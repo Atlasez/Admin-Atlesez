@@ -25,7 +25,7 @@ exerciseIds:
 references: []
 ---
 
-### 自己同型群の定義
+## 自己同型群の定義
 
 定義 1 (自己同型群). 群$G$の自己同型写像全体の集合$\operatorname{Aut}(G)$は写像の合成を演算として群をなす. これを$G$の自己同型群(automorphism group)という.
 
@@ -55,7 +55,7 @@ $$
 
 であるから$\varphi=\mathrm{id}_{G_1}$となる. よって$\Phi$は単射である. 次に$\psi\in \operatorname{Aut}(G_2)$をとると, $\varphi:=f^{-1}\psi f\in \operatorname{Aut}(G_1)$とすれば$\Phi(\varphi)=\psi$であるから$\Phi$は全射である. 以上より$\operatorname{Aut}(G_1)\cong \operatorname{Aut}(G_2)$が成り立つ. ◻
 
-### 自己同型群の例:無限巡回群
+## 自己同型群の例:無限巡回群
 
 命題 3 (無限巡回群の自己同型群). 加法群$(\mathbb{Z},+)$の自己同型群について$\operatorname{Aut}(\mathbb{Z})\cong \mathbb{Z}/2\mathbb{Z}$である.
 
@@ -85,7 +85,7 @@ $$
 
 以上より$\operatorname{Aut}(\mathbb{Z})=\{e,f_-\}\cong \mathbb{Z}/2\mathbb{Z}$が分かる. ◻
 
-### 自己同型群の例:有限巡回群
+## 自己同型群の例:有限巡回群
 
 命題 4 (有限巡回群の自己同型群). $G$を位数$n$の巡回群とするとき$\operatorname{Aut}(G)\cong (\mathbb{Z}/n\mathbb{Z})^{\times}$である.
 
@@ -119,7 +119,7 @@ $$
 
 以上より$\varphi$が群同型$\operatorname{Aut}(G)\cong (\mathbb{Z}/n\mathbb{Z})^{\times}$を与えることが分かる. ◻
 
-### 内部自己同型群と外部自己同型群
+## 内部自己同型群と外部自己同型群
 
 定義 5 (内部自己同型群). 群$G$の内部自己同型写像([準同型写像の例:例 2])全体
 
@@ -161,13 +161,13 @@ $$
 
 定義 8 (外部自己同型群). 剰余群$\operatorname{Aut}(G)/\mathop{\mathrm{Inn}}(G)$を$G$の外部自己同型群(outer automorphism group)といい, $\mathop{\mathrm{Out}}(G)$と表す.
 
-### 内部自己同型群の性質
+## 内部自己同型群の性質
 
 命題 9 (内部自己同型群と中心の関係). 群$G$の中心$Z(G)$と内部自己同型群$\mathop{\mathrm{Inn}}(G)$について$\mathop{\mathrm{Inn}}(G)\cong G/Z(G)$が成り立つ.
 
 証明. 共役作用の置換表現$\operatorname{Ad}\colon G\to \mathop{\mathrm{Inn}}(G),\,g\mapsto \operatorname{Ad}_g$を考える. $\operatorname{Ad}$の核を求めると, $g\in \mathop{\mathrm{Ker}}\operatorname{Ad}$ならば任意の$x\in G$に対して$x^g=x$が成り立つので$g\in Z(G)$. 逆に$g\in Z(G)$ならば任意の$x\in G$に対して$x^g=x$であるから$g\in \mathop{\mathrm{Ker}}\operatorname{Ad}$. よって$\mathop{\mathrm{Ker}}\operatorname{Ad}=Z(G)$が分かる. また$\operatorname{Ad}$は全射であるから, 準同型定理([準同型定理と例:定理 1])から$\mathop{\mathrm{Inn}}(G)\cong G/Z(G)$が従う. ◻
 
-### 直積群の自己同型群
+## 直積群の自己同型群
 
 命題 10 (直積群の内部自己同型群). 群$G_1,G_2$の直積群$G_1\times G_2$の内部自己同型群について $\mathop{\mathrm{Inn}}(G_1\times G_2)\cong \mathop{\mathrm{Inn}}(G_1)\times \mathop{\mathrm{Inn}}(G_2)$が成り立つ.
 

@@ -25,7 +25,7 @@ exerciseIds:
 references: []
 ---
 
-### 準同型写像による像と逆像
+## 準同型写像による像と逆像
 
 命題 1 (像, 逆像は部分群). $f\colon G_1\to G_2$を群$G_1$から$G_2$への群準同型とする. $H_1,H_2$をそれぞれ$G_1,G_2$の部分群, $N_1,N_2$をそれぞれ$G_1,G_2$の正規部分群とする. このとき以下が成り立つ.
 
@@ -93,7 +93,7 @@ $$
 \begin{align*} \begin{pmatrix} 1 & 2 & 3 \\ 2 & 3 & 1 \end{pmatrix} f( \begin{pmatrix} 1 & 2 \\ 2 & 1 \end{pmatrix} ) \begin{pmatrix} 1 & 2 & 3 \\ 2 & 3 & 1 \end{pmatrix}^{-1} =\begin{pmatrix} 1 & 2 & 3 \\ 1 & 3 & 2 \end{pmatrix} \not\in f(S_2) \end{align*}
 $$
 
-### 準同型写像の像と核
+## 準同型写像の像と核
 
 定義 2 (像, 核). $\varphi\colon G_1\to G_2$を群$G_1$から$G_2$への群準同型とする. $e_2$を$G_2$の単位元として
 
@@ -105,7 +105,7 @@ $$
 
 準同型$\varphi\colon G_1\to G_2$に対して, $\{e_2\}$は$G_2$の正規部分群であるから[準同型写像の像と核:命題 1]の2. より$\mathop{\mathrm{Ker}}\varphi$は$G_1$の正規部分群である. 一方で[準同型写像の像と核:命題 1]の1. 3. および上の補足より, $\mathop{\mathrm{Im}}\varphi$は$G$の部分群であるが正規部分群であるとは限らない.
 
-### 核による単射性の言い換え
+## 核による単射性の言い換え
 
 命題 3 (単射性の言い換え). $\varphi\colon G_1\to G_2$を群$G_1$から$G_2$への群準同型とする. $e_1$を$G_1$の単位元とすると
 
@@ -117,7 +117,7 @@ $$
 
 次に$\mathop{\mathrm{Ker}}\varphi=\{e_1\}$と仮定する. $x,y\in G_1$として$\varphi(x)=\varphi(y)$とすると, $\varphi(x)\varphi(y)^{-1}=\varphi(xy^{-1})=e_2$である. このことから$xy^{-1}\in\mathop{\mathrm{Ker}}\varphi$が分かるので, 仮定より$xy^{-1}=e_2$すなわち$x=y$が分かる. 以上より$\varphi$は単射である. ◻
 
-### 生成系の像
+## 生成系の像
 
 命題 4 (生成系の像). $\varphi\colon G_1\to G_2$を群$G_1$から$G_2$への群準同型とし, $S$を$G_1$の部分集合とする. このとき次が成り立つ.
 

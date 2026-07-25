@@ -63,7 +63,15 @@ const categoryName = category
   ? localizedName(category.name, locale)
   : entry.data.category;
 
-const toc = headings.filter((h) => h.depth <= 3);
+/**
+ * 目次は h3 まで拾う。ただし漢字記事の「【一字】」「【熟語】」のように
+ * どのセクションにも同じ名前で現れる構造ラベルは、並べても道しるべにならず
+ * 目次を埋めてしまうだけなので除く。
+ */
+const isStructuralLabel = (text: string) => /^【.+】$/u.test(text.trim());
+const toc = headings.filter(
+  (h) => h.depth <= 3 && !(h.depth === 3 && isStructuralLabel(h.text)),
+);
 
 /** 言語切替: 対応記事があればそこへ、なければ各言語の総合ホームへ */
 const localeSwitchHrefs: Partial<Record<Locale, string>> = {};

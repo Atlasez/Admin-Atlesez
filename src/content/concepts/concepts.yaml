@@ -90,14 +90,22 @@
   name: { ja: 線形空間, en: Vector Spaces }
   prerequisites: [math.set-theory.mappings]
   recommendedNext: [math.linear-algebra.linear-map]
-  related: [math.group-theory.group-definition]
+  related:
+    [
+      math.group-theory.group-definition,
+      physics.newtonian-mechanics.space-time-coordinate-systems,
+    ]
 - id: math.linear-algebra.linear-map
   subject: mathematics
   category: linear-algebra
   name: { ja: 線形写像, en: Linear Maps }
   prerequisites: [math.linear-algebra.vector-space]
   recommendedNext: [math.linear-algebra.basis-dimension]
-  related: [math.group-theory.homomorphisms]
+  related:
+    [
+      math.group-theory.homomorphisms,
+      physics.newtonian-mechanics.coordinate-transformations,
+    ]
 - id: math.linear-algebra.basis-dimension
   subject: mathematics
   category: linear-algebra
@@ -143,6 +151,8 @@
   name: { ja: 原子の構造, en: Atomic Structure }
   prerequisites: [chem.matter.composition-of-matter]
   recommendedNext: [chem.atomic-structure.electron-configuration]
+  related:
+    - astronomy.stellar-astronomy.stars
 - id: chem.atomic-structure.electron-configuration
   subject: chemistry
   category: atomic-structure
@@ -428,7 +438,11 @@
   prerequisites:
     - chem.atomic-structure.ions
   recommendedNext: []
-  related: []
+  related:
+    [
+      physics.newtonian-mechanics.kinetic-energy-work,
+      biology.biochemistry.fatty-acids-lipids,
+    ]
   alternatives: []
 - id: chem.chemical-bonding.electronegativity
   subject: chemistry
@@ -459,7 +473,7 @@
   prerequisites:
     - chem.atomic-structure.atomic-structure
   recommendedNext: []
-  related: []
+  related: [physics.foundations.physical-quantities]
   alternatives: []
 - id: chem.matter.phase-transitions
   subject: chemistry
@@ -479,7 +493,7 @@
   prerequisites:
     - chem.matter.composition-of-matter
   recommendedNext: []
-  related: []
+  related: [biology.biochemistry.fatty-acids-lipids]
   alternatives: []
 - id: chem.matter.colloidal-dispersions
   subject: chemistry
@@ -1313,7 +1327,7 @@
     ja: 物理量
   prerequisites: []
   recommendedNext: []
-  related: []
+  related: [chem.chemical-reactions.amount-of-substance]
   alternatives: []
 - id: physics.newtonian-mechanics.principles-of-newtonian-mechanics
   subject: physics
@@ -1333,7 +1347,7 @@
   prerequisites:
     - physics.foundations.physical-quantities
   recommendedNext: []
-  related: []
+  related: [math.linear-algebra.vector-space, astronomy.stellar-astronomy.stars]
   alternatives: []
 - id: physics.newtonian-mechanics.coordinate-transformations
   subject: physics
@@ -1343,7 +1357,7 @@
   prerequisites:
     - physics.newtonian-mechanics.space-time-coordinate-systems
   recommendedNext: []
-  related: []
+  related: [math.linear-algebra.linear-map]
   alternatives: []
 - id: physics.newtonian-mechanics.particles-particle-systems
   subject: physics
@@ -1363,7 +1377,7 @@
   prerequisites:
     - physics.newtonian-mechanics.particles-particle-systems
   recommendedNext: []
-  related: []
+  related: [chem.chemical-bonding.chemical-bonds-intermolecular-forces]
   alternatives: []
 - id: physics.newtonian-mechanics.momentum-impulse
   subject: physics
@@ -1404,6 +1418,8 @@
   recommendedNext: []
   related:
     - kanji.nature.sun-moon-stars
+    - chem.atomic-structure.atomic-structure
+    - physics.newtonian-mechanics.space-time-coordinate-systems
   alternatives: []
 - id: biology.biochemistry.fatty-acids-lipids
   subject: biology
@@ -1414,6 +1430,8 @@
   recommendedNext: []
   related:
     - biology.cell-biology.cell-organelles
+    - chem.chemical-bonding.chemical-bonds-intermolecular-forces
+    - chem.matter.solutions
   alternatives: []
 - id: biology.cell-biology.cell-organelles
   subject: biology
@@ -1432,7 +1450,7 @@
   prerequisites:
     - biology.cell-biology.cell-organelles
   recommendedNext: []
-  related: []
+  related: [biology.plant-physiology.auxin-functions]
   alternatives: []
 - id: biology.plant-physiology.auxin
   subject: biology
@@ -1451,5 +1469,5 @@
   prerequisites:
     - biology.plant-physiology.auxin
   recommendedNext: []
-  related: []
+  related: [biology.cell-biology.cell-division]
   alternatives: []

@@ -27,7 +27,7 @@ references: []
 
 置換表現のうち, 線形空間$V$に作用し, またその線形構造を保つもの, すなわち$\mathop{\mathrm{\mathit{GL}}}(V)$に値を持つものを考える.
 
-### 群の線形表現の定義
+## 群の線形表現の定義
 
 定義 1 (群の線形表現). $G$を群, $V$を体$\mathbb{K}$上の線形空間とする. 準同型写像$\rho\colon G\to \mathop{\mathrm{\mathit{GL}}}(V)$を$G$の$V$上の線形表現(linear representation)または単に表現(representation)という. 組$(V,\rho)$は$G$の表現空間(representation space)という. また, $V$の次元を表現$(\rho,V)$の次元(dimension)という.
 
@@ -45,7 +45,7 @@ $$
 
 によって定めると$(\rho,\mathbb{R}^2)$は$\mathbb{R}$の2次元表現である.
 
-### 部分表現
+## 部分表現
 
 定義 4 ($G$不変部分空間と部分表現). $(\rho,V)$を群$G$の線形表現とする. $V$の部分空間$W$が$G$不変部分空間($G$-invariant subspace)または単に$G$不変($G$-invariant)であるとは, 任意の$g\in G$に対して$\rho(g)(W)\subset W$が成り立つことである.
 
@@ -67,7 +67,7 @@ $$
 
 である. 各$W_{\lambda_i}$は$G$不変であるから, $\rho(g)v_{\lambda_i}\in W_{\lambda_i}$が成り立つ. よって$\rho(g)v \in \sum_{\lambda \in \Lambda} W_\lambda$であり, 和空間も$G$不変部分空間である. ◻
 
-### 既約表現の定義
+## 既約表現の定義
 
 定義 7 (既約表現). $(\rho,V)$を群$G$の線形表現とする. $V\neq \{0\}$かつ, 非自明な$G$不変部分空間をもたないとき, $(\rho,V)$を既約表現(irreducible representation)という. $(\rho,V)$が既約表現でないときは可約表現(reducible representation)という.
 
@@ -93,7 +93,7 @@ $$
 
 なので$W$は$G$不変部分空間である. $v\neq 0$であったから$W\neq \{0\}$であり, $V$は既約表現なので$W=V$となる. 以上より$V$が有限次元であることが示された. ◻
 
-### 群環上の加群と群の表現の対応
+## 群環上の加群と群の表現の対応
 
 命題 11. 群$G$の$\mathbb{K}$線形空間$V$上の表現と群環$\mathbb{K}[G]$上の左加群$V$との間には一対一対応がある. 具体的には, 写像$\Phi\colon\operatorname{Hom}(G,\mathop{\mathrm{\mathit{GL}}}(V))\to \operatorname{Hom}(\mathbb{K}[G],\operatorname{End}(V))$で全単射なものが存在する. ただし$\operatorname{Hom}(G,\mathop{\mathrm{\mathit{GL}}}(V))$は群準同型写像による集合, $\operatorname{Hom}(\mathbb{K}[G],\operatorname{End}(V))$は環準同型写像による集合である.
 

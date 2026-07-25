@@ -25,13 +25,13 @@ exerciseIds:
 references: []
 ---
 
-### Schurの補題
+## Schurの補題
 
 補題 1 (Schurの補題). $V,W$を$G$の既約表現とする. $\varphi\colon V\to W$を$G$準同型とすると$\varphi$は零写像か同型写像である.
 
 証明. まず$\varphi$の核を考えると$\mathop{\mathrm{Ker}}\varphi\subset V$は$G$不変部分空間であるから$V$は既約表現なので$\mathop{\mathrm{Ker}}\varphi=\{0\},V$に限られる. $\mathop{\mathrm{Ker}}\varphi=V$のとき$\varphi$は零写像である. 次に$\mathop{\mathrm{Ker}}\varphi=\{0\}$とすると$\varphi$は単射. $\varphi$の像を考えると$\mathop{\mathrm{Im}}\varphi\subset W$は$G$不変部分空間である. $W$は既約表現なので$\mathop{\mathrm{Im}}\varphi=\{0\},W$となるが$\varphi\neq 0$なので$\mathop{\mathrm{Im}}\varphi=W$すなわち$\varphi$は全射. 以上より$\varphi$は零写像か同型写像である. ◻
 
-### 既約表現上の自己$G$準同型写像
+## 既約表現上の自己$G$準同型写像
 
 補題 2 (Schurの補題(Strong ver)). $V$を代数閉体$\mathbb{K}$上の有限次元線形空間で$G$の既約表現とする. $\varphi\colon V\to V$を$G$準同型写像とすると, ある$k\in\mathbb{K}$が存在して次のように書ける.
 

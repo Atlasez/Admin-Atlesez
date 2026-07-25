@@ -265,6 +265,15 @@ details .details-body {
   padding: var(--space-1) 0;
 }
 
+/* KaTeXのフォントは日本語を持たないため、数式中の日本語（\text{}内など）は
+   cjk_fallback クラスが付いた別フォントで組まれる。既定のままだと本文と
+   字形も字幅も揃わないので、本文フォントに合わせる。 */
+.katex .cjk_fallback {
+  font-family: var(--font-current);
+  font-size: 1em;
+  font-style: normal;
+}
+
 @media (max-width: 767px) {
   h1 {
     font-size: calc(1.45rem * var(--text-scale));

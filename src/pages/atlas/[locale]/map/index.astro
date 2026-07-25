@@ -437,7 +437,9 @@ const subjectMetaJson = JSON.stringify(subjectMeta);
 </style>
 
 <script>
-  import cytoscape from "cytoscape";
+  // cytoscape（約440KB）は静的importにしない。地図が画面に入ってから
+  // 動的importで読み込む。リスト表示・表形式・経路検索はHTMLだけで完結して
+  // いるので、読み込みを待たずにページを使い始められる。
   import {
     toConceptMap,
     computeLearningRoute,
@@ -458,6 +460,7 @@ const subjectMetaJson = JSON.stringify(subjectMeta);
 
   async function initMap(): Promise<void> {
     if (!container) return;
+    const { default: cytoscape } = await import("cytoscape");
     const locale = container.dataset.locale === "en" ? "en" : "ja";
     const res = await fetch(container.dataset.graphUrl ?? "");
     const data: GraphData = await res.json();
@@ -986,9 +989,25 @@ const subjectMetaJson = JSON.stringify(subjectMeta);
     });
   }
 
-  initMap().catch((err) => {
-    if (detail) {
-      detail.textContent = `学習地図の読み込みに失敗しました: ${String(err)}`;
-    }
-  });
+  const start = () =>
+    initMap().catch((err) => {
+      if (detail) {
+        detail.textContent = `学習地図の読み込みに失敗しました: ${String(err)}`;
+      }
+    });
+
+  // 地図が画面に入ってから読み込む。少し手前（200px）で始めて待ち時間を隠す。
+  if (container && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        start();
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(container);
+  } else {
+    start();
+  }
 </script>
