@@ -8,13 +8,14 @@ export function withBase(path: string): string {
   return `${base}${p}`;
 }
 
-export function atlasPath(locale: Locale, ...segments: string[]): string {
+/** ロケールは string で受ける（公開ロケールを絞っても記事側の ja/en を扱えるように） */
+export function atlasPath(locale: string, ...segments: string[]): string {
   const tail = segments.length > 0 ? `${segments.join("/")}/` : "";
   return withBase(`/atlas/${locale}/${tail}`);
 }
 
 export function articlePath(
-  locale: Locale,
+  locale: string,
   subject: string,
   category: string,
   slug: string,

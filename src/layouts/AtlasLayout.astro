@@ -18,7 +18,7 @@ interface Props {
   alternates?: AlternateLink[];
   structuredData?: object;
   /** 言語切替リンク先（省略時は各ロケールの総合ホーム） */
-  localeSwitchHrefs?: Partial<Record<Locale, string>>;
+  localeSwitchHrefs?: Record<string, string>;
   /** 検索エンジンにインデックスさせない（内容が空のページなど） */
   noindex?: boolean;
 }
@@ -33,13 +33,13 @@ const {
   noindex = false,
 } = Astro.props;
 
-// 「運営紹介」は組織サイト側に集約したためアトラスのナビからは外している。
 const nav = [
   { label: t(locale, "subjects"), href: atlasPath(locale) },
   { label: t(locale, "map"), href: atlasPath(locale, "map") },
   { label: t(locale, "search"), href: atlasPath(locale, "search") },
   { label: t(locale, "bookmarks"), href: atlasPath(locale, "bookmarks") },
   { label: t(locale, "forBeginners"), href: atlasPath(locale, "guide") },
+  { label: t(locale, "team"), href: atlasPath(locale, "team") },
 ];
 const currentPath = Astro.url.pathname;
 ---
@@ -85,7 +85,12 @@ const currentPath = Astro.url.pathname;
             }
           </ul>
         </nav>
-        <nav class="lang-switch" aria-label={t(locale, "languages")}>
+        {/* 公開ロケールが 1 つのときは言語切替を出さない */}
+        <nav
+          class="lang-switch"
+          aria-label={t(locale, "languages")}
+          hidden={LOCALES.length < 2}
+        >
           <ul>
             {
               LOCALES.map((l) => (

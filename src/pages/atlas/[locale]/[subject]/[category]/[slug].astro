@@ -74,7 +74,7 @@ const toc = headings.filter(
 );
 
 /** 言語切替: 対応記事があればそこへ、なければ各言語の総合ホームへ */
-const localeSwitchHrefs: Partial<Record<Locale, string>> = {};
+const localeSwitchHrefs: Record<string, string> = {};
 for (const l of LOCALES) {
   if (l === locale) continue;
   const targets = translations.get(l);
@@ -126,7 +126,9 @@ const structuredData = {
   inLanguage: locale,
   dateModified: entry.data.updatedAt.toISOString(),
   datePublished: entry.data.createdAt.toISOString(),
-  author: entry.data.authors.map((a) => ({ "@type": "Person", name: a })),
+  // frontmatter の authors は "atlas-math-team" のような内部IDなので、
+  // 人名として出さず団体を著者にする。
+  author: { "@type": "Organization", name: "Atlasez" },
   publisher: { "@type": "Organization", name: "Atlasez" },
 };
 
@@ -181,7 +183,6 @@ const structuredData = {
         <span data-pagefind-meta="summary">{entry.data.summary}</span>
         {entry.data.aliases.map((al) => <span>{al}</span>)}
         {entry.data.tags.map((tag) => <span>{tag}</span>)}
-        {entry.data.authors.map((au) => <span>{au}</span>)}
         {entry.data.concepts.map((c) => <span>{c.id}</span>)}
       </div>
       <header class="article-header">
@@ -301,8 +302,11 @@ const structuredData = {
       <section>
         <h2>{locale === "ja" ? "記事情報" : "Article info"}</h2>
         <dl class="meta-list">
-          <dt>{t(locale, "authors")}</dt>
-          <dd>{entry.data.authors.join(", ")}</dd>
+          {
+            /* 執筆者は frontmatter に "atlas-math-team" のような内部IDしか
+               入っておらず、読者にとって意味をなさないので表示しない。
+               実名で載せられるようになったら復活させる。 */
+          }
           {
             entry.data.reviewers.length > 0 && (
               <>

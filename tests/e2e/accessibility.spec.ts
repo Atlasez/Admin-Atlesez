@@ -8,7 +8,6 @@ const pages = [
   "about/",
   "about/philosophy/",
   "about/organization/",
-  "about/members/",
   "about/history/",
   "projects/",
   "news/",
@@ -21,7 +20,6 @@ const pages = [
   "atlas/ja/map/",
   "atlas/ja/search/",
   "atlas/ja/team/",
-  "atlas/en/",
 ];
 
 for (const path of pages) {

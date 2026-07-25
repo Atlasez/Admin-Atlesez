@@ -141,9 +141,11 @@ export function relatedArticles(
 export function translationArticles(
   article: Article,
   allLocalesArticles: Article[],
-): Map<Locale, Article[]> {
+): Map<string, Article[]> {
+  // キーが Locale でなく string なのは、公開ロケールを絞っても
+  // 記事データ側のロケール（ja/en）を受けられるようにするため。
   const ownConcepts = new Set(article.data.concepts.map((c) => c.id));
-  const result = new Map<Locale, Article[]>();
+  const result = new Map<string, Article[]>();
   for (const a of allLocalesArticles) {
     if (a.data.locale === article.data.locale) continue;
     if (a.data.status !== "published") continue;

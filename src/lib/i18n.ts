@@ -1,9 +1,16 @@
 /** 学習サイトの多言語対応（UIラベルとロケールユーティリティ） */
 
-export const LOCALES = ["ja", "en"] as const;
+/**
+ * 公開するロケール。
+ *
+ * 英語版は翻訳が 4 記事しかなく、日本語版との差が大きすぎたため一旦取り下げた。
+ * 再開するときはここに "en" を戻し、`src/content/articles/en/` に記事を置けば
+ * ルーティング・言語切替・hreflang はそのまま動く（UI 文言は下の ui.en に残置）。
+ */
+export const LOCALES = ["ja"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-export const localeNames: Record<Locale, string> = {
+export const localeNames: Record<string, string> = {
   ja: "日本語",
   en: "English",
 };
@@ -203,7 +210,7 @@ export function isLocale(value: string): value is Locale {
 /** 多言語ラベルからロケールに応じた表示名を返す（英語がなければ日本語へフォールバック） */
 export function localizedName(
   name: { ja: string; en?: string },
-  locale: Locale,
+  locale: string,
 ): string {
   if (locale === "en" && name.en) return name.en;
   return name.ja;

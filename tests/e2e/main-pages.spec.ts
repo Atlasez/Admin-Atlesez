@@ -15,7 +15,7 @@ test.describe("公式サイト", () => {
     ).toBeVisible();
   });
 
-  test("理念・組織構成・実在する運営メンバーを掲載する", async ({ page }) => {
+  test("理念と組織構成を掲載する", async ({ page }) => {
     await page.goto("about/philosophy/");
     await expect(page.locator(".goal-list li")).toHaveCount(12);
     await expect(page.getByText("全ての人に開かれた学びを")).toBeVisible();
@@ -23,13 +23,6 @@ test.describe("公式サイト", () => {
     await page.goto("about/organization/");
     await expect(page.getByAltText(/Atlasezの運営事務局/)).toBeVisible();
     await expect(page.getByAltText(/代表と副代表/)).toBeVisible();
-
-    await page.goto("about/members/");
-    await expect(
-      page.getByRole("heading", { name: "釜口 悠太" }),
-    ).toBeVisible();
-    await expect(page.getByText("サンプル代表")).toHaveCount(0);
-    await expect(page.locator("[data-member]")).toHaveCount(92);
   });
 
   test("プロジェクト一覧に学習サイトが載っている", async ({ page }) => {
@@ -88,13 +81,6 @@ test.describe("学習サイト", () => {
     await expect(list).toHaveAttribute("data-view", "list");
   });
 
-  test("言語切替で英語版記事に移動できる", async ({ page }) => {
-    await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
-    await page.getByRole("link", { name: "English", exact: true }).click();
-    await expect(page).toHaveURL(/\/atlas\/en\//);
-    await expect(page.locator("h1")).toContainText("Definition of a Group");
-  });
-
   test("学習地図の代替表示（リスト・表・経路フォーム）がJSなしでも存在する", async ({
     page,
   }) => {
@@ -132,9 +118,7 @@ test.describe("学習サイト", () => {
     );
   });
 
-  test("運営紹介に現行サイトから移植した担当者が表示される", async ({
-    page,
-  }) => {
+  test("運営紹介に担当者が表示される", async ({ page }) => {
     await page.goto("atlas/ja/team/");
     await expect(page.locator("h1")).toContainText("運営紹介");
     await expect(page.getByText("釜口 悠太", { exact: true })).toBeVisible();

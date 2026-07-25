@@ -14,7 +14,6 @@ export function getStaticPaths() {
 const locale = Astro.params.locale as Locale;
 const subjects = await getPublishedSubjects();
 const articles = await getPublishedArticles(locale);
-const allArticles = await getPublishedArticles();
 
 const countBySubject = new Map<string, number>();
 for (const a of articles) {
@@ -64,16 +63,6 @@ const summary =
             {t(locale, "map")}
           </a>
         </div>
-
-        {
-          locale !== "ja" && (
-            <p class="beta-notice" role="note">
-              The English edition is in beta — only a limited set of articles
-              has been translated so far. The Japanese edition has the full
-              content.
-            </p>
-          )
-        }
 
         <ul class="subject-grid">
           {
@@ -157,13 +146,6 @@ const summary =
             }
           </ul>
         </div>
-        {
-          allArticles.length > articles.length && locale !== "ja" && (
-            <p class="translation-note">
-              {`Some articles are currently available only in Japanese (${allArticles.length - articles.length} more).`}
-            </p>
-          )
-        }
       </aside>
     </div>
   </div>
@@ -344,21 +326,6 @@ const summary =
     color: var(--text-secondary);
     font-size: calc(0.72rem * var(--text-scale));
     font-variant-numeric: tabular-nums;
-  }
-  .beta-notice {
-    margin: var(--space-3) 0 0;
-    padding: var(--space-2) var(--space-3);
-    border-left: 3px solid var(--accent-primary);
-    background: var(--background-secondary);
-    color: var(--text-secondary);
-    font-size: calc(0.88rem * var(--text-scale));
-  }
-  .translation-note {
-    margin-top: var(--space-3);
-    padding: var(--space-2);
-    background: var(--background-secondary);
-    color: var(--text-secondary);
-    font-size: calc(0.85rem * var(--text-scale));
   }
 
   @media (max-width: 900px) {

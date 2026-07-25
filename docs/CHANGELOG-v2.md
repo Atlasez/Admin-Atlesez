@@ -243,3 +243,53 @@ cytoscape（436KB）を静的 import から動的 import に変え、地図が�
 - `astro check` 0 errors 0 warnings、`lint`、`test`（11件）、`prettier --check` 通過
 - 内部リンク検証 261 ファイル
 - axe-core（jsdom）でトップ・学習地図・漢字記事・数学記事とも構造ルール違反 0
+
+## v2.6 執筆者表示の削除・英語版の取り下げ・運営紹介の集約
+
+### 1. 記事ページから執筆者表示を削除
+
+frontmatter の `authors` には `atlas-math-team` のような内部IDしか入っておらず、
+記事ページの「執筆」欄にそのまま出ていた。
+
+- 右カラムの「執筆」行を削除（`reviewers` は実名が入りうるので残置）
+- Pagefind の検索メタからも除外（`atlas-kanji-team` で検索に引っかかる意味がない）
+- 構造化データの `author` を `Person: atlas-math-team` から
+  `Organization: Atlasez` に変更
+- frontmatter の `authors` 自体は残している。実名で載せられるようになったら
+  表示を戻せる
+
+### 2. 英語版の取り下げ
+
+翻訳が 4 記事しかなく日本語版との差が大きすぎたため、一旦取り下げ。
+
+- `src/content/articles/en/` を削除
+- `LOCALES` を `["ja"]` に。**多言語の仕組みは残している**ので、
+  再開時は `LOCALES` に `"en"` を戻して記事を置けばルーティング・
+  言語切替・hreflang がそのまま動く（UI 文言 `ui.en` も残置）
+- 公開ロケールが 1 つのときは言語切替を出さない
+- トップの英語版ベータ告知・未翻訳件数の注記を削除
+- 公開ロケールを絞っても記事データ側の `ja`/`en` を扱えるよう、
+  `atlasPath` / `articlePath` / `localizedName` / `translationArticles` の
+  ロケール引数を `Locale` から `string` に広げた
+- ページ数 261 → 213
+
+### 3. 運営紹介を学習サイトのみに
+
+以前は逆（アトラス側から外す）にしていたが、方針変更にあわせて入れ替えた。
+
+- アトラス: ヘッダーナビに「運営紹介」を戻し、`noindex` を解除
+- 組織サイト: `src/pages/about/members.astro` を削除し、
+  `/about/` の一覧からも除外
+- 会員データ `src/data/atlas-members.json` はアトラス側が引き続き使用
+- E2E テストの参照先を更新（組織サイトの運営メンバー検証を削除、
+  言語切替テストを削除、a11y 検査の対象から `about/members/` と `atlas/en/` を除外）
+
+組織サイトから運営紹介への導線は張っていない。必要なら `/about/` に
+アトラスの運営紹介へのリンクを 1 つ置くのが素直。
+
+### 検証
+
+- `astro build` 213 ページ / `astro check` 0 errors 0 warnings
+- `lint`・`test`（11件）・`prettier --check`・内部リンク 213 ファイル 通過
+- axe-core（jsdom）でトップ・組織サイト about・アトラス・運営紹介・記事とも違反 0
+- 本番相当（`SITE_URL` あり）のビルドで運営紹介に `noindex` が付かないことを確認
