@@ -1,76 +1,69 @@
-# 公開手順（mitukx/Atlasez01）
+# 公開チェックリスト（Cloudflare Pages）
 
-コミットまで済んでいます。あとは下の 3 ステップだけです。
-
-公開先URL: **https://mitukx.github.io/Atlasez01/**
-学習サイト: **https://mitukx.github.io/Atlasez01/atlas/ja/**
+配信は Cloudflare Pages が GitHub リポジトリ `mitukx/Atlasez01` を
+直接ビルドして行う。詳しい背景は `docs/DEPLOYMENT.md`。
 
 ---
 
-## 1. 先に GitHub Pages を有効化する（push より先に）
-
-https://github.com/mitukx/Atlasez01/settings/pages を開き、
-
-- **Source** を `Deploy from a branch` ではなく **`GitHub Actions`** に変更
-
-これを先にやらないと、初回の CI がデプロイ工程で失敗します。
-
-## 2. push する
-
-ターミナルで：
+## 1. push する
 
 ```bash
 cd ~/Downloads/atlasez-web-main
-git push -u origin main
+git push
 ```
 
-初回は GitHub の認証を求められます。パスワード欄には
-[Personal Access Token](https://github.com/settings/tokens)（`repo` と `workflow` にチェック）
-を貼ってください。GitHub CLI を入れている場合は `gh auth login` を先に済ませておけば聞かれません。
+push すると Cloudflare Pages のビルドが自動で始まる。
 
-## 3. CI の完了を待つ
+## 2. Cloudflare Pages のビルド設定を確認する
 
-https://github.com/mitukx/Atlasez01/actions
+Workers & Pages → プロジェクト → Settings → Build
 
-`verify` → `deploy` の順に走ります。verify は 5〜10 分ほどかかります（E2E と Lighthouse を含むため）。
-緑になれば公開完了です。
+| 項目                   | 値              |
+| ---------------------- | --------------- |
+| Build command          | `npm run build` |
+| Build output directory | `dist`          |
+| Production branch      | `main`          |
 
----
+Root directory は空欄のまま。Node は `.nvmrc`（22）が読まれる。
 
-## 設定について
+## 3. 環境変数を入れる
 
-`.github/workflows/ci.yml` はリポジトリ名から自動的にパスを決めます。
+Settings → Environment variables → **Production** にだけ追加:
 
-```yaml
-SITE_URL: https://mitukx.github.io
-BASE_PATH: /Atlasez01
+```
+SITE_URL = https://<プロジェクト名>.pages.dev
 ```
 
-リポジトリ名を変えるとURLも自動で追従するので、この部分を手で書き換える必要はありません。
+独自ドメインを取ったらここを書き換えて再デプロイする。
+**Preview には設定しない**（設定しないことでプレビューが自動的に
+noindex 扱いになり、本番と重複しない）。
 
-## 独自ドメインに移す場合
+環境変数を足したあとは Deployments → 最新のデプロイ → Retry deployment。
+変数の変更は自動では反映されない。
 
-1. `public/CNAME` を作り、ドメイン名だけを 1 行書く
-2. `.github/workflows/ci.yml` の `SITE_URL` を `https://<ドメイン>`、`BASE_PATH` を `/` に固定
-3. DNS で GitHub Pages 向けのレコードを設定
+## 4. 公開後に確認すること
 
-## push 前に手元で確認したいとき
+- [ ] トップ `/` と学習サイト `/atlas/ja/` が開く
+- [ ] 検索（`/atlas/ja/search/`）が動く ← Pagefind のインデックスが配信されているか
+- [ ] 学習地図（`/atlas/ja/map/`）が描画される
+- [ ] `/robots.txt` の `Sitemap:` が本番URLになっている
+- [ ] 記事ページのソースに `noindex` が **入っていない**
+- [ ] 数式（KaTeX）が崩れていない ← 例: `/atlas/ja/mathematics/set-theory/relations/`
+
+## 5. GitHub 側の後始末
+
+GitHub Pages への自動デプロイは停止済み。
+Settings → Pages → Source を「None」に戻しておくと、古い内容が
+`mitukx.github.io/Atlasez01/` に残り続けるのを防げる。
+
+## 6. 独自ドメインを取ったら
+
+`docs/DEPLOYMENT.md` の「3. 独自ドメインを取得したあとの手順」を参照。
+やることは Custom domains への追加と `SITE_URL` の変更、再デプロイの 3 つ。
+
+## 7. ローカルで確認したいとき
 
 ```bash
-cd ~/Downloads/atlasez-web-main
 npm ci
-npm run dev          # http://localhost:4321/atlas/ja/
+npm run dev        # http://localhost:4321/
 ```
-
-本番と同じパスで確認する場合：
-
-```bash
-BASE_PATH=/Atlasez01 SITE_URL=https://mitukx.github.io npm run build
-npm run preview
-```
-
-## 初回 CI がコケたら
-
-考えられるのは E2E（Playwright + axe）だけです。こちらの環境では Chromium が入らず未実行でした。
-落ちた場合はログを見せていただければ直します。急ぎで公開を優先するなら、
-`ci.yml` の E2E と Lighthouse の step に `continue-on-error: true` を足せば通ります。

@@ -96,3 +96,32 @@ frontmatter の `summary` でした。
 
 **検証**：113 ファイルについて、本文と `summary` 以外の frontmatter が
 1 バイトも変わっていないことを確認済み。
+
+## v2.3 Cloudflare Pages への配信切り替え
+
+配信先を GitHub Pages から Cloudflare Pages に移した。
+
+- **`astro.config.mjs`**: `SITE_URL` → `CF_PAGES_URL` → `http://localhost:4321`
+  の順にフォールバック。`SITE_URL` を Production 環境にだけ設定すれば、
+  プレビュー配信は自分自身の URL を canonical に使う。
+  既定値だった `https://atlasez.github.io` は誤ったURLが本番に出る事故のもとなので撤去
+- **プレビュー配信の noindex 化**（`src/lib/deploy.ts`）。`CF_PAGES_BRANCH` が
+  `main` 以外なら全ページに `noindex, nofollow` を付け、`robots.txt` も
+  `Disallow: /` にする。本番と同じ内容が二重にインデックスされるのを防ぐ
+- **`robots.txt` を動的生成に変更**（`public/robots.txt` → `src/pages/robots.txt.ts`）。
+  従来は sitemap の URL が GitHub Pages のものにハードコードされていた
+- **`public/_headers` を追加**。`nosniff` / `Referrer-Policy` /
+  `X-Frame-Options` / `Permissions-Policy` / `Cross-Origin-Opener-Policy` と、
+  `/_astro/*` の 1 年 immutable キャッシュなど
+- **`.nvmrc`（22）を追加**。Cloudflare Pages と GitHub Actions で
+  Node のバージョンを 1 箇所から与えるため。ci.yml も `node-version-file` に変更
+- **`ci.yml` の deploy ジョブを削除**。GitHub Actions は検証専用になった。
+  あわせて検証時の `BASE_PATH` を `/<リポジトリ名>` から `/` に変更し、
+  本番と同じパス構成でリンク検証・E2E が走るようにした
+- `docs/DEPLOYMENT.md` と `docs/PUBLISH.md` を Cloudflare Pages 向けに書き直し
+
+### 残っている手作業（Cloudflare のダッシュボード側）
+
+1. Build command `npm run build` / Output directory `dist` の確認
+2. Production 環境変数に `SITE_URL` を設定 → **Retry deployment**
+3. GitHub の Settings → Pages → Source を「None」に戻す

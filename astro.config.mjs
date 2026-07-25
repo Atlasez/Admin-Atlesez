@@ -6,9 +6,15 @@ import rehypeKatex from "rehype-katex";
 import "katex/contrib/mhchem";
 
 // サイトURLとベースパスは環境変数だけで切り替えられる。
-// - GitHub Pages (project site): SITE_URL=https://<user>.github.io BASE_PATH=/atlasez-web
-// - 独自ドメイン:                SITE_URL=https://atlasez.org      BASE_PATH=/
-const SITE_URL = process.env.SITE_URL ?? "https://atlasez.github.io";
+// - Cloudflare Pages 本番: SITE_URL=https://<独自ドメイン>  BASE_PATH=/
+// - Cloudflare Pages プレビュー: SITE_URL 未設定 → CF_PAGES_URL（デプロイ固有のURL）
+// - GitHub Pages (project site): SITE_URL=https://<user>.github.io BASE_PATH=/<repo>
+//
+// CF_PAGES_URL は Cloudflare Pages がビルド時に自動で入れる変数。
+// SITE_URL を Production 環境にだけ設定しておけば、プレビューは自分自身の
+// URL を canonical / OGP に使うため、本番URLと取り違えることがない。
+const SITE_URL =
+  process.env.SITE_URL ?? process.env.CF_PAGES_URL ?? "http://localhost:4321";
 const BASE_PATH = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
