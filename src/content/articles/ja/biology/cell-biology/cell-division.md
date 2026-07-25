@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 自己複製
-  生物を生物たらしめる特徴の一つに自己複製がある。生物は基本的に「自分と同種のものを増やす」という性質を持っており、ヒトはヒトのみを生み出し増やすことができる。
-  …
+summary: 生物を生物たらしめる特徴の一つに自己複製がある。
 difficulty: basic
 estimatedMinutes: 15
 tags:

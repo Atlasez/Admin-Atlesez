@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  数 【一字】 一 イチ ひと 二 ニ ふた 三 サン み 四 シ よん 五 ゴ いつ 六 ロク む 七 シチ なな 八 ハチ や 九 キュウ
-  ここの 十 ジュウ とお 百 ヒャク もも 千 セン ち 万 マン よろず 億…
+summary: 「数・単位」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

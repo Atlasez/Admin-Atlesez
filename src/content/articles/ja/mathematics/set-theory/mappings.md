@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  写像の定義 定義 1 (写像の定義). 上の2項関係 であって、左全域的かつ右一意的であるもの、すなわち任意の の元に対して
-  の元がただ1つ定められるものを から への写像という。これを や元の間の関係も含めて 、 などと表す。 …
+summary: 「写像」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 35
 tags:

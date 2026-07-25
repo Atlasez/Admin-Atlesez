@@ -13,8 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 脂肪酸
-  脂肪酸とは、鎖状の炭化水素基に1つのカルボキシ基がついた物質である。炭素数4-30の天然の脂質から得られるものを天然脂肪酸、そうでないものを合成脂肪酸と呼ぶ。また炭素数12以上のものを長鎖脂肪酸と呼ぶ。長鎖脂肪酸…
+summary: 脂肪酸とは、鎖状の炭化水素基に1つのカルボキシ基がついた物質である。
 difficulty: basic
 estimatedMinutes: 15
 tags:

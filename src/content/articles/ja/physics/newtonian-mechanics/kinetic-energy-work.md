@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 質点 の運動方程式を運動に沿って線積分することを考える。位置 から までの運動について、 の両辺を経路に沿って線積分すると、 より、 を得る。 …
+summary: 「運動エネルギーと仕事」について解説します。
 difficulty: intermediate
 estimatedMinutes: 5
 tags:

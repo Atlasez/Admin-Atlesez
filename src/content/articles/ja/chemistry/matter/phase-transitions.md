@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  同じ物質であっても圧力や温度を変化させると、あるところで物理的な性質が大きく変わる。この圧力や温度ごとに決まる物理的な性質を状態や相と呼ぶ。反応性などの化学的性質には状態ごとの特徴が見られる。以下ではそれについて詳しくみる。
-  …
+summary: 同じ物質であっても圧力や温度を変化させると、あるところで物理的な性質が大きく変わる。
 difficulty: basic
 estimatedMinutes: 20
 tags:

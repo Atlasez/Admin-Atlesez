@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  ひ・ほのお 【一字】 火 ひ ほ 燬 炎 ほのお 焔 【熟語】 炎炎炎焼炎上火炎 火の様子 【一字】 煥 かがや-く あき-らか 焜 燉 トン
-  【熟語】 煥然煥発焜燿焜炉 火をおこす 【一字】 点 つ-ける とぼ-す と…
+summary: 「火・明かり」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  ここではまず部分群の定義を行い, より簡潔な必要十分条件を示す. そして部分群の共通部分, 和集合, 積が部分群となる条件について触れる.
-  部分群の定義 定義 1 (部分群) が群 の部分群(subgroup)であるとは…
+summary: ここではまず部分群の定義を行い, より簡潔な必要十分条件を示す. そして部分群の共通部分, 和集合, 積が部分群となる条件について触れる.
 difficulty: intermediate
 estimatedMinutes: 35
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  嘘・偽る 【一字】 嘘 うそ 偽 いつわ-る 訛 譌 詭 矯 詐 譖 誕 繆 佯 陽 譎 いつわ-り 【熟語】 にせ 【一字】 偽 にせ 贋
-  偐 にせもの 【熟語】 かたる 【一字】 拐 かた-る 騙 【熟語】 だます …
+summary: 「嘘・偽る」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

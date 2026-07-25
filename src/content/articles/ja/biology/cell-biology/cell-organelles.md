@@ -13,8 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 核
-  DNAが収められている細胞小器官で、核膜によって細胞質と区切られている。核膜は脂質二重層の膜が二つ重なったものである。内部には核小体という密度の高い構造があり、そこではリボソームRNA(rRNA)の転写が行われている…
+summary: DNAが収められている細胞小器官で、核膜によって細胞質と区切られている。
 difficulty: basic
 estimatedMinutes: 30
 tags:

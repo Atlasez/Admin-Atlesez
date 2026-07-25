@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  罪 【一字】 罪 つみ 辜 科 とが 咎 謫 坐 - 辟 - 冤 ぬれぎぬ 【熟語】 不辜無辜大辟冤罪 罪にあたる行為 【一字】 盗 ぬす-む
-  偸 窃 攘 殺 ころ-す 弑 しい-する 【熟語】 窃盗偸盗弑逆/弑虐簒弑 …
+summary: 「罪刑」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

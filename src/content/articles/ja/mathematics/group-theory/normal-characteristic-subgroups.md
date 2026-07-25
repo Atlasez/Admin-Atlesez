@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  正規部分群の定義 定義 1 (正規部分群). を群 の部分群とする. が任意の共役作用で不変, すなわち任意の に対して が成り立つとき は
-  の正規部分群(normal subgroup)であるという. このことを と表…
+summary: 「正規部分群と特性部分群」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 45
 tags:

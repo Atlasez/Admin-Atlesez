@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  くに 【一字】 国 くに 州 邦 邑 【熟語】 まち 【一字】 町 まち 闍 坊 陌 街 【熟語】 むら 【一字】 村 むら 邑 邨 党
-  【熟語】 さと 【一字】 里 さと 郷 落 閭 【熟語】 その他 【一字】 県 あ…
+summary: 「都市・村落」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

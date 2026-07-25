@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  旗・幟 【一字】 旗 はた 旛 旌 旆 幟 のぼり 纛 はたぼこ 【熟語】 旗鼓旗鼓堂堂旗幟旗幟鮮明 旗の部位 【一字】 橦 はたざお 杠 旒
-  はたあし 旄 はたかざり 【熟語】 旗脚旒綴羽旄 戦における旗 【一字】 旃…
+summary: 「旗・幟」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

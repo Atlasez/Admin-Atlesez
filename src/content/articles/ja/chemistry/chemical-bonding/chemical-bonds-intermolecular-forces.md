@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 自然界にある物質は元素の数よりもはるかに多い。それは原子同士がさまざまにつながり合うことで多様な物質を形作っているからである。原子同士が相互作用して近い距離で安定しているとき、この結びつきのことを化学結合という。また別の…
+summary: 自然界にある物質は元素の数よりもはるかに多い。
 difficulty: basic
 estimatedMinutes: 25
 tags:

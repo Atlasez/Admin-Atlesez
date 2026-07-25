@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  原子はその電子配置が閉殻や半閉殻になるとき安定となる。よって原子や分子はより安定した構造を実現するために、電子を放出したり受け取ったりして電気的に中性でない状態を取ることがある。これをイオンという。
-  …
+summary: 原子はその電子配置が閉殻や半閉殻になるとき安定となる。
 difficulty: basic
 estimatedMinutes: 10
 tags:

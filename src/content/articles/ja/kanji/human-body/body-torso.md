@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  体全体 【一字】 身 み 体 からだ 軀 むくろ 腔 から 【熟語】 身体身軀体軀満腔 胴体/胴体の各部 【一字】 胴 ドウ 胸 むね 匈 膏
-  - 肓 むなもと 腹 はら 膀 - 背 せ 腰 こし 尻 しり 臀 肛 しり…
+summary: 「体全体・胴体」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

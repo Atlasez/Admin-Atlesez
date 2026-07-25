@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  顔 【一字】 顔 かお 臉 ほお 頬 面 おもて おも 【熟語】 顔面花臉紅臉頬杖 目①（目元） 【一字】 目 め まなこ ま 眼 瞼 まぶた
-  睫 まつげ 睚 まなじり 【熟語】 血眼眼鏡 目②（ひとみ） 【一字】 瞳 …
+summary: 「顔」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

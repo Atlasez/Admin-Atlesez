@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  取捨 【一字】 取 と-る 採 采 捨 すて-る 遺 棄 捐 拌 委 擲 なげう-つ 【熟語】 捐棄委棄納采放擲 えらぶ・よなげる 【一字】
-  選 えら-ぶ よ-る え-る すぐ-る 択 撰 簡 柬 えりわけ-る 揀 わ-…
+summary: 「取捨選択」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

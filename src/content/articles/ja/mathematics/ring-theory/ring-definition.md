@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  環の定義 定義 1 (環) を集合とする. 以下の条件を満たす組 を環(ring)という. - (二項演算の閉性) 上の閉じた二項演算
-  が定まっている. - (結合法則) 次の結合法則が成り立つ. - (零元の存在)加法…
+summary: 「環の定義」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

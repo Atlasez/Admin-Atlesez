@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  いろ 【一字】 色 いろ 彩 いろど-る 采 いろどり 褪 あ-せる さ-める 濃 こ-い 淡 あわ-い うす-い 薄 【熟語】
-  色彩彩色/着色褪色濃淡 あか 【一字】 赤 あか あか-い 絳 赭 朱 あけ 丹 に 緋 …
+summary: 「色」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

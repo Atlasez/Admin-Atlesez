@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  髪型 【一字】 丫 あげまき 丱 髪 かみ 髦 たれがみ さげがみ 髫 うない 髱 たぼ つと 髷 まげ わげ まるわげ 鬟 みずら 髻
-  もとどり たぶさ 鬘 かつら かずら 鬢 びん 禿 かむろ はげ は-げる 鬣 た…
+summary: 「髪」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

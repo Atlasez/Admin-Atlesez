@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 実際に実験によって純物質が持つ性質を調べるためには、混合物から純物質を取り出すことが必要となる。これを分離という。分離には、混合物に含まれる物質の物理的・化学的性質の違いを利用する。また、ある物質に含まれる微量な不純物を…
+summary: 実際に実験によって純物質が持つ性質を調べるためには、混合物から純物質を取り出すことが必要となる。
 difficulty: basic
 estimatedMinutes: 20
 tags:

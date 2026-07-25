@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  環準同型写像の定義 定義 1 (環準同型写像) を環とする. 写像 が次の条件を満たすとき から への環準同型写像(ring
-  homomorphism)という. - は加法群 から への群準同型写像である. すなわち -…
+summary: 「環準同型写像の定義」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 30
 tags:

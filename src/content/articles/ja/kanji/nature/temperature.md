@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  さむい 【一字】 寒 さむ-い 冱 こお-る さ-える 凊 すず-しい 滄 つめ-たい 冽 洌 淒 凜 【熟語】 寒帯寒慄冱寒冽冽 あたたかい
-  【一字】 暖 あたた-かい あたた-か 煖 暄 喣 燠 あつ-い 【熟語】 …
+summary: 「寒暖」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

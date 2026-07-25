@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  皮膚 【一字】 皮 かわ 膚 はだ はだえ 肌 臚 【熟語】 皮膚完膚肌身 筋肉 【一字】 筋 すじ 腱 膂 ちから 【熟語】 筋腫腱鞘 膜
-  【一字】 膜 マク 隔 - 【熟語】 皮膜横隔膜 骨 【一字】 骨 ほね 骼 …
+summary: 「皮膚・筋肉・骨・内臓・膜・脂肪・血」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

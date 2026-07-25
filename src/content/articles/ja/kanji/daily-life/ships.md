@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  ふね一般/ふねの大小 【一字】 舟 ふね ふな 船 艘 舸 おおぶね 舶 艇 こぶね 艚 艀 はしけ 【熟語】
-  一葦小舸軽舸小舟の宵拵え舸艦走舸端舟端艇一月三舟舟に刻みて剣を求む磯際で船を破る乗りかかった船呑舟呑舟の魚尋…
+summary: 「船」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

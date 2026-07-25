@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 分散媒が液体であるコロイド分散系をコロイド溶液と呼ぶ。ここではコロイド分散系の中でも特にコロイド溶液に特徴的な分類や現象について扱う。 …
+summary: 分散媒が液体であるコロイド分散系をコロイド溶液と呼ぶ。
 difficulty: basic
 estimatedMinutes: 25
 tags:

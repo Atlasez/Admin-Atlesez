@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 数学を始めるにあたって、扱う数学的な対象を定める必要がある。その方法のうちの一つで、現代数学において最も一般的な方法が、集合という概念を基礎とする方法である。集合が扱う対象の全てであり、集合の間には一方が一方に属するとい…
+summary: 数学を始めるにあたって、扱う数学的な対象を定める必要がある。
 difficulty: intermediate
 estimatedMinutes: 40
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  たいら 【一字】 平 たい-ら 坦 夷 たい-らか 坪 ヘイ 【熟語】 高い/けわしい 【一字】 高 たか-い 隆 敞 嵩 崇 岌 嶷 崔
-  おお-きい 嵬 尭 兀 崟 崚 けわ-しい 崢 険 嶮 巌 嶬 嶇 嵯 峨 嶄 …
+summary: 「地勢」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

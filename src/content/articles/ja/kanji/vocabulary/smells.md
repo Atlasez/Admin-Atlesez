@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  匂い・良い匂い 【一字】 匂 にお-う 嗅 か-ぐ 気 キ・ケ 薫 かお-る 馨 かお-り 芬 こうば-しい 香 かんば-しい か 馥 芳
-  かぐわ-しい 郁 椒 菲 かんば-しい 鬱 ウツ 【熟語】 悪い匂い 【一字】 …
+summary: 「匂い」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  水害 【一字】 洪 おおみず 氾 ひろ-がる あふ-れる 濫 ラン 【熟語】 つつみ/土手 【一字】 堤 つつみ 防 塘 坡 陂 堡 【熟語】
-  水門/せき 【一字】 閘 ひのくち 堰 せき 【熟語】 ほり・ためいけ 【一…
+summary: 「治水」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

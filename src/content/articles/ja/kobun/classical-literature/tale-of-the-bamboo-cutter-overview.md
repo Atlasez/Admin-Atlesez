@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  竹取物語 コンテンツ - 「竹取物語」について - 本文 かぐや姫の生い立ち 1 2 五人の貴公子の求婚 1 2 3 4 仏の御石の鉢
-  蓬莱の玉の枝 1 2 3 4 5 6 火鼠の皮衣 1 2 3 龍の頸の玉 1 2 3…
+summary: 「竹取物語トップページ」について解説します。
 difficulty: basic
 estimatedMinutes: 5
 tags:

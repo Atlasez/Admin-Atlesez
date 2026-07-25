@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 通常の化学反応において元素の種類、つまり原子の陽子数は変わらない。化学反応において変化するのは、中心の原子核ではなく外側の電子の数や(量子力学的な)状態である。ここでは、原子の中の電子が取りうる状態の種類とエネルギーの関…
+summary: 通常の化学反応において元素の種類、つまり原子の陽子数は変わらない。
 difficulty: basic
 estimatedMinutes: 25
 tags:

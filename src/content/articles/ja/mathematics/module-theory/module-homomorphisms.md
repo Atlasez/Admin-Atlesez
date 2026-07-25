@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  加群の準同型写像の定義 定義 1 (R準同型写像) を環とする. 左 加群 に対し写像 が 準同型写像,
-  線形写像であるとは以下の条件を満たすことである. - はアーベル群の準同型写像である. - 任意の に対し . 同…
+summary: 「加群の準同型写像」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 25
 tags:

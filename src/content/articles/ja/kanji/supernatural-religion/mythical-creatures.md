@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  想像/伝説上の生物 【一字】 麒 キ 麟 リン 虒 ちのとら 猩 ショウ 鵺 ぬえ 鵼 獅 しし 獏 バク 貘 鯱 しゃち 竜 リュウ 鮫
-  コウ 蛟 みずち 蜃 鯤 コン 鰥 カン 鵬 おおとり 鳳 凰 鸞 ラン 鸞は鳳凰の一種。 …
+summary: 「想像/伝説上の生物」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

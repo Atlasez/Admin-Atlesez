@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 食塩が水に溶けて食塩水になるように、液体中に他の物質が混合して均一に拡散する現象を溶解という。液体に溶かされる物質（気体、液体、固体）を溶質といい、他の物質を溶かす液体を溶媒、溶解によって生じる混合物を溶液という。溶媒が…
+summary: 食塩が水に溶けて食塩水になるように、液体中に他の物質が混合して均一に拡散する現象を溶解という。
 difficulty: basic
 estimatedMinutes: 30
 tags:

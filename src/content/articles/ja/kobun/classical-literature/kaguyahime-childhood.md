@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 2.1.1 かぐや姫の生い立ち 1 - 本文 - 訳例 - 品詞分解 - 語釈 - 文法 - 読解 本文 ①今は昔、竹取の翁といふ者ありけり。 …
+summary: 「かぐや姫の生い立ち」について解説します。
 difficulty: basic
 estimatedMinutes: 45
 tags:

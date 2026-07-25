@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  群の作用の性質 定義 1 (推移的な作用). 群 が集合 に作用しているとする. ある が存在して となるとき, すなわち
-  となるときこの群作用は推移的(transitive)であるという. 定義 2 (忠実な作用). …
+summary: 定義から分かるように群の作用が自由ならば忠実である.
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  共役作用の定義 定義 1 (共役作用). 群 の 自身への作用で以下の条件を満たすものを共役作用(conjugation),
-  随伴作用(adjoint action)という. - 一般の群 に対しては自明とは限らない作用…
+summary: 単に共役作用と言えば左作用のことを指すことが多い. 次の命題により共役作用は一意に定まることが分かる.
 difficulty: intermediate
 estimatedMinutes: 30
 tags:

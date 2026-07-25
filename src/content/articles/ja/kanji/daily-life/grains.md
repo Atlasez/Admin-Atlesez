@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  こめ 【一字】 米 こめ よね 稲 いね 禾 粳 うるち 糯 もちごめ 糲 くろごめ 麤 淅 かしよね よな-げる 籔 こめあげざる 潘
-  しろみず 粲 しらげよね いい 飯 めし 餉 かれいい かれい 糒 ほしいい 糝 …
+summary: 「穀物」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

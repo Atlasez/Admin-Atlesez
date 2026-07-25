@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  ひとり 【一字】 独 ひと-り 孤 孑 煢 ひとりもの 傀 カイ 塊 【熟語】 孤独煢煢煢独孑然 仲が良い 【一字】 仲 なか 親 した-しい
-  馴 な-れる 【熟語】 親密馴れ合い 仲間・集団 【一字】 友 とも 朋 共…
+summary: 「人間関係・家族」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

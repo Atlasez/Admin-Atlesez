@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  空間と時間の定義から、許される座標系の変換は等長写像(計量を保つ変換)であって、特に時間についてはそのうち向きも保つものに限られる。すなわち、空間については
-  、時間については 、全体で が許される変換となる。 …
+summary: 空間と時間の定義から、許される座標系の変換は等長写像(計量を保つ変換)であって、特に時間についてはそのうち向きも保つものに限られる。
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

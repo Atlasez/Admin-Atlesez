@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  準同型写像の定義 定義 1 (準同型写像). を群とする. 写像 が次の条件を満たすとき から
-  への準同型写像(homomorphism)という. - - . - . 特に群 から 自身への準同型写像は の自己準同型写像…
+summary: 「準同型写像の定義」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 40
 tags:

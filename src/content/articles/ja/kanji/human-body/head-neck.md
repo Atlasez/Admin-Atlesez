@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  頭・首 【一字】 頁 かしら 頭 こうべ あたま 顱 首 くび 頸 顳 ショウ 顬 ジュ 額 ひたい ぬか-ずく 頓 頂 いただき いただ-く
-  【熟語】 頭寒足熱顱頂鶴頸蟀谷/顳顬 のど・くび 【一字】 咽 のど 喉 嚥…
+summary: 「頭・首」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

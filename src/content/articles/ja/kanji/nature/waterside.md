@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  水辺 【一字】 岸 きし 圻 さかい 浜 はま 沂 ほとり ふち 潯 きし 滸 濆 潭 瀕 瀲 涯 瀕 畔 沙 沚 なぎさ 汀 渚 浦 うら
-  磯 いそ 礒 磧 かわら 【熟語】 水辺の入り組んだところ 【一字】 湾 いり…
+summary: 「水辺」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

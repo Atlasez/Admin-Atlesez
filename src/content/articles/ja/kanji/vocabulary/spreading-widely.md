@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  あまねし 【一字】 弥 あまね-し わた-る 洽 浹 溥 ひろ-い おお-きい 旁 泛 あまね-く 周 普 遍 【熟語】 はびこる 【一字】
-  瀰 はびこ-る ひろ-い 扈 衍 ひろ-がる 莚 のびる 蔓 滔 【熟語】 し…
+summary: 「広く行き渡る」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

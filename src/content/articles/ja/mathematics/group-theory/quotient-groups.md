@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  剰余群の定義 定義 1 (剰余群). を群, をその正規部分群とする. このとき剰余集合 上の演算を に対して
-  で定めることができる(well-defined). この演算による群 を の による剰余群(quotient…
+summary: 「剰余群の定義と部分群の対応」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

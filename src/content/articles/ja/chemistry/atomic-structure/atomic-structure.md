@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 原子は化学における物質の最小の基本単位であるが、素粒子ではなく内部構造を持っている。その内部構造と性質の最小単位である元素との関係を見ていこう。 …
+summary: 原子は化学における物質の最小の基本単位であるが、素粒子ではなく内部構造を持っている。
 difficulty: basic
 estimatedMinutes: 15
 tags:

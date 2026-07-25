@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 順序集合の部分構造として上方集合を定義し、関連する概念やそれらの性質について概観する。 …
+summary: 順序集合の部分構造として上方集合を定義し、関連する概念やそれらの性質について概観する。
 difficulty: intermediate
 estimatedMinutes: 25
 tags:

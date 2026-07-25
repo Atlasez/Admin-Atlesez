@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  方向 【一字】 上 うえ 下 した 左 ひだり 右 みぎ 前 まえ 後 うし-ろ 横 よこ 斜 なな-め はす 【熟語】
-  一上一下縦横縦横無尽斜交い 方角 【一字】 東 ひがし 西 にし 南 みなみ 北 きた 朔 【熟語…
+summary: 「方向・方角」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

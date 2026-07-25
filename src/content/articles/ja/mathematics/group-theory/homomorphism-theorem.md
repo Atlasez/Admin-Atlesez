@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  準同型定理 定理 1 (準同型定理). を群 から への群準同型とする. を の正規部分群として, を自然な射影とする. このとき準同型写像
-  で となるもの, すなわち以下の図式を可換にするものが一意的に存在する. さら…
+summary: 準同型定理は群の同型を与える上で非常に有用な定理である. 次の例は準同型定理を用いて同型を与える例である.
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

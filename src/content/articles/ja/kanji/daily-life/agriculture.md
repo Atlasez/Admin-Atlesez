@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  作物をつくる 【一字】 農 たがや-す 【熟語】 農作業・農民 【一字】 圃 ホ 【熟語】 農地 【一字】 田 た 畑 はたけ はた 畠 圃
-  疇 チュウ 隴 ロウ 佃 つくだ 【熟語】 うね 【一字】 畝 うね 疇 畦 …
+summary: 「農業」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  単元の定義 定義 1 (単元, 可逆元) - 単位的環 の元 が左単元(left unit)または左可逆元(left invertible
-  element)であるとは, となる左逆元 が存在することである. - 単位的環…
+summary: 可換環では左可逆元と右可逆元の区別はない.
 difficulty: intermediate
 estimatedMinutes: 30
 tags:

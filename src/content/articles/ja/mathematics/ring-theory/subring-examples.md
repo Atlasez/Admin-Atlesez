@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  単位的環の単位的部分環 以下は単位的環 の単位的部分環 の例である. 例 1 (有理整数環の単位的部分環) 単位的環 の単位的部分環 が
-  を満たすとする. このとき が加法で閉じていることから が従う. 例 2 (多項式…
+summary: 「部分環の例」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

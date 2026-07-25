@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 晴れた夜に空を見上げると、無数の煌めく光がある。これを星と呼ぶ。同じ場所で一晩中これを観察していると、星々は相互の位置関係はそのままに一定の速さで円あるいは円弧を描くように移動していることが分かる。まるで星々が固定された…
+summary: 晴れた夜に空を見上げると、無数の煌めく光がある。
 difficulty: basic
 estimatedMinutes: 20
 tags:

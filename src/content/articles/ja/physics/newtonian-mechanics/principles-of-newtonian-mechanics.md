@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: ここでは、ニュートン力学の原理を置く。当然、ニュートン力学における基本的な実験事実や経験法則と整合的な原理が採用されるが、ニュートン力学における全てのことは、その基本的な実験事実や経験法則も含めて、全て以下の原理から導か…
+summary: ここでは、ニュートン力学の原理を置く。
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

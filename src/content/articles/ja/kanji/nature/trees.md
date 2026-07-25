@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  木一般 【一字】 木 き こ 樹 う-える 幹 みき から 枝 えだ 【熟語】 樹静かにならんと欲すれども風止まず幹枝枝を矯めて花を散らす
-  針葉（高） 【一字】 松 まつ 杉 すぎ 檜 ひのき 榧 かや 樅 もみ 栂 と…
+summary: 「木」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

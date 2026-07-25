@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  1日の時間帯 【一字】 暁 あかつき 曙 あけぼの 夙 つと-に 早 はや-い 晁 あさ 朝 あした 旦 晨 よあ-け とき 旭 あさひ 暾
-  暘 ひので 昜 あ-がる 暹 昼 ひる 午 昃 ひるす-ぎ かたむ-く 仄 夕…
+summary: 「時間」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

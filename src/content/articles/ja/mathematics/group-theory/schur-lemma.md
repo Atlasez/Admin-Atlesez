@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  Schurの補題 補題 1 (Schurの補題). を の既約表現とする. を 準同型とすると は零写像か同型写像である. 証明. まず
-  の核を考えると は 不変部分空間であるから は既約表現なので に限られる. のとき…
+summary: 「Schurの補題」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 25
 tags:

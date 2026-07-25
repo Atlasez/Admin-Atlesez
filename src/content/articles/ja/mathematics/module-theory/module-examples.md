@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  例 1 (零加群) 自明な群 に の への作用を で定めることで は左 加群である. 同様に作用を で定めることで は右 加群である.
-  これを零加群という. 例 2 (ベクトル空間) 体は特に環でもあるので, 体 上のベ…
+summary: 「環上の加群の例」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 10
 tags:

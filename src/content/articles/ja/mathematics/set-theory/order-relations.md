@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 順序の定義 定義 1 (順序の定義). 上の二項関係であって、推移的かつ反射的であるものを前順序といい、 で表す。反対称的な前順序を半順序という。 …
+summary: 反対称的な前順序を半順序という。
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  みち 【一字】 道 みち 路 行 途 塗 隧 衢 馗 径 こみち ただ-ちに 逕 蹊 町 あぜみち 陌 みち 阡 はかみち 羨 嶝 さかみち
-  さか 【熟語】 阡陌陌上街陌逕路山逕逕庭隧道衢巷街衢九衢広衢交衢康衢 分かれ道…
+summary: 「道」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

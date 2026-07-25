@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 運動量変化と力積の関係から保存則を導くことを考える。 …
+summary: 運動量変化と力積の関係から保存則を導くことを考える。
 difficulty: intermediate
 estimatedMinutes: 10
 tags:

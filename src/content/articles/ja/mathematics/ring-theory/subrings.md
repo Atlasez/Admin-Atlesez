@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  部分環の定義 ここではまず部分環の定義を行い, より簡潔な必要十分条件を示す. そして部分環の共通部分,
-  和集合が部分環となる条件について触れる. 定義 1 (部分環) が環 の部分環(subring)であるとは, の部…
+summary: ここではまず部分環の定義を行い, より簡潔な必要十分条件を示す. そして部分環の共通部分, 和集合が部分環となる条件について触れる.
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

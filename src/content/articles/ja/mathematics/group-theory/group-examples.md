@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  例 1 (自明な群). 一点集合 は演算 により群をなす. 単位元は で, の逆元も である. これを自明群, 自明な群(trivial
-  group)という. 例 2. は加法に関して群をなす. 単位元は で, の逆元は…
+summary: 「群の例」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

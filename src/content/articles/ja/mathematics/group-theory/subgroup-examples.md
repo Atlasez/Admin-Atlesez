@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  例 1 (自明な部分群). 任意の群 に対して はともに の部分群である. これらを の自明な部分群という. 例 2 (特殊線形群, 直交群,
-  特殊直交群). 体 上の 次特殊線形群(special linear gro…
+summary: 「部分群の例」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

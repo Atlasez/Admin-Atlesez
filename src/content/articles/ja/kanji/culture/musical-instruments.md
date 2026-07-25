@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  管楽器/吹奏楽器 【一字】 笛 ふえ 管 龠 籥 竽 籟 笙 しょうのふえ 簫 簧 した 篪 ちのふえ 笳 あしぶえ 葭 壎 つちぶえ
-  【熟語】 笛吹けども踊らず葦笛（あしぶえ）〈横笛〉（ようじょう）角笛（つのぶえ）鳩笛…
+summary: 「楽器」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

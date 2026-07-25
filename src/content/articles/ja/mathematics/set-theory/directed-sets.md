@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 順序集合のうち、特定のクラスの部分集合が必ず上界(下界)を持つことによって特徴づけられるものを考える。 …
+summary: 順序集合のうち、特定のクラスの部分集合が必ず上界(下界)を持つことによって特徴づけられるものを考える。
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

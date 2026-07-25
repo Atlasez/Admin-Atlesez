@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  置換表現のうち, 線形空間 に作用し, またその線形構造を保つもの, すなわち に値を持つものを考える. 群の線形表現の定義 定義 1
-  (群の線形表現). を群, を体 上の線形空間とする. 準同型写像 を の 上の線形…
+summary: 「群の線形表現」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 35
 tags:

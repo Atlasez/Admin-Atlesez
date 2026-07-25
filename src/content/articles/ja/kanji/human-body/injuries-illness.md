@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  傷・傷跡 【一字】 傷 きず 創 瘡 痍 疵 瘢 きずあと 【熟語】 病/病にかかる/病に苦しむ 【一字】 病 やまい 疵 痒 痾 疾 や-む
-  疚 なや-む 鰥 厲 えやみ 瘟 痼 ながわずら-い 錮 疫 エキ 症 しる…
+summary: 「傷・病・体の不調」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

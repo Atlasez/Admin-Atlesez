@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  化学反応による物質の変化を化学式を用いて表したものを化学反応式という。化学反応によって変化する反応前の物質を反応物、化学反応によって変化した反応後の物質を生成物という。
-  …
+summary: 化学反応による物質の変化を化学式を用いて表したものを化学反応式という。
 difficulty: basic
 estimatedMinutes: 25
 tags:

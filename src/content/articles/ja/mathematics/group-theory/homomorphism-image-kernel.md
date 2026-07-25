@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  準同型写像による像と逆像 命題 1 (像, 逆像は部分群). を群 から への群準同型とする. をそれぞれ の部分群, をそれぞれ
-  の正規部分群とする. このとき以下が成り立つ. - は の部分群. - は の部分群. …
+summary: 「準同型写像の像と核」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

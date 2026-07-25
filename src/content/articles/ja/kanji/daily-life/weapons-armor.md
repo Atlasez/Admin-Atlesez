@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  かたな・つるぎ 【一字】 刀 かたな 剣 つるぎ 鋏 矛 ほこ 戈 鉾 仗 桙 戛 戟 槊 鉈 棘 鋒 ほこさき 斬 き-る 【熟語】 やり
-  【一字】 槍 やり 鎗 槍 【熟語】 弓矢 【一字】 弓 ゆみ 弧 きゆみ 弩…
+summary: 「武器・武具」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

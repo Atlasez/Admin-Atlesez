@@ -37,14 +37,80 @@ function plainText(markdown) {
     .trim();
 }
 
-export function makeSummary(body, title) {
-  const text = plainText(body);
-  if (!text) return `${title}について解説します。`;
-  const sentence =
-    text.match(/^.{1,118}?[。！？](?:\s|$)/u)?.[0] ?? text.slice(0, 110);
-  return sentence.length < text.length && !/[。！？]$/u.test(sentence)
-    ? `${sentence}…`
-    : sentence;
+/**
+ * 要約に使える「地の文」を先頭から順に返す。
+ *
+ * - 記事の冒頭（最初の見出しより前）と最初の節だけを見る。
+ *   奥から拾うと文脈のない一文が要約になってしまうため。
+ * - 見出し・表・箇条書き・別行立ての数式は段落ごと捨てる。
+ * - インライン数式を含む文も捨てる（数式を削ると意味が通らなくなるため）。
+ */
+function* proseSentences(markdown) {
+  const text = markdown
+    .replace(/```[\s\S]*?```/g, "\n\n")
+    .replace(/\$\$[\s\S]*?\$\$/g, "\n\n");
+  let headings = 0;
+  for (const paragraph of text.split(/\n{2,}/)) {
+    const para = paragraph.trim();
+    if (!para) continue;
+    if (/^#{1,6}\s/u.test(para)) {
+      headings += 1;
+      if (headings >= 2) return; // 第2節以降には踏み込まない
+      continue;
+    }
+    // 表・引用・箇条書き・番号付きリストは要約に向かない
+    if (/^([|>]|[-*+]\s|\d+\.\s)/u.test(para)) continue;
+    for (const raw of para.split(/(?<=[。！？])/u)) {
+      const sentence = raw
+        .replace(/[*_`[\]\\]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!sentence) continue;
+      if (sentence.includes("$")) continue;
+      // 「定義 1 (関係).」のような定理環境の見出しは要約にしない
+      if (/^(定義|定理|命題|補題|系|例|証明|注意|問|解)\s*\d/u.test(sentence)) {
+        continue;
+      }
+      // 助詞や活用語尾で始まる文は、直前の別行立て数式が段落を分断した残骸。
+      // （例:「…すなわち $$…$$ となるときこの群作用は推移的である.」の後半）
+      if (
+        /^(が|を|に|は|へ|と|で|も|や|の|から|まで|より|など|とき|となる|となり|とな|であ|でな|する|され|なる)/u.test(
+          sentence,
+        )
+      ) {
+        continue;
+      }
+      // 直前の文脈を受ける文は、単独で読むと意味が通らないので要約にしない
+      if (
+        /^(これ|それ|この|その|こう|そう|また|しかし|だが|よって|従って|したがって|すなわち|つまり|ゆえに|故に|以上|次に|同様に|一方)/u.test(
+          sentence,
+        )
+      ) {
+        continue;
+      }
+      yield sentence;
+    }
+  }
+}
+
+/** 地の文が取れない記事（語彙リスト・定義のみの記事など）の定型要約 */
+function fallbackSummary(body, title, subject) {
+  if (/【(一字|熟語)】/u.test(body)) {
+    return `「${title}」に関係する漢字と熟語をまとめています。`;
+  }
+  if (subject === "mathematics") {
+    return `「${title}」について、定義と基本的な性質をまとめています。`;
+  }
+  return `「${title}」について解説します。`;
+}
+
+export function makeSummary(body, title, subject) {
+  for (const sentence of proseSentences(body)) {
+    // 短すぎる断片と、長すぎて途中で切らざるを得ない文は飛ばす
+    if (sentence.length < 15 || sentence.length > 160) continue;
+    return sentence;
+  }
+  return fallbackSummary(body, title, subject);
 }
 
 export function estimateMinutes(body) {
@@ -77,7 +143,7 @@ export function writeArticle({
     status: "published",
     createdAt,
     updatedAt,
-    summary: makeSummary(body, title),
+    summary: makeSummary(body, title, subject),
     difficulty,
     estimatedMinutes: estimateMinutes(body),
     tags: [title],

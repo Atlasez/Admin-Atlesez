@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  薬 【一字】 薬 くすり 膏 コウ 剤 ザイ 丹 タン 樟 ショウ 【熟語】 毒 【一字】 毒 どく 螫 瘴 ショウ 鴆 チン 酖 蝮 まむし
-  中 あ-たる 【熟語】 のむ・のませる 【一字】 服 の-む 盛 も-る 【…
+summary: 「薬・毒」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

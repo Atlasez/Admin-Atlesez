@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 物質をその反応性によって分類することを考える。例えば水溶液の液性のように、特定の物質との反応性を調べると対照的な2つの性質のいずれかに分類でき、さらに別の基準や見方による分類が共通していたり同じ傾向を持っていたりすること…
+summary: 物質をその反応性によって分類することを考える。
 difficulty: basic
 estimatedMinutes: 35
 tags:

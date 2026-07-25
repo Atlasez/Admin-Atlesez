@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  空間と時間の数学的表現 空間は一様かつ平坦で単連結な3次元リーマン多様体であるという要請から、空間は3次元ユークリッド空間
-  であると一意に定まる。時間は一様で連結な向きづけられた1次元リーマン多様体であるという要請から、…
+summary: 空間上、時間上の点をそれぞれ地点、時点と呼ぶ。
 difficulty: intermediate
 estimatedMinutes: 20
 tags:

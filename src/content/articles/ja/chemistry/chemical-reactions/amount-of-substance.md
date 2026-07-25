@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  化学反応は粒子同士の作用なので、その個数が大事である。しかしその粒子は我々からすれば小さくて多いため、数えられない。一方多数の粒子からなる物質の質量であれば測れる。
-  …
+summary: 化学反応は粒子同士の作用なので、その個数が大事である。
 difficulty: basic
 estimatedMinutes: 40
 tags:

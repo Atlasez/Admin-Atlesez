@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  うし 【一字】 牛 うし 丑 特 おうし 犢 こうし 犖 まだらうし 犂 牟 な-く 【熟語】
-  牛に対して琴を弾ず牛に引かれて善光寺参り〈特牛〉舐犢舐犢の愛犂牛犂牛の喩え うま一般 【一字】 馬 うま ま 午 嘶 いなな…
+summary: 「牛馬」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  巡回群 定義 1 (巡回部分群, 巡回群). 群 に対して, ある が存在して となるとき, を巡回群(cyclic group)という.
-  また, の部分群で巡回群であるものを の巡回部分群(cyclic subgrou…
+summary: 「巡回群」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 35
 tags:

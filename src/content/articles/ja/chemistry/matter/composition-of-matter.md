@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 私たちの身の回りには様々な性質を持つ「もの」がある。まずはこれらをその性質に基づいて分類するところから始めよう。 …
+summary: 私たちの身の回りには様々な性質を持つ「もの」がある。
 difficulty: basic
 estimatedMinutes: 25
 tags:

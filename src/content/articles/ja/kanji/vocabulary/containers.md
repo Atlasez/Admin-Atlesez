@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  はこ 【一字】 箱 はこ 函 い-れる 匱 ひつ 櫃 筥 筐 かたみ 篋 匣 笥 け 簞 わりご ひさご 匚 匳 こばこ くしげ 筲 めしびつ
-  盧 【熟語】 かご 【一字】 籠 かご こ-もる 轎 やまかご 篝 ふせご …
+summary: 「いれもの」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

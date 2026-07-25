@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  自己同型群の定義 定義 1 (自己同型群). 群 の自己同型写像全体の集合 は写像の合成を演算として群をなす. これを
-  の自己同型群(automorphism group)という. 自己同型群の単位元は恒等写像である. …
+summary: 「自己同型群」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 40
 tags:

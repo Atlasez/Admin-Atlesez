@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 2つ以上の任意の集合に対して、それらから新たな集合を作り出す演算を考える。まずは、構成される集合の元が皆与えられた集合の元である場合を見る。 …
+summary: 2つ以上の任意の集合に対して、それらから新たな集合を作り出す演算を考える。
 difficulty: intermediate
 estimatedMinutes: 25
 tags:

@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  左加群の定義 定義 1 (左R加群) を単位的環とする. 集合 と の組 が以下の条件を満たすとき, を 左 加群と呼ぶ.
-  が可換群であるとは, 以下の条件を満たすことをいう. - (二項演算の閉性) 上の閉じた二項演算…
+summary: 「環上の加群の定義」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 45
 tags:

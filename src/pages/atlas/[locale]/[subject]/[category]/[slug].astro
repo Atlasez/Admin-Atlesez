@@ -178,7 +178,8 @@ const structuredData = {
       </div>
       <header class="article-header">
         <h1 id="article-title">{entry.data.title}</h1>
-        <p class="article-summary">{entry.data.summary}</p>
+        {/* 要約は本文冒頭と重複しがちなので記事ページでは出さない。
+            一覧ページ・検索結果・meta description では引き続き使う。 */}
         <p class="article-badges">
           <span class="badge">
             {t(locale, "updatedAt")}:
@@ -429,10 +430,6 @@ const structuredData = {
   }
   .article-header h1 {
     margin-bottom: var(--space-2);
-  }
-  .article-summary {
-    color: var(--text-secondary);
-    font-size: calc(1.05rem * var(--text-scale));
   }
   .article-badges {
     display: flex;

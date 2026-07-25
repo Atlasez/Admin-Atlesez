@@ -13,8 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 質点・質点系 質点は、原理において質点の運動 、慣性質量 、チャージ(荷)
-  (チャージは1つとは限らない)の組として定義される。これは自然との対応の観点からは、物体の位置と運動と力の大きさに関わる量以外の大きさなどといっ…
+summary: 質点系は1つ以上の質点の組である。
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

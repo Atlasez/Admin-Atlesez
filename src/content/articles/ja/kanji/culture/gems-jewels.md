@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  宝玉・宝石 【一字】 玉 たま 珠 瑶 璇 セン 瓊 に 環 たまき 瑛 エイ 玖 キュウ 瑾 キン 瑜 ユ 玫 バイ 瑰 カイ 琅 ロウ 琥
-  コ 圭 たま 珪 璋 【熟語】 瓊瑰瑾瑜琳琅圭璋 色が美しいさま 【一字】 …
+summary: 「宝玉・宝石」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

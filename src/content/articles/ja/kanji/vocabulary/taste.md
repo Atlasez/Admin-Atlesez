@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  味 【一字】 味 あじ あじ-わう 濃 こ-い 薄 うす-い 淡 あわ-い 澹 【熟語】 あまい・うまい 【一字】 蜜 ミツ 醴 あま-い 甘
-  うま-い 甜 旨 美 ビ 滋 ジ 【熟語】 すっぱい 【一字】 酸 す す-…
+summary: 「味」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

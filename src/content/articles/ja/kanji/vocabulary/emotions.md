@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  よろこぶ・たのしむ 【一字】 喜 よろこ-ぶ 怡 懌 たの-しむ 僖 悦 賀 歓 驩 よろこ-び 讙 懽 忻 欣 慶 嬉 うれ-しい
-  たの-しむ 娯 楽 たの-しい 愉 【熟語】 いかる・うらむ 【一字】 怒 いか-る …
+summary: 「感情」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

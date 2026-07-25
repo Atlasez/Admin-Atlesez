@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  単元群の定義 命題 1 (単元群) 単位的環 の単元全体を と表す. このとき は環の乗法を演算として群をなす. を単元群(group of
-  units)または乗法群(multiplicative group)と呼ぶ. …
+summary: 単位的可換環の単元群はアーベル群である. また左単元全体を考えた場合, 積で閉じるが逆元が存在するとは限らない.
 difficulty: intermediate
 estimatedMinutes: 15
 tags:

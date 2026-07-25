@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  関係の定義 定義 1 (関係). 集合族 に対して、これらの直積集合の部分集合 を考える. このとき, 組 を
-  上の関係(relation)という. 特に が濃度 の有限集合であるとき、 項関係( -ary relati…
+summary: 「関係」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 30
 tags:

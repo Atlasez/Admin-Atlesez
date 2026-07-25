@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  元素の性質は電子配置によって決まる。そのため各元素の性質の類似や相違は電子配置の類似や相違に起因する。よって電子配置の規則から、原子番号の増加に伴って性質の類似した元素が周期的に現れる。これを周期律という。
-  …
+summary: 元素の性質は電子配置によって決まる。
 difficulty: basic
 estimatedMinutes: 45
 tags:

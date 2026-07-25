@@ -13,8 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 屈性と細胞の伸長
-  オーキシンは植物の成長を促進する植物ホルモンである。その作用メカニズムとして酸成長説(酸成長仮説)が考えられている。酸成長説において、オーキシンは細胞壁のセルロース繊維の結合に対して間接的に作用すること…
+summary: オーキシンは植物の成長を促進する植物ホルモンである。
 difficulty: basic
 estimatedMinutes: 35
 tags:

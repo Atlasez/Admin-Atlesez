@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  対称群の定義 定義 1 ((一般の)対称群). 集合 に対し を から への全単射全体の集合とすると写像の合成を演算として群となる. これを
-  の対称群(symmetric group)とよぶ. の元は置換(permuta…
+summary: 対称群は元となる集合の濃度によって特徴づけられる.
 difficulty: intermediate
 estimatedMinutes: 25
 tags:

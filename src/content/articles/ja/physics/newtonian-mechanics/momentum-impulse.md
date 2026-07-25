@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 質点の運動量と力積 質点 の運動方程式を時間積分することを考える。時刻 から までの運動について、 の両辺を で積分すると、 より、 を得る。 …
+summary: 「運動量と力積」について解説します。
 difficulty: intermediate
 estimatedMinutes: 10
 tags:

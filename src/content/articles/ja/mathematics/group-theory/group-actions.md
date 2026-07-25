@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  群の作用の定義 定義 1 (左群作用). 群 と集合 に対し, 演算 が定まっているとする. 次の条件を満たすとき は
-  に左から作用する(act on from the left)といい, 演算 を左群作用(left g…
+summary: 「群の作用と置換表現の定義」について、定義と基本的な性質をまとめています。
 difficulty: intermediate
 estimatedMinutes: 25
 tags:

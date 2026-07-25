@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  飲む 【一字】 飲 の-む 漿 のみもの 【熟語】 飲食飲料飲み止し水漿 飲み物をつぐ・そそぐ 【一字】 注 そそ-ぐ つ-ぐ 酌 く-む 献
-  コン 【熟語】 酌飲晩酌独酌 酒の種類 【一字】 酒 さけ さか 麹 鬯 に…
+summary: 「飲み物」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 10
 tags:

@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 実際のバネは質量を持つ。質量のあるバネを鉛直方向に吊り下げると、自重の分、質量のないバネよりも伸びるはずだ。 …
+summary: 質量のあるバネを鉛直方向に吊り下げると、自重の分、質量のないバネよりも伸びるはずだ。
 difficulty: intermediate
 estimatedMinutes: 10
 tags:

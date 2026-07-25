@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  脚 【一字】 脚 あし 腿 もも 股 もも また 脾 髀 膝 ひざ 臑 すね 脛 はぎ 骭 腓 こむら ふくらはぎ 【熟語】
-  股肱の臣髀肉の嘆臑齧り/脛齧り腓返り 足 【一字】 足 あし 趾 趺 蹠 あしのうら ふ-む …
+summary: 「脚・足」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:

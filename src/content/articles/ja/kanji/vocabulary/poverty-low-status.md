@@ -13,9 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary:
-  まずしい・いやしい 【一字】 乏 とぼ-しい 匱 貧 まず-しい 窶 やつ-す やつ-れる 寒 いや-しい 賤 あや-しい いや-しめる しず
-  卑 ひく-い いや-しむ 鄙 隘 仄 俗 野 俚 劣 おと-る 陋 せま-い…
+summary: 「まずしい・いやしい」に関係する漢字と熟語をまとめています。
 difficulty: basic
 estimatedMinutes: 5
 tags:
