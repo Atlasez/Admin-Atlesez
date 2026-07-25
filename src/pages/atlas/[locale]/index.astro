@@ -238,7 +238,11 @@ const summary =
     align-items: center;
     gap: var(--space-2);
   }
+  /* min-height はWCAG 2.5.8（ターゲットサイズ 24px）を満たすため */
   .subject-name {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
     font-size: calc(1.3rem * var(--text-scale));
     font-weight: 650;
     text-decoration: none;
@@ -248,10 +252,13 @@ const summary =
     color: var(--accent-primary);
     text-decoration: underline;
   }
+  /* 24px 未満だと WCAG 2.5.8（ターゲットサイズ）違反になる */
   .subject-info {
     flex: 0 0 auto;
-    width: 1.35rem;
-    height: 1.35rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    min-width: 24px;
+    min-height: 24px;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -286,12 +293,14 @@ const summary =
     font-size: calc(0.85rem * var(--text-scale));
     line-height: 1.55;
   }
-  .subject-tile.is-preparing {
-    opacity: 0.72;
-  }
+  /* 準備中は opacity で淡くしない（コントラスト比が 4.5:1 を割るため）。
+     色は --text-secondary のまま、太さと下線の有無で区別する。 */
   .subject-tile.is-preparing .subject-name {
-    color: var(--text-muted);
-    font-weight: 550;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .subject-tile.is-preparing {
+    border-bottom-style: dashed;
   }
 
   /* ---- 最近更新された記事（右カラム・スクロール） ---- */
@@ -332,7 +341,7 @@ const summary =
   }
   .recent-list time {
     flex: 0 0 auto;
-    color: var(--text-muted);
+    color: var(--text-secondary);
     font-size: calc(0.72rem * var(--text-scale));
     font-variant-numeric: tabular-nums;
   }
