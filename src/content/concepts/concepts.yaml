@@ -534,8 +534,7 @@
   name:
     ja: 想像/伝説上の生物
   prerequisites: []
-  recommendedNext:
-    - kanji.supernatural-religion.buddhism
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.supernatural-religion.buddhism
@@ -553,9 +552,8 @@
   name:
     ja: 気象・天候
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.sun-moon-stars
-  related: []
+  recommendedNext: []
+  related: [kanji.nature.sky]
   alternatives: []
 - id: kanji.nature.sky
   subject: kanji
@@ -563,9 +561,8 @@
   name:
     ja: 空
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.weather
-  related: []
+  recommendedNext: []
+  related: [kanji.nature.weather]
   alternatives: []
 - id: kanji.nature.sun-moon-stars
   subject: kanji
@@ -573,9 +570,8 @@
   name:
     ja: 太陽・月・星
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.temperature
-  related: []
+  recommendedNext: []
+  related: [kanji.vocabulary.time]
   alternatives: []
 - id: kanji.nature.directions
   subject: kanji
@@ -592,8 +588,7 @@
   name:
     ja: 寒暖
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.waterside
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.nature.terrain
@@ -602,8 +597,7 @@
   name:
     ja: 地勢
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.rocks-sand
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.nature.rocks-sand
@@ -612,8 +606,7 @@
   name:
     ja: 岩石・砂
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.trees
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.nature.waterside
@@ -622,9 +615,8 @@
   name:
     ja: 水辺
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.terrain
-  related: []
+  recommendedNext: []
+  related: [kanji.society.flood-control, kanji.daily-life.ships]
   alternatives: []
 - id: kanji.nature.trees
   subject: kanji
@@ -632,8 +624,7 @@
   name:
     ja: 木
   prerequisites: []
-  recommendedNext:
-    - kanji.nature.directions
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.society.crime-punishment
@@ -642,9 +633,8 @@
   name:
     ja: 罪刑
   prerequisites: []
-  recommendedNext:
-    - kanji.society.flood-control
-  related: []
+  recommendedNext: []
+  related: [kanji.daily-life.weapons-armor]
   alternatives: []
 - id: kanji.society.relationships-family
   subject: kanji
@@ -652,9 +642,8 @@
   name:
     ja: 人間関係・家族
   prerequisites: []
-  recommendedNext:
-    - kanji.society.crime-punishment
-  related: []
+  recommendedNext: []
+  related: [kanji.vocabulary.cities-villages]
   alternatives: []
 - id: kanji.society.flood-control
   subject: kanji
@@ -663,7 +652,7 @@
     ja: 治水
   prerequisites: []
   recommendedNext: []
-  related: []
+  related: [kanji.nature.waterside]
   alternatives: []
 - id: kanji.daily-life.metals
   subject: kanji
@@ -671,9 +660,8 @@
   name:
     ja: 金属
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.numbers-units
-  related: []
+  recommendedNext: []
+  related: [kanji.culture.gems-jewels]
   alternatives: []
 - id: kanji.daily-life.flags-banners
   subject: kanji
@@ -681,8 +669,7 @@
   name:
     ja: 旗・幟
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.fire-light
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.daily-life.fire-light
@@ -691,8 +678,7 @@
   name:
     ja: 火・明かり
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.metals
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.daily-life.numbers-units
@@ -701,8 +687,7 @@
   name:
     ja: 数・単位
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.medicine-poison
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.daily-life.curtains-tents
@@ -711,8 +696,7 @@
   name:
     ja: 幕・帳
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.ships
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.daily-life.medicine-poison
@@ -721,9 +705,8 @@
   name:
     ja: 薬・毒
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.weapons-armor
-  related: []
+  recommendedNext: []
+  related: [kanji.human-body.injuries-illness]
   alternatives: []
 - id: kanji.daily-life.weapons-armor
   subject: kanji
@@ -731,9 +714,8 @@
   name:
     ja: 武器・武具
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.beverages
-  related: []
+  recommendedNext: []
+  related: [kanji.society.crime-punishment]
   alternatives: []
 - id: kanji.vocabulary.containers
   subject: kanji
@@ -741,8 +723,7 @@
   name:
     ja: いれもの
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.roads
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.daily-life.beverages
@@ -751,9 +732,8 @@
   name:
     ja: 飲み物
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.curtains-tents
-  related: []
+  recommendedNext: []
+  related: [kanji.vocabulary.cooking]
   alternatives: []
 - id: kanji.daily-life.grains
   subject: kanji
@@ -761,9 +741,8 @@
   name:
     ja: 穀物
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.agriculture
-  related: []
+  recommendedNext: []
+  related: [kanji.daily-life.agriculture, kanji.vocabulary.cooking]
   alternatives: []
 - id: kanji.daily-life.cattle-horses
   subject: kanji
@@ -771,9 +750,8 @@
   name:
     ja: 牛馬
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.grains
-  related: []
+  recommendedNext: []
+  related: [kanji.daily-life.agriculture]
   alternatives: []
 - id: kanji.daily-life.agriculture
   subject: kanji
@@ -782,7 +760,7 @@
     ja: 農業
   prerequisites: []
   recommendedNext: []
-  related: []
+  related: [kanji.daily-life.grains, kanji.daily-life.cattle-horses]
   alternatives: []
 - id: kanji.daily-life.ships
   subject: kanji
@@ -790,9 +768,8 @@
   name:
     ja: 船
   prerequisites: []
-  recommendedNext:
-    - kanji.daily-life.cattle-horses
-  related: []
+  recommendedNext: []
+  related: [kanji.nature.waterside]
   alternatives: []
 - id: kanji.culture.musical-instruments
   subject: kanji
@@ -800,8 +777,7 @@
   name:
     ja: 楽器
   prerequisites: []
-  recommendedNext:
-    - kanji.culture.gems-jewels
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.culture.gems-jewels
@@ -811,7 +787,7 @@
     ja: 宝玉・宝石
   prerequisites: []
   recommendedNext: []
-  related: []
+  related: [kanji.daily-life.metals]
   alternatives: []
 - id: kanji.human-body.mind-heart
   subject: kanji
@@ -819,9 +795,8 @@
   name:
     ja: 心
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.skin-muscles-bones-organs
-  related: []
+  recommendedNext: []
+  related: [kanji.vocabulary.emotions]
   alternatives: []
 - id: kanji.human-body.hair
   subject: kanji
@@ -829,8 +804,7 @@
   name:
     ja: 髪
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.face
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.skin-muscles-bones-organs
@@ -839,8 +813,7 @@
   name:
     ja: 皮膚・筋肉・骨・内臓・膜・脂肪・血
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.injuries-illness
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.head-neck
@@ -849,8 +822,7 @@
   name:
     ja: 頭・首
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.mind-heart
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.face
@@ -859,8 +831,7 @@
   name:
     ja: 顔
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.head-neck
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.body-torso
@@ -869,8 +840,7 @@
   name:
     ja: 体全体・胴体
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.hair
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.shoulders-arms
@@ -879,8 +849,7 @@
   name:
     ja: 肩・脇・腕
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.legs-feet
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.legs-feet
@@ -889,8 +858,7 @@
   name:
     ja: 脚・足
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.hands
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.human-body.hands
@@ -908,9 +876,8 @@
   name:
     ja: 傷・病・体の不調
   prerequisites: []
-  recommendedNext:
-    - kanji.human-body.shoulders-arms
-  related: []
+  recommendedNext: []
+  related: [kanji.daily-life.medicine-poison]
   alternatives: []
 - id: kanji.vocabulary.colors
   subject: kanji
@@ -918,9 +885,8 @@
   name:
     ja: 色
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.patterns
-  related: []
+  recommendedNext: []
+  related: [kanji.vocabulary.patterns]
   alternatives: []
 - id: kanji.vocabulary.roads
   subject: kanji
@@ -928,8 +894,7 @@
   name:
     ja: 道
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.colors
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.selection
@@ -938,8 +903,7 @@
   name:
     ja: 取捨選択
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.forgiveness
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.time
@@ -948,9 +912,8 @@
   name:
     ja: 時間
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.selection
-  related: []
+  recommendedNext: []
+  related: [kanji.nature.sun-moon-stars]
   alternatives: []
 - id: kanji.vocabulary.patterns
   subject: kanji
@@ -958,9 +921,8 @@
   name:
     ja: 模様
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.emotions
-  related: []
+  recommendedNext: []
+  related: [kanji.vocabulary.colors]
   alternatives: []
 - id: kanji.vocabulary.smells
   subject: kanji
@@ -968,8 +930,7 @@
   name:
     ja: 匂い
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.time
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.forgiveness
@@ -978,8 +939,7 @@
   name:
     ja: 許す
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.cooking
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.emotions
@@ -988,9 +948,8 @@
   name:
     ja: 感情
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.smells
-  related: []
+  recommendedNext: []
+  related: [kanji.human-body.mind-heart]
   alternatives: []
 - id: kanji.vocabulary.spreading-widely
   subject: kanji
@@ -998,8 +957,7 @@
   name:
     ja: 広く行き渡る
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.poverty-low-status
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.poverty-low-status
@@ -1008,8 +966,7 @@
   name:
     ja: まずしい・いやしい
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.rebuking
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.taste
@@ -1018,8 +975,7 @@
   name:
     ja: 味
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.spreading-widely
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.cooking
@@ -1028,9 +984,8 @@
   name:
     ja: 調理
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.sincerity
-  related: []
+  recommendedNext: []
+  related: [kanji.daily-life.beverages, kanji.daily-life.grains]
   alternatives: []
 - id: kanji.vocabulary.sincerity
   subject: kanji
@@ -1038,8 +993,7 @@
   name:
     ja: まこと・まごころ
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.self-indulgence
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.self-indulgence
@@ -1048,8 +1002,7 @@
   name:
     ja: ほしいまま
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.taste
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.restraint
@@ -1058,8 +1011,7 @@
   name:
     ja: つつしむ
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.kinds
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.retreating
@@ -1068,8 +1020,7 @@
   name:
     ja: しりぞく
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.restraint
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.greed
@@ -1078,8 +1029,7 @@
   name:
     ja: むさぼる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.retreating
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.kinds
@@ -1088,8 +1038,7 @@
   name:
     ja: たぐい
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.criticism
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.reaching
@@ -1098,8 +1047,7 @@
   name:
     ja: いたる・いたす
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.greed
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.rebuking
@@ -1108,8 +1056,7 @@
   name:
     ja: しかる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.reaching
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.criticism
@@ -1118,8 +1065,7 @@
   name:
     ja: そしる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.flattery
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.detail
@@ -1128,8 +1074,7 @@
   name:
     ja: くわしい
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.taboo
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.repetition
@@ -1138,8 +1083,7 @@
   name:
     ja: ふたたび
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.detail
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.flattery
@@ -1148,8 +1092,7 @@
   name:
     ja: こびへつらう
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.analogy
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.analogy
@@ -1158,8 +1101,7 @@
   name:
     ja: たとえる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.looking-peeking
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.looking-peeking
@@ -1168,8 +1110,7 @@
   name:
     ja: のぞく・うかがう
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.repetition
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.suddenly
@@ -1178,8 +1119,7 @@
   name:
     ja: たちまち・にわか
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.following
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.taboo
@@ -1188,8 +1128,7 @@
   name:
     ja: いむ
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.confusion
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.confusion
@@ -1198,8 +1137,7 @@
   name:
     ja: まよう・まどう
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.waiting-welcoming
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.involvement
@@ -1208,8 +1146,7 @@
   name:
     ja: かかわる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.suddenly
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.following
@@ -1218,8 +1155,7 @@
   name:
     ja: したがう
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.comparison
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.waiting-welcoming
@@ -1228,8 +1164,7 @@
   name:
     ja: まつ・むかえる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.involvement
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.comparison
@@ -1238,8 +1173,7 @@
   name:
     ja: 比較
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.lies-deception
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.lies-deception
@@ -1248,8 +1182,7 @@
   name:
     ja: 嘘・偽る
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.troublesome
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.continuation
@@ -1258,8 +1191,7 @@
   name:
     ja: つづく・つらなる
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.obstruction
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.troublesome
@@ -1268,8 +1200,7 @@
   name:
     ja: わずらわしい
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.continuation
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.obstruction
@@ -1278,8 +1209,7 @@
   name:
     ja: さまたげる・はばむ
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.appearance-expression
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.appearance-expression
@@ -1288,8 +1218,7 @@
   name:
     ja: あらわれる・あらわす
   prerequisites: []
-  recommendedNext:
-    - kanji.vocabulary.cities-villages
+  recommendedNext: []
   related: []
   alternatives: []
 - id: kanji.vocabulary.cities-villages
@@ -1299,7 +1228,7 @@
     ja: 都市・村落
   prerequisites: []
   recommendedNext: []
-  related: []
+  related: [kanji.society.relationships-family]
   alternatives: []
 - id: kobun.classical-literature.tale-of-the-bamboo-cutter-overview
   subject: kobun
