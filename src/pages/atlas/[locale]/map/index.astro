@@ -1,0 +1,994 @@
+---
+/**
+ * 学習地図。グラフ表示（Cytoscape.js）＋アクセシブルな代替表示（階層リスト・表・経路検索フォーム）。
+ * グラフはあくまで表示手段の一つで、すべての情報・操作はHTMLでも完了できる。
+ */
+import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../components/Breadcrumb.astro";
+import { atlasPath, withBase, articlePath } from "../../../../lib/site";
+import {
+  t,
+  LOCALES,
+  localizedName,
+  edgeLabel,
+  type Locale,
+} from "../../../../lib/i18n";
+import {
+  getConcepts,
+  getPublishedSubjects,
+  getPublishedArticles,
+  indexArticlesByConcept,
+} from "../../../../lib/content";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+const { list, map } = await getConcepts();
+const subjects = (await getPublishedSubjects()).filter(
+  (s) => s.data.status === "published",
+);
+const articles = await getPublishedArticles(locale);
+const byConcept = indexArticlesByConcept(articles);
+
+const nameOf = (id: string) => {
+  const c = map.get(id);
+  return c ? localizedName(c.name, locale) : id;
+};
+const graphUrl = withBase("/atlas/graph.json");
+
+const edgeKinds = [
+  "prerequisite",
+  "recommended-next",
+  "related",
+  "part-of",
+  "alternative",
+] as const;
+
+/** 分野ごとの色（グループ化・色分け用）。順に割り当てる。 */
+const subjectPalette = [
+  "#2f6f9f",
+  "#b5651d",
+  "#7a4fb5",
+  "#2e8b6f",
+  "#c2427a",
+  "#4a7a1f",
+  "#9a6a00",
+  "#3a6ea5",
+  "#a23e48",
+  "#5f6caf",
+];
+const subjectMeta = subjects.map((s, i) => ({
+  slug: s.data.slug,
+  name: localizedName(s.data.name, locale),
+  color: subjectPalette[i % subjectPalette.length],
+}));
+const subjectMetaJson = JSON.stringify(subjectMeta);
+---
+
+<AtlasLayout
+  locale={locale}
+  title={t(locale, "map")}
+  description={locale === "ja"
+    ? "概念の前提関係をたどれる学習地図。開始地点と目的地点を選ぶと学習ルートを表示します。"
+    : "A learning map of concepts and their prerequisites, with route search."}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, "map")]),
+  )}
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: t(locale, "map") },
+      ]}
+    />
+    <h1>{t(locale, "map")}</h1>
+    <p class="reading">
+      {
+        locale === "ja"
+          ? "各ノードは学ぶ項目、つなぎ線は前提項目と次に学ぶ項目の関係を表します。ノードは分野ごとに色分けした枠でまとめています。グラフが使いにくい場合は、下の「リスト表示」「表形式」「学習ルート検索」から同じ情報を利用できます。"
+          : "Each node is a learning topic and the connectors show prerequisites and what follows. Nodes are grouped into colored boxes by subject. The same information is available below as a list, a table, and a route-search form."
+      }
+    </p>
+
+    <section aria-labelledby="graph-heading">
+      <h2 id="graph-heading">
+        {locale === "ja" ? "概念マップ（分野別）" : "Concept map by subject"}
+      </h2>
+      <div class="map-toolbar" data-graph-controls hidden>
+        <label for="map-search" class="visually-hidden">
+          {t(locale, "search")}
+        </label>
+        <input
+          id="map-search"
+          type="search"
+          list="map-node-names"
+          placeholder={t(locale, "searchPlaceholder")}
+          data-map-search
+        />
+        <datalist id="map-node-names">
+          {list.map((c) => <option value={localizedName(c.name, locale)} />)}
+        </datalist>
+        <label for="map-subject" class="map-subject-label">
+          {t(locale, "subjects")}
+        </label>
+        <select id="map-subject" data-map-subject>
+          <option value="">{t(locale, "all")}</option>
+          {
+            subjects.map((s) => (
+              <option value={s.data.slug}>
+                {localizedName(s.data.name, locale)}
+              </option>
+            ))
+          }
+        </select>
+        <span class="map-status" data-map-status aria-live="polite"></span>
+        <button type="button" class="button button-secondary" data-map-fit>
+          {t(locale, "fitView")}
+        </button>
+        <button type="button" class="button button-secondary" data-map-reset>
+          {t(locale, "resetView")}
+        </button>
+        <button type="button" class="button button-secondary" data-map-share>
+          {t(locale, "shareView")}
+        </button>
+      </div>
+      <p class="map-thread-hint" data-graph-controls hidden>
+        {
+          locale === "ja"
+            ? "各ノードは学ぶ項目です。分野ごとに色分けした枠でまとめ、枠の中では前提項目から次の項目へ右に伸びる学習順で並びます。分野を選ぶとその分野だけを表示できます。"
+            : "Each node is a topic. Nodes are grouped into colored boxes by subject; within a box they follow the learning order from prerequisites rightward. Pick a subject to focus on it."
+        }
+      </p>
+      <ul class="subject-legend" data-graph-controls hidden aria-label={t(locale, "subjects")}>
+        {
+          subjectMeta.map((s) => (
+            <li>
+              <span
+                class="subject-swatch"
+                style={`background:${s.color}`}
+                aria-hidden="true"
+              />
+              <span>{s.name}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <div
+        class="map-canvas"
+        id="learning-map"
+        role="application"
+        aria-label={t(locale, "map")}
+        data-graph-url={graphUrl}
+        data-locale={locale}
+        data-base={withBase("/")}
+        data-subjects={subjectMetaJson}
+      >
+        <noscript>
+          {
+            locale === "ja"
+              ? "グラフ表示にはJavaScriptが必要です。下のリスト表示・表形式をご利用ください。"
+              : "The graph requires JavaScript. Please use the list and table views below."
+          }
+        </noscript>
+      </div>
+      <div class="map-detail" data-map-detail aria-live="polite"></div>
+      <details class="map-legend">
+        <summary>{t(locale, "legend")}</summary>
+        <ul class="details-body legend-list">
+          {
+            edgeKinds.map((kind) => (
+              <li>
+                <span class={`legend-line legend-${kind}`} aria-hidden="true" />
+                <span>{edgeLabel(locale, kind)}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </details>
+    </section>
+
+    <section aria-labelledby="route-heading">
+      <h2 id="route-heading">{t(locale, "routeSearch")}</h2>
+      <form data-route-form class="route-form">
+        <div>
+          <label for="route-start">{t(locale, "routeStart")}</label>
+          <select id="route-start" data-route-start>
+            <option value="">
+              {locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}
+            </option>
+            {
+              list.map((c) => (
+                <option value={c.id}>{localizedName(c.name, locale)}</option>
+              ))
+            }
+          </select>
+        </div>
+        <div>
+          <label for="route-goal">{t(locale, "routeGoal")}</label>
+          <select id="route-goal" data-route-goal required>
+            <option value="">---</option>
+            {
+              list.map((c) => (
+                <option value={c.id}>{localizedName(c.name, locale)}</option>
+              ))
+            }
+          </select>
+        </div>
+        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
+      </form>
+      <div data-route-result aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="list-heading">
+      <h2 id="list-heading">{t(locale, "listAlternative")}</h2>
+      {
+        subjects.map((s) => (
+          <details open>
+            <summary>{localizedName(s.data.name, locale)}</summary>
+            <div class="details-body">
+              {s.data.categories.map((cat) => {
+                const catConcepts = list.filter(
+                  (c) =>
+                    c.subject === s.data.slug && c.category === cat.slug,
+                );
+                return (
+                  <section>
+                    <h3>{localizedName(cat.name, locale)}</h3>
+                    <ul>
+                      {catConcepts.map((c) => {
+                        const arts = byConcept.get(c.id) ?? [];
+                        const first = arts[0];
+                        return (
+                          <li>
+                            {first ? (
+                              <a
+                                href={articlePath(
+                                  locale,
+                                  first.data.subject,
+                                  first.data.category,
+                                  first.data.slug,
+                                )}
+                              >
+                                {localizedName(c.name, locale)}
+                              </a>
+                            ) : (
+                              <>
+                                {localizedName(c.name, locale)}
+                                <span class="badge">
+                                  {t(locale, "preparing")}
+                                </span>
+                              </>
+                            )}
+                            {c.prerequisites.length > 0 && (
+                              <span class="prereq-note">
+                                （{t(locale, "prerequisites")}:{" "}
+                                {c.prerequisites.map(nameOf).join("、")}）
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
+          </details>
+        ))
+      }
+    </section>
+
+    <section aria-labelledby="table-heading">
+      <h2 id="table-heading">{t(locale, "tableAlternative")}</h2>
+      <div class="table-scroll" tabindex="0">
+        <table>
+          <caption class="visually-hidden">
+            {
+              locale === "ja"
+                ? "概念と前提・推奨・関連の一覧"
+                : "Concepts with prerequisites, recommendations and relations"
+            }
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{locale === "ja" ? "概念" : "Concept"}</th>
+              <th scope="col">{t(locale, "prerequisites")}</th>
+              <th scope="col">{t(locale, "edge.recommended-next")}</th>
+              <th scope="col">{t(locale, "edge.related")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              list.map((c) => (
+                <tr>
+                  <th scope="row">{localizedName(c.name, locale)}</th>
+                  <td>{c.prerequisites.map(nameOf).join("、") || "—"}</td>
+                  <td>{c.recommendedNext.map(nameOf).join("、") || "—"}</td>
+                  <td>{c.related.map(nameOf).join("、") || "—"}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</AtlasLayout>
+
+<style>
+  section {
+    margin-block: var(--space-6);
+  }
+  .map-toolbar {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-2);
+    align-items: center;
+  }
+  .map-toolbar input,
+  .map-toolbar select {
+    min-width: 12rem;
+  }
+  .map-canvas {
+    height: 75vh;
+    min-height: 28rem;
+    border: 2px solid var(--border-default);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+  }
+  .map-subject-label {
+    font-weight: 700;
+  }
+  .map-status {
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .map-thread-hint {
+    margin: 0 0 var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .subject-legend {
+    list-style: none;
+    margin: 0 0 var(--space-2);
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  .subject-legend li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .subject-swatch {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 3px;
+  }
+  .map-detail {
+    margin-top: var(--space-2);
+    min-height: 2.5rem;
+    font-size: calc(0.95rem * var(--text-scale));
+  }
+  .map-legend {
+    margin-top: var(--space-2);
+    max-width: 24rem;
+  }
+  .legend-list {
+    list-style: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .legend-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .legend-line {
+    display: inline-block;
+    width: 3rem;
+    height: 0;
+    border-top: 3px solid var(--text-secondary);
+  }
+  .legend-prerequisite {
+    border-top-style: solid;
+    border-top-color: var(--accent-primary);
+  }
+  .legend-recommended-next {
+    border-top-style: dashed;
+    border-top-color: var(--accent-primary);
+  }
+  .legend-related {
+    border-top-style: dotted;
+  }
+  .legend-part-of {
+    border-top-width: 5px;
+  }
+  .legend-alternative {
+    border-top-style: double;
+  }
+  .route-form {
+    display: flex;
+    gap: var(--space-3);
+    align-items: end;
+    flex-wrap: wrap;
+  }
+  .prereq-note {
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  .table-scroll {
+    overflow-x: auto;
+  }
+  @media (max-width: 767px) {
+    .map-canvas {
+      height: 50vh;
+    }
+  }
+</style>
+
+<script>
+  import cytoscape from "cytoscape";
+  import {
+    toConceptMap,
+    computeLearningRoute,
+    type ConceptData,
+  } from "../../../../lib/graph";
+
+  interface GraphNode extends ConceptData {
+    articles: Record<string, { title: string; path: string }[]>;
+  }
+  interface GraphData {
+    nodes: GraphNode[];
+    edges: { source: string; target: string; kind: string }[];
+  }
+
+  const container = document.getElementById("learning-map");
+  const controls = document.querySelectorAll<HTMLElement>("[data-graph-controls]");
+  const detail = document.querySelector<HTMLElement>("[data-map-detail]");
+
+  async function initMap(): Promise<void> {
+    if (!container) return;
+    const locale = container.dataset.locale === "en" ? "en" : "ja";
+    const res = await fetch(container.dataset.graphUrl ?? "");
+    const data: GraphData = await res.json();
+    const nodeById = new Map(data.nodes.map((n) => [n.id, n]));
+    const conceptMap = toConceptMap(data.nodes);
+    const base = (container.dataset.base ?? "/").replace(/\/$/, "");
+    const label = (n: GraphNode) =>
+      locale === "en" && n.name.en ? n.name.en : n.name.ja;
+
+    controls.forEach((control) => (control.hidden = false));
+
+    const styles = getComputedStyle(document.documentElement);
+    const accent = styles.getPropertyValue("--accent-primary").trim() || "#176ea6";
+    const textColor = styles.getPropertyValue("--text-primary").trim() || "#1c1c1c";
+    const muted = styles.getPropertyValue("--border-strong").trim() || "#8d897f";
+    const canvasColor = styles.getPropertyValue("--background-primary").trim() || "#ffffff";
+    const nodeSurface = styles.getPropertyValue("--background-primary").trim() || "#ffffff";
+
+    // 分野メタ（色・表示名）とグループ化用の親ノード
+    interface SubjectMeta {
+      slug: string;
+      name: string;
+      color: string;
+    }
+    const subjectsMeta: SubjectMeta[] = JSON.parse(
+      container.dataset.subjects ?? "[]",
+    );
+    const subjectColor = new Map(subjectsMeta.map((s) => [s.slug, s.color]));
+    const subjectName = new Map(subjectsMeta.map((s) => [s.slug, s.name]));
+    const presentSubjects = [...new Set(data.nodes.map((n) => n.subject))];
+    const subjectOrder = subjectsMeta
+      .map((s) => s.slug)
+      .filter((sl) => presentSubjects.includes(sl));
+    for (const s of presentSubjects) {
+      if (!subjectOrder.includes(s)) subjectOrder.push(s);
+    }
+    const colorFor = (slug: string) => subjectColor.get(slug) ?? accent;
+
+    const cy = cytoscape({
+      container,
+      elements: [
+        // 分野ごとの親（コンパウンド）ノード
+        ...subjectOrder.map((slug) => ({
+          data: {
+            id: `subject:${slug}`,
+            label: subjectName.get(slug) ?? slug,
+            isSubject: "yes",
+            subjectColor: colorFor(slug),
+          },
+        })),
+        ...data.nodes.map((n) => ({
+          data: {
+            id: n.id,
+            label: label(n),
+            subject: n.subject,
+            isSubject: "no",
+            parent: `subject:${n.subject}`,
+            subjectColor: colorFor(n.subject),
+            hasArticle: (n.articles[locale] ?? []).length > 0 ? "yes" : "no",
+          },
+        })),
+        ...data.edges.map((e, i) => ({
+          data: {
+            id: `e${i}`,
+            source: e.source,
+            target: e.target,
+            kind: e.kind,
+          },
+        })),
+      ],
+      style: [
+        {
+          selector: 'node[isSubject = "no"]',
+          style: {
+            label: "data(label)",
+            "font-size": "13px",
+            "font-weight": 600,
+            color: textColor,
+            "text-wrap": "wrap",
+            "text-max-width": "132px",
+            "text-valign": "center",
+            "text-halign": "center",
+            "text-outline-width": 0,
+            shape: "round-rectangle",
+            width: 154,
+            height: 46,
+            "background-color": nodeSurface,
+            "border-width": 2,
+            "border-color": "data(subjectColor)",
+          },
+        },
+        {
+          // 分野グループ（親）ノード: 色分けした枠として表示
+          selector: 'node[isSubject = "yes"]',
+          style: {
+            label: "data(label)",
+            "font-size": "17px",
+            "font-weight": 700,
+            color: "data(subjectColor)",
+            "text-valign": "top",
+            "text-halign": "center",
+            "text-margin-y": -6,
+            shape: "round-rectangle",
+            "background-color": "data(subjectColor)",
+            "background-opacity": 0.06,
+            "border-width": 2,
+            "border-color": "data(subjectColor)",
+            "border-opacity": 0.5,
+            padding: "24px",
+            "z-index": 0,
+            events: "no",
+          },
+        },
+        {
+          selector: 'node[hasArticle = "no"]',
+          style: {
+            "background-color": canvasColor,
+            "border-width": 2,
+            "border-style": "dashed",
+            color: muted,
+          },
+        },
+        {
+          selector: "node:selected",
+          style: {
+            "border-width": 4,
+            "border-color": "#e4771b",
+            "background-color": "#fff4e8",
+          },
+        },
+        {
+          selector: "edge",
+          style: {
+            width: 1.5,
+            "line-color": muted,
+            "curve-style": "taxi",
+            "taxi-direction": "downward",
+            "taxi-turn": 24,
+            "target-arrow-shape": "none",
+          },
+        },
+        {
+          selector: 'edge[kind = "prerequisite"]',
+          style: {
+            "line-color": accent,
+            "target-arrow-shape": "triangle",
+            "target-arrow-color": accent,
+            width: 2.5,
+          },
+        },
+        {
+          selector: 'edge[kind = "recommended-next"]',
+          style: {
+            "line-style": "dashed",
+            "line-color": accent,
+            "target-arrow-shape": "vee",
+            "target-arrow-color": accent,
+          },
+        },
+        {
+          selector: 'edge[kind = "related"]',
+          style: { "line-style": "dotted" },
+        },
+        {
+          selector: 'edge[kind = "part-of"]',
+          style: { width: 4, "target-arrow-shape": "diamond" },
+        },
+        {
+          selector: 'edge[kind = "alternative"]',
+          style: { "line-style": "dashed", width: 1 },
+        },
+        {
+          selector: ".faded",
+          style: { opacity: 0.15 },
+        },
+        {
+          selector: ".route-highlight",
+          style: {
+            "background-color": "#fff4e8",
+            "border-color": "#e4771b",
+            "line-color": "#e4771b",
+            "target-arrow-color": "#e4771b",
+          },
+        },
+      ],
+      layout: { name: "preset", fit: false },
+      wheelSensitivity: 0.2,
+      minZoom: 0.25,
+      maxZoom: 3,
+    });
+
+    const collapsed = new Set<string>();
+
+    function fitReadable(elements: ReturnType<typeof cy.nodes>): void {
+      cy.fit(elements, 50);
+      if (cy.zoom() < 0.72) {
+        cy.zoom(0.72);
+        cy.center(elements);
+      }
+    }
+
+    function layoutAsThread(subject: string): void {
+      const visibleData = data.nodes.filter((node) => !subject || node.subject === subject);
+      const visibleIds = new Set(visibleData.map((node) => node.id));
+      const children = new Map<string, string[]>();
+      for (const node of visibleData) {
+        const parent = node.prerequisites.find((id) => visibleIds.has(id));
+        if (parent) children.set(parent, [...(children.get(parent) ?? []), node.id]);
+      }
+      const roots = visibleData
+        .filter((node) => !node.prerequisites.some((id) => visibleIds.has(id)))
+        .map((node) => node.id);
+      const ordered: { id: string; depth: number }[] = [];
+      const visited = new Set<string>();
+      const walk = (id: string, depth: number) => {
+        if (visited.has(id)) return;
+        visited.add(id);
+        ordered.push({ id, depth });
+        for (const child of children.get(id) ?? []) walk(child, depth + 1);
+      };
+      for (const root of roots) walk(root, 0);
+      for (const node of visibleData) walk(node.id, 0);
+
+      ordered.forEach(({ id, depth }, index) => {
+        cy.getElementById(id).position({ x: 120 + depth * 190, y: 52 + index * 76 });
+      });
+      cy.layout({ name: "preset", fit: false }).run();
+      cy.zoom(0.92);
+      cy.pan({ x: 72, y: 56 });
+    }
+
+    /** 全分野を縦に並べ、各分野を色分けした枠の中で学習順スレッドに並べる */
+    function layoutGrouped(): void {
+      const ITEM_X = 200;
+      const ITEM_Y = 74;
+      const SUBJECT_GAP = 150;
+      const TOP_PAD = 64;
+      let cursorY = 0;
+      for (const slug of subjectOrder) {
+        const subjNodes = data.nodes.filter((n) => n.subject === slug);
+        const ids = new Set(subjNodes.map((n) => n.id));
+        const children = new Map<string, string[]>();
+        for (const node of subjNodes) {
+          const parent = node.prerequisites.find((id) => ids.has(id));
+          if (parent) children.set(parent, [...(children.get(parent) ?? []), node.id]);
+        }
+        const roots = subjNodes
+          .filter((node) => !node.prerequisites.some((id) => ids.has(id)))
+          .map((node) => node.id);
+        const ordered: { id: string; depth: number }[] = [];
+        const visited = new Set<string>();
+        const walk = (id: string, depth: number) => {
+          if (visited.has(id)) return;
+          visited.add(id);
+          ordered.push({ id, depth });
+          for (const child of children.get(id) ?? []) walk(child, depth + 1);
+        };
+        for (const root of roots) walk(root, 0);
+        for (const node of subjNodes) walk(node.id, 0);
+
+        const startY = cursorY + TOP_PAD;
+        ordered.forEach(({ id, depth }, index) => {
+          cy.getElementById(id).position({
+            x: 160 + depth * ITEM_X,
+            y: startY + index * ITEM_Y,
+          });
+        });
+        cursorY = startY + Math.max(ordered.length, 1) * ITEM_Y + SUBJECT_GAP;
+      }
+      cy.layout({ name: "preset", fit: false }).run();
+      cy.zoom(0.75);
+      cy.pan({ x: 60, y: 40 });
+    }
+
+    function showDetail(id: string): void {
+      const n = nodeById.get(id);
+      if (!n || !detail) return;
+      const arts = n.articles[locale] ?? [];
+      const links = arts
+        .map(
+          (a) =>
+            `<a href="${base}${a.path}">${a.title}</a>`,
+        )
+        .join(" / ");
+      const neighbors = [...n.prerequisites, ...n.recommendedNext, ...n.related]
+        .map((nid) => {
+          const nn = nodeById.get(nid);
+          return nn ? label(nn) : nid;
+        })
+        .join("、");
+      const preparing = locale === "ja" ? "記事は準備中" : "Article in preparation";
+      const neighborLabel = locale === "ja" ? "隣接概念" : "Neighbors";
+      const foldLabel =
+        locale === "ja" ? "子ノードを折りたたみ/展開" : "Fold/unfold children";
+      detail.innerHTML = `<strong>${label(n)}</strong> — ${
+        links || preparing
+      }<br>${neighborLabel}: ${neighbors || "—"} <button type="button" class="button button-secondary" data-fold="${n.id}">${foldLabel}</button>`;
+      detail
+        .querySelector<HTMLButtonElement>("[data-fold]")
+        ?.addEventListener("click", () => toggleFold(id));
+    }
+
+    function dependentsOf(id: string): Set<string> {
+      // idをprerequisiteとするノードの推移的閉包
+      const result = new Set<string>();
+      const walk = (cur: string) => {
+        for (const n of data.nodes) {
+          if (n.prerequisites.includes(cur) && !result.has(n.id)) {
+            result.add(n.id);
+            walk(n.id);
+          }
+        }
+      };
+      walk(id);
+      return result;
+    }
+
+    function toggleFold(id: string): void {
+      const deps = dependentsOf(id);
+      if (collapsed.has(id)) {
+        collapsed.delete(id);
+        deps.forEach((d) => cy.getElementById(d).style("display", "element"));
+      } else {
+        collapsed.add(id);
+        deps.forEach((d) => cy.getElementById(d).style("display", "none"));
+      }
+    }
+
+    cy.on("tap", 'node[isSubject = "no"]', (ev) => {
+      const id: string = ev.target.id();
+      showDetail(id);
+      const url = new URL(location.href);
+      url.searchParams.set("selected", id);
+      history.replaceState(null, "", url);
+    });
+
+    const subjectSelect = document.querySelector<HTMLSelectElement>("[data-map-subject]");
+    const mapStatus = document.querySelector<HTMLElement>("[data-map-status]");
+
+    function applySubjectFilter(subject: string, relayout = true): void {
+      cy.elements().removeClass("faded route-highlight");
+
+      if (!subject) {
+        // 全分野をグループ表示
+        cy.elements().style("display", "element");
+        const count = cy.nodes('[isSubject = "no"]').length;
+        if (mapStatus) {
+          mapStatus.textContent = locale === "ja"
+            ? `全${subjectOrder.length}分野・${count}概念を表示`
+            : `${subjectOrder.length} subjects · ${count} concepts`;
+        }
+        const url = new URL(location.href);
+        url.searchParams.delete("subject");
+        history.replaceState(null, "", url);
+        if (relayout) layoutGrouped();
+        return;
+      }
+
+      // 特定の分野に絞り込み（その分野の枠＋概念のみ表示）
+      cy.elements().style("display", "none");
+      cy.getElementById(`subject:${subject}`).style("display", "element");
+      const visibleNodes = cy.nodes(`[subject = "${subject}"]`);
+      visibleNodes.style("display", "element");
+      cy.edges().forEach((edge) => {
+        if (edge.source().style("display") !== "none" && edge.target().style("display") !== "none") {
+          edge.style("display", "element");
+        }
+      });
+      if (mapStatus) {
+        mapStatus.textContent = locale === "ja"
+          ? `${visibleNodes.length}概念を表示`
+          : `Showing ${visibleNodes.length} concepts`;
+      }
+      const url = new URL(location.href);
+      url.searchParams.set("subject", subject);
+      history.replaceState(null, "", url);
+      if (relayout) {
+        layoutAsThread(subject);
+      }
+    }
+
+    // URLから分野・選択状態を復元。初期表示は最初の公開分野に分けて表示する。
+    const selected = new URL(location.href).searchParams.get("selected");
+    const selectedNode = selected ? nodeById.get(selected) : undefined;
+    const urlSubject = new URL(location.href).searchParams.get("subject");
+    const initialSubject = selectedNode?.subject ?? urlSubject ?? "";
+    if (subjectSelect) subjectSelect.value = initialSubject;
+    applySubjectFilter(initialSubject);
+    if (selected && cy.getElementById(selected).length > 0) {
+      cy.getElementById(selected).select();
+      showDetail(selected);
+    }
+
+    // 検索
+    document
+      .querySelector<HTMLInputElement>("[data-map-search]")
+      ?.addEventListener("change", (ev) => {
+        const q = (ev.target as HTMLInputElement).value.trim().toLowerCase();
+        if (!q) return;
+        const found = data.nodes.find((n) =>
+          label(n).toLowerCase().includes(q),
+        );
+        if (found) {
+          if (subjectSelect && subjectSelect.value !== found.subject) {
+            subjectSelect.value = found.subject;
+            applySubjectFilter(found.subject);
+          }
+          const el = cy.getElementById(found.id);
+          cy.elements().unselect();
+          el.select();
+          cy.animate({ center: { eles: el }, zoom: 1.5, duration: 300 });
+          showDetail(found.id);
+        }
+      });
+
+    // 分野フィルタ
+    subjectSelect?.addEventListener("change", (ev) => {
+        const subject = (ev.target as HTMLSelectElement).value;
+        collapsed.clear();
+        applySubjectFilter(subject);
+      });
+
+    document
+      .querySelector("[data-map-fit]")
+      ?.addEventListener("click", () =>
+        fitReadable(
+          cy.nodes().filter((element) => element.style("display") !== "none"),
+        ),
+      );
+    document.querySelector("[data-map-reset]")?.addEventListener("click", () => {
+      collapsed.clear();
+      applySubjectFilter(subjectSelect?.value ?? "");
+    });
+    document
+      .querySelector("[data-map-share]")
+      ?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(location.href);
+          if (detail)
+            detail.textContent =
+              locale === "ja" ? "URLをコピーしました" : "URL copied";
+        } catch {
+          if (detail) detail.textContent = location.href;
+        }
+      });
+
+    // 学習ルート検索（グラフとリストの両方に反映）
+    const form = document.querySelector<HTMLFormElement>("[data-route-form]");
+    const result = document.querySelector<HTMLElement>("[data-route-result]");
+    form?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const start =
+        form.querySelector<HTMLSelectElement>("[data-route-start]")?.value ??
+        "";
+      const goal =
+        form.querySelector<HTMLSelectElement>("[data-route-goal]")?.value ?? "";
+      if (!goal || !result) return;
+      try {
+        const route = computeLearningRoute(
+          start ? [start] : [],
+          goal,
+          conceptMap,
+        );
+        const stepsHtml = route.steps
+          .map((id, i) => {
+            const n = nodeById.get(id);
+            if (!n) return "";
+            const arts = n.articles[locale] ?? [];
+            const first = arts[0];
+            const link = first
+              ? `<a href="${base}${first.path}">${label(n)}</a>`
+              : `${label(n)} <span class="badge">${
+                  locale === "ja" ? "準備中" : "in preparation"
+                }</span>`;
+            const alts = (route.alternativesByStep[id] ?? [])
+              .map((aid) => {
+                const an = nodeById.get(aid);
+                return an ? label(an) : aid;
+              })
+              .join("、");
+            return `<li>${i + 1}. ${link}${
+              alts
+                ? ` <span class="prereq-note">（${
+                    locale === "ja" ? "代替" : "alt"
+                  }: ${alts}）</span>`
+                : ""
+            }</li>`;
+          })
+          .join("");
+        const skippedNames = route.skipped
+          .map((id) => {
+            const n = nodeById.get(id);
+            return n ? label(n) : id;
+          })
+          .join("、");
+        result.innerHTML = `<h3>${
+          locale === "ja" ? "学習経路" : "Learning route"
+        }</h3><ol class="route-steps" style="list-style:none;padding:0">${stepsHtml}</ol>${
+          skippedNames
+            ? `<p class="prereq-note">${
+                locale === "ja" ? "理解済みとして省略" : "Skipped"
+              }: ${skippedNames}</p>`
+            : ""
+        }`;
+        // グラフ上で強調
+        cy.elements().removeClass("route-highlight faded");
+        const routeSet = new Set(route.steps);
+        cy.nodes().forEach((n) => {
+          if (routeSet.has(n.id())) n.addClass("route-highlight");
+          else n.addClass("faded");
+        });
+        cy.edges().forEach((e) => {
+          if (
+            routeSet.has(e.source().id()) &&
+            routeSet.has(e.target().id()) &&
+            e.data("kind") === "prerequisite"
+          ) {
+            e.addClass("route-highlight");
+          } else {
+            e.addClass("faded");
+          }
+        });
+      } catch (err) {
+        result.textContent = String(err);
+      }
+    });
+  }
+
+  initMap().catch((err) => {
+    if (detail) {
+      detail.textContent = `学習地図の読み込みに失敗しました: ${String(err)}`;
+    }
+  });
+</script>

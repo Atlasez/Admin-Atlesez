@@ -1,0 +1,372 @@
+---
+import AtlasLayout from "../../../layouts/AtlasLayout.astro";
+import { atlasPath, articlePath, formatDate } from "../../../lib/site";
+import { t, LOCALES, localizedName, type Locale } from "../../../lib/i18n";
+import {
+  getPublishedArticles,
+  getPublishedSubjects,
+} from "../../../lib/content";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+const subjects = await getPublishedSubjects();
+const articles = await getPublishedArticles(locale);
+const allArticles = await getPublishedArticles();
+
+const countBySubject = new Map<string, number>();
+for (const a of articles) {
+  countBySubject.set(
+    a.data.subject,
+    (countBySubject.get(a.data.subject) ?? 0) + 1,
+  );
+}
+
+const recent = [...articles]
+  .sort((a, b) => b.data.updatedAt.getTime() - a.data.updatedAt.getTime())
+  .slice(0, 20);
+
+const alternates = LOCALES.map((l) => ({
+  hreflang: l,
+  href: new URL(atlasPath(l), Astro.site).href,
+}));
+
+const publishedSubjects = subjects.filter((s) => s.data.status === "published");
+const preparingSubjects = subjects.filter((s) => s.data.status === "preparing");
+
+/** 公開・準備中をひとつの一覧にまとめる（準備中は淡色・リンクなし） */
+const allSubjects = [
+  ...publishedSubjects.map((s) => ({ subject: s, published: true })),
+  ...preparingSubjects.map((s) => ({ subject: s, published: false })),
+];
+
+const summary =
+  locale === "ja"
+    ? `${publishedSubjects.length}分野・${articles.length}記事を公開中`
+    : `${publishedSubjects.length} subjects · ${articles.length} articles`;
+---
+
+<AtlasLayout
+  locale={locale}
+  title={locale === "ja" ? "総合ホーム" : "Home"}
+  description={t(locale, "siteTagline")}
+  alternates={alternates}
+>
+  <div class="container atlas-home">
+    <div class="content-columns">
+      <section aria-labelledby="subjects-heading">
+        <div class="section-title">
+          <h1 id="subjects-heading">{t(locale, "subjects")}</h1>
+          <p class="section-meta">{summary}</p>
+          <a class="section-link" href={atlasPath(locale, "map")}>
+            {t(locale, "map")}
+          </a>
+        </div>
+
+        {
+          locale !== "ja" && (
+            <p class="beta-notice" role="note">
+              The English edition is in beta — only a limited set of articles
+              has been translated so far. The Japanese edition has the full
+              content.
+            </p>
+          )
+        }
+
+        <ul class="subject-grid">
+          {
+            allSubjects.map(({ subject: s, published }) => {
+              const name = localizedName(s.data.name, locale);
+              const desc = localizedName(s.data.description, locale);
+              const descId = `subject-desc-${s.data.slug}`;
+              const infoLabel =
+                locale === "ja" ? `${name}とは` : `About ${name}`;
+              return (
+                <li
+                  class:list={[
+                    "subject-tile",
+                    { "is-preparing": !published },
+                  ]}
+                >
+                  <div class="subject-row">
+                    {published ? (
+                      <a
+                        class="subject-name"
+                        href={atlasPath(locale, s.data.slug)}
+                      >
+                        {name}
+                      </a>
+                    ) : (
+                      <span class="subject-name">{name}</span>
+                    )}
+                    <button
+                      type="button"
+                      class="subject-info"
+                      aria-expanded="false"
+                      aria-controls={descId}
+                      data-subject-info
+                      title={infoLabel}
+                    >
+                      <span aria-hidden="true">?</span>
+                      <span class="visually-hidden">{infoLabel}</span>
+                    </button>
+                  </div>
+                  <p class="subject-status">
+                    <span class="subject-count">
+                      {published
+                        ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
+                        : t(locale, "preparing")}
+                    </span>
+                  </p>
+                  <p class="subject-desc" id={descId} hidden>
+                    {desc}
+                  </p>
+                </li>
+              );
+            })
+          }
+        </ul>
+      </section>
+
+      <aside class="recent" aria-labelledby="recent-heading">
+        <div class="section-title">
+          <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
+        </div>
+        <div class="recent-scroll">
+          <ul class="recent-list">
+            {
+              recent.map((a) => (
+                <li>
+                  <a
+                    href={articlePath(
+                      locale,
+                      a.data.subject,
+                      a.data.category,
+                      a.data.slug,
+                    )}
+                  >
+                    {a.data.title}
+                  </a>
+                  <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>
+                    {formatDate(a.data.updatedAt, locale)}
+                  </time>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+        {
+          allArticles.length > articles.length && locale !== "ja" && (
+            <p class="translation-note">
+              {`Some articles are currently available only in Japanese (${allArticles.length - articles.length} more).`}
+            </p>
+          )
+        }
+      </aside>
+    </div>
+  </div>
+</AtlasLayout>
+
+<script>
+  // 分野タイルの「?」で分野説明を開閉する
+  document
+    .querySelectorAll<HTMLButtonElement>("[data-subject-info]")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.getAttribute("aria-controls");
+        if (!id) return;
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        const open = button.getAttribute("aria-expanded") === "true";
+        button.setAttribute("aria-expanded", open ? "false" : "true");
+        panel.hidden = open;
+      });
+    });
+</script>
+
+<style>
+  .atlas-home {
+    max-width: var(--content-width);
+  }
+  .content-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 16rem);
+    gap: var(--space-5);
+    padding-block: var(--space-2) var(--space-5);
+    align-items: start;
+  }
+  .section-title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding-bottom: var(--space-1);
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .section-title h1,
+  .section-title h2 {
+    margin: 0;
+    font-size: calc(1.45rem * var(--text-scale));
+  }
+  .section-meta {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  .section-link {
+    margin-left: auto;
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+
+  /* ---- 分野一覧 ---- */
+  .subject-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+    gap: 0 var(--space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .subject-tile {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-default);
+    line-height: 1.4;
+  }
+  .subject-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .subject-name {
+    font-size: calc(1.3rem * var(--text-scale));
+    font-weight: 650;
+    text-decoration: none;
+    color: var(--text-primary);
+  }
+  a.subject-name:hover {
+    color: var(--accent-primary);
+    text-decoration: underline;
+  }
+  .subject-info {
+    flex: 0 0 auto;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: calc(0.78rem * var(--text-scale));
+    line-height: 1;
+    min-height: 0;
+    cursor: pointer;
+  }
+  .subject-info:hover,
+  .subject-info[aria-expanded="true"] {
+    border-color: var(--accent-primary);
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+  }
+  .subject-status {
+    margin: 0;
+  }
+  .subject-count {
+    color: var(--text-secondary);
+    font-size: calc(0.78rem * var(--text-scale));
+  }
+  .subject-desc {
+    margin: var(--space-1) 0 0;
+    padding-right: var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+    line-height: 1.55;
+  }
+  .subject-tile.is-preparing {
+    opacity: 0.72;
+  }
+  .subject-tile.is-preparing .subject-name {
+    color: var(--text-muted);
+    font-weight: 550;
+  }
+
+  /* ---- 最近更新された記事（右カラム・スクロール） ---- */
+  .recent {
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .recent .section-title {
+    border-bottom-width: 1px;
+    border-bottom-color: var(--border-strong);
+  }
+  .recent .section-title h2 {
+    font-size: calc(1.02rem * var(--text-scale));
+  }
+  .recent-scroll {
+    max-height: 26rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .recent-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .recent-list li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--border-default);
+    line-height: 1.45;
+  }
+  .recent-list a {
+    text-decoration: none;
+  }
+  .recent-list a:hover {
+    text-decoration: underline;
+  }
+  .recent-list time {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: calc(0.72rem * var(--text-scale));
+    font-variant-numeric: tabular-nums;
+  }
+  .beta-notice {
+    margin: var(--space-3) 0 0;
+    padding: var(--space-2) var(--space-3);
+    border-left: 3px solid var(--accent-primary);
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+  .translation-note {
+    margin-top: var(--space-3);
+    padding: var(--space-2);
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+
+  @media (max-width: 900px) {
+    .content-columns {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+    }
+    .recent-scroll {
+      max-height: 18rem;
+    }
+  }
+  @media (max-width: 480px) {
+    .subject-grid {
+      grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+    }
+    .subject-name {
+      font-size: calc(1.15rem * var(--text-scale));
+    }
+  }
+</style>

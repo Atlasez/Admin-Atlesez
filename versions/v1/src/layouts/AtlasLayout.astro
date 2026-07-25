@@ -1,0 +1,253 @@
+---
+/** 学習サイト「アトラス」の共通レイアウト（ロケール対応） */
+import BaseHead from "../components/BaseHead.astro";
+import A11ySettings from "../components/A11ySettings.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+import { withBase, atlasPath, ORG } from "../lib/site";
+import { t, LOCALES, localeNames, type Locale } from "../lib/i18n";
+
+interface AlternateLink {
+  hreflang: string;
+  href: string;
+}
+interface Props {
+  locale: Locale;
+  title: string;
+  description: string;
+  ogType?: "website" | "article";
+  alternates?: AlternateLink[];
+  structuredData?: object;
+  /** 言語切替リンク先（省略時は各ロケールの総合ホーム） */
+  localeSwitchHrefs?: Partial<Record<Locale, string>>;
+  /** 検索エンジンにインデックスさせない（内容が空のページなど） */
+  noindex?: boolean;
+}
+const {
+  locale,
+  title,
+  description,
+  ogType,
+  alternates = [],
+  structuredData,
+  localeSwitchHrefs = {},
+  noindex = false,
+} = Astro.props;
+
+const nav = [
+  { label: t(locale, "subjects"), href: atlasPath(locale) },
+  { label: t(locale, "map"), href: atlasPath(locale, "map") },
+  { label: t(locale, "search"), href: atlasPath(locale, "search") },
+  { label: t(locale, "bookmarks"), href: atlasPath(locale, "bookmarks") },
+  { label: t(locale, "team"), href: atlasPath(locale, "team") },
+];
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang={locale} data-site="atlas">
+  <head>
+    <BaseHead
+      title={`${title} | ${t(locale, "siteName")}`}
+      description={description}
+      ogType={ogType}
+      alternates={alternates}
+      structuredData={structuredData}
+      noindex={noindex}
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{t(locale, "skipToContent")}</a>
+    <header class="atlas-header">
+      <div class="container atlas-header-inner">
+        <a class="atlas-logo" href={atlasPath(locale)}>
+          <img
+            src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-logo.png`}
+            alt=""
+            width="40"
+            height="40"
+          />
+          <span>{locale === "ja" ? "アトラス" : "Atlas"}</span>
+        </a>
+        <nav aria-label={locale === "ja" ? "メインナビゲーション" : "Main navigation"}>
+          <ul class="atlas-nav">
+            {
+              nav.map((item) => (
+                <li>
+                  <a
+                    href={item.href}
+                    aria-current={currentPath === item.href ? "page" : undefined}
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <nav class="lang-switch" aria-label={t(locale, "languages")}>
+          <ul>
+            {
+              LOCALES.map((l) => (
+                <li>
+                  {l === locale ? (
+                    <span aria-current="true">{localeNames[l]}</span>
+                  ) : (
+                    <a
+                      href={localeSwitchHrefs[l] ?? atlasPath(l)}
+                      hreflang={l}
+                      lang={l}
+                    >
+                      {localeNames[l]}
+                    </a>
+                  )}
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <ThemeToggle locale={locale} />
+        <a class="org-link" href={withBase("/")} title="Atlasez">Atlasez</a>
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="atlas-footer">
+      <div class="container atlas-footer-inner">
+        <div>
+          <p class="atlas-footer-title">{t(locale, "siteName")}</p>
+          <p>{t(locale, "siteTagline")}</p>
+          <p>
+            {t(locale, "operatedBy")}:
+            <a href={withBase("/")}>Atlasez</a> ・
+            <a href={ORG.atlasSns.x} rel="noopener noreferrer" target="_blank"
+              >X (@learning_atlas)</a
+            >
+          </p>
+          <p>
+            <a href={withBase("/privacy-policy/")}>
+              {locale === "ja" ? "プライバシーポリシー" : "Privacy Policy"}
+            </a>
+          </p>
+        </div>
+        <div>
+          <A11ySettings locale={locale} />
+        </div>
+      </div>
+      <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .atlas-header {
+    border-top: 3px solid var(--accent-primary);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  .atlas-header-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding-block: var(--space-1);
+  }
+  .atlas-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
+    font-size: calc(1.15rem * var(--text-scale));
+    color: var(--accent-primary);
+    text-decoration: none;
+    min-height: var(--touch-target);
+  }
+  .atlas-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .atlas-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    text-decoration: none;
+    color: var(--text-primary);
+    border-bottom: 2px solid transparent;
+  }
+  .atlas-nav a:hover,
+  .atlas-nav a[aria-current="page"] {
+    border-bottom-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .lang-switch {
+    margin-left: auto;
+  }
+  .lang-switch ul {
+    display: flex;
+    gap: var(--space-2);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .lang-switch span[aria-current] {
+    font-weight: 700;
+    color: var(--accent-primary);
+  }
+  .lang-switch a,
+  .lang-switch span {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    padding: 0 var(--space-1);
+  }
+  .org-link {
+    font-size: calc(0.9rem * var(--text-scale));
+    color: var(--text-secondary);
+  }
+  main {
+    min-height: 60vh;
+    padding-block: var(--space-4);
+  }
+  .atlas-footer {
+    border-top: 1px solid var(--border-default);
+    background: var(--background-primary);
+    padding-block: var(--space-5);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .atlas-footer-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--space-4);
+  }
+  .atlas-footer-title {
+    font-weight: 700;
+    margin-top: 0;
+  }
+  .atlas-copyright {
+    margin-top: var(--space-4);
+    color: var(--text-secondary);
+  }
+  @media (max-width: 767px) {
+    .lang-switch {
+      margin-left: 0;
+    }
+    .atlas-header-inner > nav:first-of-type {
+      order: 2;
+      width: 100%;
+      overflow-x: auto;
+    }
+    .atlas-nav {
+      flex-wrap: nowrap;
+      width: max-content;
+    }
+    .org-link {
+      display: none;
+    }
+  }
+</style>

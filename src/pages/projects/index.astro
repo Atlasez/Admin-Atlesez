@@ -1,0 +1,95 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { getCollection } from "astro:content";
+import { withBase } from "../../lib/site";
+
+const projects = (await getCollection("projects")).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+const statusLabel = {
+  active: "活動中",
+  preparing: "準備中",
+  archived: "終了・休止中",
+} as const;
+---
+
+<OrgLayout
+  title="プロジェクト一覧"
+  description="Atlasezが運営するプロジェクトの一覧。学習サイト「アトラス」、ゼミプラットフォーム、考えるカフェなど。"
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "プロジェクト" },
+      ]}
+    />
+    <h1>プロジェクト一覧</h1>
+    <p class="reading">
+      Atlasezは複数のプロジェクトを並行して運営しています。それぞれのページで、活動内容と参加方法を紹介しています。
+    </p>
+    <ul class="project-list">
+      {
+        projects.map((p) => (
+          <li>
+            <div>
+              <h2 class="project-name">
+                <a href={withBase(`/projects/${p.data.slug}/`)}>{p.data.name}</a>
+              </h2>
+              <p>{p.data.shortDescription}</p>
+            </div>
+            <p class="project-meta">
+              <span>{statusLabel[p.data.status]}</span>
+              <span>{p.data.startedAt}–</span>
+            </p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</OrgLayout>
+
+<style>
+  .project-name {
+    font-size: calc(1.15rem * var(--text-scale));
+    margin: 0;
+  }
+  .project-list {
+    list-style: none;
+    margin: var(--space-5) 0 0;
+    padding: 0;
+    max-width: 58rem;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .project-list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7rem;
+    gap: var(--space-3);
+    padding-block: var(--space-4);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .project-list li p {
+    margin: var(--space-1) 0 0;
+  }
+  .project-meta {
+    font-size: calc(0.82rem * var(--text-scale));
+    color: var(--text-muted);
+  }
+  .project-meta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    text-align: right;
+    margin: 0;
+  }
+  @media (max-width: 600px) {
+    .project-list li {
+      grid-template-columns: 1fr;
+    }
+    .project-meta {
+      flex-direction: row;
+      text-align: left;
+    }
+  }
+</style>

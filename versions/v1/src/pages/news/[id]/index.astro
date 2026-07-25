@@ -1,0 +1,75 @@
+---
+import OrgLayout from "../../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../../components/Breadcrumb.astro";
+import { getCollection, render } from "astro:content";
+import { withBase, formatDate } from "../../../lib/site";
+
+export async function getStaticPaths() {
+  const news = await getCollection(
+    "news",
+    (n) => n.data.status === "published",
+  );
+  return news.map((n) => ({
+    params: { id: n.id.replace(/\.md$/, "") },
+    props: { entry: n },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const categoryLabel = {
+  announcement: "告知",
+  report: "報告",
+  release: "公開",
+} as const;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  headline: entry.data.title,
+  datePublished: entry.data.date.toISOString(),
+  publisher: { "@type": "Organization", name: "Atlasez" },
+};
+---
+
+<OrgLayout
+  title={entry.data.title}
+  description={entry.data.summary}
+  ogType="article"
+  structuredData={structuredData}
+>
+  <article class="container news-article">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "お知らせ", href: withBase("/news/") },
+        { label: entry.data.title },
+      ]}
+    />
+    <h1>{entry.data.title}</h1>
+    <p class="news-meta">
+      <time datetime={entry.data.date.toISOString().slice(0, 10)}>
+        {formatDate(entry.data.date)}
+      </time>
+      <span class="badge">{categoryLabel[entry.data.category]}</span>
+      {entry.data.tags.map((tag) => <span class="badge">{tag}</span>)}
+    </p>
+    <div class="reading news-body">
+      <Content />
+    </div>
+    <p><a href={withBase("/news/")}>‹ お知らせ一覧へ戻る</a></p>
+  </article>
+</OrgLayout>
+
+<style>
+  .news-meta {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+  }
+  .news-body {
+    margin-block: var(--space-4);
+  }
+</style>

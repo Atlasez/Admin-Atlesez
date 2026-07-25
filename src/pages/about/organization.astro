@@ -1,0 +1,160 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { withBase } from "../../lib/site";
+
+const features = [
+  "学生などの若者が主体となって運営される",
+  "運営側だけでなく参加者も新しいプロジェクトを創ることができる",
+  "多種多様なプロジェクトが相互に連携・作用する",
+  "運営事務局が各プロジェクトの立ち上げ・運営のサポートや調整を行う",
+];
+---
+
+<OrgLayout
+  title="組織構成"
+  description="複数のプロジェクトと運営事務局からなるAtlasezの組織構成を紹介します。"
+>
+  <div class="container organization-page">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "Atlasezとは", href: withBase("/about/") },
+        { label: "組織構成" },
+      ]}
+    />
+
+    <header>
+      <h1>組織構成</h1>
+      <p>
+        Atlasezは、複数のプロジェクトと、運営事務局から構成されています。
+      </p>
+    </header>
+
+    <figure class="organization-figure">
+      <img
+        src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-organization-overview.png`}
+        alt="Atlasezの運営事務局が、学習サイト「アトラス」、「考えるカフェ」、国際交流、学習支援など複数のプロジェクト運営を支える組織図"
+        width="1280"
+        height="928"
+      />
+      <figcaption>Atlasez全体の構成（元サイト掲載図）</figcaption>
+    </figure>
+
+    <section class="features" aria-labelledby="features-heading">
+      <div>
+        <p class="section-number">01</p>
+        <h2 id="features-heading">特徴</h2>
+      </div>
+      <ol>
+        {
+          features.map((feature) => (
+            <li>{feature}</li>
+          ))
+        }
+      </ol>
+    </section>
+
+    <section class="office" aria-labelledby="office-heading">
+      <div class="office-copy">
+        <p class="section-number">02</p>
+        <h2 id="office-heading">運営事務局</h2>
+        <p>運営事務局は、次の役割から構成されています。</p>
+        <ul>
+          <li>代表・副代表</li>
+          <li>
+            6つの部署（掲載図には総務部、企画部、ICT部、渉外部、広報部を記載）
+          </li>
+          <li>各プロジェクトリーダー</li>
+        </ul>
+      </div>
+      <figure class="organization-figure">
+        <img
+          src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-organization-office.png`}
+          alt="代表と副代表のもとに、総務部、企画部、ICT部、渉外部、広報部、各プロジェクトリーダーを置く運営事務局の組織図"
+          width="1280"
+          height="885"
+        />
+        <figcaption>運営事務局の構成（元サイト掲載図）</figcaption>
+      </figure>
+    </section>
+  </div>
+</OrgLayout>
+
+<style>
+  .organization-page {
+    max-width: 68rem;
+  }
+  .organization-page header {
+    max-width: var(--reading-width);
+    padding-bottom: var(--space-4);
+  }
+  .organization-page header p {
+    font-size: calc(1.08rem * var(--text-scale));
+  }
+  .organization-figure {
+    margin: var(--space-3) 0 var(--space-6);
+  }
+  .organization-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border-default);
+  }
+  .organization-figure figcaption {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  .features,
+  .office {
+    display: grid;
+    grid-template-columns: minmax(11rem, 0.42fr) minmax(0, 1.58fr);
+    gap: clamp(2rem, 7vw, 6rem);
+    padding-block: var(--space-5);
+    border-top: 1px solid var(--border-default);
+  }
+  .section-number {
+    margin: 0;
+    color: var(--accent-primary);
+    font-size: calc(0.76rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+  .features h2,
+  .office h2 {
+    margin-top: var(--space-1);
+  }
+  .features ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: feature;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .features li {
+    counter-increment: feature;
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .features li::before {
+    content: counter(feature, decimal-leading-zero);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .office .organization-figure {
+    margin: 0;
+  }
+  .office-copy ul {
+    padding-left: 1.2em;
+  }
+  @media (max-width: 767px) {
+    .features,
+    .office {
+      grid-template-columns: 1fr;
+      gap: var(--space-3);
+    }
+  }
+</style>

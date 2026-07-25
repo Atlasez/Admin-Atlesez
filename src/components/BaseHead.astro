@@ -1,0 +1,101 @@
+---
+/**
+ * 全ページ共通の<head>。SEO・OGP・表示設定の復元を担う。
+ */
+import "../styles/tokens.css";
+import "../styles/base.css";
+
+interface AlternateLink {
+  hreflang: string;
+  href: string;
+}
+
+interface Props {
+  title: string;
+  description: string;
+  lang?: string;
+  ogType?: "website" | "article";
+  alternates?: AlternateLink[];
+  structuredData?: object | undefined;
+  noindex?: boolean;
+}
+
+const {
+  title,
+  description,
+  ogType = "website",
+  alternates = [],
+  structuredData,
+  noindex = false,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const ogImage = new URL(
+  `${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/og-default.svg`,
+  Astro.site,
+);
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical.href} />
+{noindex && <meta name="robots" content="noindex" />}
+<link
+  rel="icon"
+  href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/favicon.svg`}
+  type="image/svg+xml"
+/>
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:type" content={ogType} />
+<meta property="og:url" content={canonical.href} />
+<meta property="og:image" content={ogImage.href} />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+{
+  alternates.map((alt) => (
+    <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+  ))
+}
+<link
+  rel="alternate"
+  type="application/rss+xml"
+  title="Atlasez お知らせ"
+  href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/rss.xml`}
+/>
+<meta name="generator" content={Astro.generator} />
+{
+  structuredData && (
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify(structuredData)}
+    />
+  )
+}
+<script is:inline>
+  // 表示設定をペイント前に復元する（FOUC回避のためinline）
+  (function () {
+    try {
+      var prefs = JSON.parse(localStorage.getItem("atlasez-prefs") || "{}");
+      var d = document.documentElement;
+      var keys = {
+        fontSize: "data-pref-font-size",
+        contrast: "data-pref-contrast",
+        bg: "data-pref-bg",
+        lineHeight: "data-pref-line-height",
+        motion: "data-pref-motion",
+        font: "data-pref-font",
+      };
+      Object.keys(keys).forEach(function (k) {
+        if (prefs[k] && prefs[k] !== "default") {
+          d.setAttribute(keys[k], prefs[k]);
+        }
+      });
+    } catch (e) {
+      /* localStorage不可の環境では標準表示のまま */
+    }
+  })();
+</script>

@@ -1,0 +1,25 @@
+---
+import OrgLayout from "../layouts/OrgLayout.astro";
+import { withBase } from "../lib/site";
+---
+
+<OrgLayout
+  title="ページが見つかりません"
+  description="お探しのページは見つかりませんでした。"
+>
+  <div class="container">
+    <h1>404 — ページが見つかりません</h1>
+    <div class="reading">
+      <p>
+        お探しのページは移動または削除された可能性があります。
+        Google Sitesから移行したページはURLが変わっています。
+      </p>
+      <ul>
+        <li><a href={withBase("/")}>Atlasez公式サイト ホーム</a></li>
+        <li><a href={withBase("/atlas/ja/")}>学習サイト「アトラス」総合ホーム</a></li>
+        <li><a href={withBase("/atlas/ja/search/")}>学習サイト内を検索する</a></li>
+        <li><a href={withBase("/contact/")}>お問い合わせ</a></li>
+      </ul>
+    </div>
+  </div>
+</OrgLayout>

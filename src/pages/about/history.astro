@@ -1,0 +1,45 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { withBase } from "../../lib/site";
+---
+
+<OrgLayout title="沿革" description="Atlasezの沿革。現在、公開準備中です。">
+  <div class="container history-page">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "Atlasezとは", href: withBase("/about/") },
+        { label: "沿革" },
+      ]}
+    />
+    <h1>沿革</h1>
+    <div class="preparing" role="status">
+      <p>準備中</p>
+      <p>元サイトでも現在準備中のため、正式な沿革が公開され次第反映します。</p>
+    </div>
+  </div>
+</OrgLayout>
+
+<style>
+  .history-page {
+    max-width: 68rem;
+  }
+  .preparing {
+    max-width: var(--reading-width);
+    padding: var(--space-4) 0;
+    border-top: 2px solid var(--accent-primary);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .preparing p {
+    margin: 0;
+  }
+  .preparing p:first-child {
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .preparing p + p {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+  }
+</style>

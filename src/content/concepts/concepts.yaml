@@ -1,0 +1,1455 @@
+# 言語非依存の概念層。IDは永続（subject.category.name）
+# ---------- 数学: 集合論 ----------
+- id: math.set-theory.sets
+  subject: mathematics
+  category: set-theory
+  name: { ja: 集合, en: Sets }
+  recommendedNext: [math.set-theory.set-operations]
+- id: math.set-theory.set-operations
+  subject: mathematics
+  category: set-theory
+  name: { ja: 集合の演算, en: Set Operations }
+  prerequisites: [math.set-theory.sets]
+  recommendedNext: [math.set-theory.relations, math.set-theory.mappings]
+- id: math.set-theory.families-of-sets
+  subject: mathematics
+  category: set-theory
+  name: { ja: 集合族, en: Families of Sets }
+  prerequisites: [math.set-theory.set-operations]
+- id: math.set-theory.relations
+  subject: mathematics
+  category: set-theory
+  name: { ja: 関係, en: Relations }
+  prerequisites: [math.set-theory.set-operations]
+  recommendedNext: [math.set-theory.equivalence-relations]
+  related: [math.set-theory.mappings]
+- id: math.set-theory.mappings
+  subject: mathematics
+  category: set-theory
+  name: { ja: 写像, en: Mappings }
+  prerequisites: [math.set-theory.set-operations]
+  recommendedNext:
+    [math.group-theory.group-definition, math.linear-algebra.vector-space]
+  related: [math.set-theory.relations]
+- id: math.set-theory.equivalence-relations
+  subject: mathematics
+  category: set-theory
+  name: { ja: 同値関係, en: Equivalence Relations }
+  prerequisites: [math.set-theory.relations]
+  related: [math.group-theory.quotient-groups]
+- id: math.set-theory.order-relations
+  subject: mathematics
+  category: set-theory
+  name: { ja: 順序関係, en: Order Relations }
+  prerequisites: [math.set-theory.relations]
+
+# ---------- 数学: 群論 ----------
+- id: math.group-theory.group-definition
+  subject: mathematics
+  category: group-theory
+  name: { ja: 群の定義, en: Definition of a Group }
+  prerequisites: [math.set-theory.mappings]
+  recommendedNext:
+    [math.group-theory.group-examples, math.group-theory.subgroups]
+- id: math.group-theory.group-examples
+  subject: mathematics
+  category: group-theory
+  name: { ja: 群の例, en: Examples of Groups }
+  prerequisites: [math.group-theory.group-definition]
+  alternatives: [math.group-theory.group-definition]
+- id: math.group-theory.subgroups
+  subject: mathematics
+  category: group-theory
+  name: { ja: 部分群, en: Subgroups }
+  prerequisites: [math.group-theory.group-definition]
+  recommendedNext:
+    [math.group-theory.cyclic-groups, math.group-theory.homomorphisms]
+- id: math.group-theory.cyclic-groups
+  subject: mathematics
+  category: group-theory
+  name: { ja: 巡回群, en: Cyclic Groups }
+  prerequisites: [math.group-theory.subgroups]
+- id: math.group-theory.homomorphisms
+  subject: mathematics
+  category: group-theory
+  name: { ja: 準同型写像, en: Group Homomorphisms }
+  prerequisites: [math.group-theory.subgroups, math.set-theory.mappings]
+  recommendedNext: [math.group-theory.quotient-groups]
+- id: math.group-theory.quotient-groups
+  subject: mathematics
+  category: group-theory
+  name: { ja: 剰余群, en: Quotient Groups }
+  prerequisites:
+    [math.group-theory.homomorphisms, math.set-theory.equivalence-relations]
+  related: [math.linear-algebra.linear-map]
+
+# ---------- 数学: 線形代数 ----------
+- id: math.linear-algebra.vector-space
+  subject: mathematics
+  category: linear-algebra
+  name: { ja: 線形空間, en: Vector Spaces }
+  prerequisites: [math.set-theory.mappings]
+  recommendedNext: [math.linear-algebra.linear-map]
+  related: [math.group-theory.group-definition]
+- id: math.linear-algebra.linear-map
+  subject: mathematics
+  category: linear-algebra
+  name: { ja: 線形写像, en: Linear Maps }
+  prerequisites: [math.linear-algebra.vector-space]
+  recommendedNext: [math.linear-algebra.basis-dimension]
+  related: [math.group-theory.homomorphisms]
+- id: math.linear-algebra.basis-dimension
+  subject: mathematics
+  category: linear-algebra
+  name: { ja: 基底と次元, en: Basis and Dimension }
+  prerequisites: [math.linear-algebra.vector-space]
+  recommendedNext: [math.linear-algebra.eigenvalues]
+- id: math.linear-algebra.eigenvalues
+  subject: mathematics
+  category: linear-algebra
+  name: { ja: 固有値と固有ベクトル, en: Eigenvalues and Eigenvectors }
+  prerequisites:
+    [math.linear-algebra.linear-map, math.linear-algebra.basis-dimension]
+  recommendedNext: [math.linear-algebra.jordan-normal-form]
+- id: math.linear-algebra.jordan-normal-form
+  subject: mathematics
+  category: linear-algebra
+  name: { ja: ジョルダン標準形, en: Jordan Normal Form }
+  prerequisites: [math.linear-algebra.eigenvalues]
+
+# ---------- 化学: 物質の構成と状態 ----------
+- id: chem.matter.composition-of-matter
+  subject: chemistry
+  category: matter
+  name: { ja: 物質の構成, en: Composition of Matter }
+  recommendedNext:
+    [chem.matter.phases-of-matter, chem.atomic-structure.atomic-structure]
+- id: chem.matter.phases-of-matter
+  subject: chemistry
+  category: matter
+  name: { ja: 物質の相, en: Phases of Matter }
+  prerequisites: [chem.matter.composition-of-matter]
+  recommendedNext: [chem.matter.separation-purification]
+- id: chem.matter.separation-purification
+  subject: chemistry
+  category: matter
+  name: { ja: 混合物の分離と精製, en: Separation and Purification }
+  prerequisites: [chem.matter.phases-of-matter]
+
+# ---------- 化学: 原子の構造と周期表 ----------
+- id: chem.atomic-structure.atomic-structure
+  subject: chemistry
+  category: atomic-structure
+  name: { ja: 原子の構造, en: Atomic Structure }
+  prerequisites: [chem.matter.composition-of-matter]
+  recommendedNext: [chem.atomic-structure.electron-configuration]
+- id: chem.atomic-structure.electron-configuration
+  subject: chemistry
+  category: atomic-structure
+  name: { ja: 電子配置, en: Electron Configuration }
+  prerequisites: [chem.atomic-structure.atomic-structure]
+  recommendedNext: [chem.atomic-structure.periodic-table]
+- id: chem.atomic-structure.periodic-table
+  subject: chemistry
+  category: atomic-structure
+  name: { ja: 周期表, en: The Periodic Table }
+  prerequisites: [chem.atomic-structure.electron-configuration]
+  recommendedNext: [chem.atomic-structure.ions]
+- id: chem.atomic-structure.ions
+  subject: chemistry
+  category: atomic-structure
+  name: { ja: イオン, en: Ions }
+  prerequisites: [chem.atomic-structure.electron-configuration]
+  related: [chem.atomic-structure.periodic-table]
+
+# ---------- Google Sites移植: 数学・化学 ----------
+- id: math.set-theory.upper-sets
+  subject: mathematics
+  category: set-theory
+  name:
+    ja: 上方集合
+  prerequisites:
+    - math.set-theory.order-relations
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.set-theory.upper-bounds
+  subject: mathematics
+  category: set-theory
+  name:
+    ja: 上界集合
+  prerequisites:
+    - math.set-theory.upper-sets
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.set-theory.directed-sets
+  subject: mathematics
+  category: set-theory
+  name:
+    ja: 有向性
+  prerequisites:
+    - math.set-theory.order-relations
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.symmetric-groups
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 対称群の定義
+  prerequisites:
+    - math.group-theory.group-definition
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.subgroup-examples
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 部分群の例
+  prerequisites:
+    - math.group-theory.subgroups
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.generating-sets
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 群の生成系
+  prerequisites:
+    - math.group-theory.subgroups
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.homomorphism-image-kernel
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 準同型写像の像と核
+  prerequisites:
+    - math.group-theory.homomorphisms
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.homomorphism-theorem
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 準同型定理
+  prerequisites:
+    - math.group-theory.homomorphism-image-kernel
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.group-actions
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 群の作用と置換表現の定義
+  prerequisites:
+    - math.group-theory.group-definition
+    - math.set-theory.mappings
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.group-action-properties
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 群の作用の性質と例
+  prerequisites:
+    - math.group-theory.group-actions
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.conjugation-actions
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 共役作用
+  prerequisites:
+    - math.group-theory.group-action-properties
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.linear-representations
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 群の線形表現
+  prerequisites:
+    - math.group-theory.group-actions
+    - math.module-theory.modules
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.schur-lemma
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: Schurの補題
+  prerequisites:
+    - math.group-theory.linear-representations
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.automorphism-groups
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 自己同型群
+  prerequisites:
+    - math.group-theory.homomorphisms
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.group-theory.normal-characteristic-subgroups
+  subject: mathematics
+  category: group-theory
+  name:
+    ja: 正規部分群と特性部分群
+  prerequisites:
+    - math.group-theory.conjugation-actions
+    - math.group-theory.subgroups
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.ring-theory.ring-definition
+  subject: mathematics
+  category: ring-theory
+  name:
+    ja: 環の定義
+  prerequisites:
+    - math.group-theory.group-definition
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.ring-theory.subrings
+  subject: mathematics
+  category: ring-theory
+  name:
+    ja: 部分環の定義
+  prerequisites:
+    - math.ring-theory.ring-definition
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.ring-theory.subring-examples
+  subject: mathematics
+  category: ring-theory
+  name:
+    ja: 部分環の例
+  prerequisites:
+    - math.ring-theory.subrings
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.ring-theory.ring-homomorphisms
+  subject: mathematics
+  category: ring-theory
+  name:
+    ja: 環準同型写像の定義
+  prerequisites:
+    - math.ring-theory.subrings
+    - math.group-theory.homomorphisms
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.ring-theory.units
+  subject: mathematics
+  category: ring-theory
+  name:
+    ja: 単元の定義
+  prerequisites:
+    - math.ring-theory.ring-definition
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.ring-theory.unit-groups
+  subject: mathematics
+  category: ring-theory
+  name:
+    ja: 単元群の定義
+  prerequisites:
+    - math.ring-theory.units
+    - math.group-theory.group-definition
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.module-theory.modules
+  subject: mathematics
+  category: module-theory
+  name:
+    ja: 環上の加群の定義
+  prerequisites:
+    - math.ring-theory.ring-definition
+    - math.group-theory.group-definition
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.module-theory.module-examples
+  subject: mathematics
+  category: module-theory
+  name:
+    ja: 環上の加群の例
+  prerequisites:
+    - math.module-theory.modules
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: math.module-theory.module-homomorphisms
+  subject: mathematics
+  category: module-theory
+  name:
+    ja: 加群の準同型写像
+  prerequisites:
+    - math.module-theory.modules
+    - math.group-theory.homomorphisms
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.atomic-structure.ionization-energy-electron-affinity
+  subject: chemistry
+  category: atomic-structure
+  name:
+    ja: イオン化エネルギー・電子親和力
+  prerequisites:
+    - chem.atomic-structure.periodic-table
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.chemical-bonding.chemical-bonds-intermolecular-forces
+  subject: chemistry
+  category: chemical-bonding
+  name:
+    ja: 化学結合・分子間相互作用
+  prerequisites:
+    - chem.atomic-structure.ions
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.chemical-bonding.electronegativity
+  subject: chemistry
+  category: chemical-bonding
+  name:
+    ja: 電気陰性度
+  prerequisites:
+    - chem.chemical-bonding.chemical-bonds-intermolecular-forces
+    - chem.atomic-structure.periodic-table
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.chemical-reactions.chemical-equations
+  subject: chemistry
+  category: chemical-reactions
+  name:
+    ja: 化学反応式
+  prerequisites:
+    - chem.chemical-bonding.chemical-bonds-intermolecular-forces
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.chemical-reactions.amount-of-substance
+  subject: chemistry
+  category: chemical-reactions
+  name:
+    ja: 物質量・モル(mol)
+  prerequisites:
+    - chem.atomic-structure.atomic-structure
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.matter.phase-transitions
+  subject: chemistry
+  category: matter
+  name:
+    ja: 物質の状態変化
+  prerequisites:
+    - chem.matter.phases-of-matter
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.matter.solutions
+  subject: chemistry
+  category: matter
+  name:
+    ja: 溶解と溶液
+  prerequisites:
+    - chem.matter.composition-of-matter
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.matter.colloidal-dispersions
+  subject: chemistry
+  category: matter
+  name:
+    ja: コロイド分散系
+  prerequisites:
+    - chem.matter.solutions
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.matter.colloidal-solutions
+  subject: chemistry
+  category: matter
+  name:
+    ja: コロイド溶液
+  prerequisites:
+    - chem.matter.colloidal-dispersions
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: chem.chemical-reactions.acid-base-reactions
+  subject: chemistry
+  category: chemical-reactions
+  name:
+    ja: 酸塩基反応の定義
+  prerequisites:
+    - chem.chemical-reactions.chemical-equations
+    - chem.matter.solutions
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+# ---------- Google Sites移植: 追加分野 ----------
+- id: kanji.supernatural-religion.mythical-creatures
+  subject: kanji
+  category: supernatural-religion
+  name:
+    ja: 想像/伝説上の生物
+  prerequisites: []
+  recommendedNext:
+    - kanji.supernatural-religion.buddhism
+  related: []
+  alternatives: []
+- id: kanji.supernatural-religion.buddhism
+  subject: kanji
+  category: supernatural-religion
+  name:
+    ja: 仏教
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kanji.nature.weather
+  subject: kanji
+  category: nature
+  name:
+    ja: 気象・天候
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.sun-moon-stars
+  related: []
+  alternatives: []
+- id: kanji.nature.sky
+  subject: kanji
+  category: nature
+  name:
+    ja: 空
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.weather
+  related: []
+  alternatives: []
+- id: kanji.nature.sun-moon-stars
+  subject: kanji
+  category: nature
+  name:
+    ja: 太陽・月・星
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.temperature
+  related: []
+  alternatives: []
+- id: kanji.nature.directions
+  subject: kanji
+  category: nature
+  name:
+    ja: 方向・方角
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kanji.nature.temperature
+  subject: kanji
+  category: nature
+  name:
+    ja: 寒暖
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.waterside
+  related: []
+  alternatives: []
+- id: kanji.nature.terrain
+  subject: kanji
+  category: nature
+  name:
+    ja: 地勢
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.rocks-sand
+  related: []
+  alternatives: []
+- id: kanji.nature.rocks-sand
+  subject: kanji
+  category: nature
+  name:
+    ja: 岩石・砂
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.trees
+  related: []
+  alternatives: []
+- id: kanji.nature.waterside
+  subject: kanji
+  category: nature
+  name:
+    ja: 水辺
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.terrain
+  related: []
+  alternatives: []
+- id: kanji.nature.trees
+  subject: kanji
+  category: nature
+  name:
+    ja: 木
+  prerequisites: []
+  recommendedNext:
+    - kanji.nature.directions
+  related: []
+  alternatives: []
+- id: kanji.society.crime-punishment
+  subject: kanji
+  category: society
+  name:
+    ja: 罪刑
+  prerequisites: []
+  recommendedNext:
+    - kanji.society.flood-control
+  related: []
+  alternatives: []
+- id: kanji.society.relationships-family
+  subject: kanji
+  category: society
+  name:
+    ja: 人間関係・家族
+  prerequisites: []
+  recommendedNext:
+    - kanji.society.crime-punishment
+  related: []
+  alternatives: []
+- id: kanji.society.flood-control
+  subject: kanji
+  category: society
+  name:
+    ja: 治水
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kanji.daily-life.metals
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 金属
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.numbers-units
+  related: []
+  alternatives: []
+- id: kanji.daily-life.flags-banners
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 旗・幟
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.fire-light
+  related: []
+  alternatives: []
+- id: kanji.daily-life.fire-light
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 火・明かり
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.metals
+  related: []
+  alternatives: []
+- id: kanji.daily-life.numbers-units
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 数・単位
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.medicine-poison
+  related: []
+  alternatives: []
+- id: kanji.daily-life.curtains-tents
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 幕・帳
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.ships
+  related: []
+  alternatives: []
+- id: kanji.daily-life.medicine-poison
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 薬・毒
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.weapons-armor
+  related: []
+  alternatives: []
+- id: kanji.daily-life.weapons-armor
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 武器・武具
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.beverages
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.containers
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: いれもの
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.roads
+  related: []
+  alternatives: []
+- id: kanji.daily-life.beverages
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 飲み物
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.curtains-tents
+  related: []
+  alternatives: []
+- id: kanji.daily-life.grains
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 穀物
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.agriculture
+  related: []
+  alternatives: []
+- id: kanji.daily-life.cattle-horses
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 牛馬
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.grains
+  related: []
+  alternatives: []
+- id: kanji.daily-life.agriculture
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 農業
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kanji.daily-life.ships
+  subject: kanji
+  category: daily-life
+  name:
+    ja: 船
+  prerequisites: []
+  recommendedNext:
+    - kanji.daily-life.cattle-horses
+  related: []
+  alternatives: []
+- id: kanji.culture.musical-instruments
+  subject: kanji
+  category: culture
+  name:
+    ja: 楽器
+  prerequisites: []
+  recommendedNext:
+    - kanji.culture.gems-jewels
+  related: []
+  alternatives: []
+- id: kanji.culture.gems-jewels
+  subject: kanji
+  category: culture
+  name:
+    ja: 宝玉・宝石
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kanji.human-body.mind-heart
+  subject: kanji
+  category: human-body
+  name:
+    ja: 心
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.skin-muscles-bones-organs
+  related: []
+  alternatives: []
+- id: kanji.human-body.hair
+  subject: kanji
+  category: human-body
+  name:
+    ja: 髪
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.face
+  related: []
+  alternatives: []
+- id: kanji.human-body.skin-muscles-bones-organs
+  subject: kanji
+  category: human-body
+  name:
+    ja: 皮膚・筋肉・骨・内臓・膜・脂肪・血
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.injuries-illness
+  related: []
+  alternatives: []
+- id: kanji.human-body.head-neck
+  subject: kanji
+  category: human-body
+  name:
+    ja: 頭・首
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.mind-heart
+  related: []
+  alternatives: []
+- id: kanji.human-body.face
+  subject: kanji
+  category: human-body
+  name:
+    ja: 顔
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.head-neck
+  related: []
+  alternatives: []
+- id: kanji.human-body.body-torso
+  subject: kanji
+  category: human-body
+  name:
+    ja: 体全体・胴体
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.hair
+  related: []
+  alternatives: []
+- id: kanji.human-body.shoulders-arms
+  subject: kanji
+  category: human-body
+  name:
+    ja: 肩・脇・腕
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.legs-feet
+  related: []
+  alternatives: []
+- id: kanji.human-body.legs-feet
+  subject: kanji
+  category: human-body
+  name:
+    ja: 脚・足
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.hands
+  related: []
+  alternatives: []
+- id: kanji.human-body.hands
+  subject: kanji
+  category: human-body
+  name:
+    ja: 手
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kanji.human-body.injuries-illness
+  subject: kanji
+  category: human-body
+  name:
+    ja: 傷・病・体の不調
+  prerequisites: []
+  recommendedNext:
+    - kanji.human-body.shoulders-arms
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.colors
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 色
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.patterns
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.roads
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 道
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.colors
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.selection
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 取捨選択
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.forgiveness
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.time
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 時間
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.selection
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.patterns
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 模様
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.emotions
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.smells
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 匂い
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.time
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.forgiveness
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 許す
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.cooking
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.emotions
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 感情
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.smells
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.spreading-widely
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 広く行き渡る
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.poverty-low-status
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.poverty-low-status
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: まずしい・いやしい
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.rebuking
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.taste
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 味
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.spreading-widely
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.cooking
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 調理
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.sincerity
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.sincerity
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: まこと・まごころ
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.self-indulgence
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.self-indulgence
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: ほしいまま
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.taste
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.restraint
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: つつしむ
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.kinds
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.retreating
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: しりぞく
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.restraint
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.greed
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: むさぼる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.retreating
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.kinds
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: たぐい
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.criticism
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.reaching
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: いたる・いたす
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.greed
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.rebuking
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: しかる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.reaching
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.criticism
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: そしる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.flattery
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.detail
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: くわしい
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.taboo
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.repetition
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: ふたたび
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.detail
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.flattery
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: こびへつらう
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.analogy
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.analogy
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: たとえる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.looking-peeking
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.looking-peeking
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: のぞく・うかがう
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.repetition
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.suddenly
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: たちまち・にわか
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.following
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.taboo
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: いむ
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.confusion
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.confusion
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: まよう・まどう
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.waiting-welcoming
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.involvement
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: かかわる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.suddenly
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.following
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: したがう
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.comparison
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.waiting-welcoming
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: まつ・むかえる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.involvement
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.comparison
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 比較
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.lies-deception
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.lies-deception
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 嘘・偽る
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.troublesome
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.continuation
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: つづく・つらなる
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.obstruction
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.troublesome
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: わずらわしい
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.continuation
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.obstruction
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: さまたげる・はばむ
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.appearance-expression
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.appearance-expression
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: あらわれる・あらわす
+  prerequisites: []
+  recommendedNext:
+    - kanji.vocabulary.cities-villages
+  related: []
+  alternatives: []
+- id: kanji.vocabulary.cities-villages
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 都市・村落
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kobun.classical-literature.tale-of-the-bamboo-cutter-overview
+  subject: kobun
+  category: classical-literature
+  name:
+    ja: 竹取物語トップページ
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: kobun.classical-literature.kaguyahime-childhood
+  subject: kobun
+  category: classical-literature
+  name:
+    ja: かぐや姫の生い立ち
+  prerequisites:
+    - kobun.classical-literature.tale-of-the-bamboo-cutter-overview
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.foundations.physical-quantities
+  subject: physics
+  category: foundations
+  name:
+    ja: 物理量
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.principles-of-newtonian-mechanics
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: ニュートン力学の原理
+  prerequisites:
+    - physics.foundations.physical-quantities
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.space-time-coordinate-systems
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: 空間と時間の性質・座標系
+  prerequisites:
+    - physics.foundations.physical-quantities
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.coordinate-transformations
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: 座標系の変換
+  prerequisites:
+    - physics.newtonian-mechanics.space-time-coordinate-systems
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.particles-particle-systems
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: 質点・質点系
+  prerequisites:
+    - physics.newtonian-mechanics.principles-of-newtonian-mechanics
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.kinetic-energy-work
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: 運動エネルギーと仕事
+  prerequisites:
+    - physics.newtonian-mechanics.particles-particle-systems
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.momentum-impulse
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: 運動量と力積
+  prerequisites:
+    - physics.newtonian-mechanics.particles-particle-systems
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.newtonian-mechanics.conservation-of-momentum
+  subject: physics
+  category: newtonian-mechanics
+  name:
+    ja: 運動量保存則
+  prerequisites:
+    - physics.newtonian-mechanics.momentum-impulse
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: physics.oscillations.massive-spring
+  subject: physics
+  category: oscillations
+  name:
+    ja: 質量のあるバネ
+  prerequisites:
+    - physics.newtonian-mechanics.kinetic-energy-work
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: astronomy.stellar-astronomy.stars
+  subject: astronomy
+  category: stellar-astronomy
+  name:
+    ja: 星
+  prerequisites: []
+  recommendedNext: []
+  related:
+    - kanji.nature.sun-moon-stars
+  alternatives: []
+- id: biology.biochemistry.fatty-acids-lipids
+  subject: biology
+  category: biochemistry
+  name:
+    ja: 脂肪酸・脂質
+  prerequisites: []
+  recommendedNext: []
+  related:
+    - biology.cell-biology.cell-organelles
+  alternatives: []
+- id: biology.cell-biology.cell-organelles
+  subject: biology
+  category: cell-biology
+  name:
+    ja: 細胞小器官
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: biology.cell-biology.cell-division
+  subject: biology
+  category: cell-biology
+  name:
+    ja: 細胞分裂
+  prerequisites:
+    - biology.cell-biology.cell-organelles
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: biology.plant-physiology.auxin
+  subject: biology
+  category: plant-physiology
+  name:
+    ja: オーキシンとは
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+- id: biology.plant-physiology.auxin-functions
+  subject: biology
+  category: plant-physiology
+  name:
+    ja: オーキシンの働き
+  prerequisites:
+    - biology.plant-physiology.auxin
+  recommendedNext: []
+  related: []
+  alternatives: []

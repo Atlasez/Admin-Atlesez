@@ -1,0 +1,48 @@
+---
+import BaseHead from "../../components/BaseHead.astro";
+import { atlasPath } from "../../lib/site";
+import { LOCALES, localeNames } from "../../lib/i18n";
+---
+
+<!doctype html>
+<html lang="ja" data-site="atlas">
+  <head>
+    <BaseHead
+      title="学習サイト「アトラス」 | 言語を選択"
+      description="学習サイト「アトラス」。言語を選択してください。 / Atlas Learning Site. Choose your language."
+    />
+    <noscript>
+      <meta http-equiv="refresh" content={`3;url=${atlasPath("ja")}`} />
+    </noscript>
+  </head>
+  <body>
+    <main id="main" class="container locale-chooser">
+      <h1>学習サイト「アトラス」 / Atlas</h1>
+      <p>言語を選択してください / Choose your language:</p>
+      <ul>
+        {
+          LOCALES.map((l) => (
+            <li>
+              <a class="button" href={atlasPath(l)} hreflang={l} lang={l}>
+                {localeNames[l]}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </main>
+    <style>
+      .locale-chooser {
+        padding-block: var(--space-6);
+        text-align: center;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        display: flex;
+        gap: var(--space-3);
+        justify-content: center;
+      }
+    </style>
+  </body>
+</html>

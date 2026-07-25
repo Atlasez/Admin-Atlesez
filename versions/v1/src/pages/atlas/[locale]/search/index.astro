@@ -1,0 +1,219 @@
+---
+/** サイト内検索（Pagefind）。ビルド後に生成されるインデックスを利用する */
+import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../components/Breadcrumb.astro";
+import { atlasPath, withBase } from "../../../../lib/site";
+import { t, LOCALES, localeNames, type Locale } from "../../../../lib/i18n";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+
+/** Pagefindのフィルタ名 → ローカライズ済みラベル */
+const filterLabels: Record<string, string> = {
+  subject: t(locale, "subjects"),
+  category: t(locale, "category"),
+  locale: t(locale, "languages"),
+};
+---
+
+<AtlasLayout
+  locale={locale}
+  title={t(locale, "search")}
+  description={locale === "ja"
+    ? "学習サイト「アトラス」の記事を分野横断で検索します。"
+    : "Search articles across all subjects."}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, "search")]),
+  )}
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: t(locale, "search") },
+      ]}
+    />
+    <h1>{t(locale, "search")}</h1>
+    <form
+      class="search-form"
+      role="search"
+      data-search-form
+      data-base={withBase("/")}
+      data-locale-name={localeNames[locale]}
+      data-all-label={t(locale, "all")}
+      data-filter-labels={JSON.stringify(filterLabels)}
+    >
+      <label for="search-input">{t(locale, "searchPlaceholder")}</label>
+      <div class="search-row">
+        <input
+          id="search-input"
+          type="search"
+          data-search-input
+          placeholder={t(locale, "searchPlaceholder")}
+          autocomplete="off"
+        />
+        <button type="submit" class="button">{t(locale, "search")}</button>
+      </div>
+      <div class="search-filters" data-search-filters>
+        {/* フィルタはPagefindのインデックスから動的生成される */}
+      </div>
+    </form>
+    <p class="search-note" data-search-note>
+      {
+        locale === "ja"
+          ? "検索インデックスはビルド後に生成されます（npm run build）。開発サーバーでは検索できません。"
+          : "The search index is generated at build time (npm run build)."
+      }
+    </p>
+    <div data-search-status aria-live="polite" class="visually-hidden"></div>
+    <ol class="search-results" data-search-results></ol>
+  </div>
+</AtlasLayout>
+
+<style>
+  .search-form {
+    max-width: var(--reading-width);
+  }
+  .search-row {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .search-row input {
+    flex: 1;
+  }
+  .search-filters {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-top: var(--space-2);
+  }
+  .search-filters :global(label) {
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+  .search-note {
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .search-results {
+    list-style: none;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    max-width: var(--reading-width);
+  }
+  .search-results :global(li) {
+    padding-block: var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .search-results :global(mark) {
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .search-results :global(.result-title) {
+    font-weight: 600;
+  }
+</style>
+
+<script>
+  import { createPagefindAdapter, type SearchAdapter } from "../../../../lib/search";
+
+  const form = document.querySelector<HTMLFormElement>("[data-search-form]");
+  const input = document.querySelector<HTMLInputElement>("[data-search-input]");
+  const resultsEl = document.querySelector<HTMLElement>(
+    "[data-search-results]",
+  );
+  const filtersEl = document.querySelector<HTMLElement>(
+    "[data-search-filters]",
+  );
+  const note = document.querySelector<HTMLElement>("[data-search-note]");
+  const status = document.querySelector<HTMLElement>("[data-search-status]");
+
+  let adapter: SearchAdapter | null = null;
+
+  // 現在ページのロケール表示名（例: 日本語 / English）と各種ラベル
+  const localeName = form?.dataset.localeName ?? "";
+  const allLabel = form?.dataset.allLabel ?? "---";
+  let filterLabels: Record<string, string> = {};
+  try {
+    filterLabels = JSON.parse(form?.dataset.filterLabels ?? "{}");
+  } catch {
+    filterLabels = {};
+  }
+
+  async function init(): Promise<void> {
+    if (!form) return;
+    try {
+      adapter = await createPagefindAdapter(form.dataset.base ?? "/");
+      note?.remove();
+      // フィルタUIを動的生成
+      const available = await adapter.filters();
+      if (filtersEl) {
+        for (const [name, values] of Object.entries(available)) {
+          const id = `filter-${name}`;
+          const wrap = document.createElement("span");
+          const label = document.createElement("label");
+          label.htmlFor = id;
+          label.textContent = filterLabels[name] ?? name;
+          const select = document.createElement("select");
+          select.id = id;
+          select.dataset.filterName = name;
+          const all = document.createElement("option");
+          all.value = "";
+          all.textContent = allLabel;
+          select.append(all);
+          for (const [v, count] of Object.entries(values)) {
+            const opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = `${v} (${count})`;
+            select.append(opt);
+          }
+          // 言語フィルタは現在ページのロケールを初期選択にする
+          if (name === "locale" && localeName && values[localeName]) {
+            select.value = localeName;
+          }
+          select.addEventListener("change", run);
+          wrap.append(label, select);
+          filtersEl.append(wrap);
+        }
+      }
+    } catch {
+      /* 開発サーバーではインデックスがないため案内文を残す */
+    }
+  }
+
+  async function run(): Promise<void> {
+    if (!adapter || !input || !resultsEl) return;
+    const q = input.value.trim();
+    const filters: Record<string, string | undefined> = {};
+    filtersEl
+      ?.querySelectorAll<HTMLSelectElement>("select")
+      .forEach((s) => (filters[s.dataset.filterName ?? ""] = s.value));
+    const items = await adapter.search(q, filters);
+    resultsEl.innerHTML = "";
+    for (const item of items) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.className = "result-title";
+      a.href = item.url;
+      a.textContent = item.title;
+      const p = document.createElement("p");
+      p.innerHTML = item.excerptHtml; // Pagefindが生成する<mark>付き抜粋
+      li.append(a, p);
+      resultsEl.append(li);
+    }
+    if (status) status.textContent = `${items.length} results`;
+  }
+
+  form?.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    void run();
+  });
+  input?.addEventListener("input", () => {
+    if ((input?.value.length ?? 0) >= 2) void run();
+  });
+  void init();
+</script>

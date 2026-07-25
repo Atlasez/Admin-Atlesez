@@ -1,0 +1,229 @@
+---
+import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../components/Breadcrumb.astro";
+import { atlasPath } from "../../../../lib/site";
+import { t, LOCALES, type Locale } from "../../../../lib/i18n";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+const isJa = locale === "ja";
+const alternates = LOCALES.map((l) => ({
+  hreflang: l,
+  href: new URL(atlasPath(l, "guide"), Astro.site).href,
+}));
+---
+
+<AtlasLayout
+  locale={locale}
+  title={t(locale, "forBeginners")}
+  description={
+    isJa
+      ? "学習サイト「アトラス」の記事、前提知識、学習地図の使い方を案内します。"
+      : "Learn how to use Atlas articles, prerequisites, and the learning map."
+  }
+  alternates={alternates}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, "guide")]),
+  )}
+>
+  <div class="container guide-page">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: t(locale, "forBeginners") },
+      ]}
+    />
+
+    <header class="guide-intro">
+      <p class="section-label">{isJa ? "アトラスの使い方" : "How to use Atlas"}</p>
+      <h1>{t(locale, "forBeginners")}</h1>
+      <p>
+        {
+          isJa
+            ? "アトラスは、知りたい項目だけを読むことも、前提知識をたどって順番に学ぶこともできる学習サイトです。特定の教科から始める必要はありません。"
+            : "Atlas lets you read a single topic or follow its prerequisites in order. You do not need to begin with any particular subject."
+        }
+      </p>
+    </header>
+
+    <section class="start-section" aria-labelledby="start-heading">
+      <div class="section-heading">
+        <p>01</p>
+        <h2 id="start-heading">{isJa ? "入口を選ぶ" : "Choose a starting point"}</h2>
+      </div>
+      <div class="start-options">
+        <article>
+          <h3>{isJa ? "分野から探す" : "Browse by subject"}</h3>
+          <p>
+            {isJa
+              ? "数学、物理、化学、生物などから、読みたい分野とカテゴリを選びます。"
+              : "Choose a subject such as mathematics, physics, chemistry, or biology, then select a category."}
+          </p>
+          <a href={atlasPath(locale)}>{isJa ? "分野一覧を見る" : "View subjects"} →</a>
+        </article>
+        <article>
+          <h3>{isJa ? "言葉から探す" : "Search by term"}</h3>
+          <p>
+            {isJa
+              ? "学びたい用語が決まっている場合は、記事名と本文を横断して検索できます。"
+              : "If you know the term, search article titles and text across the site."}
+          </p>
+          <a href={atlasPath(locale, "search")}>{t(locale, "search")} →</a>
+        </article>
+        <article>
+          <h3>{isJa ? "つながりから探す" : "Explore connections"}</h3>
+          <p>
+            {isJa
+              ? "学習地図では、記事同士の前提関係と、目標までの学習順序を確認できます。"
+              : "The learning map shows prerequisites between articles and a route toward your goal."}
+          </p>
+          <a href={atlasPath(locale, "map")}>{t(locale, "openMap")} →</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="reading-guide" aria-labelledby="reading-heading">
+      <div class="section-heading">
+        <p>02</p>
+        <h2 id="reading-heading">{isJa ? "記事の読み方" : "How to read an article"}</h2>
+      </div>
+      <dl>
+        <div>
+          <dt>{t(locale, "prerequisiteArticles")}</dt>
+          <dd>
+            {isJa
+              ? "理解に必要な内容です。知らない項目があれば、先に読むと本文を追いやすくなります。"
+              : "These are topics needed for understanding. Read unfamiliar prerequisites first when helpful."}
+          </dd>
+        </div>
+        <div>
+          <dt>{t(locale, "preparing")}</dt>
+          <dd>
+            {isJa
+              ? "元サイトの目次にはありますが、本文はまだ公開されていません。題名だけを学習計画の見通しとして掲載しています。"
+              : "The title exists in the original site's contents, but its text is not yet published. It remains visible for planning."}
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="next-step" aria-labelledby="next-heading">
+      <p>03</p>
+      <div>
+        <h2 id="next-heading">{isJa ? "まず、気になる分野から" : "Start with a subject that interests you"}</h2>
+        <p>
+          {isJa
+            ? "順番に迷ったときだけ、前提記事や学習地図に戻れば大丈夫です。"
+            : "If the order becomes unclear, return to the prerequisites or learning map."}
+        </p>
+      </div>
+      <a class="button" href={atlasPath(locale)}>{isJa ? "分野を選ぶ" : "Choose a subject"}</a>
+    </section>
+  </div>
+</AtlasLayout>
+
+<style>
+  .guide-page {
+    max-width: 68rem;
+  }
+  .guide-intro {
+    max-width: 48rem;
+    padding: var(--space-4) 0 var(--space-5);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .section-label,
+  .section-heading > p,
+  .next-step > p {
+    margin: 0 0 var(--space-1);
+    color: var(--accent-primary);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .guide-intro h1 {
+    margin: 0 0 var(--space-2);
+  }
+  .guide-intro > p:last-child {
+    margin: 0;
+    font-size: calc(1.08rem * var(--text-scale));
+    line-height: 1.9;
+  }
+  .start-section,
+  .reading-guide {
+    display: grid;
+    grid-template-columns: minmax(10rem, 0.42fr) minmax(0, 1.58fr);
+    gap: clamp(2rem, 7vw, 6rem);
+    padding: var(--space-5) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .section-heading h2 {
+    margin: 0;
+    font-size: calc(1.45rem * var(--text-scale));
+  }
+  .start-options article {
+    padding: 0 0 var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .start-options article + article {
+    padding-top: var(--space-3);
+  }
+  .start-options h3,
+  .start-options p {
+    margin-top: 0;
+  }
+  .start-options p {
+    max-width: 44rem;
+    color: var(--text-secondary);
+  }
+  .reading-guide dl,
+  .reading-guide dl div:last-child dd {
+    margin-bottom: 0;
+  }
+  .reading-guide dl div {
+    display: grid;
+    grid-template-columns: minmax(8rem, 0.4fr) minmax(0, 1.6fr);
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-default);
+  }
+  .reading-guide dt {
+    font-weight: 700;
+  }
+  .reading-guide dd {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+  .next-step {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-5) 0;
+  }
+  .next-step h2,
+  .next-step div p {
+    margin: 0;
+  }
+  .next-step div p {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+  }
+  @media (max-width: 767px) {
+    .start-section,
+    .reading-guide,
+    .next-step {
+      grid-template-columns: 1fr;
+      gap: var(--space-3);
+    }
+    .reading-guide dl div {
+      grid-template-columns: 1fr;
+      gap: var(--space-1);
+    }
+    .next-step .button {
+      justify-self: start;
+    }
+  }
+</style>

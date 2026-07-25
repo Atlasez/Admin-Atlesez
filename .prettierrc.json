@@ -1,0 +1,9 @@
+{
+  "plugins": [],
+  "overrides": [
+    {
+      "files": "*.astro",
+      "options": { "parser": "html" }
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { withBase } from "../../lib/site";
+import memberData from "../../data/atlas-members.json";
+
+const representative = memberData.members.find(
+  (member) => member.role === "代表",
+);
+const members = memberData.members.filter((member) => member.role !== "代表");
+const importedAt = new Date(memberData.importedAt);
+---
+
+<OrgLayout
+  title="運営メンバー"
+  description="Atlasezの代表と、各プロジェクトを担当する運営メンバーを紹介します。"
+>
+  <div class="container members-page">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "Atlasezとは", href: withBase("/about/") },
+        { label: "運営メンバー" },
+      ]}
+    />
+
+    <header class="members-header">
+      <div>
+        <h1>運営メンバー</h1>
+        <p>
+          Atlasezの代表と、学習サイト「アトラス」などのプロジェクトを担当するメンバーを掲載しています。
+        </p>
+      </div>
+      <p class="source-note">
+        元サイトの公開情報を移植<br />
+        <time datetime={memberData.importedAt}>
+          {importedAt.toLocaleDateString("ja-JP")}取得
+        </time>
+      </p>
+    </header>
+
+    {
+      representative && (
+        <section class="representative" aria-labelledby="representative-heading">
+          <p class="section-label">REPRESENTATIVE</p>
+          <div>
+            <p id="representative-heading" class="role">
+              代表
+            </p>
+            <h2>{representative.name}</h2>
+            <p>{representative.affiliation}</p>
+            {representative.bio && <p>{representative.bio}</p>}
+          </div>
+        </section>
+      )
+    }
+
+    <section class="directory" aria-labelledby="directory-heading">
+      <div class="directory-heading">
+        <div>
+          <p class="section-label">MEMBERS</p>
+          <h2 id="directory-heading">プロジェクトメンバー</h2>
+        </div>
+        <p><span data-member-count>{members.length}</span>名</p>
+      </div>
+
+      <label class="filter-label" for="member-filter">
+        名前・所属・担当で絞り込む
+      </label>
+      <input
+        id="member-filter"
+        type="search"
+        data-member-filter
+        placeholder="例：数学、物理、翻訳"
+        autocomplete="off"
+      />
+
+      <ul class="member-list" data-member-list>
+        {
+          members.map((member) => (
+            <li
+              data-member
+              data-search={`${member.name} ${member.affiliation} ${member.role} ${member.bio}`.toLowerCase()}
+            >
+              <div>
+                <h3>{member.name}</h3>
+                <p class="affiliation">{member.affiliation}</p>
+              </div>
+              <div>
+                <p class="member-role">{member.role}</p>
+                {member.bio && <p class="bio">{member.bio}</p>}
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="no-results" data-no-results hidden>
+        条件に一致するメンバーはいません。
+      </p>
+    </section>
+  </div>
+</OrgLayout>
+
+<style>
+  .members-page {
+    max-width: 68rem;
+  }
+  .members-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-4);
+    align-items: end;
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .members-header > div {
+    max-width: var(--reading-width);
+  }
+  .source-note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: calc(0.8rem * var(--text-scale));
+    text-align: right;
+  }
+  .section-label {
+    margin: 0;
+    color: var(--accent-primary);
+    font-size: calc(0.76rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+  .representative {
+    display: grid;
+    grid-template-columns: minmax(10rem, 0.4fr) minmax(0, 1.6fr);
+    gap: clamp(2rem, 7vw, 6rem);
+    padding-block: var(--space-5);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .representative .role {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+  .representative h2 {
+    margin: var(--space-1) 0;
+  }
+  .representative div p:last-child {
+    margin-bottom: 0;
+  }
+  .directory {
+    padding-top: var(--space-5);
+  }
+  .directory-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+  .directory-heading h2,
+  .directory-heading > p {
+    margin: var(--space-1) 0 0;
+  }
+  .filter-label {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  [data-member-filter] {
+    width: min(100%, 32rem);
+    margin-bottom: var(--space-4);
+  }
+  .member-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .member-list li {
+    display: grid;
+    grid-template-columns: minmax(12rem, 0.6fr) minmax(0, 1.4fr);
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .member-list h3,
+  .member-list p {
+    margin: 0;
+  }
+  .affiliation,
+  .bio {
+    color: var(--text-secondary);
+  }
+  .affiliation {
+    margin-top: var(--space-1) !important;
+    font-size: calc(0.84rem * var(--text-scale));
+  }
+  .member-role {
+    color: var(--accent-primary);
+  }
+  .bio {
+    margin-top: var(--space-2) !important;
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .no-results {
+    padding: var(--space-4) 0;
+  }
+  @media (max-width: 767px) {
+    .members-header,
+    .representative,
+    .member-list li {
+      grid-template-columns: 1fr;
+      gap: var(--space-2);
+    }
+    .source-note {
+      text-align: left;
+    }
+  }
+</style>
+
+<script>
+  const input = document.querySelector<HTMLInputElement>("[data-member-filter]");
+  const members = Array.from(
+    document.querySelectorAll<HTMLElement>("[data-member]"),
+  );
+  const count = document.querySelector<HTMLElement>("[data-member-count]");
+  const noResults = document.querySelector<HTMLElement>("[data-no-results]");
+
+  input?.addEventListener("input", () => {
+    const query = input.value.trim().toLowerCase();
+    let visible = 0;
+    members.forEach((member) => {
+      const show = (member.dataset.search ?? "").includes(query);
+      member.hidden = !show;
+      if (show) visible += 1;
+    });
+    if (count) count.textContent = String(visible);
+    if (noResults) noResults.hidden = visible !== 0;
+  });
+</script>

@@ -1,0 +1,338 @@
+---
+/** カテゴリの記事一覧。グリッド／リスト切替・検索・絞り込み付き */
+import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../../components/Breadcrumb.astro";
+import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
+import {
+  t,
+  LOCALES,
+  localizedName,
+  type Locale,
+} from "../../../../../lib/i18n";
+import {
+  getPublishedArticles,
+  getPublishedSubjects,
+  getConcepts,
+  articlePrerequisiteConceptIds,
+} from "../../../../../lib/content";
+import {
+  getPlannedArticles,
+  plannedArticleTitle,
+} from "../../../../../lib/planned";
+
+export async function getStaticPaths() {
+  const subjects = (await getPublishedSubjects()).filter(
+    (s) => s.data.status === "published",
+  );
+  return LOCALES.flatMap((locale) =>
+    subjects.flatMap((s) =>
+      s.data.categories.map((cat) => ({
+        params: { locale, subject: s.data.slug, category: cat.slug },
+        props: { subject: s, category: cat },
+      })),
+    ),
+  );
+}
+
+const locale = Astro.params.locale as Locale;
+const { subject, category } = Astro.props;
+const { map } = await getConcepts();
+const articles = (await getPublishedArticles(locale)).filter(
+  (a) =>
+    a.data.subject === subject.data.slug &&
+    a.data.category === category.slug,
+);
+const subjectName = localizedName(subject.data.name, locale);
+const categoryName = localizedName(category.name, locale);
+const planned = getPlannedArticles(subject.data.slug, category.slug);
+
+/** 各記事の表示用データ（前提概念名も解決しておく） */
+const items = articles.map((a) => ({
+  article: a,
+  prereqNames: articlePrerequisiteConceptIds(a, map)
+    .map((id) => {
+      const c = map.get(id);
+      return c ? localizedName(c.name, locale) : id;
+    })
+    .slice(0, 4),
+  href: articlePath(locale, a.data.subject, a.data.category, a.data.slug),
+}));
+---
+
+<AtlasLayout
+  locale={locale}
+  title={`${categoryName} - ${subjectName}`}
+  description={localizedName(category.description, locale)}
+  noindex={articles.length === 0 && planned.length === 0}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, subject.data.slug, category.slug)]),
+  )}
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: subjectName, href: atlasPath(locale, subject.data.slug) },
+        { label: categoryName },
+      ]}
+    />
+    <h1>{categoryName}</h1>
+    <p class="reading">{localizedName(category.description, locale)}</p>
+
+    <div class="list-controls">
+      <div class="view-toggle" role="group" aria-label={locale === "ja" ? "表示切替" : "View"}>
+        <button
+          type="button"
+          class="button button-secondary"
+          data-view-btn="grid"
+          aria-pressed="true">{t(locale, "gridView")}</button
+        >
+        <button
+          type="button"
+          class="button button-secondary"
+          data-view-btn="list"
+          aria-pressed="false">{t(locale, "listView")}</button
+        >
+      </div>
+      <div class="filters">
+        <label for="filter-text">{t(locale, "search")}</label>
+        <input
+          id="filter-text"
+          type="search"
+          data-filter-text
+          placeholder={t(locale, "searchPlaceholder")}
+        />
+      </div>
+    </div>
+
+    <p class="visually-hidden" aria-live="polite" data-filter-status></p>
+
+    <ul class="article-collection" data-view="grid">
+      {
+        items.map(({ article: a, prereqNames, href }) => (
+          <li
+            class="article-item card"
+            data-title={`${a.data.title} ${a.data.summary} ${a.data.tags.join(" ")} ${a.data.aliases.join(" ")}`}
+          >
+            <h2 class="article-title">
+              <a href={href}>{a.data.title}</a>
+            </h2>
+            <p class="article-summary">{a.data.summary}</p>
+            <p class="article-badges">
+              <span class="badge">
+                {t(locale, "updatedAt")}: {formatDate(a.data.updatedAt, locale)}
+              </span>
+            </p>
+            {prereqNames.length > 0 && (
+              <p class="article-prereqs">
+                {t(locale, "prerequisites")}: {prereqNames.join("、")}
+              </p>
+            )}
+            <p class="article-actions">
+              <a class="button" href={href}>
+                {t(locale, "readArticle")}
+              </a>
+              <span
+                class="badge"
+                title={t(locale, "exercisePreparing")}
+              >
+                {t(locale, "preExercise")}（{t(locale, "preparing")}）
+              </span>
+              <span class="badge" title={t(locale, "exercisePreparing")}>
+                {t(locale, "postExercise")}（{t(locale, "preparing")}）
+              </span>
+            </p>
+          </li>
+        ))
+      }
+      {
+        planned.map((item) => (
+          <li
+            class="article-item card planned-article"
+            data-title={plannedArticleTitle(item, locale)}
+          >
+            <p class="article-status">{t(locale, "preparing")}</p>
+            <h2 class="article-title">{plannedArticleTitle(item, locale)}</h2>
+            <p class="article-summary">
+              {locale === "ja"
+                ? "現行サイトの目次に掲載されている、本文準備中の記事です。"
+                : "This title appears in the current site's contents; the article is still being prepared."}
+            </p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</AtlasLayout>
+
+<style>
+  .list-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-block: var(--space-4);
+  }
+  .filters {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filters label {
+    margin: 0;
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+  .view-toggle [aria-pressed="true"] {
+    background: var(--accent-primary);
+    color: var(--on-accent);
+  }
+  .article-collection {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .article-collection[data-view="grid"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: var(--space-3);
+  }
+  .article-title {
+    font-size: calc(1.1rem * var(--text-scale));
+    margin: 0;
+  }
+  .article-summary {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+  .planned-article {
+    border-style: dashed;
+    background: var(--background-secondary);
+  }
+  .article-status {
+    margin: 0;
+    color: var(--accent-primary);
+    font-size: calc(0.82rem * var(--text-scale));
+    font-weight: 700;
+  }
+  .article-badges,
+  .article-actions {
+    display: flex;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 0;
+  }
+  .article-actions {
+    margin-top: auto;
+  }
+  .article-prereqs {
+    margin: 0;
+    font-size: calc(0.85rem * var(--text-scale));
+    color: var(--text-secondary);
+  }
+  /* リスト表示: 情報密度の高い一行表示 */
+  .article-collection[data-view="list"] {
+    display: flex;
+    flex-direction: column;
+  }
+  .article-collection[data-view="list"] .article-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title badges"
+      "summary badges"
+      "prereqs actions";
+    gap: var(--space-1) var(--space-3);
+    border: 0;
+    border-bottom: 1px solid var(--border-default);
+    border-radius: 0;
+    padding: var(--space-2) var(--space-1);
+  }
+  .article-collection[data-view="list"] .article-title {
+    grid-area: title;
+  }
+  .article-collection[data-view="list"] .article-summary {
+    grid-area: summary;
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .article-collection[data-view="list"] .article-badges {
+    grid-area: badges;
+  }
+  .article-collection[data-view="list"] .article-prereqs {
+    grid-area: prereqs;
+  }
+  .article-collection[data-view="list"] .article-actions {
+    grid-area: actions;
+  }
+  .article-collection[data-view="list"] .article-actions .button {
+    min-height: auto;
+    padding: 0.2em 0.8em;
+  }
+  .article-item[hidden] {
+    display: none;
+  }
+  @media (max-width: 767px) {
+    .article-collection[data-view="list"] .article-item {
+      grid-template-columns: 1fr;
+      grid-template-areas: "title" "summary" "badges" "prereqs" "actions";
+    }
+  }
+</style>
+
+<script>
+  const VIEW_KEY = "atlas-article-view";
+  const collection = document.querySelector<HTMLElement>(
+    ".article-collection",
+  );
+  const buttons = document.querySelectorAll<HTMLButtonElement>(
+    "[data-view-btn]",
+  );
+  const items = Array.from(
+    document.querySelectorAll<HTMLElement>(".article-item"),
+  );
+  const textInput = document.querySelector<HTMLInputElement>(
+    "[data-filter-text]",
+  );
+  const status = document.querySelector<HTMLElement>("[data-filter-status]");
+
+  function setView(view: string): void {
+    if (!collection) return;
+    collection.dataset.view = view;
+    buttons.forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.viewBtn === view)),
+    );
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      /* noop */
+    }
+  }
+
+  buttons.forEach((b) =>
+    b.addEventListener("click", () => setView(b.dataset.viewBtn ?? "grid")),
+  );
+  try {
+    const saved = localStorage.getItem(VIEW_KEY);
+    if (saved === "list" || saved === "grid") setView(saved);
+  } catch {
+    /* noop */
+  }
+
+  function applyFilters(): void {
+    const q = (textInput?.value ?? "").trim().toLowerCase();
+    let visible = 0;
+    for (const item of items) {
+      const show =
+        q === "" || (item.dataset.title ?? "").toLowerCase().includes(q);
+      item.hidden = !show;
+      if (show) visible += 1;
+    }
+    if (status) {
+      status.textContent = `${visible} / ${items.length}`;
+    }
+  }
+  textInput?.addEventListener("input", applyFilters);
+</script>

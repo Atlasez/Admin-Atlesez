@@ -1,0 +1,248 @@
+---
+/** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
+interface Props {
+  locale?: "ja" | "en";
+}
+const { locale = "ja" } = Astro.props;
+const L =
+  locale === "ja"
+    ? {
+        title: "表示設定",
+        fontSize: "文字サイズ",
+        std: "標準",
+        large: "大",
+        xlarge: "特大",
+        contrast: "コントラスト",
+        high: "高",
+        bg: "背景",
+        white: "白",
+        soft: "低刺激色",
+        dark: "暗色",
+        lineHeight: "行間",
+        wide: "広い",
+        motion: "アニメーション",
+        reduced: "軽減",
+        font: "フォント",
+        gothic: "標準ゴシック",
+        readable: "可読性重視",
+        reset: "初期設定に戻す",
+      }
+    : {
+        title: "Display settings",
+        fontSize: "Text size",
+        std: "Default",
+        large: "Large",
+        xlarge: "X-Large",
+        contrast: "Contrast",
+        high: "High",
+        bg: "Background",
+        white: "White",
+        soft: "Soft",
+        dark: "Dark",
+        lineHeight: "Line height",
+        wide: "Wide",
+        motion: "Animation",
+        reduced: "Reduced",
+        font: "Font",
+        gothic: "Default",
+        readable: "Readable",
+        reset: "Reset to defaults",
+      };
+
+const groups = [
+  {
+    key: "fontSize",
+    label: L.fontSize,
+    options: [
+      { value: "default", label: L.std },
+      { value: "large", label: L.large },
+      { value: "xlarge", label: L.xlarge },
+    ],
+  },
+  {
+    key: "contrast",
+    label: L.contrast,
+    options: [
+      { value: "default", label: L.std },
+      { value: "high", label: L.high },
+    ],
+  },
+  {
+    key: "bg",
+    label: L.bg,
+    options: [
+      { value: "default", label: L.white },
+      { value: "soft", label: L.soft },
+      { value: "dark", label: L.dark },
+    ],
+  },
+  {
+    key: "lineHeight",
+    label: L.lineHeight,
+    options: [
+      { value: "default", label: L.std },
+      { value: "wide", label: L.wide },
+    ],
+  },
+  {
+    key: "motion",
+    label: L.motion,
+    options: [
+      { value: "default", label: L.std },
+      { value: "reduced", label: L.reduced },
+    ],
+  },
+  {
+    key: "font",
+    label: L.font,
+    options: [
+      { value: "default", label: L.gothic },
+      { value: "readable", label: L.readable },
+    ],
+  },
+];
+---
+
+<details class="a11y-settings">
+  <summary>{L.title}</summary>
+  <form class="details-body" data-a11y-form>
+    {
+      groups.map((g) => (
+        <fieldset>
+          <legend>{g.label}</legend>
+          {g.options.map((o, i) => (
+            <label class="a11y-option">
+              <input
+                type="radio"
+                name={g.key}
+                value={o.value}
+                checked={i === 0}
+              />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      ))
+    }
+    <button type="button" class="button button-secondary" data-a11y-reset>
+      {L.reset}
+    </button>
+  </form>
+</details>
+
+<style>
+  .a11y-settings {
+    font-size: calc(0.9rem * var(--text-scale));
+    background: var(--background-primary);
+  }
+  .a11y-settings summary::before {
+    content: "Aa ";
+    font-weight: 700;
+    color: var(--accent-primary);
+    margin-right: var(--space-1);
+  }
+  fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0 0 var(--space-2);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    align-items: center;
+  }
+  legend {
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: var(--space-1);
+  }
+  .a11y-option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-weight: 400;
+    min-height: var(--touch-target);
+  }
+  .a11y-option input {
+    min-height: auto;
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+</style>
+
+<script>
+  const KEY = "atlasez-prefs";
+  const ATTRS: Record<string, string> = {
+    fontSize: "data-pref-font-size",
+    contrast: "data-pref-contrast",
+    bg: "data-pref-bg",
+    lineHeight: "data-pref-line-height",
+    motion: "data-pref-motion",
+    font: "data-pref-font",
+  };
+
+  function loadPrefs(): Record<string, string> {
+    try {
+      return JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function apply(prefs: Record<string, string>): void {
+    const d = document.documentElement;
+    for (const [k, attr] of Object.entries(ATTRS)) {
+      const v = prefs[k];
+      if (v && v !== "default") d.setAttribute(attr, v);
+      else d.removeAttribute(attr);
+    }
+  }
+
+  document.querySelectorAll<HTMLFormElement>("[data-a11y-form]").forEach(
+    (form) => {
+      // 保存値をフォームに反映
+      const prefs = loadPrefs();
+      for (const [k, v] of Object.entries(prefs)) {
+        const input = form.querySelector<HTMLInputElement>(
+          `input[name="${k}"][value="${v}"]`,
+        );
+        if (input) input.checked = true;
+      }
+      const syncBackgroundChoice = () => {
+        const value = document.documentElement.dataset.prefBg ?? "default";
+        const input = form.querySelector<HTMLInputElement>(
+          `input[name="bg"][value="${value}"]`,
+        );
+        if (input) input.checked = true;
+      };
+      window.addEventListener("atlasez-theme-change", syncBackgroundChoice);
+      form.addEventListener("change", () => {
+        const data = new FormData(form);
+        const next: Record<string, string> = {};
+        for (const [k, v] of data.entries()) {
+          if (typeof v === "string" && v !== "default") next[k] = v;
+        }
+        try {
+          localStorage.setItem(KEY, JSON.stringify(next));
+        } catch {
+          /* 保存不可でも表示には適用する */
+        }
+        apply(next);
+        window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+      });
+      form
+        .querySelector("[data-a11y-reset]")
+        ?.addEventListener("click", () => {
+          try {
+            localStorage.removeItem(KEY);
+          } catch {
+            /* noop */
+          }
+          form
+            .querySelectorAll<HTMLInputElement>('input[value="default"]')
+            .forEach((i) => (i.checked = true));
+          apply({});
+          window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+        });
+    },
+  );
+</script>

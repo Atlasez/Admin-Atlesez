@@ -1,0 +1,124 @@
+---
+import OrgLayout from "../layouts/OrgLayout.astro";
+import Breadcrumb from "../components/Breadcrumb.astro";
+import { withBase, ORG } from "../lib/site";
+---
+
+<OrgLayout
+  title="お問い合わせ"
+  description="Atlasezへのお問い合わせ方法。メール・SNSでご連絡いただけます。"
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "お問い合わせ" },
+      ]}
+    />
+    <h1>お問い合わせ</h1>
+    <div class="reading">
+      <p>
+        Atlasezへのお問い合わせは、メールまたはSNSのダイレクトメッセージで受け付けています。
+      </p>
+      <h2>メール</h2>
+      <p>
+        <a href={`mailto:${ORG.email}`}>{ORG.email}</a>
+      </p>
+      <h2>SNS</h2>
+      <ul class="sns-list">
+        <li>
+          <a href={ORG.sns.x} rel="noopener noreferrer" target="_blank">
+            <svg class="sns-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M18.9 2H22l-7.3 8.3L23 22h-6.8l-5.3-6.9L4.8 22H2l7.8-8.9L1.7 2h6.9l4.8 6.4L18.9 2Zm-1.2 18h1.9L7.1 4H5.1l12.6 16Z"
+              ></path>
+            </svg>
+            <span>X (@atlasez_info)</span>
+          </a>
+        </li>
+        <li>
+          <a href={ORG.sns.instagram} rel="noopener noreferrer" target="_blank">
+            <svg class="sns-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect
+                x="3"
+                y="3"
+                width="18"
+                height="18"
+                rx="5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"></rect>
+              <circle
+                cx="12"
+                cy="12"
+                r="4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"></circle>
+              <circle cx="17.5" cy="6.5" r="1.4" fill="currentColor"></circle>
+            </svg>
+            <span>Instagram (@atlasez_info)</span>
+          </a>
+        </li>
+        <li>
+          <a href={ORG.sns.facebook} rel="noopener noreferrer" target="_blank">
+            <svg class="sns-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M14 9V7c0-.7.3-1 1-1h2V3h-3c-2.2 0-3 1.5-3 3v3H9v3h2v9h3v-9h2.2l.8-3H14Z"
+              ></path>
+            </svg>
+            <span>Facebook</span>
+          </a>
+        </li>
+        <li>
+          <a href={ORG.sns.line} rel="noopener noreferrer" target="_blank">
+            <svg class="sns-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 3C6.5 3 2 6.6 2 10.9c0 3.9 3.6 7.1 8.4 7.7.3 0 .8.2.9.5.1.2.1.6 0 .9 0 0-.1.7-.2.9-.1.3-.2 1 .9.6 1.1-.5 6-3.5 8.1-6C21.4 13.9 22 12.5 22 10.9 22 6.6 17.5 3 12 3Zm-3.6 9.6H6.9c-.2 0-.4-.2-.4-.4V9.3c0-.2.2-.4.4-.4s.4.2.4.4v2.5h1.1c.2 0 .4.2.4.4s-.2.4-.4.4Zm1.7-.4c0 .2-.2.4-.4.4s-.4-.2-.4-.4V9.3c0-.2.2-.4.4-.4s.4.2.4.4v2.9Zm3.6 0c0 .2-.1.3-.3.4h-.1c-.1 0-.3-.1-.3-.2l-1.2-1.6v1.4c0 .2-.2.4-.4.4s-.4-.2-.4-.4V9.3c0-.2.1-.3.3-.4.2 0 .3 0 .4.2l1.2 1.6V9.3c0-.2.2-.4.4-.4s.4.2.4.4v2.9Zm2.5-1.9c.2 0 .4.2.4.4s-.2.4-.4.4h-1.1v.7h1.1c.2 0 .4.2.4.4s-.2.4-.4.4h-1.5c-.2 0-.4-.2-.4-.4V9.3c0-.2.2-.4.4-.4h1.5c.2 0 .4.2.4.4s-.2.4-.4.4h-1.1v.7h1.1Z"
+              ></path>
+            </svg>
+            <span>LINE公式アカウント</span>
+          </a>
+        </li>
+      </ul>
+      <h2>学習サイトの記事について</h2>
+      <p>
+        学習サイト「アトラス」の記事の誤りは、各記事ページの「問題を報告」リンク（GitHub
+        Issue）からも報告できます。
+      </p>
+      <p class="note">
+        ※
+        お問い合わせフォームの設置は今後検討します（スパム対策の検討が必要なため。docs/ASSUMPTIONS.md参照）。
+      </p>
+    </div>
+  </div>
+</OrgLayout>
+
+<style>
+  .note {
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  .sns-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .sns-list a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .sns-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+    flex: 0 0 auto;
+    color: var(--accent-primary);
+  }
+</style>

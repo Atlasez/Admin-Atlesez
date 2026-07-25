@@ -1,0 +1,535 @@
+# 学習サイト「アトラス」分野定義
+# status: published = 新サイトで公開 / preparing = 準備中（externalUrlがあれば現行サイトへ案内）
+- id: kanji
+  slug: kanji
+  name: { ja: 漢字, en: Kanji }
+  status: published
+  order: 1
+  description:
+    ja: 漢字の成り立ち・読み・使い分けを学ぶ。
+    en: Learn the origins, readings and usage of kanji.
+  externalUrl: https://sites.google.com/view/atlas-kanji
+  categories:
+    - id: supernatural-religion
+      slug: supernatural-religion
+      name: { ja: 超自然・宗教, en: Supernatural and Religion }
+      description:
+        {
+          ja: 伝説上の生物や宗教に関する漢字。,
+          en: Kanji related to legendary beings and religion.,
+        }
+      order: 1
+      entryConceptIds: [kanji.supernatural-religion.mythical-creatures]
+      relatedCategoryIds: [culture]
+    - id: nature
+      slug: nature
+      name: { ja: 自然, en: Nature }
+      description:
+        {
+          ja: 空・気象・地形・植物など自然に関する漢字。,
+          en: Kanji for the sky,
+          weather,
+          terrain,
+          and plants.,
+        }
+      order: 2
+      entryConceptIds: [kanji.nature.sky]
+      relatedCategoryIds: [human-body]
+    - id: society
+      slug: society
+      name: { ja: 社会, en: Society }
+      description:
+        {
+          ja: 人間関係・制度・治水に関する漢字。,
+          en: Kanji concerning society,
+          relationships,
+          and public works.,
+        }
+      order: 3
+      entryConceptIds: [kanji.society.relationships-family]
+      relatedCategoryIds: [daily-life]
+    - id: daily-life
+      slug: daily-life
+      name: { ja: 生活, en: Daily Life }
+      description:
+        {
+          ja: 道具・衣食住・産業・乗り物に関する漢字。,
+          en: Kanji for tools,
+          food,
+          industry,
+          and transport.,
+        }
+      order: 4
+      entryConceptIds: [kanji.daily-life.flags-banners]
+      relatedCategoryIds: [society, culture]
+    - id: culture
+      slug: culture
+      name: { ja: 文化, en: Culture }
+      description:
+        {
+          ja: 楽器や宝飾など文化に関する漢字。,
+          en: Kanji related to music,
+          jewels,
+          and culture.,
+        }
+      order: 5
+      entryConceptIds: [kanji.culture.musical-instruments]
+      relatedCategoryIds: [daily-life]
+    - id: human-body
+      slug: human-body
+      name: { ja: 人間・人体, en: People and the Body }
+      description:
+        {
+          ja: 心身や傷病に関する漢字。,
+          en: Kanji for the body,
+          mind,
+          and health.,
+        }
+      order: 6
+      entryConceptIds: [kanji.human-body.body-torso]
+      relatedCategoryIds: [nature]
+    - id: vocabulary
+      slug: vocabulary
+      name: { ja: 意味別語彙, en: Vocabulary by Meaning }
+      description:
+        {
+          ja: 動作・状態・感情など意味ごとに学ぶ漢字。,
+          en: Kanji grouped by actions,
+          states,
+          and emotions.,
+        }
+      order: 7
+      entryConceptIds: [kanji.vocabulary.containers]
+      relatedCategoryIds: [human-body]
+- id: kobun
+  slug: kobun
+  name: { ja: 古文, en: Classical Japanese }
+  status: published
+  order: 2
+  description:
+    ja: 古典文法と読解を基礎から学ぶ。
+    en: Classical Japanese grammar and reading.
+  externalUrl: https://sites.google.com/view/atlas-kobun
+  categories:
+    - id: classical-literature
+      slug: classical-literature
+      name: { ja: 古典作品, en: Classical Literature }
+      description:
+        {
+          ja: 古典作品の本文と読解。,
+          en: Texts and readings of classical literature.,
+        }
+      order: 1
+      entryConceptIds:
+        [kobun.classical-literature.tale-of-the-bamboo-cutter-overview]
+      relatedCategoryIds: []
+- id: kanbun
+  slug: kanbun
+  name: { ja: 漢文, en: Classical Chinese }
+  status: preparing
+  order: 3
+  description:
+    ja: 訓読の基礎から漢文読解へ。
+    en: Kanbun reading from the basics.
+- id: geography
+  slug: geography
+  name: { ja: 地理, en: Geography }
+  status: preparing
+  order: 4
+  description:
+    ja: 系統地理と地誌を体系的に学ぶ。
+    en: Systematic and regional geography.
+- id: japanese-history
+  slug: japanese-history
+  name: { ja: 日本史, en: Japanese History }
+  status: preparing
+  order: 5
+  description:
+    ja: 原始から現代までの日本の歴史。
+    en: Japanese history from ancient to modern times.
+- id: world-history
+  slug: world-history
+  name: { ja: 世界史, en: World History }
+  status: preparing
+  order: 6
+  description:
+    ja: 諸地域の歴史と世界の一体化を学ぶ。
+    en: Regional histories and global integration.
+- id: philosophy
+  slug: philosophy
+  name: { ja: 哲学, en: Philosophy }
+  status: preparing
+  order: 7
+  description:
+    ja: 問いから始める哲学入門。
+    en: Philosophy, starting from questions.
+- id: archaeology
+  slug: archaeology
+  name: { ja: 考古学, en: Archaeology }
+  status: preparing
+  order: 8
+  description:
+    ja: 遺物・遺構から過去を読み解く。
+    en: Reading the past from material remains.
+- id: mathematics
+  slug: mathematics
+  name: { ja: 数学, en: Mathematics }
+  status: published
+  order: 9
+  description:
+    ja: 集合論から代数学・線形代数まで、定義と証明を大切にしながら一歩ずつ学ぶ。
+    en: From set theory to algebra and linear algebra, step by step with rigorous definitions.
+  categories:
+    - id: set-theory
+      slug: set-theory
+      name: { ja: 集合論, en: Set Theory }
+      description:
+        ja: すべての数学の土台。集合・写像・関係を扱う。
+        en: The foundation of mathematics — sets, mappings and relations.
+      order: 1
+      entryConceptIds: [math.set-theory.sets]
+      relatedCategoryIds: [group-theory, linear-algebra]
+    - id: group-theory
+      slug: group-theory
+      name: { ja: 群論, en: Group Theory }
+      description:
+        ja: 対称性を記述する代数系。定義から準同型定理まで。
+        en: The algebra of symmetry, from definitions to the homomorphism theorem.
+      order: 2
+      entryConceptIds: [math.group-theory.group-definition]
+      relatedCategoryIds: [set-theory, linear-algebra]
+    - id: linear-algebra
+      slug: linear-algebra
+      name: { ja: 線形代数, en: Linear Algebra }
+      description:
+        ja: 線形空間と線形写像。ジョルダン標準形までの道のり。
+        en: Vector spaces and linear maps, on the road to Jordan normal form.
+      order: 3
+      entryConceptIds: [math.linear-algebra.vector-space]
+      relatedCategoryIds: [set-theory, group-theory]
+    - id: ring-theory
+      slug: ring-theory
+      name: { ja: 環論, en: Ring Theory }
+      description:
+        {
+          ja: 環・部分環・準同型と単元を学ぶ。,
+          en: Rings,
+          subrings,
+          homomorphisms,
+          and units.,
+        }
+      order: 4
+      entryConceptIds: [math.ring-theory.ring-definition]
+      relatedCategoryIds: [group-theory, module-theory]
+    - id: module-theory
+      slug: module-theory
+      name: { ja: 加群論, en: Module Theory }
+      description:
+        {
+          ja: 環上の加群と準同型を学ぶ。,
+          en: Modules over rings and their homomorphisms.,
+        }
+      order: 5
+      entryConceptIds: [math.module-theory.modules]
+      relatedCategoryIds: [ring-theory, linear-algebra]
+- id: physics
+  slug: physics
+  name: { ja: 物理, en: Physics }
+  status: published
+  order: 10
+  description:
+    ja: 力学から現代物理まで。
+    en: From mechanics to modern physics.
+  externalUrl: https://sites.google.com/view/atlas-physics
+  categories:
+    - id: foundations
+      slug: foundations
+      name: { ja: 物理の基礎, en: Foundations of Physics }
+      description:
+        {
+          ja: 物理量・単位・測定の基礎。,
+          en: Physical quantities,
+          units,
+          and measurement.,
+        }
+      order: 1
+      entryConceptIds: [physics.foundations.physical-quantities]
+      relatedCategoryIds: [newtonian-mechanics]
+    - id: newtonian-mechanics
+      slug: newtonian-mechanics
+      name: { ja: ニュートン力学, en: Newtonian Mechanics }
+      description:
+        {
+          ja: 空間・時間・運動量・エネルギーから力学を組み立てる。,
+          en: Mechanics through space,
+          time,
+          momentum,
+          and energy.,
+        }
+      order: 2
+      entryConceptIds:
+        [physics.newtonian-mechanics.principles-of-newtonian-mechanics]
+      relatedCategoryIds: [foundations, oscillations]
+    - id: oscillations
+      slug: oscillations
+      name: { ja: 振動, en: Oscillations }
+      description:
+        {
+          ja: ばねなどの振動現象を学ぶ。,
+          en: Oscillatory systems such as springs.,
+        }
+      order: 3
+      entryConceptIds: [physics.oscillations.massive-spring]
+      relatedCategoryIds: [newtonian-mechanics]
+    - id: continuum-mechanics
+      slug: continuum-mechanics
+      name: { ja: 拘束系・連続体力学, en: Constrained and Continuum Mechanics }
+      description:
+        ja: 拘束を受ける系、連続体、流体の運動を扱う。
+        en: Constrained systems, continua, and fluid motion.
+      order: 4
+      entryConceptIds: []
+      relatedCategoryIds: [newtonian-mechanics]
+    - id: relativity
+      slug: relativity
+      name: { ja: 相対性理論, en: Relativity }
+      description:
+        ja: 特殊相対性理論と一般相対性理論を学ぶ。
+        en: Special and general relativity.
+      order: 5
+      entryConceptIds: []
+      relatedCategoryIds: [electromagnetism]
+    - id: electromagnetism
+      slug: electromagnetism
+      name: { ja: 電磁気学, en: Electromagnetism }
+      description:
+        ja: 電場・磁場と電磁相互作用を扱う。
+        en: Electric and magnetic fields and their interactions.
+      order: 6
+      entryConceptIds: []
+      relatedCategoryIds: [relativity]
+    - id: thermodynamics
+      slug: thermodynamics
+      name:
+        { ja: 熱力学・統計力学, en: Thermodynamics and Statistical Mechanics }
+      description:
+        ja: 熱・温度と、多数の粒子からなる系を扱う。
+        en: Heat, temperature, and systems of many particles.
+      order: 7
+      entryConceptIds: []
+      relatedCategoryIds: [quantum-mechanics]
+    - id: quantum-mechanics
+      slug: quantum-mechanics
+      name: { ja: 量子力学, en: Quantum Mechanics }
+      description:
+        ja: ミクロな世界を記述する量子論を学ぶ。
+        en: Quantum theory for describing the microscopic world.
+      order: 8
+      entryConceptIds: []
+      relatedCategoryIds: [thermodynamics]
+    - id: analytical-mechanics
+      slug: analytical-mechanics
+      name: { ja: 解析力学, en: Analytical Mechanics }
+      description:
+        ja: 力学をラグランジュ形式やハミルトン形式で捉える。
+        en: Lagrangian and Hamiltonian formulations of mechanics.
+      order: 9
+      entryConceptIds: []
+      relatedCategoryIds: [newtonian-mechanics]
+- id: chemistry
+  slug: chemistry
+  name: { ja: 化学, en: Chemistry }
+  status: published
+  order: 11
+  description:
+    ja: 物質の構成から反応まで、ミクロな視点で世界を理解する。
+    en: Understanding the world at the molecular level, from matter to reactions.
+  categories:
+    - id: matter
+      slug: matter
+      name: { ja: 物質の構成と状態, en: Matter and Its States }
+      description:
+        ja: 純物質と混合物、物質の三態、分離と精製。
+        en: Pure substances, mixtures, states of matter, separation.
+      order: 1
+      entryConceptIds: [chem.matter.composition-of-matter]
+      relatedCategoryIds: [atomic-structure]
+    - id: atomic-structure
+      slug: atomic-structure
+      name:
+        { ja: 原子の構造と周期表, en: Atomic Structure and the Periodic Table }
+      description:
+        ja: 原子・電子配置・周期表・イオン。
+        en: Atoms, electron configuration, the periodic table and ions.
+      order: 2
+      entryConceptIds: [chem.atomic-structure.atomic-structure]
+      relatedCategoryIds: [matter, chemical-bonding]
+    - id: chemical-bonding
+      slug: chemical-bonding
+      name: { ja: 化学結合, en: Chemical Bonding }
+      description:
+        {
+          ja: 化学結合・分子間相互作用・電気陰性度。,
+          en: Chemical bonds,
+          intermolecular forces,
+          and electronegativity.,
+        }
+      order: 3
+      entryConceptIds:
+        [chem.chemical-bonding.chemical-bonds-intermolecular-forces]
+      relatedCategoryIds: [atomic-structure, chemical-reactions]
+    - id: chemical-reactions
+      slug: chemical-reactions
+      name: { ja: 化学反応, en: Chemical Reactions }
+      description:
+        {
+          ja: 化学反応式・物質量・酸塩基反応。,
+          en: Equations,
+          amount of substance,
+          and acid-base reactions.,
+        }
+      order: 4
+      entryConceptIds: [chem.chemical-reactions.chemical-equations]
+      relatedCategoryIds: [chemical-bonding, matter]
+- id: geology
+  slug: geology
+  name: { ja: 地質, en: Geology }
+  status: preparing
+  order: 12
+  description:
+    ja: 大地の成り立ちを学ぶ。
+    en: How the earth was formed.
+- id: meteorology
+  slug: meteorology
+  name: { ja: 気象, en: Meteorology }
+  status: preparing
+  order: 13
+  description:
+    ja: 大気の科学。
+    en: The science of the atmosphere.
+- id: oceanography
+  slug: oceanography
+  name: { ja: 海洋, en: Oceanography }
+  status: preparing
+  order: 14
+  description:
+    ja: 海の科学。
+    en: The science of the ocean.
+- id: astronomy
+  slug: astronomy
+  name: { ja: 天文, en: Astronomy }
+  status: published
+  order: 15
+  description:
+    ja: 宇宙の構造と進化を学ぶ。
+    en: The structure and evolution of the universe.
+  externalUrl: https://sites.google.com/view/atlas-astronomy
+  categories:
+    - id: stellar-astronomy
+      slug: stellar-astronomy
+      name: { ja: 恒星, en: Stellar Astronomy }
+      description:
+        {
+          ja: 星の性質と進化を学ぶ。,
+          en: The properties and evolution of stars.,
+        }
+      order: 1
+      entryConceptIds: [astronomy.stellar-astronomy.stars]
+      relatedCategoryIds: []
+- id: biology
+  slug: biology
+  name: { ja: 生物, en: Biology }
+  status: published
+  order: 16
+  description:
+    ja: 生命の仕組みを分子から生態系まで。
+    en: Life from molecules to ecosystems.
+  externalUrl: https://sites.google.com/view/atlas-biology
+  categories:
+    - id: biochemistry
+      slug: biochemistry
+      name: { ja: 生化学, en: Biochemistry }
+      description:
+        {
+          ja: 脂質など生命を構成する分子を学ぶ。,
+          en: Molecules of life,
+          including lipids.,
+        }
+      order: 1
+      entryConceptIds: [biology.biochemistry.fatty-acids-lipids]
+      relatedCategoryIds: [cell-biology]
+    - id: cell-biology
+      slug: cell-biology
+      name: { ja: 細胞生物学, en: Cell Biology }
+      description:
+        { ja: 細胞小器官と細胞分裂を学ぶ。, en: Organelles and cell division. }
+      order: 2
+      entryConceptIds: [biology.cell-biology.cell-organelles]
+      relatedCategoryIds: [biochemistry, plant-physiology]
+    - id: plant-physiology
+      slug: plant-physiology
+      name: { ja: 植物生理学, en: Plant Physiology }
+      description:
+        {
+          ja: 植物ホルモンと植物の働きを学ぶ。,
+          en: Plant hormones and plant function.,
+        }
+      order: 3
+      entryConceptIds: [biology.plant-physiology.auxin]
+      relatedCategoryIds: [cell-biology]
+- id: informatics
+  slug: informatics
+  name: { ja: 情報, en: Informatics }
+  status: preparing
+  order: 17
+  description:
+    ja: 情報科学とプログラミングの基礎。
+    en: Foundations of computer science and programming.
+- id: fisheries-science
+  slug: fisheries-science
+  name: { ja: 水産学, en: Fisheries Science }
+  status: preparing
+  order: 18
+  description:
+    ja: 水圏の生物資源と利用。
+    en: Aquatic bioresources and their use.
+- id: architecture
+  slug: architecture
+  name: { ja: 建築, en: Architecture }
+  status: preparing
+  order: 19
+  description:
+    ja: 建築の計画・構造・環境。
+    en: Architectural planning, structure and environment.
+- id: pharmacy
+  slug: pharmacy
+  name: { ja: 薬学, en: Pharmacy }
+  status: preparing
+  order: 20
+  description:
+    ja: 薬と身体の科学。
+    en: The science of drugs and the body.
+- id: chinese
+  slug: chinese
+  name: { ja: 中国語（普通話）, en: Chinese (Mandarin) }
+  status: preparing
+  order: 21
+  description:
+    ja: 発音から文法まで、普通話の基礎。
+    en: Mandarin basics from pronunciation to grammar.
+- id: taiwanese-mandarin
+  slug: taiwanese-mandarin
+  name: { ja: 台湾華語, en: Taiwanese Mandarin }
+  status: preparing
+  order: 22
+  description:
+    ja: 台湾で話される華語を学ぶ。
+    en: Mandarin as spoken in Taiwan.
+- id: linguistics
+  slug: linguistics
+  name: { ja: 言語学, en: Linguistics }
+  status: preparing
+  order: 23
+  description:
+    ja: ことばの仕組みを科学する。
+    en: The science of language.

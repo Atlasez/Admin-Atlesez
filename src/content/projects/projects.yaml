@@ -1,0 +1,56 @@
+# Atlasezのプロジェクト一覧。データを追加するだけで公式サイトに掲載される
+- id: learning-atlas
+  slug: learning-atlas
+  name: 学習サイト「アトラス」
+  shortDescription: 無料・広告なしで0からの自学自習に使える学習プラットフォーム
+  description: |
+    「一人一人の自学自習をみんなで支える学習サイト」というコンセプトのもと、
+    「0からの自学自習に使える」「無料かつ広告なしで使える」ことを目指した学習サイトです。
+    数学・化学をはじめ23分野を順次公開しています。記事は前提知識のつながり（学習地図）で
+    結ばれており、何をどの順番で学べばよいかが分かります。
+  status: active
+  startedAt: "2024-07"
+  order: 1
+  links:
+    - label: 学習サイト アトラスを開く
+      url: /atlas/ja/
+    - label: X (@learning_atlas)
+      url: https://x.com/learning_atlas
+      external: true
+  howToJoin: 記事の執筆・査読・翻訳に参加できます。運営募集ページをご覧ください。
+- id: semi-platform
+  slug: semi-platform
+  name: ゼミプラットフォーム
+  shortDescription: 学生同士で学び合うゼミを立ち上げ、運営するためのプラットフォーム
+  description: |
+    興味のあるテーマについて学生同士でゼミを立ち上げ、継続的に学び合うための
+    プラットフォームです。2024年5月にサイトを公開しました。
+  status: active
+  startedAt: "2024-05"
+  order: 2
+  links:
+    - label: ゼミプラットフォームのサイト（現行）
+      url: https://sites.google.com/view/atlasez-semi
+      external: true
+  howToJoin: ゼミの参加者・立ち上げメンバーを随時募集しています。
+- id: thinking-cafe
+  slug: thinking-cafe
+  name: 考えるカフェ
+  shortDescription: 一つのテーマについて参加者同士でじっくり考え、対話するイベント
+  description: |
+    一つの問いをめぐって参加者同士でじっくり考え、対話するイベントです。
+    2023年1月の第1回から第4回まで開催しました。
+  status: archived
+  startedAt: "2023-01"
+  order: 3
+  howToJoin: 次回開催はお知らせで告知します。
+- id: student-council-exchange
+  slug: student-council-exchange
+  name: みんなでつくる生徒会交流会
+  shortDescription: 学校を越えて生徒会活動の知見を共有する交流会
+  description: |
+    生徒会活動に取り組む学生が学校を越えて集まり、活動の工夫や課題を共有する
+    交流イベントです。第1回を2023年に開催しました。
+  status: archived
+  startedAt: "2023-10"
+  order: 4

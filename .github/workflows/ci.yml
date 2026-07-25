@@ -1,0 +1,75 @@
+# CI: PRごとに検証し、mainマージ後にGitHub Pagesへデプロイする
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # GitHub Pages (project site) 用の設定。独自ドメイン取得後はここを変えるだけ
+  SITE_URL: https://${{ github.repository_owner }}.github.io
+  BASE_PATH: /${{ github.event.repository.name }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: 依存関係のインストール
+        run: npm ci
+      - name: コンテンツスキーマ・重複ID・循環検査
+        run: node scripts/validate-content.mjs
+      - name: 数式のKaTeX描画検査
+        run: npm run audit:math
+      - name: TypeScriptチェック
+        run: npx astro check
+      - name: Lint
+        run: npm run lint
+      - name: Formatチェック
+        run: npm run format:check
+      - name: 単体テスト
+        run: npm test
+      - name: ビルド（下書きは除外される）
+        run: npx astro build
+      - name: 検索インデックス生成
+        run: npx pagefind --site dist
+      - name: 内部リンク検証
+        run: node scripts/check-links.mjs dist "$BASE_PATH"
+      - name: Playwrightブラウザ導入
+        run: npx playwright install --with-deps chromium
+      - name: E2E・アクセシビリティ検査 (Playwright + axe)
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:4321${{ env.BASE_PATH }}
+      - name: Lighthouse CI（品質検査）
+        run: |
+          npm install -g @lhci/cli
+          npx astro preview --port 4321 &
+          sleep 3
+          lhci collect --url="http://localhost:4321$BASE_PATH/" --url="http://localhost:4321$BASE_PATH/atlas/ja/" --numberOfRuns=1 || true
+          lhci assert --preset=lighthouse:no-pwa --assertions.categories:accessibility=error || true
+      - name: ビルド成果物をアップロード（PRプレビュー用）
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    # mainへのマージ後のみ本番公開
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: GitHub Pagesへデプロイ
+        id: deployment
+        uses: actions/deploy-pages@v4

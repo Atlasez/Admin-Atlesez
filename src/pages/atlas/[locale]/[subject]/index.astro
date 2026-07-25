@@ -1,0 +1,256 @@
+---
+/**
+ * 分野ホーム（標準UI: 折り畳みセクション＝design-lab案Aを採用。
+ * 採用理由は docs/DESIGN_DECISIONS.md 参照）
+ */
+import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../components/Breadcrumb.astro";
+import { atlasPath, articlePath } from "../../../../lib/site";
+import {
+  t,
+  LOCALES,
+  localizedName,
+  type Locale,
+} from "../../../../lib/i18n";
+import {
+  getPublishedArticles,
+  getPublishedSubjects,
+} from "../../../../lib/content";
+import {
+  getPlannedArticles,
+  plannedArticleTitle,
+} from "../../../../lib/planned";
+
+export async function getStaticPaths() {
+  const subjects = (await getPublishedSubjects()).filter(
+    (s) => s.data.status === "published",
+  );
+  return LOCALES.flatMap((locale) =>
+    subjects.map((s) => ({
+      params: { locale, subject: s.data.slug },
+      props: { subject: s },
+    })),
+  );
+}
+
+const locale = Astro.params.locale as Locale;
+const { subject } = Astro.props;
+const articles = await getPublishedArticles(locale);
+const subjectArticles = articles.filter(
+  (a) => a.data.subject === subject.data.slug,
+);
+const categories = [...subject.data.categories].sort(
+  (a, b) => a.order - b.order,
+);
+
+/** 目次内の記事並び順: タイトル順 */
+function sortForToc(list: typeof subjectArticles): typeof subjectArticles {
+  return [...list].sort((a, b) =>
+    a.data.title.localeCompare(b.data.title, "ja"),
+  );
+}
+
+/** 分野全体の記事数（公開＋準備中） */
+const totalPublished = subjectArticles.length;
+const totalPlanned = getPlannedArticles(subject.data.slug).length;
+
+const alternates = LOCALES.map((l) => ({
+  hreflang: l,
+  href: new URL(atlasPath(l, subject.data.slug), Astro.site).href,
+}));
+const subjectName = localizedName(subject.data.name, locale);
+---
+
+<AtlasLayout
+  locale={locale}
+  title={subjectName}
+  description={localizedName(subject.data.description, locale)}
+  alternates={alternates}
+  noindex={subjectArticles.length === 0}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, subject.data.slug)]),
+  )}
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: subjectName },
+      ]}
+    />
+    <h1>{subjectName}</h1>
+    <p class="reading">{localizedName(subject.data.description, locale)}</p>
+    <p>
+      <a
+        class="button button-secondary"
+        href={`${atlasPath(locale, "map")}?subject=${subject.data.slug}`}
+      >
+        {locale === "ja"
+          ? `${subjectName}の地図を開く`
+          : `Open the ${subjectName} map`}
+      </a>
+    </p>
+
+    <section class="subject-toc" aria-labelledby="toc-heading">
+      <div class="toc-heading-row">
+        <h2 id="toc-heading">
+          {locale === "ja"
+            ? `${subjectName}の目次`
+            : `${subjectName} — Contents`}
+        </h2>
+        <span class="toc-total">
+          {t(locale, "articles")}: {totalPublished}
+          {totalPlanned > 0 && (
+            <> / {t(locale, "preparing")}: {totalPlanned}</>
+          )}
+        </span>
+      </div>
+
+      <ol class="toc-categories">
+        {
+          categories.map((cat) => {
+            const catArticles = sortForToc(
+              subjectArticles.filter((a) => a.data.category === cat.slug),
+            );
+            const planned = getPlannedArticles(subject.data.slug, cat.slug);
+            const empty = catArticles.length === 0 && planned.length === 0;
+            return (
+              <li class="toc-category">
+                <div class="toc-cat-head">
+                  <h3>
+                    <a href={atlasPath(locale, subject.data.slug, cat.slug)}>
+                      {localizedName(cat.name, locale)}
+                    </a>
+                  </h3>
+                  <span class="badge">
+                    {t(locale, "articles")}: {catArticles.length}
+                  </span>
+                  {planned.length > 0 && (
+                    <span class="badge planned-count">
+                      {t(locale, "preparing")}: {planned.length}
+                    </span>
+                  )}
+                </div>
+                <p class="toc-cat-desc">
+                  {localizedName(cat.description, locale)}
+                </p>
+                {empty ? (
+                  <p class="toc-empty">
+                    <span class="badge">{t(locale, "preparing")}</span>
+                  </p>
+                ) : (
+                  <ol class="toc-articles">
+                    {catArticles.map((a) => (
+                      <li>
+                        <a
+                          href={articlePath(
+                            locale,
+                            a.data.subject,
+                            a.data.category,
+                            a.data.slug,
+                          )}
+                        >
+                          {a.data.title}
+                        </a>
+                      </li>
+                    ))}
+                    {planned.map((item) => (
+                      <li class="planned-article">
+                        <span>{plannedArticleTitle(item, locale)}</span>
+                        <span class="badge">{t(locale, "preparing")}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </li>
+            );
+          })
+        }
+      </ol>
+    </section>
+  </div>
+</AtlasLayout>
+
+<style>
+  .subject-toc {
+    max-width: var(--content-width);
+    margin-top: var(--space-4);
+  }
+  .toc-heading-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: var(--space-1);
+    margin-bottom: var(--space-3);
+  }
+  .toc-heading-row h2 {
+    margin: 0;
+  }
+  .toc-total {
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+    white-space: nowrap;
+  }
+  .toc-categories {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    counter-reset: toc-cat;
+  }
+  .toc-category {
+    counter-increment: toc-cat;
+  }
+  .toc-cat-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .toc-cat-head h3 {
+    margin: 0;
+    flex: 1;
+  }
+  .toc-cat-head h3::before {
+    content: counter(toc-cat) ". ";
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .planned-count {
+    border-style: dashed;
+  }
+  .toc-cat-desc {
+    margin: var(--space-1) 0 var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .toc-empty {
+    margin: 0 0 0 var(--space-3);
+  }
+  .toc-articles {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 var(--space-3);
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .toc-articles li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    align-items: baseline;
+    padding: var(--space-1) 0;
+  }
+  .toc-articles li + li {
+    border-top: 1px solid var(--border);
+  }
+  .planned-article > span:first-child {
+    color: var(--text-secondary);
+  }
+</style>

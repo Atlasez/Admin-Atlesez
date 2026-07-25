@@ -1,0 +1,176 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { withBase } from "../../lib/site";
+
+const sections = [
+  {
+    href: withBase("/about/philosophy/"),
+    title: "理念・目標",
+    desc: "Atlasezが目指すもの",
+  },
+  {
+    href: withBase("/about/organization/"),
+    title: "組織構成",
+    desc: "チームと役割分担",
+  },
+  {
+    href: withBase("/about/members/"),
+    title: "運営メンバー",
+    desc: "運営に携わるメンバーの紹介",
+  },
+  {
+    href: withBase("/about/history/"),
+    title: "沿革",
+    desc: "設立からこれまでの歩み",
+  },
+];
+---
+
+<OrgLayout
+  title="Atlasezとは"
+  description="学生団体Atlasezの概要。理念・組織構成・運営メンバー・沿革を紹介します。"
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "Atlasezとは" },
+      ]}
+    />
+    <header class="about-intro">
+      <h1>Atlasezとは</h1>
+      <p class="definition">
+        学生などの若者が主体となって、「未来の学びを創る・学びで未来を創る」団体です。
+      </p>
+      <p>
+        「Atlasez」は、「地図帳」を意味する英語の「Atlas」の複数形「Atlases」に由来します。これは私たちが描く学びのイメージを象徴しています。
+      </p>
+    </header>
+
+    <section class="learning-image" aria-labelledby="learning-heading">
+      <div class="section-number">01</div>
+      <div>
+        <h2 id="learning-heading">私たちが実現したい学び</h2>
+        <p>
+          誰しもが持つ、知りたい・学びたい・希望を実現したい・不満を解消したいといった気持ちから、学びが始まる。
+        </p>
+        <p>
+          その過程を楽しみ、また様々な人と交流することで、世界観が拡大・更新されていく。
+        </p>
+        <p>
+          学びが蓄積・共有され、自分や周りの人の更なる学びへと繋がる。
+        </p>
+        <p>
+          こうした学びが、一人一人の世界観を広げるだけでなく、より良い社会をもたらす。
+        </p>
+      </div>
+    </section>
+
+    <section class="atlas-metaphor" aria-labelledby="atlas-heading">
+      <div class="section-number">02</div>
+      <div>
+        <h2 id="atlas-heading">地図帳に込めたイメージ</h2>
+        <p>
+          ここじゃないどこかへと行ってみたい気持ちから、冒険が始まる。
+        </p>
+        <p>
+          冒険した先でワクワクするものを見つけたり、険しい道にはばまれたり、それらを楽しみながら進んでいく。
+        </p>
+        <p>
+          出会った人と冒険を共にしたり、まだ知らぬ世界の話を聞いたりする。するとだんだん自分が持つ地図が広がり、新しい情報が書き加えられていく。
+        </p>
+        <p>
+          そうしてできた地図帳を持ち寄ることで、自分や周りの人の次の冒険のきっかけが生まれる。
+        </p>
+        <p>
+          こうした冒険の積み重ねが、地図上の世界を広げるだけでなく、実際の世界を、自ずと冒険に出たくなるような、より一層楽しい冒険ができるような世界へと変えていく。
+        </p>
+        <p>あなたも冒険に出て、一緒に地図を描きませんか？</p>
+      </div>
+    </section>
+
+    <h2 class="more-heading">より詳しく知る</h2>
+    <ul class="about-index">
+      {
+        sections.map((s, index) => (
+          <li>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <div>
+              <h3>
+              <a href={s.href}>{s.title}</a>
+              </h3>
+              <p>{s.desc}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</OrgLayout>
+
+<style>
+  .about-intro {
+    max-width: var(--reading-width);
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .definition {
+    font-size: calc(1.18rem * var(--text-scale));
+    line-height: 1.9;
+  }
+  .learning-image,
+  .atlas-metaphor {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, var(--reading-width));
+    gap: var(--space-3);
+    padding-block: var(--space-5);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .section-number,
+  .about-index > li > span {
+    color: var(--accent-primary);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .learning-image h2,
+  .atlas-metaphor h2,
+  .learning-image p:first-of-type,
+  .atlas-metaphor p:first-of-type {
+    margin-top: 0;
+  }
+  .more-heading {
+    margin-top: var(--space-5);
+  }
+  .about-index {
+    list-style: none;
+    max-width: var(--reading-width);
+    margin: 0;
+    padding: 0;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .about-index li {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .about-index h3,
+  .about-index p {
+    margin: 0;
+  }
+  .about-index p {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+  }
+  @media (max-width: 600px) {
+    .learning-image,
+    .atlas-metaphor,
+    .about-index li {
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+      gap: var(--space-2);
+    }
+  }
+</style>

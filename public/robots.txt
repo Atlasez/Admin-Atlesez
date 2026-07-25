@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# sitemap.xml のURLはデプロイ先に合わせて更新される（@astrojs/sitemapが生成）
+Sitemap: https://atlasez.github.io/atlasez-web/sitemap-index.xml

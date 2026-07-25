@@ -1,0 +1,45 @@
+{
+  "name": "atlasez-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Atlasez公式サイトと学習サイト「アトラス」",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && npm run search:index",
+    "build:ci": "astro build",
+    "search:index": "pagefind --site dist",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "eslint src scripts tests",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate:content": "astro build --config astro.config.mjs > /dev/null && node scripts/validate-content.mjs",
+    "test": "vitest run",
+    "audit:math": "node scripts/audit-math.mjs",
+    "test:e2e": "playwright test",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/rss": "^4.0.0",
+    "@astrojs/sitemap": "^3.0.0",
+    "astro": "^5.0.0",
+    "cytoscape": "^3.30.0",
+    "katex": "^0.16.0",
+    "rehype-katex": "^7.0.0",
+    "remark-math": "^6.0.0",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.0",
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.48.0",
+    "eslint": "^9.0.0",
+    "pagefind": "^1.3.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^2.1.0",
+    "zod": "^3.23.0"
+  }
+}

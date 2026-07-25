@@ -1,0 +1,245 @@
+---
+/** Atlasez公式サイトの共通レイアウト */
+import BaseHead from "../components/BaseHead.astro";
+import A11ySettings from "../components/A11ySettings.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+import { withBase, ORG } from "../lib/site";
+
+interface Props {
+  title: string;
+  description: string;
+  ogType?: "website" | "article";
+  structuredData?: object;
+}
+const { title, description, ogType, structuredData } = Astro.props;
+
+const nav = [
+  { label: "Atlasezとは", href: withBase("/about/") },
+  { label: "プロジェクト", href: withBase("/projects/") },
+  { label: "お知らせ", href: withBase("/news/") },
+  { label: "運営募集", href: withBase("/join/") },
+  { label: "お問い合わせ", href: withBase("/contact/") },
+];
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="ja" data-site="org">
+  <head>
+    <BaseHead
+      title={`${title} | Atlasez`}
+      description={description}
+      ogType={ogType}
+      structuredData={structuredData}
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="org-header">
+      <div class="container org-header-inner">
+        <a class="org-logo" href={withBase("/")}>
+          <img
+            src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-logo.png`}
+            alt=""
+            width="44"
+            height="44"
+          />
+          <span>Atlasez</span>
+        </a>
+        <nav aria-label="メインナビゲーション" class="org-nav">
+          <ul>
+            {
+              nav.map((item) => (
+                <li>
+                  <a
+                    href={item.href}
+                    aria-current={
+                      currentPath.startsWith(item.href) ? "page" : undefined
+                    }
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <a class="button atlas-link" href={withBase("/atlas/ja/")}
+          >学習サイト アトラス</a
+        >
+        <ThemeToggle locale="ja" />
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="org-footer">
+      <div class="container">
+        <div class="org-footer-cols">
+          <div>
+            <p class="org-footer-title">Atlasez</p>
+            <p>{ORG.slogan}</p>
+            <p>
+              <a href={`mailto:${ORG.email}`}>{ORG.email}</a>
+            </p>
+            <ul class="org-sns">
+              <li>
+                <a href={ORG.sns.x} rel="noopener noreferrer" target="_blank"
+                  >X (Twitter)</a
+                >
+              </li>
+              <li>
+                <a
+                  href={ORG.sns.instagram}
+                  rel="noopener noreferrer"
+                  target="_blank">Instagram</a
+                >
+              </li>
+              <li>
+                <a
+                  href={ORG.sns.facebook}
+                  rel="noopener noreferrer"
+                  target="_blank">Facebook</a
+                >
+              </li>
+              <li>
+                <a href={ORG.sns.line} rel="noopener noreferrer" target="_blank"
+                  >LINE</a
+                >
+              </li>
+            </ul>
+          </div>
+          <nav aria-label="フッターナビゲーション">
+            <ul class="org-footer-nav">
+              {
+                nav.map((item) => (
+                  <li>
+                    <a href={item.href}>{item.label}</a>
+                  </li>
+                ))
+              }
+              <li><a href={withBase("/atlas/ja/")}>学習サイト アトラス</a></li>
+              <li>
+                <a href={withBase("/privacy-policy/")}>プライバシーポリシー</a>
+              </li>
+            </ul>
+          </nav>
+          <div>
+            <A11ySettings locale="ja" />
+          </div>
+        </div>
+        <p class="org-copyright">© 2022-2026 Atlasez</p>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .org-header {
+    border-top: 3px solid var(--accent-primary);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  .org-header-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding-block: var(--space-1);
+  }
+  .org-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
+    font-size: calc(1.2rem * var(--text-scale));
+    color: var(--text-primary);
+    text-decoration: none;
+    min-height: var(--touch-target);
+  }
+  .org-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .org-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    text-decoration: none;
+    color: var(--text-primary);
+    border-bottom: 2px solid transparent;
+  }
+  .org-nav a:hover,
+  .org-nav a[aria-current="page"] {
+    border-bottom-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .atlas-link {
+    margin-left: auto;
+    background: transparent;
+    color: var(--accent-primary);
+  }
+  .atlas-link:hover {
+    background: var(--accent-subtle);
+    color: var(--accent-hover);
+  }
+  main {
+    min-height: 60vh;
+    padding-block: var(--space-5);
+  }
+  .org-footer {
+    border-top: 1px solid var(--border-default);
+    background: var(--background-primary);
+    padding-block: var(--space-5);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .org-footer-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: var(--space-4);
+  }
+  .org-footer-title {
+    font-weight: 700;
+    font-size: calc(1.1rem * var(--text-scale));
+    margin-top: 0;
+  }
+  .org-footer-nav,
+  .org-sns {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .org-sns {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+  .org-copyright {
+    margin-top: var(--space-4);
+    color: var(--text-secondary);
+  }
+  @media (max-width: 767px) {
+    .org-header-inner {
+      gap: var(--space-2);
+    }
+    .atlas-link {
+      margin-left: 0;
+    }
+    .org-nav {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .org-nav ul {
+      flex-wrap: nowrap;
+      width: max-content;
+    }
+  }
+</style>

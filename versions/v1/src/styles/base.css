@@ -1,0 +1,272 @@
+/* 基本スタイル（両サイト共通） */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-current);
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text-primary);
+  background: var(--background-primary);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-feature-settings: "palt" 1;
+}
+
+/* リンク: 色だけに依存せず下線を維持 */
+a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* フォーカスリング */
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Skip to content */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent-primary);
+  color: var(--on-accent);
+}
+.skip-link:focus {
+  left: var(--space-2);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.45;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+h1 {
+  font-size: calc(1.85rem * var(--text-scale));
+  font-weight: 650;
+}
+h2 {
+  font-size: calc(1.3rem * var(--text-scale));
+  font-weight: 650;
+}
+h3 {
+  font-size: calc(1.15rem * var(--text-scale));
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
+pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  background: var(--background-inset);
+  border-radius: var(--radius);
+  line-height: 1.6;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+th {
+  background: var(--background-secondary);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  margin: var(--space-5) 0;
+}
+
+/* レイアウトユーティリティ */
+.container {
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding-inline: var(--space-3);
+}
+.reading {
+  max-width: var(--reading-width);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ボタン */
+.button,
+button.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target);
+  padding: 0.5em 1.2em;
+  border: 1px solid var(--accent-primary);
+  border-radius: 0;
+  background: var(--accent-primary);
+  color: var(--on-accent);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button:hover {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+.button-secondary {
+  background: transparent;
+  color: var(--accent-primary);
+}
+.button-secondary:hover {
+  background: var(--accent-subtle);
+  color: var(--accent-hover);
+}
+
+/* バッジ（状態など。色だけに依存しないよう文字を必ず持つ） */
+.badge {
+  display: inline-block;
+  padding: 0.1em 0.6em;
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  font-size: calc(0.8rem * var(--text-scale));
+  color: var(--text-secondary);
+  background: var(--background-secondary);
+  white-space: nowrap;
+}
+.badge-accent {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-subtle);
+}
+
+/* パンくず */
+.breadcrumb ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  font-size: calc(0.85rem * var(--text-scale));
+}
+.breadcrumb li + li::before {
+  content: "›";
+  margin: 0 var(--space-1);
+  color: var(--text-muted);
+}
+
+/* カードグリッド */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-4);
+  padding: 0;
+  margin: var(--space-3) 0;
+  list-style: none;
+}
+.card {
+  border: 0;
+  border-top: 2px solid var(--accent-primary);
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+  padding: var(--space-3) 0 var(--space-4);
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.card h3 {
+  margin: 0;
+}
+
+/* フォーム */
+label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--background-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  padding: 0.4em 0.6em;
+  min-height: var(--touch-target);
+  max-width: 100%;
+}
+
+/* 詳細折り畳み */
+details {
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+  border-radius: 0;
+}
+details summary {
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  list-style-position: inside;
+}
+details[open] > summary {
+  border-bottom: 1px solid var(--border-default);
+}
+details .details-body {
+  padding: var(--space-3);
+}
+
+/* KaTeX数式のはみ出し対策 */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--space-1) 0;
+}
+
+@media (max-width: 767px) {
+  h1 {
+    font-size: calc(1.45rem * var(--text-scale));
+  }
+}

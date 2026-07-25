@@ -1,0 +1,112 @@
+---
+import type { GetStaticPaths } from "astro";
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { getCollection } from "astro:content";
+import { withBase, formatDate } from "../../lib/site";
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const news = (
+    await getCollection("news", (n) => n.data.status === "published")
+  ).sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+  return paginate(news, { pageSize: 10 });
+}) satisfies GetStaticPaths;
+
+const { page } = Astro.props;
+const categoryLabel = {
+  announcement: "告知",
+  report: "報告",
+  release: "公開",
+} as const;
+---
+
+<OrgLayout
+  title={page.currentPage === 1
+    ? "お知らせ"
+    : `お知らせ（${page.currentPage}ページ目）`}
+  description="Atlasezからのお知らせ一覧。イベント告知・開催報告・学習サイトの更新情報。"
+>
+  <div class="container">
+    <Breadcrumb
+      items={[{ label: "ホーム", href: withBase("/") }, { label: "お知らせ" }]}
+    />
+    <h1>お知らせ</h1>
+    <ul class="news-list">
+      {
+        page.data.map((n) => (
+          <li>
+            <div class="news-meta">
+              <time datetime={n.data.date.toISOString().slice(0, 10)}>
+                {formatDate(n.data.date)}
+              </time>
+              <span class="badge">{categoryLabel[n.data.category]}</span>
+            </div>
+            <a
+              class="news-title"
+              href={withBase(`/news/${n.id.replace(/\.md$/, "")}/`)}
+            >
+              {n.data.title}
+            </a>
+            <p class="news-summary">{n.data.summary}</p>
+          </li>
+        ))
+      }
+    </ul>
+    <nav class="pagination" aria-label="ページ送り">
+      {
+        page.url.prev && (
+          <a class="button button-secondary" href={page.url.prev}>
+            ‹ 前のページ
+          </a>
+        )
+      }
+      <span>
+        {page.currentPage} / {page.lastPage}
+      </span>
+      {
+        page.url.next && (
+          <a class="button button-secondary" href={page.url.next}>
+            次のページ ›
+          </a>
+        )
+      }
+    </nav>
+    <p>
+      <a href={withBase("/rss.xml")}>RSSフィード</a>
+    </p>
+  </div>
+</OrgLayout>
+
+<style>
+  .news-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: var(--reading-width);
+  }
+  .news-list li {
+    padding-block: var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .news-meta {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .news-title {
+    font-weight: 600;
+    font-size: calc(1.05rem * var(--text-scale));
+  }
+  .news-summary {
+    margin: var(--space-1) 0 0;
+    color: var(--text-secondary);
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+</style>

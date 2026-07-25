@@ -1,0 +1,149 @@
+/* ============================================================
+   Atlasez デザイントークン
+   - 色は少数に限定。アクセントは各サイト1色
+   - すべての可変値は表示設定パネル（data-* 属性）で上書き可能
+   ============================================================ */
+:root {
+  /* 書体 */
+  --font-sans:
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic",
+    "Noto Sans JP", system-ui, sans-serif;
+  --font-readable:
+    "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui,
+    sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  --font-current: var(--font-sans);
+
+  /* 文字サイズ・行間（表示設定で上書き） */
+  --text-scale: 1;
+  --line-height-body: 1.75;
+  --font-size-body: calc(1rem * var(--text-scale));
+
+  /* 色（ライト＝紙のような白） */
+  --text-primary: #182027;
+  --text-secondary: #56616a;
+  --text-muted: #66727b;
+  --background-primary: #ffffff;
+  --background-secondary: #f5f7f8;
+  --background-inset: #edf1f3;
+  --border-default: #d5dde2;
+  --border-strong: #84929c;
+
+  /* アクセント（サイト別に上書き） */
+  --accent-primary: #173f62; /* 公式: 紺 */
+  --accent-hover: #0d2f4c;
+  --accent-subtle: #e8eef4;
+  --on-accent: #ffffff;
+
+  --link: var(--accent-primary);
+  --focus-ring: #b3560e;
+  --danger: #a03123;
+  --success: #2c6e49;
+
+  /* 余白・寸法
+     一覧性を優先し、space-4 以上を段階的に圧縮している。
+     旧値: 4=1.5 / 5=2.5 / 6=4rem */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.875rem;
+  --space-4: 1.25rem;
+  --space-5: 1.75rem;
+  --space-6: 2.5rem;
+  --content-width: 78rem;
+  --reading-width: 56rem;
+  --radius: 2px;
+  --touch-target: 44px;
+}
+
+/* 学習サイトのアクセント（旧サイトを引き継ぐ青） */
+[data-site="atlas"] {
+  --accent-primary: #176ea6;
+  --accent-hover: #0e5686;
+  --accent-subtle: #e5f2fa;
+}
+
+/* ---------- 表示設定: 文字サイズ ---------- */
+[data-pref-font-size="large"] {
+  --text-scale: 1.15;
+}
+[data-pref-font-size="xlarge"] {
+  --text-scale: 1.3;
+}
+
+/* ---------- 表示設定: 行間 ---------- */
+[data-pref-line-height="wide"] {
+  --line-height-body: 2.2;
+}
+
+/* ---------- 表示設定: フォント ---------- */
+[data-pref-font="readable"] {
+  --font-current: var(--font-readable);
+  letter-spacing: 0.03em;
+}
+
+/* ---------- 表示設定: 背景 ---------- */
+[data-pref-bg="soft"] {
+  --background-primary: #f7f3e9;
+  --background-secondary: #efe9db;
+  --background-inset: #e7e0cf;
+  --border-default: #d6cdb8;
+}
+
+[data-pref-bg="dark"] {
+  color-scheme: dark;
+  --text-primary: #e8e6e1;
+  --text-secondary: #b5b1a8;
+  --text-muted: #8f8b82;
+  --background-primary: #191a1c;
+  --background-secondary: #232427;
+  --background-inset: #2b2c30;
+  --border-default: #3d3e42;
+  --border-strong: #6a6b70;
+  --accent-primary: #7fa8cc;
+  --accent-hover: #a3c2dd;
+  --accent-subtle: #263341;
+  --on-accent: #10151a;
+  --link: #8db4d6;
+  --focus-ring: #e8a45c;
+}
+[data-site="atlas"][data-pref-bg="dark"],
+[data-pref-bg="dark"] [data-site="atlas"] {
+  --accent-primary: #79bce6;
+  --accent-hover: #a7d5f2;
+  --accent-subtle: #203746;
+  --link: #8bc9ed;
+}
+
+/* ---------- 表示設定: 高コントラスト ---------- */
+[data-pref-contrast="high"] {
+  --text-primary: #000000;
+  --text-secondary: #1c1c1c;
+  --text-muted: #333333;
+  --border-default: #444444;
+  --link: #002a70;
+}
+[data-pref-contrast="high"][data-pref-bg="dark"] {
+  --text-primary: #ffffff;
+  --text-secondary: #f0f0f0;
+  --text-muted: #d0d0d0;
+  --border-default: #bbbbbb;
+  --link: #a8ccff;
+}
+
+/* ---------- アニメーション軽減 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+[data-pref-motion="reduced"] *,
+[data-pref-motion="reduced"] *::before,
+[data-pref-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

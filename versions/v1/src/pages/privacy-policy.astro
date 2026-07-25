@@ -1,0 +1,51 @@
+---
+import OrgLayout from "../layouts/OrgLayout.astro";
+import Breadcrumb from "../components/Breadcrumb.astro";
+import { withBase, ORG } from "../lib/site";
+---
+
+<OrgLayout
+  title="プライバシーポリシー"
+  description="Atlasez公式サイトおよび学習サイト「アトラス」のプライバシーポリシー。"
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "プライバシーポリシー" },
+      ]}
+    />
+    <h1>プライバシーポリシー</h1>
+    <div class="reading">
+      <p>
+        Atlasez（以下「当団体」）は、公式サイトおよび学習サイト「アトラス」（以下「本サイト」）における利用者の情報について、次のとおり取り扱います。
+      </p>
+      <h2>収集する情報</h2>
+      <p>
+        本サイトは、広告や行動追跡を目的としたCookie・外部スクリプトを使用しません。
+        表示設定（文字サイズ・背景色など）は利用者のブラウザ内（localStorage）にのみ保存され、当団体のサーバーには送信されません。
+      </p>
+      <h2>お問い合わせで取得する情報</h2>
+      <p>
+        メールやフォームでのお問い合わせの際に取得した氏名・連絡先は、回答および連絡の目的にのみ利用し、第三者に提供しません。
+      </p>
+      <h2>外部サービス</h2>
+      <p>
+        本サイトはGitHub Pages上で提供されます。応募フォームにはGoogleフォームを使用しています。各サービスの利用にあたっては、各社のプライバシーポリシーが適用されます。
+      </p>
+      <h2>改定</h2>
+      <p>本ポリシーを改定する場合は、本ページでお知らせします。</p>
+      <p>
+        お問い合わせ先: <a href={`mailto:${ORG.email}`}>{ORG.email}</a>
+      </p>
+      <p class="note">制定: 2026年7月22日</p>
+    </div>
+  </div>
+</OrgLayout>
+
+<style>
+  .note {
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+</style>

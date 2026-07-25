@@ -1,0 +1,370 @@
+---
+import AtlasLayout from "../../../layouts/AtlasLayout.astro";
+import { atlasPath, articlePath, formatDate } from "../../../lib/site";
+import { t, LOCALES, localizedName, type Locale } from "../../../lib/i18n";
+import {
+  getPublishedArticles,
+  getPublishedSubjects,
+} from "../../../lib/content";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+const subjects = await getPublishedSubjects();
+const articles = await getPublishedArticles(locale);
+const allArticles = await getPublishedArticles();
+
+const countBySubject = new Map<string, number>();
+for (const a of articles) {
+  countBySubject.set(
+    a.data.subject,
+    (countBySubject.get(a.data.subject) ?? 0) + 1,
+  );
+}
+
+const recent = [...articles]
+  .sort((a, b) => b.data.updatedAt.getTime() - a.data.updatedAt.getTime())
+  .slice(0, 5);
+
+const alternates = LOCALES.map((l) => ({
+  hreflang: l,
+  href: new URL(atlasPath(l), Astro.site).href,
+}));
+
+const publishedSubjects = subjects.filter((s) => s.data.status === "published");
+const preparingSubjects = subjects.filter((s) => s.data.status === "preparing");
+---
+
+<AtlasLayout
+  locale={locale}
+  title={locale === "ja" ? "総合ホーム" : "Home"}
+  description={t(locale, "siteTagline")}
+  alternates={alternates}
+>
+  <div class="container atlas-home">
+    <section class="intro" aria-labelledby="atlas-title">
+      <div>
+        <h1 id="atlas-title">{t(locale, "siteName")}</h1>
+        <p>
+          {
+            locale === "ja"
+              ? "高校・大学で学ぶ内容を、前提となる知識と結びつけてまとめています。読みたい項目を選ぶか、学習地図から順序を確かめてください。"
+              : "Topics from high school and university study, connected to the knowledge they require. Choose a subject below or use the learning map to check the order."
+          }
+        </p>
+        <div class="intro-links">
+          <a class="button" href={atlasPath(locale, "guide")}>
+            {t(locale, "forBeginners")}
+          </a>
+          <a href={atlasPath(locale, "map")}>{t(locale, "openMap")}</a>
+          <a href={atlasPath(locale, "search")}>{t(locale, "search")}</a>
+          <a href={atlasPath(locale, "team")}>{t(locale, "team")}</a>
+        </div>
+      </div>
+      <dl class="site-summary">
+        <div>
+          <dt>{locale === "ja" ? "公開記事" : "Published articles"}</dt>
+          <dd>{allArticles.length}</dd>
+        </div>
+        <div>
+          <dt>{locale === "ja" ? "公開分野" : "Subjects"}</dt>
+          <dd>{publishedSubjects.length}</dd>
+        </div>
+        <div>
+          <dt>{locale === "ja" ? "利用" : "Access"}</dt>
+          <dd>{locale === "ja" ? "無料・広告なし" : "Free, no ads"}</dd>
+        </div>
+      </dl>
+    </section>
+
+    {
+      locale !== "ja" && (
+        <p class="beta-notice" role="note">
+          The English edition is in beta — only a limited set of articles has
+          been translated so far. For full content, see the Japanese edition or
+          the current site linked on each subject.
+        </p>
+      )
+    }
+
+    <div class="content-columns">
+      <section aria-labelledby="subjects-heading">
+        <div class="section-title">
+          <h2 id="subjects-heading">{t(locale, "subjects")}</h2>
+          <a href={atlasPath(locale, "map")}>{t(locale, "map")}</a>
+        </div>
+        <ul class="subject-list">
+          {
+            publishedSubjects.map((s) => (
+              <li>
+                <div class="subject-heading">
+                  <h3>
+                    <a href={atlasPath(locale, s.data.slug)}>
+                      {localizedName(s.data.name, locale)}
+                    </a>
+                  </h3>
+                  <span>
+                    {countBySubject.get(s.data.slug) ?? 0}
+                    {locale === "ja" ? "記事" : " articles"}
+                  </span>
+                </div>
+                <p>{localizedName(s.data.description, locale)}</p>
+                {s.data.externalUrl && (
+                  <p class="subject-external">
+                    <a
+                      href={s.data.externalUrl}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {locale === "ja"
+                        ? "現行サイトも見る ↗"
+                        : "View on current site ↗"}
+                    </a>
+                  </p>
+                )}
+              </li>
+            ))
+          }
+        </ul>
+
+        <details class="preparing-subjects">
+          <summary>{t(locale, "preparing")}</summary>
+          <ul class="preparing-list details-body">
+            {
+              preparingSubjects.map((s) => (
+                <li>
+                  <span>{localizedName(s.data.name, locale)}</span>
+                  {s.data.externalUrl && (
+                    <a
+                      href={s.data.externalUrl}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {locale === "ja" ? "現行サイト" : "Current site"}
+                    </a>
+                  )}
+                </li>
+              ))
+            }
+          </ul>
+        </details>
+      </section>
+
+      <aside class="recent" aria-labelledby="recent-heading">
+        <div class="section-title">
+          <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
+        </div>
+        <ul class="recent-list">
+          {
+            recent.map((a) => (
+              <li>
+                <a
+                  href={articlePath(
+                    locale,
+                    a.data.subject,
+                    a.data.category,
+                    a.data.slug,
+                  )}
+                >
+                  {a.data.title}
+                </a>
+                <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>
+                  {formatDate(a.data.updatedAt, locale)}
+                </time>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="about-map">
+          {
+            locale === "ja"
+              ? "記事同士は、前提となる知識にもとづいてつながっています。学ぶ順番に迷ったら学習地図を利用できます。"
+              : "Articles are connected by their prerequisites. Use the learning map when you are unsure what to read first."
+          }
+        </p>
+        {
+          allArticles.length > articles.length && locale !== "ja" && (
+            <p class="translation-note">
+              {`Some articles are currently available only in Japanese (${allArticles.length - articles.length} more).`}
+            </p>
+          )
+        }
+      </aside>
+    </div>
+  </div>
+</AtlasLayout>
+
+<style>
+  .atlas-home {
+    max-width: 70rem;
+  }
+  .intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(15rem, 0.65fr);
+    gap: clamp(2rem, 6vw, 5rem);
+    padding: var(--space-4) 0 var(--space-5);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .intro h1 {
+    margin: 0 0 var(--space-2);
+    color: var(--accent-primary);
+  }
+  .intro p {
+    max-width: 42rem;
+    margin: 0;
+    font-size: calc(1.04rem * var(--text-scale));
+  }
+  .intro-links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+  .site-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    align-self: start;
+    border-top: 3px solid var(--accent-primary);
+  }
+  .site-summary div {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .site-summary div:nth-child(odd) {
+    padding-right: var(--space-3);
+  }
+  .site-summary div:last-child {
+    grid-column: 1 / -1;
+  }
+  .site-summary dt {
+    color: var(--text-secondary);
+    font-size: calc(0.8rem * var(--text-scale));
+  }
+  .site-summary dd {
+    margin: 0;
+    font-weight: 650;
+  }
+  .content-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 0.65fr);
+    gap: clamp(2.5rem, 6vw, 5rem);
+    padding-block: var(--space-5) var(--space-6);
+  }
+  .section-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .section-title h2 {
+    margin: 0;
+  }
+  .section-title a {
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+  .subject-list,
+  .recent-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .subject-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4);
+  }
+  .subject-list li {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .subject-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  .subject-heading h3,
+  .subject-list p {
+    margin: 0;
+  }
+  .subject-heading span {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: calc(0.8rem * var(--text-scale));
+  }
+  .subject-list p {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+    font-size: calc(0.92rem * var(--text-scale));
+  }
+  .subject-external {
+    margin-top: var(--space-1);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  .beta-notice {
+    margin: 0 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent, var(--text-secondary));
+    border-radius: var(--radius, 4px);
+    background: var(--surface, transparent);
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+    max-width: var(--content-width);
+  }
+  .preparing-subjects {
+    margin-top: var(--space-4);
+  }
+  .preparing-list {
+    columns: 2;
+    list-style: none;
+    margin: 0;
+  }
+  .preparing-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    break-inside: avoid;
+    padding: var(--space-1) 0;
+    color: var(--text-secondary);
+  }
+  .recent-list li {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .recent-list time {
+    color: var(--text-secondary);
+    font-size: calc(0.8rem * var(--text-scale));
+  }
+  .about-map,
+  .translation-note {
+    margin-top: var(--space-4);
+    padding: var(--space-3);
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+  @media (max-width: 767px) {
+    .intro,
+    .content-columns {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+    }
+    .subject-list {
+      grid-template-columns: 1fr;
+    }
+    .preparing-list {
+      columns: 1;
+    }
+  }
+</style>

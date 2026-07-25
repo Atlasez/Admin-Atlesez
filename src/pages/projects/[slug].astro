@@ -1,0 +1,109 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { getCollection } from "astro:content";
+import { withBase, formatDate } from "../../lib/site";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  return projects.map((p) => ({ params: { slug: p.data.slug }, props: { p } }));
+}
+
+const { p } = Astro.props;
+const statusLabel = {
+  active: "活動中",
+  preparing: "準備中",
+  archived: "終了・休止中",
+} as const;
+
+const news = (
+  await getCollection(
+    "news",
+    (n) => n.data.status === "published" && n.data.project === p.data.slug,
+  )
+)
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .slice(0, 5);
+---
+
+<OrgLayout title={p.data.name} description={p.data.shortDescription}>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "プロジェクト", href: withBase("/projects/") },
+        { label: p.data.name },
+      ]}
+    />
+    <h1>{p.data.name}</h1>
+    <p>
+      <span class="badge badge-accent">{statusLabel[p.data.status]}</span>
+      <span class="badge">開始: {p.data.startedAt}</span>
+    </p>
+    <div class="reading project-body">
+      {p.data.description.split("\n\n").map((para) => <p>{para}</p>)}
+    </div>
+
+    {
+      p.data.links.length > 0 && (
+        <section aria-labelledby="links-heading">
+          <h2 id="links-heading">関連リンク</h2>
+          <ul>
+            {p.data.links.map((l) => (
+              <li>
+                {l.external ? (
+                  <a href={l.url} rel="noopener noreferrer" target="_blank">
+                    {l.label}（外部サイト）
+                  </a>
+                ) : (
+                  <a href={withBase(l.url)}>{l.label}</a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    {
+      p.data.howToJoin && (
+        <section aria-labelledby="join-heading">
+          <h2 id="join-heading">参加方法</h2>
+          <p class="reading">{p.data.howToJoin}</p>
+          <p>
+            <a class="button" href={withBase("/join/")}>
+              運営募集を見る
+            </a>
+          </p>
+        </section>
+      )
+    }
+
+    {
+      news.length > 0 && (
+        <section aria-labelledby="news-heading">
+          <h2 id="news-heading">このプロジェクトの最新情報</h2>
+          <ul>
+            {news.map((n) => (
+              <li>
+                <time datetime={n.data.date.toISOString().slice(0, 10)}>
+                  {formatDate(n.data.date)}
+                </time>
+                ：
+                <a href={withBase(`/news/${n.id.replace(/\.md$/, "")}/`)}>
+                  {n.data.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+  </div>
+</OrgLayout>
+
+<style>
+  section {
+    margin-top: var(--space-5);
+  }
+</style>

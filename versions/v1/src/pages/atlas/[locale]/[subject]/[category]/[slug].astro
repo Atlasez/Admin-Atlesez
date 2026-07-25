@@ -1,0 +1,627 @@
+---
+/** 個別記事ページ */
+import { render } from "astro:content";
+import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../../components/Breadcrumb.astro";
+import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
+import {
+  t,
+  LOCALES,
+  localizedName,
+  localeNames,
+  type Locale,
+} from "../../../../../lib/i18n";
+import {
+  getPublishedArticles,
+  getPublishedSubjects,
+  getConcepts,
+  indexArticlesByConcept,
+  prerequisiteArticles,
+  relatedArticles,
+  nextArticles,
+  translationArticles,
+} from "../../../../../lib/content";
+import { ORG } from "../../../../../lib/site";
+import "katex/dist/katex.min.css";
+
+export async function getStaticPaths() {
+  const articles = await getPublishedArticles();
+  return articles.map((a) => ({
+    params: {
+      locale: a.data.locale,
+      subject: a.data.subject,
+      category: a.data.category,
+      slug: a.data.slug,
+    },
+    props: { entry: a },
+  }));
+}
+
+const { entry } = Astro.props;
+const locale = entry.data.locale as Locale;
+const { Content, headings } = await render(entry);
+
+const { map } = await getConcepts();
+const sameLocale = await getPublishedArticles(locale);
+const all = await getPublishedArticles();
+const byConcept = indexArticlesByConcept(sameLocale);
+
+const prereqs = prerequisiteArticles(entry, map, byConcept);
+const related = relatedArticles(entry, map, byConcept);
+const next = nextArticles(entry, map, byConcept, sameLocale);
+const translations = translationArticles(entry, all);
+
+const subjects = await getPublishedSubjects();
+const subject = subjects.find((s) => s.data.slug === entry.data.subject);
+const category = subject?.data.categories.find(
+  (c) => c.slug === entry.data.category,
+);
+const subjectName = subject
+  ? localizedName(subject.data.name, locale)
+  : entry.data.subject;
+const categoryName = category
+  ? localizedName(category.name, locale)
+  : entry.data.category;
+
+const toc = headings.filter((h) => h.depth <= 3);
+
+/** 言語切替: 対応記事があればそこへ、なければ各言語の総合ホームへ */
+const localeSwitchHrefs: Partial<Record<Locale, string>> = {};
+for (const l of LOCALES) {
+  if (l === locale) continue;
+  const targets = translations.get(l);
+  if (targets && targets.length > 0 && targets[0]) {
+    const tgt = targets[0];
+    localeSwitchHrefs[l] = articlePath(
+      l,
+      tgt.data.subject,
+      tgt.data.category,
+      tgt.data.slug,
+    );
+  }
+}
+
+const alternates = [...translations.entries()].flatMap(([l, arts]) =>
+  arts.length > 0 && arts[0]
+    ? [
+        {
+          hreflang: l,
+          href: new URL(
+            articlePath(
+              l,
+              arts[0].data.subject,
+              arts[0].data.category,
+              arts[0].data.slug,
+            ),
+            Astro.site,
+          ).href,
+        },
+      ]
+    : [],
+);
+
+const conceptNames = entry.data.concepts.map((c) => {
+  const node = map.get(c.id);
+  return { id: c.id, name: node ? localizedName(node.name, locale) : c.id };
+});
+
+const issueUrl = `${ORG.githubRepo}/issues/new?title=${encodeURIComponent(
+  `[記事報告] ${entry.data.title} (${entry.data.articleId})`,
+)}`;
+const historyUrl = `${ORG.githubRepo}/commits/main/src/content/articles/${entry.id}.md`;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Article",
+  headline: entry.data.title,
+  description: entry.data.summary,
+  inLanguage: locale,
+  dateModified: entry.data.updatedAt.toISOString(),
+  datePublished: entry.data.createdAt.toISOString(),
+  author: entry.data.authors.map((a) => ({ "@type": "Person", name: a })),
+  publisher: { "@type": "Organization", name: "Atlasez" },
+};
+
+---
+
+<AtlasLayout
+  locale={locale}
+  title={entry.data.title}
+  description={entry.data.summary}
+  ogType="article"
+  alternates={alternates}
+  structuredData={structuredData}
+  localeSwitchHrefs={localeSwitchHrefs}
+>
+  <div class="container article-layout">
+    {/* 左: 記事内目次（デスクトップは固定、モバイルは折り畳み） */}
+    <nav class="article-toc" aria-label={t(locale, "toc")}>
+      <details class="toc-details" open>
+        <summary>{t(locale, "toc")}</summary>
+        <ol class="details-body toc-list">
+          {
+            toc.map((h) => (
+              <li class={`toc-depth-${h.depth}`}>
+                <a href={`#${h.slug}`} data-toc-link={h.slug}>
+                  {h.text}
+                </a>
+              </li>
+            ))
+          }
+        </ol>
+      </details>
+    </nav>
+
+    {/* 中央: 本文（Pagefindの検索対象） */}
+    <article class="article-main" data-pagefind-body>
+      <Breadcrumb
+        items={[
+          { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+          { label: subjectName, href: atlasPath(locale, entry.data.subject) },
+          {
+            label: categoryName,
+            href: atlasPath(locale, entry.data.subject, entry.data.category),
+          },
+          { label: entry.data.title },
+        ]}
+      />
+      <div class="visually-hidden">
+        {/* Pagefind用のフィルタ・メタデータ（検索の絞り込みに使用） */}
+        <span data-pagefind-filter="subject">{subjectName}</span>
+        <span data-pagefind-filter="category">{categoryName}</span>
+        <span data-pagefind-filter="locale">{localeNames[locale]}</span>
+        <span data-pagefind-meta="summary">{entry.data.summary}</span>
+        {entry.data.aliases.map((al) => <span>{al}</span>)}
+        {entry.data.tags.map((tag) => <span>{tag}</span>)}
+        {entry.data.authors.map((au) => <span>{au}</span>)}
+        {entry.data.concepts.map((c) => <span>{c.id}</span>)}
+      </div>
+      <header class="article-header">
+        <h1 id="article-title">{entry.data.title}</h1>
+        <p class="article-summary">{entry.data.summary}</p>
+        <p class="article-badges">
+          <span class="badge">
+            {t(locale, "updatedAt")}:
+            <time datetime={entry.data.updatedAt.toISOString().slice(0, 10)}>
+              {formatDate(entry.data.updatedAt, locale)}
+            </time>
+          </span>
+        </p>
+        <button
+          type="button"
+          class="bookmark-btn"
+          data-bookmark-toggle
+          data-article-id={entry.data.articleId}
+          data-locale={locale}
+          data-title={entry.data.title}
+          data-href={articlePath(
+            locale,
+            entry.data.subject,
+            entry.data.category,
+            entry.data.slug,
+          )}
+          data-subject={subjectName}
+          data-category={categoryName}
+          data-summary={entry.data.summary}
+          data-label-save={t(locale, "saveForLater")}
+          data-label-saved={t(locale, "saved")}
+          aria-pressed="false"
+        >
+          <span data-bookmark-icon aria-hidden="true">☆</span>
+          <span data-bookmark-label>{t(locale, "saveForLater")}</span>
+        </button>
+        {
+          [...translations.entries()].length > 0 && (
+            <p class="translation-info">
+              {t(locale, "availableIn")}:
+              {[...translations.entries()].map(([l, arts]) => (
+                <span class="translation-links">
+                  {arts.map((a2) => (
+                    <a
+                      href={articlePath(
+                        l,
+                        a2.data.subject,
+                        a2.data.category,
+                        a2.data.slug,
+                      )}
+                      hreflang={l}
+                      lang={l}
+                    >
+                      {localeNames[l]}: {a2.data.title}
+                    </a>
+                  ))}
+                </span>
+              ))}
+            </p>
+          )
+        }
+      </header>
+
+      <div class="article-exercise" role="note">
+        <span class="badge">
+          {t(locale, "preExercise")}（{t(locale, "preparing")}）
+        </span>
+      </div>
+
+      <div class="article-body reading">
+        <Content />
+      </div>
+
+      <div class="article-exercise" role="note">
+        <span class="badge">
+          {t(locale, "postExercise")}（{t(locale, "preparing")}）
+        </span>
+      </div>
+
+      {
+        entry.data.references.length > 0 && (
+          <section aria-labelledby="refs-heading" class="article-refs">
+            <h2 id="refs-heading">{t(locale, "references")}</h2>
+            <ul>
+              {entry.data.references.map((r) => (
+                <li>
+                  {r.url ? (
+                    <a href={r.url} rel="noopener noreferrer" target="_blank">
+                      {r.title}
+                    </a>
+                  ) : (
+                    r.title
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+
+      <footer class="article-footer">
+        <p>
+          <a href={issueUrl} rel="noopener noreferrer" target="_blank">
+            {t(locale, "reportIssue")}
+          </a>
+          ・
+          <a href={historyUrl} rel="noopener noreferrer" target="_blank">
+            {t(locale, "editOnGitHub")}
+          </a>
+        </p>
+      </footer>
+    </article>
+
+    {/* 右: 記事情報・関連 */}
+    <aside class="article-aside" aria-label={locale === "ja" ? "記事情報" : "Article info"}>
+      <section>
+        <h2>{locale === "ja" ? "記事情報" : "Article info"}</h2>
+        <dl class="meta-list">
+          <dt>{t(locale, "authors")}</dt>
+          <dd>{entry.data.authors.join(", ")}</dd>
+          {
+            entry.data.reviewers.length > 0 && (
+              <>
+                <dt>{t(locale, "reviewers")}</dt>
+                <dd>{entry.data.reviewers.join(", ")}</dd>
+              </>
+            )
+          }
+          <dt>{t(locale, "conceptsCovered")}</dt>
+          <dd>
+            <ul class="concept-list">
+              {conceptNames.map((c) => <li>{c.name}</li>)}
+            </ul>
+          </dd>
+        </dl>
+      </section>
+      {
+        prereqs.length > 0 && (
+          <section>
+            <h2>{t(locale, "prerequisiteArticles")}</h2>
+            <ul class="aside-links">
+              {prereqs.map((a) => (
+                <li>
+                  <a
+                    href={articlePath(
+                      locale,
+                      a.data.subject,
+                      a.data.category,
+                      a.data.slug,
+                    )}
+                  >
+                    {a.data.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+      {
+        next.length > 0 && (
+          <section>
+            <h2>{t(locale, "nextArticles")}</h2>
+            <ul class="aside-links">
+              {next.map((a) => (
+                <li>
+                  <a
+                    href={articlePath(
+                      locale,
+                      a.data.subject,
+                      a.data.category,
+                      a.data.slug,
+                    )}
+                  >
+                    {a.data.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+      {
+        related.length > 0 && (
+          <section>
+            <h2>{t(locale, "relatedArticles")}</h2>
+            <ul class="aside-links">
+              {related.map((a) => (
+                <li>
+                  <a
+                    href={articlePath(
+                      locale,
+                      a.data.subject,
+                      a.data.category,
+                      a.data.slug,
+                    )}
+                  >
+                    {a.data.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    </aside>
+  </div>
+</AtlasLayout>
+
+<style>
+  .article-layout {
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr) 16rem;
+    gap: var(--space-5);
+    align-items: start;
+  }
+  .article-toc {
+    position: sticky;
+    top: var(--space-3);
+    font-size: calc(0.9rem * var(--text-scale));
+    max-height: calc(100vh - var(--space-5));
+    overflow-y: auto;
+  }
+  .toc-list {
+    list-style: none;
+    margin: 0;
+    padding: var(--space-2);
+  }
+  .toc-list a {
+    display: block;
+    padding: var(--space-1) var(--space-2);
+    text-decoration: none;
+    color: var(--text-secondary);
+    border-left: 3px solid transparent;
+  }
+  .toc-list a:hover {
+    color: var(--accent-primary);
+  }
+  .toc-list a[aria-current="true"] {
+    border-left-color: var(--accent-primary);
+    color: var(--accent-primary);
+    font-weight: 600;
+    background: var(--accent-subtle);
+  }
+  .toc-depth-3 a {
+    padding-left: var(--space-4);
+  }
+  .article-header {
+    padding-bottom: var(--space-4);
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .article-header h1 {
+    margin-bottom: var(--space-2);
+  }
+  .article-summary {
+    color: var(--text-secondary);
+    font-size: calc(1.05rem * var(--text-scale));
+  }
+  .article-badges {
+    display: flex;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+  }
+  .bookmark-btn {
+    margin-top: var(--space-2);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius, 4px);
+    background: transparent;
+    color: var(--accent-primary);
+    font: inherit;
+    font-size: calc(0.9rem * var(--text-scale));
+    cursor: pointer;
+  }
+  .bookmark-btn:hover {
+    background: var(--accent-subtle);
+  }
+  .bookmark-btn[aria-pressed="true"] {
+    background: var(--accent-primary);
+    color: var(--bg, #fff);
+  }
+  .translation-info {
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .translation-links {
+    margin-inline-start: var(--space-2);
+  }
+  .article-exercise {
+    margin-block: var(--space-3);
+  }
+  .article-body {
+    margin-block: var(--space-3);
+  }
+  .article-body :global(h2) {
+    border-bottom: 1px solid var(--border-default);
+    padding-bottom: var(--space-1);
+    margin-top: var(--space-5);
+  }
+  .article-refs,
+  .article-footer {
+    max-width: var(--reading-width);
+    margin-top: var(--space-5);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .article-aside {
+    position: sticky;
+    top: var(--space-3);
+    font-size: calc(0.9rem * var(--text-scale));
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .article-aside section {
+    border: 0;
+    border-top: 2px solid var(--accent-primary);
+    border-radius: 0;
+    padding: var(--space-2) 0 var(--space-3);
+  }
+  .article-aside h2 {
+    font-size: calc(0.95rem * var(--text-scale));
+    margin: 0 0 var(--space-2);
+  }
+  .aside-links,
+  .concept-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .meta-list {
+    margin: 0;
+  }
+  .meta-list dt {
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .meta-list dd {
+    margin: 0 0 var(--space-2);
+  }
+  /* タブレット以下: 1カラム。目次は本文上の折り畳み */
+  @media (max-width: 1023px) {
+    .article-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .article-toc {
+      position: static;
+      max-height: none;
+      order: 1;
+    }
+    .article-main {
+      order: 0;
+    }
+    .article-aside {
+      position: static;
+      order: 2;
+    }
+    .toc-details[open] summary ~ * {
+      display: block;
+    }
+  }
+  @media (min-width: 1024px) {
+    .toc-details {
+      border: 0;
+    }
+    .toc-details summary {
+      padding-left: 0;
+    }
+    .toc-details[open] > summary {
+      border-bottom: 0;
+    }
+  }
+</style>
+
+<script>
+  // 現在読んでいる見出しを目次で強調する（scroll-spy）
+  const links = new Map<string, HTMLAnchorElement>();
+  document
+    .querySelectorAll<HTMLAnchorElement>("[data-toc-link]")
+    .forEach((a) => {
+      const id = a.dataset.tocLink;
+      if (id) links.set(id, a);
+    });
+  const headings = [...links.keys()]
+    .map((id) => document.getElementById(id))
+    .filter((el): el is HTMLElement => el !== null);
+
+  if ("IntersectionObserver" in window && headings.length > 0) {
+    let currentId: string | null = null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            currentId = e.target.id;
+          }
+        }
+        if (currentId) {
+          links.forEach((a, id) => {
+            if (id === currentId) a.setAttribute("aria-current", "true");
+            else a.removeAttribute("aria-current");
+          });
+        }
+      },
+      { rootMargin: "0px 0px -70% 0px" },
+    );
+    headings.forEach((h) => observer.observe(h));
+  }
+
+  // モバイルでは目次を初期状態で閉じる
+  const mq = window.matchMedia("(max-width: 1023px)");
+  const details = document.querySelector<HTMLDetailsElement>(".toc-details");
+  if (details && mq.matches) details.open = false;
+</script>
+
+<script>
+  // 「あとで読む」ボタンの保存状態の反映とトグル
+  import { toggleBookmark, isBookmarked } from "../../../../../lib/bookmarks";
+
+  const btn = document.querySelector<HTMLButtonElement>("[data-bookmark-toggle]");
+  if (btn) {
+    const d = btn.dataset;
+    const labelEl = btn.querySelector<HTMLElement>("[data-bookmark-label]");
+    const iconEl = btn.querySelector<HTMLElement>("[data-bookmark-icon]");
+    const articleId = d.articleId ?? "";
+
+    const render = (on: boolean) => {
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      if (labelEl) labelEl.textContent = on ? d.labelSaved ?? "" : d.labelSave ?? "";
+      if (iconEl) iconEl.textContent = on ? "★" : "☆";
+    };
+
+    render(isBookmarked(articleId));
+
+    btn.addEventListener("click", () => {
+      const on = toggleBookmark({
+        articleId,
+        locale: d.locale ?? "",
+        title: d.title ?? "",
+        href: d.href ?? "",
+        subject: d.subject ?? "",
+        category: d.category ?? "",
+        summary: d.summary ?? "",
+      });
+      render(on);
+    });
+  }
+</script>

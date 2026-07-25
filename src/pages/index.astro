@@ -1,0 +1,223 @@
+---
+import OrgLayout from "../layouts/OrgLayout.astro";
+import { getCollection } from "astro:content";
+import { withBase, ORG, formatDate } from "../lib/site";
+
+const news = (await getCollection("news", (n) => n.data.status === "published"))
+  .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
+  .slice(0, 5);
+const projects = (await getCollection("projects"))
+  .filter((p) => p.data.status !== "archived")
+  .sort((a, b) => a.data.order - b.data.order);
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Atlasez",
+  url: Astro.site?.href,
+  email: ORG.email,
+  slogan: ORG.slogan,
+};
+---
+
+<OrgLayout
+  title="ホーム"
+  description="Atlasezは「未来の学びを創る。学びで未来を創る。」を理念に、学習サイト「アトラス」などを運営する学生団体です。"
+  structuredData={structuredData}
+>
+  <div class="container home">
+    <section class="lead" aria-labelledby="lead-heading">
+      <div>
+        <h1 id="lead-heading">
+          <span>未来の学びを創る。</span>
+          <span>学びで未来を創る。</span>
+        </h1>
+        <p class="lead-copy">
+          Atlasezは、学生などの若者が主体となって、「未来の学びを創る・学びで未来を創る」団体です。
+          学習サイト、ゼミ、対話の場など、学びに関わる複数のプロジェクトを運営しています。
+        </p>
+        <div class="lead-links">
+          <a class="button" href={withBase("/atlas/ja/")}>学習サイトを見る</a>
+          <a href={withBase("/about/")}>Atlasezについて</a>
+          <a href={withBase("/join/")}>運営に参加する</a>
+        </div>
+      </div>
+      <dl class="outline" aria-label="団体概要">
+        <div><dt>主体</dt><dd>学生などの若者</dd></div>
+        <div><dt>構成</dt><dd>複数のプロジェクトと運営事務局</dd></div>
+        <div><dt>名前の由来</dt><dd>「地図帳」を意味する英語「Atlas」の複数形「Atlases」をもとにした造語「Atlasez」</dd></div>
+      </dl>
+    </section>
+
+    <div class="home-body">
+      <section aria-labelledby="projects-heading">
+        <div class="section-title">
+          <h2 id="projects-heading">活動していること</h2>
+          <a href={withBase("/projects/")}>すべて見る</a>
+        </div>
+        <ul class="project-list">
+          {
+            projects.map((p) => (
+              <li>
+                <div class="project-title">
+                  <h3>
+                    <a href={withBase(`/projects/${p.data.slug}/`)}>{p.data.name}</a>
+                  </h3>
+                  <span>{p.data.status === "active" ? "活動中" : "準備中"}</span>
+                </div>
+                <p>{p.data.shortDescription}</p>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+
+      <section class="news" aria-labelledby="news-heading">
+        <div class="section-title">
+          <h2 id="news-heading">お知らせ</h2>
+          <a href={withBase("/news/")}>一覧</a>
+        </div>
+        <ul class="news-list">
+          {
+            news.map((n) => (
+              <li>
+                <time datetime={n.data.date.toISOString().slice(0, 10)}>
+                  {formatDate(n.data.date)}
+                </time>
+                <a href={withBase(`/news/${n.id.replace(/\.md$/, "")}/`)}>
+                  {n.data.title}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    </div>
+  </div>
+</OrgLayout>
+
+<style>
+  .home {
+    max-width: 70rem;
+  }
+  .lead {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(16rem, 0.75fr);
+    gap: clamp(2rem, 6vw, 5rem);
+    padding: var(--space-5) 0 var(--space-6);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .lead h1 {
+    margin: 0 0 var(--space-3);
+    max-width: 22em;
+    font-size: calc(2rem * var(--text-scale));
+  }
+  .lead h1 span {
+    display: block;
+  }
+  .lead-copy {
+    max-width: 40rem;
+    margin: 0;
+    font-size: calc(1.06rem * var(--text-scale));
+  }
+  .lead-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+  .outline {
+    margin: 0;
+    padding: var(--space-3) 0;
+    align-self: start;
+    border-top: 3px solid var(--accent-primary);
+  }
+  .outline div {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .outline dt {
+    margin-bottom: var(--space-1);
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  .outline dd {
+    margin: 0;
+  }
+  .home-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.7fr);
+    gap: clamp(2.5rem, 6vw, 5rem);
+    padding-block: var(--space-6);
+  }
+  .section-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .section-title h2 {
+    margin: 0;
+  }
+  .section-title a {
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+  .project-list,
+  .news-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .project-list li {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .project-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .project-title h3,
+  .project-list p {
+    margin: 0;
+  }
+  .project-title span {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  .project-list p {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+  }
+  .news-list li {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .news-list time {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  @media (max-width: 767px) {
+    .lead,
+    .home-body {
+      grid-template-columns: 1fr;
+      gap: var(--space-5);
+    }
+    .lead {
+      padding: var(--space-4) 0 var(--space-5);
+    }
+    .lead h1 {
+      font-size: calc(1.55rem * var(--text-scale));
+    }
+    .home-body {
+      padding-block: var(--space-5);
+    }
+  }
+</style>

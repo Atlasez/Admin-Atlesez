@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.astro/
+install.log
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
+.DS_Store

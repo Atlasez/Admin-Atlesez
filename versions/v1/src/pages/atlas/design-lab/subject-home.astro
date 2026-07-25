@@ -1,0 +1,190 @@
+---
+/**
+ * 分野ホームUIの三案比較ページ（開発用 design-lab）。
+ * 数学分野の実データで3案を並べて表示する。評価は docs/DESIGN_DECISIONS.md 参照。
+ */
+import AtlasLayout from "../../../layouts/AtlasLayout.astro";
+import { atlasPath, articlePath } from "../../../lib/site";
+import { localizedName } from "../../../lib/i18n";
+import {
+  getPublishedArticles,
+  getPublishedSubjects,
+} from "../../../lib/content";
+
+const locale = "ja" as const;
+const subjects = await getPublishedSubjects();
+const subject = subjects.find((s) => s.data.slug === "mathematics");
+if (!subject) throw new Error("design-lab: mathematics分野が必要です");
+const articles = (await getPublishedArticles(locale)).filter(
+  (a) => a.data.subject === "mathematics",
+);
+const categories = [...subject.data.categories].sort(
+  (a, b) => a.order - b.order,
+);
+const byCat = (slug: string) =>
+  articles.filter((a) => a.data.category === slug);
+---
+
+<AtlasLayout
+  locale={locale}
+  title="design-lab: 分野ホーム三案比較"
+  description="分野ホームUIの三案（折り畳み・プレビュー付きブロック・カテゴリカード）を実データで比較する開発用ページ。"
+>
+  <div class="container">
+    <h1>design-lab: 分野ホームUI 三案比較</h1>
+    <p class="reading">
+      数学分野の実データで三案を比較します。評価と採用理由は
+      <code>docs/DESIGN_DECISIONS.md</code> を参照してください。
+      <strong>採用: 案A（初期展開＋記事プレビュー付き折り畳み）</strong>
+    </p>
+
+    <section aria-labelledby="plan-a">
+      <h2 id="plan-a">案A: 折り畳みセクション（採用）</h2>
+      <p>
+        大分類をアコーディオン（<code>&lt;details&gt;</code>）で表示。JS不要でキーボード・スクリーンリーダー対応が最も確実。
+      </p>
+      <div class="demo">
+        {
+          categories.map((cat, i) => (
+            <details open={i === 0}>
+              <summary>
+                {localizedName(cat.name, locale)}（{byCat(cat.slug).length}件）
+              </summary>
+              <ul class="details-body">
+                {byCat(cat.slug).map((a) => (
+                  <li>
+                    <a
+                      href={articlePath(
+                        locale,
+                        a.data.subject,
+                        a.data.category,
+                        a.data.slug,
+                      )}
+                    >
+                      {a.data.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ))
+        }
+      </div>
+    </section>
+
+    <section aria-labelledby="plan-b">
+      <h2 id="plan-b">案B: プレビュー付きスクロールブロック</h2>
+      <p>
+        大分類ごとに横スクロール可能なブロック。クリック前から記事が見えるが、横スクロールはキーボード・スクリーンリーダーで操作しづらい。
+      </p>
+      <div class="demo">
+        {
+          categories.map((cat) => (
+            <section class="scroll-block" aria-label={localizedName(cat.name, locale)}>
+              <h3>{localizedName(cat.name, locale)}</h3>
+              <ul class="scroll-row" tabindex="0">
+                {byCat(cat.slug).map((a) => (
+                  <li class="card scroll-card">
+                    <a
+                      href={articlePath(
+                        locale,
+                        a.data.subject,
+                        a.data.category,
+                        a.data.slug,
+                      )}
+                    >
+                      {a.data.title}
+                    </a>
+                    <p>{a.data.summary}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
+        }
+      </div>
+    </section>
+
+    <section aria-labelledby="plan-c">
+      <h2 id="plan-c">案C: カテゴリカードとミニ地図</h2>
+      <p>
+        大分類の説明・代表記事・記事数・入口概念をカードで表示し、関連カテゴリを小さな図で示す。情報量は多いが実装・保守コストが高い。
+      </p>
+      <ul class="card-grid demo">
+        {
+          categories.map((cat) => {
+            const list = byCat(cat.slug);
+            const entry = list[0];
+            return (
+              <li class="card">
+                <h3>{localizedName(cat.name, locale)}</h3>
+                <p>{localizedName(cat.description, locale)}</p>
+                <p>
+                  <span class="badge">記事数: {list.length}</span>
+                </p>
+                {entry && (
+                  <p>
+                    入口:
+                    <a
+                      href={articlePath(
+                        locale,
+                        entry.data.subject,
+                        entry.data.category,
+                        entry.data.slug,
+                      )}
+                    >
+                      {entry.data.title}
+                    </a>
+                  </p>
+                )}
+                {cat.relatedCategoryIds.length > 0 && (
+                  <p class="mini-map" aria-label="関連カテゴリ">
+                    関連: {cat.relatedCategoryIds.join(" ・ ")}
+                  </p>
+                )}
+              </li>
+            );
+          })
+        }
+      </ul>
+    </section>
+
+    <p>
+      <a href={atlasPath(locale, "mathematics")}>実際の数学ホーム（案Aを採用）を見る ›</a>
+    </p>
+  </div>
+</AtlasLayout>
+
+<style>
+  section {
+    margin-block: var(--space-6);
+  }
+  .demo {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  ul.demo {
+    display: grid;
+  }
+  .scroll-row {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    padding: var(--space-1);
+    list-style: none;
+    margin: 0;
+  }
+  .scroll-card {
+    min-width: 14rem;
+  }
+  .mini-map {
+    font-size: calc(0.85rem * var(--text-scale));
+    color: var(--text-secondary);
+    border-top: 1px dotted var(--border-default);
+    padding-top: var(--space-1);
+  }
+</style>

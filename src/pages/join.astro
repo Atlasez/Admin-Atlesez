@@ -1,0 +1,74 @@
+---
+import OrgLayout from "../layouts/OrgLayout.astro";
+import Breadcrumb from "../components/Breadcrumb.astro";
+import { withBase } from "../lib/site";
+
+const roles = [
+  {
+    name: "記事執筆",
+    desc: "得意分野の学習記事をMarkdownで執筆します。テンプレートとレビュー体制があるので、執筆が初めてでも参加できます。",
+  },
+  {
+    name: "査読",
+    desc: "公開前の記事の正確性・分かりやすさを確認します。",
+  },
+  {
+    name: "翻訳",
+    desc: "記事を英語などの他言語に翻訳します。一対一の直訳でなく、言語に合った構成に再編できます。",
+  },
+  {
+    name: "サイト開発",
+    desc: "本サイトの機能開発・デザイン改善に取り組みます（GitHub上で開発）。",
+  },
+  {
+    name: "イベント・広報",
+    desc: "イベント企画やSNSでの発信を担当します。",
+  },
+];
+---
+
+<OrgLayout
+  title="運営メンバー募集"
+  description="Atlasezでは学習サイトの執筆・査読・翻訳・開発・広報など、運営メンバーを募集しています。"
+>
+  <div class="container">
+    <Breadcrumb
+      items={[{ label: "ホーム", href: withBase("/") }, { label: "運営募集" }]}
+    />
+    <h1>運営メンバー募集</h1>
+    <p class="reading">
+      Atlasezでは、いっしょに「学びの地図」をつくる仲間を募集しています。
+      学年・専攻は問いません。できる範囲・できる頻度での参加が可能です。
+    </p>
+    <h2>募集している役割</h2>
+    <ul class="card-grid">
+      {
+        roles.map((r) => (
+          <li class="card">
+            <h3>{r.name}</h3>
+            <p>{r.desc}</p>
+          </li>
+        ))
+      }
+    </ul>
+    <h2>応募方法</h2>
+    <div class="reading">
+      <p>
+        以下の応募フォームからご連絡ください。追って運営からご案内します。
+      </p>
+      <p>
+        <a
+          class="button"
+          href="https://forms.gle/NMXFgxzasbBsf3gX6"
+          rel="noopener noreferrer"
+          target="_blank">応募フォームを開く（Googleフォーム）</a
+        >
+      </p>
+      <p>
+        フォームが使えない場合は<a href={withBase("/contact/")}
+          >お問い合わせ</a
+        >からメールでご連絡ください。
+      </p>
+    </div>
+  </div>
+</OrgLayout>

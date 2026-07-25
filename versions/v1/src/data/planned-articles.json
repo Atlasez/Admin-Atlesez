@@ -1,0 +1,272 @@
+{
+  "sources": [
+    "https://sites.google.com/view/atlas-mathematics/%E3%83%9B%E3%83%BC%E3%83%A0",
+    "https://sites.google.com/view/atlas-chemistry/%E3%83%9B%E3%83%BC%E3%83%A0",
+    "https://sites.google.com/view/atlas-physics",
+    "https://sites.google.com/view/atlas-biology"
+  ],
+  "note": "現行Google Sitesの目次に題名だけがあり、本文を移植できない項目。記事ページは生成せず、一覧で準備中と表示する。",
+  "items": [
+    {
+      "subject": "mathematics",
+      "category": "set-theory",
+      "title": { "ja": "集合族", "en": "Families of Sets" },
+      "order": 3
+    },
+    {
+      "subject": "mathematics",
+      "category": "set-theory",
+      "title": {
+        "ja": "極大元とZornの補題",
+        "en": "Maximal Elements and Zorn's Lemma"
+      },
+      "order": 9
+    },
+    {
+      "subject": "mathematics",
+      "category": "set-theory",
+      "title": { "ja": "同値関係", "en": "Equivalence Relations" },
+      "order": 11
+    },
+    {
+      "subject": "mathematics",
+      "category": "group-theory",
+      "title": { "ja": "極大部分群", "en": "Maximal Subgroups" },
+      "order": 6
+    },
+    {
+      "subject": "mathematics",
+      "category": "group-theory",
+      "title": {
+        "ja": "G準同型写像と表現の同値",
+        "en": "G-homomorphisms and Equivalent Representations"
+      },
+      "order": 16
+    },
+    {
+      "subject": "mathematics",
+      "category": "group-theory",
+      "title": {
+        "ja": "正規化群と正規閉包",
+        "en": "Normalizers and Normal Closures"
+      },
+      "order": 20
+    },
+    {
+      "subject": "mathematics",
+      "category": "group-theory",
+      "title": {
+        "ja": "剰余類とLagrangeの定理",
+        "en": "Cosets and Lagrange's Theorem"
+      },
+      "order": 21
+    },
+    {
+      "subject": "mathematics",
+      "category": "group-theory",
+      "title": {
+        "ja": "共役類と類等式",
+        "en": "Conjugacy Classes and the Class Equation"
+      },
+      "order": 23
+    },
+
+    {
+      "subject": "chemistry",
+      "category": "matter",
+      "title": { "ja": "化学とは", "en": "What Is Chemistry?" },
+      "order": 1
+    },
+    {
+      "subject": "chemistry",
+      "category": "matter",
+      "title": { "ja": "希薄溶液", "en": "Dilute Solutions" },
+      "order": 18
+    },
+    {
+      "subject": "chemistry",
+      "category": "chemical-reactions",
+      "title": {
+        "ja": "水溶液中の酸塩基反応",
+        "en": "Acid–Base Reactions in Aqueous Solution"
+      },
+      "order": 20
+    },
+    {
+      "subject": "chemistry",
+      "category": "chemical-reactions",
+      "title": { "ja": "酸化還元反応", "en": "Redox Reactions" },
+      "order": 21
+    },
+    {
+      "subject": "chemistry",
+      "category": "matter",
+      "title": { "ja": "結晶", "en": "Crystals" },
+      "order": 22
+    },
+    {
+      "subject": "chemistry",
+      "category": "matter",
+      "title": { "ja": "状態方程式", "en": "Equations of State" },
+      "order": 23
+    },
+    {
+      "subject": "chemistry",
+      "category": "chemical-reactions",
+      "title": { "ja": "電池", "en": "Electrochemical Cells" },
+      "order": 24
+    },
+    {
+      "subject": "chemistry",
+      "category": "chemical-reactions",
+      "title": { "ja": "電気分解", "en": "Electrolysis" },
+      "order": 25
+    },
+
+    {
+      "subject": "physics",
+      "category": "foundations",
+      "title": { "ja": "物理とは", "en": "What Is Physics?" },
+      "order": 1
+    },
+    {
+      "subject": "physics",
+      "category": "newtonian-mechanics",
+      "title": { "ja": "ニュートン力学", "en": "Newtonian Mechanics" },
+      "order": 2
+    },
+    {
+      "subject": "physics",
+      "category": "continuum-mechanics",
+      "title": {
+        "ja": "拘束系のニュートン力学",
+        "en": "Newtonian Mechanics of Constrained Systems"
+      },
+      "order": 3
+    },
+    {
+      "subject": "physics",
+      "category": "continuum-mechanics",
+      "title": { "ja": "連続体力学", "en": "Continuum Mechanics" },
+      "order": 4
+    },
+    {
+      "subject": "physics",
+      "category": "continuum-mechanics",
+      "title": { "ja": "流体力学", "en": "Fluid Mechanics" },
+      "order": 5
+    },
+    {
+      "subject": "physics",
+      "category": "relativity",
+      "title": { "ja": "特殊相対性理論", "en": "Special Relativity" },
+      "order": 6
+    },
+    {
+      "subject": "physics",
+      "category": "electromagnetism",
+      "title": { "ja": "電磁気学", "en": "Electromagnetism" },
+      "order": 7
+    },
+    {
+      "subject": "physics",
+      "category": "relativity",
+      "title": { "ja": "一般相対性理論", "en": "General Relativity" },
+      "order": 8
+    },
+    {
+      "subject": "physics",
+      "category": "thermodynamics",
+      "title": { "ja": "熱力学", "en": "Thermodynamics" },
+      "order": 9
+    },
+    {
+      "subject": "physics",
+      "category": "thermodynamics",
+      "title": { "ja": "統計力学", "en": "Statistical Mechanics" },
+      "order": 10
+    },
+    {
+      "subject": "physics",
+      "category": "quantum-mechanics",
+      "title": { "ja": "量子力学", "en": "Quantum Mechanics" },
+      "order": 11
+    },
+    {
+      "subject": "physics",
+      "category": "analytical-mechanics",
+      "title": { "ja": "解析力学", "en": "Analytical Mechanics" },
+      "order": 12
+    },
+
+    {
+      "subject": "biology",
+      "category": "biochemistry",
+      "title": { "ja": "生物学とは", "en": "What Is Biology?" },
+      "order": 1
+    },
+    {
+      "subject": "biology",
+      "category": "biochemistry",
+      "title": { "ja": "生物とは", "en": "What Is Life?" },
+      "order": 2
+    },
+    {
+      "subject": "biology",
+      "category": "biochemistry",
+      "title": {
+        "ja": "生物の主要な元素",
+        "en": "Major Elements in Living Organisms"
+      },
+      "order": 3
+    },
+    {
+      "subject": "biology",
+      "category": "biochemistry",
+      "title": { "ja": "糖", "en": "Carbohydrates" },
+      "order": 4
+    },
+    {
+      "subject": "biology",
+      "category": "biochemistry",
+      "title": { "ja": "タンパク質", "en": "Proteins" },
+      "order": 6
+    },
+    {
+      "subject": "biology",
+      "category": "cell-biology",
+      "title": { "ja": "細胞", "en": "Cells" },
+      "order": 7
+    },
+    {
+      "subject": "biology",
+      "category": "cell-biology",
+      "title": {
+        "ja": "細胞小器官を除く細胞質",
+        "en": "Cytoplasm Excluding Organelles"
+      },
+      "order": 9
+    },
+    {
+      "subject": "biology",
+      "category": "cell-biology",
+      "title": { "ja": "細胞膜", "en": "Cell Membranes" },
+      "order": 10
+    },
+    {
+      "subject": "biology",
+      "category": "cell-biology",
+      "title": {
+        "ja": "細胞内シグナル伝達",
+        "en": "Intracellular Signal Transduction"
+      },
+      "order": 11
+    },
+    {
+      "subject": "biology",
+      "category": "cell-biology",
+      "title": { "ja": "細胞接着", "en": "Cell Adhesion" },
+      "order": 12
+    }
+  ]
+}
