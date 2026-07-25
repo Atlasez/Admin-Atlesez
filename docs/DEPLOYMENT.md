@@ -5,7 +5,7 @@
 | 変数        | GitHub Pages (project site) | 独自ドメイン          |
 | ----------- | --------------------------- | --------------------- |
 | `SITE_URL`  | `https://<user>.github.io`  | `https://atlasez.org` |
-| `BASE_PATH` | `/Atlasez01`              | `/`                   |
+| `BASE_PATH` | `/Atlasez01`                | `/`                   |
 
 CI（`.github/workflows/ci.yml`）ではリポジトリ名から自動設定される。
 
