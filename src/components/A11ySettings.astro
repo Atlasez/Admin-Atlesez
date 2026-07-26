@@ -2,8 +2,13 @@
 /** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
 interface Props {
   locale?: "ja" | "en";
+  /**
+   * true のとき <details> の外枠を付けず、設定フォームだけを描画する。
+   * ヘッダーの「表示設定」ポップオーバー（SettingsMenu）から使う。
+   */
+  bare?: boolean;
 }
-const { locale = "ja" } = Astro.props;
+const { locale = "ja", bare = false } = Astro.props;
 const L =
   locale === "ja"
     ? {
@@ -103,11 +108,10 @@ const groups = [
 ];
 ---
 
-<details class="a11y-settings">
-  <summary>{L.title}</summary>
-  <form class="details-body" data-a11y-form>
-    {
-      groups.map((g) => (
+{
+  bare ? (
+    <form class="a11y-form" data-a11y-form>
+      {groups.map((g) => (
         <fieldset>
           <legend>{g.label}</legend>
           {g.options.map((o, i) => (
@@ -122,13 +126,38 @@ const groups = [
             </label>
           ))}
         </fieldset>
-      ))
-    }
-    <button type="button" class="button button-secondary" data-a11y-reset>
-      {L.reset}
-    </button>
-  </form>
-</details>
+      ))}
+      <button type="button" class="button button-secondary" data-a11y-reset>
+        {L.reset}
+      </button>
+    </form>
+  ) : (
+    <details class="a11y-settings">
+      <summary>{L.title}</summary>
+      <form class="details-body" data-a11y-form>
+        {groups.map((g) => (
+          <fieldset>
+            <legend>{g.label}</legend>
+            {g.options.map((o, i) => (
+              <label class="a11y-option">
+                <input
+                  type="radio"
+                  name={g.key}
+                  value={o.value}
+                  checked={i === 0}
+                />
+                <span>{o.label}</span>
+              </label>
+            ))}
+          </fieldset>
+        ))}
+        <button type="button" class="button button-secondary" data-a11y-reset>
+          {L.reset}
+        </button>
+      </form>
+    </details>
+  )
+}
 
 <style>
   .a11y-settings {

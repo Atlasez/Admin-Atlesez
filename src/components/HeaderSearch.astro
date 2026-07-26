@@ -1,0 +1,87 @@
+---
+/**
+ * ヘッダー内の検索入力欄。
+ * 検索は「行き先」ではなく「操作」なので、ナビゲーションのタブから外して
+ * ヘッダー上部に常設する。送信すると検索ページに q= 付きで遷移し、
+ * 検索ページ側が q を読んで即座に結果を出す（JSなしでも成立する）。
+ */
+import { t, type Locale } from "../lib/i18n";
+import { atlasPath } from "../lib/site";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const action = atlasPath(locale, "search");
+---
+
+<form class="header-search" role="search" action={action} method="get">
+  <label class="visually-hidden" for="header-search-input">
+    {t(locale, "searchLabel")}
+  </label>
+  <input
+    id="header-search-input"
+    class="header-search-input"
+    type="search"
+    name="q"
+    autocomplete="off"
+    placeholder={t(locale, "searchPlaceholder")}
+  />
+  <button type="submit" class="header-search-button">
+    <span aria-hidden="true">⌕</span>
+    <span class="visually-hidden">{t(locale, "search")}</span>
+  </button>
+</form>
+
+<style>
+  .header-search {
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 14rem;
+    min-width: 0;
+    max-width: 26rem;
+  }
+  .header-search-input {
+    flex: 1;
+    min-width: 0;
+    min-height: var(--touch-target);
+    border: 1px solid var(--border-strong);
+    border-right: 0;
+    border-radius: var(--radius) 0 0 var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.9rem * var(--text-scale));
+    padding: 0 var(--space-2);
+  }
+  .header-search-input:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+  }
+  .header-search-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--accent-primary);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    background: var(--accent-primary);
+    color: var(--background-primary);
+    font: inherit;
+    font-size: calc(1.05rem * var(--text-scale));
+    line-height: 1;
+    cursor: pointer;
+  }
+  .header-search-button:hover {
+    filter: brightness(1.1);
+  }
+  @media (max-width: 767px) {
+    .header-search {
+      order: 4;
+      flex-basis: 100%;
+      max-width: none;
+    }
+  }
+</style>

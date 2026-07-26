@@ -1,0 +1,249 @@
+---
+/**
+ * 言語切替。
+ *
+ * 十数言語以上を想定した設計:
+ *  - 常にドロップダウン（<details>）。言語が増えてもヘッダーの高さが変わらない。
+ *  - 3言語を超えると絞り込み入力が出る。
+ *  - 一覧は母語表記を主、英語表記を副として並べる（自分の言語を探しやすくするため）。
+ *  - パネルは max-height + スクロール。20言語でも画面外にはみ出さない。
+ *  - JavaScriptが無くても <details> の開閉だけで全言語のリンクに到達できる。
+ */
+import { t, LOCALES, localeMeta, localeLabel, type Locale } from "../lib/i18n";
+import { atlasPath } from "../lib/site";
+
+interface Props {
+  locale: Locale;
+  /** 各ロケールの遷移先（省略時は各ロケールの総合ホーム） */
+  hrefs?: Record<string, string>;
+}
+const { locale, hrefs = {} } = Astro.props;
+
+const items = LOCALES.map((l) => ({
+  code: l,
+  native: localeLabel(l),
+  english: localeMeta[l]?.english ?? l,
+  href: hrefs[l] ?? atlasPath(l),
+  current: l === locale,
+}));
+const filterable = items.length > 3;
+---
+
+{
+  items.length > 1 && (
+    <details class="lang-switch" data-lang-switch>
+      <summary aria-label={t(locale, "selectLanguage")}>
+        <span class="lang-globe" aria-hidden="true">
+          ⌘
+        </span>
+        <span class="lang-current">{localeLabel(locale)}</span>
+        <span class="lang-caret" aria-hidden="true" />
+      </summary>
+      <div class="lang-panel">
+        <p class="lang-panel-title">{t(locale, "languages")}</p>
+        {filterable && (
+          <div class="lang-filter">
+            <label class="visually-hidden" for="lang-filter-input">
+              {t(locale, "selectLanguage")}
+            </label>
+            <input
+              id="lang-filter-input"
+              type="search"
+              autocomplete="off"
+              data-lang-filter
+              placeholder={t(locale, "selectLanguage")}
+            />
+          </div>
+        )}
+        <ul class="lang-list">
+          {items.map((item) => (
+            <li
+              data-lang-item
+              data-search={`${item.code} ${item.native} ${item.english}`.toLowerCase()}
+            >
+              {item.current ? (
+                <span class="lang-option is-current" aria-current="true">
+                  <span class="lang-native">{item.native}</span>
+                  <span class="lang-english">{item.english}</span>
+                </span>
+              ) : (
+                <a
+                  class="lang-option"
+                  href={item.href}
+                  hreflang={item.code}
+                  lang={item.code}
+                >
+                  <span class="lang-native">{item.native}</span>
+                  <span class="lang-english">{item.english}</span>
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p class="lang-empty" data-lang-empty hidden>
+          —
+        </p>
+      </div>
+    </details>
+  )
+}
+
+<style>
+  .lang-switch {
+    position: relative;
+  }
+  .lang-switch > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font-size: calc(0.85rem * var(--text-scale));
+    cursor: pointer;
+    list-style: none;
+    white-space: nowrap;
+  }
+  .lang-switch > summary::-webkit-details-marker {
+    display: none;
+  }
+  .lang-switch > summary:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .lang-globe {
+    font-weight: 700;
+    color: var(--accent-primary);
+  }
+  /* 母語表記が長い言語（Bahasa Indonesia 等）でもヘッダーを押し広げない */
+  .lang-current {
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lang-caret {
+    width: 0;
+    height: 0;
+    border-left: 0.3rem solid transparent;
+    border-right: 0.3rem solid transparent;
+    border-top: 0.35rem solid currentColor;
+  }
+  .lang-switch[open] > summary .lang-caret {
+    transform: rotate(180deg);
+  }
+  .lang-panel {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    width: max(15rem, 100%);
+    max-height: min(24rem, 60vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+  }
+  .lang-panel-title {
+    margin: 0 0 var(--space-1);
+    font-size: calc(0.75rem * var(--text-scale));
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .lang-filter input {
+    width: 100%;
+    margin-bottom: var(--space-1);
+  }
+  .lang-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    /* 言語が多いときは2列にして縦の長さを抑える */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: 2px;
+  }
+  .lang-option {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: var(--touch-target);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: var(--text-primary);
+    line-height: 1.25;
+  }
+  a.lang-option:hover {
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+  }
+  .lang-option.is-current {
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .lang-native {
+    font-size: calc(0.92rem * var(--text-scale));
+  }
+  .lang-english {
+    font-size: calc(0.72rem * var(--text-scale));
+    color: var(--text-secondary);
+  }
+  a.lang-option:hover .lang-english {
+    color: inherit;
+  }
+  .lang-empty {
+    margin: var(--space-2) 0 0;
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  @media (max-width: 767px) {
+    .lang-panel {
+      right: auto;
+      left: 0;
+    }
+  }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLDetailsElement>("[data-lang-switch]");
+  if (root) {
+    const filter = root.querySelector<HTMLInputElement>("[data-lang-filter]");
+    const items = [...root.querySelectorAll<HTMLElement>("[data-lang-item]")];
+    const empty = root.querySelector<HTMLElement>("[data-lang-empty]");
+
+    filter?.addEventListener("input", () => {
+      const q = filter.value.trim().toLowerCase();
+      let shown = 0;
+      for (const item of items) {
+        const hit = !q || (item.dataset.search ?? "").includes(q);
+        item.hidden = !hit;
+        if (hit) shown += 1;
+      }
+      if (empty) empty.hidden = shown > 0;
+    });
+
+    // パネルの外を押したら閉じる
+    document.addEventListener("click", (event) => {
+      if (!root.open) return;
+      if (!root.contains(event.target as Node)) root.open = false;
+    });
+    root.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        root.open = false;
+        root.querySelector("summary")?.focus();
+      }
+    });
+    root.addEventListener("toggle", () => {
+      if (root.open) filter?.focus();
+    });
+  }
+</script>

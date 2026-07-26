@@ -1,0 +1,128 @@
+---
+/**
+ * ヘッダー右上の「表示設定」。
+ * ダーク表示の切り替えと文字サイズ・行間などの設定を1か所にまとめる。
+ * 言語切替の隣に置き、見た目に関する操作をヘッダーで完結させる。
+ */
+import A11ySettings from "./A11ySettings.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+
+interface Props {
+  locale?: "ja" | "en";
+}
+const { locale = "ja" } = Astro.props;
+const title = locale === "ja" ? "表示設定" : "Display settings";
+---
+
+<details class="settings-menu" data-settings-menu>
+  <summary>
+    <span class="settings-icon" aria-hidden="true">Aa</span>
+    <span class="settings-text">{title}</span>
+    <span class="settings-caret" aria-hidden="true"></span>
+  </summary>
+  <div class="settings-panel">
+    <div class="settings-theme">
+      <ThemeToggle locale={locale} />
+    </div>
+    <A11ySettings locale={locale} bare />
+  </div>
+</details>
+
+<style>
+  .settings-menu {
+    position: relative;
+  }
+  .settings-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font-size: calc(0.85rem * var(--text-scale));
+    cursor: pointer;
+    list-style: none;
+    white-space: nowrap;
+  }
+  .settings-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+  .settings-menu > summary:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .settings-icon {
+    font-weight: 700;
+    color: var(--accent-primary);
+  }
+  .settings-caret {
+    width: 0;
+    height: 0;
+    border-left: 0.3rem solid transparent;
+    border-right: 0.3rem solid transparent;
+    border-top: 0.35rem solid currentColor;
+  }
+  .settings-menu[open] > summary .settings-caret {
+    transform: rotate(180deg);
+  }
+  .settings-panel {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    width: max(18rem, 100%);
+    max-height: min(28rem, 70vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+  }
+  .settings-theme {
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .settings-panel :global(.a11y-form) {
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  @media (max-width: 767px) {
+    .settings-menu > summary .settings-text {
+      /* 幅の狭い端末ではアイコンだけにしてヘッダーを1行に保つ */
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .settings-panel {
+      right: auto;
+      left: 0;
+      width: min(20rem, calc(100vw - 2rem));
+    }
+  }
+</style>
+
+<script>
+  const menu = document.querySelector<HTMLDetailsElement>(
+    "[data-settings-menu]",
+  );
+  if (menu) {
+    document.addEventListener("click", (event) => {
+      if (!menu.open) return;
+      if (!menu.contains(event.target as Node)) menu.open = false;
+    });
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        menu.open = false;
+        menu.querySelector("summary")?.focus();
+      }
+    });
+  }
+</script>

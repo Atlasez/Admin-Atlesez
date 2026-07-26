@@ -10,10 +10,55 @@
 export const LOCALES = ["ja"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-export const localeNames: Record<string, string> = {
-  ja: "日本語",
-  en: "English",
+/**
+ * ロケールの表示メタデータ。
+ *
+ * 将来的に十数言語以上を並べても崩れないよう、切替UIは「母語表記＋英語表記」を
+ * 持つこの表だけを見て描画する。言語を増やすときはここに1行足し、LOCALES に
+ * コードを加えるだけでよい（UIレイアウトの変更は不要）。
+ * dir を "rtl" にすればアラビア語などにも対応できる。
+ */
+export interface LocaleMeta {
+  /** 母語での表記（例: 日本語） */
+  native: string;
+  /** 英語での表記（例: Japanese）。検索・並べ替えに使う */
+  english: string;
+  /** 書字方向 */
+  dir?: "ltr" | "rtl";
+}
+
+export const localeMeta: Record<string, LocaleMeta> = {
+  ja: { native: "日本語", english: "Japanese" },
+  en: { native: "English", english: "English" },
+  "zh-Hans": { native: "简体中文", english: "Chinese (Simplified)" },
+  "zh-Hant": { native: "繁體中文", english: "Chinese (Traditional)" },
+  ko: { native: "한국어", english: "Korean" },
+  es: { native: "Español", english: "Spanish" },
+  fr: { native: "Français", english: "French" },
+  de: { native: "Deutsch", english: "German" },
+  pt: { native: "Português", english: "Portuguese" },
+  it: { native: "Italiano", english: "Italian" },
+  ru: { native: "Русский", english: "Russian" },
+  vi: { native: "Tiếng Việt", english: "Vietnamese" },
+  th: { native: "ไทย", english: "Thai" },
+  id: { native: "Bahasa Indonesia", english: "Indonesian" },
+  hi: { native: "हिन्दी", english: "Hindi" },
+  ar: { native: "العربية", english: "Arabic", dir: "rtl" },
 };
+
+/** 後方互換: コード → 母語表記 */
+export const localeNames: Record<string, string> = Object.fromEntries(
+  Object.entries(localeMeta).map(([code, meta]) => [code, meta.native]),
+);
+
+/** 未登録のコードでもコードそのものを返して落とさない */
+export function localeLabel(code: string): string {
+  return localeMeta[code]?.native ?? code;
+}
+
+export function localeDir(code: string): "ltr" | "rtl" {
+  return localeMeta[code]?.dir ?? "ltr";
+}
 
 const ui = {
   ja: {
@@ -99,6 +144,13 @@ const ui = {
     category: "カテゴリ",
     status: "公開状態",
     all: "すべて",
+    tileView: "タイル表示",
+    listViewTab: "リスト表示",
+    viewSwitcher: "表示の切り替え",
+    selectLanguage: "言語を選択",
+    searchLabel: "サイト内検索",
+    openSearch: "検索を開く",
+    closeMenu: "閉じる",
   },
   en: {
     siteName: "Atlas Learning Site",
@@ -184,6 +236,13 @@ const ui = {
     category: "Category",
     status: "Status",
     all: "All",
+    tileView: "Tiles",
+    listViewTab: "List",
+    viewSwitcher: "Switch view",
+    selectLanguage: "Select language",
+    searchLabel: "Search this site",
+    openSearch: "Open search",
+    closeMenu: "Close",
   },
 } as const;
 

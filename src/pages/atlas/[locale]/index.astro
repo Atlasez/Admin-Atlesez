@@ -1,7 +1,9 @@
 ---
 import AtlasLayout from "../../../layouts/AtlasLayout.astro";
+import LearningMap from "../../../components/LearningMap.astro";
 import { atlasPath, articlePath, formatDate } from "../../../lib/site";
 import { t, LOCALES, localizedName, type Locale } from "../../../lib/i18n";
+import { groupSubjects } from "../../../lib/taxonomy";
 import {
   getPublishedArticles,
   getPublishedSubjects,
@@ -23,6 +25,13 @@ for (const a of articles) {
   );
 }
 
+/** 分野スラッグ + カテゴリスラッグ → 記事（リスト表示用） */
+const articlesByCategory = new Map<string, typeof articles>();
+for (const a of articles) {
+  const key = `${a.data.subject}/${a.data.category}`;
+  articlesByCategory.set(key, [...(articlesByCategory.get(key) ?? []), a]);
+}
+
 const recent = [...articles]
   .sort((a, b) => b.data.updatedAt.getTime() - a.data.updatedAt.getTime())
   .slice(0, 20);
@@ -33,18 +42,21 @@ const alternates = LOCALES.map((l) => ({
 }));
 
 const publishedSubjects = subjects.filter((s) => s.data.status === "published");
-const preparingSubjects = subjects.filter((s) => s.data.status === "preparing");
 
-/** 公開・準備中をひとつの一覧にまとめる（準備中は淡色・リンクなし） */
-const allSubjects = [
-  ...publishedSubjects.map((s) => ({ subject: s, published: true })),
-  ...preparingSubjects.map((s) => ({ subject: s, published: false })),
-];
+/** 大分類 → 中ジャンル → 分野。公開・準備中を同じ枠に並べる */
+const grouped = groupSubjects(subjects, locale);
 
 const summary =
   locale === "ja"
     ? `${publishedSubjects.length}分野・${articles.length}記事を公開中`
     : `${publishedSubjects.length} subjects · ${articles.length} articles`;
+
+/** トップ内で切り替える3つの表示 */
+const views = [
+  { id: "tiles", label: t(locale, "tileView") },
+  { id: "map", label: t(locale, "map") },
+  { id: "list", label: t(locale, "listViewTab") },
+] as const;
 ---
 
 <AtlasLayout
@@ -54,69 +66,204 @@ const summary =
   alternates={alternates}
 >
   <div class="container atlas-home">
-    <div class="content-columns">
-      <section aria-labelledby="subjects-heading">
-        <div class="section-title">
-          <h1 id="subjects-heading">{t(locale, "subjects")}</h1>
+    <div class="content-columns" data-home-layout data-active-view="tiles">
+      <section aria-labelledby="subjects-heading" class="home-main">
+        <h1 id="subjects-heading" class="visually-hidden">
+          {t(locale, "subjects")}
+        </h1>
+
+        {/* ブラウザのタブのように、ページ遷移せず表示を切り替える */}
+        <div class="view-bar">
+          <div
+            class="view-tabs"
+            role="tablist"
+            aria-label={t(locale, "viewSwitcher")}
+            data-view-tabs
+          >
+            {
+              views.map((v, i) => (
+                <button
+                  type="button"
+                  role="tab"
+                  id={`view-tab-${v.id}`}
+                  class="view-tab"
+                  data-view-tab={v.id}
+                  aria-selected={i === 0 ? "true" : "false"}
+                  aria-controls={`view-panel-${v.id}`}
+                  tabindex={i === 0 ? undefined : "-1"}
+                >
+                  {v.label}
+                </button>
+              ))
+            }
+          </div>
           <p class="section-meta">{summary}</p>
-          <a class="section-link" href={atlasPath(locale, "map")}>
-            {t(locale, "map")}
-          </a>
         </div>
 
-        <ul class="subject-grid">
+        {/* --- タイル表示 --- */}
+        <div
+          id="view-panel-tiles"
+          role="tabpanel"
+          aria-labelledby="view-tab-tiles"
+          class="view-panel"
+          data-view-panel="tiles"
+        >
           {
-            allSubjects.map(({ subject: s, published }) => {
-              const name = localizedName(s.data.name, locale);
-              const desc = localizedName(s.data.description, locale);
-              const descId = `subject-desc-${s.data.slug}`;
-              const infoLabel =
-                locale === "ja" ? `${name}とは` : `About ${name}`;
-              return (
-                <li
-                  class:list={[
-                    "subject-tile",
-                    { "is-preparing": !published },
-                  ]}
-                >
-                  <div class="subject-row">
-                    {published ? (
-                      <a
-                        class="subject-name"
-                        href={atlasPath(locale, s.data.slug)}
-                      >
-                        {name}
-                      </a>
-                    ) : (
-                      <span class="subject-name">{name}</span>
-                    )}
-                    <button
-                      type="button"
-                      class="subject-info"
-                      aria-expanded="false"
-                      aria-controls={descId}
-                      data-subject-info
-                      title={infoLabel}
+            grouped.map((group) => (
+              <section class="group-block" aria-labelledby={`group-${group.group}`}>
+                <h2 class="group-heading" id={`group-${group.group}`}>
+                  {group.label}
+                </h2>
+                {group.genres.map((genre) => (
+                  <section
+                    class="genre-block"
+                    aria-labelledby={`genre-${group.group}-${genre.genre}`}
+                  >
+                    <h3
+                      class="genre-heading"
+                      id={`genre-${group.group}-${genre.genre}`}
                     >
-                      <span aria-hidden="true">?</span>
-                      <span class="visually-hidden">{infoLabel}</span>
-                    </button>
-                  </div>
-                  <p class="subject-status">
-                    <span class="subject-count">
-                      {published
-                        ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
-                        : t(locale, "preparing")}
-                    </span>
-                  </p>
-                  <p class="subject-desc" id={descId} hidden>
-                    {desc}
-                  </p>
-                </li>
-              );
-            })
+                      {genre.label}
+                    </h3>
+                    <ul class="subject-grid">
+                      {genre.subjects.map((s) => {
+                        const published = s.data.status === "published";
+                        const name = localizedName(s.data.name, locale);
+                        const desc = localizedName(s.data.description, locale);
+                        const descId = `subject-desc-${s.data.slug}`;
+                        const infoLabel =
+                          locale === "ja" ? `${name}とは` : `About ${name}`;
+                        return (
+                          <li
+                            class:list={[
+                              "subject-tile",
+                              { "is-preparing": !published },
+                            ]}
+                          >
+                            <div class="subject-row">
+                              {published ? (
+                                <a
+                                  class="subject-name"
+                                  href={atlasPath(locale, s.data.slug)}
+                                >
+                                  {name}
+                                </a>
+                              ) : (
+                                <span class="subject-name">{name}</span>
+                              )}
+                              <button
+                                type="button"
+                                class="subject-info"
+                                aria-expanded="false"
+                                aria-controls={descId}
+                                data-subject-info
+                                title={infoLabel}
+                              >
+                                <span aria-hidden="true">?</span>
+                                <span class="visually-hidden">{infoLabel}</span>
+                              </button>
+                            </div>
+                            <p class="subject-status">
+                              <span class="subject-count">
+                                {published
+                                  ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
+                                  : t(locale, "preparing")}
+                              </span>
+                            </p>
+                            <p class="subject-desc" id={descId} hidden>
+                              {desc}
+                            </p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </section>
+            ))
           }
-        </ul>
+        </div>
+
+        {/* --- 学習地図 --- */}
+        <div
+          id="view-panel-map"
+          role="tabpanel"
+          aria-labelledby="view-tab-map"
+          class="view-panel"
+          data-view-panel="map"
+        >
+          <LearningMap locale={locale} />
+        </div>
+
+        {/* --- リスト表示 --- */}
+        <div
+          id="view-panel-list"
+          role="tabpanel"
+          aria-labelledby="view-tab-list"
+          class="view-panel"
+          data-view-panel="list"
+        >
+          {
+            grouped.map((group) => (
+              <section class="list-group">
+                <h2 class="group-heading">{group.label}</h2>
+                {group.genres.map((genre) => (
+                  <section class="list-genre">
+                    <h3 class="genre-heading">{genre.label}</h3>
+                    <ul class="subject-list">
+                      {genre.subjects.map((s) => {
+                        const published = s.data.status === "published";
+                        const name = localizedName(s.data.name, locale);
+                        return (
+                          <li class="subject-list-item">
+                            <div class="subject-list-head">
+                              {published ? (
+                                <a href={atlasPath(locale, s.data.slug)}>{name}</a>
+                              ) : (
+                                <span>{name}</span>
+                              )}
+                              <span class="subject-count">
+                                {published
+                                  ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
+                                  : t(locale, "preparing")}
+                              </span>
+                            </div>
+                            {published && s.data.categories.length > 0 && (
+                              <ul class="category-list">
+                                {s.data.categories
+                                  .slice()
+                                  .sort((a, b) => a.order - b.order)
+                                  .map((cat) => {
+                                    const items =
+                                      articlesByCategory.get(
+                                        `${s.data.slug}/${cat.slug}`,
+                                      ) ?? [];
+                                    return (
+                                      <li>
+                                        <a
+                                          href={`${atlasPath(locale, s.data.slug)}${cat.slug}/`}
+                                        >
+                                          {localizedName(cat.name, locale)}
+                                        </a>
+                                        <span class="subject-count">
+                                          {items.length}
+                                          {locale === "ja" ? "記事" : ""}
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </section>
+            ))
+          }
+        </div>
       </section>
 
       <aside class="recent" aria-labelledby="recent-heading">
@@ -166,6 +313,81 @@ const summary =
         panel.hidden = open;
       });
     });
+
+  /**
+   * トップページの表示切り替え。
+   * JavaScriptが無い場合は3つの表示がそのまま縦に並ぶので、情報には必ず到達できる。
+   */
+  const VIEW_KEY = "atlasez-home-view";
+  const layout = document.querySelector<HTMLElement>("[data-home-layout]");
+  const tabs = [
+    ...document.querySelectorAll<HTMLButtonElement>("[data-view-tab]"),
+  ];
+  const panels = [
+    ...document.querySelectorAll<HTMLElement>("[data-view-panel]"),
+  ];
+
+  function activate(view: string, focus = false): void {
+    if (!tabs.some((tab) => tab.dataset.viewTab === view)) view = "tiles";
+    for (const tab of tabs) {
+      const on = tab.dataset.viewTab === view;
+      tab.setAttribute("aria-selected", String(on));
+      if (on) tab.removeAttribute("tabindex");
+      else tab.setAttribute("tabindex", "-1");
+      if (on && focus) tab.focus();
+    }
+    for (const panel of panels) {
+      panel.hidden = panel.dataset.viewPanel !== view;
+    }
+    if (layout) layout.dataset.activeView = view;
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      /* 保存できなくても表示は切り替わる */
+    }
+    const url = new URL(location.href);
+    if (view === "tiles") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    history.replaceState(null, "", url);
+  }
+
+  if (tabs.length > 0) {
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => activate(tab.dataset.viewTab ?? ""));
+    });
+
+    // 左右キーでタブを移動できるようにする（WAI-ARIA のタブパターン）
+    document
+      .querySelector<HTMLElement>("[data-view-tabs]")
+      ?.addEventListener("keydown", (event) => {
+        const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+        if (!keys.includes(event.key)) return;
+        event.preventDefault();
+        const index = tabs.findIndex(
+          (tab) => tab.getAttribute("aria-selected") === "true",
+        );
+        const next =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? tabs.length - 1
+              : (index +
+                  (event.key === "ArrowRight" ? 1 : -1) +
+                  tabs.length) %
+                tabs.length;
+        activate(tabs[next].dataset.viewTab ?? "", true);
+      });
+
+    let initial = new URL(location.href).searchParams.get("view");
+    if (!initial) {
+      try {
+        initial = localStorage.getItem(VIEW_KEY);
+      } catch {
+        initial = null;
+      }
+    }
+    activate(initial ?? "tiles");
+  }
 </script>
 
 <style>
@@ -179,6 +401,14 @@ const summary =
     padding-block: var(--space-2) var(--space-5);
     align-items: start;
   }
+  /* 地図とリストは横幅を使いたいので、右カラムを下に回す */
+  .content-columns[data-active-view="map"],
+  .content-columns[data-active-view="list"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-main {
+    min-width: 0;
+  }
   .section-title {
     display: flex;
     align-items: baseline;
@@ -186,7 +416,6 @@ const summary =
     padding-bottom: var(--space-1);
     border-bottom: 2px solid var(--accent-primary);
   }
-  .section-title h1,
   .section-title h2 {
     margin: 0;
     font-size: calc(1.45rem * var(--text-scale));
@@ -196,12 +425,81 @@ const summary =
     color: var(--text-secondary);
     font-size: calc(0.85rem * var(--text-scale));
   }
-  .section-link {
-    margin-left: auto;
-    font-size: calc(0.88rem * var(--text-scale));
+
+  /* ---- 表示切り替えタブ（ブラウザのタブ風） ---- */
+  .view-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .view-tabs {
+    display: flex;
+    gap: 2px;
+  }
+  .view-tab {
+    position: relative;
+    bottom: -2px;
+    min-height: var(--touch-target);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-bottom: 2px solid var(--accent-primary);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--background-secondary, transparent);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: calc(0.95rem * var(--text-scale));
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .view-tab:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+  .view-tab[aria-selected="true"] {
+    border-color: var(--accent-primary);
+    border-bottom-color: var(--background-primary);
+    background: var(--background-primary);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .section-meta {
+    padding-bottom: var(--space-1);
+  }
+  .view-panel {
+    padding-top: var(--space-3);
+  }
+  /* JSが無いときは3つとも並ぶ。どの表示かが分かるよう区切りを入れる */
+  .view-panel + .view-panel:not([hidden]) {
+    margin-top: var(--space-5);
+    border-top: 1px dashed var(--border-default);
   }
 
-  /* ---- 分野一覧 ---- */
+  /* ---- 大分類・中ジャンル ---- */
+  .group-block + .group-block,
+  .list-group + .list-group {
+    margin-top: var(--space-5);
+  }
+  .group-heading {
+    margin: 0 0 var(--space-2);
+    padding-bottom: 2px;
+    border-bottom: 2px solid var(--border-strong);
+    font-size: calc(1.25rem * var(--text-scale));
+  }
+  .genre-block + .genre-block,
+  .list-genre + .list-genre {
+    margin-top: var(--space-3);
+  }
+  .genre-heading {
+    margin: 0 0 var(--space-1);
+    color: var(--text-secondary);
+    font-size: calc(0.95rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  /* ---- 分野一覧（タイル） ---- */
   .subject-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
@@ -285,6 +583,41 @@ const summary =
     border-bottom-style: dashed;
   }
 
+  /* ---- 分野一覧（リスト） ---- */
+  .subject-list,
+  .category-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .subject-list-item {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .subject-list-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-size: calc(1.08rem * var(--text-scale));
+    font-weight: 650;
+  }
+  .category-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 0 var(--space-3);
+    margin-top: var(--space-1);
+    padding-left: var(--space-3);
+    border-left: 2px solid var(--border-default);
+  }
+  .category-list li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 2px 0;
+    font-size: calc(0.92rem * var(--text-scale));
+  }
+
   /* ---- 最近更新された記事（右カラム・スクロール） ---- */
   .recent {
     font-size: calc(0.9rem * var(--text-scale));
@@ -343,6 +676,10 @@ const summary =
     }
     .subject-name {
       font-size: calc(1.15rem * var(--text-scale));
+    }
+    .view-tab {
+      padding: 0 var(--space-2);
+      font-size: calc(0.88rem * var(--text-scale));
     }
   }
 </style>

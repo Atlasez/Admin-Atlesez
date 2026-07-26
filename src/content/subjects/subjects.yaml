@@ -5,6 +5,8 @@
   name: { ja: 漢字, en: Kanji }
   status: published
   order: 1
+  group: humanities
+  genre: japanese-classics
   description:
     ja: 漢字の成り立ち・読み・使い分けを学ぶ。
     en: Learn the origins, readings and usage of kanji.
@@ -57,6 +59,8 @@
   name: { ja: 古文, en: Classical Japanese }
   status: published
   order: 2
+  group: humanities
+  genre: japanese-classics
   description:
     ja: 古典文法と読解を基礎から学ぶ。
     en: Classical Japanese grammar and reading.
@@ -74,6 +78,8 @@
   name: { ja: 漢文, en: Classical Chinese }
   status: preparing
   order: 3
+  group: humanities
+  genre: japanese-classics
   description:
     ja: 訓読の基礎から漢文読解へ。
     en: Kanbun reading from the basics.
@@ -82,6 +88,8 @@
   name: { ja: 地理, en: Geography }
   status: preparing
   order: 4
+  group: social
+  genre: society-region
   description:
     ja: 系統地理と地誌を体系的に学ぶ。
     en: Systematic and regional geography.
@@ -90,6 +98,8 @@
   name: { ja: 日本史, en: Japanese History }
   status: preparing
   order: 5
+  group: humanities
+  genre: history-archaeology
   description:
     ja: 原始から現代までの日本の歴史。
     en: Japanese history from ancient to modern times.
@@ -98,6 +108,8 @@
   name: { ja: 世界史, en: World History }
   status: preparing
   order: 6
+  group: humanities
+  genre: history-archaeology
   description:
     ja: 諸地域の歴史と世界の一体化を学ぶ。
     en: Regional histories and global integration.
@@ -106,6 +118,8 @@
   name: { ja: 哲学, en: Philosophy }
   status: preparing
   order: 7
+  group: humanities
+  genre: thought
   description:
     ja: 問いから始める哲学入門。
     en: Philosophy, starting from questions.
@@ -114,6 +128,8 @@
   name: { ja: 考古学, en: Archaeology }
   status: preparing
   order: 8
+  group: humanities
+  genre: history-archaeology
   description:
     ja: 遺物・遺構から過去を読み解く。
     en: Reading the past from material remains.
@@ -122,6 +138,8 @@
   name: { ja: 数学, en: Mathematics }
   status: published
   order: 9
+  group: natural
+  genre: mathematical-science
   description:
     ja: 集合論から代数学・線形代数まで、定義と証明を大切にしながら一歩ずつ学ぶ。
     en: From set theory to algebra and linear algebra, step by step with rigorous definitions.
@@ -161,6 +179,8 @@
   name: { ja: 物理, en: Physics }
   status: published
   order: 10
+  group: natural
+  genre: physical-science
   description:
     ja: 力学から現代物理まで。
     en: From mechanics to modern physics.
@@ -227,6 +247,8 @@
   name: { ja: 化学, en: Chemistry }
   status: published
   order: 11
+  group: natural
+  genre: physical-science
   description:
     ja: 物質の構成から反応まで、ミクロな視点で世界を理解する。
     en: Understanding the world at the molecular level, from matter to reactions.
@@ -262,6 +284,8 @@
   name: { ja: 地質, en: Geology }
   status: preparing
   order: 12
+  group: natural
+  genre: earth-space-science
   description:
     ja: 大地の成り立ちを学ぶ。
     en: How the earth was formed.
@@ -270,6 +294,8 @@
   name: { ja: 気象, en: Meteorology }
   status: preparing
   order: 13
+  group: natural
+  genre: earth-space-science
   description:
     ja: 大気の科学。
     en: The science of the atmosphere.
@@ -278,6 +304,8 @@
   name: { ja: 海洋, en: Oceanography }
   status: preparing
   order: 14
+  group: natural
+  genre: earth-space-science
   description:
     ja: 海の科学。
     en: The science of the ocean.
@@ -286,6 +314,8 @@
   name: { ja: 天文, en: Astronomy }
   status: published
   order: 15
+  group: natural
+  genre: earth-space-science
   description:
     ja: 宇宙の構造と進化を学ぶ。
     en: The structure and evolution of the universe.
@@ -302,6 +332,8 @@
   name: { ja: 生物, en: Biology }
   status: published
   order: 16
+  group: natural
+  genre: life-science
   description:
     ja: 生命の仕組みを分子から生態系まで。
     en: Life from molecules to ecosystems.
@@ -330,6 +362,8 @@
   name: { ja: 情報, en: Informatics }
   status: preparing
   order: 17
+  group: applied
+  genre: information-science
   description:
     ja: 情報科学とプログラミングの基礎。
     en: Foundations of computer science and programming.
@@ -338,6 +372,8 @@
   name: { ja: 水産学, en: Fisheries Science }
   status: preparing
   order: 18
+  group: applied
+  genre: resource-industry
   description:
     ja: 水圏の生物資源と利用。
     en: Aquatic bioresources and their use.
@@ -346,6 +382,8 @@
   name: { ja: 建築, en: Architecture }
   status: preparing
   order: 19
+  group: applied
+  genre: engineering
   description:
     ja: 建築の計画・構造・環境。
     en: Architectural planning, structure and environment.
@@ -354,6 +392,8 @@
   name: { ja: 薬学, en: Pharmacy }
   status: preparing
   order: 20
+  group: applied
+  genre: health-science
   description:
     ja: 薬と身体の科学。
     en: The science of drugs and the body.
@@ -362,6 +402,8 @@
   name: { ja: 中国語（普通話）, en: Chinese (Mandarin) }
   status: preparing
   order: 21
+  group: humanities
+  genre: language-learning
   description:
     ja: 発音から文法まで、普通話の基礎。
     en: Mandarin basics from pronunciation to grammar.
@@ -370,6 +412,8 @@
   name: { ja: 台湾華語, en: Taiwanese Mandarin }
   status: preparing
   order: 22
+  group: humanities
+  genre: language-learning
   description:
     ja: 台湾で話される華語を学ぶ。
     en: Mandarin as spoken in Taiwan.
@@ -378,6 +422,8 @@
   name: { ja: 言語学, en: Linguistics }
   status: preparing
   order: 23
+  group: humanities
+  genre: language-science
   description:
     ja: ことばの仕組みを科学する。
     en: The science of language.
