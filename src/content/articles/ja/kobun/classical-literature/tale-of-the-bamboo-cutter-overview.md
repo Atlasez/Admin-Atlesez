@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「竹取物語トップページ」について解説します。
+summary: 古文「竹取物語トップページ」の本文理解に必要な語句や背景を解説する学習記事です。
 difficulty: basic
 estimatedMinutes: 5
 tags:

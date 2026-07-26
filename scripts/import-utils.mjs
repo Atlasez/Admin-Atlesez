@@ -96,12 +96,24 @@ function* proseSentences(markdown) {
 /** 地の文が取れない記事（語彙リスト・定義のみの記事など）の定型要約 */
 function fallbackSummary(body, title, subject) {
   if (/【(一字|熟語)】/u.test(body)) {
-    return `「${title}」に関係する漢字と熟語をまとめています。`;
+    return `「${title}」に関わる漢字を、字義や熟語の用例とともに整理した語彙学習記事です。`;
   }
   if (subject === "mathematics") {
-    return `「${title}」について、定義と基本的な性質をまとめています。`;
+    return `「${title}」の定義と基本性質を、式や命題を通して確認する数学記事です。`;
   }
-  return `「${title}」について解説します。`;
+  if (subject === "kobun") {
+    return `古文「${title}」の本文理解に必要な語句や背景を解説する学習記事です。`;
+  }
+  if (subject === "physics") {
+    return `物理における「${title}」の考え方と基本的な関係式を解説する学習記事です。`;
+  }
+  if (subject === "chemistry") {
+    return `化学における「${title}」の仕組みと基本事項を整理した学習記事です。`;
+  }
+  if (subject === "biology") {
+    return `生物における「${title}」の仕組みと働きを整理した学習記事です。`;
+  }
+  return `「${title}」の基礎事項と関連する考え方を整理した学習記事です。`;
 }
 
 export function makeSummary(body, title, subject) {

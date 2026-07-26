@@ -32,6 +32,13 @@ function lineAt(text, offset) {
 }
 
 const failures = [];
+const strictWarnings = [];
+const katexStrict = (file, line) => (code, message) => {
+  if (code === "unicodeTextInMathMode") {
+    strictWarnings.push(`${relative(".", file)}:${line}: ${message}`);
+  }
+  return "ignore";
+};
 for (const file of await markdownFiles(ROOT)) {
   const text = await readFile(file, "utf8");
   const ranges = [];
@@ -43,7 +50,7 @@ for (const file of await markdownFiles(ROOT)) {
       katex.renderToString(match[1], {
         displayMode: true,
         throwOnError: true,
-        strict: "ignore",
+        strict: katexStrict(file, lineAt(text, match.index)),
         macros,
       });
     } catch (error) {
@@ -63,7 +70,7 @@ for (const file of await markdownFiles(ROOT)) {
       katex.renderToString(match[1], {
         displayMode: false,
         throwOnError: true,
-        strict: "ignore",
+        strict: katexStrict(file, lineAt(text, match.index)),
         macros,
       });
     } catch (error) {
@@ -80,6 +87,8 @@ for (const file of await markdownFiles(ROOT)) {
     );
   }
 }
+
+failures.push(...new Set(strictWarnings));
 
 if (failures.length) {
   console.error(

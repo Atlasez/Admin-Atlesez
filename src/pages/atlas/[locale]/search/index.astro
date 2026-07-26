@@ -69,6 +69,7 @@ const filterLabels: Record<string, string> = {
       }
     </p>
     <div data-search-status aria-live="polite" class="visually-hidden"></div>
+    <p class="search-count" data-search-count aria-live="polite"></p>
     <ol class="search-results" data-search-results></ol>
   </div>
 </AtlasLayout>
@@ -104,6 +105,11 @@ const filterLabels: Record<string, string> = {
     padding: 0;
     max-width: var(--reading-width);
   }
+  .search-count {
+    min-height: 1.5em;
+    margin: var(--space-3) 0 0;
+    color: var(--text-secondary);
+  }
   .search-results :global(li) {
     padding-block: var(--space-3);
     border-bottom: 1px solid var(--border-default);
@@ -131,6 +137,7 @@ const filterLabels: Record<string, string> = {
   );
   const note = document.querySelector<HTMLElement>("[data-search-note]");
   const status = document.querySelector<HTMLElement>("[data-search-status]");
+  const count = document.querySelector<HTMLElement>("[data-search-count]");
 
   let adapter: SearchAdapter | null = null;
 
@@ -188,6 +195,17 @@ const filterLabels: Record<string, string> = {
   async function run(): Promise<void> {
     if (!adapter || !input || !resultsEl) return;
     const q = input.value.trim();
+    if (!q) {
+      resultsEl.innerHTML = "";
+      if (count) count.textContent = "";
+      if (status) {
+        status.textContent =
+          document.documentElement.lang === "ja"
+            ? "検索語を入力してください"
+            : "Enter a search term";
+      }
+      return;
+    }
     const filters: Record<string, string | undefined> = {};
     filtersEl
       ?.querySelectorAll<HTMLSelectElement>("select")
@@ -201,11 +219,18 @@ const filterLabels: Record<string, string> = {
       a.href = item.url;
       a.textContent = item.title;
       const p = document.createElement("p");
-      p.innerHTML = item.excerptHtml; // Pagefindが生成する<mark>付き抜粋
+      // 本文由来の抜粋には数式の読み上げ文字列や内部IDが混ざるため、
+      // 編集済みの要約を検索結果の説明として使う。
+      p.textContent = item.meta.summary ?? "";
       li.append(a, p);
       resultsEl.append(li);
     }
-    if (status) status.textContent = `${items.length} results`;
+    const resultCount =
+      document.documentElement.lang === "ja"
+        ? `${items.length}件の記事`
+        : `${items.length} results`;
+    if (count) count.textContent = resultCount;
+    if (status) status.textContent = resultCount;
   }
 
   form?.addEventListener("submit", (ev) => {

@@ -1,4 +1,5 @@
-import { defineCollection, z } from "astro:content";
+import { defineCollection } from "astro:content";
+import { z } from "astro/zod";
 import { glob, file } from "astro/loaders";
 import { parse as parseYaml } from "yaml";
 
@@ -31,14 +32,13 @@ const subjects = defineCollection({
     order: z.number().int(),
     description: localized,
     /** 段階移行中: 現行Google Sitesへの一時リンク */
-    externalUrl: z.string().url().optional(),
+    externalUrl: z.url().optional(),
     categories: z
       .array(
         z.object({
           id: slugSchema,
           slug: slugSchema,
           name: localized,
-          description: localized,
           order: z.number().int(),
           /** 入口となる概念 */
           entryConceptIds: z.array(conceptIdSchema).default([]),
@@ -125,7 +125,7 @@ const articles = defineCollection({
       })
       .default({ pre: [], post: [] }),
     references: z
-      .array(z.object({ title: z.string(), url: z.string().url().optional() }))
+      .array(z.object({ title: z.string(), url: z.url().optional() }))
       .default([]),
   }),
 });

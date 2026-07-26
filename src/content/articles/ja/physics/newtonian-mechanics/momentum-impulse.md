@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「運動量と力積」について解説します。
+summary: 物理における「運動量と力積」の考え方と基本的な関係式を解説する学習記事です。
 difficulty: intermediate
 estimatedMinutes: 10
 tags:
@@ -42,8 +42,10 @@ $$
 を得る。 ここで、左辺は境界時刻$t_1,\,t_2$における質点$i$の量$\boldsymbol{p}_i:=m_i\boldsymbol{v}_i$の差であり、これを質点$i$の運動量と呼ぶ。右辺は力の時間積分であり、この量$\boldsymbol{I}_i^{t_1\to t_2}=\int_{t_1}^{t_2}\boldsymbol{F}_i\dd t$を質点$i$に働く力積と呼ぶ。すなわち、
 
 $$
-\boldsymbol{p}_i(t_2)-\boldsymbol{p}_i(t_1)=\boldsymbol{I}_i^{t_1\to t_2}。
+\boldsymbol{p}_i(t_2)-\boldsymbol{p}_i(t_1)=\boldsymbol{I}_i^{t_1\to t_2}
 $$
+
+が成り立つ。
 
 運動量の時間微分は$\dv{\boldsymbol{p}_i}{t}=\boldsymbol{F}_i$で与えられる。これは運動方程式の書き換えとなっている。
 

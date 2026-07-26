@@ -55,6 +55,9 @@ test.describe("学習サイト", () => {
 
   test("本文準備中の目次項目を記事一覧に表示する", async ({ page }) => {
     await page.goto("atlas/ja/mathematics/set-theory/");
+    await expect(
+      page.getByText("すべての数学の土台。集合・写像・関係を扱う。"),
+    ).toHaveCount(0);
     const planned = page
       .locator(".planned-article")
       .filter({ hasText: "集合族" });
@@ -63,11 +66,25 @@ test.describe("学習サイト", () => {
     await expect(planned.getByRole("link")).toHaveCount(0);
   });
 
+  test("分野の目次にジャンル紹介文を表示しない", async ({ page }) => {
+    await page.goto("atlas/ja/mathematics/");
+    await expect(
+      page.getByText("すべての数学の土台。集合・写像・関係を扱う。"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("対称性を記述する代数系。定義から準同型定理まで。"),
+    ).toHaveCount(0);
+  });
+
   test("記事ページに目次・前提記事が表示される", async ({ page }) => {
     await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
     await expect(page.locator("h1")).toContainText("群の定義");
     await expect(page.getByRole("navigation", { name: "目次" })).toBeVisible();
     await expect(page.getByText("前提記事")).toBeVisible();
+    await expect(page.getByText("査読状況", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("未査読", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "参考文献" })).toBeVisible();
+    await expect(page.getByText("事前演習（準備中）")).toHaveCount(0);
   });
 
   test("グリッド／リスト表示を切り替えられる", async ({ page }) => {
@@ -86,9 +103,9 @@ test.describe("学習サイト", () => {
   }) => {
     await page.goto("atlas/ja/map/");
     await expect(
-      page.getByRole("heading", { name: "リスト表示（グラフの代替）" }),
+      page.getByText("リスト表示（グラフの代替）", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "表形式" })).toBeVisible();
+    await expect(page.getByText("表形式", { exact: true })).toBeVisible();
     await expect(page.getByLabel(/目的地点/)).toBeVisible();
   });
 
@@ -96,6 +113,7 @@ test.describe("学習サイト", () => {
     page,
   }) => {
     await page.goto("atlas/ja/map/");
+    await page.locator("[data-route-subject]").selectOption({ label: "数学" });
     await page.getByLabel(/開始地点/).selectOption({ label: "線形空間" });
     await page
       .getByLabel(/目的地点/)
@@ -105,6 +123,32 @@ test.describe("学習サイト", () => {
     await expect(result).toContainText("固有値");
     await expect(result).toContainText("ジョルダン標準形");
     await expect(result).not.toContainText("写像の定義");
+    await expect(result.getByRole("listitem")).toHaveCount(8);
+    await expect(result).toContainText("同じ分野からあわせて読む（4件）");
+    await expect(result).toContainText("開始地点以前の前提（4件）");
+  });
+
+  test("検索結果には編集済みの要約を表示する", async ({ page }) => {
+    await page.goto("atlas/ja/search/");
+    await page.getByRole("searchbox").fill("群");
+    await page.getByRole("button", { name: "検索" }).click();
+    const results = page.locator("[data-search-results]");
+    await expect(results).toContainText("数学記事です");
+    await expect(results).not.toContainText("math.group-theory");
+    await expect(page.locator("[data-search-count]")).toContainText("件の記事");
+  });
+
+  test("スマートフォンではメニューを開いて移動できる", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("atlas/ja/");
+    const menu = page.getByRole("button", { name: "メニュー" });
+    const mainNav = page.locator("#atlas-main-nav");
+    await expect(menu).toBeVisible();
+    await expect(
+      mainNav.getByRole("link", { name: "学習地図" }),
+    ).not.toBeVisible();
+    await menu.click();
+    await expect(mainNav.getByRole("link", { name: "学習地図" })).toBeVisible();
   });
 
   test("表示設定が保存される", async ({ page }) => {

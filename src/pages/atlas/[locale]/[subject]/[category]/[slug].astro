@@ -247,26 +247,34 @@ const structuredData = {
         }
       </header>
 
-      <div class="article-exercise" role="note">
-        <span class="badge">
-          {t(locale, "preExercise")}（{t(locale, "preparing")}）
-        </span>
-      </div>
+      {
+        entry.data.exerciseIds.pre.length > 0 && (
+          <div class="article-exercise" role="note">
+            <span class="badge">
+              {t(locale, "preExercise")}（{t(locale, "preparing")}）
+            </span>
+          </div>
+        )
+      }
 
       <div class="article-body reading">
         <Content />
       </div>
 
-      <div class="article-exercise" role="note">
-        <span class="badge">
-          {t(locale, "postExercise")}（{t(locale, "preparing")}）
-        </span>
-      </div>
-
       {
-        entry.data.references.length > 0 && (
-          <section aria-labelledby="refs-heading" class="article-refs">
-            <h2 id="refs-heading">{t(locale, "references")}</h2>
+        entry.data.exerciseIds.post.length > 0 && (
+          <div class="article-exercise" role="note">
+            <span class="badge">
+              {t(locale, "postExercise")}（{t(locale, "preparing")}）
+            </span>
+          </div>
+        )
+      }
+
+      <section aria-labelledby="refs-heading" class="article-refs">
+        <h2 id="refs-heading">{t(locale, "references")}</h2>
+        {
+          entry.data.references.length > 0 ? (
             <ul>
               {entry.data.references.map((r) => (
                 <li>
@@ -280,9 +288,15 @@ const structuredData = {
                 </li>
               ))}
             </ul>
-          </section>
-        )
-      }
+          ) : (
+            <p class="reference-status">
+              {locale === "ja"
+                ? "この記事には参考文献がまだ登録されていません。内容を検証する際は、記事下部の報告リンクをご利用ください。"
+                : "No references have been registered for this article yet."}
+            </p>
+          )
+        }
+      </section>
 
       <footer class="article-footer">
         <p>
@@ -306,14 +320,6 @@ const structuredData = {
             /* 執筆者は frontmatter に "atlas-math-team" のような内部IDしか
                入っておらず、読者にとって意味をなさないので表示しない。
                実名で載せられるようになったら復活させる。 */
-          }
-          {
-            entry.data.reviewers.length > 0 && (
-              <>
-                <dt>{t(locale, "reviewers")}</dt>
-                <dd>{entry.data.reviewers.join(", ")}</dd>
-              </>
-            )
           }
           <dt>{t(locale, "conceptsCovered")}</dt>
           <dd>

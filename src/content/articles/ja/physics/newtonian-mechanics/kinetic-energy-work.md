@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「運動エネルギーと仕事」について解説します。
+summary: 物理における「運動エネルギーと仕事」の考え方と基本的な関係式を解説する学習記事です。
 difficulty: intermediate
 estimatedMinutes: 5
 tags:
@@ -44,8 +44,10 @@ $$
 を得る。 ここで、左辺は運動の境界時刻$t_1,\,t_2$の量$K_i:=\frac{1}{2}m{v_i}^2$の差であり、これを質点$i$の運動エネルギーと呼ぶ。右辺は力の線積分であり、この量$W_i^{C(\boldsymbol{r}_i(t_1)\to\boldsymbol{r}_i(t_2))}=\int_{C(\boldsymbol{r}_i(t_1)\to\boldsymbol{r}_i(t_2))}\boldsymbol{F}_i(\boldsymbol{r}_i)\vdot\dd{\boldsymbol{r}_i}$を質点$i$になされる仕事と呼ぶ。すなわち、
 
 $$
-K(t_2)-K(t_1)=W_i^{C(\boldsymbol{r}_i(t_1)\to\boldsymbol{r}_i(t_2))}。
+K(t_2)-K(t_1)=W_i^{C(\boldsymbol{r}_i(t_1)\to\boldsymbol{r}_i(t_2))}
 $$
+
+が成り立つ。
 
 運動エネルギーの時間微分は$\int_{C(\boldsymbol{r}_i(t_1)\to\boldsymbol{r}_i(t_2))}\boldsymbol{F}_i\vdot\dd{\boldsymbol{r}_i}=\int_{t_1}^{t_2}\boldsymbol{F}\vdot\boldsymbol{v}_i\dd{t}$より、$\dv{K_i}{t}=\boldsymbol{F}_i\vdot\boldsymbol{v}_i$で与えられる。$P_i=\boldsymbol{F}_i\vdot\boldsymbol{v}_i$を仕事率という。
 

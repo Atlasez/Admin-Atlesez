@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「かぐや姫の生い立ち」について解説します。
+summary: 古文「かぐや姫の生い立ち」の本文理解に必要な語句や背景を解説する学習記事です。
 difficulty: basic
 estimatedMinutes: 45
 tags:

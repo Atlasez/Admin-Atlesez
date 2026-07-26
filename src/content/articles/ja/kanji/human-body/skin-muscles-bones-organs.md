@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「皮膚・筋肉・骨・内臓・膜・脂肪・血」に関係する漢字と熟語をまとめています。
+summary: 「皮膚・筋肉・骨・内臓・膜・脂肪・血」に関わる漢字を、字義や熟語の用例とともに整理した語彙学習記事です。
 difficulty: basic
 estimatedMinutes: 10
 tags:

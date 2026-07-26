@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「時間」に関係する漢字と熟語をまとめています。
+summary: 「時間」に関わる漢字を、字義や熟語の用例とともに整理した語彙学習記事です。
 difficulty: basic
 estimatedMinutes: 5
 tags:
