@@ -197,10 +197,10 @@ const structuredData = {
             </time>
           </span>
         </p>
-        <button
-          type="button"
-          class="bookmark-btn"
-          data-bookmark-toggle
+        {/* 「あとで読む」= これから読むもの / 「読んだ・理解した」= 済んだもの */}
+        <div
+          class="article-actions"
+          data-article-actions
           data-article-id={entry.data.articleId}
           data-locale={locale}
           data-title={entry.data.title}
@@ -213,13 +213,37 @@ const structuredData = {
           data-subject={subjectName}
           data-category={categoryName}
           data-summary={entry.data.summary}
-          data-label-save={t(locale, "saveForLater")}
-          data-label-saved={t(locale, "saved")}
-          aria-pressed="false"
         >
-          <span data-bookmark-icon aria-hidden="true">☆</span>
-          <span data-bookmark-label>{t(locale, "saveForLater")}</span>
-        </button>
+          <button
+            type="button"
+            class="bookmark-btn"
+            data-bookmark-toggle
+            data-label-save={t(locale, "saveForLater")}
+            data-label-saved={t(locale, "saved")}
+            aria-pressed="false"
+          >
+            <span data-bookmark-icon aria-hidden="true">☆</span>
+            <span data-bookmark-label>{t(locale, "saveForLater")}</span>
+          </button>
+          <button
+            type="button"
+            class="bookmark-btn history-btn"
+            data-history-toggle="read"
+            aria-pressed="false"
+          >
+            <span aria-hidden="true">✓</span>
+            <span>{t(locale, "markRead")}</span>
+          </button>
+          <button
+            type="button"
+            class="bookmark-btn history-btn"
+            data-history-toggle="understood"
+            aria-pressed="false"
+          >
+            <span aria-hidden="true">◎</span>
+            <span>{t(locale, "markUnderstood")}</span>
+          </button>
+        </div>
         {
           [...translations.entries()].length > 0 && (
             <p class="translation-info">
@@ -454,8 +478,13 @@ const structuredData = {
     gap: var(--space-1);
     flex-wrap: wrap;
   }
-  .bookmark-btn {
+  .article-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
     margin-top: var(--space-2);
+  }
+  .bookmark-btn {
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
@@ -474,6 +503,15 @@ const structuredData = {
   .bookmark-btn[aria-pressed="true"] {
     background: var(--accent-primary);
     color: var(--bg, #fff);
+  }
+  /* 学習の記録は「あとで読む」と役割が違うので、枠線の色で区別する */
+  .history-btn {
+    border-color: var(--border-strong);
+    color: var(--text-secondary);
+  }
+  .history-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
   .translation-info {
     font-size: calc(0.9rem * var(--text-scale));
@@ -620,35 +658,71 @@ const structuredData = {
 </script>
 
 <script>
-  // 「あとで読む」ボタンの保存状態の反映とトグル
+  // 「あとで読む」と「読んだ・理解した」の状態反映とトグル
   import { toggleBookmark, isBookmarked } from "../../../../../lib/bookmarks";
+  import {
+    toggleHistory,
+    historyStateOf,
+    type HistoryState,
+  } from "../../../../../lib/history";
 
-  const btn = document.querySelector<HTMLButtonElement>("[data-bookmark-toggle]");
-  if (btn) {
-    const d = btn.dataset;
-    const labelEl = btn.querySelector<HTMLElement>("[data-bookmark-label]");
-    const iconEl = btn.querySelector<HTMLElement>("[data-bookmark-icon]");
+  const actions = document.querySelector<HTMLElement>("[data-article-actions]");
+  if (actions) {
+    const d = actions.dataset;
     const articleId = d.articleId ?? "";
-
-    const render = (on: boolean) => {
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-      if (labelEl) labelEl.textContent = on ? d.labelSaved ?? "" : d.labelSave ?? "";
-      if (iconEl) iconEl.textContent = on ? "★" : "☆";
+    // 3つのボタンで同じ記事情報を使う
+    const entry = {
+      articleId,
+      locale: d.locale ?? "",
+      title: d.title ?? "",
+      href: d.href ?? "",
+      subject: d.subject ?? "",
+      category: d.category ?? "",
+      summary: d.summary ?? "",
     };
 
-    render(isBookmarked(articleId));
+    const bookmarkBtn = actions.querySelector<HTMLButtonElement>(
+      "[data-bookmark-toggle]",
+    );
+    if (bookmarkBtn) {
+      const bd = bookmarkBtn.dataset;
+      const labelEl =
+        bookmarkBtn.querySelector<HTMLElement>("[data-bookmark-label]");
+      const iconEl =
+        bookmarkBtn.querySelector<HTMLElement>("[data-bookmark-icon]");
 
-    btn.addEventListener("click", () => {
-      const on = toggleBookmark({
-        articleId,
-        locale: d.locale ?? "",
-        title: d.title ?? "",
-        href: d.href ?? "",
-        subject: d.subject ?? "",
-        category: d.category ?? "",
-        summary: d.summary ?? "",
+      const renderBookmark = (on: boolean) => {
+        bookmarkBtn.setAttribute("aria-pressed", on ? "true" : "false");
+        if (labelEl) {
+          labelEl.textContent = on ? (bd.labelSaved ?? "") : (bd.labelSave ?? "");
+        }
+        if (iconEl) iconEl.textContent = on ? "★" : "☆";
+      };
+
+      renderBookmark(isBookmarked(articleId));
+      bookmarkBtn.addEventListener("click", () => {
+        renderBookmark(toggleBookmark(entry));
       });
-      render(on);
-    });
+    }
+
+    const historyButtons = [
+      ...actions.querySelectorAll<HTMLButtonElement>("[data-history-toggle]"),
+    ];
+    const renderHistory = (state: HistoryState | null) => {
+      for (const button of historyButtons) {
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.historyToggle === state),
+        );
+      }
+    };
+
+    renderHistory(historyStateOf(articleId));
+    for (const button of historyButtons) {
+      button.addEventListener("click", () => {
+        const state = button.dataset.historyToggle as HistoryState;
+        renderHistory(toggleHistory(entry, state));
+      });
+    }
   }
 </script>

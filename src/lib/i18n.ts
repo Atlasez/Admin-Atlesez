@@ -151,6 +151,20 @@ const ui = {
     searchLabel: "サイト内検索",
     openSearch: "検索を開く",
     closeMenu: "閉じる",
+    upcomingArticles: "近日公開予定の記事",
+    noUpcoming: "近日公開予定の記事はありません。",
+    history: "学習の記録",
+    markRead: "読んだ",
+    markUnderstood: "理解した",
+    stateRead: "読んだ",
+    stateUnderstood: "理解した",
+    historyHint:
+      "読んだ・理解した記事はこの端末のブラウザ内にのみ記録されます。",
+    noHistory:
+      "記録はまだありません。記事ページの「読んだ」「理解した」で記録できます。",
+    clearHistory: "すべて削除",
+    filterAll: "すべて",
+    remove: "削除",
   },
   en: {
     siteName: "Atlas Learning Site",
@@ -243,6 +257,20 @@ const ui = {
     searchLabel: "Search this site",
     openSearch: "Open search",
     closeMenu: "Close",
+    upcomingArticles: "Coming soon",
+    noUpcoming: "No upcoming articles.",
+    history: "Learning record",
+    markRead: "Read",
+    markUnderstood: "Understood",
+    stateRead: "Read",
+    stateUnderstood: "Understood",
+    historyHint:
+      "Your reading record is stored only in this browser on this device.",
+    noHistory:
+      "Nothing recorded yet. Use “Read” or “Understood” on any article page.",
+    clearHistory: "Clear all",
+    filterAll: "All",
+    remove: "Remove",
   },
 } as const;
 

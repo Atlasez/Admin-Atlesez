@@ -1,0 +1,297 @@
+---
+/**
+ * 学習の記録（読んだ・理解した）の一覧。
+ * localStorage に保存された内容をクライアント側で描画する（サーバーには送らない）。
+ */
+import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../components/Breadcrumb.astro";
+import { atlasPath } from "../../../../lib/site";
+import { t, LOCALES, type Locale } from "../../../../lib/i18n";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+
+const filters = [
+  { value: "all", label: t(locale, "filterAll") },
+  { value: "understood", label: t(locale, "stateUnderstood") },
+  { value: "read", label: t(locale, "stateRead") },
+];
+---
+
+<AtlasLayout
+  locale={locale}
+  title={t(locale, "history")}
+  description={t(locale, "historyHint")}
+  noindex={true}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, "history")]),
+  )}
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: t(locale, "history") },
+      ]}
+    />
+    <div class="history-head">
+      <h1>{t(locale, "history")}</h1>
+      <button
+        type="button"
+        class="button button-secondary"
+        data-history-clear
+        hidden
+      >
+        {t(locale, "clearHistory")}
+      </button>
+    </div>
+    <p class="history-hint">{t(locale, "historyHint")}</p>
+
+    <p class="history-counts" data-history-counts aria-live="polite"></p>
+
+    <div class="history-filters" data-history-filters hidden>
+      <fieldset>
+        <legend class="visually-hidden">{t(locale, "filter")}</legend>
+        {
+          filters.map((f, i) => (
+            <label class="history-filter">
+              <input
+                type="radio"
+                name="history-state"
+                value={f.value}
+                checked={i === 0}
+              />
+              <span>{f.label}</span>
+            </label>
+          ))
+        }
+      </fieldset>
+    </div>
+
+    <p
+      class="history-empty"
+      data-history-empty
+      data-remove-label={t(locale, "remove")}
+      data-label-read={t(locale, "stateRead")}
+      data-label-understood={t(locale, "stateUnderstood")}
+    >
+      {t(locale, "noHistory")}
+    </p>
+    <ol class="history-list" data-history-list></ol>
+  </div>
+</AtlasLayout>
+
+<style>
+  .history-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .history-hint,
+  .history-counts {
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .history-filters fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    align-items: center;
+    border: 0;
+    padding: 0;
+    margin: 0 0 var(--space-2);
+  }
+  .history-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--touch-target);
+    font-weight: 400;
+  }
+  .history-filter input {
+    width: 1.1rem;
+    height: 1.1rem;
+    min-height: auto;
+  }
+  .history-list {
+    list-style: none;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: var(--content-width);
+  }
+  .history-list :global(li) {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius, 4px);
+    padding: var(--space-3);
+  }
+  .history-list :global(.history-row) {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    align-items: baseline;
+  }
+  .history-list :global(.history-title) {
+    font-size: calc(1.05rem * var(--text-scale));
+    font-weight: 600;
+  }
+  .history-list :global(.history-meta) {
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+    margin: var(--space-1) 0 0;
+  }
+  /* 「理解した」は塗り、「読んだ」は枠だけ。色以外でも区別できるようにする */
+  .history-list :global(.history-state) {
+    display: inline-block;
+    padding: 0 var(--space-1);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius, 4px);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-weight: 700;
+    color: var(--accent-primary);
+  }
+  .history-list :global(.history-state.is-understood) {
+    background: var(--accent-primary);
+    color: var(--background-primary);
+  }
+  .history-list :global(.history-remove) {
+    flex: 0 0 auto;
+    min-height: var(--touch-target);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius, 4px);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: calc(0.82rem * var(--text-scale));
+    padding: var(--space-1) var(--space-2);
+    cursor: pointer;
+  }
+  .history-list :global(.history-remove:hover) {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+</style>
+
+<script>
+  import {
+    loadHistory,
+    removeHistory,
+    clearHistory,
+    countHistory,
+    type HistoryEntry,
+  } from "../../../../lib/history";
+
+  const listEl = document.querySelector<HTMLOListElement>("[data-history-list]");
+  const emptyEl = document.querySelector<HTMLElement>("[data-history-empty]");
+  const clearBtn = document.querySelector<HTMLButtonElement>(
+    "[data-history-clear]",
+  );
+  const countsEl = document.querySelector<HTMLElement>("[data-history-counts]");
+  const filtersEl = document.querySelector<HTMLElement>(
+    "[data-history-filters]",
+  );
+
+  const removeLabel = emptyEl?.dataset.removeLabel ?? "Remove";
+  const labelRead = emptyEl?.dataset.labelRead ?? "Read";
+  const labelUnderstood = emptyEl?.dataset.labelUnderstood ?? "Understood";
+  const ja = document.documentElement.lang === "ja";
+
+  function currentFilter(): string {
+    return (
+      filtersEl?.querySelector<HTMLInputElement>("input:checked")?.value ?? "all"
+    );
+  }
+
+  function fmtDate(ms: number): string {
+    try {
+      return new Date(ms).toLocaleDateString();
+    } catch {
+      return "";
+    }
+  }
+
+  function render(): void {
+    if (!listEl || !emptyEl) return;
+    const all = loadHistory().sort((a, b) => b.updatedAt - a.updatedAt);
+    const counts = countHistory(all);
+
+    if (countsEl) {
+      countsEl.textContent =
+        all.length === 0
+          ? ""
+          : ja
+            ? `${labelUnderstood} ${counts.understood}件 ・ ${labelRead} ${counts.read}件`
+            : `${counts.understood} ${labelUnderstood.toLowerCase()} · ${counts.read} ${labelRead.toLowerCase()}`;
+    }
+    if (clearBtn) clearBtn.hidden = all.length === 0;
+    if (filtersEl) filtersEl.hidden = all.length === 0;
+
+    const filter = currentFilter();
+    const items = filter === "all" ? all : all.filter((e) => e.state === filter);
+
+    listEl.innerHTML = "";
+    if (all.length === 0) {
+      emptyEl.hidden = false;
+      return;
+    }
+    emptyEl.hidden = true;
+    for (const entry of items) listEl.append(renderItem(entry));
+  }
+
+  function renderItem(entry: HistoryEntry): HTMLLIElement {
+    const li = document.createElement("li");
+
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const link = document.createElement("a");
+    link.className = "history-title";
+    link.href = entry.href;
+    link.textContent = entry.title;
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "history-remove";
+    remove.textContent = removeLabel;
+    remove.addEventListener("click", () => {
+      removeHistory(entry.articleId);
+      render();
+    });
+
+    row.append(link, remove);
+
+    const state = document.createElement("span");
+    state.className =
+      entry.state === "understood"
+        ? "history-state is-understood"
+        : "history-state";
+    state.textContent =
+      entry.state === "understood" ? labelUnderstood : labelRead;
+
+    const meta = document.createElement("p");
+    meta.className = "history-meta";
+    meta.append(state);
+    const rest = [entry.subject, entry.category, fmtDate(entry.updatedAt)]
+      .filter(Boolean)
+      .join(" ・ ");
+    if (rest) meta.append(` ${rest}`);
+
+    li.append(row, meta);
+    return li;
+  }
+
+  filtersEl?.addEventListener("change", render);
+  clearBtn?.addEventListener("click", () => {
+    clearHistory();
+    render();
+  });
+
+  render();
+</script>
