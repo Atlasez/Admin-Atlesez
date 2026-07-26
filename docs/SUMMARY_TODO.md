@@ -1,76 +1,13 @@
-# 要約（summary）が定型文のままの記事
+# 記事要約の品質確認
 
-本文から要約に使える地の文が取れず、タイトルから作った定型文で埋めている記事です。
-余裕のあるときに frontmatter の `summary:` を書き換えてください。
+旧インポート時に作られた「〜について解説します。」などの短い定型要約は、
+本文と分野に合わせた学習目的の要約へ更新済みです。
 
-- 手書きした要約は再生成の対象外です（`regenerate-summaries.mjs` は末尾が「…」の要約しか触りません）
-- この一覧は `node scripts/regenerate-summaries.mjs --list` で作り直せます
+今後の確認には次のコマンドを使います。
 
-- `ja/kanji/culture/gems-jewels.md`
-- `ja/kanji/culture/musical-instruments.md`
-- `ja/kanji/daily-life/agriculture.md`
-- `ja/kanji/daily-life/beverages.md`
-- `ja/kanji/daily-life/cattle-horses.md`
-- `ja/kanji/daily-life/fire-light.md`
-- `ja/kanji/daily-life/flags-banners.md`
-- `ja/kanji/daily-life/grains.md`
-- `ja/kanji/daily-life/medicine-poison.md`
-- `ja/kanji/daily-life/metals.md`
-- `ja/kanji/daily-life/numbers-units.md`
-- `ja/kanji/daily-life/ships.md`
-- `ja/kanji/daily-life/weapons-armor.md`
-- `ja/kanji/human-body/body-torso.md`
-- `ja/kanji/human-body/face.md`
-- `ja/kanji/human-body/hair.md`
-- `ja/kanji/human-body/head-neck.md`
-- `ja/kanji/human-body/injuries-illness.md`
-- `ja/kanji/human-body/legs-feet.md`
-- `ja/kanji/human-body/skin-muscles-bones-organs.md`
-- `ja/kanji/nature/directions.md`
-- `ja/kanji/nature/sun-moon-stars.md`
-- `ja/kanji/nature/temperature.md`
-- `ja/kanji/nature/terrain.md`
-- `ja/kanji/nature/trees.md`
-- `ja/kanji/nature/waterside.md`
-- `ja/kanji/nature/weather.md`
-- `ja/kanji/society/crime-punishment.md`
-- `ja/kanji/society/flood-control.md`
-- `ja/kanji/society/relationships-family.md`
-- `ja/kanji/supernatural-religion/mythical-creatures.md`
-- `ja/kanji/vocabulary/cities-villages.md`
-- `ja/kanji/vocabulary/colors.md`
-- `ja/kanji/vocabulary/containers.md`
-- `ja/kanji/vocabulary/emotions.md`
-- `ja/kanji/vocabulary/lies-deception.md`
-- `ja/kanji/vocabulary/patterns.md`
-- `ja/kanji/vocabulary/poverty-low-status.md`
-- `ja/kanji/vocabulary/roads.md`
-- `ja/kanji/vocabulary/selection.md`
-- `ja/kanji/vocabulary/smells.md`
-- `ja/kanji/vocabulary/spreading-widely.md`
-- `ja/kanji/vocabulary/taste.md`
-- `ja/kanji/vocabulary/time.md`
-- `ja/kobun/classical-literature/kaguyahime-childhood.md`
-- `ja/kobun/classical-literature/tale-of-the-bamboo-cutter-overview.md`
-- `ja/mathematics/group-theory/automorphism-groups.md`
-- `ja/mathematics/group-theory/cyclic-groups.md`
-- `ja/mathematics/group-theory/generating-sets.md`
-- `ja/mathematics/group-theory/group-actions.md`
-- `ja/mathematics/group-theory/group-examples.md`
-- `ja/mathematics/group-theory/homomorphism-image-kernel.md`
-- `ja/mathematics/group-theory/homomorphisms.md`
-- `ja/mathematics/group-theory/linear-representations.md`
-- `ja/mathematics/group-theory/normal-characteristic-subgroups.md`
-- `ja/mathematics/group-theory/quotient-groups.md`
-- `ja/mathematics/group-theory/schur-lemma.md`
-- `ja/mathematics/group-theory/subgroup-examples.md`
-- `ja/mathematics/module-theory/module-examples.md`
-- `ja/mathematics/module-theory/module-homomorphisms.md`
-- `ja/mathematics/module-theory/modules.md`
-- `ja/mathematics/ring-theory/ring-definition.md`
-- `ja/mathematics/ring-theory/ring-homomorphisms.md`
-- `ja/mathematics/ring-theory/subring-examples.md`
-- `ja/mathematics/set-theory/mappings.md`
-- `ja/mathematics/set-theory/relations.md`
-- `ja/physics/newtonian-mechanics/kinetic-energy-work.md`
-- `ja/physics/newtonian-mechanics/momentum-impulse.md`
+```bash
+node scripts/regenerate-summaries.mjs --list
+```
+
+一覧が空であれば、旧定型文は残っていません。新規記事では、検索結果だけを
+読んでも記事の対象と学べる内容が分かる要約を優先してください。

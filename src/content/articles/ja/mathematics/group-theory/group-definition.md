@@ -45,7 +45,7 @@ $$
 \begin{align*} \forall x\in G,\quad e\cdot x=x,\quad(\text{または}x\cdot e=x) \end{align*}
 $$
 
-が成り立つ. この$e$を$G$の左単位元(left identity element)(または右単位元(left identity element))という.
+が成り立つ. この$e$を$G$の左単位元(left identity element)(または右単位元(right identity element))という.
 
 - (左/右逆元の存在) 3.を満たす$(G,\cdot ,e)$に対し, $G$上の閉じた単項演算${}^{-1}\colon G\to G;\,x\mapsto x^{-1}$が定まっていて, 任意の$x\in G$に対し
 
@@ -120,13 +120,13 @@ $$
 結合法則により$(xy)z=x(yz)$なのでこれをかっこを省略して$xyz$とかく. 結合法則が成り立つことから次のような略記がwell-definedであることが従う. $G$を群として$x\in G$に対し, $n$を正の整数として
 
 $$
-\begin{align*} x^n:=\underbrace{xx\cdots xx}_{\text{$n$個}},\quad x^0:=e,\quad x^{-n}:=\underbrace{x^{-1}x^{-1}\cdots x^{-1}x^{-1}}_{\text{$n$個}} \end{align*}
+\begin{align*} x^n:=\underbrace{xx\cdots xx}_{n\text{個}},\quad x^0:=e,\quad x^{-n}:=\underbrace{x^{-1}x^{-1}\cdots x^{-1}x^{-1}}_{n\text{個}} \end{align*}
 $$
 
 のように表す. $(G,+)$がアーベル群であるときにも同様の次の略記を用いる.
 
 $$
-\begin{gather*} nx=\underbrace{x+x+\cdots +x+x}_{\text{$n$個}},\quad 0x=0:=e \\ -x:=x^{-1},\quad -nx:=\underbrace{x^{-1}+x^{-1}+\cdots +x^{-1}+x^{-1}}_{\text{$n$個}} \end{gather*}
+\begin{gather*} nx=\underbrace{x+x+\cdots +x+x}_{n\text{個}},\quad 0x=0:=e \\ -x:=x^{-1},\quad -nx:=\underbrace{x^{-1}+x^{-1}+\cdots +x^{-1}+x^{-1}}_{n\text{個}} \end{gather*}
 $$
 
 ## 両側単位元と両側逆元の存在

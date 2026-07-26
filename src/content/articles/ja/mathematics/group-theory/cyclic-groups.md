@@ -13,7 +13,7 @@ reviewers: []
 status: published
 createdAt: 2024-01-01
 updatedAt: 2026-07-22
-summary: 「巡回群」について、定義と基本的な性質をまとめています。
+summary: 「巡回群」の定義と基本性質を、式や命題を通して確認する数学記事です。
 difficulty: intermediate
 estimatedMinutes: 35
 tags:

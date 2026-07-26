@@ -3,6 +3,8 @@
  *
  *   node scripts/regenerate-summaries.mjs --dry   … 差分を表示するだけ
  *   node scripts/regenerate-summaries.mjs --list  … 定型文のままの記事を一覧する
+ *   node scripts/regenerate-summaries.mjs --refresh-fallbacks
+ *                                            … 旧定型文を改善版へ更新する
  *   node scripts/regenerate-summaries.mjs         … 書き換える
  *
  * 旧インポータは本文の冒頭を機械的に切り出しており、インライン数式が
@@ -18,6 +20,7 @@ import { ROOT, makeSummary } from "./import-utils.mjs";
 const ARTICLES_DIR = join(ROOT, "src/content/articles");
 const dryRun = process.argv.includes("--dry");
 const listOnly = process.argv.includes("--list");
+const refreshFallbacks = process.argv.includes("--refresh-fallbacks");
 
 /** makeSummary が生成する定型文かどうか */
 const FALLBACK_PATTERN =
@@ -55,8 +58,11 @@ for (const file of files) {
     continue;
   }
 
-  // 手書きの要約は触らない。壊れている（末尾が「…」）ものだけ作り直す。
-  if (!/(…|\.\.\.)$/u.test(current)) continue;
+  // 手書きの要約は触らない。壊れている要約と、明示的に指定された場合の
+  // 旧定型文だけを本文・分野に合わせて作り直す。
+  const isBroken = /(…|\.\.\.)$/u.test(current);
+  const isOldFallback = FALLBACK_PATTERN.test(current);
+  if (!isBroken && !(refreshFallbacks && isOldFallback)) continue;
 
   // 旧要約は数式が抜けたり見出しが混ざったりしているので、末尾の「…」を
   // 落とすだけでは直らない。必ず本文から作り直す。

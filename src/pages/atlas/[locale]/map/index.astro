@@ -106,12 +106,78 @@ const categoryMetaJson = JSON.stringify(
     <p class="reading">
       {
         locale === "ja"
-          ? "はじめはカテゴリの箱だけを表示します。箱を押すとその中の項目と、外の分野につながっている項目が開きます。グラフが使いにくい場合は、下の「リスト表示」「表形式」「学習ルート検索」から同じ情報を利用できます。"
-          : "The map starts with one box per category. Select a box to open the topics inside it along with the topics they connect to. The same information is available below as a list, a table, and a route-search form."
+          ? "学びたい分野と目標を選ぶと、前提から順に読む記事を表示します。概念どうしの関係を詳しく見たい場合は、その下の概念マップを開いてください。"
+          : "Choose a subject and a goal to see articles in prerequisite order. Open the concept map below only when you want to explore the relationships in detail."
       }
     </p>
 
-    <section aria-labelledby="graph-heading">
+    <section aria-labelledby="route-heading" class="route-section">
+      <h2 id="route-heading">{t(locale, "routeSearch")}</h2>
+      <p class="route-intro">
+        {
+          locale === "ja"
+            ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
+            : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."
+        }
+      </p>
+      <form data-route-form class="route-form">
+        <div>
+          <label for="route-subject">{t(locale, "subjects")}</label>
+          <select id="route-subject" data-route-subject>
+            {
+              subjects.map((s) => (
+                <option value={s.data.slug}>
+                  {localizedName(s.data.name, locale)}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+        <div>
+          <label for="route-goal">{t(locale, "routeGoal")}</label>
+          <select id="route-goal" data-route-goal required>
+            <option value="">---</option>
+            {
+              conceptsBySubject.flatMap(({ slug, concepts }) =>
+                concepts.map((c) => (
+                  <option value={c.id} data-route-option data-subject={slug}>
+                    {localizedName(c.name, locale)}
+                  </option>
+                )),
+              )
+            }
+          </select>
+        </div>
+        <div>
+          <label for="route-start">
+            {locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}
+          </label>
+          <select id="route-start" data-route-start>
+            <option value="">
+              {locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}
+            </option>
+            {
+              conceptsBySubject.flatMap(({ slug, concepts }) =>
+                concepts.map((c) => (
+                  <option value={c.id} data-route-option data-subject={slug}>
+                    {localizedName(c.name, locale)}
+                  </option>
+                )),
+              )
+            }
+          </select>
+        </div>
+        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
+      </form>
+      <div data-route-result aria-live="polite"></div>
+    </section>
+
+    <details class="map-explorer">
+      <summary>
+        {locale === "ja" ? "概念マップを開く（任意）" : "Open concept map (optional)"}
+      </summary>
+      <div class="details-body">
+      <section aria-labelledby="graph-heading">
       <h2 id="graph-heading">
         {locale === "ja" ? "概念マップ" : "Concept map"}
       </h2>
@@ -145,12 +211,6 @@ const categoryMetaJson = JSON.stringify(
         <span class="map-status" data-map-status aria-live="polite"></span>
         <button type="button" class="button button-secondary" data-map-back hidden>
           {locale === "ja" ? "← 全体に戻る" : "← Back to overview"}
-        </button>
-        <button type="button" class="button button-secondary" data-map-fit>
-          {t(locale, "fitView")}
-        </button>
-        <button type="button" class="button button-secondary" data-map-reset>
-          {t(locale, "resetView")}
         </button>
         <button type="button" class="button button-secondary" data-map-share>
           {t(locale, "shareView")}
@@ -221,49 +281,12 @@ const categoryMetaJson = JSON.stringify(
         </ul>
       </details>
     </section>
+      </div>
+    </details>
 
-    <section aria-labelledby="route-heading">
-      <h2 id="route-heading">{t(locale, "routeSearch")}</h2>
-      <form data-route-form class="route-form">
-        <div>
-          <label for="route-start">{t(locale, "routeStart")}</label>
-          <select id="route-start" data-route-start>
-            <option value="">
-              {locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}
-            </option>
-            {
-              conceptsBySubject.map(({ name, concepts }) => (
-                <optgroup label={name}>
-                  {concepts.map((c) => (
-                    <option value={c.id}>{localizedName(c.name, locale)}</option>
-                  ))}
-                </optgroup>
-              ))
-            }
-          </select>
-        </div>
-        <div>
-          <label for="route-goal">{t(locale, "routeGoal")}</label>
-          <select id="route-goal" data-route-goal required>
-            <option value="">---</option>
-            {
-              conceptsBySubject.map(({ name, concepts }) => (
-                <optgroup label={name}>
-                  {concepts.map((c) => (
-                    <option value={c.id}>{localizedName(c.name, locale)}</option>
-                  ))}
-                </optgroup>
-              ))
-            }
-          </select>
-        </div>
-        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
-      </form>
-      <div data-route-result aria-live="polite"></div>
-    </section>
-
-    <section aria-labelledby="list-heading">
-      <h2 id="list-heading">{t(locale, "listAlternative")}</h2>
+    <details class="map-data">
+      <summary id="list-heading">{t(locale, "listAlternative")}</summary>
+      <div class="details-body">
       {
         subjects.map((s) => (
           <details>
@@ -323,10 +346,12 @@ const categoryMetaJson = JSON.stringify(
           </details>
         ))
       }
-    </section>
+      </div>
+    </details>
 
-    <section aria-labelledby="table-heading">
-      <h2 id="table-heading">{t(locale, "tableAlternative")}</h2>
+    <details class="map-data">
+      <summary id="table-heading">{t(locale, "tableAlternative")}</summary>
+      <div class="details-body">
       <div class="table-scroll" tabindex="0">
         <table>
           <caption class="visually-hidden">
@@ -358,7 +383,8 @@ const categoryMetaJson = JSON.stringify(
           </tbody>
         </table>
       </div>
-    </section>
+      </div>
+    </details>
   </div>
 </AtlasLayout>
 
@@ -378,7 +404,7 @@ const categoryMetaJson = JSON.stringify(
     min-width: 12rem;
   }
   .map-canvas {
-    height: 75vh;
+    height: 65vh;
     min-height: 28rem;
     border: 2px solid var(--border-default);
     border-radius: var(--radius);
@@ -465,10 +491,76 @@ const categoryMetaJson = JSON.stringify(
     border-top-style: double;
   }
   .route-form {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(12rem, 1fr)) auto;
     gap: var(--space-3);
     align-items: end;
-    flex-wrap: wrap;
+  }
+  .route-section {
+    padding: var(--space-4);
+    border: 2px solid var(--accent-primary);
+    background: var(--accent-subtle);
+  }
+  .route-section h2 {
+    margin-top: 0;
+  }
+  .route-intro {
+    max-width: var(--reading-width);
+    color: var(--text-secondary);
+  }
+  :global(.route-steps) {
+    display: grid;
+    gap: var(--space-2);
+    list-style: none;
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    max-width: var(--reading-width);
+  }
+  :global(.route-steps li) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  :global(.route-number) {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 2rem;
+    min-height: 2rem;
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  :global(.route-supplemental) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
+    max-width: var(--reading-width);
+  }
+  :global(.route-supplemental li) {
+    padding: var(--space-2);
+    border: 1px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  :global(.route-known) {
+    max-width: var(--reading-width);
+    margin-top: var(--space-3);
+  }
+  :global(.route-known ul) {
+    margin-bottom: 0;
+  }
+  .map-explorer,
+  .map-data {
+    margin-block: var(--space-4);
+  }
+  .map-explorer > summary,
+  .map-data > summary {
+    font-size: calc(1.08rem * var(--text-scale));
   }
   .prereq-note {
     color: var(--text-secondary);
@@ -478,8 +570,18 @@ const categoryMetaJson = JSON.stringify(
     overflow-x: auto;
   }
   @media (max-width: 767px) {
+    .route-form {
+      grid-template-columns: 1fr;
+    }
+    .route-form .button {
+      width: 100%;
+    }
+    .route-section {
+      padding: var(--space-3);
+    }
     .map-canvas {
       height: 50vh;
+      min-height: 22rem;
     }
   }
 </style>
@@ -513,7 +615,6 @@ const categoryMetaJson = JSON.stringify(
     const res = await fetch(container.dataset.graphUrl ?? "");
     const data: GraphData = await res.json();
     const nodeById = new Map(data.nodes.map((n) => [n.id, n]));
-    const conceptMap = toConceptMap(data.nodes);
     const base = (container.dataset.base ?? "/").replace(/\/$/, "");
     const label = (n: GraphNode) =>
       locale === "en" && n.name.en ? n.name.en : n.name.ja;
@@ -790,7 +891,6 @@ const categoryMetaJson = JSON.stringify(
         },
       ],
       layout: { name: "preset", fit: false },
-      wheelSensitivity: 0.2,
       minZoom: 0.2,
       maxZoom: 3,
     });
@@ -1078,95 +1178,171 @@ const categoryMetaJson = JSON.stringify(
       showDetail(selected);
     }
 
-    // 学習ルート検索（グラフとリストの両方に反映）
+  }
+
+  async function initRoute(): Promise<void> {
     const form = document.querySelector<HTMLFormElement>("[data-route-form]");
     const result = document.querySelector<HTMLElement>("[data-route-result]");
-    form?.addEventListener("submit", (ev) => {
-      ev.preventDefault();
-      const start =
-        form.querySelector<HTMLSelectElement>("[data-route-start]")?.value ?? "";
-      const goal =
-        form.querySelector<HTMLSelectElement>("[data-route-goal]")?.value ?? "";
-      if (!goal || !result) return;
+    const routeSubject =
+      document.querySelector<HTMLSelectElement>("[data-route-subject]");
+    const routeStart =
+      document.querySelector<HTMLSelectElement>("[data-route-start]");
+    const routeGoal =
+      document.querySelector<HTMLSelectElement>("[data-route-goal]");
+    if (!form || !result || !routeSubject || !routeStart || !routeGoal || !container) {
+      return;
+    }
+
+    const locale = container.dataset.locale === "en" ? "en" : "ja";
+    const ja = locale === "ja";
+    const base = (container.dataset.base ?? "/").replace(/\/$/, "");
+    const res = await fetch(container.dataset.graphUrl ?? "");
+    const data: GraphData = await res.json();
+    const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
+    const conceptMap = toConceptMap(data.nodes);
+    const label = (node: GraphNode) =>
+      locale === "en" && node.name.en ? node.name.en : node.name.ja;
+    const escapeHtml = (value: string) =>
+      value.replace(
+        /[&<>"']/g,
+        (char) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          })[char] ?? char,
+      );
+    const renderConcept = (id: string) => {
+      const node = nodeById.get(id);
+      if (!node) return "";
+      const first = (node.articles[locale] ?? [])[0];
+      return first
+        ? `<a href="${base}${first.path}">${escapeHtml(label(node))}</a>`
+        : `${escapeHtml(label(node))} <span class="badge">${
+            ja ? "準備中" : "in preparation"
+          }</span>`;
+    };
+
+    const filterRouteOptions = () => {
+      const subject = routeSubject.value;
+      for (const select of [routeStart, routeGoal]) {
+        select.value = "";
+        select
+          .querySelectorAll<HTMLOptionElement>("[data-route-option]")
+          .forEach((option) => {
+            const matches = option.dataset.subject === subject;
+            option.hidden = !matches;
+            option.disabled = !matches;
+          });
+      }
+      result.innerHTML = "";
+    };
+
+    const requestedSubject = new URL(location.href).searchParams.get("subject");
+    if (
+      requestedSubject &&
+      [...routeSubject.options].some((option) => option.value === requestedSubject)
+    ) {
+      routeSubject.value = requestedSubject;
+    }
+    filterRouteOptions();
+    routeSubject.addEventListener("change", filterRouteOptions);
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const start = routeStart.value;
+      const goal = routeGoal.value;
+      if (!goal) return;
       try {
         const route = computeLearningRoute(start ? [start] : [], goal, conceptMap);
         const stepsHtml = route.steps
-          .map((id, i) => {
-            const n = nodeById.get(id);
-            if (!n) return "";
-            const arts = n.articles[locale] ?? [];
-            const first = arts[0];
-            const link = first
-              ? `<a href="${base}${first.path}">${label(n)}</a>`
-              : `${label(n)} <span class="badge">${
-                  ja ? "準備中" : "in preparation"
-                }</span>`;
-            const alts = (route.alternativesByStep[id] ?? [])
-              .map((aid) => nodeById.get(aid))
-              .filter((an): an is GraphNode => Boolean(an))
-              .map((an) => label(an))
-              .join("、");
-            return `<li>${i + 1}. ${link}${
-              alts
-                ? ` <span class="prereq-note">（${ja ? "代替" : "alt"}: ${alts}）</span>`
-                : ""
-            }</li>`;
+          .map((id, index) => {
+            const item = renderConcept(id);
+            return item
+              ? `<li><span class="route-number">${index + 1}</span>${item}</li>`
+              : "";
           })
           .join("");
-        const skippedNames = route.skipped
-          .map((id) => nodeById.get(id))
-          .filter((n): n is GraphNode => Boolean(n))
-          .map((n) => label(n))
-          .join("、");
+
+        // 前提関係が少ない分野でも次に読む候補を見つけられるよう、
+        // 必須経路とは分けて同分野の項目を合計8件まで補う。
+        const goalNode = nodeById.get(goal);
+        const routeIds = new Set([...route.steps, ...route.skipped]);
+        const directConnections = new Set<string>();
+        for (const id of route.steps) {
+          const node = nodeById.get(id);
+          if (!node) continue;
+          for (const connected of [
+            ...node.related,
+            ...node.recommendedNext,
+            ...node.alternatives,
+          ]) {
+            directConnections.add(connected);
+          }
+        }
+        const supplementalLimit = Math.max(0, 8 - route.steps.length);
+        const supplemental = goalNode
+          ? data.nodes
+              .map((node, index) => ({ node, index }))
+              .filter(
+                ({ node }) =>
+                  node.subject === goalNode.subject && !routeIds.has(node.id),
+              )
+              .sort((a, b) => {
+                const rank = (node: GraphNode) => [
+                  directConnections.has(node.id) ? 0 : 1,
+                  node.category === goalNode.category ? 0 : 1,
+                  (node.articles[locale] ?? []).length > 0 ? 0 : 1,
+                ];
+                const ar = rank(a.node);
+                const br = rank(b.node);
+                for (let i = 0; i < ar.length; i += 1) {
+                  if (ar[i] !== br[i]) return ar[i] - br[i];
+                }
+                return a.index - b.index;
+              })
+              .slice(0, supplementalLimit)
+              .map(({ node }) => node.id)
+          : [];
+        const supplementalHtml = supplemental
+          .map((id) => `<li>${renderConcept(id)}</li>`)
+          .join("");
+        const skippedHtml = route.skipped
+          .map((id) => `<li>${renderConcept(id)}</li>`)
+          .join("");
+
         result.innerHTML = `<h3>${
-          ja ? "学習経路" : "Learning route"
-        }</h3><ol class="route-steps" style="list-style:none;padding:0">${stepsHtml}</ol>${
-          skippedNames
-            ? `<p class="prereq-note">${
-                ja ? "理解済みとして省略" : "Skipped"
-              }: ${skippedNames}</p>`
+          ja
+            ? `おすすめの学習順（${route.steps.length}件）`
+            : `Recommended learning order (${route.steps.length})`
+        }</h3><ol class="route-steps">${stepsHtml}</ol>${
+          supplemental.length > 0
+            ? `<h4>${
+                ja
+                  ? `同じ分野からあわせて読む（${supplemental.length}件）`
+                  : `Also read in this subject (${supplemental.length})`
+              }</h4><ul class="route-supplemental">${supplementalHtml}</ul>`
+            : ""
+        }${
+          route.skipped.length > 0
+            ? `<details class="route-known"><summary>${
+                ja
+                  ? `開始地点以前の前提（${route.skipped.length}件）`
+                  : `Prerequisites before the starting point (${route.skipped.length})`
+              }</summary><ul>${skippedHtml}</ul></details>`
             : ""
         }`;
-
-        // 経路の概念がすべて見えるよう、関係するカテゴリをまとめて描く
-        const routeSet = new Set(route.steps);
-        hideAll();
-        if (backButton) backButton.hidden = false;
-        focused = null;
-        const routeNodes = route.steps
-          .map((id) => nodeById.get(id))
-          .filter((n): n is GraphNode => Boolean(n));
-        routeNodes.forEach((n, index) => {
-          const el = cy.getElementById(n.id);
-          el.style("display", "element");
-          el.position({ x: 140 + index * 200, y: 120 });
-          el.addClass("route-highlight");
-        });
-        new Set(routeNodes.map((n) => n.subject)).forEach((slug) =>
-          show(`#subject\\:${slug}`),
-        );
-        showConnectingEdges();
-        cy.edges(":visible").forEach((e) => {
-          if (
-            routeSet.has(e.source().id()) &&
-            routeSet.has(e.target().id()) &&
-            e.data("kind") === "prerequisite"
-          ) {
-            e.addClass("route-highlight");
-          }
-        });
-        cy.layout({ name: "preset", fit: false }).run();
-        fitReadable(cy.nodes(":visible").filter((n) => n.data("kind") !== "subject"));
-        setStatus(
-          ja
-            ? `学習経路 ${route.steps.length}項目を表示`
-            : `Showing a route of ${route.steps.length} items`,
-        );
-      } catch (err) {
-        result.textContent = String(err);
+      } catch {
+        result.textContent = ja
+          ? "この組み合わせでは学習経路を作成できませんでした。"
+          : "No learning route could be created for this selection.";
       }
     });
   }
+
+  void initRoute();
 
   const start = () =>
     initMap().catch((err) => {

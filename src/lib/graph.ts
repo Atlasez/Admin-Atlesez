@@ -211,7 +211,10 @@ export function computeLearningRoute(
   known.delete(goalId);
 
   const toLearn = [...needed].filter((id) => !known.has(id));
-  const skipped = [...needed].filter((id) => known.has(id));
+  const skipped = topoSort(
+    [...needed].filter((id) => known.has(id)),
+    map,
+  );
   const steps = topoSort(toLearn, map);
 
   const alternativesByStep: Record<string, string[]> = {};

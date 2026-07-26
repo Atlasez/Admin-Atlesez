@@ -131,9 +131,6 @@ const subjectName = localizedName(subject.data.name, locale);
                     </span>
                   )}
                 </div>
-                <p class="toc-cat-desc">
-                  {localizedName(cat.description, locale)}
-                </p>
                 {empty ? (
                   <p class="toc-empty">
                     <span class="badge">{t(locale, "preparing")}</span>
@@ -223,11 +220,6 @@ const subjectName = localizedName(subject.data.name, locale);
   }
   .planned-count {
     border-style: dashed;
-  }
-  .toc-cat-desc {
-    margin: var(--space-1) 0 var(--space-2);
-    color: var(--text-secondary);
-    font-size: calc(0.9rem * var(--text-scale));
   }
   .toc-empty {
     margin: 0 0 0 var(--space-3);

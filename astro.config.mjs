@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
+import { unified } from "@astrojs/markdown-remark";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/contrib/mhchem";
@@ -24,23 +25,25 @@ export default defineConfig({
   trailingSlash: "always",
   integrations: [sitemap()],
   markdown: {
-    remarkPlugins: [remarkMath],
-    rehypePlugins: [
-      [
-        rehypeKatex,
-        {
-          throwOnError: false,
-          strict: "warn",
-          macros: {
-            "\\dv": "\\frac{\\mathrm{d}#1}{\\mathrm{d}#2}",
-            "\\dvtwo": "\\frac{\\mathrm{d}^{2}#1}{\\mathrm{d}#2^{2}}",
-            "\\dd": "\\,\\mathrm{d}#1",
-            "\\vdot": "\\mathbin{\\cdot}",
-            "\\divergence": "\\nabla\\mathbin{\\cdot}",
+    processor: unified({
+      remarkPlugins: [remarkMath],
+      rehypePlugins: [
+        [
+          rehypeKatex,
+          {
+            throwOnError: false,
+            strict: "warn",
+            macros: {
+              "\\dv": "\\frac{\\mathrm{d}#1}{\\mathrm{d}#2}",
+              "\\dvtwo": "\\frac{\\mathrm{d}^{2}#1}{\\mathrm{d}#2^{2}}",
+              "\\dd": "\\,\\mathrm{d}#1",
+              "\\vdot": "\\mathbin{\\cdot}",
+              "\\divergence": "\\nabla\\mathbin{\\cdot}",
+            },
           },
-        },
+        ],
       ],
-    ],
+    }),
     shikiConfig: {
       themes: { light: "github-light", dark: "github-dark" },
     },

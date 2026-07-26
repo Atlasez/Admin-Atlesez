@@ -52,7 +52,7 @@ function mapHeadings(body, fn) {
 
 function shallowestLevel(body) {
   let min = Infinity;
-  mapHeadings(body, (level, rest, line) => {
+  mapHeadings(body, (level, _rest, line) => {
     min = Math.min(min, level);
     return line;
   });

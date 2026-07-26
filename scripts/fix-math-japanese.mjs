@@ -94,12 +94,12 @@ function fixBody(body) {
     if (segment.startsWith("```")) return segment;
     // $$...$$ を先に処理してから $...$ を処理する
     return segment
-      .replace(/\$\$([\s\S]*?)\$\$/g, (whole, inner) => {
+      .replace(/\$\$([\s\S]*?)\$\$/g, (_whole, inner) => {
         const next = wrapJapanese(inner);
         if (next !== inner) changed += 1;
         return `$$${next}$$`;
       })
-      .replace(/\$([^$\n]+)\$/g, (whole, inner) => {
+      .replace(/\$([^$\n]+)\$/g, (_whole, inner) => {
         const next = wrapJapanese(inner);
         if (next !== inner) changed += 1;
         return `$${next}$`;

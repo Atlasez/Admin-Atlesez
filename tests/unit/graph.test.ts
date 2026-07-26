@@ -87,6 +87,7 @@ describe("computeLearningRoute", () => {
     const route = computeLearningRoute(["vector-space"], "jordan", map);
     expect(route.steps).not.toContain("mappings");
     expect(route.skipped).toContain("vector-space");
+    expect(route.skipped).toEqual(["mappings", "vector-space"]);
     expect(route.steps).toContain("linear-map");
     expect(route.steps.at(-1)).toBe("jordan");
   });
