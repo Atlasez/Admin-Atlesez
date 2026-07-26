@@ -6,6 +6,7 @@
   "description": "Atlasez公式サイトと学習サイト「アトラス」",
   "scripts": {
     "dev": "astro dev",
+    "new:article": "node scripts/new-article.mjs",
     "build": "astro build && npm run search:index",
     "build:ci": "astro build",
     "search:index": "pagefind --site dist",

@@ -1,10 +1,14 @@
 # コンテンツモデル（CONTENT_MODEL）
 
 スキーマの実体は `src/content.config.ts`（Zodで検証、違反はビルド失敗）。
+記事を1本足すだけなら [ADDING_ARTICLES.md](ADDING_ARTICLES.md) のほうが早い。
 
 ## 1. 二層構造
 
 **概念（言語非依存）** と **記事（言語別）** を分離する。翻訳は概念を介して対応づけるため、言語間で記事が一対一に対応する必要がない。
+
+> 英語版は現在停止中（2026-07-26）。以下の多言語の例は仕組みの説明として残している。
+> 概念グラフの詳しい話は [CONCEPT_GRAPH.md](CONCEPT_GRAPH.md) にある。
 
 ```text
 概念: math.set-theory.sets ──┬── ja記事: 集合の定義と表し方（sets）
@@ -71,7 +75,11 @@ references:
 
 ## 4. 分野（`src/content/subjects/subjects.yaml`）
 
-23分野を定義。`status: published | preparing`、任意の `externalUrl`（移行前の現行Google Sitesへの案内）、`categories[]`（大分類: 名称・説明・順序・入口概念・関連カテゴリ）。
+23分野を定義。`status: published | preparing`、`categories[]`（大分類: 名称・説明・順序・入口概念・関連カテゴリ）。
+`externalUrl` は移行元Google Sitesへの案内用に残っているが、2026-07-26に画面表示は全廃した。
+
+**新しいカテゴリを使う記事を書く前に、このファイルへカテゴリを追加すること。**
+未定義のカテゴリを指す記事は `node scripts/validate-content.mjs` で止まる。
 
 ## 5. お知らせ・プロジェクト
 

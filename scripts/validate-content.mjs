@@ -7,7 +7,7 @@
  * 失敗時は終了コード1。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
@@ -100,6 +100,9 @@ const REQUIRED = [
   "estimatedMinutes",
 ];
 
+/** 分野・カテゴリの実在検査のために控えておく（subjects の読み込みが後のため） */
+const articleMeta = [];
+
 for (const file of articleFiles) {
   const text = readFileSync(file, "utf8");
   const m = text.match(/^---\n([\s\S]*?)\n---/);
@@ -134,6 +137,7 @@ for (const file of articleFiles) {
   for (const p of [...(fm.prerequisites ?? []), ...(fm.related ?? [])]) {
     if (!conceptIds.has(p)) errors.push(`${file}: 存在しない概念 ${p} を参照`);
   }
+  articleMeta.push({ file, fm });
 }
 
 // ---------- 本文準備中の記事 ----------
@@ -147,6 +151,32 @@ const categoryKeys = new Set(
     ),
   ),
 );
+// ---------- 記事の分野・カテゴリとファイルの置き場所 ----------
+for (const { file, fm } of articleMeta) {
+  if (!fm.subject || !fm.category) continue;
+  const key = `${fm.subject}/${fm.category}`;
+  if (!categoryKeys.has(key)) {
+    errors.push(
+      `${file}: 存在しない分野・カテゴリ ${key} を指しています（subjects.yaml に定義がありません）`,
+    );
+    continue;
+  }
+  // frontmatter と置き場所がずれていると、URL と中身が食い違う
+  const expected = join(
+    root,
+    "src/content/articles",
+    String(fm.locale),
+    String(fm.subject),
+    String(fm.category),
+    `${fm.slug}.md`,
+  );
+  if (file !== expected) {
+    errors.push(
+      `${file}: frontmatter と置き場所が一致しません（期待: ${relative(root, expected)}）`,
+    );
+  }
+}
+
 const planned = JSON.parse(
   readFileSync(join(root, "src/data/planned-articles.json"), "utf8"),
 ).items;

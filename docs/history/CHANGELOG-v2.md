@@ -1,5 +1,8 @@
 # v2 改修メモ（2026-07-26）
 
+> **これは移行時（2026年7月）の記録です。** 現状の説明ではありません。
+> 今の仕様は [docs/README.md](../README.md) の索引から探してください。
+
 旧バージョンは `versions/v1/` に保存済み（ビルド対象外）。
 
 ## 指摘いただいた項目への対応
@@ -349,3 +352,53 @@ frontmatter の `authors` には `atlas-math-team` のような内部IDしか入
 ルート表示）は実ブラウザで未検証**です。リスト表示・表形式・学習ルート検索は
 HTML だけで完結しているので、グラフが崩れていても情報にはたどり着けますが、
 `npm run dev` で `/atlas/ja/map/` を一度見ていただけると確実です。
+
+## v2.8 ドキュメント整理と記事追加の導線
+
+### 1. 記事追加を 1 コマンドに（`scripts/new-article.mjs`）
+
+frontmatter の必須項目は 14 個あり、うち `articleId`・日付・概念ID など
+半分以上は決まりから機械的に決まるものだった。加えて概念を
+`concepts.yaml` に登録する作業が別途必要で、初めての人には負担が大きかった。
+
+```bash
+npm run new:article -- --subject chemistry --category matter --slug gases --title 気体
+```
+
+- 記事の雛形（`status: draft`）と概念を同時に作る
+- 分野・カテゴリが実在しなければ候補を出して止まる
+- 既存概念に紐づけたいときは `--concept <ID>`
+
+実際にこのコマンドで作った記事が、そのまま `validate-content` → `build` →
+`check-links` → `astro check` → `lint` → `test` を通ることを確認済み。
+
+### 2. 検証の穴を塞いだ（`scripts/validate-content.mjs`）
+
+- **存在しない分野・カテゴリ**を指す記事を検出するようにした
+  （従来は素通りし、カテゴリ一覧ページのないURLが生成されていた）
+- **frontmatter とファイルの置き場所のズレ**を検出するようにした
+  （URL と中身が食い違う事故を防ぐ）
+
+### 3. ドキュメントの整理
+
+**新規**
+
+- `docs/README.md` — 目的別の索引。スクリプト早見表つき
+- `docs/ADDING_ARTICLES.md` — 記事追加の手順書。見出し・数式・概念の書き方、
+  詰まりどころの対応表まで 1 ページに集約
+- `docs/CONCEPT_GRAPH.md` — 概念グラフの線の意味、学習地図の 2 段構成、
+  線を足すときの判断基準、既知の弱点
+
+**移動** — 移行時の記録を `docs/history/` へ隔離し、冒頭に注意書きを入れた
+
+- `CURRENT_SITE_AUDIT.md` / `MIGRATION_PLAN.md` / `ASSUMPTIONS.md` / `CHANGELOG-v2.md`
+
+**更新** — 実態と食い違っていた記述を修正
+
+- `README.md`: GitHub Pages → Cloudflare Pages、英語版の記述、
+  ディレクトリ構成、コマンド一覧
+- `EDITORIAL_WORKFLOW.md`: 公開先、記事作成手順、翻訳は停止中である旨
+- `CONTENT_MODEL.md`: 英語版の位置づけ、`externalUrl` の現状、
+  カテゴリを先に定義する必要がある旨
+
+docs 内の相対リンクは全件到達することを確認済み。
