@@ -151,9 +151,8 @@ const views = [
                               ) : (
                                 <span class="subject-name">{name}</span>
                               )}
-                              {/* 「?」は分野名の隣で目立ちすぎ、裸の「とは」は
-                                  語の一部に見えてしまう。山括弧で囲って
-                                  注記であることを示す。 */}
+                              {/* 丸囲みの「?」。分野名の一部に見えないよう
+                                  記号にし、枠は淡色にして主張を抑える。 */}
                               <button
                                 type="button"
                                 class="subject-info"
@@ -162,7 +161,7 @@ const views = [
                                 data-subject-info
                                 title={infoLabel}
                               >
-                                <span aria-hidden="true">〈とは〉</span>
+                                <span aria-hidden="true">?</span>
                                 <span class="visually-hidden">{infoLabel}</span>
                               </button>
                             </div>
@@ -570,26 +569,29 @@ const views = [
   /* 24px 未満だと WCAG 2.5.8（ターゲットサイズ）違反になる */
   .subject-info {
     flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
     min-width: 24px;
     min-height: 24px;
-    padding: 0 var(--space-1);
+    padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    /* 分野名の邪魔をしないよう枠なし。触れたときだけ下線を出す */
-    border: 0;
+    /* 枠は淡色にして分野名より目立たせない。触れたときだけ色を強める */
+    border: 1px solid var(--border-default);
+    border-radius: 50%;
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: calc(0.72rem * var(--text-scale));
+    font-size: calc(0.78rem * var(--text-scale));
     line-height: 1;
-    white-space: nowrap;
     cursor: pointer;
   }
   .subject-info:hover,
   .subject-info[aria-expanded="true"] {
+    border-color: var(--accent-primary);
+    background: var(--accent-subtle);
     color: var(--accent-primary);
-    text-decoration: underline;
   }
   .subject-status {
     margin: 0;
