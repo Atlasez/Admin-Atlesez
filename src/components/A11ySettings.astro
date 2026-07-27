@@ -196,6 +196,35 @@ const groups = [
     width: 1.1rem;
     height: 1.1rem;
   }
+
+  /*
+   * スマホでは項目数（6グループ）に対して縦が伸びすぎるので詰める。
+   * 選択肢の高さは 44px から 36px に落とすが、WCAG 2.5.8 の下限 24px は
+   * 十分に上回るので操作性は保たれる。
+   */
+  @media (max-width: 767px) {
+    .a11y-settings,
+    .a11y-form {
+      font-size: calc(0.85rem * var(--text-scale));
+    }
+    fieldset {
+      margin-bottom: var(--space-1);
+      gap: 0 var(--space-2);
+    }
+    legend {
+      margin-bottom: 0;
+      font-size: calc(0.8rem * var(--text-scale));
+      color: var(--text-secondary);
+    }
+    .a11y-option {
+      min-height: 2.25rem;
+      gap: 4px;
+    }
+    .a11y-option input {
+      width: 1rem;
+      height: 1rem;
+    }
+  }
 </style>
 
 <script>

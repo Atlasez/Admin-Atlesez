@@ -112,23 +112,30 @@ const close = locale === "ja" ? "閉じる" : "Close";
       width: auto;
       max-width: none;
       margin: 0;
-      max-height: 80vh;
+      max-height: 75vh;
       overflow-y: auto;
       border-width: 1px 0 0;
       border-radius: var(--radius) var(--radius) 0 0;
-      padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+      /* 画面下から出るシート。余白を詰めて 1 画面に収める */
+      padding: var(--space-2) var(--space-3);
+      padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
       box-shadow: 0 -8px 24px rgb(0 0 0 / 22%);
+    }
+    .settings-theme {
+      margin-bottom: var(--space-1);
+      padding-bottom: var(--space-1);
     }
     .settings-close {
       display: block;
       width: 100%;
-      min-height: var(--touch-target);
-      margin-top: var(--space-3);
+      min-height: 2.5rem;
+      margin-top: var(--space-2);
       border: 1px solid var(--accent-primary);
       border-radius: var(--radius);
       background: var(--accent-primary);
       color: var(--on-accent);
       font: inherit;
+      font-size: calc(0.9rem * var(--text-scale));
       font-weight: 700;
       cursor: pointer;
     }

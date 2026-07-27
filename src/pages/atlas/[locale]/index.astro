@@ -151,8 +151,9 @@ const views = [
                               ) : (
                                 <span class="subject-name">{name}</span>
                               )}
-                              {/* 「?」は分野名の隣で目立ちすぎるので、
-                                  内容が分かる小さな文字ラベルにする */}
+                              {/* 「?」は分野名の隣で目立ちすぎ、裸の「とは」は
+                                  語の一部に見えてしまう。山括弧で囲って
+                                  注記であることを示す。 */}
                               <button
                                 type="button"
                                 class="subject-info"
@@ -161,7 +162,7 @@ const views = [
                                 data-subject-info
                                 title={infoLabel}
                               >
-                                <span aria-hidden="true">とは</span>
+                                <span aria-hidden="true">〈とは〉</span>
                                 <span class="visually-hidden">{infoLabel}</span>
                               </button>
                             </div>
