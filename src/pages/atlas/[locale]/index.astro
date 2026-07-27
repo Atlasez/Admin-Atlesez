@@ -151,6 +151,8 @@ const views = [
                               ) : (
                                 <span class="subject-name">{name}</span>
                               )}
+                              {/* 「?」は分野名の隣で目立ちすぎるので、
+                                  内容が分かる小さな文字ラベルにする */}
                               <button
                                 type="button"
                                 class="subject-info"
@@ -159,7 +161,7 @@ const views = [
                                 data-subject-info
                                 title={infoLabel}
                               >
-                                <span aria-hidden="true">?</span>
+                                <span aria-hidden="true">とは</span>
                                 <span class="visually-hidden">{infoLabel}</span>
                               </button>
                             </div>
@@ -567,30 +569,26 @@ const views = [
   /* 24px 未満だと WCAG 2.5.8（ターゲットサイズ）違反になる */
   .subject-info {
     flex: 0 0 auto;
-    width: 1.5rem;
-    height: 1.5rem;
     min-width: 24px;
     min-height: 24px;
-    padding: 0;
+    padding: 0 var(--space-1);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    /* 分野名の邪魔をしないよう枠なし。触れたときだけ丸枠を出す */
-    border: 1px solid transparent;
-    border-radius: 50%;
+    /* 分野名の邪魔をしないよう枠なし。触れたときだけ下線を出す */
+    border: 0;
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: calc(0.78rem * var(--text-scale));
+    font-size: calc(0.72rem * var(--text-scale));
     line-height: 1;
-    min-height: 0;
+    white-space: nowrap;
     cursor: pointer;
   }
   .subject-info:hover,
   .subject-info[aria-expanded="true"] {
-    border-color: var(--accent-primary);
-    background: var(--accent-subtle);
     color: var(--accent-primary);
+    text-decoration: underline;
   }
   .subject-status {
     margin: 0;
@@ -705,6 +703,24 @@ const views = [
       max-height: 18rem;
     }
   }
+  @media (max-width: 767px) {
+    /* 3つの表示切り替えは横並びのまま画面幅いっぱいに均等配置する。
+       文字を小さくしすぎずに指で押せる幅を確保するため。 */
+    .view-tabs {
+      width: 100%;
+    }
+    .view-tab {
+      flex: 1 1 0;
+      padding: 0 var(--space-1);
+    }
+    .section-meta {
+      width: 100%;
+    }
+    /* カテゴリの内訳は狭い画面では1列に落とす */
+    .category-list {
+      grid-template-columns: 1fr;
+    }
+  }
   @media (max-width: 480px) {
     .subject-grid {
       grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
@@ -713,8 +729,7 @@ const views = [
       font-size: calc(1.15rem * var(--text-scale));
     }
     .view-tab {
-      padding: 0 var(--space-2);
-      font-size: calc(0.88rem * var(--text-scale));
+      font-size: calc(0.85rem * var(--text-scale));
     }
   }
 </style>

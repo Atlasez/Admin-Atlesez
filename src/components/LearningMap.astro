@@ -556,6 +556,18 @@ const categoryMetaJson = JSON.stringify(
       height: 50vh;
       min-height: 22rem;
     }
+    /* 道具立ては縦に積む。横に溢れて押せなくなるのを防ぐ */
+    .map-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .map-toolbar .button {
+      width: 100%;
+    }
+    .subject-legend {
+      gap: var(--space-1) var(--space-2);
+      font-size: calc(0.8rem * var(--text-scale));
+    }
   }
 </style>
 
@@ -1086,8 +1098,31 @@ const categoryMetaJson = JSON.stringify(
       syncUrl();
     });
 
+    /**
+     * 分野を選んだら、学習ルート検索の「目的地点」もその分野だけに絞る。
+     * 全 154 項目から探すのは大変なうえ、地図に出ていない分野を選べてしまうと
+     * 表示と操作が食い違うため。開始地点は分野をまたぐ前提を選べるよう絞らない。
+     */
+    function filterGoalOptions(subject: string): void {
+      const goal =
+        document.querySelector<HTMLSelectElement>("[data-route-goal]");
+      if (!goal) return;
+      let selectedHidden = false;
+      goal
+        .querySelectorAll<HTMLOptionElement>("option[data-route-option]")
+        .forEach((option) => {
+          const match = !subject || option.dataset.subject === subject;
+          option.hidden = !match;
+          option.disabled = !match;
+          if (!match && option.selected) selectedHidden = true;
+        });
+      // 絞り込みで消えた項目が選ばれたままにならないようにする
+      if (selectedHidden) goal.value = "";
+    }
+
     subjectSelect?.addEventListener("change", () => {
       renderOverview(subjectSelect.value);
+      filterGoalOptions(subjectSelect.value);
       syncUrl();
     });
 
@@ -1139,6 +1174,8 @@ const categoryMetaJson = JSON.stringify(
     const selectedNode = selected ? nodeById.get(selected) : undefined;
 
     if (subjectSelect) subjectSelect.value = urlSubject;
+    // URL に分野が入っていた場合も、目的地点の絞り込みを初期状態から合わせる
+    filterGoalOptions(urlSubject);
     if (urlCategory && conceptsByCat.has(urlCategory)) {
       renderCategory(urlCategory);
     } else if (selectedNode) {

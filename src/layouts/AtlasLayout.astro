@@ -1,8 +1,7 @@
 ---
 /** 学習サイト「アトラス」の共通レイアウト（ロケール対応） */
 import BaseHead from "../components/BaseHead.astro";
-import A11ySettings from "../components/A11ySettings.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
+import SettingsMenu from "../components/SettingsMenu.astro";
 import LangSwitch from "../components/LangSwitch.astro";
 import HeaderSearch from "../components/HeaderSearch.astro";
 import { withBase, atlasPath, ORG } from "../lib/site";
@@ -82,7 +81,7 @@ const currentPath = Astro.url.pathname;
         </a>
         <HeaderSearch locale={locale} />
         <div class="atlas-utility-actions">
-          <ThemeToggle locale={locale} />
+          <SettingsMenu locale={locale} />
           <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
           <a class="org-link" href={withBase("/")} title="Atlasez">Atlasez</a>
         </div>
@@ -149,9 +148,6 @@ const currentPath = Astro.url.pathname;
               {locale === "ja" ? "プライバシーポリシー" : "Privacy Policy"}
             </a>
           </p>
-        </div>
-        <div>
-          <A11ySettings locale={locale} />
         </div>
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>

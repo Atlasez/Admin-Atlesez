@@ -143,9 +143,14 @@ const structuredData = {
   structuredData={structuredData}
   localeSwitchHrefs={localeSwitchHrefs}
 >
+  {/* 記事のどこまで読んだかを示す帯。装飾なので支援技術からは隠す */}
+  <div class="reading-progress" aria-hidden="true">
+    <div class="reading-progress-bar" data-reading-progress></div>
+  </div>
+
   <div class="container article-layout">
     {/* 左: 記事内目次（デスクトップは固定、モバイルは折り畳み） */}
-    <nav class="article-toc" aria-label={t(locale, "toc")}>
+    <nav class="article-toc" id="article-toc" aria-label={t(locale, "toc")}>
       <details class="toc-details" open>
         <summary>{t(locale, "toc")}</summary>
         <ol class="details-body toc-list">
@@ -322,6 +327,16 @@ const structuredData = {
         }
       </section>
 
+      {
+        toc.length > 2 && (
+          <p class="back-to-toc">
+            <a href="#article-toc">
+              {locale === "ja" ? "↑ 目次へ戻る" : "↑ Back to contents"}
+            </a>
+          </p>
+        )
+      }
+
       <footer class="article-footer">
         <p>
           <a href={issueUrl} rel="noopener noreferrer" target="_blank">
@@ -427,6 +442,33 @@ const structuredData = {
 </AtlasLayout>
 
 <style>
+  /*
+   * 読み進み具合の帯。画面上端に固定し、記事本文の位置に応じて伸びる。
+   * 高さ 3px の装飾なので、内容は目次の現在地強調（scroll-spy）が担う。
+   */
+  .reading-progress {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 40;
+    height: 3px;
+    background: transparent;
+    pointer-events: none;
+  }
+  .reading-progress-bar {
+    width: 0;
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 80ms linear;
+  }
+  [data-pref-motion="reduced"] .reading-progress-bar {
+    transition: none;
+  }
+
+  .back-to-toc {
+    margin-top: var(--space-4);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+
   /* 本文カラムを広く取るため、コンテナ幅を広げ左右カラムを絞っている */
   .article-layout {
     display: grid;
@@ -604,6 +646,24 @@ const structuredData = {
       display: block;
     }
   }
+  @media (max-width: 767px) {
+    /* 別行立ての数式は画面幅を超えるので、その式だけ横に送れるようにする */
+    .article-body :global(.katex-display) {
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    /* 記事情報・関連の枠は狭い画面では余白を詰める */
+    .article-aside section {
+      padding-top: var(--space-2);
+    }
+    .article-header h1 {
+      overflow-wrap: break-word;
+    }
+    .bookmark-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
   @media (min-width: 1024px) {
     .toc-details {
       border: 0;
@@ -618,6 +678,23 @@ const structuredData = {
 </style>
 
 <script>
+  // 記事本文のどこまで来たかを画面上端の帯で示す
+  const progressBar = document.querySelector<HTMLElement>("[data-reading-progress]");
+  const articleBody = document.querySelector<HTMLElement>(".article-body");
+
+  if (progressBar && articleBody) {
+    const update = () => {
+      const rect = articleBody.getBoundingClientRect();
+      const total = rect.height - window.innerHeight;
+      // 本文が画面より短い記事では帯を出しても意味がないので 0 のままにする
+      const ratio = total <= 0 ? 0 : (-rect.top / total) * 100;
+      progressBar.style.width = `${Math.min(100, Math.max(0, ratio))}%`;
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+  }
+
   // 現在読んでいる見出しを目次で強調する（scroll-spy）
   const links = new Map<string, HTMLAnchorElement>();
   document

@@ -1,0 +1,164 @@
+---
+/**
+ * ヘッダーの「表示設定」。
+ *
+ * ダーク表示の切り替えと、文字サイズ・行間・フォント・コントラストの設定を
+ * 1 つのボタンにまとめる。押すと両方が同時に開く（中では折りたたまない）。
+ * 見た目に関する操作をここだけで完結させるためのもの。
+ */
+import A11ySettings from "./A11ySettings.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+
+interface Props {
+  locale?: "ja" | "en";
+}
+const { locale = "ja" } = Astro.props;
+const title = locale === "ja" ? "表示設定" : "Display settings";
+const close = locale === "ja" ? "閉じる" : "Close";
+---
+
+<details class="settings-menu" data-settings-menu>
+  <summary>
+    <span class="settings-icon" aria-hidden="true">Aa</span>
+    <span class="settings-text">{title}</span>
+    <span class="settings-caret" aria-hidden="true"></span>
+  </summary>
+  <div class="settings-panel">
+    {/* 明暗の切り替えと細かな設定を、折りたたまずに続けて並べる */}
+    <div class="settings-theme">
+      <ThemeToggle locale={locale} />
+    </div>
+    <A11ySettings locale={locale} bare />
+    <button type="button" class="settings-close" data-settings-close>
+      {close}
+    </button>
+  </div>
+</details>
+
+<style>
+  .settings-menu {
+    position: relative;
+    border: 0;
+    border-radius: 0;
+  }
+  .settings-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font-size: calc(0.9rem * var(--text-scale));
+    cursor: pointer;
+    list-style: none;
+    white-space: nowrap;
+  }
+  .settings-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+  .settings-menu > summary:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .settings-icon {
+    font-weight: 700;
+  }
+  .settings-caret::after {
+    content: "▾";
+    font-size: 0.8em;
+  }
+  .settings-menu[open] > summary .settings-caret::after {
+    content: "▴";
+  }
+
+  .settings-panel {
+    position: absolute;
+    right: 0;
+    z-index: 30;
+    width: max-content;
+    min-width: 16rem;
+    max-width: min(22rem, calc(100vw - 2 * var(--space-3)));
+    margin-top: var(--space-1);
+    padding: var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+  }
+  .settings-theme {
+    margin-bottom: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .settings-close {
+    display: none;
+  }
+
+  /*
+   * スマホでは吹き出しが画面からはみ出すので、画面下から出るシートにする。
+   * 指の届きやすい下側に置き、閉じるボタンを明示する。
+   */
+  @media (max-width: 767px) {
+    .settings-menu[open] > summary {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+    .settings-panel {
+      position: fixed;
+      inset: auto 0 0 0;
+      width: auto;
+      max-width: none;
+      margin: 0;
+      max-height: 80vh;
+      overflow-y: auto;
+      border-width: 1px 0 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 24px rgb(0 0 0 / 22%);
+    }
+    .settings-close {
+      display: block;
+      width: 100%;
+      min-height: var(--touch-target);
+      margin-top: var(--space-3);
+      border: 1px solid var(--accent-primary);
+      border-radius: var(--radius);
+      background: var(--accent-primary);
+      color: var(--on-accent);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  }
+</style>
+
+<script>
+  // 外側を押す・Escape・「閉じる」で閉じる
+  const menu = document.querySelector<HTMLDetailsElement>("[data-settings-menu]");
+  if (menu) {
+    const summary = menu.querySelector("summary");
+
+    const close = (refocus = false) => {
+      if (!menu.open) return;
+      menu.open = false;
+      if (refocus) summary?.focus();
+    };
+
+    document.addEventListener("click", (event) => {
+      if (!menu.open) return;
+      if (!(event.target instanceof Node)) return;
+      if (!menu.contains(event.target)) close();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close(true);
+    });
+
+    menu
+      .querySelector("[data-settings-close]")
+      ?.addEventListener("click", () => close(true));
+  }
+</script>

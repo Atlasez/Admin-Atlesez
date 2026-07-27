@@ -28,8 +28,7 @@ const action = atlasPath(locale, "search");
     placeholder={t(locale, "searchPlaceholder")}
   />
   <button type="submit" class="header-search-button">
-    <span aria-hidden="true">⌕</span>
-    <span class="visually-hidden">{t(locale, "search")}</span>
+    {t(locale, "search")}
   </button>
 </form>
 
@@ -62,16 +61,19 @@ const action = atlasPath(locale, "search");
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: var(--touch-target);
+    flex: 0 0 auto;
     min-height: var(--touch-target);
-    padding: 0 var(--space-2);
+    /* 「検索」の2文字が折り返さない幅を確保する */
+    padding: 0 var(--space-3);
     border: 1px solid var(--accent-primary);
     border-radius: 0 var(--radius) var(--radius) 0;
     background: var(--accent-primary);
-    color: var(--background-primary);
+    color: var(--on-accent);
     font: inherit;
-    font-size: calc(1.05rem * var(--text-scale));
+    font-size: calc(0.9rem * var(--text-scale));
+    font-weight: 700;
     line-height: 1;
+    white-space: nowrap;
     cursor: pointer;
   }
   .header-search-button:hover {
