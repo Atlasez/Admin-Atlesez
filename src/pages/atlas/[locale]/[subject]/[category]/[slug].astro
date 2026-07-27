@@ -230,24 +230,38 @@ const structuredData = {
             <span data-bookmark-icon aria-hidden="true">☆</span>
             <span data-bookmark-label>{t(locale, "saveForLater")}</span>
           </button>
-          <button
-            type="button"
-            class="bookmark-btn history-btn"
-            data-history-toggle="read"
-            aria-pressed="false"
+          {/*
+            「読んだ」→「理解した」は独立した2つの印ではなく、1つの状態が進む
+            段階。押すと片方が外れるので、独立したボタンに見えないよう
+            ひと続きの選択群として示す。同じ段階をもう一度押すと未記録に戻る。
+          */}
+          <div
+            class="history-group"
+            role="group"
+            aria-label={t(locale, "learningRecord")}
           >
-            <span aria-hidden="true">✓</span>
-            <span>{t(locale, "markRead")}</span>
-          </button>
-          <button
-            type="button"
-            class="bookmark-btn history-btn"
-            data-history-toggle="understood"
-            aria-pressed="false"
-          >
-            <span aria-hidden="true">◎</span>
-            <span>{t(locale, "markUnderstood")}</span>
-          </button>
+            <span class="history-label">{t(locale, "learningRecord")}</span>
+            <div class="history-steps">
+              <button
+                type="button"
+                class="history-step"
+                data-history-toggle="read"
+                aria-pressed="false"
+              >
+                <span aria-hidden="true">✓</span>
+                <span>{t(locale, "markRead")}</span>
+              </button>
+              <button
+                type="button"
+                class="history-step"
+                data-history-toggle="understood"
+                aria-pressed="false"
+              >
+                <span aria-hidden="true">◎</span>
+                <span>{t(locale, "markUnderstood")}</span>
+              </button>
+            </div>
+          </div>
         </div>
         {
           [...translations.entries()].length > 0 && (
@@ -462,6 +476,59 @@ const structuredData = {
   }
   [data-pref-motion="reduced"] .reading-progress-bar {
     transition: none;
+  }
+
+  /*
+   * 学習の記録。2つのボタンを1つの枠に収め、間に区切りを入れて
+   * 「未記録 → 読んだ → 理解した」と進む段階であることを示す。
+   */
+  .history-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .history-label {
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  .history-steps {
+    display: inline-flex;
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .history-step {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--touch-target);
+    padding: 0 var(--space-3);
+    border: 0;
+    background: transparent;
+    color: var(--accent-primary);
+    font: inherit;
+    font-size: calc(0.88rem * var(--text-scale));
+    cursor: pointer;
+  }
+  /* 段階の区切り。2つが地続きであることを示す */
+  .history-step + .history-step {
+    border-left: 1px solid var(--accent-primary);
+  }
+  .history-step:hover {
+    background: var(--accent-subtle);
+  }
+  .history-step[aria-pressed="true"] {
+    background: var(--accent-primary);
+    color: var(--on-accent);
+    font-weight: 700;
+  }
+  /*
+   * 「理解した」を選ぶと「読んだ」も達成済みなので、手前の段階も
+   * 薄く塗って到達済みであることを示す。
+   */
+  .history-steps[data-reached="understood"] [data-history-toggle="read"] {
+    background: var(--accent-subtle);
   }
 
   .back-to-toc {
@@ -785,12 +852,18 @@ const structuredData = {
     const historyButtons = [
       ...actions.querySelectorAll<HTMLButtonElement>("[data-history-toggle]"),
     ];
+    const historySteps = actions.querySelector<HTMLElement>(".history-steps");
     const renderHistory = (state: HistoryState | null) => {
       for (const button of historyButtons) {
         button.setAttribute(
           "aria-pressed",
           String(button.dataset.historyToggle === state),
         );
+      }
+      // 「理解した」なら「読んだ」も到達済みとして薄く塗る
+      if (historySteps) {
+        if (state) historySteps.dataset.reached = state;
+        else delete historySteps.dataset.reached;
       }
     };
 

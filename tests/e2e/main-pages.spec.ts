@@ -130,8 +130,10 @@ test.describe("学習サイト", () => {
 
   test("検索結果には編集済みの要約を表示する", async ({ page }) => {
     await page.goto("atlas/ja/search/");
-    await page.getByRole("searchbox").fill("群");
-    await page.getByRole("button", { name: "検索" }).click();
+    // ヘッダーにも検索欄があるので、検索ページ本体のフォームに限定する
+    const searchForm = page.locator("[data-search-form]");
+    await searchForm.getByRole("searchbox").fill("群");
+    await searchForm.getByRole("button", { name: "検索" }).click();
     const results = page.locator("[data-search-results]");
     await expect(results).toContainText("数学記事です");
     await expect(results).not.toContainText("math.group-theory");
@@ -153,7 +155,8 @@ test.describe("学習サイト", () => {
 
   test("表示設定が保存される", async ({ page }) => {
     await page.goto("atlas/ja/");
-    await page.getByText("表示設定").click();
+    // 表示設定はヘッダーのメニュー1か所に集約されている
+    await page.locator("[data-settings-menu] > summary").click();
     await page.getByLabel("特大").check();
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute(
