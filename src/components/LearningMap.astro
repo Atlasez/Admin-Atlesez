@@ -146,9 +146,10 @@ const categoryMetaJson = JSON.stringify(
     <div data-route-result aria-live="polite"></div>
   </section>
 
-  <details class="map-explorer">
+  {/* 最初から開いた状態。畳みたい人のために details のままにしてある */}
+  <details class="map-explorer" open>
     <summary>
-      {locale === "ja" ? "概念マップを開く（任意）" : "Open concept map (optional)"}
+      {locale === "ja" ? "概念マップ" : "Concept map"}
     </summary>
     <div class="details-body">
     <section aria-labelledby="graph-heading">

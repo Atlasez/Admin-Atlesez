@@ -1,7 +1,8 @@
 ---
 /** 学習サイト「アトラス」の共通レイアウト（ロケール対応） */
 import BaseHead from "../components/BaseHead.astro";
-import SettingsMenu from "../components/SettingsMenu.astro";
+import A11ySettings from "../components/A11ySettings.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
 import LangSwitch from "../components/LangSwitch.astro";
 import HeaderSearch from "../components/HeaderSearch.astro";
 import { withBase, atlasPath, ORG } from "../lib/site";
@@ -45,7 +46,6 @@ const nav = [
   { label: t(locale, "map"), href: atlasPath(locale, "map") },
   { label: t(locale, "bookmarks"), href: atlasPath(locale, "bookmarks") },
   { label: t(locale, "history"), href: atlasPath(locale, "history") },
-  { label: t(locale, "team"), href: atlasPath(locale, "team") },
 ];
 const guide = {
   label: t(locale, "forBeginners"),
@@ -82,7 +82,7 @@ const currentPath = Astro.url.pathname;
         </a>
         <HeaderSearch locale={locale} />
         <div class="atlas-utility-actions">
-          <SettingsMenu locale={locale} />
+          <ThemeToggle locale={locale} />
           <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
           <a class="org-link" href={withBase("/")} title="Atlasez">Atlasez</a>
         </div>
@@ -150,6 +150,9 @@ const currentPath = Astro.url.pathname;
             </a>
           </p>
         </div>
+        <div>
+          <A11ySettings locale={locale} />
+        </div>
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
     </footer>
@@ -214,7 +217,7 @@ const currentPath = Astro.url.pathname;
     border-bottom-color: var(--accent-primary);
     color: var(--accent-primary);
   }
-  /* 「はじめての方へ」は入口として囲みで目立たせ、右端に寄せる */
+  /* 「はじめての方へ」は入口として塗りつぶしで目立たせ、右端に寄せる */
   .nav-guide {
     margin-left: auto;
     display: flex;
@@ -224,17 +227,17 @@ const currentPath = Astro.url.pathname;
     border: 1px solid var(--accent-primary);
     border-radius: var(--radius);
     border-bottom-width: 1px;
-    background: var(--accent-subtle);
-    color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: var(--on-accent);
     font-weight: 700;
     padding: 0 var(--space-3);
     margin-block: var(--space-1);
   }
   .nav-guide a:hover,
   .nav-guide a[aria-current="page"] {
-    background: var(--accent-primary);
-    color: var(--background-primary);
-    border-bottom-color: var(--accent-primary);
+    background: var(--accent-hover);
+    color: var(--on-accent);
+    border-color: var(--accent-hover);
   }
   .org-link {
     font-size: calc(0.9rem * var(--text-scale));
