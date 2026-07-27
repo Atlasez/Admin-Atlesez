@@ -5,6 +5,10 @@ import { atlasPath, articlePath, formatDate } from "../../../lib/site";
 import { t, LOCALES, localizedName, type Locale } from "../../../lib/i18n";
 import { groupSubjects } from "../../../lib/taxonomy";
 import {
+  getPlannedArticles,
+  plannedArticleTitle,
+} from "../../../lib/planned";
+import {
   getPublishedArticles,
   getPublishedSubjects,
 } from "../../../lib/content";
@@ -35,6 +39,34 @@ for (const a of articles) {
 const recent = [...articles]
   .sort((a, b) => b.data.updatedAt.getTime() - a.data.updatedAt.getTime())
   .slice(0, 20);
+
+/**
+ * 近日公開予定の記事。
+ * 目次に題名だけがあり本文が未移植の項目（planned-articles.json）を、
+ * 公開中の分野に限って集める。行き先はその記事が入るカテゴリのページ。
+ */
+const categoryNameOf = new Map<string, string>();
+for (const s of subjects) {
+  for (const cat of s.data.categories) {
+    categoryNameOf.set(
+      `${s.data.slug}/${cat.slug}`,
+      localizedName(cat.name, locale),
+    );
+  }
+}
+const upcoming = subjects
+  .filter((s) => s.data.status === "published")
+  .flatMap((s) =>
+    getPlannedArticles(s.data.slug).map((item) => ({
+      title: plannedArticleTitle(item, locale),
+      category:
+        categoryNameOf.get(`${s.data.slug}/${item.category}`) ?? item.category,
+      href: `${atlasPath(locale, s.data.slug)}${item.category}/`,
+      order: item.order,
+    })),
+  )
+  .sort((a, b) => a.order - b.order)
+  .slice(0, 12);
 
 const alternates = LOCALES.map((l) => ({
   hreflang: l,
@@ -271,6 +303,25 @@ const views = [
       </section>
 
       <aside class="recent">
+        {/* これから増えるものを先に見せ、その下に更新履歴を置く */}
+        {
+          upcoming.length > 0 && (
+            <section class="upcoming" aria-labelledby="upcoming-heading">
+              <div class="section-title">
+                <h2 id="upcoming-heading">{t(locale, "upcomingArticles")}</h2>
+              </div>
+              <ul class="upcoming-list">
+                {upcoming.map((u) => (
+                  <li>
+                    <a href={u.href}>{u.title}</a>
+                    <span class="upcoming-category">{u.category}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+
         <section aria-labelledby="recent-heading">
         <div class="section-title">
           <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
@@ -684,6 +735,40 @@ const views = [
     border-bottom: 1px solid var(--border-default);
     line-height: 1.45;
   }
+  /* ---- 近日公開予定の記事（右カラム上部） ---- */
+  .upcoming {
+    margin-bottom: var(--space-4);
+  }
+  .upcoming-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 14rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .upcoming-list li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    /* 準備中であることが分かるよう、公開済み一覧とは破線で区別する */
+    border-bottom: 1px dashed var(--border-default);
+    line-height: 1.45;
+  }
+  .upcoming-list a {
+    text-decoration: none;
+  }
+  .upcoming-list a:hover {
+    text-decoration: underline;
+  }
+  .upcoming-category {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: calc(0.72rem * var(--text-scale));
+  }
+
   .recent-list a {
     text-decoration: none;
   }
