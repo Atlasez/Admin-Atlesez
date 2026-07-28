@@ -503,7 +503,7 @@ const views = [
     align-items: flex-end;
     gap: var(--space-3);
     flex-wrap: wrap;
-    padding-bottom: var(--space-2);
+    /* タブの下辺がこの線の上にそのまま乗るよう、下の余白は入れない */
     border-bottom: 2px solid var(--accent-primary);
   }
   /*
@@ -545,7 +545,7 @@ const views = [
     font-weight: 700;
   }
   .section-meta {
-    padding-bottom: var(--space-1);
+    padding-bottom: var(--space-2);
   }
   .view-panel {
     padding-top: var(--space-3);
