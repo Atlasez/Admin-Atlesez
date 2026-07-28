@@ -19,7 +19,8 @@
     "test": "vitest run",
     "audit:math": "node scripts/audit-math.mjs",
     "test:e2e": "playwright test",
-    "astro": "astro"
+    "astro": "astro",
+    "check:i18n": "node --experimental-strip-types scripts/check-ui-translations.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.2.1",

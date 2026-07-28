@@ -121,12 +121,16 @@ const items = articles.map((a) => ({
             <p class="article-summary">{a.data.summary}</p>
             <p class="article-badges">
               <span class="badge">
-                {t(locale, "updatedAt")}: {formatDate(a.data.updatedAt, locale)}
+                {t(locale, "updatedAt")}:
+                <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>
+                  {formatDate(a.data.updatedAt, locale)}
+                </time>
               </span>
             </p>
             {prereqNames.length > 0 && (
               <p class="article-prereqs">
-                {t(locale, "prerequisites")}: {prereqNames.join("、")}
+                <span class="prereq-label">{t(locale, "prerequisites")}:</span>
+                {prereqNames.join("、")}
               </p>
             )}
             <p class="article-actions">

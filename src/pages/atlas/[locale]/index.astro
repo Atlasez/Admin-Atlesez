@@ -492,32 +492,42 @@ const views = [
     padding-bottom: var(--space-2);
     border-bottom: 2px solid var(--accent-primary);
   }
-  /* 分野ページの「グリッド／リスト」切替と同じボタン調にそろえる */
+  /*
+   * ブラウザのタブのような見た目。選択中のタブだけ下辺を消して
+   * 中身の面とつなげ、「いま開いている面」が分かるようにする。
+   */
   .view-tabs {
     display: flex;
-    gap: var(--space-2);
+    gap: 2px;
   }
   .view-tab {
+    position: relative;
+    bottom: -2px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: var(--touch-target);
-    padding: 0.5em 1.2em;
-    border: 1px solid var(--accent-primary);
-    border-radius: 0;
-    background: transparent;
-    color: var(--accent-primary);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-bottom: 2px solid var(--accent-primary);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
     font: inherit;
     font-size: calc(0.95rem * var(--text-scale));
+    font-weight: 600;
     cursor: pointer;
   }
   .view-tab:hover {
-    background: var(--accent-subtle);
-    color: var(--accent-hover);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
   }
   .view-tab[aria-selected="true"] {
-    background: var(--accent-primary);
-    color: var(--on-accent);
+    border-color: var(--accent-primary);
+    /* 下辺を面の色で塗りつぶし、中身と地続きに見せる */
+    border-bottom-color: var(--background-primary);
+    background: var(--background-primary);
+    color: var(--accent-primary);
     font-weight: 700;
   }
   .section-meta {

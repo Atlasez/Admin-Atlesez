@@ -1,4 +1,5 @@
 ---
+import { UI_LANGUAGES, UI_LANGUAGE_NAMES } from "../lib/ui-locales";
 /** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
 interface Props {
   locale?: "ja" | "en";
@@ -55,6 +56,15 @@ const L =
       };
 
 const groups = [
+  {
+    // 記事本文ではなく画面まわりの表示言語。切り替えても URL は変わらない。
+    key: "lang",
+    label: locale === "ja" ? "言語" : "Language",
+    options: UI_LANGUAGES.map((code) => ({
+      value: code,
+      label: UI_LANGUAGE_NAMES[code],
+    })),
+  },
   {
     key: "fontSize",
     label: L.fontSize,
@@ -286,6 +296,8 @@ const groups = [
         }
         apply(next);
         window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+        // 言語は HTML 属性ではなく文字の差し替えで反映するので別に知らせる
+        window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
       });
       form
         .querySelector("[data-a11y-reset]")
@@ -300,6 +312,7 @@ const groups = [
             .forEach((i) => (i.checked = true));
           apply({});
           window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+          window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
         });
     },
   );

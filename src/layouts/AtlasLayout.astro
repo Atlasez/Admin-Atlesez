@@ -1,6 +1,7 @@
 ---
 /** 学習サイト「アトラス」の共通レイアウト（ロケール対応） */
 import BaseHead from "../components/BaseHead.astro";
+import UiLanguage from "../components/UiLanguage.astro";
 import SettingsMenu from "../components/SettingsMenu.astro";
 import LangSwitch from "../components/LangSwitch.astro";
 import HeaderSearch from "../components/HeaderSearch.astro";
@@ -66,6 +67,7 @@ const currentPath = Astro.url.pathname;
     />
   </head>
   <body>
+    <UiLanguage />
     <a class="skip-link" href="#main">{t(locale, "skipToContent")}</a>
     <header class="atlas-header">
       {/* 上段: ロゴ・検索・表示設定・言語切替（見た目と横断操作をここに集約） */}

@@ -1,6 +1,7 @@
 ---
 /** Atlasez公式サイトの共通レイアウト */
 import BaseHead from "../components/BaseHead.astro";
+import UiLanguage from "../components/UiLanguage.astro";
 import A11ySettings from "../components/A11ySettings.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 import { withBase, ORG } from "../lib/site";
@@ -34,6 +35,7 @@ const currentPath = Astro.url.pathname;
     />
   </head>
   <body>
+    <UiLanguage />
     <a class="skip-link" href="#main">本文へ移動</a>
     <header class="org-header">
       <div class="container org-header-inner">
