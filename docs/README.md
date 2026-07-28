@@ -10,6 +10,7 @@
 | [CONTENT_MODEL.md](CONTENT_MODEL.md)           | frontmatter の全項目と、概念・記事の二層構造                         |
 | [CONCEPT_GRAPH.md](CONCEPT_GRAPH.md)           | 概念グラフの線の意味、学習地図の見え方、線の足し方                   |
 | [EDITORIAL_WORKFLOW.md](EDITORIAL_WORKFLOW.md) | ブランチ・PR・査読・公開の流れ                                       |
+| [BACKLOG.md](BACKLOG.md)                       | 着手前の積み残しメモ                                                 |
 | [SUMMARY_TODO.md](SUMMARY_TODO.md)             | 要約が定型文のままの記事一覧（手書き待ち）                           |
 
 ## サイトを運用する

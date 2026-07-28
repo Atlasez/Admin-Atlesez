@@ -28,7 +28,8 @@ export function loadBookmarks(): Bookmark[] {
   }
 }
 
-function save(list: Bookmark[]): void {
+/** 一覧をまるごと保存する（読み込み機能でも使う） */
+export function saveBookmarks(list: Bookmark[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
@@ -42,7 +43,7 @@ export function isBookmarked(articleId: string): boolean {
 
 export function removeBookmark(articleId: string): Bookmark[] {
   const list = loadBookmarks().filter((b) => b.articleId !== articleId);
-  save(list);
+  saveBookmarks(list);
   return list;
 }
 
@@ -52,14 +53,14 @@ export function toggleBookmark(entry: Omit<Bookmark, "savedAt">): boolean {
   const idx = list.findIndex((b) => b.articleId === entry.articleId);
   if (idx >= 0) {
     list.splice(idx, 1);
-    save(list);
+    saveBookmarks(list);
     return false;
   }
   list.push({ ...entry, savedAt: Date.now() });
-  save(list);
+  saveBookmarks(list);
   return true;
 }
 
 export function clearBookmarks(): void {
-  save([]);
+  saveBookmarks([]);
 }

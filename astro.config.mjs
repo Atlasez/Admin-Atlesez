@@ -23,6 +23,12 @@ export default defineConfig({
   base: BASE_PATH,
   outDir: process.env.OUT_DIR ?? "./dist",
   trailingSlash: "always",
+  // 「あとで読む」「学習の記録」は「学習リスト」1ページに統合した。
+  // 以前のURLを開いた人が迷子にならないよう転送する。
+  redirects: {
+    "/atlas/ja/bookmarks/": "/atlas/ja/list/",
+    "/atlas/ja/history/": "/atlas/ja/list/",
+  },
   integrations: [sitemap()],
   markdown: {
     processor: unified({

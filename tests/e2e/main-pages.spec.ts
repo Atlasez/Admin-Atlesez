@@ -147,10 +147,12 @@ test.describe("学習サイト", () => {
     const mainNav = page.locator("#atlas-main-nav");
     await expect(menu).toBeVisible();
     await expect(
-      mainNav.getByRole("link", { name: "学習地図" }),
+      mainNav.getByRole("link", { name: "学習リスト" }),
     ).not.toBeVisible();
     await menu.click();
-    await expect(mainNav.getByRole("link", { name: "学習地図" })).toBeVisible();
+    await expect(
+      mainNav.getByRole("link", { name: "学習リスト" }),
+    ).toBeVisible();
   });
 
   test("表示設定が保存される", async ({ page }) => {

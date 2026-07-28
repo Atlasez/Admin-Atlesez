@@ -78,6 +78,7 @@ export const UI_DICTIONARY: Record<
   メニュー: { en: "Menu", zh: "菜单", ko: "메뉴" },
   分野: { en: "Subjects", zh: "领域", ko: "분야" },
   学習地図: { en: "Learning Map", zh: "学习地图", ko: "학습 지도" },
+  学習リスト: { en: "Learning list", zh: "学习清单", ko: "학습 목록" },
   あとで読む: { en: "Reading list", zh: "稍后阅读", ko: "나중에 읽기" },
   学習の記録: {
     en: "Learning record",

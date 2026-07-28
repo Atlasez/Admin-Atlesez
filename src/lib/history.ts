@@ -65,7 +65,8 @@ export function loadHistory(): HistoryEntry[] {
   }
 }
 
-function save(list: HistoryEntry[]): void {
+/** 一覧をまるごと保存する（読み込み機能でも使う） */
+export function saveHistory(list: HistoryEntry[]): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
@@ -106,7 +107,7 @@ export function toggleHistory(
 
   if (nextState === null) {
     if (index >= 0) list.splice(index, 1);
-    save(list);
+    saveHistory(list);
     return null;
   }
 
@@ -117,18 +118,18 @@ export function toggleHistory(
   };
   if (index >= 0) list[index] = next;
   else list.push(next);
-  save(list);
+  saveHistory(list);
   return nextState;
 }
 
 export function removeHistory(articleId: string): HistoryEntry[] {
   const list = loadHistory().filter((e) => e.articleId !== articleId);
-  save(list);
+  saveHistory(list);
   return list;
 }
 
 export function clearHistory(): void {
-  save([]);
+  saveHistory([]);
 }
 
 /**

@@ -30,6 +30,24 @@ for (const a of articles) {
   );
 }
 
+/**
+ * 「〇〇とは」の飛び先。
+ * 本来は分野の総論記事に飛ばしたいが、まだ無いので暫定でその分野の
+ * 先頭記事に飛ばす。総論記事ができたらここを差し替える。
+ */
+const introArticleOf = new Map<string, string>();
+for (const a of [...articles].sort((x, y) =>
+  `${x.data.category}/${x.data.slug}`.localeCompare(
+    `${y.data.category}/${y.data.slug}`,
+  ),
+)) {
+  if (introArticleOf.has(a.data.subject)) continue;
+  introArticleOf.set(
+    a.data.subject,
+    articlePath(locale, a.data.subject, a.data.category, a.data.slug),
+  );
+}
+
 /** 分野スラッグ + カテゴリスラッグ → 記事（リスト表示用） */
 const articlesByCategory = new Map<string, typeof articles>();
 for (const a of articles) {
@@ -164,10 +182,9 @@ const views = [
                       {genre.subjects.map((s) => {
                         const published = s.data.status === "published";
                         const name = localizedName(s.data.name, locale);
-                        const desc = localizedName(s.data.description, locale);
-                        const descId = `subject-desc-${s.data.slug}`;
                         const infoLabel =
                           locale === "ja" ? `${name}とは` : `About ${name}`;
+                        const introHref = introArticleOf.get(s.data.slug);
                         return (
                           <li
                             class:list={[
@@ -176,9 +193,10 @@ const views = [
                             ]}
                           >
                             <div class="subject-row">
+                              {/* タイル全体を押せるようにする（::after で行を覆う） */}
                               {published ? (
                                 <a
-                                  class="subject-name"
+                                  class="subject-name subject-link"
                                   href={atlasPath(locale, s.data.slug)}
                                 >
                                   {name}
@@ -186,19 +204,19 @@ const views = [
                               ) : (
                                 <span class="subject-name">{name}</span>
                               )}
-                              {/* 丸囲みの「?」。分野名の一部に見えないよう
-                                  記号にし、枠は淡色にして主張を抑える。 */}
-                              <button
-                                type="button"
-                                class="subject-info"
-                                aria-expanded="false"
-                                aria-controls={descId}
-                                data-subject-info
-                                title={infoLabel}
-                              >
-                                <span aria-hidden="true">?</span>
-                                <span class="visually-hidden">{infoLabel}</span>
-                              </button>
+                              {/* 「〇〇とは」の解説へ。タイルのリンクより手前に出す */}
+                              {introHref && (
+                                <a
+                                  class="subject-info"
+                                  href={introHref}
+                                  title={infoLabel}
+                                >
+                                  <span aria-hidden="true">?</span>
+                                  <span class="visually-hidden">
+                                    {infoLabel}
+                                  </span>
+                                </a>
+                              )}
                               {/* 記事数・準備中は行の右端にそろえる */}
                               <span class="subject-count">
                                 {published
@@ -206,9 +224,6 @@ const views = [
                                   : t(locale, "preparing")}
                               </span>
                             </div>
-                            <p class="subject-desc" id={descId} hidden>
-                              {desc}
-                            </p>
                           </li>
                         );
                       })}
@@ -366,21 +381,6 @@ const views = [
 </AtlasLayout>
 
 <script>
-  // 分野タイルの「?」で分野説明を開閉する
-  document
-    .querySelectorAll<HTMLButtonElement>("[data-subject-info]")
-    .forEach((button) => {
-      button.addEventListener("click", () => {
-        const id = button.getAttribute("aria-controls");
-        if (!id) return;
-        const panel = document.getElementById(id);
-        if (!panel) return;
-        const open = button.getAttribute("aria-expanded") === "true";
-        button.setAttribute("aria-expanded", open ? "false" : "true");
-        panel.hidden = open;
-      });
-    });
-
   /**
    * トップページの表示切り替え。
    * JavaScriptが無い場合は3つの表示がそのまま縦に並ぶので、情報には必ず到達できる。
@@ -590,7 +590,7 @@ const views = [
   }
   .group-heading h2 {
     margin: 0;
-    font-size: calc(1.1rem * var(--text-scale));
+    font-size: calc(1.15rem * var(--text-scale));
   }
   .list-genre + .list-genre {
     margin-top: var(--space-3);
@@ -619,13 +619,25 @@ const views = [
     padding: 0;
   }
   .subject-tile {
-    padding: var(--space-2) 0;
+    position: relative;
+    padding: var(--space-2);
     border-bottom: 1px solid var(--border-default);
+    border-radius: var(--radius);
     line-height: 1.4;
+    transition:
+      box-shadow 0.15s ease,
+      background-color 0.15s ease;
+  }
+  /* タイルのどこを押しても分野へ入れる。影で「押せる」ことを示す */
+  .subject-tile:has(.subject-link:hover),
+  .subject-tile:has(.subject-link:focus-visible) {
+    background: var(--background-secondary);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.14);
   }
   .subject-row {
     display: flex;
-    align-items: baseline;
+    /* 文字サイズを変えても記事数・準備中が上下にずれないよう中央でそろえる */
+    align-items: center;
     gap: var(--space-2);
   }
   /* 記事数は行の右端へ */
@@ -643,12 +655,21 @@ const views = [
     text-decoration: none;
     color: var(--text-primary);
   }
+  /* タイル全体をあたり判定にする */
+  .subject-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
   a.subject-name:hover {
     color: var(--accent-primary);
-    text-decoration: underline;
   }
   /* 24px 未満だと WCAG 2.5.8（ターゲットサイズ）違反になる */
   .subject-info {
+    position: relative;
+    /* タイル全体のリンクより手前に置き、単独で押せるようにする */
+    z-index: 1;
     flex: 0 0 auto;
     width: 1.5rem;
     height: 1.5rem;
@@ -661,15 +682,15 @@ const views = [
     /* 枠は淡色にして分野名より目立たせない。触れたときだけ色を強める */
     border: 1px solid var(--border-default);
     border-radius: 50%;
-    background: transparent;
+    background: var(--background-primary);
     color: var(--text-secondary);
     font: inherit;
     font-size: calc(0.78rem * var(--text-scale));
     line-height: 1;
+    text-decoration: none;
     cursor: pointer;
   }
-  .subject-info:hover,
-  .subject-info[aria-expanded="true"] {
+  .subject-info:hover {
     border-color: var(--accent-primary);
     background: var(--accent-subtle);
     color: var(--accent-primary);
@@ -681,13 +702,6 @@ const views = [
     color: var(--text-secondary);
     font-size: calc(0.78rem * var(--text-scale));
     font-weight: 400;
-  }
-  .subject-desc {
-    margin: var(--space-1) 0 var(--space-1);
-    padding-right: var(--space-2);
-    color: var(--text-secondary);
-    font-size: calc(0.85rem * var(--text-scale));
-    line-height: 1.55;
   }
   /* 準備中は opacity で淡くしない（コントラスト比が 4.5:1 を割るため）。
      色は --text-secondary のまま、太さと下線の有無で区別する。 */
@@ -710,11 +724,21 @@ const views = [
     padding: var(--space-2) 0;
     border-bottom: 1px solid var(--border-default);
   }
+  /* リスト表示は「大ジャンル 1.15 → 中ジャンル 0.95 → 分野 1.05 → カテゴリ 0.85」と
+     字の大きさが素直に下るようにそろえる。タイル表示ほど分野名を大きくすると
+     中ジャンルの見出しが埋もれて段が読み取れなくなるため、ここでは詰める。 */
+  .list-genre > .genre-heading {
+    font-size: calc(0.95rem * var(--text-scale));
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+  }
   .subject-list-head {
     display: flex;
-    align-items: baseline;
+    /* 記事数・準備中が下にずれないよう中央でそろえる */
+    align-items: center;
     gap: var(--space-2);
-    font-size: calc(1.2rem * var(--text-scale));
+    font-size: calc(1.05rem * var(--text-scale));
     font-weight: 650;
   }
   .category-list {
@@ -731,7 +755,7 @@ const views = [
     justify-content: space-between;
     gap: var(--space-2);
     padding: 2px 0;
-    font-size: calc(0.88rem * var(--text-scale));
+    font-size: calc(0.85rem * var(--text-scale));
   }
 
 

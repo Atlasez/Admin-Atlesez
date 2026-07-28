@@ -55,16 +55,20 @@ const L =
         reset: "Reset to defaults",
       };
 
+/**
+ * 表示言語。記事本文ではなく画面まわりの文字を切り替える。URL は変わらない。
+ * 今後十数言語に増える想定なので、並べずにドロップダウンで選ばせる。
+ */
+const languageGroup = {
+  key: "lang",
+  label: locale === "ja" ? "言語" : "Language",
+  options: UI_LANGUAGES.map((code) => ({
+    value: code,
+    label: UI_LANGUAGE_NAMES[code],
+  })),
+};
+
 const groups = [
-  {
-    // 記事本文ではなく画面まわりの表示言語。切り替えても URL は変わらない。
-    key: "lang",
-    label: locale === "ja" ? "言語" : "Language",
-    options: UI_LANGUAGES.map((code) => ({
-      value: code,
-      label: UI_LANGUAGE_NAMES[code],
-    })),
-  },
   {
     key: "fontSize",
     label: L.fontSize,
@@ -121,6 +125,16 @@ const groups = [
 {
   bare ? (
     <form class="a11y-form" data-a11y-form>
+      <p class="a11y-lang">
+        <label class="a11y-lang-label" for="a11y-lang-bare">
+          {languageGroup.label}
+        </label>
+        <select id="a11y-lang-bare" name={languageGroup.key}>
+          {languageGroup.options.map((o) => (
+            <option value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </p>
       {groups.map((g) => (
         <fieldset>
           <legend>{g.label}</legend>
@@ -147,6 +161,16 @@ const groups = [
     <details class="a11y-settings">
       <summary>{L.title}</summary>
       <form class="details-body" data-a11y-form>
+        <p class="a11y-lang">
+          <label class="a11y-lang-label" for="a11y-lang">
+            {languageGroup.label}
+          </label>
+          <select id="a11y-lang" name={languageGroup.key}>
+            {languageGroup.options.map((o) => (
+              <option value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </p>
         {groups.map((g) => (
           <fieldset>
             <legend>{g.label}</legend>
@@ -183,6 +207,21 @@ const groups = [
     font-weight: 700;
     color: var(--accent-primary);
     margin-right: var(--space-1);
+  }
+  .a11y-lang {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+  }
+  .a11y-lang-label {
+    margin: 0;
+    font-weight: 600;
+  }
+  .a11y-lang select {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 12rem;
   }
   fieldset {
     border: 0;
@@ -335,6 +374,11 @@ const groups = [
           `input[name="${k}"][value="${v}"]`,
         );
         if (input) input.checked = true;
+        // 言語のようにドロップダウンで選ぶ項目
+        const select = form.querySelector<HTMLSelectElement>(
+          `select[name="${k}"]`,
+        );
+        if (select) select.value = v;
       }
       const syncBackgroundChoice = () => {
         const value = document.documentElement.dataset.prefBg ?? "default";
@@ -371,6 +415,9 @@ const groups = [
           form
             .querySelectorAll<HTMLInputElement>('input[value="default"]')
             .forEach((i) => (i.checked = true));
+          form
+            .querySelectorAll<HTMLSelectElement>("select")
+            .forEach((sel) => (sel.selectedIndex = 0));
           apply({});
           window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
           window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
