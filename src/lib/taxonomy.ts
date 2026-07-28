@@ -8,7 +8,7 @@
 
 import { localizedName, type Locale } from "./i18n";
 
-export const GROUPS = ["humanities", "social", "natural", "applied"] as const;
+export const GROUPS = ["humanities", "social", "natural"] as const;
 export type SubjectGroup = (typeof GROUPS)[number];
 
 interface Labeled {
@@ -20,10 +20,6 @@ export const groupMeta: Record<SubjectGroup, Labeled & { order: number }> = {
   humanities: { name: { ja: "人文科学", en: "Humanities" }, order: 1 },
   social: { name: { ja: "社会科学", en: "Social Sciences" }, order: 2 },
   natural: { name: { ja: "自然科学", en: "Natural Sciences" }, order: 3 },
-  applied: {
-    name: { ja: "応用・学際", en: "Applied and Interdisciplinary" },
-    order: 4,
-  },
 };
 
 /** 中ジャンル（どの大分類に属するかと表示順を持つ） */
@@ -36,70 +32,35 @@ export const genreMeta: Record<
     group: "humanities",
     order: 1,
   },
-  "japanese-classics": {
-    name: { ja: "日本語・古典", en: "Japanese and Classics" },
+  "language-literature": {
+    name: { ja: "言語・文学", en: "Language and Literature" },
     group: "humanities",
     order: 2,
   },
-  "language-science": {
-    name: { ja: "言語科学", en: "Language Science" },
+  "history-thought-culture": {
+    name: { ja: "歴史・思想・文化", en: "History, Thought and Culture" },
     group: "humanities",
     order: 3,
   },
-  "history-archaeology": {
-    name: { ja: "歴史・考古", en: "History and Archaeology" },
-    group: "humanities",
-    order: 4,
-  },
-  thought: {
-    name: { ja: "思想", en: "Thought" },
-    group: "humanities",
-    order: 5,
-  },
   "society-region": {
-    name: { ja: "社会・地域", en: "Society and Regions" },
+    name: { ja: "地域・社会", en: "Regions and Society" },
     group: "social",
     order: 1,
   },
-  "mathematical-science": {
-    name: { ja: "数理科学", en: "Mathematical Sciences" },
+  "mathematics-information": {
+    name: { ja: "数理・情報", en: "Mathematics and Information" },
     group: "natural",
     order: 1,
   },
-  "physical-science": {
-    name: { ja: "物質科学", en: "Physical Sciences" },
+  "matter-space-earth": {
+    name: { ja: "物質・宇宙・地球", en: "Matter, Space and Earth" },
     group: "natural",
     order: 2,
   },
-  "life-science": {
-    name: { ja: "生命科学", en: "Life Sciences" },
+  "life-applied-science": {
+    name: { ja: "生命・応用科学", en: "Life and Applied Sciences" },
     group: "natural",
     order: 3,
-  },
-  "earth-space-science": {
-    name: { ja: "地球・宇宙科学", en: "Earth and Space Sciences" },
-    group: "natural",
-    order: 4,
-  },
-  "information-science": {
-    name: { ja: "情報科学", en: "Information Science" },
-    group: "applied",
-    order: 1,
-  },
-  engineering: {
-    name: { ja: "工学・建築", en: "Engineering and Architecture" },
-    group: "applied",
-    order: 2,
-  },
-  "health-science": {
-    name: { ja: "医療・薬学", en: "Health Sciences" },
-    group: "applied",
-    order: 3,
-  },
-  "resource-industry": {
-    name: { ja: "資源・産業", en: "Resources and Industry" },
-    group: "applied",
-    order: 4,
   },
 };
 

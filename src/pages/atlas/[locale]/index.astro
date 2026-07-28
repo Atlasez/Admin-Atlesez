@@ -146,6 +146,7 @@ const views = [
                 <summary class="group-heading">
                   <h2 id={`group-${group.group}`}>{group.label}</h2>
                 </summary>
+                <div class="genre-columns">
                 {group.genres.map((genre) => (
                   <section
                     class="genre-block"
@@ -196,14 +197,13 @@ const views = [
                                 <span aria-hidden="true">?</span>
                                 <span class="visually-hidden">{infoLabel}</span>
                               </button>
-                            </div>
-                            <p class="subject-status">
+                              {/* 記事数・準備中は行の右端にそろえる */}
                               <span class="subject-count">
                                 {published
                                   ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
                                   : t(locale, "preparing")}
                               </span>
-                            </p>
+                            </div>
                             <p class="subject-desc" id={descId} hidden>
                               {desc}
                             </p>
@@ -213,6 +213,7 @@ const views = [
                     </ul>
                   </section>
                 ))}
+                </div>
               </details>
             ))
           }
@@ -582,7 +583,6 @@ const views = [
     margin: 0;
     font-size: calc(1.1rem * var(--text-scale));
   }
-  .genre-block + .genre-block,
   .list-genre + .list-genre {
     margin-top: var(--space-3);
   }
@@ -594,11 +594,17 @@ const views = [
     letter-spacing: 0.04em;
   }
 
-  /* ---- 分野一覧（タイル） ---- */
-  .subject-grid {
+  /* ---- 分野一覧（タイル） ----
+     大ジャンルの中で中ジャンルを段に分け、各段では分野を
+     「名前 … 記事数」の1行ずつ積む。 */
+  .genre-columns {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-    gap: 0 var(--space-3);
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: var(--space-4) var(--space-5);
+    align-items: start;
+  }
+  .subject-grid {
+    display: block;
     list-style: none;
     margin: 0;
     padding: 0;
@@ -610,8 +616,13 @@ const views = [
   }
   .subject-row {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: var(--space-2);
+  }
+  /* 記事数は行の右端へ */
+  .subject-row .subject-count {
+    margin-left: auto;
+    flex: 0 0 auto;
   }
   /* min-height はWCAG 2.5.8（ターゲットサイズ 24px）を満たすため */
   .subject-name {
@@ -663,7 +674,7 @@ const views = [
     font-weight: 400;
   }
   .subject-desc {
-    margin: var(--space-1) 0 0;
+    margin: var(--space-1) 0 var(--space-1);
     padding-right: var(--space-2);
     color: var(--text-secondary);
     font-size: calc(0.85rem * var(--text-scale));
