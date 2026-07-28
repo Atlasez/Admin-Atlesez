@@ -219,51 +219,81 @@ const groups = [
   @media (max-width: 767px) {
     .a11y-settings,
     .a11y-form {
-      font-size: calc(0.85rem * var(--text-scale));
-    }
-    fieldset {
-      display: block;
-      margin-bottom: var(--space-2);
-    }
-    legend {
-      margin-bottom: var(--space-1);
-      font-size: calc(0.8rem * var(--text-scale));
-      color: var(--text-secondary);
+      font-size: calc(0.82rem * var(--text-scale));
     }
     /*
-     * 指で押す前提の並べ方。小さな丸を狙わせず、選択肢そのものを
-     * 押せる面（チップ）にして横に3つずつ並べる。
+     * 設定は7組あるので、1組あたりの高さを詰めないと画面を埋めてしまう。
+     * ラジオの丸は消して選択肢そのものを押せる面にし、
+     * 見出し・面・組の間の余白を最小限にする。
      */
+    fieldset {
+      display: block;
+      margin: 0 0 var(--space-1);
+    }
+    legend {
+      margin-bottom: 2px;
+      font-size: calc(0.75rem * var(--text-scale));
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
     .a11y-options {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-1);
+      grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+      gap: 4px;
     }
     .a11y-option {
       justify-content: center;
-      gap: 4px;
-      min-height: var(--touch-target);
-      padding: 0 var(--space-1);
+      /* 丸は消して面ごと押させる。高さは 32px（WCAG 2.5.8 の下限 24px 以上） */
+      min-height: 2rem;
+      padding: 0 4px;
       border: 1px solid var(--border-strong);
       border-radius: var(--radius);
       text-align: center;
-      line-height: 1.25;
+      line-height: 1.2;
+      font-weight: 400;
     }
-    /* 選ばれている面をはっきり示す */
     .a11y-option:has(input:checked) {
       border-color: var(--accent-primary);
       background: var(--accent-subtle);
       color: var(--accent-primary);
       font-weight: 700;
     }
-    .a11y-option input {
-      width: 0.9rem;
-      height: 0.9rem;
-      flex: 0 0 auto;
-    }
-    /* 選択肢が2つの組は2列にして横幅を稼ぐ */
+    /* 選択肢が2つの組は横幅を分け合う */
     .a11y-options:has(> :nth-child(2):last-child) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /*
+     * 丸を隠せるのは :has() で選択状態を面に反映できる場合だけ。
+     * 非対応のブラウザでは丸を残さないと、どれを選んでいるか分からなくなる。
+     */
+    @supports selector(:has(*)) {
+      .a11y-option input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      /* キーボード操作でどこにいるか分かるようにする */
+      .a11y-option:has(input:focus-visible) {
+        outline: 3px solid var(--focus-ring);
+        outline-offset: 1px;
+      }
+    }
+    @supports not selector(:has(*)) {
+      .a11y-option input {
+        width: 0.85rem;
+        height: 0.85rem;
+        flex: 0 0 auto;
+      }
+    }
+    /* 「初期設定に戻す」は控えめに、1行に収める */
+    .a11y-form > .button {
+      width: 100%;
+      min-height: 2rem;
+      margin-top: var(--space-1);
+      font-size: calc(0.8rem * var(--text-scale));
     }
   }
 </style>

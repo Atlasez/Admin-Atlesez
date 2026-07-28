@@ -112,30 +112,33 @@ const close = locale === "ja" ? "閉じる" : "Close";
       width: auto;
       max-width: none;
       margin: 0;
-      max-height: 75vh;
+      max-height: 80vh;
       overflow-y: auto;
       border-width: 1px 0 0;
       border-radius: var(--radius) var(--radius) 0 0;
       /* 画面下から出るシート。余白を詰めて 1 画面に収める */
-      padding: var(--space-2) var(--space-3);
+      padding: var(--space-2);
       padding-bottom: max(var(--space-2), env(safe-area-inset-bottom));
       box-shadow: 0 -8px 24px rgb(0 0 0 / 22%);
     }
+    /*
+     * 明暗は「背景」の設定（白／低刺激色／暗色）と重なるので、
+     * 狭い画面ではこのボタンを出さない。設定の行数をひとつ減らせる。
+     */
     .settings-theme {
-      margin-bottom: var(--space-1);
-      padding-bottom: var(--space-1);
+      display: none;
     }
     .settings-close {
       display: block;
       width: 100%;
-      min-height: 2.5rem;
-      margin-top: var(--space-2);
+      min-height: 2.25rem;
+      margin-top: var(--space-1);
       border: 1px solid var(--accent-primary);
       border-radius: var(--radius);
       background: var(--accent-primary);
       color: var(--on-accent);
       font: inherit;
-      font-size: calc(0.9rem * var(--text-scale));
+      font-size: calc(0.85rem * var(--text-scale));
       font-weight: 700;
       cursor: pointer;
     }
