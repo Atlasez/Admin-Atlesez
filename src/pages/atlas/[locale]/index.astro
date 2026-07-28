@@ -7,6 +7,7 @@ import { groupSubjects } from "../../../lib/taxonomy";
 import {
   getPlannedArticles,
   plannedArticleTitle,
+  plannedProgress,
 } from "../../../lib/planned";
 import {
   getPublishedArticles,
@@ -63,6 +64,7 @@ const upcoming = subjects
         categoryNameOf.get(`${s.data.slug}/${item.category}`) ?? item.category,
       href: `${atlasPath(locale, s.data.slug)}${item.category}/`,
       order: item.order,
+      progress: plannedProgress(item),
     })),
   )
   .sort((a, b) => a.order - b.order)
@@ -315,7 +317,14 @@ const views = [
                 {upcoming.map((u) => (
                   <li>
                     <a href={u.href}>{u.title}</a>
-                    <span class="upcoming-category">{u.category}</span>
+                    <span class="upcoming-meta">
+                      {u.progress === "in-progress" && (
+                        <span class="badge badge-accent">
+                          {t(locale, "progressInProgress")}
+                        </span>
+                      )}
+                      <span class="upcoming-category">{u.category}</span>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -783,6 +792,12 @@ const views = [
   }
   .upcoming-list a:hover {
     text-decoration: underline;
+  }
+  .upcoming-meta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-1);
+    flex: 0 0 auto;
   }
   .upcoming-category {
     flex: 0 0 auto;

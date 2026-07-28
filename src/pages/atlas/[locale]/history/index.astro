@@ -12,12 +12,24 @@ export function getStaticPaths() {
   return LOCALES.map((locale) => ({ params: { locale } }));
 }
 
+import { HISTORY_STAGES } from "../../../../lib/history";
+
 const locale = Astro.params.locale as Locale;
 
+/** 段階ID → 表示名。クライアント側の描画に渡す */
+const stageLabelsJson = JSON.stringify(
+  Object.fromEntries(
+    HISTORY_STAGES.map((stage) => [stage.id, t(locale, stage.labelKey)]),
+  ),
+);
+
+/** 絞り込みは段階の配列から作る。段階を足せばここにも自動で並ぶ（進んだ順） */
 const filters = [
   { value: "all", label: t(locale, "filterAll") },
-  { value: "understood", label: t(locale, "stateUnderstood") },
-  { value: "read", label: t(locale, "stateRead") },
+  ...[...HISTORY_STAGES].reverse().map((stage) => ({
+    value: stage.id,
+    label: t(locale, stage.labelKey),
+  })),
 ];
 ---
 
@@ -75,8 +87,7 @@ const filters = [
       class="history-empty"
       data-history-empty
       data-remove-label={t(locale, "remove")}
-      data-label-read={t(locale, "stateRead")}
-      data-label-understood={t(locale, "stateUnderstood")}
+      data-stage-labels={stageLabelsJson}
     >
       {t(locale, "noHistory")}
     </p>
@@ -185,6 +196,7 @@ const filters = [
     removeHistory,
     clearHistory,
     countHistory,
+    HISTORY_STAGES as STAGES,
     type HistoryEntry,
   } from "../../../../lib/history";
 
@@ -199,8 +211,13 @@ const filters = [
   );
 
   const removeLabel = emptyEl?.dataset.removeLabel ?? "Remove";
-  const labelRead = emptyEl?.dataset.labelRead ?? "Read";
-  const labelUnderstood = emptyEl?.dataset.labelUnderstood ?? "Understood";
+  const stageLabels: Record<string, string> = (() => {
+    try {
+      return JSON.parse(emptyEl?.dataset.stageLabels ?? "{}");
+    } catch {
+      return {};
+    }
+  })();
   const ja = document.documentElement.lang === "ja";
 
   function currentFilter(): string {
@@ -223,12 +240,15 @@ const filters = [
     const counts = countHistory(all);
 
     if (countsEl) {
-      countsEl.textContent =
-        all.length === 0
-          ? ""
-          : ja
-            ? `${labelUnderstood} ${counts.understood}件 ・ ${labelRead} ${counts.read}件`
-            : `${counts.understood} ${labelUnderstood.toLowerCase()} · ${counts.read} ${labelRead.toLowerCase()}`;
+      // 段階ごとの件数を進んだ順に並べる。段階が増えても自動で追随する
+      const parts = [...STAGES]
+        .reverse()
+        .map((stage) => {
+          const label = stageLabels[stage.id] ?? stage.id;
+          const n = counts.byStage[stage.id] ?? 0;
+          return ja ? `${label} ${n}件` : `${n} ${label.toLowerCase()}`;
+        });
+      countsEl.textContent = all.length === 0 ? "" : parts.join(ja ? " ・ " : " · ");
     }
     if (clearBtn) clearBtn.hidden = all.length === 0;
     if (filtersEl) filtersEl.hidden = all.length === 0;
@@ -269,11 +289,11 @@ const filters = [
 
     const state = document.createElement("span");
     state.className =
-      entry.state === "understood"
+      // 最後の段階に達していれば強調する
+      entry.state === STAGES[STAGES.length - 1]?.id
         ? "history-state is-understood"
         : "history-state";
-    state.textContent =
-      entry.state === "understood" ? labelUnderstood : labelRead;
+    state.textContent = stageLabels[entry.state] ?? entry.state;
 
     const meta = document.createElement("p");
     meta.className = "history-meta";

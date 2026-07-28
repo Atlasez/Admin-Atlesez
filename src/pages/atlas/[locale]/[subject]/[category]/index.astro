@@ -17,6 +17,7 @@ import {
 } from "../../../../../lib/content";
 import {
   getPlannedArticles,
+  plannedProgress,
   plannedArticleTitle,
 } from "../../../../../lib/planned";
 
@@ -156,7 +157,21 @@ const items = articles.map((a) => ({
             class="article-item card planned-article"
             data-title={plannedArticleTitle(item, locale)}
           >
-            <p class="article-status">{t(locale, "preparing")}</p>
+            <p class="article-status">
+              {t(locale, "preparing")}
+              <span
+                class:list={[
+                  "badge",
+                  {
+                    "badge-accent": plannedProgress(item) === "in-progress",
+                  },
+                ]}
+              >
+                {plannedProgress(item) === "in-progress"
+                  ? t(locale, "progressInProgress")
+                  : t(locale, "progressNotStarted")}
+              </span>
+            </p>
             <h2 class="article-title">{plannedArticleTitle(item, locale)}</h2>
             <p class="article-summary">
               {locale === "ja"
@@ -217,6 +232,9 @@ const items = articles.map((a) => ({
     background: var(--background-secondary);
   }
   .article-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     margin: 0;
     color: var(--accent-primary);
     font-size: calc(0.82rem * var(--text-scale));

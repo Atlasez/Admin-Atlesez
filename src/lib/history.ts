@@ -1,15 +1,40 @@
 /**
- * 学習履歴（読んだ・理解した）のクライアント側ユーティリティ。
+ * 学習履歴のクライアント側ユーティリティ。
  *
  * 「あとで読む」（bookmarks.ts）が“これから読むもの”を溜めるのに対し、
- * こちらは“もう読んだ・理解したもの”を記録する。データはこの端末のブラウザ内
+ * こちらは“どこまで進んだか”を記録する。データはこの端末のブラウザ内
  * （localStorage）にのみ保存され、サーバーには送信されない。
  *
- * 状態は read（読んだ）→ understood（理解した）の2段階。
- * 「理解した」は「読んだ」を含むものとして扱い、1記事につき1エントリだけ持つ。
+ * 段階は下の HISTORY_STAGES の並び順で表す。**後ろの段階は前の段階を含む**
+ * （「理解した」なら「読んだ」も達成済み）。保存するのは到達した段階ひとつだけで、
+ * それより手前が達成済みかどうかは順番から導く。
+ *
+ * 段階を増やすときは HISTORY_STAGES に足すだけでよい。
+ * 例:「とりあえず目を通した → しっかり読んだ → 他人に説明できる」
+ * 画面・集計・保存のいずれも配列を見て動くので、他を触る必要はない。
  */
 
-export type HistoryState = "read" | "understood";
+/** 進み具合の段階。手前から順に並べる。id は保存値なので後から変えない。 */
+export const HISTORY_STAGES = [
+  { id: "read", labelKey: "markRead", icon: "✓" },
+  { id: "understood", labelKey: "markUnderstood", icon: "◎" },
+] as const;
+
+export type HistoryState = (typeof HISTORY_STAGES)[number]["id"];
+
+/** 段階の並び順。未記録は -1。 */
+export function historyRank(state: HistoryState | null): number {
+  if (!state) return -1;
+  return HISTORY_STAGES.findIndex((s) => s.id === state);
+}
+
+/** その段階に到達しているか（後ろの段階を選べば手前も達成済み） */
+export function hasReached(
+  current: HistoryState | null,
+  stage: HistoryState,
+): boolean {
+  return historyRank(current) >= historyRank(stage);
+}
 
 export interface HistoryEntry {
   articleId: string;
@@ -87,17 +112,25 @@ export function clearHistory(): void {
   save([]);
 }
 
-/** 状態ごとの件数（一覧ページの見出しに使う） */
+/**
+ * 段階ごとの件数（一覧ページの見出しに使う）。
+ * 「その段階ちょうど」の件数を数える。段階を増やしても自動で追随する。
+ */
 export function countHistory(entries: HistoryEntry[] = loadHistory()): {
+  byStage: Record<string, number>;
   read: number;
   understood: number;
   total: number;
 } {
-  let read = 0;
-  let understood = 0;
+  const byStage: Record<string, number> = {};
+  for (const stage of HISTORY_STAGES) byStage[stage.id] = 0;
   for (const e of entries) {
-    if (e.state === "understood") understood += 1;
-    else read += 1;
+    if (byStage[e.state] !== undefined) byStage[e.state] += 1;
   }
-  return { read, understood, total: read + understood };
+  return {
+    byStage,
+    read: byStage.read ?? 0,
+    understood: byStage.understood ?? 0,
+    total: entries.length,
+  };
 }

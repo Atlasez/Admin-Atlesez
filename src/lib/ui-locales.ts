@@ -218,6 +218,8 @@ export const UI_DICTIONARY: Record<
 
   // --- 一覧・状態 ---
   準備中: { en: "In preparation", zh: "准备中", ko: "준비 중" },
+  執筆中: { en: "In progress", zh: "撰写中", ko: "집필 중" },
+  未着手: { en: "Not started", zh: "未开始", ko: "미착수" },
   "前提知識:": {
     en: "Prerequisites:",
     zh: "前置知识:",
