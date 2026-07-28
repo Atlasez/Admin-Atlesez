@@ -171,20 +171,29 @@ const currentPath = Astro.url.pathname;
     gap: var(--space-3);
     padding-block: var(--space-1);
   }
-  .main-nav {
-    min-width: 0;
+  /* 広い画面の並び: ロゴ → 検索 → 行き先 → 表示設定。
+     DOM上は nav が先だが、検索をロゴの隣に見せるため order で入れ替える。
+     狭い画面の並びは後段のメディアクエリで上書きする。 */
+  .atlas-logo {
+    order: 0;
   }
   .atlas-bar-search {
-    /* 広い画面では余った幅を検索欄に回し、右端に寄せる */
-    flex: 1 1 12rem;
+    order: 1;
+    flex: 0 1 20rem;
     min-width: 0;
-    margin-left: auto;
+  }
+  .main-nav {
+    order: 2;
+    min-width: 0;
   }
   .atlas-bar-actions {
+    order: 3;
     display: flex;
     align-items: center;
     gap: var(--space-2);
     flex: 0 0 auto;
+    /* 表示設定だけ右端に寄せる */
+    margin-left: auto;
   }
   .atlas-logo {
     display: inline-flex;
@@ -286,11 +295,11 @@ const currentPath = Astro.url.pathname;
     }
     .atlas-bar-actions {
       order: 2;
+      margin-left: 0;
     }
     .atlas-bar-search {
       order: 3;
       flex: 0 0 100%;
-      margin-left: 0;
       padding-bottom: var(--space-1);
     }
     .main-nav {
