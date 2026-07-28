@@ -52,16 +52,30 @@ describe("学習の記録: 段階", () => {
     expect(hasReached(null, "read")).toBe(false);
   });
 
-  it("段階を選ぶと保存され、同じ段階をもう一度選ぶと取り消される", () => {
-    expect(toggleHistory(entry, "read")).toBe("read");
-    expect(historyStateOf(entry.articleId)).toBe("read");
-
+  it("上の段階を入れると下の段階も入る", () => {
+    // いきなり「理解した」を入れても「読んだ」は達成済みになる
     expect(toggleHistory(entry, "understood")).toBe("understood");
-    expect(historyStateOf(entry.articleId)).toBe("understood");
+    expect(hasReached(historyStateOf(entry.articleId), "read")).toBe(true);
     // 1記事につき1件しか持たない
     expect(loadHistory()).toHaveLength(1);
+  });
 
-    expect(toggleHistory(entry, "understood")).toBeNull();
+  it("上の段階を切っても下の段階は残る", () => {
+    toggleHistory(entry, "understood");
+    expect(toggleHistory(entry, "understood")).toBe("read");
+    expect(historyStateOf(entry.articleId)).toBe("read");
+  });
+
+  it("下の段階を切ると上の段階も切れる", () => {
+    toggleHistory(entry, "understood");
+    expect(toggleHistory(entry, "read")).toBeNull();
+    expect(historyStateOf(entry.articleId)).toBeNull();
+    expect(loadHistory()).toHaveLength(0);
+  });
+
+  it("一番下の段階を入れて切ると未記録に戻る", () => {
+    expect(toggleHistory(entry, "read")).toBe("read");
+    expect(toggleHistory(entry, "read")).toBeNull();
     expect(historyStateOf(entry.articleId)).toBeNull();
   });
 

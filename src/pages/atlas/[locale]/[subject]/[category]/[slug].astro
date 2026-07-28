@@ -251,9 +251,8 @@ const structuredData = {
                   data-stage-index={index}
                   aria-pressed="false"
                 >
-                  <span class="history-step-icon" aria-hidden="true">
-                    {stage.icon}
-                  </span>
+                  {/* チェック枠。入っていれば ✓ が出る */}
+                  <span class="history-check" aria-hidden="true" />
                   <span>{t(locale, stage.labelKey)}</span>
                 </button>
               ))}
@@ -490,49 +489,61 @@ const structuredData = {
     font-size: calc(0.82rem * var(--text-scale));
   }
   /*
-   * 進み具合の段階。左から右へ進み、後ろを選ぶと手前も達成済みになる。
-   * 段階が増えても等幅で並ぶよう、列数は個数から自動で決める。
+   * 学習の記録。段階ごとに独立したスイッチとして押せるが、
+   * 上の段階は下の段階を含むので連動する（「理解した」を入れると
+   * 「読んだ」も入る）。段階が増えても横に並ぶだけ。
    */
   .history-steps {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-    border: 1px solid var(--accent-primary);
-    border-radius: var(--radius);
-    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
   .history-step {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-1);
+    gap: var(--space-2);
     min-height: var(--touch-target);
     padding: 0 var(--space-3);
-    border: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     background: transparent;
-    color: var(--accent-primary);
+    color: var(--text-primary);
     font: inherit;
     font-size: calc(0.88rem * var(--text-scale));
     cursor: pointer;
   }
-  /* 段階の切れ目 */
-  .history-step + .history-step {
-    border-left: 1px solid var(--accent-primary);
+  /* チェック枠。入っていれば ✓ を出す */
+  .history-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: var(--background-primary);
+    font-size: 0.85rem;
+    line-height: 1;
   }
   .history-step:hover {
-    background: var(--accent-subtle);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
-  /* 到達済みの段階はすべて塗る */
+  /* 入っている段階 */
   .history-step.is-reached {
+    border-color: var(--accent-primary);
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .history-step.is-reached .history-check {
+    border-color: var(--accent-primary);
     background: var(--accent-primary);
     color: var(--on-accent);
   }
-  /* いま選ばれている段階（＝現在地）だけ太字にして区別する */
-  .history-step.is-current {
-    font-weight: 700;
-  }
-  .history-step.is-current .history-step-icon::after {
-    content: "";
+  .history-step.is-reached .history-check::after {
+    content: "✓";
   }
 
   .back-to-toc {
@@ -858,17 +869,16 @@ const structuredData = {
       ...actions.querySelectorAll<HTMLButtonElement>("[data-history-toggle]"),
     ];
     /**
-     * 後ろの段階は前の段階を含むので、到達済みの段階はすべて塗る。
-     * いま選ばれている段階だけ「現在地」として強調する。
+     * 上の段階は下の段階を含むので、到達段階までのスイッチをすべて入れる。
+     * 押したときの連動は toggleHistory 側が担う。
      */
     const renderHistory = (state: HistoryState | null) => {
       const reached = historyRank(state);
       for (const button of historyButtons) {
         const index = Number(button.dataset.stageIndex ?? -1);
-        const isCurrent = button.dataset.historyToggle === state;
-        button.setAttribute("aria-pressed", String(index <= reached));
-        button.classList.toggle("is-reached", index <= reached);
-        button.classList.toggle("is-current", isCurrent);
+        const on = index <= reached;
+        button.setAttribute("aria-pressed", String(on));
+        button.classList.toggle("is-reached", on);
       }
     };
 

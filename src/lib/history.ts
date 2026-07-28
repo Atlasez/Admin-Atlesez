@@ -79,27 +79,46 @@ export function historyStateOf(articleId: string): HistoryState | null {
 }
 
 /**
- * 状態を切り替える。同じ状態をもう一度押すと取り消す。
- * 戻り値は切り替え後の状態（取り消した場合は null）。
+ * 段階のスイッチを切り替える。段階どうしは独立して押せるが、
+ * 上の段階は下の段階を含むので連動する。
+ *
+ *   入っていない段階を入れる → その段階までまとめて入る
+ *     （「理解した」を入れると「読んだ」も入る）
+ *   入っている段階を切る     → その段階から上をまとめて切る
+ *     （「読んだ」を切ると「理解した」も切れる）
+ *
+ * 保存するのは到達した段階ひとつだけで、下が入っているかは順番から導く。
+ * 戻り値は切り替え後の到達段階（すべて切れたら null）。
  */
 export function toggleHistory(
   entry: Omit<HistoryEntry, "state" | "updatedAt">,
-  state: HistoryState,
+  stage: HistoryState,
 ): HistoryState | null {
   const list = loadHistory();
   const index = list.findIndex((e) => e.articleId === entry.articleId);
+  const current = index >= 0 ? list[index].state : null;
 
-  if (index >= 0 && list[index].state === state) {
-    list.splice(index, 1);
+  // いま入っているなら、その1つ下まで戻す（＝この段階から上を切る）
+  const targetRank = hasReached(current, stage)
+    ? historyRank(stage) - 1
+    : historyRank(stage);
+  const nextState = targetRank < 0 ? null : HISTORY_STAGES[targetRank].id;
+
+  if (nextState === null) {
+    if (index >= 0) list.splice(index, 1);
     save(list);
     return null;
   }
 
-  const next: HistoryEntry = { ...entry, state, updatedAt: Date.now() };
+  const next: HistoryEntry = {
+    ...entry,
+    state: nextState,
+    updatedAt: Date.now(),
+  };
   if (index >= 0) list[index] = next;
   else list.push(next);
   save(list);
-  return state;
+  return nextState;
 }
 
 export function removeHistory(articleId: string): HistoryEntry[] {
