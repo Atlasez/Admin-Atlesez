@@ -90,15 +90,16 @@ const currentPath = Astro.url.pathname;
         >
           {locale === "ja" ? "メニュー" : "Menu"}
         </button>
-        {/* 狭い画面ではここごと畳む。検索と表示設定はnavの外に出しておく */}
-        <div class="atlas-bar-collapse" id="atlas-main-nav" data-main-nav>
-          <nav
-            class="main-nav"
-            aria-label={locale === "ja"
-              ? "メインナビゲーション"
-              : "Main navigation"}
-          >
-            <ul class="atlas-nav">
+        {/* 狭い画面で畳むのはここだけ。検索と表示設定は常に出したままにする */}
+        <nav
+          class="main-nav"
+          id="atlas-main-nav"
+          data-main-nav
+          aria-label={locale === "ja"
+            ? "メインナビゲーション"
+            : "Main navigation"}
+        >
+          <ul class="atlas-nav">
             {
               nav.map((item) => (
                 <li>
@@ -119,13 +120,14 @@ const currentPath = Astro.url.pathname;
                 {guide.label}
               </a>
             </li>
-            </ul>
-          </nav>
-          <div class="atlas-bar-tools">
-            <HeaderSearch locale={locale} />
-            <SettingsMenu locale={locale} />
-            <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
-          </div>
+          </ul>
+        </nav>
+        <div class="atlas-bar-search">
+          <HeaderSearch locale={locale} />
+        </div>
+        <div class="atlas-bar-actions">
+          <SettingsMenu locale={locale} />
+          <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
         </div>
       </div>
     </header>
@@ -169,21 +171,20 @@ const currentPath = Astro.url.pathname;
     gap: var(--space-3);
     padding-block: var(--space-1);
   }
-  .atlas-bar-collapse {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex: 1 1 auto;
-    min-width: 0;
-  }
   .main-nav {
     min-width: 0;
   }
-  .atlas-bar-tools {
+  .atlas-bar-search {
+    /* 広い画面では余った幅を検索欄に回し、右端に寄せる */
+    flex: 1 1 12rem;
+    min-width: 0;
+    margin-left: auto;
+  }
+  .atlas-bar-actions {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    margin-left: auto;
+    flex: 0 0 auto;
   }
   .atlas-logo {
     display: inline-flex;
@@ -265,30 +266,42 @@ const currentPath = Astro.url.pathname;
     margin-top: var(--space-4);
     color: var(--text-secondary);
   }
-  /* 画面が狭いときは1段に収まらないので、ロゴと「メニュー」だけ出して畳む */
+  /* 狭い画面では1段に収まらないので2段に折る。
+     1段目: ロゴ・メニュー・表示設定 / 2段目: 検索欄（横幅いっぱい）
+     行き先のリンクだけを「メニュー」で開閉する。 */
   @media (max-width: 900px) {
     .atlas-bar {
       gap: var(--space-2);
       flex-wrap: wrap;
+      row-gap: var(--space-1);
     }
     .atlas-logo {
+      order: 0;
       margin-right: auto;
     }
     .nav-toggle {
+      order: 1;
       display: inline-flex;
       margin-left: 0;
     }
-    .atlas-bar-collapse {
+    .atlas-bar-actions {
+      order: 2;
+    }
+    .atlas-bar-search {
+      order: 3;
+      flex: 0 0 100%;
+      margin-left: 0;
+      padding-bottom: var(--space-1);
+    }
+    .main-nav {
+      order: 4;
       display: none;
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-1);
       width: 100%;
       padding-block: var(--space-1);
       border-top: 1px solid var(--border-default);
     }
-    .atlas-bar-collapse[data-open] {
-      display: flex;
+    .main-nav[data-open] {
+      display: block;
     }
     .atlas-nav {
       display: grid;

@@ -79,10 +79,9 @@ const action = atlasPath(locale, "search");
   .header-search-button:hover {
     filter: brightness(1.1);
   }
-  @media (max-width: 767px) {
+  /* 狭い画面ではヘッダー2段目を丸ごと使う */
+  @media (max-width: 900px) {
     .header-search {
-      order: 4;
-      flex-basis: 100%;
       max-width: none;
     }
   }
