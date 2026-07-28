@@ -31,20 +31,24 @@ for (const a of articles) {
 }
 
 /**
- * 「〇〇とは」の飛び先。
- * 本来は分野の総論記事に飛ばしたいが、まだ無いので暫定でその分野の
- * 先頭記事に飛ばす。総論記事ができたらここを差し替える。
+ * 「〇〇とは」の飛び先。分野定義の introSlug が指す総論記事を引く。
+ * introSlug が未設定の分野、または記事がまだ無い分野では ? を出さない。
  */
 const introArticleOf = new Map<string, string>();
-for (const a of [...articles].sort((x, y) =>
-  `${x.data.category}/${x.data.slug}`.localeCompare(
-    `${y.data.category}/${y.data.slug}`,
-  ),
-)) {
-  if (introArticleOf.has(a.data.subject)) continue;
+for (const s of subjects) {
+  if (!s.data.introSlug) continue;
+  const article = articles.find(
+    (a) => a.data.subject === s.data.slug && a.data.slug === s.data.introSlug,
+  );
+  if (!article) continue;
   introArticleOf.set(
-    a.data.subject,
-    articlePath(locale, a.data.subject, a.data.category, a.data.slug),
+    s.data.slug,
+    articlePath(
+      locale,
+      article.data.subject,
+      article.data.category,
+      article.data.slug,
+    ),
   );
 }
 

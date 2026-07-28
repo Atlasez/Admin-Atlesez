@@ -37,6 +37,8 @@ const subjects = defineCollection({
     genre: slugSchema,
     /** 段階移行中: 現行Google Sitesへの一時リンク */
     externalUrl: z.url().optional(),
+    /** 分野の総論記事（「〇〇とは」）のslug。トップページの ? の飛び先になる */
+    introSlug: slugSchema.optional(),
     categories: z
       .array(
         z.object({

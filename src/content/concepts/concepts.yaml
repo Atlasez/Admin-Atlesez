@@ -1400,3 +1400,73 @@
   recommendedNext: []
   related: [biology.cell-biology.cell-division]
   alternatives: []
+
+# ---------- 各分野の総論 ----------
+- id: kanji.overview.what-is-kanji
+  subject: kanji
+  category: overview
+  name: { ja: 漢字とは, en: What is Kanji? }
+  recommendedNext:
+    [
+      kanji.supernatural-religion.mythical-creatures,
+      kanji.nature.sky,
+      kanji.society.relationships-family,
+      kanji.daily-life.flags-banners,
+      kanji.culture.musical-instruments,
+      kanji.human-body.body-torso,
+      kanji.vocabulary.containers,
+    ]
+- id: kobun.overview.what-is-kobun
+  subject: kobun
+  category: overview
+  name: { ja: 古文とは, en: What is Classical Japanese? }
+  recommendedNext:
+    [kobun.classical-literature.tale-of-the-bamboo-cutter-overview]
+- id: math.overview.what-is-mathematics
+  subject: mathematics
+  category: overview
+  name: { ja: 数学とは, en: What is Mathematics? }
+  recommendedNext:
+    [
+      math.set-theory.sets,
+      math.group-theory.group-definition,
+      math.linear-algebra.vector-space,
+      math.ring-theory.ring-definition,
+      math.module-theory.modules,
+    ]
+- id: physics.overview.what-is-physics
+  subject: physics
+  category: overview
+  name: { ja: 物理学とは, en: What is Physics? }
+  recommendedNext:
+    [
+      physics.foundations.physical-quantities,
+      physics.newtonian-mechanics.principles-of-newtonian-mechanics,
+      physics.oscillations.massive-spring,
+    ]
+- id: chem.overview.what-is-chemistry
+  subject: chemistry
+  category: overview
+  name: { ja: 化学とは, en: What is Chemistry? }
+  recommendedNext:
+    [
+      chem.matter.composition-of-matter,
+      chem.atomic-structure.atomic-structure,
+      chem.chemical-bonding.chemical-bonds-intermolecular-forces,
+      chem.chemical-reactions.chemical-equations,
+    ]
+- id: astronomy.overview.what-is-astronomy
+  subject: astronomy
+  category: overview
+  name: { ja: 天文学とは, en: What is Astronomy? }
+  recommendedNext: [astronomy.stellar-astronomy.stars]
+- id: biology.overview.what-is-biology
+  subject: biology
+  category: overview
+  name: { ja: 生物学とは, en: What is Biology? }
+  recommendedNext:
+    [
+      biology.biochemistry.fatty-acids-lipids,
+      biology.cell-biology.cell-organelles,
+      biology.plant-physiology.auxin,
+    ]

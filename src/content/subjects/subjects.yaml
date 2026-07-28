@@ -5,6 +5,7 @@
   name: { ja: 漢字, en: Kanji }
   status: published
   order: 1
+  introSlug: what-is-kanji
   group: humanities
   genre: language-learning
   description:
@@ -12,6 +13,12 @@
     en: Learn the origins, readings and usage of kanji.
   externalUrl: https://sites.google.com/view/atlas-kanji
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [kanji.overview.what-is-kanji]
+      relatedCategoryIds: []
     - id: supernatural-religion
       slug: supernatural-religion
       name: { ja: 超自然・宗教, en: Supernatural and Religion }
@@ -59,6 +66,7 @@
   name: { ja: 古文, en: Classical Japanese }
   status: published
   order: 2
+  introSlug: what-is-kobun
   group: humanities
   genre: language-learning
   description:
@@ -66,6 +74,12 @@
     en: Classical Japanese grammar and reading.
   externalUrl: https://sites.google.com/view/atlas-kobun
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [kobun.overview.what-is-kobun]
+      relatedCategoryIds: []
     - id: classical-literature
       slug: classical-literature
       name: { ja: 古典作品, en: Classical Literature }
@@ -138,12 +152,19 @@
   name: { ja: 数学, en: Mathematics }
   status: published
   order: 9
+  introSlug: what-is-mathematics
   group: natural
   genre: mathematics-information
   description:
     ja: 集合論から代数学・線形代数まで、定義と証明を大切にしながら一歩ずつ学ぶ。
     en: From set theory to algebra and linear algebra, step by step with rigorous definitions.
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [math.overview.what-is-mathematics]
+      relatedCategoryIds: []
     - id: set-theory
       slug: set-theory
       name: { ja: 集合論, en: Set Theory }
@@ -179,6 +200,7 @@
   name: { ja: 物理, en: Physics }
   status: published
   order: 10
+  introSlug: what-is-physics
   group: natural
   genre: matter-space-earth
   description:
@@ -186,6 +208,12 @@
     en: From mechanics to modern physics.
   externalUrl: https://sites.google.com/view/atlas-physics
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [physics.overview.what-is-physics]
+      relatedCategoryIds: []
     - id: foundations
       slug: foundations
       name: { ja: 物理の基礎, en: Foundations of Physics }
@@ -247,12 +275,19 @@
   name: { ja: 化学, en: Chemistry }
   status: published
   order: 11
+  introSlug: what-is-chemistry
   group: natural
   genre: matter-space-earth
   description:
     ja: 物質の構成から反応まで、ミクロな視点で世界を理解する。
     en: Understanding the world at the molecular level, from matter to reactions.
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [chem.overview.what-is-chemistry]
+      relatedCategoryIds: []
     - id: matter
       slug: matter
       name: { ja: 物質の構成と状態, en: Matter and Its States }
@@ -314,6 +349,7 @@
   name: { ja: 天文, en: Astronomy }
   status: published
   order: 15
+  introSlug: what-is-astronomy
   group: natural
   genre: matter-space-earth
   description:
@@ -321,6 +357,12 @@
     en: The structure and evolution of the universe.
   externalUrl: https://sites.google.com/view/atlas-astronomy
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [astronomy.overview.what-is-astronomy]
+      relatedCategoryIds: []
     - id: stellar-astronomy
       slug: stellar-astronomy
       name: { ja: 恒星, en: Stellar Astronomy }
@@ -332,6 +374,7 @@
   name: { ja: 生物, en: Biology }
   status: published
   order: 16
+  introSlug: what-is-biology
   group: natural
   genre: life-applied-science
   description:
@@ -339,6 +382,12 @@
     en: Life from molecules to ecosystems.
   externalUrl: https://sites.google.com/view/atlas-biology
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [biology.overview.what-is-biology]
+      relatedCategoryIds: []
     - id: biochemistry
       slug: biochemistry
       name: { ja: 生化学, en: Biochemistry }
