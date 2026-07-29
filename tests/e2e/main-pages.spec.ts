@@ -97,6 +97,25 @@ test.describe("学習サイト", () => {
     await expect(page.getByText("事前演習（準備中）")).toHaveCount(0);
   });
 
+  test("読んだ・理解したは連動するトグルスイッチ", async ({ page }) => {
+    await page.goto("atlas/ja/biology/overview/what-is-biology/");
+    const read = page.getByRole("switch", { name: "読んだ" });
+    const understood = page.getByRole("switch", { name: "理解した" });
+
+    await expect(read).toHaveAttribute("aria-checked", "false");
+    await expect(understood).toHaveAttribute("aria-checked", "false");
+
+    // 上の段階をオンにすると、手前の段階もオンになる
+    await understood.click();
+    await expect(read).toHaveAttribute("aria-checked", "true");
+    await expect(understood).toHaveAttribute("aria-checked", "true");
+
+    // 手前の段階をオフにすると、上の段階もオフになる
+    await read.click();
+    await expect(read).toHaveAttribute("aria-checked", "false");
+    await expect(understood).toHaveAttribute("aria-checked", "false");
+  });
+
   test("グリッド／リスト表示を切り替えられる", async ({ page }) => {
     await page.goto("atlas/ja/mathematics/set-theory/");
     const list = page.locator(".article-collection");
