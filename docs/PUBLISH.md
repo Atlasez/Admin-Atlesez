@@ -8,7 +8,7 @@
 ## 1. push する
 
 ```bash
-cd ~/Downloads/atlasez-web-main
+cd <このリポジトリをcloneした場所>
 git push
 ```
 

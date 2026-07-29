@@ -59,10 +59,13 @@ ID の接頭辞は分野スラッグと一致しないものがあります（�
 - 詳細で点線の枠になっている項目は別カテゴリのもの。ダブルクリックで移動します
 - 表示状態は URL に残ります（`?category=chemistry/matter`）
 
-グラフは表示手段の 1 つで、同じ情報を**リスト表示・表形式・学習ルート検索**からも
-たどれます。JavaScript が動かない環境ではこちらだけが表示されます。
+グラフは表示手段の1つです。地図の枠内に学習ルート検索があり、総合ホームには
+独立したリスト表示があります。以前地図内にあったリスト表示・表形式は、横幅と
+HTML容量を使うため削除しました。JavaScriptが動かない環境では、総合ホームの
+リスト表示へ案内します。
 
-実装は `src/pages/atlas/[locale]/map/index.astro`、
+実装は `src/components/LearningMap.astro`（総合ホームと地図ページで共用）、
+ページは`src/pages/atlas/[locale]/map/index.astro`、
 グラフデータの配信は `src/pages/atlas/graph.json.ts` です。
 
 ---
