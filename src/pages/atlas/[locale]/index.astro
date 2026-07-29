@@ -473,10 +473,9 @@ const views = [
     align-items: start;
   }
   /* 地図とリストは横幅を使いたいので、右カラムを下に回す */
-  .content-columns[data-active-view="map"],
-  .content-columns[data-active-view="list"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  /* 「近日公開予定」「最近更新された記事」は、どの表示でも同じ位置に置く。
+     タブを切り替えるたびに右カラムが消えると視線の置き場が変わるため。
+     地図で横幅が欲しいときは枠内の全画面ボタンを使う。 */
   .home-main {
     min-width: 0;
   }
@@ -860,6 +859,13 @@ const views = [
        文字を小さくしすぎずに指で押せる幅を確保するため。 */
     .view-tabs {
       width: 100%;
+      /* 記事数の行が下に回るため、下線はタブ列自身に持たせる。
+         view-bar 側に置くと記事数の下に線が来て、タブの隙間から
+         線が途切れて見えてしまう。 */
+      border-bottom: 2px solid var(--accent-primary);
+    }
+    .view-bar {
+      border-bottom: 0;
     }
     .view-tab {
       flex: 1 1 0;
@@ -867,6 +873,8 @@ const views = [
     }
     .section-meta {
       width: 100%;
+      padding-top: var(--space-2);
+      padding-bottom: 0;
     }
     /* カテゴリの内訳は狭い画面では1列に落とす */
     .category-list {

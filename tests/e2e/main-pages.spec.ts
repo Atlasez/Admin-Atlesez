@@ -98,21 +98,23 @@ test.describe("学習サイト", () => {
     await expect(list).toHaveAttribute("data-view", "list");
   });
 
-  test("学習地図の代替表示（リスト・表・経路フォーム）がJSなしでも存在する", async ({
-    page,
-  }) => {
+  test("経路検索は地図の枠内のボタンから開く", async ({ page }) => {
     await page.goto("atlas/ja/map/");
-    await expect(
-      page.getByText("リスト表示（グラフの代替）", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText("表形式", { exact: true })).toBeVisible();
+    const open = page.getByRole("button", { name: "学習ルート検索" });
+    // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す
+    await expect(page.getByLabel(/目的地点/)).not.toBeVisible();
+    await open.click();
     await expect(page.getByLabel(/目的地点/)).toBeVisible();
+    await expect(open).toHaveAttribute("aria-expanded", "true");
+    await page.keyboard.press("Escape");
+    await expect(page.getByLabel(/目的地点/)).not.toBeVisible();
   });
 
   test("学習ルートを計算できる（線形空間→ジョルダン標準形）", async ({
     page,
   }) => {
     await page.goto("atlas/ja/map/");
+    await page.getByRole("button", { name: "学習ルート検索" }).click();
     await page.locator("[data-route-subject]").selectOption({ label: "数学" });
     await page.getByLabel(/開始地点/).selectOption({ label: "線形空間" });
     await page
@@ -140,19 +142,16 @@ test.describe("学習サイト", () => {
     await expect(page.locator("[data-search-count]")).toContainText("件の記事");
   });
 
-  test("スマートフォンではメニューを開いて移動できる", async ({ page }) => {
+  test("スマートフォンでも行き先が畳まれずに出ている", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("atlas/ja/");
-    const menu = page.getByRole("button", { name: "メニュー" });
     const mainNav = page.locator("#atlas-main-nav");
-    await expect(menu).toBeVisible();
-    await expect(
-      mainNav.getByRole("link", { name: "学習リスト" }),
-    ).not.toBeVisible();
-    await menu.click();
-    await expect(
-      mainNav.getByRole("link", { name: "学習リスト" }),
-    ).toBeVisible();
+    // メニューで畳まず、3つの行き先と検索欄を最初から見せる
+    for (const name of ["分野", "学習リスト", "はじめての方へ"]) {
+      await expect(mainNav.getByRole("link", { name })).toBeVisible();
+    }
+    await expect(page.locator("#header-search-input")).toBeVisible();
+    await expect(page.getByRole("button", { name: "メニュー" })).toHaveCount(0);
   });
 
   test("表示設定が保存される", async ({ page }) => {

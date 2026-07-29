@@ -79,10 +79,15 @@ const action = atlasPath(locale, "search");
   .header-search-button:hover {
     filter: brightness(1.1);
   }
-  /* 狭い画面ではヘッダー2段目を丸ごと使う */
+  /* 狭い画面ではヘッダーの1行を丸ごと使う。
+     入力欄は 16px を下限にする（iOS Safari が 16px 未満で自動拡大するため。
+     base.css の要素指定はクラス指定に負けるので、ここで明示する）。 */
   @media (max-width: 900px) {
     .header-search {
       max-width: none;
+    }
+    .header-search-input {
+      font-size: max(16px, calc(0.9rem * var(--text-scale)));
     }
   }
 </style>

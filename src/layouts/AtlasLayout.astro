@@ -81,20 +81,9 @@ const currentPath = Astro.url.pathname;
           />
           <span>{locale === "ja" ? "アトラス" : "Atlas"}</span>
         </a>
-        <button
-          class="nav-toggle button button-secondary"
-          type="button"
-          aria-controls="atlas-main-nav"
-          aria-expanded="false"
-          data-nav-toggle
-        >
-          {locale === "ja" ? "メニュー" : "Menu"}
-        </button>
-        {/* 狭い画面で畳むのはここだけ。検索と表示設定は常に出したままにする */}
         <nav
           class="main-nav"
           id="atlas-main-nav"
-          data-main-nav
           aria-label={locale === "ja"
             ? "メインナビゲーション"
             : "Main navigation"}
@@ -213,10 +202,6 @@ const currentPath = Astro.url.pathname;
     margin: 0;
     padding: 0;
   }
-  .nav-toggle {
-    display: none;
-    margin-left: auto;
-  }
   .atlas-nav a {
     display: inline-flex;
     align-items: center;
@@ -275,9 +260,9 @@ const currentPath = Astro.url.pathname;
     margin-top: var(--space-4);
     color: var(--text-secondary);
   }
-  /* 狭い画面では1段に収まらないので2段に折る。
-     1段目: ロゴ・メニュー・表示設定 / 2段目: 検索欄（横幅いっぱい）
-     行き先のリンクだけを「メニュー」で開閉する。 */
+  /* 狭い画面では1段に収まらないので3段に折る。畳まず全部出す。
+     1段目: アトラス・表示設定 / 2段目: 検索欄 / 3段目: 行き先
+     行き先は3つなので、常に見えていても1行に収まる。 */
   @media (max-width: 900px) {
     .atlas-bar {
       gap: var(--space-2);
@@ -288,61 +273,36 @@ const currentPath = Astro.url.pathname;
       order: 0;
       margin-right: auto;
     }
-    .nav-toggle {
-      order: 1;
-      display: inline-flex;
-      margin-left: 0;
-    }
     .atlas-bar-actions {
-      order: 2;
+      order: 1;
       margin-left: 0;
     }
     .atlas-bar-search {
-      order: 3;
+      order: 2;
       flex: 0 0 100%;
-      padding-bottom: var(--space-1);
     }
     .main-nav {
-      order: 4;
-      display: none;
+      order: 3;
       width: 100%;
-      padding-block: var(--space-1);
+      padding-top: var(--space-1);
       border-top: 1px solid var(--border-default);
-    }
-    .main-nav[data-open] {
-      display: block;
     }
     .atlas-nav {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      /* 分野・学習リスト・はじめての方へ の3つを均等に並べる */
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       width: 100%;
+      gap: var(--space-1);
     }
     .atlas-nav a {
       width: 100%;
-      padding-inline: var(--space-2);
-    }
-    .nav-guide {
-      grid-column: 1 / -1;
+      justify-content: center;
+      padding-inline: var(--space-1);
+      font-size: calc(0.9rem * var(--text-scale));
     }
     .nav-guide a {
       justify-content: center;
     }
-    .atlas-bar-tools {
-      margin-left: 0;
-      flex-wrap: wrap;
-    }
   }
 </style>
 
-<script>
-  const navToggle =
-    document.querySelector<HTMLButtonElement>("[data-nav-toggle]");
-  const mainNav = document.querySelector<HTMLElement>("[data-main-nav]");
-
-  navToggle?.addEventListener("click", () => {
-    if (!mainNav) return;
-    const open = !mainNav.hasAttribute("data-open");
-    mainNav.toggleAttribute("data-open", open);
-    navToggle.setAttribute("aria-expanded", String(open));
-  });
-</script>

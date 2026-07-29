@@ -122,6 +122,13 @@ const filterLabels: Record<string, string> = {
   .search-results :global(.result-title) {
     font-weight: 600;
   }
+
+  /* iOS Safari は 16px 未満の入力欄で画面を拡大してしまう */
+  @media (max-width: 767px) {
+    #search-input {
+      font-size: max(16px, calc(0.9rem * var(--text-scale)));
+    }
+  }
 </style>
 
 <script>

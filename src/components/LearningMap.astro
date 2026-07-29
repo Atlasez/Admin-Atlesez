@@ -6,36 +6,24 @@
  * 総合ホームではタブが開かれるまで画面に入らないため、
  * cytoscape の読み込みは IntersectionObserver によって自然に遅延される。
  */
-import { withBase, articlePath } from "../lib/site";
+import { withBase } from "../lib/site";
 import {
   t,
   localizedName,
   edgeLabel,
   type Locale,
 } from "../lib/i18n";
-import {
-  getConcepts,
-  getPublishedSubjects,
-  getPublishedArticles,
-  indexArticlesByConcept,
-} from "../lib/content";
+import { getConcepts, getPublishedSubjects } from "../lib/content";
 
 interface Props {
   locale: Locale;
 }
 const { locale } = Astro.props;
 
-const { list, map } = await getConcepts();
+const { list } = await getConcepts();
 const subjects = (await getPublishedSubjects()).filter(
   (s) => s.data.status === "published",
 );
-const articles = await getPublishedArticles(locale);
-const byConcept = indexArticlesByConcept(articles);
-
-const nameOf = (id: string) => {
-  const c = map.get(id);
-  return c ? localizedName(c.name, locale) : id;
-};
 const graphUrl = withBase("/atlas/graph.json");
 
 const edgeKinds = [
@@ -85,77 +73,16 @@ const categoryMetaJson = JSON.stringify(
 );
 ---
 
-  <section aria-labelledby="route-heading" class="route-section">
-    <h2 id="route-heading">{t(locale, "routeSearch")}</h2>
-    <p class="route-intro">
-      {
-        locale === "ja"
-          ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
-          : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."
-      }
-    </p>
-    <form data-route-form class="route-form">
-      <div>
-        <label for="route-subject">{t(locale, "subjects")}</label>
-        <select id="route-subject" data-route-subject>
-          {
-            subjects.map((s) => (
-              <option value={s.data.slug}>
-                {localizedName(s.data.name, locale)}
-              </option>
-            ))
-          }
-        </select>
-      </div>
-      <div>
-        <label for="route-goal">{t(locale, "routeGoal")}</label>
-        <select id="route-goal" data-route-goal required>
-          <option value="">---</option>
-          {
-            conceptsBySubject.flatMap(({ slug, concepts }) =>
-              concepts.map((c) => (
-                <option value={c.id} data-route-option data-subject={slug}>
-                  {localizedName(c.name, locale)}
-                </option>
-              )),
-            )
-          }
-        </select>
-      </div>
-      <div>
-        <label for="route-start">
-          {locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}
-        </label>
-        <select id="route-start" data-route-start>
-          <option value="">
-            {locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}
-          </option>
-          {
-            conceptsBySubject.flatMap(({ slug, concepts }) =>
-              concepts.map((c) => (
-                <option value={c.id} data-route-option data-subject={slug}>
-                  {localizedName(c.name, locale)}
-                </option>
-              )),
-            )
-          }
-        </select>
-      </div>
-      <button type="submit" class="button">{t(locale, "routeCompute")}</button>
-    </form>
-    <div data-route-result aria-live="polite"></div>
-  </section>
+<section aria-labelledby="graph-heading" class="map-section">
+  <h2 id="graph-heading" class="visually-hidden">
+    {locale === "ja" ? "概念マップ" : "Concept map"}
+  </h2>
 
-  {/* 最初から開いた状態。畳みたい人のために details のままにしてある */}
-  <details class="map-explorer" open>
-    <summary>
-      {locale === "ja" ? "概念マップ" : "Concept map"}
-    </summary>
-    <div class="details-body">
-    <section aria-labelledby="graph-heading">
-    <h2 id="graph-heading">
-      {locale === "ja" ? "概念マップ" : "Concept map"}
-    </h2>
+  {/*
+    地図の操作はすべて枠の中に置く。枠の外に箱を並べると横幅を食うため、
+    経路検索も枠内のボタンから開くパネルにしている（地図アプリと同じ作法）。
+  */}
+  <div class="map-frame" data-map-frame>
     <div class="map-toolbar" data-graph-controls hidden>
       <label for="map-search" class="visually-hidden">
         {t(locale, "search")}
@@ -184,38 +111,9 @@ const categoryMetaJson = JSON.stringify(
         }
       </select>
       <span class="map-status" data-map-status aria-live="polite"></span>
-      <button type="button" class="button button-secondary" data-map-back hidden>
-        {locale === "ja" ? "← 全体に戻る" : "← Back to overview"}
-      </button>
-      <button type="button" class="button button-secondary" data-map-share>
-        {t(locale, "shareView")}
-      </button>
     </div>
-    <p class="map-thread-hint" data-graph-controls hidden>
-      {
-        locale === "ja"
-          ? "カテゴリを開くと、前提のない項目が左、そこから学ぶ項目が右へ並びます。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。分野を選ぶと概要をその分野だけに絞れます。"
-          : "Inside a category, topics without prerequisites sit on the left and what follows extends to the right. Dotted nodes belong to other categories; double-click one to move there. Use the subject selector to narrow the overview."
-      }
-    </p>
-    <ul class="subject-legend" data-graph-controls hidden aria-label={t(locale, "subjects")}>
-      {
-        subjectMeta.map((s) => (
-          <li>
-            <span
-              class="subject-swatch"
-              style={`background:${s.color}`}
-              aria-hidden="true"
-            />
-            <span>{s.name}</span>
-          </li>
-        ))
-      }
-    </ul>
-    <div
-      class="map-canvas"
-      id="learning-map"
-      role="application"
+
+    <div class="map-canvas" id="learning-map" role="application"
       aria-label={t(locale, "map")}
       data-graph-url={graphUrl}
       data-locale={locale}
@@ -226,151 +124,188 @@ const categoryMetaJson = JSON.stringify(
       <noscript>
         {
           locale === "ja"
-            ? "グラフ表示にはJavaScriptが必要です。下のリスト表示・表形式をご利用ください。"
-            : "The graph requires JavaScript. Please use the list and table views below."
+            ? "概念マップの表示にはJavaScriptが必要です。分野・カテゴリ・記事の一覧は「リスト表示」からご覧いただけます。"
+            : "The concept map requires JavaScript. Use the list view to browse subjects, categories and articles."
         }
       </noscript>
     </div>
-    <div class="map-detail" data-map-detail aria-live="polite"></div>
-    <details class="map-legend">
-      <summary>{t(locale, "legend")}</summary>
-      <ul class="details-body legend-list">
-        <li>
-          <span class="legend-line legend-category-link" aria-hidden="true" />
-          <span>
-            {
-              locale === "ja"
-                ? "カテゴリ間のつながり（概要で表示）"
-                : "Link between categories (shown in the overview)"
-            }
-          </span>
-        </li>
-        {
-          edgeKinds.map((kind) => (
-            <li>
-              <span class={`legend-line legend-${kind}`} aria-hidden="true" />
-              <span>{edgeLabel(locale, kind)}</span>
-            </li>
-          ))
-        }
-      </ul>
-    </details>
-  </section>
-    </div>
-  </details>
 
-  <details class="map-data">
-    <summary id="list-heading">{t(locale, "listAlternative")}</summary>
-    <div class="details-body">
+    {/* 枠の左上: 戻る・経路検索 */}
+    <div class="map-tools map-tools-start" data-graph-controls hidden>
+      <button type="button" class="map-tool" data-map-back hidden>
+        {locale === "ja" ? "← 全体に戻る" : "← Back to overview"}
+      </button>
+      <button
+        type="button"
+        class="map-tool"
+        data-route-open
+        aria-expanded="false"
+        aria-controls="map-route-panel"
+      >
+        {t(locale, "routeSearch")}
+      </button>
+    </div>
+
+    {/* 枠の右上: 全画面・共有 */}
+    <div class="map-tools map-tools-end" data-graph-controls hidden>
+      <button
+        type="button"
+        class="map-tool"
+        data-map-fullscreen
+        aria-pressed="false"
+      >
+        {locale === "ja" ? "全画面" : "Full screen"}
+      </button>
+      <button type="button" class="map-tool" data-map-share>
+        {t(locale, "shareView")}
+      </button>
+    </div>
+
+    {/* 経路検索。枠の中に重ねて出す */}
+    <div class="map-route" id="map-route-panel" data-route-panel hidden>
+      <div class="map-route-head">
+        <h3>{t(locale, "routeSearch")}</h3>
+        <button
+          type="button"
+          class="map-route-close"
+          data-route-close
+          aria-label={locale === "ja" ? "閉じる" : "Close"}
+        >
+          ×
+        </button>
+      </div>
+      <p class="route-intro">
+        {
+          locale === "ja"
+            ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
+            : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."
+        }
+      </p>
+      <form data-route-form class="route-form">
+        <div>
+          <label for="route-subject">{t(locale, "subjects")}</label>
+          <select id="route-subject" data-route-subject>
+            {
+              subjects.map((s) => (
+                <option value={s.data.slug}>
+                  {localizedName(s.data.name, locale)}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+        <div>
+          <label for="route-goal">{t(locale, "routeGoal")}</label>
+          <select id="route-goal" data-route-goal required>
+            <option value="">---</option>
+            {
+              conceptsBySubject.flatMap(({ slug, concepts }) =>
+                concepts.map((c) => (
+                  <option value={c.id} data-route-option data-subject={slug}>
+                    {localizedName(c.name, locale)}
+                  </option>
+                )),
+              )
+            }
+          </select>
+        </div>
+        <div>
+          <label for="route-start">
+            {locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}
+          </label>
+          <select id="route-start" data-route-start>
+            <option value="">
+              {locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}
+            </option>
+            {
+              conceptsBySubject.flatMap(({ slug, concepts }) =>
+                concepts.map((c) => (
+                  <option value={c.id} data-route-option data-subject={slug}>
+                    {localizedName(c.name, locale)}
+                  </option>
+                )),
+              )
+            }
+          </select>
+        </div>
+        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
+      </form>
+      <div data-route-result aria-live="polite"></div>
+    </div>
+
+    <div class="map-detail" data-map-detail aria-live="polite"></div>
+  </div>
+
+  <p class="map-thread-hint" data-graph-controls hidden>
     {
-      subjects.map((s) => (
-        <details>
-          <summary>
-            {localizedName(s.data.name, locale)}（
-            {list.filter((c) => c.subject === s.data.slug).length}
-            {locale === "ja" ? "項目" : ""}）
-          </summary>
-          <div class="details-body">
-            {s.data.categories.map((cat) => {
-              const catConcepts = list.filter(
-                (c) =>
-                  c.subject === s.data.slug && c.category === cat.slug,
-              );
-              return (
-                <section>
-                  <h3>{localizedName(cat.name, locale)}</h3>
-                  <ul>
-                    {catConcepts.map((c) => {
-                      const arts = byConcept.get(c.id) ?? [];
-                      const first = arts[0];
-                      return (
-                        <li>
-                          {first ? (
-                            <a
-                              href={articlePath(
-                                locale,
-                                first.data.subject,
-                                first.data.category,
-                                first.data.slug,
-                              )}
-                            >
-                              {localizedName(c.name, locale)}
-                            </a>
-                          ) : (
-                            <>
-                              {localizedName(c.name, locale)}
-                              <span class="badge">
-                                {t(locale, "preparing")}
-                              </span>
-                            </>
-                          )}
-                          {c.prerequisites.length > 0 && (
-                            <span class="prereq-note">
-                              （{t(locale, "prerequisites")}:{" "}
-                              {c.prerequisites.map(nameOf).join("、")}）
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              );
-            })}
-          </div>
-        </details>
+      locale === "ja"
+        ? "カテゴリを押すと中の項目が開き、「← 全体に戻る」またはEscで閉じられます。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。"
+        : "Select a category to open it; use “Back to overview” or Esc to close. Dotted nodes belong to other categories; double-click one to move there."
+    }
+  </p>
+  <ul
+    class="subject-legend"
+    data-graph-controls
+    hidden
+    aria-label={t(locale, "subjects")}
+  >
+    {
+      subjectMeta.map((s) => (
+        <li>
+          <span
+            class="subject-swatch"
+            style={`background:${s.color}`}
+            aria-hidden="true"
+          />
+          <span>{s.name}</span>
+        </li>
       ))
     }
-    </div>
-  </details>
-
-  <details class="map-data">
-    <summary id="table-heading">{t(locale, "tableAlternative")}</summary>
-    <div class="details-body">
-    <div class="table-scroll" tabindex="0">
-      <table>
-        <caption class="visually-hidden">
+  </ul>
+  <details class="map-legend">
+    <summary>{t(locale, "legend")}</summary>
+    <ul class="details-body legend-list">
+      <li>
+        <span class="legend-line legend-category-link" aria-hidden="true" />
+        <span>
           {
             locale === "ja"
-              ? "概念と前提・推奨・関連の一覧"
-              : "Concepts with prerequisites, recommendations and relations"
+              ? "カテゴリ間のつながり（概要で表示）"
+              : "Link between categories (shown in the overview)"
           }
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">{locale === "ja" ? "概念" : "Concept"}</th>
-            <th scope="col">{t(locale, "prerequisites")}</th>
-            <th scope="col">{t(locale, "edge.recommended-next")}</th>
-            <th scope="col">{t(locale, "edge.related")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {
-            list.map((c) => (
-              <tr>
-                <th scope="row">{localizedName(c.name, locale)}</th>
-                <td>{c.prerequisites.map(nameOf).join("、") || "—"}</td>
-                <td>{c.recommendedNext.map(nameOf).join("、") || "—"}</td>
-                <td>{c.related.map(nameOf).join("、") || "—"}</td>
-              </tr>
-            ))
-          }
-        </tbody>
-      </table>
-    </div>
-    </div>
+        </span>
+      </li>
+      {
+        edgeKinds.map((kind) => (
+          <li>
+            <span class={`legend-line legend-${kind}`} aria-hidden="true" />
+            <span>{edgeLabel(locale, kind)}</span>
+          </li>
+        ))
+      }
+    </ul>
   </details>
-
+</section>
 <style>
   section {
     margin-block: var(--space-6);
+  }
+  /* 地図まわりの枠。道具立てと経路検索をこの中に重ねる */
+  .map-frame {
+    position: relative;
+    border: 2px solid var(--border-default);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    overflow: hidden;
   }
   .map-toolbar {
     display: flex;
     gap: var(--space-2);
     flex-wrap: wrap;
-    margin-bottom: var(--space-2);
     align-items: center;
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--background-secondary);
   }
   .map-toolbar input,
   .map-toolbar select {
@@ -379,9 +314,100 @@ const categoryMetaJson = JSON.stringify(
   .map-canvas {
     height: 65vh;
     min-height: 28rem;
-    border: 2px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  /* 全画面のときは画面いっぱいに広げる */
+  .map-frame:fullscreen {
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .map-frame:fullscreen .map-canvas {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  /* 枠の中に浮かせるボタン群 */
+  .map-tools {
+    position: absolute;
+    top: calc(var(--space-2) + 3.25rem);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    z-index: 2;
+  }
+  .map-tools-start {
+    left: var(--space-2);
+  }
+  .map-tools-end {
+    right: var(--space-2);
+  }
+  .map-tool {
+    min-height: var(--touch-target);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.85rem * var(--text-scale));
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+    cursor: pointer;
+  }
+  .map-tool:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .map-tool[aria-expanded="true"],
+  .map-tool[aria-pressed="true"] {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: var(--on-accent);
+  }
+
+  /* 経路検索。地図アプリのように枠の左側に重ねて出す */
+  .map-route {
+    position: absolute;
+    top: calc(var(--space-2) + 3.25rem + var(--touch-target) + var(--space-1));
+    left: var(--space-2);
+    z-index: 3;
+    width: min(24rem, calc(100% - var(--space-4)));
+    max-height: calc(100% - 9rem);
+    overflow-y: auto;
+    padding: var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.24);
+  }
+  .map-route-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  .map-route-head h3 {
+    margin: 0;
+    font-size: calc(1rem * var(--text-scale));
+  }
+  .map-route-close {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(1.1rem * var(--text-scale));
+    line-height: 1;
+    cursor: pointer;
+  }
+  .map-route-close:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
   .map-subject-label {
     font-weight: 700;
@@ -415,10 +441,22 @@ const categoryMetaJson = JSON.stringify(
     height: 0.9rem;
     border-radius: 3px;
   }
+  /* 押した項目の説明。枠の下辺に重ねる。中身が無いときは出さない */
   .map-detail {
-    margin-top: var(--space-2);
-    min-height: 2.5rem;
-    font-size: calc(0.95rem * var(--text-scale));
+    position: absolute;
+    left: var(--space-2);
+    right: var(--space-2);
+    bottom: var(--space-2);
+    z-index: 1;
+    padding: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .map-detail:empty {
+    display: none;
   }
   .map-legend {
     margin-top: var(--space-2);
@@ -465,21 +503,16 @@ const categoryMetaJson = JSON.stringify(
   }
   .route-form {
     display: grid;
-    grid-template-columns: repeat(3, minmax(12rem, 1fr)) auto;
-    gap: var(--space-3);
-    align-items: end;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
   }
-  .route-section {
-    padding: var(--space-4);
-    border: 2px solid var(--accent-primary);
-    background: var(--accent-subtle);
-  }
-  .route-section h2 {
-    margin-top: 0;
+  .route-form select {
+    width: 100%;
   }
   .route-intro {
-    max-width: var(--reading-width);
+    margin: var(--space-1) 0 var(--space-2);
     color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
   }
   :global(.route-steps) {
     display: grid;
@@ -527,34 +560,40 @@ const categoryMetaJson = JSON.stringify(
   :global(.route-known ul) {
     margin-bottom: 0;
   }
-  .map-explorer,
-  .map-data {
-    margin-block: var(--space-4);
-  }
-  .map-explorer > summary,
-  .map-data > summary {
-    font-size: calc(1.08rem * var(--text-scale));
-  }
-  .prereq-note {
-    color: var(--text-secondary);
-    font-size: calc(0.85rem * var(--text-scale));
-  }
-  .table-scroll {
-    overflow-x: auto;
-  }
   @media (max-width: 767px) {
-    .route-form {
-      grid-template-columns: 1fr;
+    /* iOS Safari は 16px 未満の入力欄で画面を拡大してしまう */
+    .map-toolbar input,
+    .map-toolbar select,
+    .route-form select {
+      font-size: max(16px, 1rem);
     }
     .route-form .button {
       width: 100%;
     }
-    .route-section {
-      padding: var(--space-3);
-    }
     .map-canvas {
-      height: 50vh;
+      height: 60vh;
       min-height: 22rem;
+    }
+    /* 道具立ては縦に積んだツールバーの下に来るので、その分だけ下げる */
+    .map-tools {
+      top: auto;
+      bottom: var(--space-2);
+    }
+    .map-tools-start {
+      left: var(--space-2);
+    }
+    .map-tools-end {
+      right: var(--space-2);
+    }
+    .map-route {
+      top: var(--space-2);
+      left: var(--space-2);
+      right: var(--space-2);
+      width: auto;
+      max-height: calc(100% - 6rem);
+    }
+    .map-detail {
+      bottom: calc(var(--space-2) + var(--touch-target) + var(--space-1));
     }
     /* 道具立ては縦に積む。横に溢れて押せなくなるのを防ぐ */
     .map-toolbar {
@@ -592,6 +631,59 @@ const categoryMetaJson = JSON.stringify(
   const container = document.getElementById("learning-map");
   const controls = document.querySelectorAll<HTMLElement>("[data-graph-controls]");
   const detail = document.querySelector<HTMLElement>("[data-map-detail]");
+  const frame = document.querySelector<HTMLElement>("[data-map-frame]");
+  const routePanel = document.querySelector<HTMLElement>("[data-route-panel]");
+  const routeOpen = document.querySelector<HTMLButtonElement>("[data-route-open]");
+
+  /**
+   * 経路検索パネルの開閉。地図の枠内に重ねて出すので、
+   * 開いているかどうかをボタンの aria-expanded で示す。
+   */
+  function setRouteOpen(open: boolean): void {
+    if (!routePanel) return;
+    routePanel.hidden = !open;
+    routeOpen?.setAttribute("aria-expanded", String(open));
+    if (open) {
+      routePanel
+        .querySelector<HTMLSelectElement>("[data-route-subject]")
+        ?.focus();
+    }
+  }
+
+  routeOpen?.addEventListener("click", () => setRouteOpen(routePanel?.hidden ?? true));
+  document
+    .querySelector<HTMLButtonElement>("[data-route-close]")
+    ?.addEventListener("click", () => {
+      setRouteOpen(false);
+      routeOpen?.focus();
+    });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && routePanel && !routePanel.hidden) {
+      setRouteOpen(false);
+      routeOpen?.focus();
+    }
+  });
+
+  /** 全画面表示。対応していないブラウザではボタンを出さない。 */
+  const fullscreenBtn = document.querySelector<HTMLButtonElement>(
+    "[data-map-fullscreen]",
+  );
+  if (fullscreenBtn && frame) {
+    if (!frame.requestFullscreen) {
+      fullscreenBtn.hidden = true;
+    } else {
+      fullscreenBtn.addEventListener("click", () => {
+        if (document.fullscreenElement === frame) void document.exitFullscreen();
+        else void frame.requestFullscreen();
+      });
+      document.addEventListener("fullscreenchange", () => {
+        const on = document.fullscreenElement === frame;
+        fullscreenBtn.setAttribute("aria-pressed", String(on));
+        // 枠の大きさが変わるので、cytoscape に再計測させる
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+  }
 
   async function initMap(): Promise<void> {
     if (!container) return;
@@ -1093,9 +1185,31 @@ const categoryMetaJson = JSON.stringify(
       syncUrl();
     });
 
-    backButton?.addEventListener("click", () => {
+    // 全画面の切り替えなどで枠の大きさが変わったら測り直す
+    window.addEventListener("resize", () => {
+      cy.resize();
+      cy.fit(cy.nodes(":visible"), 50);
+    });
+
+    /** カテゴリを閉じて概要に戻す（fold） */
+    function collapse(): void {
       renderOverview(subjectSelect?.value ?? "");
       syncUrl();
+    }
+
+    backButton?.addEventListener("click", collapse);
+
+    // Esc でも閉じられるようにする。開いていないときは何もしない。
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !focused) return;
+      // 経路検索が開いているときはそちらを先に閉じる
+      if (routePanel && !routePanel.hidden) return;
+      collapse();
+    });
+
+    // 何もない場所を押したときも閉じる（地図アプリと同じ感覚）
+    cy.on("tap", (ev) => {
+      if (ev.target === cy && focused) collapse();
     });
 
     /**
