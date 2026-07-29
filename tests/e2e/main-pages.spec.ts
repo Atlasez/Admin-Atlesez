@@ -42,7 +42,17 @@ test.describe("公式サイト", () => {
 test.describe("学習サイト", () => {
   test("総合ホームに分野と準備中の区別がある", async ({ page }) => {
     await page.goto("atlas/ja/");
-    await expect(page.getByRole("link", { name: "数学" })).toBeVisible();
+    /*
+      「数学」を役割と名前だけで引くと、隣の丸囲み ? （名前は「数学とは」）や
+      リスト表示側の同名リンクにも当たってしまう。タイルのリンクだと分かる
+      class で絞る。
+    */
+    const mathTile = page.locator("a.subject-link", { hasText: "数学" });
+    await expect(mathTile).toBeVisible();
+    await expect(mathTile).toHaveAttribute(
+      "href",
+      /\/atlas\/ja\/mathematics\//,
+    );
     await expect(page.getByText("準備中").first()).toBeVisible();
   });
 
@@ -157,8 +167,16 @@ test.describe("学習サイト", () => {
   test("表示設定が保存される", async ({ page }) => {
     await page.goto("atlas/ja/");
     // 表示設定はヘッダーのメニュー1か所に集約されている
+    const menu = page.locator("[data-settings-menu]");
     await page.locator("[data-settings-menu] > summary").click();
-    await page.getByLabel("特大").check();
+    await expect(menu).toHaveAttribute("open", "");
+    /*
+      ラジオの丸は隠して選択肢そのものを押せる面にしているため、
+      input は見えない。利用者と同じくラベルの面を押す。
+    */
+    const xlarge = menu.locator("label.a11y-option", { hasText: "特大" });
+    await expect(xlarge).toBeVisible();
+    await xlarge.click();
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute(
       "data-pref-font-size",
