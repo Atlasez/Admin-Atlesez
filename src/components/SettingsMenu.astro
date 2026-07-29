@@ -18,9 +18,7 @@ const close = locale === "ja" ? "閉じる" : "Close";
 
 <details class="settings-menu" data-settings-menu>
   <summary>
-    <span class="settings-icon" aria-hidden="true">Aa</span>
     <span class="settings-text">{title}</span>
-    <span class="settings-caret" aria-hidden="true"></span>
   </summary>
   <div class="settings-panel">
     {/*
@@ -62,16 +60,6 @@ const close = locale === "ja" ? "閉じる" : "Close";
     border-color: var(--accent-primary);
     color: var(--accent-primary);
   }
-  .settings-icon {
-    font-weight: 700;
-  }
-  .settings-caret::after {
-    content: "▾";
-  }
-  .settings-menu[open] > summary .settings-caret::after {
-    content: "▴";
-  }
-
   .settings-panel {
     position: absolute;
     right: 0;

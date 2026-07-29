@@ -116,7 +116,7 @@ const currentPath = Astro.url.pathname;
         </div>
         <div class="atlas-bar-actions">
           <SettingsMenu locale={locale} />
-          <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
+          <a class="org-home-link" href={withBase("/")}>Atlasez</a>
         </div>
       </div>
     </header>
@@ -141,6 +141,9 @@ const currentPath = Astro.url.pathname;
             </a>
           </p>
         </div>
+        <div class="atlas-footer-language">
+          <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
+        </div>
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
     </footer>
@@ -153,27 +156,26 @@ const currentPath = Astro.url.pathname;
     border-bottom: 1px solid var(--border-default);
     background: var(--background-primary);
   }
-  /* 1段ヘッダー。左からロゴ・行き先、右に検索と表示設定 */
+  /* 1段ヘッダー。添付デザインに合わせ、ロゴ・行き先・検索・表示設定の順 */
   .atlas-bar {
     display: flex;
     align-items: center;
     gap: var(--space-3);
     padding-block: var(--space-1);
   }
-  /* 広い画面の並び: ロゴ → 検索 → 行き先 → 表示設定。
-     DOM上は nav が先だが、検索をロゴの隣に見せるため order で入れ替える。
-     狭い画面の並びは後段のメディアクエリで上書きする。 */
   .atlas-logo {
     order: 0;
   }
-  .atlas-bar-search {
+  .main-nav {
     order: 1;
-    flex: 0 1 20rem;
     min-width: 0;
   }
-  .main-nav {
+  .atlas-bar-search {
     order: 2;
+    flex: 1 1 20rem;
     min-width: 0;
+    display: flex;
+    justify-content: flex-end;
   }
   .atlas-bar-actions {
     order: 3;
@@ -181,8 +183,6 @@ const currentPath = Astro.url.pathname;
     align-items: center;
     gap: var(--space-2);
     flex: 0 0 auto;
-    /* 表示設定だけ右端に寄せる */
-    margin-left: auto;
   }
   .atlas-logo {
     display: inline-flex;
@@ -216,7 +216,7 @@ const currentPath = Astro.url.pathname;
     border-bottom-color: var(--accent-primary);
     color: var(--accent-primary);
   }
-  /* 「はじめての方へ」は入口として塗りつぶしで目立たせる */
+  /* 「はじめての方へ」は添付デザインと同じ囲みスタイル */
   .nav-guide {
     display: flex;
     align-items: center;
@@ -225,17 +225,25 @@ const currentPath = Astro.url.pathname;
     border: 1px solid var(--accent-primary);
     border-radius: var(--radius);
     border-bottom-width: 1px;
-    background: var(--accent-primary);
-    color: var(--on-accent);
+    background: var(--background-primary);
+    color: var(--accent-primary);
     font-weight: 700;
     padding: 0 var(--space-3);
     margin-block: var(--space-1);
   }
   .nav-guide a:hover,
   .nav-guide a[aria-current="page"] {
-    background: var(--accent-hover);
-    color: var(--on-accent);
-    border-color: var(--accent-hover);
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+  .org-home-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-target);
+    color: var(--text-secondary);
+    text-underline-offset: 0.2em;
+    white-space: nowrap;
   }
   main {
     min-height: 60vh;
@@ -255,6 +263,10 @@ const currentPath = Astro.url.pathname;
   .atlas-footer-title {
     font-weight: 700;
     margin-top: 0;
+  }
+  .atlas-footer-language {
+    display: flex;
+    justify-content: flex-end;
   }
   .atlas-copyright {
     margin-top: var(--space-4);
@@ -276,6 +288,10 @@ const currentPath = Astro.url.pathname;
     .atlas-bar-actions {
       order: 1;
       margin-left: 0;
+    }
+    /* スマホの1段目は「アトラス」と「表示設定」だけにする */
+    .org-home-link {
+      display: none;
     }
     .atlas-bar-search {
       order: 2;
@@ -305,4 +321,3 @@ const currentPath = Astro.url.pathname;
     }
   }
 </style>
-
