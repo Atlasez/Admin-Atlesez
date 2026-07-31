@@ -249,12 +249,16 @@ const structuredData = {
               aria-valuenow="0"
               aria-valuetext={t(locale, "stateUnrecorded")}
             >
-              <span class="history-stage-track" aria-hidden="true">
-                <span class="history-stage-line" />
-                <span class="history-stage-stop" />
-                <span class="history-stage-stop" />
-                <span class="history-stage-stop" />
-                <span class="history-stage-thumb" />
+              <span class="history-stage-switches" aria-hidden="true">
+                <span class="history-stage-switch">
+                  <span class="history-stage-knob" />
+                </span>
+                <span class="history-stage-switch">
+                  <span class="history-stage-knob" />
+                </span>
+                <span class="history-stage-switch">
+                  <span class="history-stage-knob" />
+                </span>
               </span>
               <span class="history-stage-labels" aria-hidden="true">
                 <span>{t(locale, "stateUnrecorded")}</span>
@@ -509,48 +513,62 @@ const structuredData = {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
   }
-  .history-stage-track {
-    position: relative;
+  .history-stage-switches {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    gap: 0.55rem;
     align-items: center;
-    height: 1.25rem;
-    margin-inline: 1.25rem;
+    padding-inline: 0.45rem;
   }
-  .history-stage-line {
-    position: absolute;
-    inset: 50% 0 auto;
-    height: 0.2rem;
-    border-radius: 999px;
-    background: var(--border-strong);
-    transform: translateY(-50%);
-  }
-  .history-stage-stop {
-    z-index: 1;
-    width: 0.45rem;
-    height: 0.45rem;
+  .history-stage-switch {
+    position: relative;
+    display: block;
+    width: 2.6rem;
+    height: 1.45rem;
     justify-self: center;
-    border-radius: 50%;
-    background: var(--border-strong);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--background-secondary);
+    transition:
+      border-color 0.16s ease,
+      background-color 0.16s ease;
   }
-  .history-stage-thumb {
+  .history-stage-knob {
     position: absolute;
-    z-index: 2;
-    left: 0;
-    width: 1.05rem;
-    height: 1.05rem;
-    border: 2px solid var(--accent-primary);
+    top: 50%;
+    left: 0.18rem;
+    width: 1.02rem;
+    height: 1.02rem;
     border-radius: 50%;
-    background: var(--background-primary);
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 25%, transparent);
-    transform: translateX(-50%);
-    transition: left 0.16s ease;
+    background: var(--text-secondary);
+    opacity: 0.48;
+    transform: translateY(-50%);
+    transition:
+      left 0.16s ease,
+      background-color 0.16s ease,
+      opacity 0.16s ease;
   }
-  .history-stage-toggle[data-state="read"] .history-stage-thumb {
-    left: 50%;
+  .history-stage-toggle[data-state="none"]
+    .history-stage-switch:nth-child(1),
+  .history-stage-toggle[data-state="read"]
+    .history-stage-switch:nth-child(2),
+  .history-stage-toggle[data-state="understood"]
+    .history-stage-switch:nth-child(3) {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
   }
-  .history-stage-toggle[data-state="understood"] .history-stage-thumb {
-    left: 100%;
+  .history-stage-toggle[data-state="none"]
+    .history-stage-switch:nth-child(1)
+    .history-stage-knob,
+  .history-stage-toggle[data-state="read"]
+    .history-stage-switch:nth-child(2)
+    .history-stage-knob,
+  .history-stage-toggle[data-state="understood"]
+    .history-stage-switch:nth-child(3)
+    .history-stage-knob {
+    left: calc(100% - 1.2rem);
+    background: var(--on-accent);
+    opacity: 1;
   }
   .history-stage-labels {
     display: grid;
