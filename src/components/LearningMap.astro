@@ -17,13 +17,18 @@ import { getConcepts, getPublishedSubjects } from "../lib/content";
 
 interface Props {
   locale: Locale;
+  /** 分野トップに埋め込む場合、その分野を初期表示として固定する。 */
+  subject?: string;
 }
-const { locale } = Astro.props;
+const { locale, subject: fixedSubject = "" } = Astro.props;
 
 const { list } = await getConcepts();
 const subjects = (await getPublishedSubjects()).filter(
   (s) => s.data.status === "published",
 );
+const selectableSubjects = fixedSubject
+  ? subjects.filter((s) => s.data.slug === fixedSubject)
+  : subjects;
 const graphUrl = withBase("/atlas/graph.json");
 
 const edgeKinds = [
@@ -101,10 +106,10 @@ const categoryMetaJson = JSON.stringify(
         {t(locale, "subjects")}
       </label>
       <select id="map-subject" data-map-subject>
-        <option value="">{t(locale, "all")}</option>
+        {!fixedSubject && <option value="">{t(locale, "all")}</option>}
         {
-          subjects.map((s) => (
-            <option value={s.data.slug}>
+          selectableSubjects.map((s) => (
+            <option value={s.data.slug} selected={s.data.slug === fixedSubject}>
               {localizedName(s.data.name, locale)}
             </option>
           ))
@@ -120,6 +125,7 @@ const categoryMetaJson = JSON.stringify(
       data-base={withBase("/")}
       data-subjects={subjectMetaJson}
       data-categories={categoryMetaJson}
+      data-fixed-subject={fixedSubject}
     >
       <noscript>
         {
@@ -186,7 +192,7 @@ const categoryMetaJson = JSON.stringify(
           <label for="route-subject">{t(locale, "subjects")}</label>
           <select id="route-subject" data-route-subject>
             {
-              subjects.map((s) => (
+              selectableSubjects.map((s) => (
                 <option value={s.data.slug}>
                   {localizedName(s.data.name, locale)}
                 </option>
@@ -1283,7 +1289,8 @@ const categoryMetaJson = JSON.stringify(
     // 初期表示: URL に category があればそこ、なければ概要
     const params = new URL(location.href).searchParams;
     const urlCategory = params.get("category");
-    const urlSubject = params.get("subject") ?? "";
+    const fixedSubject = container.dataset.fixedSubject ?? "";
+    const urlSubject = params.get("subject") ?? fixedSubject;
     const selected = params.get("selected");
     const selectedNode = selected ? nodeById.get(selected) : undefined;
 
@@ -1364,7 +1371,9 @@ const categoryMetaJson = JSON.stringify(
       result.innerHTML = "";
     };
 
-    const requestedSubject = new URL(location.href).searchParams.get("subject");
+    const requestedSubject =
+      new URL(location.href).searchParams.get("subject") ??
+      container.dataset.fixedSubject;
     if (
       requestedSubject &&
       [...routeSubject.options].some((option) => option.value === requestedSubject)

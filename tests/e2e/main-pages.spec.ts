@@ -106,6 +106,44 @@ test.describe("学習サイト", () => {
     ).toHaveCount(0);
   });
 
+  test("各分野トップでタイル・学習地図・リストを切り替えられる", async ({
+    page,
+  }) => {
+    await page.goto("atlas/ja/mathematics/");
+
+    await expect(page.getByRole("tab", { name: "リスト表示" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.locator(".toc-category-details[open]")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "群の定義", exact: true }),
+    ).not.toBeVisible();
+
+    const groupTheory = page.locator("[data-category='group-theory']");
+    await groupTheory.locator("summary").click();
+    await expect(groupTheory).toHaveAttribute("open", "");
+    await expect(
+      page.getByRole("link", { name: "群の定義", exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole("tab", { name: "学習地図" }).click();
+    await expect(page.locator("[data-view-panel='map']")).toBeVisible();
+    await expect(page.locator("[data-map-subject]")).toHaveValue("mathematics");
+    await expect(page.locator("[data-map-subject] option")).toHaveCount(1);
+
+    await page.getByRole("tab", { name: "タイル表示" }).click();
+    await expect(
+      page.getByRole("link", { name: /集合論.*記事/ }),
+    ).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("tab", { name: "タイル表示" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   test("記事ページに目次・前提記事が表示される", async ({ page }) => {
     await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
     await expect(page.locator("h1")).toContainText("群の定義");
