@@ -8,6 +8,7 @@ const pages = [
   "about/",
   "about/philosophy/",
   "about/organization/",
+  "about/members/",
   "about/history/",
   "projects/",
   "news/",

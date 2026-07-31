@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-/** 現行Google Sitesの公開「運営紹介」から、アトラス担当者をJSONへ移植する。 */
+/** 現行Google Sitesの公開「運営紹介」から、全運営メンバーとアトラス担当者をJSONへ移植する。 */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const SOURCE_URL =
   "https://sites.google.com/view/atlasez/atlasez%E3%81%A8%E3%81%AF/%E9%81%8B%E5%96%B6%E7%B4%B9%E4%BB%8B";
-const output = resolve("src/data/atlas-members.json");
+const atlasOutput = resolve("src/data/atlas-members.json");
+const atlasezOutput = resolve("src/data/atlasez-members.json");
 
 const response = await fetch(SOURCE_URL);
 if (!response.ok) {
@@ -45,10 +46,6 @@ for (const section of html
   if (roleIndex < 0) continue;
 
   const role = lines[roleIndex].replace("役職・担当：", "");
-  if (role !== "代表" && !role.includes("学習サイト「アトラス」運営")) {
-    continue;
-  }
-
   const bioIndex = lines.findIndex((line) => line.startsWith("自己紹介："));
   const nextLabelIndex = lines.findIndex(
     (line, index) =>
@@ -75,13 +72,31 @@ if (members.length < 10) {
   throw new Error(`取得件数が少なすぎます: ${members.length}件`);
 }
 
-const data = {
+const common = {
   source: SOURCE_URL,
   importedAt: new Date().toISOString(),
   note: "現行サイトの公開情報を移植。所属は現行ページの注記に従い、*なしは2025年4月以降の所属。",
+};
+const atlasezData = {
+  ...common,
   members,
 };
+const atlasData = {
+  ...common,
+  members: members.filter(
+    (member) =>
+      member.role === "代表" ||
+      member.role.includes("学習サイト「アトラス」運営"),
+  ),
+};
 
-await mkdir(dirname(output), { recursive: true });
-await writeFile(output, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-console.log(`運営紹介を移植しました: ${members.length}名 → ${output}`);
+await mkdir(dirname(atlasOutput), { recursive: true });
+await writeFile(
+  atlasezOutput,
+  `${JSON.stringify(atlasezData, null, 2)}\n`,
+  "utf8",
+);
+await writeFile(atlasOutput, `${JSON.stringify(atlasData, null, 2)}\n`, "utf8");
+console.log(
+  `運営紹介を移植しました: 全体${members.length}名 / アトラス${atlasData.members.length}名`,
+);

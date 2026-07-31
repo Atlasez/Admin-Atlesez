@@ -25,6 +25,26 @@ test.describe("公式サイト", () => {
     await expect(page.getByAltText(/代表と副代表/)).toBeVisible();
   });
 
+  test("組織サイトに運営紹介を掲載する", async ({ page }) => {
+    await page.goto("about/");
+    await page.getByRole("link", { name: "運営紹介" }).click();
+    await expect(page).toHaveURL(/\/about\/members\/$/);
+    await expect(page.locator("h1")).toHaveText("運営紹介");
+    await expect(page.locator("[data-member]")).toHaveCount(98);
+    await expect(page.getByText("釜口 悠太", { exact: true })).toBeVisible();
+    await expect(page.locator(".member-row details")).toHaveCount(0);
+    await expect(
+      page
+        .locator("[data-member]")
+        .filter({ hasText: "福山 月" })
+        .getByText(/iGEM/),
+    ).toBeVisible();
+
+    await page.getByLabel("プロジェクト").selectOption("cafe");
+    await expect(page.locator("[data-member]:visible")).toHaveCount(4);
+    await expect(page.locator("[data-member-count]")).toHaveText("4名を表示");
+  });
+
   test("プロジェクト一覧に学習サイトが載っている", async ({ page }) => {
     await page.goto("projects/");
     await expect(
