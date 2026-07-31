@@ -546,12 +546,20 @@ const structuredData = {
     transform: translateY(-50%);
     transition: left 0.16s ease;
   }
-  .history-stage-toggle[data-state="read"] .history-stage-track,
+  .history-stage-toggle[data-state="read"] .history-stage-track {
+    border-color: var(--accent-primary);
+    background: linear-gradient(
+      to right,
+      var(--accent-primary) 0 50%,
+      var(--background-secondary) 50% 100%
+    );
+  }
   .history-stage-toggle[data-state="understood"] .history-stage-track {
     border-color: var(--accent-primary);
     background: var(--accent-primary);
   }
-  .history-stage-toggle[data-state="read"] .history-stage-position,
+  .history-stage-toggle[data-state="read"]
+    .history-stage-position:nth-child(-n + 2),
   .history-stage-toggle[data-state="understood"] .history-stage-position {
     background: var(--on-accent);
     opacity: 1;
