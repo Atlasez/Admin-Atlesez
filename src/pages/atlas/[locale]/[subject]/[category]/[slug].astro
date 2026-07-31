@@ -249,16 +249,11 @@ const structuredData = {
               aria-valuenow="0"
               aria-valuetext={t(locale, "stateUnrecorded")}
             >
-              <span class="history-stage-switches" aria-hidden="true">
-                <span class="history-stage-switch">
-                  <span class="history-stage-knob" />
-                </span>
-                <span class="history-stage-switch">
-                  <span class="history-stage-knob" />
-                </span>
-                <span class="history-stage-switch">
-                  <span class="history-stage-knob" />
-                </span>
+              <span class="history-stage-track" aria-hidden="true">
+                <span class="history-stage-position" />
+                <span class="history-stage-position" />
+                <span class="history-stage-position" />
+                <span class="history-stage-thumb" />
               </span>
               <span class="history-stage-labels" aria-hidden="true">
                 <span>{t(locale, "stateUnrecorded")}</span>
@@ -513,19 +508,15 @@ const structuredData = {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px;
   }
-  .history-stage-switches {
+  .history-stage-track {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.55rem;
     align-items: center;
-    padding-inline: 0.45rem;
-  }
-  .history-stage-switch {
-    position: relative;
-    display: block;
-    width: 2.6rem;
-    height: 1.45rem;
-    justify-self: center;
+    width: 6.25rem;
+    height: 1.75rem;
+    margin-inline: auto;
+    padding-inline: 0.32rem;
     border: 1px solid var(--border-strong);
     border-radius: 999px;
     background: var(--background-secondary);
@@ -533,42 +524,43 @@ const structuredData = {
       border-color 0.16s ease,
       background-color 0.16s ease;
   }
-  .history-stage-knob {
-    position: absolute;
-    top: 50%;
-    left: 0.18rem;
-    width: 1.02rem;
-    height: 1.02rem;
+  .history-stage-position {
+    width: 0.26rem;
+    height: 0.26rem;
+    justify-self: center;
     border-radius: 50%;
     background: var(--text-secondary);
-    opacity: 0.48;
-    transform: translateY(-50%);
-    transition:
-      left 0.16s ease,
-      background-color 0.16s ease,
-      opacity 0.16s ease;
+    opacity: 0.38;
   }
-  .history-stage-toggle[data-state="none"]
-    .history-stage-switch:nth-child(1),
-  .history-stage-toggle[data-state="read"]
-    .history-stage-switch:nth-child(2),
-  .history-stage-toggle[data-state="understood"]
-    .history-stage-switch:nth-child(3) {
+  .history-stage-thumb {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 0.2rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+    border-radius: 50%;
+    background: var(--background-primary);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 24%, transparent);
+    transform: translateY(-50%);
+    transition: left 0.16s ease;
+  }
+  .history-stage-toggle[data-state="read"] .history-stage-track,
+  .history-stage-toggle[data-state="understood"] .history-stage-track {
     border-color: var(--accent-primary);
     background: var(--accent-primary);
   }
-  .history-stage-toggle[data-state="none"]
-    .history-stage-switch:nth-child(1)
-    .history-stage-knob,
-  .history-stage-toggle[data-state="read"]
-    .history-stage-switch:nth-child(2)
-    .history-stage-knob,
-  .history-stage-toggle[data-state="understood"]
-    .history-stage-switch:nth-child(3)
-    .history-stage-knob {
-    left: calc(100% - 1.2rem);
+  .history-stage-toggle[data-state="read"] .history-stage-position,
+  .history-stage-toggle[data-state="understood"] .history-stage-position {
     background: var(--on-accent);
     opacity: 1;
+  }
+  .history-stage-toggle[data-state="read"] .history-stage-thumb {
+    left: calc(50% - 0.625rem);
+  }
+  .history-stage-toggle[data-state="understood"] .history-stage-thumb {
+    left: calc(100% - 1.45rem);
   }
   .history-stage-labels {
     display: grid;
