@@ -79,6 +79,31 @@ export function historyStateOf(articleId: string): HistoryState | null {
   return loadHistory().find((e) => e.articleId === articleId)?.state ?? null;
 }
 
+/** 到達段階を直接設定する。null は未記録に戻す。 */
+export function setHistoryState(
+  entry: Omit<HistoryEntry, "state" | "updatedAt">,
+  state: HistoryState | null,
+): HistoryState | null {
+  const list = loadHistory();
+  const index = list.findIndex((e) => e.articleId === entry.articleId);
+
+  if (state === null) {
+    if (index >= 0) list.splice(index, 1);
+    saveHistory(list);
+    return null;
+  }
+
+  const next: HistoryEntry = {
+    ...entry,
+    state,
+    updatedAt: Date.now(),
+  };
+  if (index >= 0) list[index] = next;
+  else list.push(next);
+  saveHistory(list);
+  return state;
+}
+
 /**
  * 段階のスイッチを切り替える。段階どうしは独立して押せるが、
  * 上の段階は下の段階を含むので連動する。
@@ -95,9 +120,7 @@ export function toggleHistory(
   entry: Omit<HistoryEntry, "state" | "updatedAt">,
   stage: HistoryState,
 ): HistoryState | null {
-  const list = loadHistory();
-  const index = list.findIndex((e) => e.articleId === entry.articleId);
-  const current = index >= 0 ? list[index].state : null;
+  const current = historyStateOf(entry.articleId);
 
   // いま入っているなら、その1つ下まで戻す（＝この段階から上を切る）
   const targetRank = hasReached(current, stage)
@@ -105,21 +128,7 @@ export function toggleHistory(
     : historyRank(stage);
   const nextState = targetRank < 0 ? null : HISTORY_STAGES[targetRank].id;
 
-  if (nextState === null) {
-    if (index >= 0) list.splice(index, 1);
-    saveHistory(list);
-    return null;
-  }
-
-  const next: HistoryEntry = {
-    ...entry,
-    state: nextState,
-    updatedAt: Date.now(),
-  };
-  if (index >= 0) list[index] = next;
-  else list.push(next);
-  saveHistory(list);
-  return nextState;
+  return setHistoryState(entry, nextState);
 }
 
 export function removeHistory(articleId: string): HistoryEntry[] {

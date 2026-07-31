@@ -4,6 +4,7 @@ import {
   historyRank,
   hasReached,
   toggleHistory,
+  setHistoryState,
   historyStateOf,
   countHistory,
   loadHistory,
@@ -50,6 +51,14 @@ describe("学習の記録: 段階", () => {
     // 逆は成り立たない
     expect(hasReached("read", "understood")).toBe(false);
     expect(hasReached(null, "read")).toBe(false);
+  });
+
+  it("3段階の到達状態を直接設定できる", () => {
+    expect(setHistoryState(entry, "read")).toBe("read");
+    expect(setHistoryState(entry, "understood")).toBe("understood");
+    expect(hasReached(historyStateOf(entry.articleId), "read")).toBe(true);
+    expect(setHistoryState(entry, null)).toBeNull();
+    expect(historyStateOf(entry.articleId)).toBeNull();
   });
 
   it("上の段階を入れると下の段階も入る", () => {

@@ -97,23 +97,27 @@ test.describe("学習サイト", () => {
     await expect(page.getByText("事前演習（準備中）")).toHaveCount(0);
   });
 
-  test("読んだ・理解したは連動するトグルスイッチ", async ({ page }) => {
+  test("学習記録は未記録・読んだ・理解したの3段階トグル", async ({ page }) => {
     await page.goto("atlas/ja/biology/overview/what-is-biology/");
-    const read = page.getByRole("switch", { name: "読んだ" });
-    const understood = page.getByRole("switch", { name: "理解した" });
+    const history = page.getByRole("slider", { name: "学習の記録" });
 
-    await expect(read).toHaveAttribute("aria-checked", "false");
-    await expect(understood).toHaveAttribute("aria-checked", "false");
+    await expect(history).toHaveAttribute("aria-valuenow", "0");
+    await expect(history).toHaveAttribute("aria-valuetext", "未記録");
 
-    // 上の段階をオンにすると、手前の段階もオンになる
-    await understood.click();
-    await expect(read).toHaveAttribute("aria-checked", "true");
-    await expect(understood).toHaveAttribute("aria-checked", "true");
+    await history.click();
+    await expect(history).toHaveAttribute("aria-valuenow", "1");
+    await expect(history).toHaveAttribute("aria-valuetext", "読んだ");
 
-    // 手前の段階をオフにすると、上の段階もオフになる
-    await read.click();
-    await expect(read).toHaveAttribute("aria-checked", "false");
-    await expect(understood).toHaveAttribute("aria-checked", "false");
+    await history.click();
+    await expect(history).toHaveAttribute("aria-valuenow", "2");
+    await expect(history).toHaveAttribute("aria-valuetext", "理解した");
+
+    // 「理解した」は集計上「読んだ」にも到達済みとして扱われる
+    await page.reload();
+    await expect(history).toHaveAttribute("aria-valuetext", "理解した");
+
+    await history.click();
+    await expect(history).toHaveAttribute("aria-valuetext", "未記録");
   });
 
   test("グリッド／リスト表示を切り替えられる", async ({ page }) => {
