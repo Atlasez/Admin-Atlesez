@@ -67,9 +67,9 @@ const categoryItems = categories.map((cat) => ({
 }));
 
 const views = [
-  { id: "list", label: t(locale, "listViewTab") },
-  { id: "map", label: t(locale, "map") },
   { id: "tiles", label: t(locale, "tileView") },
+  { id: "map", label: t(locale, "map") },
+  { id: "list", label: t(locale, "listViewTab") },
 ] as const;
 
 const summary =
@@ -91,7 +91,7 @@ const summary =
   <div
     class="container subject-home"
     data-subject-layout
-    data-view-storage-key={`atlasez-subject-view-v2:${subject.data.slug}`}
+    data-view-storage-key={`atlasez-subject-view-v3:${subject.data.slug}`}
   >
     <Breadcrumb
       items={[
@@ -285,7 +285,7 @@ const summary =
     subjectLayout?.dataset.viewStorageKey ?? "atlasez-subject-view";
 
   function activateSubjectView(view: string, focus = false): void {
-    if (!subjectTabs.some((tab) => tab.dataset.viewTab === view)) view = "list";
+    if (!subjectTabs.some((tab) => tab.dataset.viewTab === view)) view = "tiles";
     for (const tab of subjectTabs) {
       const active = tab.dataset.viewTab === view;
       tab.setAttribute("aria-selected", String(active));
@@ -302,7 +302,7 @@ const summary =
       /* 保存できなくても表示切り替えは利用できる */
     }
     const url = new URL(location.href);
-    if (view === "list") url.searchParams.delete("view");
+    if (view === "tiles") url.searchParams.delete("view");
     else url.searchParams.set("view", view);
     history.replaceState(null, "", url);
     if (view === "map") window.dispatchEvent(new Event("resize"));
@@ -343,7 +343,7 @@ const summary =
         initialView = null;
       }
     }
-    activateSubjectView(initialView ?? "list");
+    activateSubjectView(initialView ?? "tiles");
   }
 </script>
 

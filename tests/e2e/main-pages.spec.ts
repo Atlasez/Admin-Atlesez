@@ -111,10 +111,20 @@ test.describe("学習サイト", () => {
   }) => {
     await page.goto("atlas/ja/mathematics/");
 
-    await expect(page.getByRole("tab", { name: "リスト表示" })).toHaveAttribute(
+    await expect(page.getByRole("tab", { name: "タイル表示" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
+    await expect(
+      page.getByRole("link", { name: /集合論.*記事/ }),
+    ).toBeVisible();
+
+    await page.getByRole("tab", { name: "学習地図" }).click();
+    await expect(page.locator("[data-view-panel='map']")).toBeVisible();
+    await expect(page.locator("[data-map-subject]")).toHaveValue("mathematics");
+    await expect(page.locator("[data-map-subject] option")).toHaveCount(1);
+
+    await page.getByRole("tab", { name: "リスト表示" }).click();
     await expect(page.locator(".toc-category-details[open]")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "群の定義", exact: true }),
@@ -127,18 +137,8 @@ test.describe("学習サイト", () => {
       page.getByRole("link", { name: "群の定義", exact: true }),
     ).toBeVisible();
 
-    await page.getByRole("tab", { name: "学習地図" }).click();
-    await expect(page.locator("[data-view-panel='map']")).toBeVisible();
-    await expect(page.locator("[data-map-subject]")).toHaveValue("mathematics");
-    await expect(page.locator("[data-map-subject] option")).toHaveCount(1);
-
-    await page.getByRole("tab", { name: "タイル表示" }).click();
-    await expect(
-      page.getByRole("link", { name: /集合論.*記事/ }),
-    ).toBeVisible();
-
     await page.reload();
-    await expect(page.getByRole("tab", { name: "タイル表示" })).toHaveAttribute(
+    await expect(page.getByRole("tab", { name: "リスト表示" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
