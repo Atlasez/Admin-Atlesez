@@ -104,6 +104,13 @@ test.describe("学習サイト", () => {
     await expect(history).toHaveAttribute("aria-valuenow", "0");
     await expect(history).toHaveAttribute("aria-valuetext", "未記録");
 
+    // ラベルや周囲ではなく、スイッチ本体だけを押せる
+    await page
+      .locator(".history-stage-labels")
+      .getByText("理解した", { exact: true })
+      .click();
+    await expect(history).toHaveAttribute("aria-valuenow", "0");
+
     await history.click();
     await expect(history).toHaveAttribute("aria-valuenow", "1");
     await expect(history).toHaveAttribute("aria-valuetext", "読んだ");

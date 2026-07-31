@@ -237,31 +237,40 @@ const structuredData = {
             aria-label={t(locale, "learningRecord")}
           >
             <span class="history-label">{t(locale, "learningRecord")}</span>
-            <button
-              type="button"
-              class="history-stage-toggle"
-              data-history-stage-toggle
+            <div
+              class="history-stage-control"
+              data-history-stage-control
               data-state="none"
-              role="slider"
-              aria-label={t(locale, "learningRecord")}
-              aria-valuemin="0"
-              aria-valuemax={HISTORY_STAGES.length}
-              aria-valuenow="0"
-              aria-valuetext={t(locale, "stateUnrecorded")}
             >
-              <span class="history-stage-track" aria-hidden="true">
-                <span class="history-stage-position" />
-                <span class="history-stage-position" />
-                <span class="history-stage-position" />
-                <span class="history-stage-thumb" />
-              </span>
+              <button
+                type="button"
+                class="history-stage-toggle"
+                data-history-stage-toggle
+                data-state="none"
+                data-label-none={t(locale, "stateUnrecorded")}
+                data-label-read={t(locale, "markRead")}
+                data-label-understood={t(locale, "markUnderstood")}
+                role="slider"
+                aria-label={t(locale, "learningRecord")}
+                aria-valuemin="0"
+                aria-valuemax={HISTORY_STAGES.length}
+                aria-valuenow="0"
+                aria-valuetext={t(locale, "stateUnrecorded")}
+              >
+                <span class="history-stage-track" aria-hidden="true">
+                  <span class="history-stage-position" />
+                  <span class="history-stage-position" />
+                  <span class="history-stage-position" />
+                  <span class="history-stage-thumb" />
+                </span>
+              </button>
               <span class="history-stage-labels" aria-hidden="true">
                 <span>{t(locale, "stateUnrecorded")}</span>
                 {HISTORY_STAGES.map((stage) => (
                   <span>{t(locale, stage.labelKey)}</span>
                 ))}
               </span>
-            </button>
+            </div>
           </div>
         </div>
         {
@@ -490,18 +499,23 @@ const structuredData = {
     color: var(--text-secondary);
     font-size: calc(0.82rem * var(--text-scale));
   }
+  .history-stage-control {
+    width: 10.5rem;
+  }
   .history-stage-toggle {
-    width: 13.5rem;
-    min-height: var(--touch-target);
-    padding: 0.35rem 0.55rem;
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius);
-    background: var(--background-primary);
+    display: block;
+    width: 6.25rem;
+    height: 1.75rem;
+    margin-inline: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
     color: var(--text-secondary);
     font: inherit;
     cursor: pointer;
   }
-  .history-stage-toggle:hover {
+  .history-stage-toggle:hover .history-stage-track {
     border-color: var(--accent-primary);
   }
   .history-stage-toggle:focus-visible {
@@ -513,9 +527,8 @@ const structuredData = {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     align-items: center;
-    width: 6.25rem;
-    height: 1.75rem;
-    margin-inline: auto;
+    width: 100%;
+    height: 100%;
     padding-inline: 0.32rem;
     border: 1px solid var(--border-strong);
     border-radius: 999px;
@@ -579,13 +592,13 @@ const structuredData = {
     line-height: 1.25;
     text-align: center;
   }
-  .history-stage-toggle[data-state="none"]
+  .history-stage-control[data-state="none"]
     .history-stage-labels
     > :nth-child(1),
-  .history-stage-toggle[data-state="read"]
+  .history-stage-control[data-state="read"]
     .history-stage-labels
     > :nth-child(2),
-  .history-stage-toggle[data-state="understood"]
+  .history-stage-control[data-state="understood"]
     .history-stage-labels
     > :nth-child(3) {
     color: var(--accent-primary);
@@ -958,25 +971,23 @@ const structuredData = {
     const historyToggle = actions.querySelector<HTMLButtonElement>(
       "[data-history-stage-toggle]",
     );
+    const historyControl = actions.querySelector<HTMLElement>(
+      "[data-history-stage-control]",
+    );
     const states: Array<HistoryState | null> = [
       null,
       ...HISTORY_STAGES.map((stage) => stage.id),
     ];
     const stateLabels = [
-      historyToggle?.querySelector<HTMLElement>(
-        ".history-stage-labels > :nth-child(1)",
-      )?.textContent ?? "",
-      ...HISTORY_STAGES.map(
-        (_, index) =>
-          historyToggle?.querySelector<HTMLElement>(
-            `.history-stage-labels > :nth-child(${index + 2})`,
-          )?.textContent ?? "",
-      ),
+      historyToggle?.dataset.labelNone ?? "",
+      historyToggle?.dataset.labelRead ?? "",
+      historyToggle?.dataset.labelUnderstood ?? "",
     ];
     const renderHistory = (state: HistoryState | null) => {
       if (!historyToggle) return;
       const index = states.indexOf(state);
       historyToggle.dataset.state = state ?? "none";
+      if (historyControl) historyControl.dataset.state = state ?? "none";
       historyToggle.setAttribute("aria-valuenow", String(index));
       historyToggle.setAttribute("aria-valuetext", stateLabels[index] ?? "");
     };
