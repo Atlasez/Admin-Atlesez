@@ -116,7 +116,6 @@ const currentPath = Astro.url.pathname;
         </div>
         <div class="atlas-bar-actions">
           <SettingsMenu locale={locale} />
-          <a class="org-home-link" href={withBase("/")}>Atlasez</a>
         </div>
       </div>
     </header>
@@ -225,25 +224,17 @@ const currentPath = Astro.url.pathname;
     border: 1px solid var(--accent-primary);
     border-radius: var(--radius);
     border-bottom-width: 1px;
-    background: var(--background-primary);
-    color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: var(--on-accent);
     font-weight: 700;
     padding: 0 var(--space-3);
     margin-block: var(--space-1);
   }
   .nav-guide a:hover,
   .nav-guide a[aria-current="page"] {
-    background: var(--accent-subtle);
-    color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 86%, black);
+    color: var(--on-accent);
     border-color: var(--accent-primary);
-  }
-  .org-home-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--touch-target);
-    color: var(--text-secondary);
-    text-underline-offset: 0.2em;
-    white-space: nowrap;
   }
   main {
     min-height: 60vh;
@@ -290,9 +281,6 @@ const currentPath = Astro.url.pathname;
       margin-left: 0;
     }
     /* スマホの1段目は「アトラス」と「表示設定」だけにする */
-    .org-home-link {
-      display: none;
-    }
     .atlas-bar-search {
       order: 2;
       flex: 0 0 100%;

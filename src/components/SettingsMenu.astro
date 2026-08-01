@@ -56,6 +56,15 @@ const close = locale === "ja" ? "閉じる" : "Close";
   .settings-menu > summary::-webkit-details-marker {
     display: none;
   }
+  .settings-menu > summary::after {
+    content: "▾";
+    color: var(--text-secondary);
+    font-size: calc(0.75rem * var(--text-scale));
+    line-height: 1;
+  }
+  .settings-menu[open] > summary::after {
+    content: "▴";
+  }
   .settings-menu > summary:hover {
     border-color: var(--accent-primary);
     color: var(--accent-primary);

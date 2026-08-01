@@ -3,6 +3,7 @@
 import { render } from "astro:content";
 import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../../components/Breadcrumb.astro";
+import HistoryStageControl from "../../../../../components/HistoryStageControl.astro";
 import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
 import {
   t,
@@ -22,7 +23,6 @@ import {
   translationArticles,
 } from "../../../../../lib/content";
 import { ORG } from "../../../../../lib/site";
-import { HISTORY_STAGES } from "../../../../../lib/history";
 import "katex/dist/katex.min.css";
 
 export async function getStaticPaths() {
@@ -231,47 +231,7 @@ const structuredData = {
             <span data-bookmark-icon aria-hidden="true">☆</span>
             <span data-bookmark-label>{t(locale, "saveForLater")}</span>
           </button>
-          <div
-            class="history-group"
-            role="group"
-            aria-label={t(locale, "learningRecord")}
-          >
-            <span class="history-label">{t(locale, "learningRecord")}</span>
-            <div
-              class="history-stage-control"
-              data-history-stage-control
-              data-state="none"
-            >
-              <button
-                type="button"
-                class="history-stage-toggle"
-                data-history-stage-toggle
-                data-state="none"
-                data-label-none={t(locale, "stateUnrecorded")}
-                data-label-read={t(locale, "markRead")}
-                data-label-understood={t(locale, "markUnderstood")}
-                role="slider"
-                aria-label={t(locale, "learningRecord")}
-                aria-valuemin="0"
-                aria-valuemax={HISTORY_STAGES.length}
-                aria-valuenow="0"
-                aria-valuetext={t(locale, "stateUnrecorded")}
-              >
-                <span class="history-stage-track" aria-hidden="true">
-                  <span class="history-stage-position" />
-                  <span class="history-stage-position" />
-                  <span class="history-stage-position" />
-                  <span class="history-stage-thumb" />
-                </span>
-              </button>
-              <span class="history-stage-labels" aria-hidden="true">
-                <span>{t(locale, "stateUnrecorded")}</span>
-                {HISTORY_STAGES.map((stage) => (
-                  <span>{t(locale, stage.labelKey)}</span>
-                ))}
-              </span>
-            </div>
-          </div>
+          <HistoryStageControl locale={locale} />
         </div>
         {
           [...translations.entries()].length > 0 && (
@@ -312,6 +272,10 @@ const structuredData = {
 
       <div class="article-body reading">
         <Content />
+      </div>
+
+      <div class="article-bottom-history">
+        <HistoryStageControl locale={locale} />
       </div>
 
       {
@@ -488,121 +452,12 @@ const structuredData = {
     transition: none;
   }
 
-  /* 「未記録 → 読んだ → 理解した」と進む学習記録。 */
-  .history-group {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-  .history-label {
-    color: var(--text-secondary);
-    font-size: calc(0.82rem * var(--text-scale));
-  }
-  .history-stage-control {
-    width: 10.5rem;
-  }
-  .history-stage-toggle {
-    display: block;
-    width: 6.25rem;
-    height: 1.75rem;
-    margin-inline: auto;
-    padding: 0;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    color: var(--text-secondary);
-    font: inherit;
-    cursor: pointer;
-  }
-  .history-stage-toggle:hover .history-stage-track {
-    border-color: var(--accent-primary);
-  }
-  .history-stage-toggle:focus-visible {
-    outline: 3px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
-  .history-stage-track {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    padding-inline: 0.32rem;
-    border: 1px solid var(--border-strong);
-    border-radius: 999px;
-    background: var(--background-secondary);
-    transition:
-      border-color 0.16s ease,
-      background-color 0.16s ease;
-  }
-  .history-stage-position {
-    width: 0.26rem;
-    height: 0.26rem;
-    justify-self: center;
-    border-radius: 50%;
-    background: var(--text-secondary);
-    opacity: 0.38;
-  }
-  .history-stage-thumb {
-    position: absolute;
-    z-index: 1;
-    top: 50%;
-    left: 0.2rem;
-    width: 1.25rem;
-    height: 1.25rem;
-    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
-    border-radius: 50%;
-    background: var(--background-primary);
-    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 24%, transparent);
-    transform: translateY(-50%);
-    transition: left 0.16s ease;
-  }
-  .history-stage-toggle[data-state="read"] .history-stage-track {
-    border-color: var(--accent-primary);
-    background: linear-gradient(
-      to right,
-      var(--accent-primary) 0 50%,
-      var(--background-secondary) 50% 100%
-    );
-  }
-  .history-stage-toggle[data-state="understood"] .history-stage-track {
-    border-color: var(--accent-primary);
-    background: var(--accent-primary);
-  }
-  .history-stage-toggle[data-state="read"]
-    .history-stage-position:nth-child(-n + 2),
-  .history-stage-toggle[data-state="understood"] .history-stage-position {
-    background: var(--on-accent);
-    opacity: 1;
-  }
-  .history-stage-toggle[data-state="read"] .history-stage-thumb {
-    left: calc(50% - 0.625rem);
-  }
-  .history-stage-toggle[data-state="understood"] .history-stage-thumb {
-    left: calc(100% - 1.45rem);
-  }
-  .history-stage-labels {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.2rem;
-    margin-top: 0.15rem;
-    font-size: calc(0.72rem * var(--text-scale));
-    line-height: 1.25;
-    text-align: center;
-  }
-  .history-stage-control[data-state="none"]
-    .history-stage-labels
-    > :nth-child(1),
-  .history-stage-control[data-state="read"]
-    .history-stage-labels
-    > :nth-child(2),
-  .history-stage-control[data-state="understood"]
-    .history-stage-labels
-    > :nth-child(3) {
-    color: var(--accent-primary);
-    font-weight: 700;
+  .article-bottom-history {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: var(--space-5);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-default);
   }
 
   .back-to-toc {
@@ -968,28 +823,35 @@ const structuredData = {
       });
     }
 
-    const historyToggle = actions.querySelector<HTMLButtonElement>(
-      "[data-history-stage-toggle]",
-    );
-    const historyControl = actions.querySelector<HTMLElement>(
-      "[data-history-stage-control]",
-    );
+    const historyToggles = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        "[data-history-stage-toggle]",
+      ),
+    ];
+    const historyControls = [
+      ...document.querySelectorAll<HTMLElement>(
+        "[data-history-stage-control]",
+      ),
+    ];
     const states: Array<HistoryState | null> = [
       null,
       ...HISTORY_STAGES.map((stage) => stage.id),
     ];
     const stateLabels = [
-      historyToggle?.dataset.labelNone ?? "",
-      historyToggle?.dataset.labelRead ?? "",
-      historyToggle?.dataset.labelUnderstood ?? "",
+      historyToggles[0]?.dataset.labelNone ?? "",
+      historyToggles[0]?.dataset.labelRead ?? "",
+      historyToggles[0]?.dataset.labelUnderstood ?? "",
     ];
     const renderHistory = (state: HistoryState | null) => {
-      if (!historyToggle) return;
       const index = states.indexOf(state);
-      historyToggle.dataset.state = state ?? "none";
-      if (historyControl) historyControl.dataset.state = state ?? "none";
-      historyToggle.setAttribute("aria-valuenow", String(index));
-      historyToggle.setAttribute("aria-valuetext", stateLabels[index] ?? "");
+      historyToggles.forEach((toggle) => {
+        toggle.dataset.state = state ?? "none";
+        toggle.setAttribute("aria-valuenow", String(index));
+        toggle.setAttribute("aria-valuetext", stateLabels[index] ?? "");
+      });
+      historyControls.forEach((control) => {
+        control.dataset.state = state ?? "none";
+      });
     };
 
     let currentState = historyStateOf(articleId);
@@ -999,10 +861,21 @@ const structuredData = {
       currentState = setHistoryState(entry, states[bounded]);
       renderHistory(currentState);
     };
-    if (historyToggle) {
-      historyToggle.addEventListener("click", () => {
-        const currentIndex = states.indexOf(currentState);
-        moveTo((currentIndex + 1) % states.length);
+    historyToggles.forEach((historyToggle) => {
+      historyToggle.addEventListener("click", (event) => {
+        // ポインター操作では、触れた位置に最も近い段階へレバーを移す。
+        // キーボードによる click は座標を持たないため、従来どおり1段進める。
+        if (event.detail === 0) {
+          const currentIndex = states.indexOf(currentState);
+          moveTo((currentIndex + 1) % states.length);
+          return;
+        }
+        const rect = historyToggle.getBoundingClientRect();
+        const ratio = Math.max(
+          0,
+          Math.min(1, (event.clientX - rect.left) / rect.width),
+        );
+        moveTo(Math.round(ratio * (states.length - 1)));
       });
       historyToggle.addEventListener("keydown", (event) => {
         const currentIndex = states.indexOf(currentState);
@@ -1020,6 +893,6 @@ const structuredData = {
           moveTo(states.length - 1);
         }
       });
-    }
+    });
   }
 </script>

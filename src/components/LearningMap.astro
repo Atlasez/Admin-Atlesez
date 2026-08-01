@@ -19,8 +19,14 @@ interface Props {
   locale: Locale;
   /** 分野トップに埋め込む場合、その分野を初期表示として固定する。 */
   subject?: string;
+  /** カテゴリトップに埋め込む場合、そのカテゴリを初期表示する。 */
+  category?: string;
 }
-const { locale, subject: fixedSubject = "" } = Astro.props;
+const {
+  locale,
+  subject: fixedSubject = "",
+  category: fixedCategory = "",
+} = Astro.props;
 
 const { list } = await getConcepts();
 const subjects = (await getPublishedSubjects()).filter(
@@ -126,6 +132,7 @@ const categoryMetaJson = JSON.stringify(
       data-subjects={subjectMetaJson}
       data-categories={categoryMetaJson}
       data-fixed-subject={fixedSubject}
+      data-fixed-category={fixedCategory}
     >
       <noscript>
         {
@@ -1288,7 +1295,8 @@ const categoryMetaJson = JSON.stringify(
 
     // 初期表示: URL に category があればそこ、なければ概要
     const params = new URL(location.href).searchParams;
-    const urlCategory = params.get("category");
+    const urlCategory =
+      params.get("category") ?? container.dataset.fixedCategory;
     const fixedSubject = container.dataset.fixedSubject ?? "";
     const urlSubject = params.get("subject") ?? fixedSubject;
     const selected = params.get("selected");

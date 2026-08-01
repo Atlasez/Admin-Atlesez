@@ -78,9 +78,33 @@ test.describe("学習サイト", () => {
 
   test("はじめての方へは専用ガイドに移動する", async ({ page }) => {
     await page.goto("atlas/ja/");
-    await page.getByRole("link", { name: "はじめての方へ" }).click();
+    const guide = page.getByRole("link", { name: "はじめての方へ" });
+    await expect(guide).toHaveCSS("background-color", "rgb(23, 110, 166)");
+    await expect(guide).toHaveCSS("color", "rgb(255, 255, 255)");
+    await expect(
+      page
+        .locator("header")
+        .getByRole("link", { name: "Atlasez", exact: true }),
+    ).toHaveCount(0);
+    const settings = page.locator("[data-settings-menu] > summary");
+    await expect(settings).toHaveCSS("cursor", "pointer");
+    expect(
+      await settings.evaluate((element) =>
+        getComputedStyle(element, "::after").content.replaceAll('"', ""),
+      ),
+    ).toBe("▾");
+
+    await guide.click();
     await expect(page).toHaveURL(/\/atlas\/ja\/guide\/$/);
     await expect(page.locator("h1")).toHaveText("はじめての方へ");
+  });
+
+  test("最近更新された記事を近日公開予定より先に表示する", async ({ page }) => {
+    await page.goto("atlas/ja/");
+    await expect(page.locator("aside.recent h2")).toHaveText([
+      "最近更新された記事",
+      "近日公開予定の記事",
+    ]);
   });
 
   test("本文準備中の目次項目を記事一覧に表示する", async ({ page }) => {
@@ -155,9 +179,15 @@ test.describe("学習サイト", () => {
     await expect(page.getByText("事前演習（準備中）")).toHaveCount(0);
   });
 
-  test("学習記録は未記録・読んだ・理解したの3段階トグル", async ({ page }) => {
+  test("学習記録は触れた位置へ移動し、記事の上下で同期する", async ({
+    page,
+  }) => {
     await page.goto("atlas/ja/biology/overview/what-is-biology/");
-    const history = page.getByRole("slider", { name: "学習の記録" });
+    const histories = page.getByRole("slider", { name: "学習の記録" });
+    const history = histories.first();
+    const bottomHistory = histories.last();
+
+    await expect(histories).toHaveCount(2);
 
     await expect(history).toHaveAttribute("aria-valuenow", "0");
     await expect(history).toHaveAttribute("aria-valuetext", "未記録");
@@ -165,31 +195,51 @@ test.describe("学習サイト", () => {
     // ラベルや周囲ではなく、スイッチ本体だけを押せる
     await page
       .locator(".history-stage-labels")
+      .first()
       .getByText("理解した", { exact: true })
       .click();
     await expect(history).toHaveAttribute("aria-valuenow", "0");
 
-    await history.click();
+    await history.click({ position: { x: 84, y: 15 } });
     await expect(history).toHaveAttribute("aria-valuenow", "1");
     await expect(history).toHaveAttribute("aria-valuetext", "読んだ");
+    await expect(bottomHistory).toHaveAttribute("aria-valuetext", "読んだ");
 
-    await history.click();
+    await history.click({ position: { x: 164, y: 15 } });
     await expect(history).toHaveAttribute("aria-valuenow", "2");
     await expect(history).toHaveAttribute("aria-valuetext", "理解した");
+    await expect(bottomHistory).toHaveAttribute("aria-valuetext", "理解した");
 
     // 「理解した」は集計上「読んだ」にも到達済みとして扱われる
     await page.reload();
     await expect(history).toHaveAttribute("aria-valuetext", "理解した");
 
-    await history.click();
+    await bottomHistory.click({ position: { x: 4, y: 15 } });
     await expect(history).toHaveAttribute("aria-valuetext", "未記録");
   });
 
-  test("グリッド／リスト表示を切り替えられる", async ({ page }) => {
-    await page.goto("atlas/ja/mathematics/set-theory/");
+  test("カテゴリトップでタイル・学習地図・リストを切り替えられる", async ({
+    page,
+  }) => {
+    await page.goto("atlas/ja/mathematics/group-theory/");
     const list = page.locator(".article-collection");
+    await expect(page.getByRole("tab", { name: "タイル表示" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(list).toHaveAttribute("data-view", "grid");
-    await page.getByRole("button", { name: "リスト" }).click();
+    await expect(page.getByRole("link", { name: "記事を読む" })).toHaveCount(0);
+    await expect(
+      page.locator(".article-item").filter({
+        has: page.getByRole("link", { name: "群の定義", exact: true }),
+      }),
+    ).toHaveCSS("position", "relative");
+
+    await page.getByRole("tab", { name: "学習地図" }).click();
+    await expect(page.locator("[data-map-view-panel]")).toBeVisible();
+    await expect(page.locator("[data-map-subject]")).toHaveValue("mathematics");
+
+    await page.getByRole("tab", { name: "リスト表示" }).click();
     await expect(list).toHaveAttribute("data-view", "list");
     // 設定が保存される（リロード後も維持）
     await page.reload();

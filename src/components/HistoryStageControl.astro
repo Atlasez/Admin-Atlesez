@@ -1,0 +1,169 @@
+---
+/** 未記録・読んだ・理解したを1本の3段階スライダーで記録する。 */
+import { t, type Locale } from "../lib/i18n";
+import { HISTORY_STAGES } from "../lib/history";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+---
+
+<div
+  class="history-group"
+  role="group"
+  aria-label={t(locale, "learningRecord")}
+>
+  <div
+    class="history-stage-control"
+    data-history-stage-control
+    data-state="none"
+  >
+    <button
+      type="button"
+      class="history-stage-toggle"
+      data-history-stage-toggle
+      data-state="none"
+      data-label-none={t(locale, "stateUnrecorded")}
+      data-label-read={t(locale, "markRead")}
+      data-label-understood={t(locale, "markUnderstood")}
+      role="slider"
+      aria-label={t(locale, "learningRecord")}
+      aria-valuemin="0"
+      aria-valuemax={HISTORY_STAGES.length}
+      aria-valuenow="0"
+      aria-valuetext={t(locale, "stateUnrecorded")}
+    >
+      <span class="history-stage-track" aria-hidden="true">
+        <span class="history-stage-position" />
+        <span class="history-stage-position" />
+        <span class="history-stage-position" />
+        <span class="history-stage-thumb" />
+      </span>
+    </button>
+    <span class="history-stage-labels" aria-hidden="true">
+      <span>{t(locale, "stateUnrecorded")}</span>
+      {HISTORY_STAGES.map((stage) => <span>{t(locale, stage.labelKey)}</span>)}
+    </span>
+  </div>
+</div>
+
+<style>
+  .history-group {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .history-stage-control {
+    width: 10.5rem;
+  }
+  .history-stage-toggle {
+    display: block;
+    width: 100%;
+    height: 1.9rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .history-stage-toggle:hover .history-stage-track {
+    border-color: var(--accent-primary);
+  }
+  .history-stage-toggle:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  .history-stage-track {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding-inline: 0.36rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--background-secondary);
+    transition:
+      border-color 0.16s ease,
+      background-color 0.16s ease;
+  }
+  .history-stage-position {
+    width: 0.28rem;
+    height: 0.28rem;
+    justify-self: center;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    opacity: 0.38;
+  }
+  .history-stage-thumb {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 0.22rem;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+    border-radius: 50%;
+    background: var(--background-primary);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 24%, transparent);
+    transform: translateY(-50%);
+    transition: left 0.16s ease;
+  }
+  .history-stage-toggle[data-state="read"] .history-stage-track {
+    border-color: var(--accent-primary);
+    background: linear-gradient(
+      to right,
+      var(--accent-primary) 0 50%,
+      var(--background-secondary) 50% 100%
+    );
+  }
+  .history-stage-toggle[data-state="understood"] .history-stage-track {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+  }
+  .history-stage-toggle[data-state="read"]
+    .history-stage-position:nth-child(-n + 2),
+  .history-stage-toggle[data-state="understood"] .history-stage-position {
+    background: var(--on-accent);
+    opacity: 1;
+  }
+  .history-stage-toggle[data-state="read"] .history-stage-thumb {
+    left: calc(50% - 0.675rem);
+  }
+  .history-stage-toggle[data-state="understood"] .history-stage-thumb {
+    left: calc(100% - 1.57rem);
+  }
+  .history-stage-labels {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.2rem;
+    margin-top: 0.18rem;
+    font-size: calc(0.72rem * var(--text-scale));
+    line-height: 1.25;
+    text-align: center;
+  }
+  .history-stage-control[data-state="none"]
+    .history-stage-labels
+    > :nth-child(1),
+  .history-stage-control[data-state="read"]
+    .history-stage-labels
+    > :nth-child(2),
+  .history-stage-control[data-state="understood"]
+    .history-stage-labels
+    > :nth-child(3) {
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  @media (max-width: 767px) {
+    .history-group,
+    .history-stage-control {
+      width: 100%;
+    }
+  }
+</style>

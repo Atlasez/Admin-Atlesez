@@ -2,6 +2,7 @@
 /** カテゴリの記事一覧。グリッド／リスト切替・検索・絞り込み付き */
 import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../../components/Breadcrumb.astro";
+import LearningMap from "../../../../../components/LearningMap.astro";
 import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
 import {
   t,
@@ -46,6 +47,15 @@ const articles = (await getPublishedArticles(locale)).filter(
 const subjectName = localizedName(subject.data.name, locale);
 const categoryName = localizedName(category.name, locale);
 const planned = getPlannedArticles(subject.data.slug, category.slug);
+const views = [
+  { id: "tiles", label: t(locale, "tileView") },
+  { id: "map", label: t(locale, "map") },
+  { id: "list", label: t(locale, "listViewTab") },
+] as const;
+const summary =
+  locale === "ja"
+    ? `${articles.length}記事を公開中${planned.length > 0 ? `・準備中${planned.length}件` : ""}`
+    : `${articles.length} articles${planned.length > 0 ? ` · ${planned.length} planned` : ""}`;
 
 /** 各記事の表示用データ（前提概念名も解決しておく） */
 const items = articles.map((a) => ({
@@ -71,7 +81,12 @@ const items = articles.map((a) => ({
     LOCALES.map((l) => [l, atlasPath(l, subject.data.slug, category.slug)]),
   )}
 >
-  <div class="container">
+  <div
+    class="container category-home"
+    data-category-layout
+    data-active-view="tiles"
+    data-view-storage-key={`atlasez-category-view:${subject.data.slug}/${category.slug}`}
+  >
     <Breadcrumb
       items={[
         { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
@@ -81,34 +96,54 @@ const items = articles.map((a) => ({
     />
     <h1>{categoryName}</h1>
 
-    <div class="list-controls">
-      <div class="view-toggle" role="group" aria-label={locale === "ja" ? "表示切替" : "View"}>
-        <button
-          type="button"
-          class="button button-secondary"
-          data-view-btn="grid"
-          aria-pressed="true">{t(locale, "gridView")}</button
-        >
-        <button
-          type="button"
-          class="button button-secondary"
-          data-view-btn="list"
-          aria-pressed="false">{t(locale, "listView")}</button
-        >
+    <div class="view-bar">
+      <div
+        class="view-tabs"
+        role="tablist"
+        aria-label={t(locale, "viewSwitcher")}
+        data-view-tabs
+      >
+        {
+          views.map((view, index) => (
+            <button
+              type="button"
+              role="tab"
+              id={`category-view-tab-${view.id}`}
+              class="view-tab"
+              data-view-tab={view.id}
+              aria-selected={index === 0 ? "true" : "false"}
+              aria-controls={view.id === "map"
+                ? "category-view-panel-map"
+                : "category-view-panel-articles"}
+              tabindex={index === 0 ? undefined : "-1"}
+            >
+              {view.label}
+            </button>
+          ))
+        }
       </div>
-      <div class="filters">
-        <label for="filter-text">{t(locale, "search")}</label>
-        <input
-          id="filter-text"
-          type="search"
-          data-filter-text
-          placeholder={t(locale, "searchPlaceholder")}
-        />
-      </div>
+      <p class="section-meta">{summary}</p>
+    </div>
+
+    <div class="filters">
+      <label for="filter-text">{t(locale, "search")}</label>
+      <input
+        id="filter-text"
+        type="search"
+        data-filter-text
+        placeholder={t(locale, "searchPlaceholder")}
+      />
     </div>
 
     <p class="visually-hidden" aria-live="polite" data-filter-status></p>
 
+    <div
+      id="category-view-panel-articles"
+      class="view-panel"
+      role="tabpanel"
+      aria-labelledby="category-view-tab-tiles"
+      data-article-view-panel
+    >
     <ul class="article-collection" data-view="grid">
       {
         items.map(({ article: a, prereqNames, href }) => (
@@ -127,6 +162,12 @@ const items = articles.map((a) => ({
                   {formatDate(a.data.updatedAt, locale)}
                 </time>
               </span>
+              <span class="badge" title={t(locale, "exercisePreparing")}>
+                {t(locale, "preExercise")}（{t(locale, "preparing")}）
+              </span>
+              <span class="badge" title={t(locale, "exercisePreparing")}>
+                {t(locale, "postExercise")}（{t(locale, "preparing")}）
+              </span>
             </p>
             {prereqNames.length > 0 && (
               <p class="article-prereqs">
@@ -134,20 +175,6 @@ const items = articles.map((a) => ({
                 {prereqNames.join("、")}
               </p>
             )}
-            <p class="article-actions">
-              <a class="button" href={href}>
-                {t(locale, "readArticle")}
-              </a>
-              <span
-                class="badge"
-                title={t(locale, "exercisePreparing")}
-              >
-                {t(locale, "preExercise")}（{t(locale, "preparing")}）
-              </span>
-              <span class="badge" title={t(locale, "exercisePreparing")}>
-                {t(locale, "postExercise")}（{t(locale, "preparing")}）
-              </span>
-            </p>
           </li>
         ))
       }
@@ -182,32 +209,94 @@ const items = articles.map((a) => ({
         ))
       }
     </ul>
+    </div>
+
+    <div
+      id="category-view-panel-map"
+      class="view-panel"
+      role="tabpanel"
+      aria-labelledby="category-view-tab-map"
+      data-map-view-panel
+      hidden
+    >
+      <LearningMap
+        locale={locale}
+        subject={subject.data.slug}
+        category={`${subject.data.slug}/${category.slug}`}
+      />
+    </div>
   </div>
 </AtlasLayout>
 
 <style>
-  .list-controls {
+  .category-home {
+    max-width: var(--content-width);
+    padding-bottom: var(--space-5);
+  }
+  .view-bar {
     display: flex;
-    justify-content: space-between;
-    align-items: end;
+    align-items: flex-end;
     gap: var(--space-3);
     flex-wrap: wrap;
-    margin-block: var(--space-4);
+    margin-top: var(--space-4);
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .view-tabs {
+    display: flex;
+    gap: 2px;
+  }
+  .view-tab {
+    position: relative;
+    bottom: -2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--touch-target);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-bottom: 2px solid var(--accent-primary);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: calc(0.95rem * var(--text-scale));
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .view-tab:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+  .view-tab[aria-selected="true"] {
+    border-color: var(--accent-primary);
+    border-bottom-color: var(--background-primary);
+    background: var(--background-primary);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .section-meta {
+    margin: 0;
+    padding-bottom: var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  .view-panel {
+    padding-top: var(--space-3);
   }
   .filters {
     display: flex;
     gap: var(--space-2);
     align-items: center;
     flex-wrap: wrap;
+    margin-top: var(--space-3);
   }
   .filters label {
     margin: 0;
     font-weight: 400;
     color: var(--text-secondary);
   }
-  .view-toggle [aria-pressed="true"] {
-    background: var(--accent-primary);
-    color: var(--on-accent);
+  [data-category-layout][data-active-view="map"] > .filters {
+    display: none;
   }
   .article-collection {
     list-style: none;
@@ -222,6 +311,20 @@ const items = articles.map((a) => ({
   .article-title {
     font-size: calc(1.1rem * var(--text-scale));
     margin: 0;
+  }
+  .article-item {
+    position: relative;
+  }
+  .article-title a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .article-item:has(.article-title a:hover),
+  .article-item:has(.article-title a:focus-visible) {
+    border-color: var(--accent-primary);
+    box-shadow: 0 3px 12px rgb(0 0 0 / 0.14);
   }
   .article-summary {
     margin: 0;
@@ -240,16 +343,12 @@ const items = articles.map((a) => ({
     font-size: calc(0.82rem * var(--text-scale));
     font-weight: 700;
   }
-  .article-badges,
-  .article-actions {
+  .article-badges {
     display: flex;
     gap: var(--space-1);
     flex-wrap: wrap;
     align-items: center;
     margin: 0;
-  }
-  .article-actions {
-    margin-top: auto;
   }
   .article-prereqs {
     margin: 0;
@@ -267,7 +366,7 @@ const items = articles.map((a) => ({
     grid-template-areas:
       "title badges"
       "summary badges"
-      "prereqs actions";
+      "prereqs badges";
     gap: var(--space-1) var(--space-3);
     border: 0;
     border-bottom: 1px solid var(--border-default);
@@ -287,32 +386,51 @@ const items = articles.map((a) => ({
   .article-collection[data-view="list"] .article-prereqs {
     grid-area: prereqs;
   }
-  .article-collection[data-view="list"] .article-actions {
-    grid-area: actions;
-  }
-  .article-collection[data-view="list"] .article-actions .button {
-    min-height: auto;
-    padding: 0.2em 0.8em;
-  }
   .article-item[hidden] {
     display: none;
   }
   @media (max-width: 767px) {
     .article-collection[data-view="list"] .article-item {
       grid-template-columns: 1fr;
-      grid-template-areas: "title" "summary" "badges" "prereqs" "actions";
+      grid-template-areas: "title" "summary" "badges" "prereqs";
+    }
+    .view-tabs {
+      width: 100%;
+      border-bottom: 2px solid var(--accent-primary);
+    }
+    .view-bar {
+      border-bottom: 0;
+    }
+    .view-tab {
+      flex: 1 1 0;
+      padding-inline: var(--space-1);
+    }
+    .section-meta {
+      width: 100%;
+      padding-top: var(--space-2);
+      padding-bottom: 0;
     }
   }
 </style>
 
 <script>
-  const VIEW_KEY = "atlas-article-view";
+  const categoryLayout = document.querySelector<HTMLElement>(
+    "[data-category-layout]",
+  );
   const collection = document.querySelector<HTMLElement>(
     ".article-collection",
   );
-  const buttons = document.querySelectorAll<HTMLButtonElement>(
-    "[data-view-btn]",
+  const articlePanel = document.querySelector<HTMLElement>(
+    "[data-article-view-panel]",
   );
+  const mapPanel = document.querySelector<HTMLElement>("[data-map-view-panel]");
+  const tabs = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      "[data-category-layout] [data-view-tab]",
+    ),
+  ];
+  const viewKey =
+    categoryLayout?.dataset.viewStorageKey ?? "atlasez-category-view";
   const items = Array.from(
     document.querySelectorAll<HTMLElement>(".article-item"),
   );
@@ -321,27 +439,72 @@ const items = articles.map((a) => ({
   );
   const status = document.querySelector<HTMLElement>("[data-filter-status]");
 
-  function setView(view: string): void {
-    if (!collection) return;
-    collection.dataset.view = view;
-    buttons.forEach((b) =>
-      b.setAttribute("aria-pressed", String(b.dataset.viewBtn === view)),
-    );
-    try {
-      localStorage.setItem(VIEW_KEY, view);
-    } catch {
-      /* noop */
+  function setView(view: string, focus = false): void {
+    if (!tabs.some((tab) => tab.dataset.viewTab === view)) view = "tiles";
+    const mapActive = view === "map";
+    if (collection) collection.dataset.view = view === "list" ? "list" : "grid";
+    if (articlePanel) {
+      articlePanel.hidden = mapActive;
+      articlePanel.setAttribute(
+        "aria-labelledby",
+        `category-view-tab-${view === "list" ? "list" : "tiles"}`,
+      );
     }
+    if (mapPanel) mapPanel.hidden = !mapActive;
+    if (categoryLayout) categoryLayout.dataset.activeView = view;
+    for (const tab of tabs) {
+      const active = tab.dataset.viewTab === view;
+      tab.setAttribute("aria-selected", String(active));
+      if (active) tab.removeAttribute("tabindex");
+      else tab.setAttribute("tabindex", "-1");
+      if (active && focus) tab.focus();
+    }
+    try {
+      localStorage.setItem(viewKey, view);
+    } catch {
+      /* 保存できなくても表示切り替えは利用できる */
+    }
+    const url = new URL(location.href);
+    if (view === "tiles") url.searchParams.delete("view");
+    else url.searchParams.set("view", view);
+    history.replaceState(null, "", url);
+    if (mapActive) window.dispatchEvent(new Event("resize"));
   }
 
-  buttons.forEach((b) =>
-    b.addEventListener("click", () => setView(b.dataset.viewBtn ?? "grid")),
-  );
-  try {
-    const saved = localStorage.getItem(VIEW_KEY);
-    if (saved === "list" || saved === "grid") setView(saved);
-  } catch {
-    /* noop */
+  if (tabs.length > 0) {
+    tabs.forEach((tab) =>
+      tab.addEventListener("click", () => setView(tab.dataset.viewTab ?? "")),
+    );
+    document
+      .querySelector<HTMLElement>("[data-category-layout] [data-view-tabs]")
+      ?.addEventListener("keydown", (event) => {
+        const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+        if (!keys.includes(event.key)) return;
+        event.preventDefault();
+        const index = tabs.findIndex(
+          (tab) => tab.getAttribute("aria-selected") === "true",
+        );
+        const next =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? tabs.length - 1
+              : (index +
+                  (event.key === "ArrowRight" ? 1 : -1) +
+                  tabs.length) %
+                tabs.length;
+        setView(tabs[next].dataset.viewTab ?? "", true);
+      });
+
+    let initial = new URL(location.href).searchParams.get("view");
+    if (!initial) {
+      try {
+        initial = localStorage.getItem(viewKey);
+      } catch {
+        initial = null;
+      }
+    }
+    setView(initial ?? "tiles");
   }
 
   function applyFilters(): void {

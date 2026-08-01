@@ -325,7 +325,35 @@ const views = [
       </section>
 
       <aside class="recent">
-        {/* これから増えるものを先に見せ、その下に更新履歴を置く */}
+        <section aria-labelledby="recent-heading">
+          <div class="section-title">
+            <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
+          </div>
+          <div class="recent-scroll">
+            <ul class="recent-list">
+              {
+                recent.map((a) => (
+                  <li>
+                    <a
+                      href={articlePath(
+                        locale,
+                        a.data.subject,
+                        a.data.category,
+                        a.data.slug,
+                      )}
+                    >
+                      {a.data.title}
+                    </a>
+                    <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>
+                      {formatDate(a.data.updatedAt, locale)}
+                    </time>
+                  </li>
+                ))
+              }
+            </ul>
+          </div>
+        </section>
+
         {
           upcoming.length > 0 && (
             <section class="upcoming" aria-labelledby="upcoming-heading">
@@ -350,35 +378,6 @@ const views = [
             </section>
           )
         }
-
-        <section aria-labelledby="recent-heading">
-        <div class="section-title">
-          <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
-        </div>
-        <div class="recent-scroll">
-          <ul class="recent-list">
-            {
-              recent.map((a) => (
-                <li>
-                  <a
-                    href={articlePath(
-                      locale,
-                      a.data.subject,
-                      a.data.category,
-                      a.data.slug,
-                    )}
-                  >
-                    {a.data.title}
-                  </a>
-                  <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>
-                    {formatDate(a.data.updatedAt, locale)}
-                  </time>
-                </li>
-              ))
-            }
-          </ul>
-        </div>
-        </section>
       </aside>
     </div>
   </div>
@@ -794,7 +793,7 @@ const views = [
   }
   /* ---- 近日公開予定の記事（右カラム上部） ---- */
   .upcoming {
-    margin-bottom: var(--space-4);
+    margin-top: var(--space-4);
   }
   .upcoming-list {
     list-style: none;
