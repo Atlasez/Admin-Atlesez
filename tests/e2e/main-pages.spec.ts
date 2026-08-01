@@ -192,6 +192,30 @@ test.describe("学習サイト", () => {
     await expect(history).toHaveAttribute("aria-valuenow", "0");
     await expect(history).toHaveAttribute("aria-valuetext", "未記録");
 
+    const expectThumbAlignedWithPosition = async (positionIndex: number) => {
+      await expect
+        .poll(() =>
+          history.evaluate((toggle, index) => {
+            const thumb = toggle.querySelector(".history-stage-thumb");
+            const positions = toggle.querySelectorAll(
+              ".history-stage-position",
+            );
+            const thumbRect = thumb?.getBoundingClientRect();
+            const positionRect = positions[index]?.getBoundingClientRect();
+            const thumbCenter = thumbRect
+              ? thumbRect.left + thumbRect.width / 2
+              : NaN;
+            const positionCenter = positionRect
+              ? positionRect.left + positionRect.width / 2
+              : NaN;
+            return Math.abs(thumbCenter - positionCenter);
+          }, positionIndex),
+        )
+        .toBeLessThan(0.5);
+    };
+
+    await expectThumbAlignedWithPosition(0);
+
     // ラベルや周囲ではなく、スイッチ本体だけを押せる
     await page
       .locator(".history-stage-labels")
@@ -204,11 +228,13 @@ test.describe("学習サイト", () => {
     await expect(history).toHaveAttribute("aria-valuenow", "1");
     await expect(history).toHaveAttribute("aria-valuetext", "読んだ");
     await expect(bottomHistory).toHaveAttribute("aria-valuetext", "読んだ");
+    await expectThumbAlignedWithPosition(1);
 
     await history.click({ position: { x: 164, y: 15 } });
     await expect(history).toHaveAttribute("aria-valuenow", "2");
     await expect(history).toHaveAttribute("aria-valuetext", "理解した");
     await expect(bottomHistory).toHaveAttribute("aria-valuetext", "理解した");
+    await expectThumbAlignedWithPosition(2);
 
     // 「理解した」は集計上「読んだ」にも到達済みとして扱われる
     await page.reload();

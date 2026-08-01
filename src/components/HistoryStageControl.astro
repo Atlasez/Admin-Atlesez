@@ -79,13 +79,12 @@ const { locale } = Astro.props;
     outline-offset: 2px;
   }
   .history-stage-track {
+    --history-thumb-size: 1.35rem;
+    --history-edge-center: calc(var(--history-thumb-size) / 2);
     position: relative;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    align-items: center;
+    display: block;
     width: 100%;
     height: 100%;
-    padding-inline: 0.36rem;
     border: 1px solid var(--border-strong);
     border-radius: 999px;
     background: var(--background-secondary);
@@ -94,20 +93,31 @@ const { locale } = Astro.props;
       background-color 0.16s ease;
   }
   .history-stage-position {
+    position: absolute;
+    top: 50%;
     width: 0.28rem;
     height: 0.28rem;
-    justify-self: center;
     border-radius: 50%;
     background: var(--text-secondary);
     opacity: 0.38;
+    transform: translate(-50%, -50%);
+  }
+  .history-stage-position:nth-child(1) {
+    left: var(--history-edge-center);
+  }
+  .history-stage-position:nth-child(2) {
+    left: 50%;
+  }
+  .history-stage-position:nth-child(3) {
+    left: calc(100% - var(--history-edge-center));
   }
   .history-stage-thumb {
     position: absolute;
     z-index: 1;
     top: 50%;
-    left: 0.22rem;
-    width: 1.35rem;
-    height: 1.35rem;
+    left: 0;
+    width: var(--history-thumb-size);
+    height: var(--history-thumb-size);
     border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
     border-radius: 50%;
     background: var(--background-primary);
@@ -134,10 +144,10 @@ const { locale } = Astro.props;
     opacity: 1;
   }
   .history-stage-toggle[data-state="read"] .history-stage-thumb {
-    left: calc(50% - 0.675rem);
+    left: calc(50% - var(--history-edge-center));
   }
   .history-stage-toggle[data-state="understood"] .history-stage-thumb {
-    left: calc(100% - 1.57rem);
+    left: calc(100% - var(--history-thumb-size));
   }
   .history-stage-labels {
     display: grid;
