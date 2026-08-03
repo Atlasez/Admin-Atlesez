@@ -171,7 +171,9 @@ const { locale } = Astro.props;
     font-weight: 700;
   }
   @media (max-width: 767px) {
-    .history-group,
+    .history-group {
+      width: min(10.5rem, 100%);
+    }
     .history-stage-control {
       width: 100%;
     }

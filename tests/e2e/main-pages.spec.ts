@@ -182,12 +182,14 @@ test.describe("学習サイト", () => {
   test("学習記録は触れた位置へ移動し、記事の上下で同期する", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("atlas/ja/biology/overview/what-is-biology/");
     const histories = page.getByRole("slider", { name: "学習の記録" });
     const history = histories.first();
     const bottomHistory = histories.last();
 
     await expect(histories).toHaveCount(2);
+    await expect(history).toHaveCSS("width", "168px");
 
     await expect(history).toHaveAttribute("aria-valuenow", "0");
     await expect(history).toHaveAttribute("aria-valuetext", "未記録");
