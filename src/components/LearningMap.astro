@@ -149,6 +149,14 @@ const categoryMetaJson = JSON.stringify(
           {locale === "ja" ? "表示を戻す" : "Fit view"}
         </button>
       </div>
+      <button
+        type="button"
+        class="map-touch-toggle"
+        data-map-touch-toggle
+        aria-pressed="false"
+      >
+        {locale === "ja" ? "地図を操作" : "Control map"}
+      </button>
     </div>
 
     <div class="map-canvas" id="learning-map" role="application"
@@ -391,6 +399,9 @@ const categoryMetaJson = JSON.stringify(
     font: inherit;
     font-size: calc(0.82rem * var(--text-scale));
     cursor: pointer;
+  }
+  .map-touch-toggle {
+    display: none;
   }
   .map-viewport-tools button:hover {
     border-color: var(--accent-primary);
@@ -760,6 +771,12 @@ const categoryMetaJson = JSON.stringify(
     margin-bottom: 0;
   }
   @media (max-width: 767px) {
+    section {
+      margin-block: var(--space-3);
+    }
+    .map-frame {
+      border-radius: calc(var(--radius) - 2px);
+    }
     /* iOS Safari は 16px 未満の入力欄で画面を拡大してしまう */
     .map-toolbar input,
     .map-toolbar select,
@@ -772,21 +789,48 @@ const categoryMetaJson = JSON.stringify(
       width: 100%;
     }
     .map-status {
-      flex-basis: auto;
+      grid-column: 1 / -1;
+      min-height: 2.5em;
+      line-height: 1.35;
     }
     .map-viewport-tools {
+      display: grid;
+      grid-template-columns: 2.75rem minmax(3rem, 1fr) 2.75rem 1fr 1fr;
+      grid-column: 1 / -1;
       width: 100%;
       margin-left: 0;
     }
-    .map-viewport-tools button:last-child {
-      margin-left: auto;
+    .map-viewport-tools button {
+      min-width: 0;
+      padding-inline: var(--space-1);
+      white-space: nowrap;
+    }
+    .map-touch-toggle {
+      display: block;
+      grid-column: 1 / -1;
+      min-height: var(--touch-target);
+      border: 1px solid var(--accent-primary);
+      border-radius: var(--radius);
+      background: var(--background-primary);
+      color: var(--accent-primary);
+      font: inherit;
+      font-weight: 700;
+    }
+    .map-touch-toggle[aria-pressed="true"] {
+      background: var(--accent-primary);
+      color: var(--on-accent);
     }
     .route-form .button {
       width: 100%;
     }
     .map-canvas {
-      height: 60vh;
-      min-height: 22rem;
+      height: 70svh;
+      min-height: 32rem;
+      max-height: 44rem;
+      touch-action: pan-y pinch-zoom;
+    }
+    .map-canvas[data-touch-active="true"] {
+      touch-action: none;
     }
     .map-canvas-caption,
     .map-canvas-legend {
@@ -797,8 +841,11 @@ const categoryMetaJson = JSON.stringify(
       top: auto;
       bottom: var(--space-2);
       max-width: calc(100% - var(--space-4));
+      padding: 3px;
     }
     .map-tools-start {
+      top: var(--space-2);
+      bottom: auto;
       left: var(--space-2);
     }
     .map-tools-end {
@@ -810,16 +857,36 @@ const categoryMetaJson = JSON.stringify(
       right: var(--space-2);
       width: auto;
       max-height: calc(100% - 6rem);
+      z-index: 5;
     }
     .map-detail {
       bottom: calc(var(--space-2) + var(--touch-target) + var(--space-1));
     }
     /* 道具立ては縦に積む。横に溢れて押せなくなるのを防ぐ */
     .map-toolbar {
-      flex-direction: column;
-      align-items: stretch;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: var(--space-1) var(--space-2);
+      padding: var(--space-2);
     }
-    .map-toolbar .button {
+    .map-toolbar input[type="search"] {
+      grid-column: 1 / -1;
+    }
+    .map-toolbar select {
+      width: 100%;
+      min-width: 0;
+    }
+    .map-tool {
+      min-height: 2.5rem;
+      padding-inline: var(--space-2);
+      font-size: calc(0.78rem * var(--text-scale));
+    }
+    .map-frame:has(.map-route:not([hidden])) .map-tools {
+      visibility: hidden;
+    }
+    .map-toolbar .button,
+    .map-touch-toggle {
       width: 100%;
     }
     .subject-legend {
@@ -915,6 +982,7 @@ const categoryMetaJson = JSON.stringify(
     const label = (n: GraphNode) =>
       locale === "en" && n.name.en ? n.name.en : n.name.ja;
     const ja = locale === "ja";
+    const mobileViewport = window.matchMedia("(max-width: 767px)").matches;
 
     controls.forEach((control) => (control.hidden = false));
 
@@ -1211,6 +1279,36 @@ const categoryMetaJson = JSON.stringify(
       maxZoom: 3,
     });
 
+    /**
+     * スマホでは地図上の1本指ドラッグとページスクロールが競合する。
+     * 初期状態はページを縦に動かせるようにし、明示的に「地図を操作」を
+     * 押したときだけパン・ピンチズームを有効にする。
+     */
+    const touchToggle = document.querySelector<HTMLButtonElement>(
+      "[data-map-touch-toggle]",
+    );
+    const setTouchInteraction = (active: boolean) => {
+      container.dataset.touchActive = String(active);
+      touchToggle?.setAttribute("aria-pressed", String(active));
+      if (touchToggle) {
+        touchToggle.textContent = active
+          ? ja
+            ? "ページスクロールに戻す"
+            : "Return to page scrolling"
+          : ja
+            ? "地図を操作"
+            : "Control map";
+      }
+      cy.userPanningEnabled(!mobileViewport || active);
+      cy.userZoomingEnabled(!mobileViewport || active);
+    };
+    if (mobileViewport) {
+      setTouchInteraction(false);
+      touchToggle?.addEventListener("click", () => {
+        setTouchInteraction(touchToggle.getAttribute("aria-pressed") !== "true");
+      });
+    }
+
     const mapStatus = document.querySelector<HTMLElement>("[data-map-status]");
     const subjectSelect =
       document.querySelector<HTMLSelectElement>("[data-map-subject]");
@@ -1387,8 +1485,9 @@ const categoryMetaJson = JSON.stringify(
     function fitReadable(elements: ReturnType<typeof cy.nodes>): void {
       if (elements.length === 0) return;
       cy.fit(elements, 50);
-      if (cy.zoom() < 0.4) {
-        cy.zoom(0.4);
+      const minimumReadableZoom = mobileViewport ? 0.62 : 0.4;
+      if (cy.zoom() < minimumReadableZoom) {
+        cy.zoom(minimumReadableZoom);
         cy.center(elements);
       }
     }
@@ -1467,7 +1566,9 @@ const categoryMetaJson = JSON.stringify(
     // 全画面の切り替えなどで枠の大きさが変わったら測り直す
     window.addEventListener("resize", () => {
       cy.resize();
-      cy.fit(cy.nodes(":visible"), 50);
+      fitReadable(
+        cy.nodes(":visible").filter((node) => node.data("kind") !== "subject"),
+      );
     });
 
     /** カテゴリを閉じて概要に戻す（fold） */

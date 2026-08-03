@@ -350,6 +350,42 @@ test.describe("学習サイト", () => {
     await expect(page.getByLabel(/目的地点/)).not.toBeVisible();
   });
 
+  test("スマートフォンでは学習地図とページスクロールを切り替えられる", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("atlas/ja/map/");
+
+    const canvas = page.locator("[data-map-frame] .map-canvas");
+    const touchToggle = page.getByRole("button", { name: "地図を操作" });
+    await expect(touchToggle).toBeVisible();
+    await expect(touchToggle).toHaveAttribute("aria-pressed", "false");
+    await expect(canvas).toHaveCSS("touch-action", "pan-y pinch-zoom");
+
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox?.height).toBeGreaterThanOrEqual(500);
+    const zoom = Number(
+      (await page.locator("[data-map-zoom-level]").textContent())?.replace(
+        "%",
+        "",
+      ),
+    );
+    expect(zoom).toBeGreaterThanOrEqual(60);
+
+    await touchToggle.click();
+    await expect(
+      page.getByRole("button", { name: "ページスクロールに戻す" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(canvas).toHaveCSS("touch-action", "none");
+
+    const frame = page.locator("[data-map-frame]");
+    expect(
+      await frame.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth + 1,
+      ),
+    ).toBe(true);
+  });
+
   test("学習ルートを計算できる（線形空間→ジョルダン標準形）", async ({
     page,
   }) => {
