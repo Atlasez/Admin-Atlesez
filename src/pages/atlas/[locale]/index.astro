@@ -261,63 +261,111 @@ const views = [
         >
           {
             grouped.map((group) => (
-              <details class="list-group" open>
+              <details class="list-group">
                 <summary class="group-heading">
                   <h2>{group.label}</h2>
                 </summary>
-                {group.genres.map((genre) => (
-                  <section class="list-genre">
-                    <h3 class="genre-heading">{genre.label}</h3>
+                <div class="list-group-body">
+                  {group.genres.map((genre) => (
+                  <details class="list-genre">
+                    <summary class="list-genre-heading">
+                      <h3>{genre.label}</h3>
+                    </summary>
                     <ul class="subject-list">
                       {genre.subjects.map((s) => {
                         const published = s.data.status === "published";
                         const name = localizedName(s.data.name, locale);
+                        const sortedCategories = s.data.categories
+                          .slice()
+                          .sort((a, b) => a.order - b.order);
                         return (
                           <li class="subject-list-item">
-                            <div class="subject-list-head">
-                              {published ? (
-                                <a href={atlasPath(locale, s.data.slug)}>{name}</a>
-                              ) : (
-                                <span>{name}</span>
-                              )}
-                              <span class="subject-count">
-                                {published
-                                  ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
-                                  : t(locale, "preparing")}
-                              </span>
-                            </div>
-                            {published && s.data.categories.length > 0 && (
-                              <ul class="category-list">
-                                {s.data.categories
-                                  .slice()
-                                  .sort((a, b) => a.order - b.order)
-                                  .map((cat) => {
+                            {published && sortedCategories.length > 0 ? (
+                              <details class="subject-list-details">
+                                <summary class="subject-list-head">
+                                  <a href={`${atlasPath(locale, s.data.slug)}?view=list`}>
+                                    {name}
+                                  </a>
+                                  <span class="subject-count">
+                                    {countBySubject.get(s.data.slug) ?? 0}
+                                    {locale === "ja" ? "記事" : " articles"}
+                                  </span>
+                                </summary>
+                                <ul class="category-list">
+                                  {sortedCategories.map((cat) => {
                                     const items =
                                       articlesByCategory.get(
                                         `${s.data.slug}/${cat.slug}`,
                                       ) ?? [];
+                                    const planned = getPlannedArticles(
+                                      s.data.slug,
+                                      cat.slug,
+                                    );
                                     return (
-                                      <li>
-                                        <a
-                                          href={`${atlasPath(locale, s.data.slug)}${cat.slug}/`}
-                                        >
-                                          {localizedName(cat.name, locale)}
-                                        </a>
-                                        <span class="subject-count">
-                                          {items.length}
-                                          {locale === "ja" ? "記事" : ""}
-                                        </span>
+                                      <li class="category-list-item">
+                                        <details class="category-list-details">
+                                          <summary class="category-list-head">
+                                            <a
+                                              href={`${atlasPath(locale, s.data.slug)}${cat.slug}/?view=list`}
+                                            >
+                                              {localizedName(cat.name, locale)}
+                                            </a>
+                                            <span class="subject-count">
+                                              {items.length}
+                                              {locale === "ja" ? "記事" : " articles"}
+                                              {planned.length > 0 &&
+                                                ` / ${locale === "ja" ? `準備中${planned.length}件` : `${planned.length} planned`}`}
+                                            </span>
+                                          </summary>
+                                          <ul class="article-list">
+                                            {items.map((article) => (
+                                              <li>
+                                                <a
+                                                  href={articlePath(
+                                                    locale,
+                                                    article.data.subject,
+                                                    article.data.category,
+                                                    article.data.slug,
+                                                  )}
+                                                >
+                                                  {article.data.title}
+                                                </a>
+                                              </li>
+                                            ))}
+                                            {planned.map((item) => (
+                                              <li class="planned-list-item">
+                                                <span>
+                                                  {plannedArticleTitle(item, locale)}
+                                                </span>
+                                                <span class="planned-label">
+                                                  {t(locale, "preparing")}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </details>
                                       </li>
                                     );
                                   })}
-                              </ul>
+                                </ul>
+                              </details>
+                            ) : (
+                              <div class="subject-list-head subject-list-static">
+                                <span>{name}</span>
+                                <span class="subject-count">
+                                  {published
+                                    ? `${countBySubject.get(s.data.slug) ?? 0}${locale === "ja" ? "記事" : " articles"}`
+                                    : t(locale, "preparing")}
+                                </span>
+                              </div>
                             )}
                           </li>
                         );
                       })}
                     </ul>
-                  </section>
-                ))}
+                  </details>
+                  ))}
+                </div>
               </details>
             ))
           }
@@ -329,7 +377,8 @@ const views = [
           <div class="section-title">
             <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
           </div>
-          <div class="recent-scroll">
+          <div class="scroll-shell">
+          <div class="recent-scroll" data-scroll-region tabindex="0">
             <ul class="recent-list">
               {
                 recent.map((a) => (
@@ -352,6 +401,11 @@ const views = [
               }
             </ul>
           </div>
+          <p class="scroll-hint" data-scroll-hint hidden aria-hidden="true">
+            <span>↕</span>
+            {locale === "ja" ? "スクロールして続きを表示" : "Scroll for more"}
+          </p>
+          </div>
         </section>
 
         {
@@ -360,7 +414,8 @@ const views = [
               <div class="section-title">
                 <h2 id="upcoming-heading">{t(locale, "upcomingArticles")}</h2>
               </div>
-              <ul class="upcoming-list">
+              <div class="scroll-shell">
+              <ul class="upcoming-list" data-scroll-region tabindex="0">
                 {upcoming.map((u) => (
                   <li>
                     <a href={u.href}>{u.title}</a>
@@ -375,6 +430,11 @@ const views = [
                   </li>
                 ))}
               </ul>
+              <p class="scroll-hint" data-scroll-hint hidden aria-hidden="true">
+                <span>↕</span>
+                {locale === "ja" ? "スクロールして続きを表示" : "Scroll for more"}
+              </p>
+              </div>
             </section>
           )
         }
@@ -458,6 +518,16 @@ const views = [
     }
     activate(initial ?? "tiles");
   }
+
+  /** 固定高の一覧に続きがある場合だけ、スクロール案内を表示する。 */
+  const syncScrollHints = () => {
+    document.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach((region) => {
+      const hint = region.parentElement?.querySelector<HTMLElement>("[data-scroll-hint]");
+      if (hint) hint.hidden = region.scrollHeight <= region.clientHeight + 1;
+    });
+  };
+  syncScrollHints();
+  window.addEventListener("resize", syncScrollHints);
 </script>
 
 <style>
@@ -646,6 +716,10 @@ const views = [
   .subject-row .subject-count {
     margin-left: auto;
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    line-height: 1;
   }
   /* min-height はWCAG 2.5.8（ターゲットサイズ 24px）を満たすため */
   .subject-name {
@@ -717,47 +791,118 @@ const views = [
 
   /* ---- 分野一覧（リスト） ---- */
   .subject-list,
-  .category-list {
+  .category-list,
+  .article-list {
     list-style: none;
     margin: 0;
     padding: 0;
   }
-  .subject-list-item {
-    padding: var(--space-2) 0;
-    border-bottom: 1px solid var(--border-default);
+  .list-group-body {
+    padding-left: var(--space-2);
+    border-left: 2px solid var(--border-default);
   }
-  /* リスト表示は「大ジャンル 1.15 → 中ジャンル 0.95 → 分野 1.05 → カテゴリ 0.85」と
-     字の大きさが素直に下るようにそろえる。タイル表示ほど分野名を大きくすると
-     中ジャンルの見出しが埋もれて段が読み取れなくなるため、ここでは詰める。 */
-  .list-genre > .genre-heading {
-    font-size: calc(0.95rem * var(--text-scale));
-    font-weight: 650;
-    letter-spacing: 0.02em;
-    color: var(--text-primary);
+  .list-genre {
+    border: 0;
   }
-  .subject-list-head {
+  .list-genre + .list-genre {
+    margin-top: var(--space-3);
+  }
+  .list-genre-heading,
+  .subject-list-head,
+  .category-list-head {
     display: flex;
-    /* 記事数・準備中が下にずれないよう中央でそろえる */
     align-items: center;
     gap: var(--space-2);
+    list-style: none;
+    cursor: pointer;
+  }
+  .list-genre-heading::-webkit-details-marker,
+  .subject-list-head::-webkit-details-marker,
+  .category-list-head::-webkit-details-marker {
+    display: none;
+  }
+  .list-genre-heading::before,
+  .subject-list-head::before,
+  .category-list-head::before {
+    content: "▸";
+    flex: 0 0 0.7rem;
+    color: var(--text-secondary);
+    font-size: calc(0.72rem * var(--text-scale));
+  }
+  .list-genre[open] > .list-genre-heading::before,
+  .subject-list-details[open] > .subject-list-head::before,
+  .category-list-details[open] > .category-list-head::before {
+    content: "▾";
+  }
+  .list-genre-heading {
+    padding-block: var(--space-1);
+    border-bottom: 1px solid var(--border-strong);
+  }
+  .list-genre-heading h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: calc(0.98rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .subject-list-item {
+    padding: var(--space-1) 0 var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .subject-list-head {
     font-size: calc(1.05rem * var(--text-scale));
     font-weight: 650;
   }
+  .subject-list-head > a,
+  .category-list-head > a {
+    color: var(--text-primary);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+  }
+  .subject-list-head .subject-count,
+  .category-list-head .subject-count {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .subject-list-static {
+    cursor: default;
+  }
+  .subject-list-static::before {
+    content: "";
+  }
   .category-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-    gap: 0 var(--space-3);
     margin-top: var(--space-1);
+    margin-left: 0.35rem;
     padding-left: var(--space-3);
     border-left: 2px solid var(--border-default);
   }
-  .category-list li {
+  .category-list-item {
+    padding: var(--space-1) 0;
+  }
+  .category-list-head {
+    font-size: calc(0.9rem * var(--text-scale));
+    font-weight: 600;
+  }
+  .article-list {
+    margin: var(--space-1) 0 0 0.35rem;
+    padding-left: var(--space-4);
+    border-left: 1px dashed var(--border-strong);
+  }
+  .article-list li {
+    padding: 3px 0;
+    font-size: calc(0.84rem * var(--text-scale));
+  }
+  .planned-list-item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    padding: 2px 0;
-    font-size: calc(0.85rem * var(--text-scale));
+    color: var(--text-secondary);
+  }
+  .planned-label {
+    flex: 0 0 auto;
+    font-size: calc(0.72rem * var(--text-scale));
+    font-weight: 600;
   }
 
 
@@ -776,6 +921,25 @@ const views = [
     max-height: 26rem;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  .scroll-shell {
+    position: relative;
+  }
+  .scroll-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 3px var(--space-1);
+    border-top: 1px solid var(--border-default);
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    font-size: calc(0.7rem * var(--text-scale));
+    line-height: 1.2;
+  }
+  .scroll-hint[hidden] {
+    display: none;
   }
   .recent-list {
     list-style: none;

@@ -114,9 +114,29 @@ const conceptNames = entry.data.concepts.map((c) => {
   return { id: c.id, name: node ? localizedName(node.name, locale) : c.id };
 });
 
-const issueUrl = `${ORG.githubRepo}/issues/new?title=${encodeURIComponent(
-  `[記事報告] ${entry.data.title} (${entry.data.articleId})`,
-)}`;
+/**
+ * 記事の問題報告フォーム。
+ * forms.gle の短縮URLはクエリ文字列を転送時に破棄するため、記事情報を
+ * 自動入力できる Google Forms の正式URLを使用する。
+ */
+const reportFormUrl = new URL(
+  "https://docs.google.com/forms/d/e/1FAIpQLSfo-vqZALgq9xYhi7G8yaNMnWhaT-l-zTTj0cNzTfimVtLvRA/viewform",
+);
+reportFormUrl.searchParams.set("usp", "pp_url");
+reportFormUrl.searchParams.set("entry.1033608797", entry.data.title);
+reportFormUrl.searchParams.set(
+  "entry.1590510319",
+  new URL(
+    articlePath(
+      locale,
+      entry.data.subject,
+      entry.data.category,
+      entry.data.slug,
+    ),
+    Astro.site,
+  ).href,
+);
+reportFormUrl.searchParams.set("entry.65646072", entry.data.articleId);
 const historyUrl = `${ORG.githubRepo}/commits/main/src/content/articles/${entry.id}.md`;
 
 const structuredData = {
@@ -327,7 +347,11 @@ const structuredData = {
 
       <footer class="article-footer">
         <p>
-          <a href={issueUrl} rel="noopener noreferrer" target="_blank">
+          <a
+            href={reportFormUrl.href}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
             {t(locale, "reportIssue")}
           </a>
           ・

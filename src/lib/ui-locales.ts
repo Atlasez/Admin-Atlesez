@@ -20,6 +20,14 @@ export const UI_LANGUAGE_NAMES: Record<UiLanguage, string> = {
   ko: "한국어",
 };
 
+/** 表示設定で、現在の言語と異なる言語名に添える英語表記。 */
+export const UI_LANGUAGE_ENGLISH_NAMES: Record<UiLanguage, string> = {
+  ja: "Japanese",
+  en: "English",
+  zh: "Chinese",
+  ko: "Korean",
+};
+
 /** 日本語 → 各言語。ja は原文なので持たない。 */
 export const UI_DICTIONARY: Record<
   string,
@@ -148,6 +156,11 @@ export const UI_DICTIONARY: Record<
   // --- 総合ホーム ---
   タイル表示: { en: "Tiles", zh: "磁贴视图", ko: "타일 보기" },
   リスト表示: { en: "List", zh: "列表视图", ko: "목록 보기" },
+  スクロールして続きを表示: {
+    en: "Scroll for more",
+    zh: "滚动查看更多",
+    ko: "스크롤하여 더 보기",
+  },
   表示切替: { en: "Switch view", zh: "切换显示", ko: "보기 전환" },
   近日公開予定の記事: {
     en: "Coming soon",

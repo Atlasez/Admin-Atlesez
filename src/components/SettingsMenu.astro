@@ -56,14 +56,23 @@ const close = locale === "ja" ? "閉じる" : "Close";
   .settings-menu > summary::-webkit-details-marker {
     display: none;
   }
+  .settings-menu > summary::before {
+    content: "Aa";
+    color: var(--accent-primary);
+    font-size: calc(1.05rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: -0.04em;
+  }
   .settings-menu > summary::after {
-    content: "▾";
-    color: var(--text-secondary);
-    font-size: calc(0.75rem * var(--text-scale));
-    line-height: 1;
+    content: "";
+    width: 0;
+    height: 0;
+    margin-left: 2px;
+    border-inline: 0.32rem solid transparent;
+    border-top: 0.46rem solid currentColor;
   }
   .settings-menu[open] > summary::after {
-    content: "▴";
+    transform: rotate(180deg);
   }
   .settings-menu > summary:hover {
     border-color: var(--accent-primary);

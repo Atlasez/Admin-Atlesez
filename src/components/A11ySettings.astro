@@ -1,5 +1,9 @@
 ---
-import { UI_LANGUAGES, UI_LANGUAGE_NAMES } from "../lib/ui-locales";
+import {
+  UI_LANGUAGES,
+  UI_LANGUAGE_ENGLISH_NAMES,
+  UI_LANGUAGE_NAMES,
+} from "../lib/ui-locales";
 /** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
 interface Props {
   locale?: "ja" | "en";
@@ -65,6 +69,8 @@ const languageGroup = {
   options: UI_LANGUAGES.map((code) => ({
     value: code,
     label: UI_LANGUAGE_NAMES[code],
+    native: UI_LANGUAGE_NAMES[code],
+    english: UI_LANGUAGE_ENGLISH_NAMES[code],
   })),
 };
 
@@ -131,7 +137,13 @@ const groups = [
         </label>
         <select id="a11y-lang-bare" name={languageGroup.key}>
           {languageGroup.options.map((o) => (
-            <option value={o.value}>{o.label}</option>
+            <option
+              value={o.value}
+              data-language-native={o.native}
+              data-language-english={o.english}
+            >
+              {o.label}
+            </option>
           ))}
         </select>
       </p>
@@ -167,7 +179,13 @@ const groups = [
           </label>
           <select id="a11y-lang" name={languageGroup.key}>
             {languageGroup.options.map((o) => (
-              <option value={o.value}>{o.label}</option>
+              <option
+                value={o.value}
+                data-language-native={o.native}
+                data-language-english={o.english}
+              >
+                {o.label}
+              </option>
             ))}
           </select>
         </p>
@@ -358,6 +376,19 @@ const groups = [
     }
   }
 
+  /** 選択中ではない言語は、母語表記に英語名を添えて探しやすくする。 */
+  function updateLanguageOptionLabels(select: HTMLSelectElement): void {
+    const current = select.value;
+    select.querySelectorAll<HTMLOptionElement>("option").forEach((option) => {
+      const native = option.dataset.languageNative ?? option.textContent ?? "";
+      const english = option.dataset.languageEnglish ?? "";
+      option.textContent =
+        option.value === current || !english || native === english
+          ? native
+          : `${native}(${english})`;
+    });
+  }
+
   document.querySelectorAll<HTMLFormElement>("[data-a11y-form]").forEach(
     (form) => {
       // 保存値をフォームに反映
@@ -373,6 +404,9 @@ const groups = [
         );
         if (select) select.value = v;
       }
+      form
+        .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
+        .forEach(updateLanguageOptionLabels);
       const syncBackgroundChoice = () => {
         const value = document.documentElement.dataset.prefBg ?? "default";
         const input = form.querySelector<HTMLInputElement>(
@@ -382,6 +416,9 @@ const groups = [
       };
       window.addEventListener("atlasez-theme-change", syncBackgroundChoice);
       form.addEventListener("change", () => {
+        form
+          .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
+          .forEach(updateLanguageOptionLabels);
         const data = new FormData(form);
         const next: Record<string, string> = {};
         for (const [k, v] of data.entries()) {
@@ -410,7 +447,10 @@ const groups = [
             .forEach((i) => (i.checked = true));
           form
             .querySelectorAll<HTMLSelectElement>("select")
-            .forEach((sel) => (sel.selectedIndex = 0));
+            .forEach((sel) => {
+              sel.selectedIndex = 0;
+              if (sel.name === "lang") updateLanguageOptionLabels(sel);
+            });
           apply({});
           window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
           window.dispatchEvent(new CustomEvent("atlasez-lang-change"));

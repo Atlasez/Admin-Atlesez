@@ -122,6 +122,33 @@ const categoryMetaJson = JSON.stringify(
         }
       </select>
       <span class="map-status" data-map-status aria-live="polite"></span>
+      <div
+        class="map-viewport-tools"
+        role="group"
+        aria-label={locale === "ja" ? "地図の表示倍率" : "Map zoom"}
+      >
+        <button
+          type="button"
+          data-map-zoom-out
+          aria-label={locale === "ja" ? "縮小" : "Zoom out"}
+        >
+          −
+        </button>
+        <output data-map-zoom-level aria-live="polite">100%</output>
+        <button
+          type="button"
+          data-map-zoom-in
+          aria-label={locale === "ja" ? "拡大" : "Zoom in"}
+        >
+          ＋
+        </button>
+        <button type="button" data-map-arrange>
+          {locale === "ja" ? "自動整列" : "Auto layout"}
+        </button>
+        <button type="button" data-map-fit>
+          {locale === "ja" ? "表示を戻す" : "Fit view"}
+        </button>
+      </div>
     </div>
 
     <div class="map-canvas" id="learning-map" role="application"
@@ -143,10 +170,25 @@ const categoryMetaJson = JSON.stringify(
       </noscript>
     </div>
 
+    {/* 共有されたグラフ画面と同じく、操作の説明と線の意味を地図内に置く。 */}
+    <div class="map-canvas-caption" data-graph-controls hidden aria-hidden="true">
+      <strong>{locale === "ja" ? "学習地図" : "Learning map"}</strong>
+      <small>
+        {locale === "ja"
+          ? "背景ドラッグで移動 · ノードを押すと記事へ移動"
+          : "Drag the background to pan · Select a node to open its article"}
+      </small>
+    </div>
+    <div class="map-canvas-legend" data-graph-controls hidden aria-hidden="true">
+      <span><i class="canvas-line canvas-line-solid"></i>{locale === "ja" ? "前提" : "Prerequisite"}</span>
+      <span><i class="canvas-line canvas-line-dash"></i>{locale === "ja" ? "次におすすめ" : "Recommended"}</span>
+      <span><i class="canvas-line canvas-line-dot"></i>{locale === "ja" ? "関連" : "Related"}</span>
+    </div>
+
     {/* 枠の左上: 戻る・経路検索 */}
     <div class="map-tools map-tools-start" data-graph-controls hidden>
       <button type="button" class="map-tool" data-map-back hidden>
-        {locale === "ja" ? "← 全体に戻る" : "← Back to overview"}
+        {locale === "ja" ? "▴ カテゴリを折りたたむ" : "▴ Fold category"}
       </button>
       <button
         type="button"
@@ -252,8 +294,8 @@ const categoryMetaJson = JSON.stringify(
   <p class="map-thread-hint" data-graph-controls hidden>
     {
       locale === "ja"
-        ? "カテゴリを押すと中の項目が開き、「← 全体に戻る」またはEscで閉じられます。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。"
-        : "Select a category to open it; use “Back to overview” or Esc to close. Dotted nodes belong to other categories; double-click one to move there."
+        ? "▸のカテゴリを押すと中の項目が開き、「▴ 折りたたむ」またはEscで閉じられます。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。"
+        : "Select a ▸ category to open it; use “▴ Fold” or Esc to close. Dotted nodes belong to other categories; double-click one to move there."
     }
   </p>
   <ul
@@ -306,7 +348,7 @@ const categoryMetaJson = JSON.stringify(
   /* 地図まわりの枠。道具立てと経路検索をこの中に重ねる */
   .map-frame {
     position: relative;
-    border: 2px solid var(--border-default);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     background: var(--background-primary);
     overflow: hidden;
@@ -324,10 +366,143 @@ const categoryMetaJson = JSON.stringify(
   .map-toolbar select {
     min-width: 12rem;
   }
+  .map-toolbar input[type="search"] {
+    flex: 1 1 18rem;
+    max-width: 28rem;
+    min-width: 16rem;
+  }
+  .map-status {
+    flex: 1 1 14rem;
+  }
+  .map-viewport-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+  }
+  .map-viewport-tools button {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding-inline: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.82rem * var(--text-scale));
+    cursor: pointer;
+  }
+  .map-viewport-tools button:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .map-viewport-tools output {
+    min-width: 3.25rem;
+    color: var(--text-secondary);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
   .map-canvas {
+    --map-grid-size: 24px;
+    --map-grid-x: 0px;
+    --map-grid-y: 0px;
+    position: relative;
     height: 65vh;
     min-height: 28rem;
-    background: var(--background-primary);
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    background-color: color-mix(
+      in srgb,
+      var(--background-primary) 86%,
+      #f7f3e9
+    );
+    background-image:
+      linear-gradient(
+        color-mix(in srgb, var(--border-strong) 10%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--border-strong) 10%, transparent) 1px,
+        transparent 1px
+      ),
+      radial-gradient(
+        circle at 50% 45%,
+        color-mix(in srgb, var(--background-primary) 96%, transparent),
+        color-mix(in srgb, var(--background-secondary) 55%, transparent)
+      );
+    background-position:
+      var(--map-grid-x) var(--map-grid-y),
+      var(--map-grid-x) var(--map-grid-y),
+      center;
+    background-size:
+      var(--map-grid-size) var(--map-grid-size),
+      var(--map-grid-size) var(--map-grid-size),
+      100% 100%;
+  }
+  .map-canvas:active {
+    cursor: grabbing;
+  }
+  .map-canvas-caption {
+    position: absolute;
+    z-index: 2;
+    top: calc(3.25rem + var(--touch-target) + var(--space-4));
+    left: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    max-width: min(22rem, 55%);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+    pointer-events: none;
+  }
+  .map-canvas-caption strong {
+    font-size: calc(0.95rem * var(--text-scale));
+    letter-spacing: 0.06em;
+  }
+  .map-canvas-caption small {
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: calc(0.68rem * var(--text-scale));
+  }
+  .map-canvas-legend {
+    position: absolute;
+    z-index: 2;
+    right: var(--space-3);
+    bottom: var(--space-3);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+    color: var(--text-secondary);
+    font-size: calc(0.68rem * var(--text-scale));
+    pointer-events: none;
+  }
+  .map-canvas-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .canvas-line {
+    width: 1.4rem;
+    height: 0;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .canvas-line-dash {
+    border-top-style: dashed;
+  }
+  .canvas-line-dot {
+    border-top-style: dotted;
+    border-top-color: var(--text-secondary);
   }
   /* 全画面のときは画面いっぱいに広げる */
   .map-frame:fullscreen {
@@ -349,7 +524,12 @@ const categoryMetaJson = JSON.stringify(
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
-    z-index: 2;
+    z-index: 4;
+    padding: 4px;
+    border: 1px solid var(--border-default);
+    border-radius: calc(var(--radius) + 2px);
+    background: var(--background-primary);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
   }
   .map-tools-start {
     left: var(--space-2);
@@ -367,12 +547,18 @@ const categoryMetaJson = JSON.stringify(
     font: inherit;
     font-size: calc(0.85rem * var(--text-scale));
     font-weight: 600;
-    box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+    box-shadow: none;
     cursor: pointer;
   }
   .map-tool:hover {
     border-color: var(--accent-primary);
     color: var(--accent-primary);
+  }
+  .map-tool:focus-visible,
+  .map-viewport-tools button:focus-visible,
+  .map-route-close:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent-primary) 45%, transparent);
+    outline-offset: 2px;
   }
   .map-tool[aria-expanded="true"],
   .map-tool[aria-pressed="true"] {
@@ -460,7 +646,7 @@ const categoryMetaJson = JSON.stringify(
     left: var(--space-2);
     right: var(--space-2);
     bottom: var(--space-2);
-    z-index: 1;
+    z-index: 4;
     padding: var(--space-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
@@ -580,6 +766,21 @@ const categoryMetaJson = JSON.stringify(
     .route-form select {
       font-size: max(16px, 1rem);
     }
+    .map-toolbar input[type="search"] {
+      max-width: none;
+      min-width: 0;
+      width: 100%;
+    }
+    .map-status {
+      flex-basis: auto;
+    }
+    .map-viewport-tools {
+      width: 100%;
+      margin-left: 0;
+    }
+    .map-viewport-tools button:last-child {
+      margin-left: auto;
+    }
     .route-form .button {
       width: 100%;
     }
@@ -587,10 +788,15 @@ const categoryMetaJson = JSON.stringify(
       height: 60vh;
       min-height: 22rem;
     }
+    .map-canvas-caption,
+    .map-canvas-legend {
+      display: none;
+    }
     /* 道具立ては縦に積んだツールバーの下に来るので、その分だけ下げる */
     .map-tools {
       top: auto;
       bottom: var(--space-2);
+      max-width: calc(100% - var(--space-4));
     }
     .map-tools-start {
       left: var(--space-2);
@@ -719,7 +925,6 @@ const categoryMetaJson = JSON.stringify(
     const textColor = read("--text-primary", "#1c1c1c");
     const muted = read("--border-strong", "#8d897f");
     const canvasColor = read("--background-primary", "#ffffff");
-    const nodeSurface = read("--background-primary", "#ffffff");
 
     const subjectMeta: { slug: string; name: string; color: string }[] =
       JSON.parse(container.dataset.subjects ?? "[]");
@@ -757,8 +962,15 @@ const categoryMetaJson = JSON.stringify(
     const catLabel = (key: string) => {
       const name = categoryName.get(key) ?? key.split("/")[1];
       const count = conceptsByCat.get(key)?.length ?? 0;
-      return `${name}\n${count}${ja ? "項目" : ""}`;
+      return `▸ ${name}\n${count}${ja ? "項目" : " items"}`;
     };
+    const relationName = new Map([
+      ["prerequisite", ja ? "前提" : "Prerequisite"],
+      ["recommended-next", ja ? "次におすすめ" : "Recommended next"],
+      ["related", ja ? "関連" : "Related"],
+      ["part-of", ja ? "一部" : "Part of"],
+      ["alternative", ja ? "別経路" : "Alternative"],
+    ]);
 
     /** カテゴリ間のつながり（概念どうしの辺を集約したもの） */
     const catEdges = new Map<string, { source: string; target: string }>();
@@ -817,6 +1029,7 @@ const categoryMetaJson = JSON.stringify(
             source: `cat:${e.source}`,
             target: `cat:${e.target}`,
             kind: "category-link",
+            relationLabel: "",
           },
         })),
         // 概念間の辺
@@ -826,6 +1039,7 @@ const categoryMetaJson = JSON.stringify(
             source: e.source,
             target: e.target,
             kind: e.kind,
+            relationLabel: relationName.get(e.kind) ?? e.kind,
           },
         })),
       ],
@@ -834,20 +1048,24 @@ const categoryMetaJson = JSON.stringify(
           selector: 'node[kind = "concept"]',
           style: {
             label: "data(label)",
-            "font-size": "13px",
+            "font-size": "12px",
             "font-weight": 600,
             color: textColor,
             "text-wrap": "wrap",
-            "text-max-width": "132px",
+            "text-max-width": "116px",
             "text-valign": "center",
             "text-halign": "center",
+            "text-justification": "left",
+            "line-height": 1.35,
             "text-outline-width": 0,
             shape: "round-rectangle",
-            width: 154,
-            height: 46,
-            "background-color": nodeSurface,
-            "border-width": 2,
+            width: 136,
+            height: 70,
+            "background-color": "data(subjectColor)",
+            "background-opacity": 0.12,
+            "border-width": 1,
             "border-color": "data(subjectColor)",
+            "overlay-opacity": 0,
           },
         },
         {
@@ -855,20 +1073,21 @@ const categoryMetaJson = JSON.stringify(
           selector: 'node[kind = "category"]',
           style: {
             label: "data(label)",
-            "font-size": "14px",
+            "font-size": "13px",
             "font-weight": 700,
             color: textColor,
             "text-wrap": "wrap",
-            "text-max-width": "150px",
+            "text-max-width": "132px",
             "text-valign": "center",
             "text-halign": "center",
             shape: "round-rectangle",
-            width: 172,
-            height: 60,
+            width: 150,
+            height: 70,
             "background-color": "data(subjectColor)",
             "background-opacity": 0.12,
-            "border-width": 2,
+            "border-width": 1,
             "border-color": "data(subjectColor)",
+            "overlay-opacity": 0,
           },
         },
         {
@@ -878,9 +1097,9 @@ const categoryMetaJson = JSON.stringify(
             "background-color": canvasColor,
             "border-style": "dotted",
             color: muted,
-            width: 132,
-            height: 40,
-            "font-size": "12px",
+            width: 128,
+            height: 58,
+            "font-size": "11px",
           },
         },
         {
@@ -924,6 +1143,13 @@ const categoryMetaJson = JSON.stringify(
         {
           selector: "edge",
           style: {
+            label: "data(relationLabel)",
+            "font-size": "9px",
+            color: muted,
+            "text-rotation": "none",
+            "text-background-color": canvasColor,
+            "text-background-opacity": 0.9,
+            "text-background-padding": "2px",
             width: 1.5,
             "line-color": muted,
             "curve-style": "bezier",
@@ -990,6 +1216,8 @@ const categoryMetaJson = JSON.stringify(
       document.querySelector<HTMLSelectElement>("[data-map-subject]");
     const backButton =
       document.querySelector<HTMLButtonElement>("[data-map-back]");
+    const zoomLevel =
+      document.querySelector<HTMLOutputElement>("[data-map-zoom-level]");
 
     /** いま詳細で開いているカテゴリ。null なら概要。 */
     let focused: string | null = null;
@@ -997,6 +1225,17 @@ const categoryMetaJson = JSON.stringify(
     const setStatus = (text: string) => {
       if (mapStatus) mapStatus.textContent = text;
     };
+
+    /** 倍率表示と格子背景を、地図のパン・ズームへ追従させる。 */
+    const syncViewportUi = () => {
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      if (zoomLevel) zoomLevel.value = `${Math.round(zoom * 100)}%`;
+      container.style.setProperty("--map-grid-size", `${24 * zoom}px`);
+      container.style.setProperty("--map-grid-x", `${pan.x}px`);
+      container.style.setProperty("--map-grid-y", `${pan.y}px`);
+    };
+    cy.on("pan zoom", syncViewportUi);
 
     const hideAll = () => {
       cy.elements().style("display", "none");
@@ -1020,7 +1259,10 @@ const categoryMetaJson = JSON.stringify(
     function renderOverview(subject: string): void {
       focused = null;
       hideAll();
-      if (backButton) backButton.hidden = true;
+      if (backButton) {
+        backButton.hidden = true;
+        backButton.textContent = ja ? "▴ カテゴリを折りたたむ" : "▴ Fold category";
+      }
 
       const slugs = subject
         ? subjectOrder.filter((s) => s === subject)
@@ -1130,6 +1372,11 @@ const categoryMetaJson = JSON.stringify(
       fitReadable(cy.nodes(":visible").filter((n) => n.data("kind") !== "subject"));
 
       const name = categoryName.get(key) ?? key;
+      if (backButton) {
+        backButton.textContent = ja
+          ? `▴ ${name}を折りたたむ`
+          : `▴ Fold ${name}`;
+      }
       setStatus(
         ja
           ? `${name}: ${inside.length}項目（外とのつながり ${outsideIds.size}件）`
@@ -1144,6 +1391,18 @@ const categoryMetaJson = JSON.stringify(
         cy.zoom(0.4);
         cy.center(elements);
       }
+    }
+
+    /** 共有グラフの「自動調整」と同様に、表示中の関係から読みやすく並べ直す。 */
+    function autoArrange(): void {
+      if (!focused) {
+        renderOverview(subjectSelect?.value ?? "");
+        return;
+      }
+      // この地図では前提の深さが学習順そのものなので、汎用の力学配置ではなく
+      // renderCategory の「前提が左、発展が右」という専用配置へ戻す。
+      renderCategory(focused);
+      syncViewportUi();
     }
 
     /** URL に今の表示状態を書き戻す */
@@ -1183,9 +1442,16 @@ const categoryMetaJson = JSON.stringify(
       syncUrl();
     });
 
-    // 概念を押したら詳細を出す。外の概念はそのカテゴリへ移動する。
+    // 記事がある概念は、押した時点で該当記事へ移動する。
+    // 準備中の概念だけは、従来どおり地図内に詳細を表示する。
     cy.on("tap", 'node[kind = "concept"]', (ev) => {
       const id: string = ev.target.id();
+      const node = nodeById.get(id);
+      const article = node?.articles[locale]?.[0];
+      if (article) {
+        location.assign(`${base}${article.path}`);
+        return;
+      }
       showDetail(id);
       const url = new URL(location.href);
       url.searchParams.set("selected", id);
@@ -1255,9 +1521,30 @@ const categoryMetaJson = JSON.stringify(
 
     document
       .querySelector("[data-map-fit]")
-      ?.addEventListener("click", () =>
-        fitReadable(cy.nodes(":visible").filter((n) => n.data("kind") !== "subject")),
-      );
+      ?.addEventListener("click", () => {
+        fitReadable(
+          cy.nodes(":visible").filter((n) => n.data("kind") !== "subject"),
+        );
+        syncViewportUi();
+      });
+
+    document
+      .querySelector("[data-map-arrange]")
+      ?.addEventListener("click", autoArrange);
+
+    document
+      .querySelector("[data-map-zoom-out]")
+      ?.addEventListener("click", () => {
+        cy.zoom(Math.max(cy.minZoom(), cy.zoom() / 1.2));
+        syncViewportUi();
+      });
+
+    document
+      .querySelector("[data-map-zoom-in]")
+      ?.addEventListener("click", () => {
+        cy.zoom(Math.min(cy.maxZoom(), cy.zoom() * 1.2));
+        syncViewportUi();
+      });
 
     document.querySelector("[data-map-reset]")?.addEventListener("click", () => {
       if (subjectSelect) subjectSelect.value = "";
@@ -1316,6 +1603,7 @@ const categoryMetaJson = JSON.stringify(
       cy.getElementById(selected).select();
       showDetail(selected);
     }
+    syncViewportUi();
 
   }
 

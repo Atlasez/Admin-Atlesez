@@ -90,9 +90,14 @@ test.describe("学習サイト", () => {
     await expect(settings).toHaveCSS("cursor", "pointer");
     expect(
       await settings.evaluate((element) =>
-        getComputedStyle(element, "::after").content.replaceAll('"', ""),
+        getComputedStyle(element, "::before").content.replaceAll('"', ""),
       ),
-    ).toBe("▾");
+    ).toBe("Aa");
+    expect(
+      await settings.evaluate((element) =>
+        parseFloat(getComputedStyle(element, "::after").borderTopWidth),
+      ),
+    ).toBeGreaterThan(0);
 
     await guide.click();
     await expect(page).toHaveURL(/\/atlas\/ja\/guide\/$/);
@@ -105,6 +110,41 @@ test.describe("学習サイト", () => {
       "最近更新された記事",
       "近日公開予定の記事",
     ]);
+    await expect(
+      page.getByText("スクロールして続きを表示").first(),
+    ).toBeVisible();
+  });
+
+  test("総合リストを記事まで段階的に展開できる", async ({ page }) => {
+    await page.goto("atlas/ja/?view=list");
+    await expect(page.locator(".list-group[open]")).toHaveCount(0);
+
+    const natural = page.locator(".list-group", { hasText: "自然科学" });
+    await natural.locator(":scope > summary").click();
+    const mathGenre = natural.locator(".list-genre", { hasText: "数理・情報" });
+    await mathGenre.locator(":scope > summary").click();
+
+    const mathematics = mathGenre.locator(".subject-list-details", {
+      has: page.getByRole("link", { name: "数学", exact: true }),
+    });
+    await expect(
+      mathematics.getByRole("link", { name: "数学", exact: true }),
+    ).toHaveAttribute("href", /\/mathematics\/\?view=list$/);
+    await mathematics.locator(":scope > summary").click();
+
+    const groupTheory = mathematics.locator(".category-list-details", {
+      has: page.getByRole("link", { name: "群論", exact: true }),
+    });
+    await expect(
+      groupTheory.getByRole("link", { name: "群論", exact: true }),
+    ).toHaveAttribute("href", /\/group-theory\/\?view=list$/);
+    await expect(
+      page.getByRole("link", { name: "群の定義", exact: true }),
+    ).not.toBeVisible();
+    await groupTheory.locator(":scope > summary").click();
+    await expect(
+      page.getByRole("link", { name: "群の定義", exact: true }),
+    ).toBeVisible();
   });
 
   test("本文準備中の目次項目を記事一覧に表示する", async ({ page }) => {
@@ -189,7 +229,7 @@ test.describe("学習サイト", () => {
     const bottomHistory = histories.last();
 
     await expect(histories).toHaveCount(2);
-    await expect(history).toHaveCSS("width", "168px");
+    await expect(history).toHaveCSS("width", "120px");
 
     await expect(history).toHaveAttribute("aria-valuenow", "0");
     await expect(history).toHaveAttribute("aria-valuetext", "未記録");
@@ -226,13 +266,13 @@ test.describe("学習サイト", () => {
       .click();
     await expect(history).toHaveAttribute("aria-valuenow", "0");
 
-    await history.click({ position: { x: 84, y: 15 } });
+    await history.click({ position: { x: 60, y: 15 } });
     await expect(history).toHaveAttribute("aria-valuenow", "1");
     await expect(history).toHaveAttribute("aria-valuetext", "読んだ");
     await expect(bottomHistory).toHaveAttribute("aria-valuetext", "読んだ");
     await expectThumbAlignedWithPosition(1);
 
-    await history.click({ position: { x: 164, y: 15 } });
+    await history.click({ position: { x: 116, y: 15 } });
     await expect(history).toHaveAttribute("aria-valuenow", "2");
     await expect(history).toHaveAttribute("aria-valuetext", "理解した");
     await expect(bottomHistory).toHaveAttribute("aria-valuetext", "理解した");
@@ -276,6 +316,30 @@ test.describe("学習サイト", () => {
 
   test("経路検索は地図の枠内のボタンから開く", async ({ page }) => {
     await page.goto("atlas/ja/map/");
+    const zoomLevel = page.locator("[data-map-zoom-level]");
+    await expect(zoomLevel).toBeVisible();
+    await expect(page.getByRole("button", { name: "自動整列" })).toBeVisible();
+    await expect(
+      page.getByText("背景ドラッグで移動 · ノードを押すと記事へ移動"),
+    ).toBeVisible();
+    await expect(page.locator("[data-map-status]")).not.toHaveText("");
+    const initialZoom = Number(
+      (await zoomLevel.textContent())?.replace("%", ""),
+    );
+    await page.getByRole("button", { name: "拡大" }).click();
+    await expect
+      .poll(async () =>
+        Number((await zoomLevel.textContent())?.replace("%", "")),
+      )
+      .toBeGreaterThan(initialZoom);
+
+    await page.locator("[data-map-search]").fill("群の定義");
+    await page.locator("[data-map-search]").dispatchEvent("change");
+    const fold = page.getByRole("button", { name: /群論を折りたたむ/ });
+    await expect(fold).toBeVisible();
+    await fold.click();
+    await expect(fold).not.toBeVisible();
+
     const open = page.getByRole("button", { name: "学習ルート検索" });
     // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す
     await expect(page.getByLabel(/目的地点/)).not.toBeVisible();
@@ -343,6 +407,11 @@ test.describe("学習サイト", () => {
     const xlarge = menu.locator("label.a11y-option", { hasText: "特大" });
     await expect(xlarge).toBeVisible();
     await xlarge.click();
+    const language = menu.locator('select[name="lang"]');
+    await language.selectOption("en");
+    await expect(language.locator('option[value="ja"]')).toHaveText(
+      "日本語(Japanese)",
+    );
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute(
       "data-pref-font-size",
