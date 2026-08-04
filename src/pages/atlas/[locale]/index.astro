@@ -906,6 +906,7 @@ const views = [
     overscroll-behavior: contain;
     scrollbar-color: var(--border-strong) var(--background-secondary);
     scrollbar-width: auto;
+    scrollbar-gutter: stable;
     padding-right: var(--space-2);
   }
   .recent-scroll::-webkit-scrollbar,
@@ -945,33 +946,8 @@ const views = [
     overscroll-behavior: contain;
     scrollbar-color: var(--border-strong) var(--background-secondary);
     scrollbar-width: auto;
+    scrollbar-gutter: stable;
     padding-right: var(--space-2);
-  }
-  /* macOS などでOS標準のスクロールバーが自動的に隠れる場合にも、
-     この領域が続くことを常に見分けられるようにする。 */
-  .scroll-shell {
-    position: relative;
-  }
-  .scroll-shell::before,
-  .scroll-shell::after {
-    position: absolute;
-    right: 0.2rem;
-    content: "";
-    pointer-events: none;
-  }
-  .scroll-shell::before {
-    top: 0.45rem;
-    bottom: 0.45rem;
-    width: 0.35rem;
-    border-radius: 999px;
-    background: var(--border-default);
-  }
-  .scroll-shell::after {
-    top: 0.65rem;
-    width: 0.35rem;
-    height: 2.8rem;
-    border-radius: 999px;
-    background: var(--border-strong);
   }
   .upcoming-list li {
     display: flex;

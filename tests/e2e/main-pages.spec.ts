@@ -323,9 +323,6 @@ test.describe("学習サイト", () => {
     const zoomLevel = page.locator("[data-map-zoom-level]");
     await expect(zoomLevel).toBeVisible();
     await expect(page.getByRole("button", { name: "自動整列" })).toBeVisible();
-    await expect(
-      page.getByText("背景ドラッグで移動 · ノードを押すと詳細を表示"),
-    ).toBeVisible();
     await expect(page.locator("[data-map-status]")).not.toHaveText("");
     const initialZoom = Number(
       (await zoomLevel.textContent())?.replace("%", ""),

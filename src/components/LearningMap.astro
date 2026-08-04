@@ -471,6 +471,10 @@ const categoryMetaJson = JSON.stringify(
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
     pointer-events: none;
   }
+  /* 説明は地図の下に表示しているため、ノードの上には重ねない。 */
+  .map-canvas-caption {
+    display: none;
+  }
   .map-canvas-caption strong {
     font-size: calc(0.95rem * var(--text-scale));
     letter-spacing: 0.06em;
@@ -1459,24 +1463,33 @@ const categoryMetaJson = JSON.stringify(
       const COL_W = 210;
       const ROW_H = 96;
       const SUBJECT_GAP = 120;
-      let cursorY = 0;
+      // 分野を縦一列に積むと全体表示が極端に縮小されるため、
+      // 2列の区画にして、各分野の中では従来どおり3列に並べる。
+      const SUBJECT_COL_W = COLS * COL_W + 170;
+      const cursorYByColumn = [0, 0];
 
-      for (const slug of slugs) {
+      for (const [subjectIndex, slug] of slugs.entries()) {
         const keys = catKeys.filter((k) => k.startsWith(`${slug}/`));
         if (keys.length === 0) continue;
+        const column = subjectIndex % 2;
+        const cursorY = cursorYByColumn[column];
+        const baseX = 140 + column * SUBJECT_COL_W;
         show(`#subject\\:${slug}`);
         keys.forEach((key, index) => {
           const node = cy.getElementById(`cat:${key}`);
           node.style("display", "element");
           node.position({
-            x: 140 + (index % COLS) * COL_W,
-            y: cursorY + 80 + Math.floor(index / COLS) * ROW_H,
+            x: baseX + (index % COLS) * COL_W,
+            y: cursorY + 100 + Math.floor(index / COLS) * ROW_H,
           });
         });
-        cursorY += 80 + Math.ceil(keys.length / COLS) * ROW_H + SUBJECT_GAP;
+        cursorYByColumn[column] =
+          cursorY + 100 + Math.ceil(keys.length / COLS) * ROW_H + SUBJECT_GAP;
       }
 
-      showConnectingEdges();
+      // 概要ではカテゴリ間の線が交差しすぎて読めなくなるため、
+      // 線はカテゴリを開いた詳細表示でのみ出す。
+      cy.edges().style("display", "none");
       cy.layout({ name: "preset", fit: false }).run();
       const visibleCategories = cy.nodes(':visible[kind = "category"]');
       spreadNodes(visibleCategories);
@@ -1624,11 +1637,13 @@ const categoryMetaJson = JSON.stringify(
     function fitReadable(elements: ReturnType<typeof cy.nodes>): void {
       if (elements.length === 0) return;
       cy.fit(elements, 50);
-      const minimumReadableZoom = mobileViewport ? 0.62 : 0.4;
+      const minimumReadableZoom = mobileViewport ? 0.62 : 0.56;
       if (cy.zoom() < minimumReadableZoom) {
         cy.zoom(minimumReadableZoom);
         cy.center(elements);
       }
+      // 上部の検索・操作バーの下から地図を始め、ノードとUIを重ねない。
+      cy.panBy({ x: 0, y: mobileViewport ? 132 : 150 });
     }
 
     /** 共有グラフの「自動調整」と同様に、表示中の関係から読みやすく並べ直す。 */
