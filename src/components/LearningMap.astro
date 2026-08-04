@@ -1329,6 +1329,16 @@ const categoryMetaJson = JSON.stringify(
             "border-color": "#e4771b",
             "line-color": "#e4771b",
             "target-arrow-color": "#e4771b",
+            width: 4,
+            opacity: 1,
+          },
+        },
+        {
+          selector: ".route-start",
+          style: {
+            "background-color": "#e5f3ff",
+            "border-color": accent,
+            "border-width": 4,
           },
         },
       ],
@@ -1428,6 +1438,25 @@ const categoryMetaJson = JSON.stringify(
             if (bForce) { bForce.x -= fx; bForce.y -= fy; }
           }
         }
+        // つながるノードはほどよく引き寄せ、無関係なノードは反発させる。
+        // 参照元の ForceAtlas2 と同じ読みやすい塊を、描画のちらつきなしで再現する。
+        cy.edges(":visible").forEach((edge) => {
+          const a = edge.source();
+          const b = edge.target();
+          if (!force.has(a.id()) || !force.has(b.id())) return;
+          const delta = {
+            x: b.position("x") - a.position("x"),
+            y: b.position("y") - a.position("y"),
+          };
+          const distance = Math.max(1, Math.hypot(delta.x, delta.y));
+          const pull = Math.max(-2, Math.min(2, (distance - 180) * 0.012));
+          const fx = (delta.x / distance) * pull;
+          const fy = (delta.y / distance) * pull;
+          const aForce = force.get(a.id());
+          const bForce = force.get(b.id());
+          if (aForce) { aForce.x += fx; aForce.y += fy; }
+          if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+        });
         nodes.forEach((node) => {
           const f = force.get(node.id());
           if (!f) return;
@@ -1632,6 +1661,20 @@ const categoryMetaJson = JSON.stringify(
       if (!stepIds || !skippedIds || !goalId) return;
       renderRouteOnMap(stepIds, skippedIds, goalId);
       syncViewportUi();
+    });
+
+    window.addEventListener("atlas-map-route-select", (event) => {
+      const { id, mode } = (event as CustomEvent<{
+        id?: string;
+        mode?: "start" | "goal";
+      }>).detail;
+      if (!id || !mode) return;
+      cy.nodes().removeClass("route-start");
+      const node = cy.getElementById(id);
+      if (node.length > 0 && mode === "start") {
+        node.addClass("route-start");
+        setStatus(ja ? "開始地点を選択しました。次に目的地点を選んでください。" : "Start selected. Now select a goal.");
+      }
     });
 
     function fitReadable(elements: ReturnType<typeof cy.nodes>): void {
