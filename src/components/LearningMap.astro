@@ -159,6 +159,43 @@ const categoryMetaJson = JSON.stringify(
       </button>
     </div>
 
+    {/* 検索中も地図の操作層と競合しないよう、経路検索はツールバー直下に展開する。 */}
+    <div class="map-route" id="map-route-panel" data-route-panel hidden>
+      <div class="map-route-head">
+        <h3>{t(locale, "routeSearch")}</h3>
+        <button type="button" class="map-route-close" data-route-close aria-label={locale === "ja" ? "閉じる" : "Close"}>×</button>
+      </div>
+      <p class="route-intro">
+        {locale === "ja"
+          ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
+          : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."}
+      </p>
+      <form data-route-form class="route-form">
+        <div>
+          <label for="route-subject">{t(locale, "subjects")}</label>
+          <select id="route-subject" data-route-subject>
+            {selectableSubjects.map((s) => <option value={s.data.slug}>{localizedName(s.data.name, locale)}</option>)}
+          </select>
+        </div>
+        <div>
+          <label for="route-goal">{t(locale, "routeGoal")}</label>
+          <select id="route-goal" data-route-goal required>
+            <option value="">---</option>
+            {conceptsBySubject.flatMap(({ slug, concepts }) => concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>))}
+          </select>
+        </div>
+        <div>
+          <label for="route-start">{locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}</label>
+          <select id="route-start" data-route-start>
+            <option value="">{locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}</option>
+            {conceptsBySubject.flatMap(({ slug, concepts }) => concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>))}
+          </select>
+        </div>
+        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
+      </form>
+      <div data-route-result aria-live="polite"></div>
+    </div>
+
     <div class="map-canvas" id="learning-map" role="application"
       aria-label={t(locale, "map")}
       data-graph-url={graphUrl}
@@ -222,78 +259,6 @@ const categoryMetaJson = JSON.stringify(
       <button type="button" class="map-tool" data-map-share>
         {t(locale, "shareView")}
       </button>
-    </div>
-
-    {/* 経路検索。枠の中に重ねて出す */}
-    <div class="map-route" id="map-route-panel" data-route-panel hidden>
-      <div class="map-route-head">
-        <h3>{t(locale, "routeSearch")}</h3>
-        <button
-          type="button"
-          class="map-route-close"
-          data-route-close
-          aria-label={locale === "ja" ? "閉じる" : "Close"}
-        >
-          ×
-        </button>
-      </div>
-      <p class="route-intro">
-        {
-          locale === "ja"
-            ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
-            : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."
-        }
-      </p>
-      <form data-route-form class="route-form">
-        <div>
-          <label for="route-subject">{t(locale, "subjects")}</label>
-          <select id="route-subject" data-route-subject>
-            {
-              selectableSubjects.map((s) => (
-                <option value={s.data.slug}>
-                  {localizedName(s.data.name, locale)}
-                </option>
-              ))
-            }
-          </select>
-        </div>
-        <div>
-          <label for="route-goal">{t(locale, "routeGoal")}</label>
-          <select id="route-goal" data-route-goal required>
-            <option value="">---</option>
-            {
-              conceptsBySubject.flatMap(({ slug, concepts }) =>
-                concepts.map((c) => (
-                  <option value={c.id} data-route-option data-subject={slug}>
-                    {localizedName(c.name, locale)}
-                  </option>
-                )),
-              )
-            }
-          </select>
-        </div>
-        <div>
-          <label for="route-start">
-            {locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}
-          </label>
-          <select id="route-start" data-route-start>
-            <option value="">
-              {locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}
-            </option>
-            {
-              conceptsBySubject.flatMap(({ slug, concepts }) =>
-                concepts.map((c) => (
-                  <option value={c.id} data-route-option data-subject={slug}>
-                    {localizedName(c.name, locale)}
-                  </option>
-                )),
-              )
-            }
-          </select>
-        </div>
-        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
-      </form>
-      <div data-route-result aria-live="polite"></div>
     </div>
 
     <div class="map-detail" data-map-detail aria-live="polite"></div>
@@ -582,15 +547,12 @@ const categoryMetaJson = JSON.stringify(
     color: var(--on-accent);
   }
 
-  /* 経路検索。地図アプリのように枠の左側に重ねて出す */
+  /* 経路検索。地図とは独立した通常フローに置き、操作レイヤーと重ねない。 */
   .map-route {
-    position: absolute;
-    top: calc(var(--space-2) + 3.25rem + var(--touch-target) + var(--space-1));
-    left: var(--space-2);
-    z-index: 3;
-    width: min(24rem, calc(100% - var(--space-4)));
-    max-height: calc(100% - 9rem);
-    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+    margin: var(--space-2);
+    max-width: 48rem;
     padding: var(--space-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
@@ -880,12 +842,8 @@ const categoryMetaJson = JSON.stringify(
       right: var(--space-2);
     }
     .map-route {
-      top: var(--space-2);
-      left: var(--space-2);
-      right: var(--space-2);
-      width: auto;
-      max-height: calc(100% - 6rem);
-      z-index: 5;
+      margin: var(--space-2);
+      max-width: none;
     }
     .map-detail {
       bottom: calc(var(--space-2) + var(--touch-target) + var(--space-1));
@@ -909,9 +867,6 @@ const categoryMetaJson = JSON.stringify(
       min-height: 2.5rem;
       padding-inline: var(--space-2);
       font-size: calc(0.78rem * var(--text-scale));
-    }
-    .map-frame:has(.map-route:not([hidden])) .map-tools {
-      visibility: hidden;
     }
     .map-toolbar .button,
     .map-touch-toggle {
@@ -1313,20 +1268,30 @@ const categoryMetaJson = JSON.stringify(
         { selector: ".faded", style: { opacity: 0.15 } },
         { selector: ".hover-muted", style: { opacity: 0.16 } },
         {
-          selector: ".hover-focus",
+          selector: "node.hover-focus",
+          style: { opacity: 1, "border-width": 3 },
+        },
+        {
+          selector: "edge.hover-focus",
           style: {
             opacity: 1,
-            "border-width": 3,
             "line-color": accent,
             "target-arrow-color": accent,
             width: 3,
           },
         },
         {
-          selector: ".route-highlight",
+          selector: "node.route-highlight",
           style: {
             "background-color": "#fff4e8",
             "border-color": "#e4771b",
+            "border-width": 3,
+            opacity: 1,
+          },
+        },
+        {
+          selector: "edge.route-highlight",
+          style: {
             "line-color": "#e4771b",
             "target-arrow-color": "#e4771b",
             width: 4,
@@ -1792,19 +1757,33 @@ const categoryMetaJson = JSON.stringify(
       history.replaceState(null, "", url);
     });
 
-    /** 触れている関係だけを濃くし、離れた要素は控えめにする。 */
-    const clearHover = () =>
+    /**
+     * 触れている関係だけを濃くする。ノードと辺の境界をまたぐ際に即座に
+     * class を外すと Cytoscape のヒット領域が変わり、点滅やクリック漏れを
+     * 起こすため、短い猶予を設けて次の hover が来たら取り消す。
+     */
+    let hoverClearTimer: number | undefined;
+    let hoveredElementId: string | undefined;
+    const clearHover = () => {
+      hoveredElementId = undefined;
       cy.elements().removeClass("hover-focus hover-muted");
+    };
     cy.on("mouseover", "node, edge", (ev) => {
-      clearHover();
+      if (hoverClearTimer) window.clearTimeout(hoverClearTimer);
       const target = ev.target;
+      if (hoveredElementId === target.id()) return;
+      cy.elements().removeClass("hover-focus hover-muted");
+      hoveredElementId = target.id();
       const focus = target.isNode()
         ? target.union(target.neighborhood())
         : target.union(target.source()).union(target.target());
       cy.elements(":visible").addClass("hover-muted");
       focus.removeClass("hover-muted").addClass("hover-focus");
     });
-    cy.on("mouseout", "node, edge", clearHover);
+    cy.on("mouseout", "node, edge", () => {
+      if (hoverClearTimer) window.clearTimeout(hoverClearTimer);
+      hoverClearTimer = window.setTimeout(clearHover, 80);
+    });
 
     cy.on("dbltap", 'node[kind = "concept"].outside', (ev) => {
       const key = ev.target.data("catKey") as string;
