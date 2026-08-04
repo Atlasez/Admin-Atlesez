@@ -110,19 +110,23 @@ test.describe("学習サイト", () => {
       "最近更新された記事",
       "近日公開予定の記事",
     ]);
-    await expect(
-      page.getByText("スクロールして続きを表示").first(),
-    ).toBeVisible();
+    await expect(page.locator(".recent-scroll")).toHaveCSS(
+      "overflow-y",
+      "scroll",
+    );
+    await expect(page.locator(".upcoming-list")).toHaveCSS(
+      "overflow-y",
+      "scroll",
+    );
   });
 
   test("総合リストを記事まで段階的に展開できる", async ({ page }) => {
     await page.goto("atlas/ja/?view=list");
-    await expect(page.locator(".list-group[open]")).toHaveCount(0);
+    await expect(page.locator(".list-group[open]")).not.toHaveCount(0);
 
     const natural = page.locator(".list-group", { hasText: "自然科学" });
-    await natural.locator(":scope > summary").click();
     const mathGenre = natural.locator(".list-genre", { hasText: "数理・情報" });
-    await mathGenre.locator(":scope > summary").click();
+    await expect(mathGenre).toHaveAttribute("open", "");
 
     const mathematics = mathGenre.locator(".subject-list-details", {
       has: page.getByRole("link", { name: "数学", exact: true }),
@@ -320,7 +324,7 @@ test.describe("学習サイト", () => {
     await expect(zoomLevel).toBeVisible();
     await expect(page.getByRole("button", { name: "自動整列" })).toBeVisible();
     await expect(
-      page.getByText("背景ドラッグで移動 · ノードを押すと記事へ移動"),
+      page.getByText("背景ドラッグで移動 · ノードを押すと詳細を表示"),
     ).toBeVisible();
     await expect(page.locator("[data-map-status]")).not.toHaveText("");
     const initialZoom = Number(
@@ -404,6 +408,29 @@ test.describe("学習サイト", () => {
     await expect(result.getByRole("listitem")).toHaveCount(8);
     await expect(result).toContainText("同じ分野からあわせて読む（4件）");
     await expect(result).toContainText("開始地点以前の前提（4件）");
+    await expect(page.locator("[data-map-status]")).toContainText(
+      "学習経路を表示中",
+    );
+  });
+
+  test("地図上で選んだノードを経路の始点・終点にできる", async ({ page }) => {
+    await page.goto("atlas/ja/map/");
+    const search = page.locator("[data-map-search]");
+
+    await search.fill("群の定義");
+    await search.dispatchEvent("change");
+    await page.getByRole("button", { name: "開始地点にする" }).click();
+
+    await search.fill("Schurの補題");
+    await search.dispatchEvent("change");
+    await page.getByRole("button", { name: "目的地点にする" }).click();
+
+    await expect(page.locator("[data-route-result]")).toContainText(
+      "Schurの補題",
+    );
+    await expect(page.locator("[data-map-status]")).toContainText(
+      "学習経路を表示中",
+    );
   });
 
   test("検索結果には編集済みの要約を表示する", async ({ page }) => {

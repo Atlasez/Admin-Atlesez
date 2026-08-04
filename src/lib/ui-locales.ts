@@ -28,6 +28,14 @@ export const UI_LANGUAGE_ENGLISH_NAMES: Record<UiLanguage, string> = {
   ko: "Korean",
 };
 
+/** 日本語表示中に添える各言語の日本語名。 */
+export const UI_LANGUAGE_JAPANESE_NAMES: Record<UiLanguage, string> = {
+  ja: "日本語",
+  en: "英語",
+  zh: "中国語",
+  ko: "韓国語",
+};
+
 /** 日本語 → 各言語。ja は原文なので持たない。 */
 export const UI_DICTIONARY: Record<
   string,

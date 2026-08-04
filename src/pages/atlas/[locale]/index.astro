@@ -261,13 +261,13 @@ const views = [
         >
           {
             grouped.map((group) => (
-              <details class="list-group">
+              <details class="list-group" open>
                 <summary class="group-heading">
                   <h2>{group.label}</h2>
                 </summary>
                 <div class="list-group-body">
                   {group.genres.map((genre) => (
-                  <details class="list-genre">
+                  <details class="list-genre" open>
                     <summary class="list-genre-heading">
                       <h3>{genre.label}</h3>
                     </summary>
@@ -401,10 +401,6 @@ const views = [
               }
             </ul>
           </div>
-          <p class="scroll-hint" data-scroll-hint hidden aria-hidden="true">
-            <span>↕</span>
-            {locale === "ja" ? "スクロールして続きを表示" : "Scroll for more"}
-          </p>
           </div>
         </section>
 
@@ -430,10 +426,6 @@ const views = [
                   </li>
                 ))}
               </ul>
-              <p class="scroll-hint" data-scroll-hint hidden aria-hidden="true">
-                <span>↕</span>
-                {locale === "ja" ? "スクロールして続きを表示" : "Scroll for more"}
-              </p>
               </div>
             </section>
           )
@@ -519,15 +511,6 @@ const views = [
     activate(initial ?? "tiles");
   }
 
-  /** 固定高の一覧に続きがある場合だけ、スクロール案内を表示する。 */
-  const syncScrollHints = () => {
-    document.querySelectorAll<HTMLElement>("[data-scroll-region]").forEach((region) => {
-      const hint = region.parentElement?.querySelector<HTMLElement>("[data-scroll-hint]");
-      if (hint) hint.hidden = region.scrollHeight <= region.clientHeight + 1;
-    });
-  };
-  syncScrollHints();
-  window.addEventListener("resize", syncScrollHints);
 </script>
 
 <style>
@@ -919,27 +902,20 @@ const views = [
   }
   .recent-scroll {
     max-height: 26rem;
-    overflow-y: auto;
+    overflow-y: scroll;
     overscroll-behavior: contain;
+    scrollbar-color: var(--border-strong) var(--background-secondary);
+    scrollbar-width: auto;
   }
-  .scroll-shell {
-    position: relative;
+  .recent-scroll::-webkit-scrollbar,
+  .upcoming-list::-webkit-scrollbar {
+    width: 0.75rem;
   }
-  .scroll-hint {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-1);
-    margin: 0;
-    padding: 3px var(--space-1);
-    border-top: 1px solid var(--border-default);
-    background: var(--background-secondary);
-    color: var(--text-secondary);
-    font-size: calc(0.7rem * var(--text-scale));
-    line-height: 1.2;
-  }
-  .scroll-hint[hidden] {
-    display: none;
+  .recent-scroll::-webkit-scrollbar-thumb,
+  .upcoming-list::-webkit-scrollbar-thumb {
+    border: 3px solid var(--background-secondary);
+    border-radius: 999px;
+    background: var(--border-strong);
   }
   .recent-list {
     list-style: none;
@@ -964,8 +940,10 @@ const views = [
     margin: 0;
     padding: 0;
     max-height: 14rem;
-    overflow-y: auto;
+    overflow-y: scroll;
     overscroll-behavior: contain;
+    scrollbar-color: var(--border-strong) var(--background-secondary);
+    scrollbar-width: auto;
   }
   .upcoming-list li {
     display: flex;

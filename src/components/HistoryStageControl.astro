@@ -80,7 +80,10 @@ const { locale } = Astro.props;
   }
   .history-stage-track {
     --history-thumb-size: 1.15rem;
-    --history-edge-center: calc(var(--history-thumb-size) / 2);
+    --history-thumb-inset: 0.18rem;
+    --history-edge-center: calc(
+      var(--history-thumb-inset) + var(--history-thumb-size) / 2
+    );
     position: relative;
     display: block;
     width: 100%;
@@ -115,7 +118,7 @@ const { locale } = Astro.props;
     position: absolute;
     z-index: 1;
     top: 50%;
-    left: 0;
+    left: var(--history-thumb-inset);
     width: var(--history-thumb-size);
     height: var(--history-thumb-size);
     border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
@@ -144,10 +147,12 @@ const { locale } = Astro.props;
     opacity: 1;
   }
   .history-stage-toggle[data-state="read"] .history-stage-thumb {
-    left: calc(50% - var(--history-edge-center));
+    left: calc(50% - var(--history-thumb-size) / 2);
   }
   .history-stage-toggle[data-state="understood"] .history-stage-thumb {
-    left: calc(100% - var(--history-thumb-size));
+    left: calc(
+      100% - var(--history-thumb-size) - var(--history-thumb-inset)
+    );
   }
   .history-stage-labels {
     display: grid;

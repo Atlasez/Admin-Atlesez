@@ -183,7 +183,7 @@ const categoryMetaJson = JSON.stringify(
       <strong>{locale === "ja" ? "学習地図" : "Learning map"}</strong>
       <small>
         {locale === "ja"
-          ? "背景ドラッグで移動 · ノードを押すと記事へ移動"
+          ? "背景ドラッグで移動 · ノードを押すと詳細を表示"
           : "Drag the background to pan · Select a node to open its article"}
       </small>
     </div>
@@ -668,6 +668,30 @@ const categoryMetaJson = JSON.stringify(
   .map-detail:empty {
     display: none;
   }
+  :global(.map-detail-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+  }
+  :global(.map-detail-actions button),
+  :global(.map-detail-actions a) {
+    min-height: 2rem;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.82rem * var(--text-scale));
+    text-decoration: none;
+    cursor: pointer;
+  }
+  :global(.map-detail-actions button:hover),
+  :global(.map-detail-actions a:hover) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
   .map-legend {
     margin-top: var(--space-2);
     max-width: 24rem;
@@ -920,6 +944,14 @@ const categoryMetaJson = JSON.stringify(
   const frame = document.querySelector<HTMLElement>("[data-map-frame]");
   const routePanel = document.querySelector<HTMLElement>("[data-route-panel]");
   const routeOpen = document.querySelector<HTMLButtonElement>("[data-route-open]");
+  type RouteNodeSelection = { id?: string; mode?: "start" | "goal" };
+  const pendingRouteSelections: RouteNodeSelection[] = [];
+  let applyRouteSelection: ((selection: RouteNodeSelection) => void) | undefined;
+  window.addEventListener("atlas-map-route-select", (event) => {
+    const selection = (event as CustomEvent<RouteNodeSelection>).detail;
+    if (applyRouteSelection) applyRouteSelection(selection);
+    else pendingRouteSelections.push(selection);
+  });
 
   /**
    * 経路検索パネルの開閉。地図の枠内に重ねて出すので、
@@ -1000,6 +1032,15 @@ const categoryMetaJson = JSON.stringify(
     const subjectName = new Map(subjectMeta.map((s) => [s.slug, s.name]));
     const subjectColor = new Map(subjectMeta.map((s) => [s.slug, s.color]));
     const colorFor = (slug: string) => subjectColor.get(slug) ?? accent;
+    /** 線がノードの下を透けないよう、分野色を淡い不透明色に変換する。 */
+    const pastelFor = (color: string) => {
+      const hex = color.replace("#", "");
+      if (!/^[0-9a-f]{6}$/i.test(hex)) return "#f4f6f8";
+      const channels = [0, 2, 4].map((index) =>
+        Number.parseInt(hex.slice(index, index + 2), 16),
+      );
+      return `rgb(${channels.map((value) => Math.round(value * 0.18 + 255 * 0.82)).join(", ")})`;
+    };
 
     const categoryMeta: { subject: string; slug: string; name: string }[] =
       JSON.parse(container.dataset.categories ?? "[]");
@@ -1075,6 +1116,7 @@ const categoryMetaJson = JSON.stringify(
             subject: key.split("/")[0],
             parent: `subject:${key.split("/")[0]}`,
             subjectColor: colorFor(key.split("/")[0]),
+            nodeFill: pastelFor(colorFor(key.split("/")[0])),
           },
         })),
         // 概念ノード（詳細で描く）
@@ -1087,6 +1129,7 @@ const categoryMetaJson = JSON.stringify(
             catKey: catKeyOf(n),
             parent: `subject:${n.subject}`,
             subjectColor: colorFor(n.subject),
+            nodeFill: pastelFor(colorFor(n.subject)),
             hasArticle: (n.articles[locale] ?? []).length > 0 ? "yes" : "no",
           },
         })),
@@ -1129,8 +1172,8 @@ const categoryMetaJson = JSON.stringify(
             shape: "round-rectangle",
             width: 136,
             height: 70,
-            "background-color": "data(subjectColor)",
-            "background-opacity": 0.12,
+            "background-color": "data(nodeFill)",
+            "background-opacity": 1,
             "border-width": 1,
             "border-color": "data(subjectColor)",
             "overlay-opacity": 0,
@@ -1151,8 +1194,8 @@ const categoryMetaJson = JSON.stringify(
             shape: "round-rectangle",
             width: 150,
             height: 70,
-            "background-color": "data(subjectColor)",
-            "background-opacity": 0.12,
+            "background-color": "data(nodeFill)",
+            "background-opacity": 1,
             "border-width": 1,
             "border-color": "data(subjectColor)",
             "overlay-opacity": 0,
@@ -1264,6 +1307,17 @@ const categoryMetaJson = JSON.stringify(
           style: { "line-style": "dashed", width: 1 },
         },
         { selector: ".faded", style: { opacity: 0.15 } },
+        { selector: ".hover-muted", style: { opacity: 0.16 } },
+        {
+          selector: ".hover-focus",
+          style: {
+            opacity: 1,
+            "border-width": 3,
+            "line-color": accent,
+            "target-arrow-color": accent,
+            width: 3,
+          },
+        },
         {
           selector: ".route-highlight",
           style: {
@@ -1337,11 +1391,45 @@ const categoryMetaJson = JSON.stringify(
 
     const hideAll = () => {
       cy.elements().style("display", "none");
-      cy.elements().removeClass("faded route-highlight outside");
+      cy.elements().removeClass(
+        "faded route-highlight outside hover-focus hover-muted",
+      );
     };
 
     const show = (selector: string) =>
       cy.elements(selector).style("display", "element");
+
+    /** 固定の初期位置から、辺の長さとノード同士の反発を使って余白を確保する。 */
+    function spreadNodes(elements: ReturnType<typeof cy.nodes>): void {
+      if (elements.length < 2) return;
+      const nodes = elements.toArray();
+      // 親ノードを含む部分グラフに汎用レイアウトをそのまま渡すと、
+      // Cytoscape の compound layout が隠れた子を参照してしまうため、
+      // 表示中のノードだけで小さな反発計算を行う。
+      for (let iteration = 0; iteration < 64; iteration += 1) {
+        const force = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const a = nodes[i];
+            const b = nodes[j];
+            const delta = { x: a.position("x") - b.position("x"), y: a.position("y") - b.position("y") };
+            const distance = Math.max(18, Math.hypot(delta.x, delta.y));
+            const magnitude = Math.min(6, 3_200 / (distance * distance));
+            const fx = (delta.x / distance) * magnitude;
+            const fy = (delta.y / distance) * magnitude;
+            const aForce = force.get(a.id());
+            const bForce = force.get(b.id());
+            if (aForce) { aForce.x += fx; aForce.y += fy; }
+            if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+          }
+        }
+        nodes.forEach((node) => {
+          const f = force.get(node.id());
+          if (!f) return;
+          node.position({ x: node.position("x") + f.x, y: node.position("y") + f.y });
+        });
+      }
+    }
 
     /** 両端が見えている辺だけ表示する */
     function showConnectingEdges(): void {
@@ -1388,7 +1476,9 @@ const categoryMetaJson = JSON.stringify(
 
       showConnectingEdges();
       cy.layout({ name: "preset", fit: false }).run();
-      fitReadable(cy.nodes(':visible[kind = "category"]'));
+      const visibleCategories = cy.nodes(':visible[kind = "category"]');
+      spreadNodes(visibleCategories);
+      fitReadable(visibleCategories);
 
       const shown = cy.nodes(':visible[kind = "category"]').length;
       setStatus(
@@ -1467,7 +1557,11 @@ const categoryMetaJson = JSON.stringify(
 
       showConnectingEdges();
       cy.layout({ name: "preset", fit: false }).run();
-      fitReadable(cy.nodes(":visible").filter((n) => n.data("kind") !== "subject"));
+      const visibleConcepts = cy
+        .nodes(":visible")
+        .filter((n) => n.data("kind") !== "subject");
+      spreadNodes(visibleConcepts);
+      fitReadable(visibleConcepts);
 
       const name = categoryName.get(key) ?? key;
       if (backButton) {
@@ -1481,6 +1575,49 @@ const categoryMetaJson = JSON.stringify(
           : `${name}: ${inside.length} items, ${outsideIds.size} external links`,
       );
     }
+
+    /** 計算した経路だけを地図上に残して、進む順番を視覚化する。 */
+    function renderRouteOnMap(stepIds: string[], skippedIds: string[], goalId: string) {
+      const routeIds = new Set([...stepIds, ...skippedIds]);
+      if (routeIds.size === 0) return;
+      focused = null;
+      hideAll();
+      if (backButton) backButton.hidden = false;
+      for (const id of routeIds) {
+        const node = cy.getElementById(id);
+        if (node.length === 0) continue;
+        node.style("display", "element");
+        node.addClass("route-highlight");
+        const subject = node.data("subject") as string;
+        show(`#subject\\:${subject}`);
+      }
+      cy.edges().forEach((edge) => {
+        const visible =
+          routeIds.has(edge.source().id()) && routeIds.has(edge.target().id());
+        edge.style("display", visible ? "element" : "none");
+        if (visible) edge.addClass("route-highlight");
+      });
+      const routeNodes = cy.nodes(":visible").filter((n) => n.data("kind") !== "subject");
+      spreadNodes(routeNodes);
+      fitReadable(routeNodes);
+      const goalName = nodeById.get(goalId);
+      setStatus(
+        ja
+          ? `学習経路を表示中: ${goalName ? label(goalName) : "目的地点"}`
+          : `Learning route: ${goalName ? label(goalName) : "Goal"}`,
+      );
+    }
+
+    window.addEventListener("atlas-map-route", (event) => {
+      const { stepIds, skippedIds, goalId } = (event as CustomEvent<{
+        stepIds?: string[];
+        skippedIds?: string[];
+        goalId?: string;
+      }>).detail;
+      if (!stepIds || !skippedIds || !goalId) return;
+      renderRouteOnMap(stepIds, skippedIds, goalId);
+      syncViewportUi();
+    });
 
     function fitReadable(elements: ReturnType<typeof cy.nodes>): void {
       if (elements.length === 0) return;
@@ -1520,7 +1657,10 @@ const categoryMetaJson = JSON.stringify(
       if (!n || !detail) return;
       const arts = n.articles[locale] ?? [];
       const links = arts
-        .map((a) => `<a href="${base}${a.path}">${a.title}</a>`)
+        .map(
+          (a) =>
+            `<a href="${base}${a.path}" class="map-detail-article-link">${a.title}</a>`,
+        )
         .join(" / ");
       const neighbors = [...n.prerequisites, ...n.recommendedNext, ...n.related]
         .map((nid) => nodeById.get(nid))
@@ -1531,8 +1671,37 @@ const categoryMetaJson = JSON.stringify(
       const neighborLabel = ja ? "隣接概念" : "Neighbors";
       detail.innerHTML = `<strong>${label(n)}</strong> — ${
         links || preparing
-      }<br>${neighborLabel}: ${neighbors || "—"}`;
+      }<br>${neighborLabel}: ${neighbors || "—"}<div class="map-detail-actions"><button type="button" data-route-node="start" data-node-id="${id}">${
+        ja ? "開始地点にする" : "Set as start"
+      }</button><button type="button" data-route-node="goal" data-node-id="${id}">${
+        ja ? "目的地点にする" : "Set as goal"
+      }</button></div>`;
     }
+
+    // Cytoscape は地図内のクリックを捕捉するため、詳細パネルのボタンは
+    // document の capture 段階で拾う。これでノード上に重なっていても確実に選択できる。
+    let lastRouteNodeClick = "";
+    let lastRouteNodeAt = 0;
+    const selectRouteNodeFromDetail = (event: Event) => {
+        const button = (event.target as Element).closest<HTMLButtonElement>(
+          "[data-route-node]",
+        );
+        if (!button) return;
+        const id = button.dataset.nodeId;
+        const mode = button.dataset.routeNode;
+        if (!id || (mode !== "start" && mode !== "goal")) return;
+        const selectionKey = `${id}:${mode}`;
+        const now = performance.now();
+        if (event.type === "click" && selectionKey === lastRouteNodeClick && now - lastRouteNodeAt < 500) return;
+        lastRouteNodeClick = selectionKey;
+        lastRouteNodeAt = now;
+        window.dispatchEvent(
+          new CustomEvent("atlas-map-route-select", { detail: { id, mode } }),
+        );
+      };
+    // Cytoscape が click を抑止する環境でも、pointerup は必ず届く。
+    document.addEventListener("pointerup", selectRouteNodeFromDetail, true);
+    document.addEventListener("click", selectRouteNodeFromDetail, true);
 
     // カテゴリを押したら中に入る
     cy.on("tap", 'node[kind = "category"]', (ev) => {
@@ -1541,14 +1710,20 @@ const categoryMetaJson = JSON.stringify(
       syncUrl();
     });
 
-    // 記事がある概念は、押した時点で該当記事へ移動する。
-    // 準備中の概念だけは、従来どおり地図内に詳細を表示する。
+    // 通常は詳細を開き、記事リンクまたは経路の始点・終点を選べるようにする。
     cy.on("tap", 'node[kind = "concept"]', (ev) => {
       const id: string = ev.target.id();
       const node = nodeById.get(id);
-      const article = node?.articles[locale]?.[0];
-      if (article) {
-        location.assign(`${base}${article.path}`);
+      if (!node) return;
+      if (routePanel && !routePanel.hidden) {
+        const routeStart = document.querySelector<HTMLSelectElement>(
+          "[data-route-start]",
+        );
+        window.dispatchEvent(
+          new CustomEvent("atlas-map-route-select", {
+            detail: { id, mode: routeStart?.value ? "goal" : "start" },
+          }),
+        );
         return;
       }
       showDetail(id);
@@ -1556,6 +1731,20 @@ const categoryMetaJson = JSON.stringify(
       url.searchParams.set("selected", id);
       history.replaceState(null, "", url);
     });
+
+    /** 触れている関係だけを濃くし、離れた要素は控えめにする。 */
+    const clearHover = () =>
+      cy.elements().removeClass("hover-focus hover-muted");
+    cy.on("mouseover", "node, edge", (ev) => {
+      clearHover();
+      const target = ev.target;
+      const focus = target.isNode()
+        ? target.union(target.neighborhood())
+        : target.union(target.source()).union(target.target());
+      cy.elements(":visible").addClass("hover-muted");
+      focus.removeClass("hover-muted").addClass("hover-focus");
+    });
+    cy.on("mouseout", "node, edge", clearHover);
 
     cy.on("dbltap", 'node[kind = "concept"].outside', (ev) => {
       const key = ev.target.data("catKey") as string;
@@ -1780,6 +1969,24 @@ const categoryMetaJson = JSON.stringify(
     filterRouteOptions();
     routeSubject.addEventListener("change", filterRouteOptions);
 
+    /** ノード詳細や地図上の選択から、経路検索の始点・目的地点を設定する。 */
+    applyRouteSelection = ({ id, mode }) => {
+      const node = id ? nodeById.get(id) : undefined;
+      if (!node || !mode) return;
+      if (routeSubject.value !== node.subject) {
+        routeSubject.value = node.subject;
+        filterRouteOptions();
+      }
+      if (mode === "start") {
+        routeStart.value = node.id;
+      } else {
+        routeGoal.value = node.id;
+      }
+      setRouteOpen(true);
+      if (mode === "goal") form.requestSubmit();
+    };
+    pendingRouteSelections.splice(0).forEach(applyRouteSelection);
+
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const start = routeStart.value;
@@ -1864,6 +2071,15 @@ const categoryMetaJson = JSON.stringify(
               }</summary><ul>${skippedHtml}</ul></details>`
             : ""
         }`;
+        window.dispatchEvent(
+          new CustomEvent("atlas-map-route", {
+            detail: {
+              stepIds: route.steps,
+              skippedIds: route.skipped,
+              goalId: goal,
+            },
+          }),
+        );
       } catch {
         result.textContent = ja
           ? "この組み合わせでは学習経路を作成できませんでした。"
@@ -1881,18 +2097,7 @@ const categoryMetaJson = JSON.stringify(
       }
     });
 
-  // 地図が画面に入ってから読み込む。少し手前（200px）で始めて待ち時間を隠す。
-  if (container && "IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        observer.disconnect();
-        start();
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(container);
-  } else {
-    start();
-  }
+  // タブ内・画面下にある地図でも、検索や経路検索を押した直後から必ず使えるようにする。
+  // Cytoscape 自体は動的 import のままなので、初期 HTML の描画は妨げない。
+  start();
 </script>

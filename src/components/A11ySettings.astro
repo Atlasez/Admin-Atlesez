@@ -2,6 +2,7 @@
 import {
   UI_LANGUAGES,
   UI_LANGUAGE_ENGLISH_NAMES,
+  UI_LANGUAGE_JAPANESE_NAMES,
   UI_LANGUAGE_NAMES,
 } from "../lib/ui-locales";
 /** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
@@ -71,6 +72,7 @@ const languageGroup = {
     label: UI_LANGUAGE_NAMES[code],
     native: UI_LANGUAGE_NAMES[code],
     english: UI_LANGUAGE_ENGLISH_NAMES[code],
+    japanese: UI_LANGUAGE_JAPANESE_NAMES[code],
   })),
 };
 
@@ -141,6 +143,7 @@ const groups = [
               value={o.value}
               data-language-native={o.native}
               data-language-english={o.english}
+              data-language-japanese={o.japanese}
             >
               {o.label}
             </option>
@@ -182,7 +185,8 @@ const groups = [
               <option
                 value={o.value}
                 data-language-native={o.native}
-                data-language-english={o.english}
+              data-language-english={o.english}
+              data-language-japanese={o.japanese}
               >
                 {o.label}
               </option>
@@ -382,10 +386,12 @@ const groups = [
     select.querySelectorAll<HTMLOptionElement>("option").forEach((option) => {
       const native = option.dataset.languageNative ?? option.textContent ?? "";
       const english = option.dataset.languageEnglish ?? "";
+      const japanese = option.dataset.languageJapanese ?? "";
+      const suffix = current === "ja" ? japanese : english;
       option.textContent =
-        option.value === current || !english || native === english
+        option.value === current || !suffix || native === suffix
           ? native
-          : `${native}(${english})`;
+          : `${native}(${suffix})`;
     });
   }
 
