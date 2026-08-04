@@ -281,7 +281,7 @@ const views = [
                         return (
                           <li class="subject-list-item">
                             {published && sortedCategories.length > 0 ? (
-                              <details class="subject-list-details">
+                              <details class="subject-list-details" open>
                                 <summary class="subject-list-head">
                                   <a href={`${atlasPath(locale, s.data.slug)}?view=list`}>
                                     {name}

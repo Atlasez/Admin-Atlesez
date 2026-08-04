@@ -157,6 +157,31 @@ const categoryMetaJson = JSON.stringify(
       >
         {locale === "ja" ? "地図を操作" : "Control map"}
       </button>
+      <div class="map-action-tools" data-graph-controls hidden>
+        <button type="button" class="map-tool" data-map-back hidden>
+          {locale === "ja" ? "▴ カテゴリを折りたたむ" : "▴ Fold category"}
+        </button>
+        <button
+          type="button"
+          class="map-tool"
+          data-route-open
+          aria-expanded="false"
+          aria-controls="map-route-panel"
+        >
+          {t(locale, "routeSearch")}
+        </button>
+        <button
+          type="button"
+          class="map-tool"
+          data-map-fullscreen
+          aria-pressed="false"
+        >
+          {locale === "ja" ? "全画面" : "Full screen"}
+        </button>
+        <button type="button" class="map-tool" data-map-share>
+          {t(locale, "shareView")}
+        </button>
+      </div>
     </div>
 
     {/* 検索中も地図の操作層と競合しないよう、経路検索はツールバー直下に展開する。 */}
@@ -228,37 +253,6 @@ const categoryMetaJson = JSON.stringify(
       <span><i class="canvas-line canvas-line-solid"></i>{locale === "ja" ? "前提" : "Prerequisite"}</span>
       <span><i class="canvas-line canvas-line-dash"></i>{locale === "ja" ? "次におすすめ" : "Recommended"}</span>
       <span><i class="canvas-line canvas-line-dot"></i>{locale === "ja" ? "関連" : "Related"}</span>
-    </div>
-
-    {/* 枠の左上: 戻る・経路検索 */}
-    <div class="map-tools map-tools-start" data-graph-controls hidden>
-      <button type="button" class="map-tool" data-map-back hidden>
-        {locale === "ja" ? "▴ カテゴリを折りたたむ" : "▴ Fold category"}
-      </button>
-      <button
-        type="button"
-        class="map-tool"
-        data-route-open
-        aria-expanded="false"
-        aria-controls="map-route-panel"
-      >
-        {t(locale, "routeSearch")}
-      </button>
-    </div>
-
-    {/* 枠の右上: 全画面・共有 */}
-    <div class="map-tools map-tools-end" data-graph-controls hidden>
-      <button
-        type="button"
-        class="map-tool"
-        data-map-fullscreen
-        aria-pressed="false"
-      >
-        {locale === "ja" ? "全画面" : "Full screen"}
-      </button>
-      <button type="button" class="map-tool" data-map-share>
-        {t(locale, "shareView")}
-      </button>
     </div>
 
     <div class="map-detail" data-map-detail aria-live="polite"></div>
@@ -497,25 +491,13 @@ const categoryMetaJson = JSON.stringify(
     min-height: 0;
   }
 
-  /* 枠の中に浮かせるボタン群 */
-  .map-tools {
-    position: absolute;
-    top: calc(var(--space-2) + 3.25rem);
+  /* 地図の操作はツールバーにまとめる。キャンバス上には重ねない。 */
+  .map-action-tools {
+    align-items: center;
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
-    z-index: 4;
-    padding: 4px;
-    border: 1px solid var(--border-default);
-    border-radius: calc(var(--radius) + 2px);
-    background: var(--background-primary);
-    box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
-  }
-  .map-tools-start {
-    left: var(--space-2);
-  }
-  .map-tools-end {
-    right: var(--space-2);
+    margin-left: auto;
   }
   .map-tool {
     min-height: var(--touch-target);
@@ -826,20 +808,12 @@ const categoryMetaJson = JSON.stringify(
     .map-canvas-legend {
       display: none;
     }
-    /* 道具立ては縦に積んだツールバーの下に来るので、その分だけ下げる */
-    .map-tools {
-      top: auto;
-      bottom: var(--space-2);
-      max-width: calc(100% - var(--space-4));
-      padding: 3px;
-    }
-    .map-tools-start {
-      top: var(--space-2);
-      bottom: auto;
-      left: var(--space-2);
-    }
-    .map-tools-end {
-      right: var(--space-2);
+    .map-action-tools {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+      margin-left: 0;
     }
     .map-route {
       margin: var(--space-2);
@@ -1266,18 +1240,35 @@ const categoryMetaJson = JSON.stringify(
           style: { "line-style": "dashed", width: 1 },
         },
         { selector: ".faded", style: { opacity: 0.15 } },
-        { selector: ".hover-muted", style: { opacity: 0.16 } },
         {
-          selector: "node.hover-focus",
-          style: { opacity: 1, "border-width": 3 },
+          selector: "node.hover-target",
+          style: {
+            opacity: 1,
+            "background-color": "#e5f3ff",
+            "border-color": accent,
+            "border-width": 5,
+            color: accent,
+            "font-weight": 700,
+            "z-index": 999,
+          },
         },
         {
-          selector: "edge.hover-focus",
+          selector: "node.hover-neighbor",
+          style: {
+            opacity: 1,
+            "border-color": accent,
+            "border-width": 3,
+            "z-index": 998,
+          },
+        },
+        {
+          selector: "edge.hover-target, edge.hover-neighbor",
           style: {
             opacity: 1,
             "line-color": accent,
             "target-arrow-color": accent,
-            width: 3,
+            width: 3.5,
+            "z-index": 997,
           },
         },
         {
@@ -1371,7 +1362,7 @@ const categoryMetaJson = JSON.stringify(
     const hideAll = () => {
       cy.elements().style("display", "none");
       cy.elements().removeClass(
-        "faded route-highlight outside hover-focus hover-muted",
+        "faded route-highlight outside hover-target hover-neighbor",
       );
     };
 
@@ -1758,7 +1749,9 @@ const categoryMetaJson = JSON.stringify(
     });
 
     /**
-     * 触れている関係だけを濃くする。ノードと辺の境界をまたぐ際に即座に
+     * 触れている要素、直接つながるノード、対応する辺をそれぞれ濃くする。
+     * それ以外は消さずに残すことで、地図全体の位置関係を見失わないようにする。
+     * ノードと辺の境界をまたぐ際に即座に
      * class を外すと Cytoscape のヒット領域が変わり、点滅やクリック漏れを
      * 起こすため、短い猶予を設けて次の hover が来たら取り消す。
      */
@@ -1766,19 +1759,23 @@ const categoryMetaJson = JSON.stringify(
     let hoveredElementId: string | undefined;
     const clearHover = () => {
       hoveredElementId = undefined;
-      cy.elements().removeClass("hover-focus hover-muted");
+      cy.elements().removeClass("hover-target hover-neighbor");
     };
     cy.on("mouseover", "node, edge", (ev) => {
       if (hoverClearTimer) window.clearTimeout(hoverClearTimer);
       const target = ev.target;
       if (hoveredElementId === target.id()) return;
-      cy.elements().removeClass("hover-focus hover-muted");
+      cy.elements().removeClass("hover-target hover-neighbor");
       hoveredElementId = target.id();
-      const focus = target.isNode()
-        ? target.union(target.neighborhood())
-        : target.union(target.source()).union(target.target());
-      cy.elements(":visible").addClass("hover-muted");
-      focus.removeClass("hover-muted").addClass("hover-focus");
+      const connectedEdges = target.isNode()
+        ? target.connectedEdges()
+        : target;
+      const connectedNodes = target.isNode()
+        ? connectedEdges.connectedNodes().difference(target)
+        : target.connectedNodes();
+      target.addClass("hover-target");
+      connectedNodes.addClass("hover-neighbor");
+      connectedEdges.addClass("hover-neighbor");
     });
     cy.on("mouseout", "node, edge", () => {
       if (hoverClearTimer) window.clearTimeout(hoverClearTimer);

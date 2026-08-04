@@ -114,30 +114,6 @@ const conceptNames = entry.data.concepts.map((c) => {
   return { id: c.id, name: node ? localizedName(node.name, locale) : c.id };
 });
 
-/**
- * 記事の問題報告フォーム。
- * forms.gle の短縮URLはクエリ文字列を転送時に破棄するため、記事情報を
- * 自動入力できる Google Forms の正式URLを使用する。
- */
-const reportFormUrl = new URL(
-  "https://docs.google.com/forms/d/e/1FAIpQLSfo-vqZALgq9xYhi7G8yaNMnWhaT-l-zTTj0cNzTfimVtLvRA/viewform",
-);
-reportFormUrl.searchParams.set("usp", "pp_url");
-reportFormUrl.searchParams.set("entry.1033608797", entry.data.title);
-reportFormUrl.searchParams.set(
-  "entry.1590510319",
-  new URL(
-    articlePath(
-      locale,
-      entry.data.subject,
-      entry.data.category,
-      entry.data.slug,
-    ),
-    Astro.site,
-  ).href,
-);
-reportFormUrl.searchParams.set("entry.65646072", entry.data.articleId);
-reportFormUrl.searchParams.set("embedded", "true");
 const historyUrl = `${ORG.githubRepo}/commits/main/src/content/articles/${entry.id}.md`;
 
 const structuredData = {
@@ -348,23 +324,57 @@ const structuredData = {
 
       <footer class="article-footer">
         <div class="article-footer-links">
-          <details class="issue-report">
-            <summary>
-              <span>{t(locale, "reportIssue")}</span>
-              <small>{locale === "ja" ? "フォームを開く" : "Open form"}</small>
-            </summary>
+          <section class="issue-report" aria-labelledby="issue-report-heading">
+            <h2 id="issue-report-heading">{t(locale, "reportIssue")}</h2>
             <p class="issue-report-note">
               {locale === "ja"
-                ? "記事名・URLはあらかじめ入力されています。内容を記入して、この画面内で送信できます。"
-                : "The article title and URL are prefilled. Complete and submit the form here."}
+                ? "記事名・URLは自動で添付されます。誤りや改善案をこの画面からお送りください。"
+                : "The article title and URL are attached automatically. Send an error report or suggestion here."}
             </p>
-            <iframe
+            <form
               class="issue-report-form"
-              src={reportFormUrl.href}
-              title={t(locale, "reportIssue")}
-              loading="lazy"
-            />
-          </details>
+              data-issue-report-form
+              data-article-title={entry.data.title}
+              data-article-id={entry.data.articleId}
+              data-locale={locale}
+            >
+              <div class="issue-report-fields">
+                <label>
+                  {locale === "ja" ? "報告の種類" : "Report type"}
+                  <select name="reportType" required>
+                    <option value="error">{locale === "ja" ? "誤り・誤植" : "Error or typo"}</option>
+                    <option value="suggestion">{locale === "ja" ? "改善の提案" : "Suggestion"}</option>
+                    <option value="reference">{locale === "ja" ? "出典・参考文献" : "Reference"}</option>
+                    <option value="other">{locale === "ja" ? "その他" : "Other"}</option>
+                  </select>
+                </label>
+                <label>
+                  {locale === "ja" ? "内容" : "Details"}
+                  <textarea
+                    name="details"
+                    rows="5"
+                    required
+                    maxlength="6000"
+                    placeholder={locale === "ja" ? "該当箇所と、どのように修正すべきかをお書きください。" : "Describe the relevant section and the proposed correction."}
+                  ></textarea>
+                </label>
+                <label>
+                  {locale === "ja" ? "返信先（任意）" : "Reply address (optional)"}
+                  <input name="contact" type="email" maxlength="320" autocomplete="email" />
+                </label>
+                <label class="issue-report-trap" aria-hidden="true">
+                  Website
+                  <input name="website" type="text" tabindex="-1" autocomplete="off" />
+                </label>
+              </div>
+              <div class="issue-report-actions">
+                <button type="submit" class="button">
+                  {locale === "ja" ? "報告を送信" : "Send report"}
+                </button>
+                <p data-issue-report-status aria-live="polite"></p>
+              </div>
+            </form>
+          </section>
           <a href={historyUrl} rel="noopener noreferrer" target="_blank">
             {t(locale, "editOnGitHub")}
           </a>
@@ -631,19 +641,11 @@ const structuredData = {
     align-items: flex-start;
     gap: var(--space-2);
   }
-  .issue-report summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-3);
+  .issue-report h2 {
+    margin: 0;
+    padding: var(--space-3) var(--space-3) 0;
     color: var(--text-primary);
-    cursor: pointer;
-    font-weight: 700;
-  }
-  .issue-report summary small {
-    color: var(--accent-primary);
-    font-weight: 600;
+    font-size: calc(1rem * var(--text-scale));
   }
   .issue-report-note {
     margin: 0;
@@ -652,15 +654,58 @@ const structuredData = {
     font-size: calc(0.86rem * var(--text-scale));
   }
   .issue-report-form {
-    display: block;
-    width: 100%;
-    height: min(38rem, 68svh);
-    min-height: 28rem;
     margin: var(--space-2) var(--space-3) var(--space-3);
     width: calc(100% - var(--space-6));
+  }
+  .issue-report-fields {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .issue-report-fields label {
+    display: grid;
+    gap: var(--space-1);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  .issue-report-fields select,
+  .issue-report-fields input,
+  .issue-report-fields textarea {
+    width: 100%;
     border: 1px solid var(--border-strong);
     border-radius: calc(var(--radius) - 2px);
     background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-weight: 400;
+  }
+  .issue-report-fields textarea {
+    min-height: 7rem;
+    resize: vertical;
+  }
+  .issue-report-trap {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .issue-report-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+  .issue-report-actions p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: calc(0.86rem * var(--text-scale));
+  }
+  .issue-report-actions p[data-state="success"] {
+    color: var(--accent-primary);
+  }
+  .issue-report-actions p[data-state="error"] {
+    color: #a12828;
   }
   .article-aside {
     position: sticky;
@@ -850,6 +895,57 @@ const structuredData = {
   const mq = window.matchMedia("(max-width: 1023px)");
   const details = document.querySelector<HTMLDetailsElement>(".toc-details");
   if (details && mq.matches) details.open = false;
+</script>
+
+<script>
+  const reportForm = document.querySelector<HTMLFormElement>("[data-issue-report-form]");
+  if (reportForm) {
+    reportForm.dataset.openedAt = String(Date.now());
+    const status = reportForm.querySelector<HTMLElement>("[data-issue-report-status]");
+    const submit = reportForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const isJapanese = reportForm.dataset.locale === "ja";
+    reportForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!reportForm.reportValidity()) return;
+
+      const values = new FormData(reportForm);
+      const setStatus = (message: string, state: "success" | "error" | "sending") => {
+        if (!status) return;
+        status.textContent = message;
+        status.dataset.state = state;
+      };
+      submit?.setAttribute("disabled", "");
+      setStatus(isJapanese ? "送信しています…" : "Sending…", "sending");
+      try {
+        const response = await fetch("/api/article-reports", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            articleTitle: reportForm.dataset.articleTitle,
+            articleUrl: window.location.href,
+            articleId: reportForm.dataset.articleId,
+            locale: reportForm.dataset.locale,
+            openedAt: reportForm.dataset.openedAt,
+            reportType: values.get("reportType"),
+            details: values.get("details"),
+            contact: values.get("contact"),
+            website: values.get("website"),
+          }),
+        });
+        const result = (await response.json()) as { ok?: boolean; error?: string };
+        if (!response.ok || !result.ok) throw new Error(result.error);
+        reportForm.reset();
+        setStatus(isJapanese ? "送信しました。ご協力ありがとうございます。" : "Report sent. Thank you.", "success");
+      } catch (error) {
+        const message = error instanceof Error && error.message
+          ? error.message
+          : isJapanese ? "送信できませんでした。時間をおいて再度お試しください。" : "Could not send the report. Please try again later.";
+        setStatus(message, "error");
+      } finally {
+        submit?.removeAttribute("disabled");
+      }
+    });
+  }
 </script>
 
 <script>

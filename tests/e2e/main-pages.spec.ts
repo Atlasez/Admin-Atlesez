@@ -134,7 +134,7 @@ test.describe("学習サイト", () => {
     await expect(
       mathematics.getByRole("link", { name: "数学", exact: true }),
     ).toHaveAttribute("href", /\/mathematics\/\?view=list$/);
-    await mathematics.locator(":scope > summary").click();
+    await expect(mathematics).toHaveAttribute("open", "");
 
     const groupTheory = mathematics.locator(".category-list-details", {
       has: page.getByRole("link", { name: "群論", exact: true }),
@@ -221,6 +221,12 @@ test.describe("学習サイト", () => {
     await expect(page.getByText("未査読", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "参考文献" })).toBeVisible();
     await expect(page.getByText("事前演習（準備中）")).toHaveCount(0);
+    await expect(page.getByText("この記事の問題を報告")).toBeVisible();
+    await expect(page.getByLabel("報告の種類")).toBeVisible();
+    await expect(page.getByLabel("内容")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "報告を送信" }),
+    ).toBeVisible();
   });
 
   test("学習記録は触れた位置へ移動し、記事の上下で同期する", async ({
@@ -324,6 +330,14 @@ test.describe("学習サイト", () => {
     await expect(zoomLevel).toBeVisible();
     await expect(page.getByRole("button", { name: "自動整列" })).toBeVisible();
     await expect(page.locator("[data-map-status]")).not.toHaveText("");
+    const [actionToolsBox, mapCanvasBox] = await Promise.all([
+      page.locator(".map-action-tools").boundingBox(),
+      page.locator("#learning-map").boundingBox(),
+    ]);
+    // 全画面・共有などの操作はキャンバスに重ねず、ツールバー内に収める。
+    expect(
+      (actionToolsBox?.y ?? 0) + (actionToolsBox?.height ?? 0),
+    ).toBeLessThanOrEqual(mapCanvasBox?.y ?? 0);
     const initialZoom = Number(
       (await zoomLevel.textContent())?.replace("%", ""),
     );

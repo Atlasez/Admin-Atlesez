@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "object",
+            "properties": {
+              "ja": {
+                "type": "string"
+              },
+              "en": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ja"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "published",
+              "preparing"
+            ]
+          },
+          "order": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": {
+            "type": "object",
+            "properties": {
+              "ja": {
+                "type": "string"
+              },
+              "en": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ja"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "humanities",
+              "social",
+              "natural",
+              "applied"
+            ]
+          },
+          "genre": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "externalUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "introSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "categories": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "name": {
+                  "type": "object",
+                  "properties": {
+                    "ja": {
+                      "type": "string"
+                    },
+                    "en": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ja"
+                  ]
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "entryConceptIds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+\\.[a-z0-9-]+\\.[a-z0-9-]+$"
+                  }
+                },
+                "relatedCategoryIds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "slug",
+                "name",
+                "order"
+              ]
+            }
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "status",
+          "order",
+          "description",
+          "group",
+          "genre"
+        ]
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "name": {
+            "type": "object",
+            "properties": {
+              "ja": {
+                "type": "string"
+              },
+              "en": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ja"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "published",
+              "preparing"
+            ]
+          },
+          "order": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": {
+            "type": "object",
+            "properties": {
+              "ja": {
+                "type": "string"
+              },
+              "en": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ja"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "humanities",
+              "social",
+              "natural",
+              "applied"
+            ]
+          },
+          "genre": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "externalUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "introSlug": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "categories": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "slug": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "name": {
+                  "type": "object",
+                  "properties": {
+                    "ja": {
+                      "type": "string"
+                    },
+                    "en": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ja"
+                  ]
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "entryConceptIds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+\\.[a-z0-9-]+\\.[a-z0-9-]+$"
+                  }
+                },
+                "relatedCategoryIds": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "slug",
+                "name",
+                "order"
+              ]
+            }
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "status",
+          "order",
+          "description",
+          "group",
+          "genre"
+        ]
+      }
+    }
+  ]
+}

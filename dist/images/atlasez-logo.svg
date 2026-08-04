@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Atlasez">
+  <!-- 仮ロゴ（コンパス）。正式ロゴ画像の差し替え手順は docs/MIGRATION_PLAN.md を参照 -->
+  <circle cx="24" cy="24" r="21" fill="none" stroke="#24425f" stroke-width="3"/>
+  <path d="M24 8 L28 24 L24 40 L20 24 Z" fill="#24425f"/>
+  <path d="M8 24 L24 20 L40 24 L24 28 Z" fill="#7a97b3"/>
+  <circle cx="24" cy="24" r="3" fill="#ffffff" stroke="#24425f" stroke-width="1.5"/>
+</svg>
