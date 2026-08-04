@@ -1,8 +1,10 @@
 ---
 import {
   UI_LANGUAGES,
+  UI_LANGUAGE_CHINESE_NAMES,
   UI_LANGUAGE_ENGLISH_NAMES,
   UI_LANGUAGE_JAPANESE_NAMES,
+  UI_LANGUAGE_KOREAN_NAMES,
   UI_LANGUAGE_NAMES,
 } from "../lib/ui-locales";
 /** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
@@ -73,6 +75,8 @@ const languageGroup = {
     native: UI_LANGUAGE_NAMES[code],
     english: UI_LANGUAGE_ENGLISH_NAMES[code],
     japanese: UI_LANGUAGE_JAPANESE_NAMES[code],
+    chinese: UI_LANGUAGE_CHINESE_NAMES[code],
+    korean: UI_LANGUAGE_KOREAN_NAMES[code],
   })),
 };
 
@@ -143,7 +147,9 @@ const groups = [
               value={o.value}
               data-language-native={o.native}
               data-language-english={o.english}
-              data-language-japanese={o.japanese}
+                      data-language-japanese={o.japanese}
+                      data-language-chinese={o.chinese}
+                      data-language-korean={o.korean}
             >
               {o.label}
             </option>
@@ -186,7 +192,9 @@ const groups = [
                 value={o.value}
                 data-language-native={o.native}
               data-language-english={o.english}
-              data-language-japanese={o.japanese}
+                      data-language-japanese={o.japanese}
+                      data-language-chinese={o.chinese}
+                      data-language-korean={o.korean}
               >
                 {o.label}
               </option>
@@ -387,7 +395,15 @@ const groups = [
       const native = option.dataset.languageNative ?? option.textContent ?? "";
       const english = option.dataset.languageEnglish ?? "";
       const japanese = option.dataset.languageJapanese ?? "";
-      const suffix = current === "ja" ? japanese : english;
+      const chinese = option.dataset.languageChinese ?? "";
+      const korean = option.dataset.languageKorean ?? "";
+      const suffixByLanguage: Record<string, string> = {
+        ja: japanese,
+        en: english,
+        zh: chinese,
+        ko: korean,
+      };
+      const suffix = suffixByLanguage[current] ?? english;
       option.textContent =
         option.value === current || !suffix || native === suffix
           ? native

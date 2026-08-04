@@ -1406,7 +1406,8 @@ const categoryMetaJson = JSON.stringify(
       // 親ノードを含む部分グラフに汎用レイアウトをそのまま渡すと、
       // Cytoscape の compound layout が隠れた子を参照してしまうため、
       // 表示中のノードだけで小さな反発計算を行う。
-      for (let iteration = 0; iteration < 64; iteration += 1) {
+      cy.startBatch();
+      for (let iteration = 0; iteration < 20; iteration += 1) {
         const force = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
         for (let i = 0; i < nodes.length; i += 1) {
           for (let j = i + 1; j < nodes.length; j += 1) {
@@ -1429,6 +1430,7 @@ const categoryMetaJson = JSON.stringify(
           node.position({ x: node.position("x") + f.x, y: node.position("y") + f.y });
         });
       }
+      cy.endBatch();
     }
 
     /** 両端が見えている辺だけ表示する */
