@@ -347,6 +347,18 @@ test.describe("学習サイト", () => {
     await open.click();
     await expect(page.getByLabel(/目的地点/)).toBeVisible();
     await expect(open).toHaveAttribute("aria-expanded", "true");
+    // 経路検索は canvas の上に重ねず、独立して操作できる位置に置く。
+    const routePanel = page.locator("[data-route-panel]");
+    const canvas = page.locator("#learning-map");
+    await expect(routePanel).toHaveCSS("position", "relative");
+    const [routeBox, canvasBox] = await Promise.all([
+      routePanel.boundingBox(),
+      canvas.boundingBox(),
+    ]);
+    expect(routeBox?.y).toBeLessThan(canvasBox?.y ?? 0);
+    expect((routeBox?.y ?? 0) + (routeBox?.height ?? 0)).toBeLessThanOrEqual(
+      canvasBox?.y ?? 0,
+    );
     await page.keyboard.press("Escape");
     await expect(page.getByLabel(/目的地点/)).not.toBeVisible();
   });
