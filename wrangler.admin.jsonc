@@ -3,11 +3,14 @@
   "name": "atlasez-admin",
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
+  "vars": {
+    "ADMIN_AUTH_MODE": "google-oauth"
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*", "/admin/*"],
+    "run_worker_first": ["/api/*", "/admin/*", "/auth/*"],
   },
   "d1_databases": [
     {
