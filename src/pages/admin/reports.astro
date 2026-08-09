@@ -1,18 +1,19 @@
 ---
-import AtlasLayout from "../../layouts/AtlasLayout.astro";
+import AdminLayout from "../../layouts/AdminLayout.astro";
 ---
 
-<AtlasLayout
-  locale="ja"
+<AdminLayout
   title="記事の問題報告"
   description="運営用の記事問題報告管理画面"
-  noindex={true}
 >
-  <section class="admin-reports container" data-reports-admin>
+  <section class="admin-reports" data-reports-admin>
     <header class="admin-reports-heading">
-      <p class="eyebrow">運営用</p>
-      <h1>記事の問題報告</h1>
-      <p>読者から届いた報告を確認し、対応状況とメモを保存できます。</p>
+      <div>
+        <p class="eyebrow">ATLASEZ / 運営用</p>
+        <h1>記事の問題報告</h1>
+        <p>読者から届いた報告を確認し、対応状況と運営メモをまとめて管理します。</p>
+      </div>
+      <a class="back-to-atlas" href="/atlas/ja/">学習サイトへ戻る</a>
     </header>
 
     <div class="report-controls">
@@ -25,47 +26,56 @@ import AtlasLayout from "../../layouts/AtlasLayout.astro";
           <option value="resolved">対応済み</option>
         </select>
       </label>
-      <button class="button button-outline" type="button" data-reports-refresh>更新</button>
-      <output data-report-count></output>
+      <button class="button button-outline" type="button" data-reports-refresh>一覧を更新</button>
+      <output class="report-count" data-report-count></output>
     </div>
     <p class="report-feedback" data-report-feedback aria-live="polite">読み込み中です…</p>
     <div class="report-list" data-report-list></div>
   </section>
-</AtlasLayout>
+</AdminLayout>
 
 <style>
-  .admin-reports { max-width: 1040px; padding-block: 3rem 5rem; }
-  .admin-reports-heading { margin-bottom: 2rem; }
-  .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .08em; margin: 0 0 .4rem; }
-  h1 { margin: 0; }
-  .admin-reports-heading > p:last-child { color: var(--muted); margin-bottom: 0; }
-  .report-controls { align-items: end; display: flex; flex-wrap: wrap; gap: .8rem; margin-bottom: 1rem; }
-  .report-controls label { display: grid; font-size: .9rem; font-weight: 700; gap: .35rem; }
-  select, textarea { border: 1px solid var(--border); border-radius: .35rem; background: var(--surface); color: var(--text); font: inherit; }
-  select { min-height: 2.7rem; padding: .35rem .6rem; }
-  .report-controls output { color: var(--muted); padding-bottom: .5rem; }
-  .report-feedback { color: var(--muted); min-height: 1.5rem; }
+  .admin-reports { box-sizing: border-box; margin: 0 auto; max-width: 1180px; padding: 3rem 2rem 5rem; }
+  .admin-reports-heading { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1.5rem; }
+  .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .45rem; }
+  h1 { font-size: clamp(1.8rem, 4vw, 2.45rem); letter-spacing: -.025em; margin: 0; }
+  .admin-reports-heading div > p:last-child { color: var(--muted); margin: .65rem 0 0; }
+  .back-to-atlas { border: 1px solid var(--border); border-radius: 999px; color: var(--text); font-size: .88rem; padding: .6rem .85rem; text-decoration: none; white-space: nowrap; }
+  .back-to-atlas:hover { border-color: var(--accent); color: var(--accent); }
+  .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: .75rem; display: flex; flex-wrap: wrap; gap: .9rem; margin-bottom: .75rem; padding: 1rem; }
+  .report-controls label { display: grid; font-size: .82rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
+  select, textarea { border: 1px solid var(--border); border-radius: .45rem; background: var(--surface); color: var(--text); font: inherit; }
+  select { min-height: 2.6rem; min-width: 10rem; padding: .35rem .65rem; }
+  .report-count { align-self: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .88rem; font-weight: 700; margin-left: auto; padding: .55rem .8rem; }
+  .report-feedback { color: var(--muted); font-size: .9rem; min-height: 1.4rem; padding-left: .2rem; }
   .report-list { display: grid; gap: 1rem; }
-  .report-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: .6rem; padding: 1.2rem; }
-  .report-card[data-status="reviewing"] { border-left-color: #c78500; }
-  .report-card[data-status="resolved"] { border-left-color: #328455; }
-  .report-card-head { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; }
-  .report-card h2 { font-size: 1.1rem; margin: 0; }
-  .report-meta { color: var(--muted); font-size: .88rem; margin: .45rem 0 1rem; }
-  .report-details { background: var(--surface-alt); border-radius: .35rem; line-height: 1.65; margin: 0 0 1rem; padding: .8rem; white-space: pre-wrap; word-break: break-word; }
-  .report-article { color: var(--accent); font-weight: 700; }
-  .report-card label { display: grid; font-size: .9rem; font-weight: 700; gap: .35rem; }
-  .report-card textarea { box-sizing: border-box; min-height: 5.5rem; padding: .6rem; resize: vertical; width: 100%; }
-  .report-actions { align-items: end; display: grid; gap: .8rem; grid-template-columns: minmax(11rem, 14rem) 1fr auto; margin-top: 1rem; }
-  .status-badge { border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .8rem; font-weight: 700; padding: .25rem .55rem; white-space: nowrap; }
-  .report-card[data-status="reviewing"] .status-badge { color: #a46b00; }
-  .report-card[data-status="resolved"] .status-badge { color: #267143; }
-  .report-empty { border: 1px dashed var(--border); border-radius: .6rem; color: var(--muted); padding: 2rem; text-align: center; }
+  .report-list :global(.report-card) { background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: .75rem; box-shadow: 0 1px 2px rgb(15 23 42 / .04); overflow: hidden; padding: 0; }
+  .report-list :global(.report-card[data-status="reviewing"]) { border-left-color: #c78500; }
+  .report-list :global(.report-card[data-status="resolved"]) { border-left-color: #328455; }
+  .report-list :global(.report-card-head) { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; justify-content: space-between; padding: 1rem 1.15rem; }
+  .report-list :global(.report-card h2) { font-size: .85rem; letter-spacing: .04em; margin: 0; text-transform: uppercase; }
+  .report-list :global(.report-meta) { color: var(--muted); font-size: .82rem; margin: .4rem 0 0; }
+  .report-list :global(.report-article) { font-size: 1.06rem; font-weight: 800; margin: 0; }
+  .report-list :global(.report-article a) { color: var(--text); text-decoration-color: color-mix(in srgb, var(--accent), transparent 55%); text-underline-offset: .2em; }
+  .report-list :global(.report-article a:hover) { color: var(--accent); }
+  .report-list :global(.report-details) { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .5rem; line-height: 1.65; margin: .75rem 0 0; padding: .8rem .9rem; white-space: pre-wrap; word-break: break-word; }
+  .report-list :global(.report-content) { padding: 1.15rem; }
+  .report-list :global(.report-card label) { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
+  .report-list :global(.report-card textarea) { box-sizing: border-box; line-height: 1.5; min-height: 6.2rem; padding: .65rem; resize: vertical; width: 100%; }
+  .report-list :global(.report-actions) { border-top: 1px solid var(--border); display: grid; gap: 1rem; grid-template-columns: 10rem minmax(0, 1fr) auto; padding: 1rem 1.15rem 1.15rem; }
+  .report-list :global(.status-badge) { background: color-mix(in srgb, var(--accent), transparent 90%); border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .78rem; font-weight: 800; padding: .3rem .6rem; white-space: nowrap; }
+  .report-list :global(.report-card[data-status="reviewing"] .status-badge) { background: #fff4d6; color: #9a6400; }
+  .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
+  .report-list :global(.report-empty) { border: 1px dashed var(--border); border-radius: .75rem; color: var(--muted); padding: 3rem 2rem; text-align: center; }
   @media (max-width: 700px) {
-    .admin-reports { padding-top: 2rem; }
-    .report-card-head, .report-actions { display: grid; grid-template-columns: 1fr; }
-    .status-badge { justify-self: start; }
-    .report-controls output { padding-bottom: 0; }
+    .admin-reports { padding: 1.5rem 1rem 3rem; }
+    .admin-reports-heading { display: grid; gap: 1rem; }
+    .back-to-atlas { justify-self: start; }
+    .report-controls { align-items: stretch; display: grid; }
+    .report-controls label, .report-controls select { width: 100%; }
+    .report-count { justify-self: start; margin-left: 0; }
+    .report-list :global(.report-card-head), .report-list :global(.report-actions) { display: grid; grid-template-columns: 1fr; }
+    .report-list :global(.status-badge) { justify-self: start; }
   }
 </style>
 
@@ -98,8 +108,10 @@ import AtlasLayout from "../../layouts/AtlasLayout.astro";
         const url = safeUrl(report.article_url);
         return `<article class="report-card" data-status="${report.status}" data-report-id="${report.id}">
           <div class="report-card-head"><div><h2>${escapeHtml(types[report.report_type] ?? report.report_type)}</h2><p class="report-meta">${date(report.created_at)} ・ ${escapeHtml(report.locale)}${report.contact ? ` ・ 連絡先: ${escapeHtml(report.contact)}` : ""}</p></div><span class="status-badge">${labels[report.status]}</span></div>
+          <div class="report-content">
           <p class="report-article">${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(report.article_title)}を開く</a>` : escapeHtml(report.article_title)}</p>
           <p class="report-details">${escapeHtml(report.details)}</p>
+          </div>
           <div class="report-actions"><label>対応状況<select data-report-status>${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${report.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>運営メモ<textarea data-report-note maxlength="4000" placeholder="対応内容や確認事項を記録できます。">${escapeHtml(report.admin_note)}</textarea></label><button class="button" type="button" data-report-save>保存</button></div>
         </article>`;
       }).join("");
