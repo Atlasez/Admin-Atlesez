@@ -900,35 +900,6 @@ const views = [
   .recent .section-title h2 {
     font-size: calc(1.02rem * var(--text-scale));
   }
-  /* macOS/iOS がネイティブのスクロールバーを隠しても、続きがある欄だと
-     すぐ分かるように常設のレールとつまみを重ねる。 */
-  .scroll-shell {
-    position: relative;
-    padding-right: 1rem;
-  }
-  .scroll-shell::before,
-  .scroll-shell::after {
-    content: "";
-    position: absolute;
-    right: .18rem;
-    z-index: 1;
-    pointer-events: none;
-  }
-  .scroll-shell::before {
-    top: .35rem;
-    bottom: .35rem;
-    width: .32rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--border-strong), transparent 72%);
-  }
-  .scroll-shell::after {
-    top: .62rem;
-    width: .32rem;
-    height: clamp(2.25rem, 20%, 4.5rem);
-    border-radius: 999px;
-    background: var(--border-strong);
-    box-shadow: 0 0 0 2px var(--background-secondary);
-  }
   .recent-scroll {
     max-height: 26rem;
     overflow-y: scroll;
@@ -1029,8 +1000,6 @@ const views = [
     }
   }
   @media (max-width: 767px) {
-    .scroll-shell { padding-right: .85rem; }
-    .scroll-shell::before, .scroll-shell::after { right: .08rem; width: .28rem; }
     /* 3つの表示切り替えは横並びのまま画面幅いっぱいに均等配置する。
        文字を小さくしすぎずに指で押せる幅を確保するため。 */
     .view-tabs {
