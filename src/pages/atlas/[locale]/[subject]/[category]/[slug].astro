@@ -932,8 +932,15 @@ const structuredData = {
             website: values.get("website"),
           }),
         });
-        const result = (await response.json()) as { ok?: boolean; error?: string };
-        if (!response.ok || !result.ok) throw new Error(result.error);
+        const contentType = response.headers.get("content-type") ?? "";
+        const result = contentType.includes("application/json")
+          ? (await response.json()) as { ok?: boolean; error?: string }
+          : undefined;
+        if (!response.ok || !result?.ok) {
+          throw new Error(result?.error ?? (isJapanese
+            ? "送信先に接続できませんでした。時間をおいて再度お試しください。"
+            : "The report endpoint is unavailable. Please try again later."));
+        }
         reportForm.reset();
         setStatus(isJapanese ? "送信しました。ご協力ありがとうございます。" : "Report sent. Thank you.", "success");
       } catch (error) {
