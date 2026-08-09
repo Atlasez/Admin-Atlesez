@@ -491,10 +491,18 @@ async function logoutAdmin(request: Request, env: Env): Promise<Response> {
 async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   const identity = await getAuthenticatedEmail(request, env);
   if (identity instanceof Response) return identity;
+  const token = cookieValue(request, ADMIN_SESSION_COOKIE);
+  const googleSession = token
+    ? await env.REPORTS.prepare(
+        "SELECT email FROM admin_auth_sessions WHERE session_hash = ? AND expires_at > ?",
+      )
+        .bind(await hash(token), new Date().toISOString())
+        .first<{ email: string }>()
+    : null;
   return json({
     email: identity,
     googlePreviewEnabled: googleOAuthEnabled(env) && googleOAuthConfigured(env),
-    googleAuthenticated: Boolean(cookieValue(request, ADMIN_SESSION_COOKIE)),
+    googleAuthenticated: googleSession?.email === identity,
     authMode: authMode(env),
   });
 }
