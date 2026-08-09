@@ -2,6 +2,15 @@
 
 各記事の「この記事の問題を報告」は、Googleフォームを開かずにサイト内で送信できるフォームです。送信内容は Cloudflare Worker の `POST /api/article-reports` が受け取り、D1 の `article_reports` テーブルへ保存します。
 
+## 運営用の確認画面
+
+`/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。公開時は **Cloudflare Access** で次の2つを必ず同じ運営者だけに制限してください。
+
+- `/admin/*`
+- `/api/admin/*`
+
+初期の許可メールアドレスは `ukyoukay0@gmail.com` です。記事を投稿する読者向けの `/api/article-reports` は保護対象に含めません。
+
 ## ローカルで確認する
 
 初回だけ、別のターミナルでローカルD1にテーブルを作ります。

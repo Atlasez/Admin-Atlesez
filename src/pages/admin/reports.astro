@@ -1,0 +1,137 @@
+---
+import AtlasLayout from "../../layouts/AtlasLayout.astro";
+---
+
+<AtlasLayout
+  locale="ja"
+  title="記事の問題報告"
+  description="運営用の記事問題報告管理画面"
+  noindex={true}
+>
+  <section class="admin-reports container" data-reports-admin>
+    <header class="admin-reports-heading">
+      <p class="eyebrow">運営用</p>
+      <h1>記事の問題報告</h1>
+      <p>読者から届いた報告を確認し、対応状況とメモを保存できます。</p>
+    </header>
+
+    <div class="report-controls">
+      <label>
+        表示する状態
+        <select data-report-filter>
+          <option value="all">すべて</option>
+          <option value="new">未確認</option>
+          <option value="reviewing">確認中</option>
+          <option value="resolved">対応済み</option>
+        </select>
+      </label>
+      <button class="button button-outline" type="button" data-reports-refresh>更新</button>
+      <output data-report-count></output>
+    </div>
+    <p class="report-feedback" data-report-feedback aria-live="polite">読み込み中です…</p>
+    <div class="report-list" data-report-list></div>
+  </section>
+</AtlasLayout>
+
+<style>
+  .admin-reports { max-width: 1040px; padding-block: 3rem 5rem; }
+  .admin-reports-heading { margin-bottom: 2rem; }
+  .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .08em; margin: 0 0 .4rem; }
+  h1 { margin: 0; }
+  .admin-reports-heading > p:last-child { color: var(--muted); margin-bottom: 0; }
+  .report-controls { align-items: end; display: flex; flex-wrap: wrap; gap: .8rem; margin-bottom: 1rem; }
+  .report-controls label { display: grid; font-size: .9rem; font-weight: 700; gap: .35rem; }
+  select, textarea { border: 1px solid var(--border); border-radius: .35rem; background: var(--surface); color: var(--text); font: inherit; }
+  select { min-height: 2.7rem; padding: .35rem .6rem; }
+  .report-controls output { color: var(--muted); padding-bottom: .5rem; }
+  .report-feedback { color: var(--muted); min-height: 1.5rem; }
+  .report-list { display: grid; gap: 1rem; }
+  .report-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: .6rem; padding: 1.2rem; }
+  .report-card[data-status="reviewing"] { border-left-color: #c78500; }
+  .report-card[data-status="resolved"] { border-left-color: #328455; }
+  .report-card-head { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; }
+  .report-card h2 { font-size: 1.1rem; margin: 0; }
+  .report-meta { color: var(--muted); font-size: .88rem; margin: .45rem 0 1rem; }
+  .report-details { background: var(--surface-alt); border-radius: .35rem; line-height: 1.65; margin: 0 0 1rem; padding: .8rem; white-space: pre-wrap; word-break: break-word; }
+  .report-article { color: var(--accent); font-weight: 700; }
+  .report-card label { display: grid; font-size: .9rem; font-weight: 700; gap: .35rem; }
+  .report-card textarea { box-sizing: border-box; min-height: 5.5rem; padding: .6rem; resize: vertical; width: 100%; }
+  .report-actions { align-items: end; display: grid; gap: .8rem; grid-template-columns: minmax(11rem, 14rem) 1fr auto; margin-top: 1rem; }
+  .status-badge { border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .8rem; font-weight: 700; padding: .25rem .55rem; white-space: nowrap; }
+  .report-card[data-status="reviewing"] .status-badge { color: #a46b00; }
+  .report-card[data-status="resolved"] .status-badge { color: #267143; }
+  .report-empty { border: 1px dashed var(--border); border-radius: .6rem; color: var(--muted); padding: 2rem; text-align: center; }
+  @media (max-width: 700px) {
+    .admin-reports { padding-top: 2rem; }
+    .report-card-head, .report-actions { display: grid; grid-template-columns: 1fr; }
+    .status-badge { justify-self: start; }
+    .report-controls output { padding-bottom: 0; }
+  }
+</style>
+
+<script>
+  type ReportStatus = "new" | "reviewing" | "resolved";
+  type Report = {
+    id: string; article_title: string; article_url: string; report_type: string;
+    details: string; contact: string | null; locale: string; status: ReportStatus;
+    admin_note: string; created_at: string; updated_at: string;
+  };
+
+  const root = document.querySelector<HTMLElement>("[data-reports-admin]");
+  if (root) {
+    const filter = root.querySelector<HTMLSelectElement>("[data-report-filter]")!;
+    const list = root.querySelector<HTMLElement>("[data-report-list]")!;
+    const feedback = root.querySelector<HTMLElement>("[data-report-feedback]")!;
+    const count = root.querySelector<HTMLOutputElement>("[data-report-count]")!;
+    const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
+    const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
+    const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+    const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const safeUrl = (value: string) => {
+      try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; }
+    };
+
+    const render = (reports: Report[]) => {
+      count.value = `${reports.length} 件`;
+      if (!reports.length) { list.innerHTML = '<p class="report-empty">該当する報告はありません。</p>'; return; }
+      list.innerHTML = reports.map((report) => {
+        const url = safeUrl(report.article_url);
+        return `<article class="report-card" data-status="${report.status}" data-report-id="${report.id}">
+          <div class="report-card-head"><div><h2>${escapeHtml(types[report.report_type] ?? report.report_type)}</h2><p class="report-meta">${date(report.created_at)} ・ ${escapeHtml(report.locale)}${report.contact ? ` ・ 連絡先: ${escapeHtml(report.contact)}` : ""}</p></div><span class="status-badge">${labels[report.status]}</span></div>
+          <p class="report-article">${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(report.article_title)}を開く</a>` : escapeHtml(report.article_title)}</p>
+          <p class="report-details">${escapeHtml(report.details)}</p>
+          <div class="report-actions"><label>対応状況<select data-report-status>${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${report.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>運営メモ<textarea data-report-note maxlength="4000" placeholder="対応内容や確認事項を記録できます。">${escapeHtml(report.admin_note)}</textarea></label><button class="button" type="button" data-report-save>保存</button></div>
+        </article>`;
+      }).join("");
+    };
+
+    const load = async () => {
+      feedback.textContent = "読み込み中です…";
+      try {
+        const response = await fetch(`/api/admin/article-reports?status=${encodeURIComponent(filter.value)}`, { credentials: "same-origin" });
+        const data = await response.json() as { reports?: Report[]; error?: string };
+        if (!response.ok) throw new Error(data.error ?? "読み込めませんでした。");
+        render(data.reports ?? []); feedback.textContent = "";
+      } catch (error) { list.innerHTML = ""; count.value = ""; feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
+    };
+    filter.addEventListener("change", load);
+    root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
+    list.addEventListener("click", async (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-report-save]");
+      if (!button) return;
+      const card = button.closest<HTMLElement>("[data-report-id]");
+      if (!card) return;
+      const status = card.querySelector<HTMLSelectElement>("[data-report-status]")!;
+      const note = card.querySelector<HTMLTextAreaElement>("[data-report-note]")!;
+      button.disabled = true; button.textContent = "保存中…";
+      try {
+        const response = await fetch(`/api/admin/article-reports/${card.dataset.reportId}`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: status.value, adminNote: note.value }) });
+        const data = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+        feedback.textContent = "保存しました。"; await load();
+      } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
+      finally { button.disabled = false; button.textContent = "保存"; }
+    });
+    void load();
+  }
+</script>
