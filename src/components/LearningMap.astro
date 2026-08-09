@@ -253,6 +253,8 @@ const categoryMetaJson = JSON.stringify(
       <span><i class="canvas-line canvas-line-solid"></i>{locale === "ja" ? "前提" : "Prerequisite"}</span>
       <span><i class="canvas-line canvas-line-dash"></i>{locale === "ja" ? "次におすすめ" : "Recommended"}</span>
       <span><i class="canvas-line canvas-line-dot"></i>{locale === "ja" ? "関連" : "Related"}</span>
+      <span><i class="canvas-state canvas-state-read"></i>{locale === "ja" ? "読んだ" : "Read"}</span>
+      <span><i class="canvas-state canvas-state-understood"></i>{locale === "ja" ? "理解した" : "Understood"}</span>
     </div>
 
     <div class="map-detail" data-map-detail aria-live="polite"></div>
@@ -287,6 +289,14 @@ const categoryMetaJson = JSON.stringify(
   <details class="map-legend">
     <summary>{t(locale, "legend")}</summary>
     <ul class="details-body legend-list">
+      <li>
+        <span class="legend-state legend-state-read" aria-hidden="true" />
+        <span>{locale === "ja" ? "読んだ記事を含む概念" : "Concepts with a read article"}</span>
+      </li>
+      <li>
+        <span class="legend-state legend-state-understood" aria-hidden="true" />
+        <span>{locale === "ja" ? "理解した記事を含む概念" : "Concepts with an understood article"}</span>
+      </li>
       <li>
         <span class="legend-line legend-category-link" aria-hidden="true" />
         <span>
@@ -448,7 +458,8 @@ const categoryMetaJson = JSON.stringify(
     z-index: 2;
     right: var(--space-3);
     bottom: var(--space-3);
-    display: flex;
+    /* 地図の上に凡例を重ねるとノードを隠すため、下部の凡例に集約する。 */
+    display: none;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-2);
@@ -477,6 +488,20 @@ const categoryMetaJson = JSON.stringify(
   .canvas-line-dot {
     border-top-style: dotted;
     border-top-color: var(--text-secondary);
+  }
+  .canvas-state {
+    width: 0.72rem;
+    height: 0.72rem;
+    border: 1px solid currentcolor;
+    border-radius: 0.18rem;
+  }
+  .canvas-state-read {
+    background: #176ea6;
+    color: #0e4f7b;
+  }
+  .canvas-state-understood {
+    background: #17803d;
+    color: #0b5427;
   }
   /* 全画面のときは画面いっぱいに広げる */
   .map-frame:fullscreen {
@@ -661,6 +686,21 @@ const categoryMetaJson = JSON.stringify(
     width: 3rem;
     height: 0;
     border-top: 3px solid var(--text-secondary);
+  }
+  .legend-state {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 3px solid;
+    border-radius: 0.28rem;
+  }
+  .legend-state-read {
+    border-color: #0b4f7d;
+    background: #176ea6;
+  }
+  .legend-state-understood {
+    border-color: #0b5427;
+    background: #17803d;
   }
   .legend-category-link {
     border-top-style: solid;
@@ -862,9 +902,16 @@ const categoryMetaJson = JSON.stringify(
     computeLearningRoute,
     type ConceptData,
   } from "../lib/graph";
+  import {
+    highestHistoryState,
+    loadHistory,
+  } from "../lib/history";
 
   interface GraphNode extends ConceptData {
-    articles: Record<string, { title: string; path: string }[]>;
+    articles: Record<
+      string,
+      { articleId: string; title: string; path: string }[]
+    >;
   }
   interface GraphData {
     nodes: GraphNode[];
@@ -1168,12 +1215,43 @@ const categoryMetaJson = JSON.stringify(
           },
         },
         {
+          // 詳細表示では、親ノードは子ノードを表示するために必要だが、
+          // 分野ごとの枠は外部概念どうしで重なりやすいので見せない。
+          selector: "node.detail-subject",
+          style: {
+            "background-opacity": 0,
+            "border-opacity": 0,
+            color: "transparent",
+          },
+        },
+        {
           selector: 'node[hasArticle = "no"]',
           style: {
             "background-color": canvasColor,
             "border-width": 2,
             "border-style": "dashed",
             color: muted,
+          },
+        },
+        {
+          selector: "node.history-read",
+          style: {
+            "background-color": "#176ea6",
+            "border-color": "#0b4f7d",
+            "border-width": 4,
+            color: "#ffffff",
+            "font-weight": 700,
+          },
+        },
+        {
+          selector: "node.history-understood",
+          style: {
+            "background-color": "#17803d",
+            "border-color": "#0b5427",
+            "border-width": 4,
+            color: "#ffffff",
+            "font-weight": 700,
+            "border-style": "double",
           },
         },
         {
@@ -1304,6 +1382,38 @@ const categoryMetaJson = JSON.stringify(
     });
 
     /**
+     * 記事ごとの学習記録を概念ノードへ集約する。
+     * 1概念に複数の記事がある場合は、最も進んだ記事の状態を採用する。
+     */
+    const applyLearningHistory = () => {
+      const historyByArticle = new Map(
+        loadHistory().map((entry) => [entry.articleId, entry.state]),
+      );
+      cy.nodes('node[kind = "concept"]').forEach((element) => {
+        const node = nodeById.get(element.id());
+        const states = Object.values(node?.articles ?? {})
+          .flat()
+          .map((article) => historyByArticle.get(article.articleId));
+        const state = highestHistoryState(states);
+        element.removeClass("history-read history-understood");
+        const name = node ? label(node) : element.data("label");
+        if (state === "read") {
+          element.addClass("history-read");
+        } else if (state === "understood") {
+          element.addClass("history-understood");
+        }
+        // ラベルを増やすと小さいノードで折り返してはみ出すため、状態は色と枠で示す。
+        element.data("label", name);
+        element.data("learningState", state ?? "none");
+      });
+    };
+    applyLearningHistory();
+    window.addEventListener("atlasez-history-change", applyLearningHistory);
+    window.addEventListener("storage", (event) => {
+      if (event.key === "atlasez-history") applyLearningHistory();
+    });
+
+    /**
      * スマホでは地図上の1本指ドラッグとページスクロールが競合する。
      * 初期状態はページを縦に動かせるようにし、明示的に「地図を操作」を
      * 押したときだけパン・ピンチズームを有効にする。
@@ -1362,7 +1472,7 @@ const categoryMetaJson = JSON.stringify(
     const hideAll = () => {
       cy.elements().style("display", "none");
       cy.elements().removeClass(
-        "faded route-highlight outside hover-target hover-neighbor",
+        "faded route-highlight outside hover-target hover-neighbor detail-subject",
       );
     };
 
@@ -1377,7 +1487,7 @@ const categoryMetaJson = JSON.stringify(
       // Cytoscape の compound layout が隠れた子を参照してしまうため、
       // 表示中のノードだけで小さな反発計算を行う。
       cy.startBatch();
-      for (let iteration = 0; iteration < 20; iteration += 1) {
+      for (let iteration = 0; iteration < 36; iteration += 1) {
         const force = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
         for (let i = 0; i < nodes.length; i += 1) {
           for (let j = i + 1; j < nodes.length; j += 1) {
@@ -1385,13 +1495,36 @@ const categoryMetaJson = JSON.stringify(
             const b = nodes[j];
             const delta = { x: a.position("x") - b.position("x"), y: a.position("y") - b.position("y") };
             const distance = Math.max(18, Math.hypot(delta.x, delta.y));
-            const magnitude = Math.min(6, 3_200 / (distance * distance));
+            const magnitude = Math.min(9, 7_200 / (distance * distance));
             const fx = (delta.x / distance) * magnitude;
             const fy = (delta.y / distance) * magnitude;
             const aForce = force.get(a.id());
             const bForce = force.get(b.id());
             if (aForce) { aForce.x += fx; aForce.y += fy; }
             if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+
+            // 反発だけでは文字を含むタイルが少しずつ重なるため、
+            // 実際のタイル寸法に基づく衝突判定で必ず離す。
+            const minX = (a.outerWidth() + b.outerWidth()) / 2 + 30;
+            const minY = (a.outerHeight() + b.outerHeight()) / 2 + 22;
+            const overlapX = minX - Math.abs(delta.x);
+            const overlapY = minY - Math.abs(delta.y);
+            if (overlapX > 0 && overlapY > 0 && aForce && bForce) {
+              const separateHorizontally = overlapX < overlapY;
+              const direction = separateHorizontally
+                ? (delta.x || (i % 2 === 0 ? 1 : -1))
+                : (delta.y || (j % 2 === 0 ? 1 : -1));
+              const amount = (separateHorizontally ? overlapX : overlapY) * 0.18;
+              if (separateHorizontally) {
+                const sign = Math.sign(direction);
+                aForce.x += sign * amount;
+                bForce.x -= sign * amount;
+              } else {
+                const sign = Math.sign(direction);
+                aForce.y += sign * amount;
+                bForce.y -= sign * amount;
+              }
+            }
           }
         }
         // つながるノードはほどよく引き寄せ、無関係なノードは反発させる。
@@ -1405,7 +1538,7 @@ const categoryMetaJson = JSON.stringify(
             y: b.position("y") - a.position("y"),
           };
           const distance = Math.max(1, Math.hypot(delta.x, delta.y));
-          const pull = Math.max(-2, Math.min(2, (distance - 180) * 0.012));
+          const pull = Math.max(-2, Math.min(2, (distance - 220) * 0.01));
           const fx = (delta.x / distance) * pull;
           const fy = (delta.y / distance) * pull;
           const aForce = force.get(a.id());
@@ -1459,7 +1592,9 @@ const categoryMetaJson = JSON.stringify(
         const column = subjectIndex % 2;
         const cursorY = cursorYByColumn[column];
         const baseX = 140 + column * SUBJECT_COL_W;
-        show(`#subject\\:${slug}`);
+        const subjectNode = cy.getElementById(`subject:${slug}`);
+        subjectNode.removeClass("detail-subject");
+        subjectNode.style("display", "element");
         keys.forEach((key, index) => {
           const node = cy.getElementById(`cat:${key}`);
           node.style("display", "element");
@@ -1534,7 +1669,7 @@ const categoryMetaJson = JSON.stringify(
         rowByDepth.set(depth, row + 1);
         const node = cy.getElementById(id);
         node.style("display", "element");
-        node.position({ x: 140 + depth * 200, y: 80 + row * 76 });
+        node.position({ x: 150 + depth * 240, y: 90 + row * 102 });
       }
 
       // 外の概念は右側にまとめる
@@ -1547,13 +1682,18 @@ const categoryMetaJson = JSON.stringify(
         node.position({ x: 200 + (maxDepth + 1) * 200, y: 80 + index * 64 });
       });
 
-      // 分野の枠は、いま見えている概念が属する分野だけ出す
+      // 親ノードは子ノードを表示するために必要だが、詳細画面では
+      // 外部概念の分野枠どうしが重なりやすい。枠だけ透明化する。
       const shownSubjects = new Set(
         [...insideIds, ...outsideIds]
           .map((id) => nodeById.get(id)?.subject)
-          .filter((s): s is string => Boolean(s)),
+          .filter((slug): slug is string => Boolean(slug)),
       );
-      shownSubjects.forEach((slug) => show(`#subject\\:${slug}`));
+      shownSubjects.forEach((slug) => {
+        const subjectNode = cy.getElementById(`subject:${slug}`);
+        subjectNode.addClass("detail-subject");
+        subjectNode.style("display", "element");
+      });
 
       showConnectingEdges();
       cy.layout({ name: "preset", fit: false }).run();
@@ -1685,9 +1825,15 @@ const categoryMetaJson = JSON.stringify(
         .join("、");
       const preparing = ja ? "記事は準備中" : "Article in preparation";
       const neighborLabel = ja ? "隣接概念" : "Neighbors";
+      const learningState = cy.getElementById(id).data("learningState") as string;
+      const learningLabel = learningState === "understood"
+        ? ja ? "理解した" : "Understood"
+        : learningState === "read"
+          ? ja ? "読んだ" : "Read"
+          : ja ? "未記録" : "Not recorded";
       detail.innerHTML = `<strong>${label(n)}</strong> — ${
         links || preparing
-      }<br>${neighborLabel}: ${neighbors || "—"}<div class="map-detail-actions"><button type="button" data-route-node="start" data-node-id="${id}">${
+      }<br>${ja ? "学習記録" : "Learning record"}: ${learningLabel}<br>${neighborLabel}: ${neighbors || "—"}<div class="map-detail-actions"><button type="button" data-route-node="start" data-node-id="${id}">${
         ja ? "開始地点にする" : "Set as start"
       }</button><button type="button" data-route-node="goal" data-node-id="${id}">${
         ja ? "目的地点にする" : "Set as goal"

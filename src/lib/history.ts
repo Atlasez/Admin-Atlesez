@@ -36,6 +36,17 @@ export function hasReached(
   return historyRank(current) >= historyRank(stage);
 }
 
+/** 複数の記事状態から、もっとも進んでいる状態を返す。 */
+export function highestHistoryState(
+  states: Array<HistoryState | null | undefined>,
+): HistoryState | null {
+  let highest: HistoryState | null = null;
+  for (const state of states) {
+    if (state && historyRank(state) > historyRank(highest)) highest = state;
+  }
+  return highest;
+}
+
 export interface HistoryEntry {
   articleId: string;
   locale: string;
@@ -90,6 +101,7 @@ export function setHistoryState(
   if (state === null) {
     if (index >= 0) list.splice(index, 1);
     saveHistory(list);
+    notifyHistoryChange();
     return null;
   }
 
@@ -101,6 +113,7 @@ export function setHistoryState(
   if (index >= 0) list[index] = next;
   else list.push(next);
   saveHistory(list);
+  notifyHistoryChange();
   return state;
 }
 
@@ -134,11 +147,20 @@ export function toggleHistory(
 export function removeHistory(articleId: string): HistoryEntry[] {
   const list = loadHistory().filter((e) => e.articleId !== articleId);
   saveHistory(list);
+  notifyHistoryChange();
   return list;
 }
 
 export function clearHistory(): void {
   saveHistory([]);
+  notifyHistoryChange();
+}
+
+/** 同じ画面内の地図・一覧にも、記録変更を即時反映する。 */
+function notifyHistoryChange(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("atlasez-history-change"));
+  }
 }
 
 /**

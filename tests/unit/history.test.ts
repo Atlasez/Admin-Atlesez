@@ -3,6 +3,7 @@ import {
   HISTORY_STAGES,
   historyRank,
   hasReached,
+  highestHistoryState,
   toggleHistory,
   setHistoryState,
   historyStateOf,
@@ -51,6 +52,12 @@ describe("学習の記録: 段階", () => {
     // 逆は成り立たない
     expect(hasReached("read", "understood")).toBe(false);
     expect(hasReached(null, "read")).toBe(false);
+  });
+
+  it("複数記事の状態から最も進んだ状態を選べる", () => {
+    expect(highestHistoryState([null, "read", undefined])).toBe("read");
+    expect(highestHistoryState(["read", "understood"])).toBe("understood");
+    expect(highestHistoryState([null, undefined])).toBeNull();
   });
 
   it("3段階の到達状態を直接設定できる", () => {
