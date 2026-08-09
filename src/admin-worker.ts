@@ -81,7 +81,11 @@ const hash = async (value: string) => {
     .join("");
 };
 
-const googleOAuthEnabled = (env: Env) => env.ADMIN_AUTH_MODE === "google-oauth";
+const authMode = (env: Env) => env.ADMIN_AUTH_MODE ?? "cloudflare-access";
+const googleOAuthEnabled = (env: Env) =>
+  authMode(env) === "google-oauth" || authMode(env) === "hybrid-preview";
+const cloudflareAccessEnabled = (env: Env) =>
+  authMode(env) === "cloudflare-access" || authMode(env) === "hybrid-preview";
 
 /**
  * 認証方式の境界。現在はCloudflare Access、将来は同じ権限表のまま
@@ -91,34 +95,42 @@ async function getAuthenticatedEmail(
   request: Request,
   env: Env,
 ): Promise<string | Response> {
-  if (!googleOAuthEnabled(env)) {
-    if (env.ADMIN_AUTH_MODE && env.ADMIN_AUTH_MODE !== "cloudflare-access")
-      return json(
-        { error: "管理画面の認証方式が正しく設定されていません。" },
-        500,
-      );
+  const mode = authMode(env);
+  if (!cloudflareAccessEnabled(env) && !googleOAuthEnabled(env))
+    return json(
+      { error: "管理画面の認証方式が正しく設定されていません。" },
+      500,
+    );
+
+  // 併用プレビューでは、Googleログイン済みならそちらを優先する。
+  // まだGoogleでログインしていない運営者は、従来どおりAccessのメールを使う。
+  if (googleOAuthEnabled(env)) {
+    const token = cookieValue(request, ADMIN_SESSION_COOKIE);
+    if (token) {
+      const session = await env.REPORTS.prepare(
+        "SELECT email FROM admin_auth_sessions WHERE session_hash = ? AND expires_at > ?",
+      )
+        .bind(await hash(token), new Date().toISOString())
+        .first<{ email: string }>();
+      if (session?.email) return session.email;
+    }
+  }
+
+  if (cloudflareAccessEnabled(env)) {
     const email = request.headers
       .get(ACCESS_EMAIL_HEADER)
       ?.trim()
       .toLowerCase();
-    return (
-      email ||
-      json(
-        { error: "Cloudflare Access の認証情報を確認できませんでした。" },
-        401,
-      )
-    );
+    if (email) return email;
   }
-
-  const token = cookieValue(request, ADMIN_SESSION_COOKIE);
-  if (!token) return json({ error: "ログインが必要です。" }, 401);
-  const session = await env.REPORTS.prepare(
-    "SELECT email FROM admin_auth_sessions WHERE session_hash = ? AND expires_at > ?",
-  )
-    .bind(await hash(token), new Date().toISOString())
-    .first<{ email: string }>();
-  return (
-    session?.email ?? json({ error: "ログインの有効期限が切れました。" }, 401)
+  return json(
+    {
+      error:
+        mode === "google-oauth"
+          ? "ログインが必要です。"
+          : "Cloudflare Access の認証情報を確認できませんでした。",
+    },
+    401,
   );
 }
 
@@ -476,6 +488,17 @@ async function logoutAdmin(request: Request, env: Env): Promise<Response> {
   return new Response(null, { status: 302, headers });
 }
 
+async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
+  const identity = await getAuthenticatedEmail(request, env);
+  if (identity instanceof Response) return identity;
+  return json({
+    email: identity,
+    googlePreviewEnabled: googleOAuthEnabled(env) && googleOAuthConfigured(env),
+    googleAuthenticated: Boolean(cookieValue(request, ADMIN_SESSION_COOKIE)),
+    authMode: authMode(env),
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -485,6 +508,8 @@ export default {
       return completeGoogleLogin(request, env);
     if (url.pathname === "/auth/logout" && request.method === "POST")
       return logoutAdmin(request, env);
+    if (url.pathname === "/api/admin/auth-status" && request.method === "GET")
+      return adminAuthStatus(request, env);
     if (url.pathname === "/api/admin/report-admin-permissions") {
       if (request.method === "GET")
         return listReportAdminPermissions(request, env);
@@ -510,7 +535,7 @@ export default {
       url.pathname === "/admin/reports" ||
       url.pathname === "/admin/reports/"
     ) {
-      if (googleOAuthEnabled(env)) {
+      if (authMode(env) === "google-oauth") {
         const identity = await getAuthenticatedEmail(request, env);
         if (identity instanceof Response)
           return new Response(null, {
