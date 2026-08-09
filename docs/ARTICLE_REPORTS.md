@@ -4,12 +4,11 @@
 
 ## 運営用の確認画面
 
-`/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。公開時は **Cloudflare Access** で次の2つを必ず同じ運営者だけに制限してください。
+`/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。読者向けWorkerとは別の `atlasez-admin` Workerで公開し、Worker全体を **Cloudflare Access** で運営者だけに制限します。
 
-- `/admin/*`
-- `/api/admin/*`
+- `atlasez-admin.<account>.workers.dev/*`
 
-初期の許可メールアドレスは `ukyoukay0@gmail.com` です。記事を投稿する読者向けの `/api/article-reports` は保護対象に含めません。
+初期の許可メールアドレスは `ukyoukay0@gmail.com` です。記事を投稿する読者向けの `/api/article-reports` は通常サイト側にだけ残し、保護対象に含めません。
 
 ## ローカルで確認する
 

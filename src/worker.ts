@@ -10,7 +10,6 @@ interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T>(): Promise<T | null>;
   run(): Promise<unknown>;
-  all<T>(): Promise<{ results: T[] }>;
 }
 
 interface D1Database {
@@ -34,31 +33,8 @@ type ReportPayload = {
   openedAt?: unknown;
 };
 
-type AdminUpdatePayload = {
-  status?: unknown;
-  adminNote?: unknown;
-};
-
-type ArticleReport = {
-  id: string;
-  article_title: string;
-  article_url: string;
-  article_id: string | null;
-  report_type: string;
-  details: string;
-  contact: string | null;
-  locale: string;
-  status: ReportStatus;
-  admin_note: string;
-  created_at: string;
-  updated_at: string;
-};
-
-type ReportStatus = "new" | "reviewing" | "resolved";
-
 const MAX_DETAILS_LENGTH = 6_000;
 const MAX_CONTACT_LENGTH = 320;
-const MAX_ADMIN_NOTE_LENGTH = 4_000;
 const MIN_FORM_FILL_MS = 1_200;
 const MAX_FORM_OPEN_MS = 2 * 60 * 60 * 1_000;
 const ALLOWED_REPORT_TYPES = new Set([
@@ -67,7 +43,6 @@ const ALLOWED_REPORT_TYPES = new Set([
   "reference",
   "other",
 ]);
-const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
@@ -216,82 +191,9 @@ async function saveArticleReport(
   return json({ ok: true }, 201);
 }
 
-function isSameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  return !origin || origin === new URL(request.url).origin;
-}
-
-async function listArticleReports(request: Request, env: Env): Promise<Response> {
-  const requestedStatus = new URL(request.url).searchParams.get("status") ?? "all";
-  const status = REPORT_STATUSES.has(requestedStatus as ReportStatus)
-    ? (requestedStatus as ReportStatus)
-    : null;
-  if (requestedStatus !== "all" && !status) {
-    return json({ error: "状態を確認してください。" }, 400);
-  }
-
-  const baseQuery = `SELECT id, article_title, article_url, article_id, report_type,
-      details, contact, locale, status, admin_note, created_at, updated_at
-    FROM article_reports`;
-  const order = ` ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END,
-      created_at DESC LIMIT 250`;
-  const result = status
-    ? await env.REPORTS.prepare(`${baseQuery} WHERE status = ?${order}`)
-        .bind(status)
-        .all<ArticleReport>()
-    : await env.REPORTS.prepare(`${baseQuery}${order}`).all<ArticleReport>();
-
-  return json({ reports: result.results });
-}
-
-async function updateArticleReport(
-  request: Request,
-  env: Env,
-  reportId: string,
-): Promise<Response> {
-  if (!isSameOrigin(request)) {
-    return json({ error: "この送信元からは受け付けられません。" }, 403);
-  }
-  if (request.headers.get("content-type")?.includes("application/json") !== true) {
-    return json({ error: "JSON形式で送信してください。" }, 415);
-  }
-
-  let payload: AdminUpdatePayload;
-  try {
-    payload = (await request.json()) as AdminUpdatePayload;
-  } catch {
-    return json({ error: "入力内容を読み取れませんでした。" }, 400);
-  }
-  const status = text(payload.status, 20) as ReportStatus;
-  if (!REPORT_STATUSES.has(status)) {
-    return json({ error: "対応状況を確認してください。" }, 400);
-  }
-
-  await env.REPORTS.prepare(
-    `UPDATE article_reports
-      SET status = ?, admin_note = ?, updated_at = ?
-      WHERE id = ?`,
-  )
-    .bind(status, text(payload.adminNote, MAX_ADMIN_NOTE_LENGTH), new Date().toISOString(), reportId)
-    .run();
-  return json({ ok: true });
-}
-
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
-    // 本番では Cloudflare Access で /admin/* と /api/admin/* を運営だけに制限する。
-    if (url.pathname === "/api/admin/article-reports") {
-      if (request.method !== "GET")
-        return json({ error: "GETのみ利用できます。" }, 405);
-      return listArticleReports(request, env);
-    }
-    const reportMatch = url.pathname.match(/^\/api\/admin\/article-reports\/([0-9a-f-]{36})$/i);
-    if (reportMatch) {
-      if (request.method !== "PATCH")
-        return json({ error: "PATCHのみ利用できます。" }, 405);
-      return updateArticleReport(request, env, reportMatch[1]);
-    }
     if (url.pathname === "/api/article-reports") {
       if (request.method !== "POST")
         return json({ error: "POSTのみ利用できます。" }, 405);
