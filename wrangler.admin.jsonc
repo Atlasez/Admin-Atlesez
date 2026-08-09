@@ -7,13 +7,13 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*", "/admin/*"]
+    "run_worker_first": ["/api/*", "/admin/*"],
   },
   "d1_databases": [
     {
       "binding": "REPORTS",
       "database_name": "atlasez-reports",
-      "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c"
-    }
-  ]
+      "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
+    },
+  ],
 }

@@ -66,7 +66,8 @@ const isTrustedReportOrigin = (origin: string | null, requestUrl: URL) =>
 
 const withCors = (response: Response, request: Request) => {
   const origin = request.headers.get("origin");
-  if (!origin || !isTrustedReportOrigin(origin, new URL(request.url))) return response;
+  if (!origin || !isTrustedReportOrigin(origin, new URL(request.url)))
+    return response;
   const headers = new Headers(response.headers);
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-methods", "POST, OPTIONS");
@@ -221,7 +222,10 @@ export default {
         return withCors(new Response(null, { status: 204 }), request);
       }
       if (request.method !== "POST")
-        return withCors(json({ error: "POSTのみ利用できます。" }, 405), request);
+        return withCors(
+          json({ error: "POSTのみ利用できます。" }, 405),
+          request,
+        );
       return withCors(await saveArticleReport(request, env), request);
     }
     return env.ASSETS.fetch(request);
