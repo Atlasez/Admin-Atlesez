@@ -368,6 +368,8 @@ const structuredData = {
               data-issue-report-form
               data-article-title={entry.data.title}
               data-article-id={entry.data.articleId}
+              data-article-subject={entry.data.subject}
+              data-article-category={entry.data.category}
               data-locale={locale}
             >
               <div class="issue-report-fields">
@@ -1008,6 +1010,8 @@ const structuredData = {
             articleTitle: reportForm.dataset.articleTitle,
             articleUrl: window.location.href,
             articleId: reportForm.dataset.articleId,
+            subject: reportForm.dataset.articleSubject,
+            category: reportForm.dataset.articleCategory,
             locale: reportForm.dataset.locale,
             openedAt: reportForm.dataset.openedAt,
             reportType: values.get("reportType"),
