@@ -377,7 +377,7 @@ const views = [
           <div class="section-title">
             <h2 id="recent-heading">{t(locale, "recentArticles")}</h2>
           </div>
-          <div class="scroll-shell">
+          <div class="scroll-shell" data-scroll-fade>
           <div class="recent-scroll" data-scroll-region tabindex="0">
             <ul class="recent-list">
               {
@@ -410,7 +410,7 @@ const views = [
               <div class="section-title">
                 <h2 id="upcoming-heading">{t(locale, "upcomingArticles")}</h2>
               </div>
-              <div class="scroll-shell">
+              <div class="scroll-shell" data-scroll-fade>
               <ul class="upcoming-list" data-scroll-region tabindex="0">
                 {upcoming.map((u) => (
                   <li>
@@ -510,6 +510,23 @@ const views = [
     }
     activate(initial ?? "tiles");
   }
+
+  // OSの設定でスクロールバーが常時表示されない場合でも、下に続きが
+  // あることを視覚的に示す。最後まで到達した時点では覆いを消す。
+  document.querySelectorAll<HTMLElement>("[data-scroll-fade]").forEach((shell) => {
+    const region = shell.querySelector<HTMLElement>("[data-scroll-region]");
+    if (!region) return;
+
+    const updateScrollFade = () => {
+      const hasMore = region.scrollHeight > region.clientHeight + 1;
+      const atEnd = region.scrollTop + region.clientHeight >= region.scrollHeight - 1;
+      shell.dataset.scrollFade = hasMore && !atEnd ? "more" : "end";
+    };
+
+    region.addEventListener("scroll", updateScrollFade, { passive: true });
+    new ResizeObserver(updateScrollFade).observe(region);
+    updateScrollFade();
+  });
 
 </script>
 
@@ -908,6 +925,23 @@ const views = [
     scrollbar-width: auto;
     scrollbar-gutter: stable;
     padding-right: var(--space-2);
+  }
+  .scroll-shell {
+    position: relative;
+  }
+  .scroll-shell[data-scroll-fade="more"]::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 3.1rem;
+    content: "";
+    pointer-events: none;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--background-primary), transparent 100%),
+      var(--background-primary) 88%
+    );
   }
   .recent-scroll::-webkit-scrollbar,
   .upcoming-list::-webkit-scrollbar {
