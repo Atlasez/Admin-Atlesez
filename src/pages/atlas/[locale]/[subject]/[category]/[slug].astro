@@ -113,6 +113,14 @@ const conceptNames = entry.data.concepts.map((c) => {
   const node = map.get(c.id);
   return { id: c.id, name: node ? localizedName(node.name, locale) : c.id };
 });
+const tocLabel = (text: string) =>
+  text
+    // 目次の文字列はMarkdown由来の生テキストなので、数式を再解釈させない。
+    // `$G$` が描画環境によって「GGG」のように崩れるのを避ける。
+    .replace(/\$([^$]+)\$/g, "$1")
+    .replace(/\\(?:mathrm|mathbb|operatorname|mathop|text)\{([^}]+)\}/g, "$1")
+    .replace(/\\[a-zA-Z]+/g, "")
+    .replace(/[{}]/g, "");
 
 const historyUrl = `${ORG.githubRepo}/commits/main/src/content/articles/${entry.id}.md`;
 
@@ -156,7 +164,7 @@ const structuredData = {
             toc.map((h) => (
               <li class={`toc-depth-${h.depth}`}>
                 <a href={`#${h.slug}`} data-toc-link={h.slug}>
-                  {h.text}
+                  {tocLabel(h.text)}
                 </a>
               </li>
             ))
@@ -164,6 +172,9 @@ const structuredData = {
         </ol>
       </details>
     </nav>
+    <button type="button" class="mobile-toc-trigger" data-mobile-toc>
+      {t(locale, "toc")}
+    </button>
 
     {/* 中央: 本文（Pagefindの検索対象） */}
     <article class="article-main" data-pagefind-body>
@@ -188,6 +199,27 @@ const structuredData = {
         {entry.data.tags.map((tag) => <span>{tag}</span>)}
         {entry.data.concepts.map((c) => <span>{c.id}</span>)}
       </div>
+      {
+        conceptNames.length > 0 && (
+          <section
+            class="article-concept-nodes"
+            aria-label={locale === "ja" ? "この記事の主要概念" : "Main concepts in this article"}
+          >
+            <span>{locale === "ja" ? "主要概念" : "Main concepts"}</span>
+            <div>
+              {
+                conceptNames.map((concept) => (
+                  <a
+                    href={`${atlasPath(locale, "map")}?subject=${encodeURIComponent(entry.data.subject)}&category=${encodeURIComponent(`${entry.data.subject}/${entry.data.category}`)}&selected=${encodeURIComponent(concept.id)}`}
+                  >
+                    {concept.name}
+                  </a>
+                ))
+              }
+            </div>
+          </section>
+        )
+      }
       <header class="article-header">
         <h1 id="article-title">{entry.data.title}</h1>
         {/* 要約は本文冒頭と重複しがちなので記事ページでは出さない。
@@ -508,6 +540,32 @@ const structuredData = {
     margin-top: var(--space-4);
     font-size: calc(0.9rem * var(--text-scale));
   }
+  .article-concept-nodes {
+    display: grid;
+    gap: var(--space-1);
+    margin: var(--space-3) 0;
+  }
+  .article-concept-nodes > span {
+    color: var(--text-secondary);
+    font-size: calc(.82rem * var(--text-scale));
+    font-weight: 700;
+  }
+  .article-concept-nodes > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .article-concept-nodes a {
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    padding: .35rem .6rem;
+    text-decoration: none;
+  }
+  .article-concept-nodes a:hover {
+    background: var(--accent-primary);
+    color: var(--background-primary);
+  }
 
   /* 本文カラムを広く取るため、コンテナ幅を広げ左右カラムを絞っている */
   .article-layout {
@@ -816,6 +874,20 @@ const structuredData = {
       width: 100%;
       justify-content: center;
     }
+    .mobile-toc-trigger {
+      position: fixed;
+      right: var(--space-3);
+      bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+      z-index: 20;
+      min-height: 2.75rem;
+      border: 1px solid var(--accent-primary);
+      border-radius: 999px;
+      background: var(--background-primary);
+      box-shadow: var(--shadow);
+      color: var(--accent-primary);
+      font-weight: 700;
+      padding: 0 var(--space-3);
+    }
     /* 学習の記録のトグルも横幅いっぱいに広げ、2段で分け合う */
     .history-steps {
       display: flex;
@@ -837,6 +909,9 @@ const structuredData = {
     .toc-details[open] > summary {
       border-bottom: 0;
     }
+  }
+  @media (min-width: 768px) {
+    .mobile-toc-trigger { display: none; }
   }
 </style>
 
@@ -895,6 +970,12 @@ const structuredData = {
   const mq = window.matchMedia("(max-width: 1023px)");
   const details = document.querySelector<HTMLDetailsElement>(".toc-details");
   if (details && mq.matches) details.open = false;
+  document.querySelector<HTMLButtonElement>("[data-mobile-toc]")?.addEventListener("click", () => {
+    if (!details) return;
+    details.open = true;
+    document.getElementById("article-toc")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => details.querySelector<HTMLAnchorElement>("a")?.focus(), 350);
+  });
 </script>
 
 <script>

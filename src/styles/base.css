@@ -299,3 +299,23 @@ details .details-body {
     overflow-x: auto;
   }
 }
+/* スクロール領域は、OSがオーバーレイスクロールバーを隠す環境でも
+   続きがあることを見分けられるよう、レールとつまみを常に描画する。 */
+[data-scroll-region] {
+  scrollbar-width: auto;
+  scrollbar-color: var(--border-strong) var(--background-secondary);
+  scrollbar-gutter: stable both-edges;
+}
+[data-scroll-region]::-webkit-scrollbar {
+  display: block;
+  width: 0.75rem;
+}
+[data-scroll-region]::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 999px;
+}
+[data-scroll-region]::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 2px solid var(--background-secondary);
+  border-radius: 999px;
+}
