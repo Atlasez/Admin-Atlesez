@@ -2,6 +2,12 @@
 
 各記事の「この記事の問題を報告」は、Googleフォームを開かずにサイト内で送信できるフォームです。送信内容は Cloudflare Worker の `POST /api/article-reports` が受け取り、D1 の `article_reports` テーブルへ保存します。
 
+## Discord通知（任意）
+
+`DISCORD_REPORT_WEBHOOK_URL` をCloudflare Worker `atlasez-web-1` のシークレットに設定すると、保存成功後にDiscordへ通知します。通知するのは記事名・分野・カテゴリ・報告種別だけで、報告本文と返信先はDiscordへ送りません。通知に失敗しても報告の保存は失敗しません。
+
+Cloudflare Dashboardで Worker & Pages → `atlasez-web-1` → Settings → Variables and Secrets を開き、**Secret** として `DISCORD_REPORT_WEBHOOK_URL` を追加してください。値にはDiscordで新規発行したIncoming Webhook URLを入力します。Webhook URLは外部に共有した場合は無効化し、再発行してください。
+
 ## 運営用の確認画面
 
 `/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。読者向けWorkerとは別の `atlasez-admin` Workerで公開し、Worker全体を **Cloudflare Access** で運営者だけに制限します。
