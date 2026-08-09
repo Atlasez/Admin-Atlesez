@@ -25,6 +25,8 @@ type ReportPayload = {
   articleTitle?: unknown;
   articleUrl?: unknown;
   articleId?: unknown;
+  subject?: unknown;
+  category?: unknown;
   reportType?: unknown;
   details?: unknown;
   contact?: unknown;
@@ -37,6 +39,7 @@ const MAX_DETAILS_LENGTH = 6_000;
 const MAX_CONTACT_LENGTH = 320;
 const MIN_FORM_FILL_MS = 1_200;
 const MAX_FORM_OPEN_MS = 2 * 60 * 60 * 1_000;
+const TAXONOMY_SLUG = /^[a-z0-9-]+$/;
 const ALLOWED_REPORT_TYPES = new Set([
   "error",
   "suggestion",
@@ -112,6 +115,8 @@ async function saveArticleReport(
   const articleTitle = text(payload.articleTitle, 200);
   const articleUrl = text(payload.articleUrl, 2_000);
   const articleId = text(payload.articleId, 200);
+  const subject = text(payload.subject, 80);
+  const category = text(payload.category, 80);
   const reportType = text(payload.reportType, 40);
   const details = text(payload.details, MAX_DETAILS_LENGTH);
   const contact = text(payload.contact, MAX_CONTACT_LENGTH);
@@ -121,6 +126,8 @@ async function saveArticleReport(
   if (
     !articleTitle ||
     !articleUrl ||
+    !TAXONOMY_SLUG.test(subject) ||
+    !TAXONOMY_SLUG.test(category) ||
     !details ||
     !ALLOWED_REPORT_TYPES.has(reportType)
   ) {
@@ -193,14 +200,16 @@ async function saveArticleReport(
 
   await env.REPORTS.prepare(
     `INSERT INTO article_reports
-      (id, article_title, article_url, article_id, report_type, details, contact, locale, reporter_hash, content_hash, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, article_title, article_url, article_id, subject, category, report_type, details, contact, locale, reporter_hash, content_hash, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       crypto.randomUUID(),
       articleTitle,
       articleUrl,
       articleId || null,
+      subject,
+      category,
       reportType,
       details,
       contact || null,
