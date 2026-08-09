@@ -20,6 +20,8 @@ interface Env {
 
 type ReportStatus = "new" | "reviewing" | "resolved";
 type AdminUpdatePayload = { status?: unknown; adminNote?: unknown };
+type PermissionPayload = { email?: unknown; subject?: unknown };
+type ReportAdminPermission = { email: string; subject: string };
 type ArticleReport = {
   id: string;
   article_title: string;
@@ -40,6 +42,8 @@ type ArticleReport = {
 const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
 const MAX_ADMIN_NOTE_LENGTH = 4_000;
 const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SUBJECT_SLUG = /^[a-z0-9-]+$/;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 const text = (value: unknown, maximum: number) =>
@@ -73,6 +77,25 @@ async function getAdminScope(
 
 const isResponse = (value: AdminScope | Response): value is Response =>
   value instanceof Response;
+
+async function getGlobalAdminScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!scope.allSubjects)
+    return json(
+      { error: "担当分野の設定は全分野管理者のみ変更できます。" },
+      403,
+    );
+  return scope;
+}
+
+const isSameOrigin = (request: Request) => {
+  const origin = request.headers.get("origin");
+  return !origin || origin === new URL(request.url).origin;
+};
 
 async function listArticleReports(
   request: Request,
@@ -114,8 +137,7 @@ async function updateArticleReport(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin)
+  if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (
     request.headers.get("content-type")?.includes("application/json") !== true
@@ -151,9 +173,89 @@ async function updateArticleReport(
   return json({ ok: true });
 }
 
+async function listReportAdminPermissions(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const result = await env.REPORTS.prepare(
+    "SELECT email, subject FROM report_admin_permissions ORDER BY email, subject",
+  ).all<ReportAdminPermission>();
+  return json({ permissions: result.results });
+}
+
+async function createReportAdminPermission(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (
+    request.headers.get("content-type")?.includes("application/json") !== true
+  )
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  let payload: PermissionPayload;
+  try {
+    payload = (await request.json()) as PermissionPayload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const email = text(payload.email, 320).toLowerCase();
+  const subject = text(payload.subject, 80);
+  if (
+    !EMAIL_PATTERN.test(email) ||
+    (subject !== "*" && !SUBJECT_SLUG.test(subject))
+  )
+    return json({ error: "メールアドレスと担当分野を確認してください。" }, 400);
+  await env.REPORTS.prepare(
+    "INSERT OR IGNORE INTO report_admin_permissions (email, subject) VALUES (?, ?)",
+  )
+    .bind(email, subject)
+    .run();
+  return json({ ok: true }, 201);
+}
+
+async function deleteReportAdminPermission(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const url = new URL(request.url);
+  const email = (url.searchParams.get("email") ?? "").trim().toLowerCase();
+  const subject = (url.searchParams.get("subject") ?? "").trim();
+  if (
+    !EMAIL_PATTERN.test(email) ||
+    (subject !== "*" && !SUBJECT_SLUG.test(subject))
+  )
+    return json({ error: "対象の権限を確認してください。" }, 400);
+  if (email === scope.email && subject === "*")
+    return json({ error: "自分自身の全分野権限は削除できません。" }, 400);
+  await env.REPORTS.prepare(
+    "DELETE FROM report_admin_permissions WHERE email = ? AND subject = ?",
+  )
+    .bind(email, subject)
+    .run();
+  return json({ ok: true });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/api/admin/report-admin-permissions") {
+      if (request.method === "GET")
+        return listReportAdminPermissions(request, env);
+      if (request.method === "POST")
+        return createReportAdminPermission(request, env);
+      if (request.method === "DELETE")
+        return deleteReportAdminPermission(request, env);
+      return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
+    }
     if (url.pathname === "/api/admin/article-reports") {
       return request.method === "GET"
         ? listArticleReports(request, env)

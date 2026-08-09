@@ -3,7 +3,15 @@ interface Fetcher {
 }
 
 interface ExportedHandler<Environment> {
-  fetch(request: Request, env: Environment): Response | Promise<Response>;
+  fetch(
+    request: Request,
+    env: Environment,
+    ctx: ExecutionContext,
+  ): Response | Promise<Response>;
+}
+
+interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 interface D1PreparedStatement {
@@ -19,6 +27,7 @@ interface D1Database {
 interface Env {
   ASSETS: Fetcher;
   REPORTS: D1Database;
+  DISCORD_REPORT_WEBHOOK_URL?: string;
 }
 
 type ReportPayload = {
@@ -46,6 +55,12 @@ const ALLOWED_REPORT_TYPES = new Set([
   "reference",
   "other",
 ]);
+const REPORT_TYPE_LABEL: Record<string, string> = {
+  error: "誤り・不具合",
+  suggestion: "改善提案",
+  reference: "出典・参考文献",
+  other: "その他",
+};
 
 // GitHub Pages で公開している画面からも、Cloudflare Worker の送信APIを利用する。
 // この一覧以外のサイトからはブラウザー経由で送信できない。
@@ -87,9 +102,68 @@ async function fingerprint(value: string): Promise<string> {
     .join("");
 }
 
+type DiscordReport = {
+  articleTitle: string;
+  articleUrl: string;
+  subject: string;
+  category: string;
+  reportType: string;
+};
+
+/**
+ * 通知先はWorkerのシークレットだけから読む。報告本文・連絡先・IP由来の情報は
+ * Discordへ送らず、管理画面でのみ確認できるようにする。
+ */
+async function notifyDiscord(env: Env, report: DiscordReport): Promise<void> {
+  const webhookUrl = env.DISCORD_REPORT_WEBHOOK_URL?.trim();
+  if (!webhookUrl) return;
+  try {
+    const url = new URL(webhookUrl);
+    if (
+      url.protocol !== "https:" ||
+      (url.hostname !== "discord.com" && url.hostname !== "discordapp.com")
+    ) {
+      return;
+    }
+    await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "Atlasez 記事報告",
+        allowed_mentions: { parse: [] },
+        embeds: [
+          {
+            title: "新しい記事報告",
+            url: report.articleUrl,
+            color: 0x176ea6,
+            fields: [
+              { name: "記事", value: report.articleTitle, inline: false },
+              {
+                name: "分野",
+                value: `${report.subject} / ${report.category}`,
+                inline: true,
+              },
+              {
+                name: "種類",
+                value:
+                  REPORT_TYPE_LABEL[report.reportType] ?? report.reportType,
+                inline: true,
+              },
+            ],
+            footer: { text: "本文・連絡先は運営用の報告管理画面で確認" },
+          },
+        ],
+      }),
+    });
+  } catch {
+    // 通知失敗は報告保存に影響させない。Webhook URLもログへ出さない。
+  }
+}
+
 async function saveArticleReport(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
 ): Promise<Response> {
   if (
     request.headers.get("content-type")?.includes("application/json") !== true
@@ -220,11 +294,21 @@ async function saveArticleReport(
     )
     .run();
 
+  ctx.waitUntil(
+    notifyDiscord(env, {
+      articleTitle,
+      articleUrl,
+      subject,
+      category,
+      reportType,
+    }),
+  );
+
   return json({ ok: true }, 201);
 }
 
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/api/article-reports") {
       if (request.method === "OPTIONS") {
@@ -235,7 +319,7 @@ export default {
           json({ error: "POSTのみ利用できます。" }, 405),
           request,
         );
-      return withCors(await saveArticleReport(request, env), request);
+      return withCors(await saveArticleReport(request, env, ctx), request);
     }
     return env.ASSETS.fetch(request);
   },
