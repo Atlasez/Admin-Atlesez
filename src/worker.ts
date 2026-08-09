@@ -44,6 +44,14 @@ const ALLOWED_REPORT_TYPES = new Set([
   "other",
 ]);
 
+// GitHub Pages で公開している画面からも、Cloudflare Worker の送信APIを利用する。
+// この一覧以外のサイトからはブラウザー経由で送信できない。
+const TRUSTED_REPORT_ORIGINS = new Set([
+  "https://mitukx.github.io",
+  "http://localhost:4321",
+  "http://127.0.0.1:4321",
+]);
+
 const json = (body: unknown, status = 200) =>
   Response.json(body, {
     status,
@@ -52,6 +60,20 @@ const json = (body: unknown, status = 200) =>
 
 const text = (value: unknown, maximum: number) =>
   typeof value === "string" ? value.trim().slice(0, maximum) : "";
+
+const isTrustedReportOrigin = (origin: string | null, requestUrl: URL) =>
+  !origin || origin === requestUrl.origin || TRUSTED_REPORT_ORIGINS.has(origin);
+
+const withCors = (response: Response, request: Request) => {
+  const origin = request.headers.get("origin");
+  if (!origin || !isTrustedReportOrigin(origin, new URL(request.url))) return response;
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", origin);
+  headers.set("access-control-allow-methods", "POST, OPTIONS");
+  headers.set("access-control-allow-headers", "content-type");
+  headers.set("vary", "origin");
+  return new Response(response.body, { status: response.status, headers });
+};
 
 async function fingerprint(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
@@ -72,7 +94,7 @@ async function saveArticleReport(
   }
 
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) {
+  if (!isTrustedReportOrigin(origin, new URL(request.url))) {
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   }
 
@@ -195,9 +217,12 @@ export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/api/article-reports") {
+      if (request.method === "OPTIONS") {
+        return withCors(new Response(null, { status: 204 }), request);
+      }
       if (request.method !== "POST")
-        return json({ error: "POSTのみ利用できます。" }, 405);
-      return saveArticleReport(request, env);
+        return withCors(json({ error: "POSTのみ利用できます。" }, 405), request);
+      return withCors(await saveArticleReport(request, env), request);
     }
     return env.ASSETS.fetch(request);
   },

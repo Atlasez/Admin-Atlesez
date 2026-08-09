@@ -917,7 +917,10 @@ const structuredData = {
       submit?.setAttribute("disabled", "");
       setStatus(isJapanese ? "送信しています…" : "Sending…", "sending");
       try {
-        const response = await fetch("/api/article-reports", {
+        const reportEndpoint = window.location.hostname === "mitukx.github.io"
+          ? "https://atlasez-web-1.ukyoukay0.workers.dev/api/article-reports"
+          : "/api/article-reports";
+        const response = await fetch(reportEndpoint, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
