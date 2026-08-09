@@ -58,6 +58,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .report-list :global(.report-main) { min-width: 0; }
   .report-list :global(.report-article) { font-size: .96rem; font-weight: 800; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .report-list :global(.report-meta) { color: var(--muted); font-size: .76rem; margin: .22rem 0 0; }
+  .report-list :global(.report-subject) { background: color-mix(in srgb, var(--accent), transparent 90%); border-radius: 999px; color: var(--accent); display: inline-block; font-size: .72rem; font-weight: 800; margin-right: .35rem; padding: .12rem .42rem; }
   .report-list :global(.report-type) { color: var(--muted); font-size: .76rem; font-weight: 700; white-space: nowrap; }
   .report-list :global(.report-article a) { color: var(--text); text-decoration-color: color-mix(in srgb, var(--accent), transparent 55%); text-underline-offset: .2em; }
   .report-list :global(.report-article a:hover) { color: var(--accent); }
@@ -88,7 +89,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   type ReportStatus = "new" | "reviewing" | "resolved";
   type Report = {
     id: string; article_title: string; article_url: string; report_type: string;
-    details: string; contact: string | null; locale: string; status: ReportStatus;
+    details: string; contact: string | null; locale: string; subject: string; category: string; status: ReportStatus;
     admin_note: string; created_at: string; updated_at: string;
   };
 
@@ -113,7 +114,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         const url = safeUrl(report.article_url);
         return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
           <summary class="report-summary">
-            <div class="report-main"><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta">${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
+            <div class="report-main"><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
             <span class="report-type">${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="status-badge">${labels[report.status]}</span>
           </summary>
           <div class="report-content">
