@@ -11,7 +11,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       <div>
         <p class="eyebrow">ATLASEZ / 運営用</p>
         <h1>記事の問題報告</h1>
-        <p>読者から届いた報告を確認し、対応状況と運営メモをまとめて管理します。</p>
+        <p>未確認の報告から確認し、必要なときだけ詳細と運営メモを開いて対応します。</p>
       </div>
       <a class="back-to-atlas" href="/atlas/ja/">学習サイトへ戻る</a>
     </header>
@@ -35,38 +35,45 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 </AdminLayout>
 
 <style>
-  .admin-reports { box-sizing: border-box; margin: 0 auto; max-width: 1180px; padding: 3rem 2rem 5rem; }
-  .admin-reports-heading { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1.5rem; }
+  .admin-reports { box-sizing: border-box; margin: 0 auto; max-width: 1080px; padding: 2.25rem 1.5rem 4rem; }
+  .admin-reports-heading { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1.25rem; }
   .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .45rem; }
   h1 { font-size: clamp(1.8rem, 4vw, 2.45rem); letter-spacing: -.025em; margin: 0; }
   .admin-reports-heading div > p:last-child { color: var(--muted); margin: .65rem 0 0; }
   .back-to-atlas { border: 1px solid var(--border); border-radius: 999px; color: var(--text); font-size: .88rem; padding: .6rem .85rem; text-decoration: none; white-space: nowrap; }
   .back-to-atlas:hover { border-color: var(--accent); color: var(--accent); }
-  .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: .75rem; display: flex; flex-wrap: wrap; gap: .9rem; margin-bottom: .75rem; padding: 1rem; }
+  .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: .55rem; padding: .7rem .8rem; }
   .report-controls label { display: grid; font-size: .82rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
   select, textarea { border: 1px solid var(--border); border-radius: .45rem; background: var(--surface); color: var(--text); font: inherit; }
-  select { min-height: 2.6rem; min-width: 10rem; padding: .35rem .65rem; }
-  .report-count { align-self: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .88rem; font-weight: 700; margin-left: auto; padding: .55rem .8rem; }
-  .report-feedback { color: var(--muted); font-size: .9rem; min-height: 1.4rem; padding-left: .2rem; }
-  .report-list { display: grid; gap: 1rem; }
-  .report-list :global(.report-card) { background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: .75rem; box-shadow: 0 1px 2px rgb(15 23 42 / .04); overflow: hidden; padding: 0; }
+  select { min-height: 2.35rem; min-width: 9rem; padding: .3rem .55rem; }
+  .report-count { align-self: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .82rem; font-weight: 700; margin-left: auto; padding: .45rem .7rem; }
+  .report-feedback { color: var(--muted); font-size: .83rem; min-height: 1.25rem; padding-left: .15rem; }
+  .report-list { border: 1px solid var(--border); border-radius: .7rem; display: grid; overflow: hidden; }
+  .report-list :global(.report-card) { background: var(--surface); border-bottom: 1px solid var(--border); border-left: 4px solid var(--accent); margin: 0; }
+  .report-list :global(.report-card:last-child) { border-bottom: 0; }
   .report-list :global(.report-card[data-status="reviewing"]) { border-left-color: #c78500; }
   .report-list :global(.report-card[data-status="resolved"]) { border-left-color: #328455; }
-  .report-list :global(.report-card-head) { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; justify-content: space-between; padding: 1rem 1.15rem; }
-  .report-list :global(.report-card h2) { font-size: .85rem; letter-spacing: .04em; margin: 0; text-transform: uppercase; }
-  .report-list :global(.report-meta) { color: var(--muted); font-size: .82rem; margin: .4rem 0 0; }
-  .report-list :global(.report-article) { font-size: 1.06rem; font-weight: 800; margin: 0; }
+  .report-list :global(.report-summary) { align-items: center; cursor: pointer; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) auto auto 1rem; list-style: none; padding: .7rem .9rem; }
+  .report-list :global(.report-summary::-webkit-details-marker) { display: none; }
+  .report-list :global(.report-summary::after) { color: var(--muted); content: "⌄"; font-size: 1rem; grid-column: 4; grid-row: 1; transform: rotate(-90deg); transition: transform .15s ease; }
+  .report-list :global(.report-card[open] .report-summary::after) { transform: rotate(0); }
+  .report-list :global(.report-summary:hover) { background: var(--surface-alt); }
+  .report-list :global(.report-main) { min-width: 0; }
+  .report-list :global(.report-article) { font-size: .96rem; font-weight: 800; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .report-list :global(.report-meta) { color: var(--muted); font-size: .76rem; margin: .22rem 0 0; }
+  .report-list :global(.report-type) { color: var(--muted); font-size: .76rem; font-weight: 700; white-space: nowrap; }
   .report-list :global(.report-article a) { color: var(--text); text-decoration-color: color-mix(in srgb, var(--accent), transparent 55%); text-underline-offset: .2em; }
   .report-list :global(.report-article a:hover) { color: var(--accent); }
-  .report-list :global(.report-details) { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .5rem; line-height: 1.65; margin: .75rem 0 0; padding: .8rem .9rem; white-space: pre-wrap; word-break: break-word; }
-  .report-list :global(.report-content) { padding: 1.15rem; }
+  .report-list :global(.report-content) { border-top: 1px solid var(--border); padding: .8rem .9rem .9rem; }
+  .report-list :global(.report-link) { font-size: .85rem; font-weight: 800; }
+  .report-list :global(.report-details) { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .45rem; font-size: .9rem; line-height: 1.55; margin: .65rem 0 0; padding: .65rem .75rem; white-space: pre-wrap; word-break: break-word; }
   .report-list :global(.report-card label) { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
-  .report-list :global(.report-card textarea) { box-sizing: border-box; line-height: 1.5; min-height: 6.2rem; padding: .65rem; resize: vertical; width: 100%; }
-  .report-list :global(.report-actions) { border-top: 1px solid var(--border); display: grid; gap: 1rem; grid-template-columns: 10rem minmax(0, 1fr) auto; padding: 1rem 1.15rem 1.15rem; }
-  .report-list :global(.status-badge) { background: color-mix(in srgb, var(--accent), transparent 90%); border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .78rem; font-weight: 800; padding: .3rem .6rem; white-space: nowrap; }
+  .report-list :global(.report-card textarea) { box-sizing: border-box; line-height: 1.5; min-height: 4.5rem; padding: .55rem; resize: vertical; width: 100%; }
+  .report-list :global(.report-actions) { align-items: end; display: grid; gap: .75rem; grid-template-columns: 9rem minmax(0, 1fr) auto; margin-top: .8rem; }
+  .report-list :global(.status-badge) { background: color-mix(in srgb, var(--accent), transparent 90%); border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .74rem; font-weight: 800; padding: .28rem .55rem; white-space: nowrap; }
   .report-list :global(.report-card[data-status="reviewing"] .status-badge) { background: #fff4d6; color: #9a6400; }
   .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
-  .report-list :global(.report-empty) { border: 1px dashed var(--border); border-radius: .75rem; color: var(--muted); padding: 3rem 2rem; text-align: center; }
+  .report-list :global(.report-empty) { color: var(--muted); padding: 2.5rem 2rem; text-align: center; }
   @media (max-width: 700px) {
     .admin-reports { padding: 1.5rem 1rem 3rem; }
     .admin-reports-heading { display: grid; gap: 1rem; }
@@ -74,7 +81,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .report-controls { align-items: stretch; display: grid; }
     .report-controls label, .report-controls select { width: 100%; }
     .report-count { justify-self: start; margin-left: 0; }
-    .report-list :global(.report-card-head), .report-list :global(.report-actions) { display: grid; grid-template-columns: 1fr; }
+    .report-list :global(.report-summary), .report-list :global(.report-actions) { display: grid; grid-template-columns: 1fr; }
+    .report-list :global(.report-summary::after) { display: none; }
+    .report-list :global(.report-type), .report-list :global(.status-badge) { justify-self: start; }
     .report-list :global(.status-badge) { justify-self: start; }
   }
 </style>
@@ -106,14 +115,18 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       if (!reports.length) { list.innerHTML = '<p class="report-empty">該当する報告はありません。</p>'; return; }
       list.innerHTML = reports.map((report) => {
         const url = safeUrl(report.article_url);
-        return `<article class="report-card" data-status="${report.status}" data-report-id="${report.id}">
-          <div class="report-card-head"><div><h2>${escapeHtml(types[report.report_type] ?? report.report_type)}</h2><p class="report-meta">${date(report.created_at)} ・ ${escapeHtml(report.locale)}${report.contact ? ` ・ 連絡先: ${escapeHtml(report.contact)}` : ""}</p></div><span class="status-badge">${labels[report.status]}</span></div>
+        return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
+          <summary class="report-summary">
+            <div class="report-main"><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta">${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
+            <span class="report-type">${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="status-badge">${labels[report.status]}</span>
+          </summary>
           <div class="report-content">
-          <p class="report-article">${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(report.article_title)}を開く</a>` : escapeHtml(report.article_title)}</p>
+          ${url ? `<a class="report-link" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">記事を開く</a>` : ""}
           <p class="report-details">${escapeHtml(report.details)}</p>
-          </div>
           <div class="report-actions"><label>対応状況<select data-report-status>${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${report.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>運営メモ<textarea data-report-note maxlength="4000" placeholder="対応内容や確認事項を記録できます。">${escapeHtml(report.admin_note)}</textarea></label><button class="button" type="button" data-report-save>保存</button></div>
-        </article>`;
+          ${report.contact ? `<p class="report-meta">連絡先: ${escapeHtml(report.contact)}</p>` : ""}
+          </div>
+        </details>`;
       }).join("");
     };
 
