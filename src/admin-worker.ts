@@ -42,6 +42,15 @@ type ArticleReport = {
   created_at: string;
   updated_at: string;
 };
+type ArticleAnalytics = {
+  article_id: string;
+  article_title: string;
+  subject: string;
+  category: string;
+  views: number;
+  engaged_reads: number;
+  completed_reads: number;
+};
 
 const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
 const MAX_ADMIN_NOTE_LENGTH = 4_000;
@@ -207,6 +216,38 @@ async function listArticleReports(
     ? await statement.bind(...values).all<ArticleReport>()
     : await statement.all<ArticleReport>();
   return json({ reports: result.results });
+}
+
+async function listArticleAnalytics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
+  const days = Number.isInteger(daysParam) ? Math.min(90, Math.max(1, daysParam)) : 30;
+  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
+    .toISOString()
+    .slice(0, 10);
+  const filters = ["day >= ?"];
+  const values: unknown[] = [since];
+  if (!scope.allSubjects) {
+    filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
+    values.push(...scope.subjects);
+  }
+  const result = await env.REPORTS.prepare(
+    `SELECT article_id, MAX(article_title) AS article_title, subject, category,
+        SUM(views) AS views, SUM(engaged_reads) AS engaged_reads,
+        SUM(completed_reads) AS completed_reads
+     FROM article_analytics_daily
+     WHERE ${filters.join(" AND ")}
+     GROUP BY article_id, subject, category
+     ORDER BY completed_reads DESC, engaged_reads DESC, views DESC, article_title ASC
+     LIMIT 50`,
+  )
+    .bind(...values)
+    .all<ArticleAnalytics>();
+  return json({ days, articles: result.results });
 }
 
 async function updateArticleReport(
@@ -532,6 +573,8 @@ export default {
         ? listArticleReports(request, env)
         : json({ error: "GETのみ利用できます。" }, 405);
     }
+    if (url.pathname === "/api/admin/article-analytics" && request.method === "GET")
+      return listArticleAnalytics(request, env);
     const match = url.pathname.match(
       /^\/api\/admin\/article-reports\/([0-9a-f-]{36})$/i,
     );

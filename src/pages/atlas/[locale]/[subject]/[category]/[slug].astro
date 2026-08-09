@@ -247,6 +247,8 @@ const structuredData = {
           )}
           data-subject={subjectName}
           data-category={categoryName}
+          data-subject-slug={entry.data.subject}
+          data-category-slug={entry.data.category}
           data-summary={entry.data.summary}
         >
           <button
@@ -916,6 +918,49 @@ const structuredData = {
     .mobile-toc-trigger { display: none; }
   }
 </style>
+
+<script>
+  // 匿名の利用統計。個人情報や端末識別子を送らず、記事ごとの日別集計だけを残す。
+  const analyticsActions = document.querySelector<HTMLElement>("[data-article-actions]");
+  const analyticsArticleBody = document.querySelector<HTMLElement>(".article-body");
+  if (analyticsActions && analyticsArticleBody) {
+    const data = analyticsActions.dataset;
+    const analyticsPayload = {
+      articleId: data.articleId ?? "",
+      articleTitle: data.title ?? "",
+      subject: data.subjectSlug ?? "",
+      category: data.categorySlug ?? "",
+      locale: data.locale ?? "ja",
+    };
+    const sent = new Set<string>();
+    const endpoint = window.location.hostname === "mitukx.github.io"
+      ? "https://atlasez-web-1.ukyoukay0.workers.dev/api/article-analytics"
+      : "/api/article-analytics";
+    const track = (event: "view" | "engaged" | "complete") => {
+      if (sent.has(event)) return;
+      sent.add(event);
+      void fetch(endpoint, {
+        method: "POST",
+        keepalive: true,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...analyticsPayload, event }),
+      }).catch(() => {
+        // 統計送信の失敗は記事閲覧を妨げない。
+      });
+    };
+    track("view");
+    window.setTimeout(() => {
+      if (document.visibilityState === "visible") track("engaged");
+    }, 15_000);
+    const checkCompletion = () => {
+      const threshold = analyticsArticleBody.offsetTop + analyticsArticleBody.offsetHeight * 0.9;
+      if (window.scrollY + window.innerHeight >= threshold) track("complete");
+    };
+    window.addEventListener("scroll", checkCompletion, { passive: true });
+    window.addEventListener("resize", checkCompletion);
+    checkCompletion();
+  }
+</script>
 
 <script>
   // 記事本文のどこまで来たかを画面上端の帯で示す

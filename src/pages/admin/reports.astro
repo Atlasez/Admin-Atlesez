@@ -21,6 +21,22 @@ const subjects = (await getCollection("subjects")).sort(
       <div class="admin-auth-actions" data-admin-auth-actions hidden></div>
     </header>
 
+    <section class="analytics-panel" data-analytics-admin aria-labelledby="analytics-heading">
+      <div class="analytics-heading">
+        <div>
+          <p class="eyebrow">匿名集計</p>
+          <h2 id="analytics-heading">記事の閲覧統計</h2>
+          <p>個人情報を保存せず、閲覧・15秒以上の滞在・本文の90%到達を日別に集計します。</p>
+        </div>
+        <div class="analytics-controls">
+          <label>期間<select data-analytics-days><option value="7">直近7日</option><option value="30" selected>直近30日</option><option value="90">直近90日</option></select></label>
+          <button class="button button-outline" type="button" data-analytics-refresh>更新</button>
+        </div>
+      </div>
+      <output class="analytics-summary" data-analytics-summary>読み込み中です…</output>
+      <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
+    </section>
+
     <section class="permission-panel" data-permission-admin hidden aria-labelledby="permission-heading">
       <div>
         <p class="eyebrow">全分野管理者のみ</p>
@@ -64,6 +80,20 @@ const subjects = (await getCollection("subjects")).sort(
   .admin-auth-actions a, .admin-auth-actions button { font: inherit; font-size: .82rem; }
   .admin-auth-actions a { border: 1px solid var(--border); border-radius: .45rem; color: var(--text); padding: .55rem .7rem; text-decoration: none; }
   .admin-auth-actions a:hover { background: var(--surface-alt); }
+  .analytics-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; margin: 0 0 1.25rem; padding: 1rem; }
+  .analytics-heading { align-items: end; display: flex; gap: 1rem; justify-content: space-between; }
+  .analytics-heading h2 { font-size: 1.05rem; margin: 0; }
+  .analytics-heading p { color: var(--muted); font-size: .86rem; margin: .3rem 0 0; }
+  .analytics-controls { align-items: end; display: flex; gap: .55rem; }
+  .analytics-controls label { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
+  .analytics-summary { color: var(--muted); display: block; font-size: .8rem; margin: .85rem 0 .55rem; }
+  .analytics-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem; overflow-x: auto; }
+  .analytics-table { border-collapse: collapse; font-size: .84rem; min-width: 36rem; width: 100%; }
+  .analytics-table th, .analytics-table td { border-bottom: 1px solid var(--border); padding: .6rem .7rem; text-align: right; white-space: nowrap; }
+  .analytics-table th { background: var(--surface-alt); color: var(--muted); font-size: .73rem; letter-spacing: .03em; }
+  .analytics-table th:first-child, .analytics-table td:first-child { max-width: 32rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
+  .analytics-table tr:last-child td { border-bottom: 0; }
+  .analytics-table .analytics-meta { color: var(--muted); display: block; font-size: .72rem; margin-top: .15rem; }
   .permission-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; display: grid; gap: .8rem; margin: 0 0 1.25rem; padding: 1rem; }
   .permission-panel h2 { font-size: 1.05rem; margin: 0; }
   .permission-panel p { color: var(--muted); font-size: .86rem; margin: .3rem 0 0; }
@@ -112,6 +142,8 @@ const subjects = (await getCollection("subjects")).sort(
   @media (max-width: 700px) {
     .admin-reports { padding: 1.5rem 1rem 3rem; }
     .admin-reports-heading { display: grid; gap: 1rem; }
+    .analytics-heading { align-items: stretch; display: grid; }
+    .analytics-controls { align-items: end; }
     .report-controls { align-items: stretch; display: grid; }
     .permission-form { grid-template-columns: 1fr; }
     .report-controls label, .report-controls select { width: 100%; }
@@ -131,6 +163,10 @@ const subjects = (await getCollection("subjects")).sort(
     admin_note: string; created_at: string; updated_at: string;
   };
   type Permission = { email: string; subject: string };
+  type Analytics = {
+    article_id: string; article_title: string; subject: string; category: string;
+    views: number; engaged_reads: number; completed_reads: number;
+  };
 
   const root = document.querySelector<HTMLElement>("[data-reports-admin]");
   if (root) {
@@ -143,6 +179,9 @@ const subjects = (await getCollection("subjects")).sort(
     const permissionList = root.querySelector<HTMLElement>("[data-permission-list]");
     const permissionFeedback = root.querySelector<HTMLElement>("[data-permission-feedback]");
     const authActions = root.querySelector<HTMLElement>("[data-admin-auth-actions]");
+    const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
+    const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
+    const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
     const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
     const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
@@ -167,6 +206,34 @@ const subjects = (await getCollection("subjects")).sort(
     ]);
     const setPermissionFeedback = (message: string) => {
       if (permissionFeedback) permissionFeedback.textContent = message;
+    };
+    const renderAnalytics = (articles: Analytics[], days: number) => {
+      if (!analyticsList || !analyticsSummary) return;
+      const totals = articles.reduce(
+        (sum, article) => ({
+          views: sum.views + article.views,
+          engaged: sum.engaged + article.engaged_reads,
+          completed: sum.completed + article.completed_reads,
+        }),
+        { views: 0, engaged: 0, completed: 0 },
+      );
+      analyticsSummary.value = `直近${days}日・${articles.length}記事 ／ 閲覧 ${totals.views.toLocaleString()} ・ 読まれた ${totals.engaged.toLocaleString()} ・ 90%到達 ${totals.completed.toLocaleString()}`;
+      analyticsList.innerHTML = articles.length
+        ? articles.map((article) => `<tr><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td>${article.views.toLocaleString()}</td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td></tr>`).join("")
+        : '<tr><td colspan="4" class="report-empty">この期間の統計はまだありません。</td></tr>';
+    };
+    const loadAnalytics = async () => {
+      if (!analyticsDays || !analyticsSummary) return;
+      analyticsSummary.value = "読み込み中です…";
+      try {
+        const response = await fetch(`/api/admin/article-analytics?days=${encodeURIComponent(analyticsDays.value)}`, { credentials: "same-origin" });
+        const data = await readApiResponse<{ articles?: Analytics[]; days?: number; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "統計を読み込めませんでした。");
+        renderAnalytics(data.articles ?? [], data.days ?? Number(analyticsDays.value));
+      } catch (error) {
+        analyticsSummary.value = error instanceof Error ? error.message : "統計を読み込めませんでした。";
+        if (analyticsList) analyticsList.innerHTML = "";
+      }
     };
     const loadAuthStatus = async () => {
       if (!authActions) return;
@@ -234,6 +301,8 @@ const subjects = (await getCollection("subjects")).sort(
     };
     filter.addEventListener("change", load);
     root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
+    analyticsDays?.addEventListener("change", loadAnalytics);
+    root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", loadAnalytics);
     permissionForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!permissionForm.reportValidity()) return;
@@ -282,6 +351,7 @@ const subjects = (await getCollection("subjects")).sort(
       finally { button.disabled = false; button.textContent = "保存"; }
     });
     void load();
+    void loadAnalytics();
     void loadPermissions();
     void loadAuthStatus();
   }

@@ -44,6 +44,15 @@ type ReportPayload = {
   openedAt?: unknown;
 };
 
+type AnalyticsPayload = {
+  articleId?: unknown;
+  articleTitle?: unknown;
+  subject?: unknown;
+  category?: unknown;
+  locale?: unknown;
+  event?: unknown;
+};
+
 const MAX_DETAILS_LENGTH = 6_000;
 const MAX_CONTACT_LENGTH = 320;
 const MIN_FORM_FILL_MS = 1_200;
@@ -55,6 +64,7 @@ const ALLOWED_REPORT_TYPES = new Set([
   "reference",
   "other",
 ]);
+const ALLOWED_ANALYTICS_EVENTS = new Set(["view", "engaged", "complete"]);
 const REPORT_TYPE_LABEL: Record<string, string> = {
   error: "誤り・不具合",
   suggestion: "改善提案",
@@ -307,6 +317,82 @@ async function saveArticleReport(
   return json({ ok: true }, 201);
 }
 
+/**
+ * 読者の個人情報・IPアドレス・端末識別子は保存せず、公開記事の利用状況だけを
+ * 日別集計する。イベントは画面側でも各ページにつき一度だけ送信するため、
+ * ここでは集計値だけを持つ。
+ */
+async function saveArticleAnalytics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (
+    request.headers.get("content-type")?.includes("application/json") !== true
+  ) {
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  }
+  const origin = request.headers.get("origin");
+  if (!isTrustedReportOrigin(origin, new URL(request.url))) {
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  }
+  let payload: AnalyticsPayload;
+  try {
+    payload = (await request.json()) as AnalyticsPayload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const articleId = text(payload.articleId, 200);
+  const articleTitle = text(payload.articleTitle, 200);
+  const subject = text(payload.subject, 80);
+  const category = text(payload.category, 80);
+  const locale = text(payload.locale, 16) || "ja";
+  const event = text(payload.event, 20);
+  if (
+    !TAXONOMY_SLUG.test(articleId) ||
+    !articleTitle ||
+    !TAXONOMY_SLUG.test(subject) ||
+    !TAXONOMY_SLUG.test(category) ||
+    !/^[a-z]{2}(?:-[A-Z]{2})?$/.test(locale) ||
+    !ALLOWED_ANALYTICS_EVENTS.has(event)
+  ) {
+    return json({ error: "統計データを確認してください。" }, 400);
+  }
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10);
+  const increments = {
+    view: event === "view" ? 1 : 0,
+    engaged: event === "engaged" ? 1 : 0,
+    complete: event === "complete" ? 1 : 0,
+  };
+  await env.REPORTS.prepare(
+    `INSERT INTO article_analytics_daily
+      (day, article_id, article_title, subject, category, locale, views, engaged_reads, completed_reads, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(day, article_id, locale) DO UPDATE SET
+       article_title = excluded.article_title,
+       subject = excluded.subject,
+       category = excluded.category,
+       views = views + excluded.views,
+       engaged_reads = engaged_reads + excluded.engaged_reads,
+       completed_reads = completed_reads + excluded.completed_reads,
+       updated_at = excluded.updated_at`,
+  )
+    .bind(
+      day,
+      articleId,
+      articleTitle,
+      subject,
+      category,
+      locale,
+      increments.view,
+      increments.engaged,
+      increments.complete,
+      now.toISOString(),
+    )
+    .run();
+  return json({ ok: true }, 201);
+}
+
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
@@ -320,6 +406,17 @@ export default {
           request,
         );
       return withCors(await saveArticleReport(request, env, ctx), request);
+    }
+    if (url.pathname === "/api/article-analytics") {
+      if (request.method === "OPTIONS") {
+        return withCors(new Response(null, { status: 204 }), request);
+      }
+      if (request.method !== "POST")
+        return withCors(
+          json({ error: "POSTのみ利用できます。" }, 405),
+          request,
+        );
+      return withCors(await saveArticleAnalytics(request, env), request);
     }
     return env.ASSETS.fetch(request);
   },
