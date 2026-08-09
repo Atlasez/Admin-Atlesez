@@ -8,7 +8,7 @@
 ## 1. push する
 
 ```bash
-cd ~/Downloads/atlasez-web-main
+cd <このリポジトリをcloneした場所>
 git push
 ```
 
@@ -40,6 +40,22 @@ noindex 扱いになり、本番と重複しない）。
 
 環境変数を足したあとは Deployments → 最新のデプロイ → Retry deployment。
 変数の変更は自動では反映されない。
+
+## 3.5 PR ごとのプレビューを使う
+
+ブランチを push すると、Cloudflare Pages が本番とは別にプレビューを作る。
+
+```bash
+git switch -c feature/なにか
+# 変更してコミット
+git push -u origin feature/なにか
+```
+
+数分で `https://feature-なにか.<project>.pages.dev` が見られるようになる。
+本番（main）は上書きされない。PR を作れば URL がコメントされる。
+
+うまく出ないときは Settings → Builds & deployments の
+**Preview deployments** が `All branches` かどうかを見る。
 
 ## 4. 公開後に確認すること
 

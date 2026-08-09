@@ -278,4 +278,44 @@ details .details-body {
   h1 {
     font-size: calc(1.45rem * var(--text-scale));
   }
+
+  /* iOS Safari は 16px 未満の入力欄にフォーカスすると画面を拡大してしまう。
+     拡大されるとヘッダーが崩れて戻せなくなるので、狭い画面では 16px を下限にする。 */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+
+  /* 長いURLや英数字の連続で横スクロールが出ないようにする */
+  body {
+    overflow-wrap: break-word;
+  }
+
+  /* 表は画面幅で切らず、その表だけ横に送れるようにする */
+  .article-body table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+/* スクロール領域は、OSがオーバーレイスクロールバーを隠す環境でも
+   続きがあることを見分けられるよう、レールとつまみを常に描画する。 */
+[data-scroll-region] {
+  scrollbar-width: auto;
+  scrollbar-color: var(--border-strong) var(--background-secondary);
+  scrollbar-gutter: stable both-edges;
+}
+[data-scroll-region]::-webkit-scrollbar {
+  display: block;
+  width: 0.75rem;
+}
+[data-scroll-region]::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 999px;
+}
+[data-scroll-region]::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 2px solid var(--background-secondary);
+  border-radius: 999px;
 }

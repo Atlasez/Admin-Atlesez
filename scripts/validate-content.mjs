@@ -186,6 +186,16 @@ for (const item of planned) {
   if (!categoryKeys.has(categoryKey)) {
     errors.push(`準備中記事が存在しない分野・カテゴリを参照: ${categoryKey}`);
   }
+  if (
+    item.progress !== undefined &&
+    item.progress !== "not-started" &&
+    item.progress !== "in-progress"
+  ) {
+    errors.push(
+      `準備中記事の progress が不正: ${item.title.ja} (${item.progress})` +
+        " — not-started か in-progress を指定してください",
+    );
+  }
   const plannedKey = `${categoryKey}/${item.title.ja}`;
   if (plannedKeys.has(plannedKey)) {
     errors.push(`準備中記事が重複: ${plannedKey}`);

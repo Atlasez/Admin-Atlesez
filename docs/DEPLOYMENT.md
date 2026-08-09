@@ -46,6 +46,33 @@ Settings → Environment variables
 独自ドメインを取るまでは `SITE_URL` に発行済みの `https://<project>.pages.dev`
 を入れておく。ドメイン取得後はこの1箇所を書き換えるだけでよい。
 
+### PR ごとのプレビュー配信
+
+Cloudflare Pages は **push されたブランチごとに自動でビルドし、専用の URL を発行する**。
+本番を上書きすることはないので、PR を並行して走らせても互いに干渉しない。
+
+| 何を push したか        | 出来るもの                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `main`                  | 本番（独自ドメイン / `<project>.pages.dev`）                                                      |
+| その他のブランチ        | プレビュー `https://<ブランチ名>.<project>.pages.dev`                                             |
+| 同ブランチへの追加 push | 上のブランチ URL が最新に差し替わる。過去分も `https://<コミットhash>.<project>.pages.dev` で残る |
+
+ブランチ名の URL は固定なので、PR のレビュー依頼に貼るのはこちらが便利。
+
+**設定の確認**（Workers & Pages → プロジェクト → Settings → Builds & deployments）
+
+1. **Preview deployments** が `All branches` になっていること
+   （`None` だとプレビューが作られない）
+2. **Environment variables** の `SITE_URL` が **Production にだけ**入っていること。
+   Preview 側に入れると、プレビューが本番URLを canonical に出してしまう
+3. GitHub App 連携で入れていれば、PR に プレビューURL が自動でコメントされる。
+   出ない場合は Cloudflare の GitHub App がそのリポジトリに許可されているか確認する
+
+**プレビューは検索エンジンに出ない。** `main` 以外のビルドは自動で全ページ
+`noindex, nofollow` になり、`robots.txt` も `Disallow: /` になる
+（`src/lib/deploy.ts` が `CF_PAGES_BRANCH` を見て判定）。
+本番と同じ内容が二重にインデックスされる事故を防ぐため。
+
 ### プレビュー配信の扱い
 
 `main` 以外のブランチのビルドは自動的に

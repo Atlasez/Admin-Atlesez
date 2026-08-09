@@ -187,6 +187,52 @@ main にマージしても公開されないので、書きかけをマージし
 
 ---
 
+## 準備中の記事に「執筆中」を出す
+
+まだ本文がない記事は `src/data/planned-articles.json` で管理しています。
+`progress` を `in-progress` にすると、分野ページ・カテゴリページ・トップの
+「近日公開予定」で **執筆中** の印が付きます。省略時は **未着手** です。
+
+```json
+{
+  "subject": "mathematics",
+  "category": "set-theory",
+  "title": { "ja": "集合族", "en": "Families of Sets" },
+  "order": 3,
+  "progress": "in-progress"
+}
+```
+
+指定できるのは `not-started` と `in-progress` の2つだけで、
+それ以外を書くと `node scripts/validate-content.mjs` が止めます。
+
+本文ができたら、この項目を消して通常の記事として追加してください。
+
+## 学習の記録の段階を増やす
+
+読者側の「読んだ／理解した」は `src/lib/history.ts` の `HISTORY_STAGES` に
+並んでいます。**手前から順に並べる**決まりです。
+
+段階どうしは独立したスイッチとして押せますが、上の段階は下の段階を含むので
+連動します。
+
+- 入っていない段階を入れる → その段階まで**まとめて入る**
+- 入っている段階を切る → その段階から上を**まとめて切る**
+
+段階を足すときはこの配列に追加し、表示名を `src/lib/i18n.ts` に足すだけです。
+記事ページのトグル・学習の記録ページの絞り込みと件数は、いずれもこの配列を
+見て描いているので、他を触る必要はありません。
+
+```ts
+export const HISTORY_STAGES = [
+  { id: "skimmed", labelKey: "markSkimmed", icon: "○" },
+  { id: "read", labelKey: "markRead", icon: "✓" },
+  { id: "understood", labelKey: "markUnderstood", icon: "◎" },
+] as const;
+```
+
+`id` は localStorage に保存される値なので、公開後は変えないでください。
+
 ## 記事を消す・移す
 
 - **消す**: ファイルを削除し、その概念を参照する記事が他になければ

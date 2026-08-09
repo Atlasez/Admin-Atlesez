@@ -10,10 +10,55 @@
 export const LOCALES = ["ja"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-export const localeNames: Record<string, string> = {
-  ja: "日本語",
-  en: "English",
+/**
+ * ロケールの表示メタデータ。
+ *
+ * 将来的に十数言語以上を並べても崩れないよう、切替UIは「母語表記＋英語表記」を
+ * 持つこの表だけを見て描画する。言語を増やすときはここに1行足し、LOCALES に
+ * コードを加えるだけでよい（UIレイアウトの変更は不要）。
+ * dir を "rtl" にすればアラビア語などにも対応できる。
+ */
+export interface LocaleMeta {
+  /** 母語での表記（例: 日本語） */
+  native: string;
+  /** 英語での表記（例: Japanese）。検索・並べ替えに使う */
+  english: string;
+  /** 書字方向 */
+  dir?: "ltr" | "rtl";
+}
+
+export const localeMeta: Record<string, LocaleMeta> = {
+  ja: { native: "日本語", english: "Japanese" },
+  en: { native: "English", english: "English" },
+  "zh-Hans": { native: "简体中文", english: "Chinese (Simplified)" },
+  "zh-Hant": { native: "繁體中文", english: "Chinese (Traditional)" },
+  ko: { native: "한국어", english: "Korean" },
+  es: { native: "Español", english: "Spanish" },
+  fr: { native: "Français", english: "French" },
+  de: { native: "Deutsch", english: "German" },
+  pt: { native: "Português", english: "Portuguese" },
+  it: { native: "Italiano", english: "Italian" },
+  ru: { native: "Русский", english: "Russian" },
+  vi: { native: "Tiếng Việt", english: "Vietnamese" },
+  th: { native: "ไทย", english: "Thai" },
+  id: { native: "Bahasa Indonesia", english: "Indonesian" },
+  hi: { native: "हिन्दी", english: "Hindi" },
+  ar: { native: "العربية", english: "Arabic", dir: "rtl" },
 };
+
+/** 後方互換: コード → 母語表記 */
+export const localeNames: Record<string, string> = Object.fromEntries(
+  Object.entries(localeMeta).map(([code, meta]) => [code, meta.native]),
+);
+
+/** 未登録のコードでもコードそのものを返して落とさない */
+export function localeLabel(code: string): string {
+  return localeMeta[code]?.native ?? code;
+}
+
+export function localeDir(code: string): "ltr" | "rtl" {
+  return localeMeta[code]?.dir ?? "ltr";
+}
 
 const ui = {
   ja: {
@@ -24,6 +69,13 @@ const ui = {
     search: "検索",
     team: "運営紹介",
     bookmarks: "あとで読む",
+    learningList: "学習リスト",
+    learningListHint:
+      "あとで読む・読んだ・理解したの記録です。この端末のブラウザ内にのみ保存され、サーバーには送られません。",
+    exportRecords: "書き出し",
+    importRecords: "読み込み",
+    importDone: "読み込みました",
+    importFailed: "読み込めませんでした",
     saveForLater: "あとで読む",
     saved: "保存済み",
     removeBookmark: "削除",
@@ -99,6 +151,31 @@ const ui = {
     category: "カテゴリ",
     status: "公開状態",
     all: "すべて",
+    tileView: "タイル表示",
+    listViewTab: "リスト表示",
+    viewSwitcher: "表示の切り替え",
+    selectLanguage: "言語を選択",
+    searchLabel: "サイト内検索",
+    openSearch: "検索を開く",
+    closeMenu: "閉じる",
+    upcomingArticles: "近日公開予定の記事",
+    noUpcoming: "近日公開予定の記事はありません。",
+    history: "学習の記録",
+    learningRecord: "学習の記録",
+    progressInProgress: "執筆中",
+    progressNotStarted: "未着手",
+    stateUnrecorded: "未記録",
+    markRead: "読んだ",
+    markUnderstood: "理解した",
+    stateRead: "読んだ",
+    stateUnderstood: "理解した",
+    historyHint:
+      "読んだ・理解した記事はこの端末のブラウザ内にのみ記録されます。",
+    noHistory:
+      "記録はまだありません。記事ページの「読んだ」「理解した」で記録できます。",
+    clearHistory: "すべて削除",
+    filterAll: "すべて",
+    remove: "削除",
   },
   en: {
     siteName: "Atlas Learning Site",
@@ -108,6 +185,13 @@ const ui = {
     search: "Search",
     team: "Team",
     bookmarks: "Reading list",
+    learningList: "Learning list",
+    learningListHint:
+      "Your reading list and learning record. Stored only in this browser; nothing is sent to a server.",
+    exportRecords: "Export",
+    importRecords: "Import",
+    importDone: "Imported",
+    importFailed: "Could not import",
     saveForLater: "Save for later",
     saved: "Saved",
     removeBookmark: "Remove",
@@ -184,6 +268,31 @@ const ui = {
     category: "Category",
     status: "Status",
     all: "All",
+    tileView: "Tiles",
+    listViewTab: "List",
+    viewSwitcher: "Switch view",
+    selectLanguage: "Select language",
+    searchLabel: "Search this site",
+    openSearch: "Open search",
+    closeMenu: "Close",
+    upcomingArticles: "Coming soon",
+    noUpcoming: "No upcoming articles.",
+    history: "Learning record",
+    learningRecord: "Learning record",
+    progressInProgress: "In progress",
+    progressNotStarted: "Not started",
+    stateUnrecorded: "Not recorded",
+    markRead: "Read",
+    markUnderstood: "Understood",
+    stateRead: "Read",
+    stateUnderstood: "Understood",
+    historyHint:
+      "Your reading record is stored only in this browser on this device.",
+    noHistory:
+      "Nothing recorded yet. Use “Read” or “Understood” on any article page.",
+    clearHistory: "Clear all",
+    filterAll: "All",
+    remove: "Remove",
   },
 } as const;
 

@@ -1,0 +1,548 @@
+---
+/**
+ * 学習リスト。
+ * 「あとで読む」（ブックマーク）と「学習の記録」（読んだ・理解した）を
+ * 1ページにまとめ、タブで切り替える。
+ * どちらも localStorage にだけ保存され、サーバーには送られない。
+ */
+import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
+import Breadcrumb from "../../../../components/Breadcrumb.astro";
+import { atlasPath } from "../../../../lib/site";
+import { t, LOCALES, type Locale } from "../../../../lib/i18n";
+import { HISTORY_STAGES } from "../../../../lib/history";
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+
+/**
+ * タブ。あとで読む → 読んだ → 理解した の順に「読む前 → 読んだ後」で並べる。
+ * 段階を増やしたら HISTORY_STAGES に足すだけでここにも並ぶ。
+ */
+const tabs = [
+  { id: "saved", label: t(locale, "bookmarks") },
+  ...HISTORY_STAGES.map((stage) => ({
+    id: stage.id as string,
+    label: t(locale, stage.labelKey),
+  })),
+];
+
+/** 段階ID → 表示名。クライアント側の描画に渡す */
+const stageLabelsJson = JSON.stringify(
+  Object.fromEntries(
+    HISTORY_STAGES.map((stage) => [stage.id, t(locale, stage.labelKey)]),
+  ),
+);
+---
+
+<AtlasLayout
+  locale={locale}
+  title={t(locale, "learningList")}
+  description={t(locale, "learningListHint")}
+  noindex={true}
+  localeSwitchHrefs={Object.fromEntries(
+    LOCALES.map((l) => [l, atlasPath(l, "list")]),
+  )}
+>
+  <div class="container">
+    <Breadcrumb
+      items={[
+        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+        { label: t(locale, "learningList") },
+      ]}
+    />
+    <div class="list-head">
+      <h1>{t(locale, "learningList")}</h1>
+      <div class="list-actions">
+        {/* キャッシュを消すと記録が消えるので、書き出し・読み込みを用意する */}
+        <button
+          type="button"
+          class="button button-secondary"
+          data-records-export
+        >
+          {t(locale, "exportRecords")}
+        </button>
+        <label class="button button-secondary records-import">
+          {t(locale, "importRecords")}
+          <input
+            type="file"
+            accept="application/json,.json"
+            class="visually-hidden"
+            data-records-import
+          />
+        </label>
+      </div>
+    </div>
+    <p class="list-hint">{t(locale, "learningListHint")}</p>
+    <p class="list-status" data-records-status role="status" aria-live="polite">
+    </p>
+
+    <div class="list-tabs" role="tablist" data-list-tabs>
+      {
+        tabs.map((tab, i) => (
+          <button
+            type="button"
+            role="tab"
+            id={`list-tab-${tab.id}`}
+            class="list-tab"
+            aria-selected={i === 0 ? "true" : "false"}
+            aria-controls={`list-panel-${tab.id}`}
+            tabindex={i === 0 ? undefined : -1}
+            data-list-tab={tab.id}
+          >
+            <span>{tab.label}</span>
+            <span class="list-tab-count" data-count-for={tab.id}>
+              0
+            </span>
+          </button>
+        ))
+      }
+    </div>
+
+    {
+      tabs.map((tab, i) => (
+        <div
+          id={`list-panel-${tab.id}`}
+          role="tabpanel"
+          aria-labelledby={`list-tab-${tab.id}`}
+          class="list-panel"
+          data-list-panel={tab.id}
+          hidden={i !== 0}
+        >
+          <p class="list-empty" data-empty-for={tab.id}>
+            {tab.id === "saved"
+              ? t(locale, "noBookmarks")
+              : t(locale, "noHistory")}
+          </p>
+          <ol class="record-list" data-list-for={tab.id} />
+        </div>
+      ))
+    }
+
+    <p class="list-clear-wrap">
+      <button
+        type="button"
+        class="button button-secondary"
+        data-records-clear
+        hidden
+        data-clear-saved={t(locale, "clearBookmarks")}
+        data-clear-history={t(locale, "clearHistory")}
+        data-remove-label={t(locale, "remove")}
+        data-stage-labels={stageLabelsJson}
+        data-import-done={t(locale, "importDone")}
+        data-import-failed={t(locale, "importFailed")}></button>
+    </p>
+  </div>
+</AtlasLayout>
+
+<style>
+  .list-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .list-actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  /* label をボタンに見せているので、中身のずれを揃える */
+  .records-import {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .list-hint,
+  .list-status {
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .list-status:empty {
+    margin: 0;
+  }
+
+  /* トップページの表示切替と同じ見た目のタブ。
+     タブの下辺が下線の上にそのまま乗るようにそろえる。 */
+  .list-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: var(--space-4) 0 0;
+    border-bottom: 2px solid var(--accent-primary);
+  }
+  .list-tab {
+    position: relative;
+    bottom: -2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-height: var(--touch-target);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-bottom: 2px solid var(--accent-primary);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: calc(0.95rem * var(--text-scale));
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .list-tab:hover {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+  .list-tab[aria-selected="true"] {
+    border-color: var(--accent-primary);
+    /* 下辺を面の色で塗りつぶし、中身と地続きに見せる */
+    border-bottom-color: var(--background-primary);
+    background: var(--background-primary);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  .list-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    padding: 0 0.35em;
+    border-radius: 999px;
+    background: var(--background-inset);
+    color: var(--text-secondary);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-weight: 700;
+  }
+  .list-tab[aria-selected="true"] .list-tab-count {
+    background: var(--accent-primary);
+    color: var(--on-accent);
+  }
+
+  .list-panel {
+    padding-top: var(--space-3);
+  }
+  .list-empty {
+    color: var(--text-secondary);
+    margin-top: var(--space-4);
+  }
+  .record-list {
+    list-style: none;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: var(--content-width);
+  }
+  .record-list :global(li) {
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+  }
+  .record-list :global(.record-row) {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    align-items: baseline;
+  }
+  .record-list :global(.record-title) {
+    font-size: calc(1.05rem * var(--text-scale));
+    font-weight: 600;
+  }
+  .record-list :global(.record-meta) {
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+    margin: var(--space-1) 0 0;
+  }
+  .record-list :global(.record-summary) {
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+    margin: var(--space-2) 0 0;
+  }
+  .record-list :global(.record-remove) {
+    flex: 0 0 auto;
+    min-height: var(--touch-target);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: calc(0.82rem * var(--text-scale));
+    padding: var(--space-1) var(--space-2);
+    cursor: pointer;
+  }
+  .record-list :global(.record-remove:hover) {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+  }
+  .list-clear-wrap {
+    margin-top: var(--space-5);
+  }
+</style>
+
+<script>
+  import {
+    loadBookmarks,
+    removeBookmark,
+    clearBookmarks,
+    saveBookmarks,
+    type Bookmark,
+  } from "../../../../lib/bookmarks";
+  import {
+    loadHistory,
+    saveHistory,
+    removeHistory,
+    clearHistory,
+    hasReached,
+    HISTORY_STAGES as STAGES,
+    type HistoryEntry,
+  } from "../../../../lib/history";
+
+  const tabsEl = document.querySelector<HTMLElement>("[data-list-tabs]");
+  const clearBtn = document.querySelector<HTMLButtonElement>(
+    "[data-records-clear]",
+  );
+  const statusEl = document.querySelector<HTMLElement>("[data-records-status]");
+
+  if (tabsEl && clearBtn) {
+    const d = clearBtn.dataset;
+    const removeLabel = d.removeLabel ?? "Remove";
+    const stageLabels: Record<string, string> = (() => {
+      try {
+        return JSON.parse(d.stageLabels ?? "{}");
+      } catch {
+        return {};
+      }
+    })();
+    const ja = document.documentElement.lang === "ja";
+
+    /** いま開いているタブのID */
+    function currentTab(): string {
+      return (
+        tabsEl!.querySelector<HTMLButtonElement>('[aria-selected="true"]')
+          ?.dataset.listTab ?? "saved"
+      );
+    }
+
+    function fmtDate(ms: number): string {
+      try {
+        return new Date(ms).toLocaleDateString();
+      } catch {
+        return "";
+      }
+    }
+
+    /** 1件分のカード。消したときの動きは呼び出し側から渡す */
+    function card(
+      item: Bookmark | HistoryEntry,
+      at: number,
+      badge: string | null,
+      onRemove: () => void,
+    ): HTMLLIElement {
+      const li = document.createElement("li");
+      const row = document.createElement("div");
+      row.className = "record-row";
+
+      const link = document.createElement("a");
+      link.className = "record-title";
+      link.href = item.href;
+      link.textContent = item.title;
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "record-remove";
+      remove.textContent = removeLabel;
+      remove.addEventListener("click", () => {
+        onRemove();
+        render();
+      });
+      row.append(link, remove);
+
+      const meta = document.createElement("p");
+      meta.className = "record-meta";
+      meta.textContent = [item.subject, item.category, fmtDate(at), badge]
+        .filter(Boolean)
+        .join(ja ? " ・ " : " · ");
+
+      li.append(row, meta);
+      const summary = (item as Bookmark).summary;
+      if (summary) {
+        const p = document.createElement("p");
+        p.className = "record-summary";
+        p.textContent = summary;
+        li.append(p);
+      }
+      return li;
+    }
+
+    function render(): void {
+      const saved = loadBookmarks().sort((a, b) => b.savedAt - a.savedAt);
+      const history = loadHistory().sort((a, b) => b.updatedAt - a.updatedAt);
+
+      /** タブID → 中身 */
+      const buckets: Record<string, HTMLLIElement[]> = {
+        saved: saved.map((b) =>
+          card(b, b.savedAt, null, () => removeBookmark(b.articleId)),
+        ),
+      };
+      for (const stage of STAGES) {
+        // 「理解した」に達していれば「読んだ」にも並ぶ（段階は積み上がる）
+        buckets[stage.id] = history
+          .filter((e) => hasReached(e.state, stage.id))
+          .map((e) =>
+            card(e, e.updatedAt, stageLabels[e.state] ?? null, () =>
+              removeHistory(e.articleId),
+            ),
+          );
+      }
+
+      for (const [id, items] of Object.entries(buckets)) {
+        const list = document.querySelector<HTMLOListElement>(
+          `[data-list-for="${id}"]`,
+        );
+        const empty = document.querySelector<HTMLElement>(
+          `[data-empty-for="${id}"]`,
+        );
+        const count = document.querySelector<HTMLElement>(
+          `[data-count-for="${id}"]`,
+        );
+        if (count) count.textContent = String(items.length);
+        if (empty) empty.hidden = items.length > 0;
+        if (list) {
+          list.innerHTML = "";
+          for (const li of items) list.append(li);
+        }
+      }
+
+      // 「すべて消す」はいま見ているタブに対して効く
+      const tab = currentTab();
+      clearBtn!.hidden = (buckets[tab] ?? []).length === 0;
+      clearBtn!.textContent =
+        tab === "saved" ? (d.clearSaved ?? "") : (d.clearHistory ?? "");
+    }
+
+    /** タブを選び直す */
+    function select(btn: HTMLButtonElement): void {
+      for (const other of tabsEl!.querySelectorAll<HTMLButtonElement>(
+        "[data-list-tab]",
+      )) {
+        const on = other === btn;
+        other.setAttribute("aria-selected", on ? "true" : "false");
+        if (on) other.removeAttribute("tabindex");
+        else other.tabIndex = -1;
+        const panel = document.querySelector<HTMLElement>(
+          `[data-list-panel="${other.dataset.listTab}"]`,
+        );
+        if (panel) panel.hidden = !on;
+      }
+      render();
+    }
+
+    tabsEl.addEventListener("click", (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(
+        "[data-list-tab]",
+      );
+      if (btn) select(btn);
+    });
+
+    // 左右キーでタブを移動できるようにする（ARIA のタブの作法）
+    tabsEl.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const all = [
+        ...tabsEl.querySelectorAll<HTMLButtonElement>("[data-list-tab]"),
+      ];
+      const i = all.findIndex((b) => b.getAttribute("aria-selected") === "true");
+      const step = event.key === "ArrowRight" ? 1 : -1;
+      const next = all[(i + step + all.length) % all.length];
+      if (next) {
+        select(next);
+        next.focus();
+      }
+      event.preventDefault();
+    });
+
+    clearBtn.addEventListener("click", () => {
+      if (currentTab() === "saved") clearBookmarks();
+      else clearHistory();
+      render();
+    });
+
+    // ---- 書き出し・読み込み（キャッシュ消去で記録が消えるのを防ぐ） ----
+    document
+      .querySelector<HTMLButtonElement>("[data-records-export]")
+      ?.addEventListener("click", () => {
+        const data = {
+          format: "atlasez-records",
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          bookmarks: loadBookmarks(),
+          history: loadHistory(),
+        };
+        const url = URL.createObjectURL(
+          new Blob([JSON.stringify(data, null, 2)], {
+            type: "application/json",
+          }),
+        );
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `atlasez-records-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+    document
+      .querySelector<HTMLInputElement>("[data-records-import]")
+      ?.addEventListener("change", async (event) => {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+          const parsed = JSON.parse(await file.text());
+          if (parsed?.format !== "atlasez-records") throw new Error("format");
+          // 既存の記録は消さず、記事IDが同じものは新しい方を残す
+          function mergeBy<T>(
+            current: T[],
+            incoming: T[],
+            id: (x: T) => string,
+            at: (x: T) => number,
+          ): T[] {
+            const byId = new Map(current.map((x) => [id(x), x]));
+            for (const x of incoming) {
+              const old = byId.get(id(x));
+              if (!old || at(x) > at(old)) byId.set(id(x), x);
+            }
+            return [...byId.values()];
+          }
+          saveBookmarks(
+            mergeBy<Bookmark>(
+              loadBookmarks(),
+              parsed.bookmarks ?? [],
+              (b) => b.articleId,
+              (b) => b.savedAt,
+            ),
+          );
+          saveHistory(
+            mergeBy<HistoryEntry>(
+              loadHistory(),
+              parsed.history ?? [],
+              (e) => e.articleId,
+              (e) => e.updatedAt,
+            ),
+          );
+          if (statusEl) statusEl.textContent = d.importDone ?? "";
+          render();
+        } catch {
+          if (statusEl) statusEl.textContent = d.importFailed ?? "";
+        }
+        input.value = "";
+      });
+
+    render();
+  }
+</script>

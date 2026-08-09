@@ -1,0 +1,93 @@
+---
+/**
+ * ヘッダー内の検索入力欄。
+ * 検索は「行き先」ではなく「操作」なので、ナビゲーションのタブから外して
+ * ヘッダー上部に常設する。送信すると検索ページに q= 付きで遷移し、
+ * 検索ページ側が q を読んで即座に結果を出す（JSなしでも成立する）。
+ */
+import { t, type Locale } from "../lib/i18n";
+import { atlasPath } from "../lib/site";
+
+interface Props {
+  locale: Locale;
+}
+const { locale } = Astro.props;
+const action = atlasPath(locale, "search");
+---
+
+<form class="header-search" role="search" action={action} method="get">
+  <label class="visually-hidden" for="header-search-input">
+    {t(locale, "searchLabel")}
+  </label>
+  <input
+    id="header-search-input"
+    class="header-search-input"
+    type="search"
+    name="q"
+    autocomplete="off"
+    placeholder={t(locale, "searchPlaceholder")}
+  />
+  <button type="submit" class="header-search-button">
+    {t(locale, "search")}
+  </button>
+</form>
+
+<style>
+  .header-search {
+    display: flex;
+    align-items: stretch;
+    flex: 1 1 14rem;
+    min-width: 0;
+    max-width: 26rem;
+  }
+  .header-search-input {
+    flex: 1;
+    min-width: 0;
+    min-height: var(--touch-target);
+    border: 1px solid var(--border-strong);
+    border-right: 0;
+    border-radius: var(--radius) 0 0 var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.9rem * var(--text-scale));
+    padding: 0 var(--space-2);
+  }
+  .header-search-input:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+  }
+  .header-search-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: var(--touch-target);
+    /* 「検索」の2文字が折り返さない幅を確保する */
+    padding: 0 var(--space-3);
+    border: 1px solid var(--accent-primary);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    background: var(--accent-primary);
+    color: var(--on-accent);
+    font: inherit;
+    font-size: calc(0.9rem * var(--text-scale));
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .header-search-button:hover {
+    filter: brightness(1.1);
+  }
+  /* 狭い画面ではヘッダーの1行を丸ごと使う。
+     入力欄は 16px を下限にする（iOS Safari が 16px 未満で自動拡大するため。
+     base.css の要素指定はクラス指定に負けるので、ここで明示する）。 */
+  @media (max-width: 900px) {
+    .header-search {
+      max-width: none;
+    }
+    .header-search-input {
+      font-size: max(16px, calc(0.9rem * var(--text-scale)));
+    }
+  }
+</style>

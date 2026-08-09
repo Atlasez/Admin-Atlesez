@@ -1,6 +1,6 @@
 # CI: PR・mainへのpushで内容を検証する。
-# 本番配信は Cloudflare Pages が同じリポジトリを直接ビルドして行うため、
-# このワークフローはデプロイしない（docs/DEPLOYMENT.md を参照）。
+# 本番配信は GitHub Pages 用の deploy-pages.yml と Cloudflare の自動ビルドで行うため、
+# このワークフローは検証だけを担当する。
 name: CI
 
 on:

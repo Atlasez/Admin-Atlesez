@@ -1,9 +1,22 @@
 ---
+import {
+  UI_LANGUAGES,
+  UI_LANGUAGE_CHINESE_NAMES,
+  UI_LANGUAGE_ENGLISH_NAMES,
+  UI_LANGUAGE_JAPANESE_NAMES,
+  UI_LANGUAGE_KOREAN_NAMES,
+  UI_LANGUAGE_NAMES,
+} from "../lib/ui-locales";
 /** 表示設定パネル。localStorageに保存し、BaseHeadのinlineスクリプトが復元する */
 interface Props {
   locale?: "ja" | "en";
+  /**
+   * true のとき <details> の外枠を付けず、設定フォームだけを描画する。
+   * ヘッダーの「表示設定」ポップオーバー（SettingsMenu）から使う。
+   */
+  bare?: boolean;
 }
-const { locale = "ja" } = Astro.props;
+const { locale = "ja", bare = false } = Astro.props;
 const L =
   locale === "ja"
     ? {
@@ -48,6 +61,24 @@ const L =
         readable: "Readable",
         reset: "Reset to defaults",
       };
+
+/**
+ * 表示言語。記事本文ではなく画面まわりの文字を切り替える。URL は変わらない。
+ * 今後十数言語に増える想定なので、並べずにドロップダウンで選ばせる。
+ */
+const languageGroup = {
+  key: "lang",
+  label: locale === "ja" ? "言語" : "Language",
+  options: UI_LANGUAGES.map((code) => ({
+    value: code,
+    label: UI_LANGUAGE_NAMES[code],
+    native: UI_LANGUAGE_NAMES[code],
+    english: UI_LANGUAGE_ENGLISH_NAMES[code],
+    japanese: UI_LANGUAGE_JAPANESE_NAMES[code],
+    chinese: UI_LANGUAGE_CHINESE_NAMES[code],
+    korean: UI_LANGUAGE_KOREAN_NAMES[code],
+  })),
+};
 
 const groups = [
   {
@@ -103,32 +134,98 @@ const groups = [
 ];
 ---
 
-<details class="a11y-settings">
-  <summary>{L.title}</summary>
-  <form class="details-body" data-a11y-form>
-    {
-      groups.map((g) => (
+{
+  bare ? (
+    <form class="a11y-form" data-a11y-form>
+      <p class="a11y-lang">
+        <label class="a11y-lang-label" for="a11y-lang-bare">
+          {languageGroup.label}
+        </label>
+        <select id="a11y-lang-bare" name={languageGroup.key}>
+          {languageGroup.options.map((o) => (
+            <option
+              value={o.value}
+              data-language-native={o.native}
+              data-language-english={o.english}
+                      data-language-japanese={o.japanese}
+                      data-language-chinese={o.chinese}
+                      data-language-korean={o.korean}
+            >
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </p>
+      {groups.map((g) => (
         <fieldset>
           <legend>{g.label}</legend>
-          {g.options.map((o, i) => (
-            <label class="a11y-option">
-              <input
-                type="radio"
-                name={g.key}
-                value={o.value}
-                checked={i === 0}
-              />
-              <span>{o.label}</span>
-            </label>
-          ))}
+          <div class="a11y-options">
+            {g.options.map((o, i) => (
+              <label class="a11y-option">
+                <input
+                  type="radio"
+                  name={g.key}
+                  value={o.value}
+                  checked={i === 0}
+                />
+                <span>{o.label}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
-      ))
-    }
-    <button type="button" class="button button-secondary" data-a11y-reset>
-      {L.reset}
-    </button>
-  </form>
-</details>
+      ))}
+      <button type="button" class="button button-secondary" data-a11y-reset>
+        {L.reset}
+      </button>
+    </form>
+  ) : (
+    <details class="a11y-settings">
+      <summary>{L.title}</summary>
+      <form class="details-body" data-a11y-form>
+        <p class="a11y-lang">
+          <label class="a11y-lang-label" for="a11y-lang">
+            {languageGroup.label}
+          </label>
+          <select id="a11y-lang" name={languageGroup.key}>
+            {languageGroup.options.map((o) => (
+              <option
+                value={o.value}
+                data-language-native={o.native}
+              data-language-english={o.english}
+                      data-language-japanese={o.japanese}
+                      data-language-chinese={o.chinese}
+                      data-language-korean={o.korean}
+              >
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </p>
+        {groups.map((g) => (
+          <fieldset>
+            <legend>{g.label}</legend>
+            <div class="a11y-options">
+              {g.options.map((o, i) => (
+                <label class="a11y-option">
+                  <input
+                    type="radio"
+                    name={g.key}
+                    value={o.value}
+                    checked={i === 0}
+                  />
+                  <span>{o.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ))}
+        <button type="button" class="button button-secondary" data-a11y-reset>
+          {L.reset}
+        </button>
+      </form>
+    </details>
+  )
+}
 
 <style>
   .a11y-settings {
@@ -141,19 +238,27 @@ const groups = [
     color: var(--accent-primary);
     margin-right: var(--space-1);
   }
+  .a11y-lang {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+  }
+  .a11y-lang-label {
+    margin: 0;
+    font-weight: 600;
+  }
+  .a11y-lang select {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 12rem;
+  }
   fieldset {
     border: 0;
     padding: 0;
-    margin: 0 0 var(--space-2);
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1) var(--space-3);
-    align-items: center;
   }
   legend {
-    font-weight: 600;
     padding: 0;
-    margin-bottom: var(--space-1);
   }
   .a11y-option {
     display: inline-flex;
@@ -166,6 +271,92 @@ const groups = [
     min-height: auto;
     width: 1.1rem;
     height: 1.1rem;
+  }
+
+  /*
+   * 設定は7組あるので、素直に並べると縦に伸びすぎる。
+   * ラジオの丸は消して選択肢そのものを押せる面にし、
+   * 見出し・面・組の間の余白を最小限にする。画面幅によらず同じ形。
+   * 面の高さは 32px で、WCAG 2.5.8 の下限 24px は十分に上回る。
+   */
+  fieldset {
+    display: block;
+    margin: 0 0 var(--space-1);
+  }
+  legend {
+    margin-bottom: 2px;
+    font-size: calc(0.78rem * var(--text-scale));
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .a11y-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+    gap: 4px;
+  }
+  .a11y-option {
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    text-align: center;
+    line-height: 1.2;
+    font-weight: 400;
+  }
+  .a11y-option:has(input:checked) {
+    border-color: var(--accent-primary);
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  /* 選択肢が2つの組は横幅を分け合う */
+  .a11y-options:has(> :nth-child(2):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /*
+   * 丸を隠せるのは :has() で選択状態を面に反映できる場合だけ。
+   * 非対応のブラウザでは丸を残さないと、どれを選んでいるか分からなくなる。
+   */
+  @supports selector(:has(*)) {
+    .a11y-option input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    /* キーボード操作でどこにいるか分かるようにする */
+    .a11y-option:has(input:focus-visible) {
+      outline: 3px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+  @supports not selector(:has(*)) {
+    .a11y-option input {
+      width: 0.85rem;
+      height: 0.85rem;
+      flex: 0 0 auto;
+    }
+  }
+  /* 「初期設定に戻す」は控えめに、1行に収める */
+  .a11y-form > .button {
+    width: 100%;
+    min-height: 2rem;
+    margin-top: var(--space-1);
+    font-size: calc(0.8rem * var(--text-scale));
+  }
+
+  /* 狭い画面では字だけさらに詰める */
+  @media (max-width: 767px) {
+    .a11y-settings,
+    .a11y-form {
+      font-size: calc(0.82rem * var(--text-scale));
+    }
+    legend {
+      font-size: calc(0.75rem * var(--text-scale));
+    }
   }
 </style>
 
@@ -197,6 +388,29 @@ const groups = [
     }
   }
 
+  /** 選択中ではない言語は、母語表記に英語名を添えて探しやすくする。 */
+  function updateLanguageOptionLabels(select: HTMLSelectElement): void {
+    const current = select.value;
+    select.querySelectorAll<HTMLOptionElement>("option").forEach((option) => {
+      const native = option.dataset.languageNative ?? option.textContent ?? "";
+      const english = option.dataset.languageEnglish ?? "";
+      const japanese = option.dataset.languageJapanese ?? "";
+      const chinese = option.dataset.languageChinese ?? "";
+      const korean = option.dataset.languageKorean ?? "";
+      const suffixByLanguage: Record<string, string> = {
+        ja: japanese,
+        en: english,
+        zh: chinese,
+        ko: korean,
+      };
+      const suffix = suffixByLanguage[current] ?? english;
+      option.textContent =
+        option.value === current || !suffix || native === suffix
+          ? native
+          : `${native}(${suffix})`;
+    });
+  }
+
   document.querySelectorAll<HTMLFormElement>("[data-a11y-form]").forEach(
     (form) => {
       // 保存値をフォームに反映
@@ -206,7 +420,15 @@ const groups = [
           `input[name="${k}"][value="${v}"]`,
         );
         if (input) input.checked = true;
+        // 言語のようにドロップダウンで選ぶ項目
+        const select = form.querySelector<HTMLSelectElement>(
+          `select[name="${k}"]`,
+        );
+        if (select) select.value = v;
       }
+      form
+        .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
+        .forEach(updateLanguageOptionLabels);
       const syncBackgroundChoice = () => {
         const value = document.documentElement.dataset.prefBg ?? "default";
         const input = form.querySelector<HTMLInputElement>(
@@ -216,6 +438,9 @@ const groups = [
       };
       window.addEventListener("atlasez-theme-change", syncBackgroundChoice);
       form.addEventListener("change", () => {
+        form
+          .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
+          .forEach(updateLanguageOptionLabels);
         const data = new FormData(form);
         const next: Record<string, string> = {};
         for (const [k, v] of data.entries()) {
@@ -228,6 +453,8 @@ const groups = [
         }
         apply(next);
         window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+        // 言語は HTML 属性ではなく文字の差し替えで反映するので別に知らせる
+        window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
       });
       form
         .querySelector("[data-a11y-reset]")
@@ -240,8 +467,15 @@ const groups = [
           form
             .querySelectorAll<HTMLInputElement>('input[value="default"]')
             .forEach((i) => (i.checked = true));
+          form
+            .querySelectorAll<HTMLSelectElement>("select")
+            .forEach((sel) => {
+              sel.selectedIndex = 0;
+              if (sel.name === "lang") updateLanguageOptionLabels(sel);
+            });
           apply({});
           window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
+          window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
         });
     },
   );

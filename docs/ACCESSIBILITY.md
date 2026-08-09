@@ -17,7 +17,9 @@
 - タッチターゲット `--touch-target: 44px`
 - 検索・絞り込みの結果件数を `aria-live="polite"` で通知
 - `lang="ja"` / `lang="en"`、言語切替リンクに `hreflang`・`lang`
-- 学習地図: グラフ（`role="application"`）に依存せず、階層リスト・表・経路検索フォームで同一情報と操作を提供。JS無効時も本文・ナビ・リスト表示が動作
+- 学習地図: グラフは`role="application"`と操作説明を持つ。経路検索は地図枠内の
+  フォームで操作でき、総合ホームには独立したリスト表示がある。JS無効時も本文・
+  ナビ・リスト表示へ到達できる
 
 ## 表示設定パネル（`src/components/A11ySettings.astro`）
 

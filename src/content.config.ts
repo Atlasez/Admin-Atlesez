@@ -31,8 +31,14 @@ const subjects = defineCollection({
     status: z.enum(["published", "preparing"]),
     order: z.number().int(),
     description: localized,
+    /** 大分類（人文科学・社会科学・自然科学・応用/学際）。ラベルは lib/taxonomy.ts */
+    group: z.enum(["humanities", "social", "natural", "applied"]),
+    /** 中ジャンル（例: language-learning）。ラベルは lib/taxonomy.ts */
+    genre: slugSchema,
     /** 段階移行中: 現行Google Sitesへの一時リンク */
     externalUrl: z.url().optional(),
+    /** 分野の総論記事（「〇〇とは」）のslug。トップページの ? の飛び先になる */
+    introSlug: slugSchema.optional(),
     categories: z
       .array(
         z.object({

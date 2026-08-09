@@ -1,10 +1,12 @@
 ---
 /** 学習サイト「アトラス」の共通レイアウト（ロケール対応） */
 import BaseHead from "../components/BaseHead.astro";
-import A11ySettings from "../components/A11ySettings.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
+import UiLanguage from "../components/UiLanguage.astro";
+import SettingsMenu from "../components/SettingsMenu.astro";
+import LangSwitch from "../components/LangSwitch.astro";
+import HeaderSearch from "../components/HeaderSearch.astro";
 import { withBase, atlasPath, ORG } from "../lib/site";
-import { t, LOCALES, localeNames, type Locale } from "../lib/i18n";
+import { t, type Locale } from "../lib/i18n";
 
 interface AlternateLink {
   hreflang: string;
@@ -33,14 +35,22 @@ const {
   noindex = false,
 } = Astro.props;
 
+/**
+ * ナビゲーション。
+ * 行き先は3つに絞ってヘッダーを1段にした。
+ * - 学習地図はトップページの表示タブから開けるのでここには置かない
+ * - あとで読む・学習の記録は「学習リスト」1ページにまとめた
+ * 検索は「行き先」ではなく「操作」なので、タブではなく入力欄として同じ段に置く。
+ * 「はじめての方へ」は入口として目立たせたいので囲みスタイルにする。
+ */
 const nav = [
   { label: t(locale, "subjects"), href: atlasPath(locale) },
-  { label: t(locale, "map"), href: atlasPath(locale, "map") },
-  { label: t(locale, "search"), href: atlasPath(locale, "search") },
-  { label: t(locale, "bookmarks"), href: atlasPath(locale, "bookmarks") },
-  { label: t(locale, "forBeginners"), href: atlasPath(locale, "guide") },
-  { label: t(locale, "team"), href: atlasPath(locale, "team") },
+  { label: t(locale, "learningList"), href: atlasPath(locale, "list") },
 ];
+const guide = {
+  label: t(locale, "forBeginners"),
+  href: atlasPath(locale, "guide"),
+};
 const currentPath = Astro.url.pathname;
 ---
 
@@ -57,9 +67,11 @@ const currentPath = Astro.url.pathname;
     />
   </head>
   <body>
+    <UiLanguage />
     <a class="skip-link" href="#main">{t(locale, "skipToContent")}</a>
     <header class="atlas-header">
-      <div class="container atlas-header-inner">
+      {/* ロゴ・行き先・はじめての方へ・検索・表示設定を1段に並べる */}
+      <div class="container atlas-bar">
         <a class="atlas-logo" href={atlasPath(locale)}>
           <img
             src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-logo.png`}
@@ -69,20 +81,12 @@ const currentPath = Astro.url.pathname;
           />
           <span>{locale === "ja" ? "アトラス" : "Atlas"}</span>
         </a>
-        <button
-          class="nav-toggle button button-secondary"
-          type="button"
-          aria-controls="atlas-main-nav"
-          aria-expanded="false"
-          data-nav-toggle
-        >
-          {locale === "ja" ? "メニュー" : "Menu"}
-        </button>
         <nav
-          id="atlas-main-nav"
           class="main-nav"
-          aria-label={locale === "ja" ? "メインナビゲーション" : "Main navigation"}
-          data-main-nav
+          id="atlas-main-nav"
+          aria-label={locale === "ja"
+            ? "メインナビゲーション"
+            : "Main navigation"}
         >
           <ul class="atlas-nav">
             {
@@ -97,36 +101,22 @@ const currentPath = Astro.url.pathname;
                 </li>
               ))
             }
+            <li class="nav-guide">
+              <a
+                href={guide.href}
+                aria-current={currentPath === guide.href ? "page" : undefined}
+              >
+                {guide.label}
+              </a>
+            </li>
           </ul>
         </nav>
-        {/* 公開ロケールが 1 つのときは言語切替を出さない */}
-        <nav
-          class="lang-switch"
-          aria-label={t(locale, "languages")}
-          hidden={LOCALES.length < 2}
-        >
-          <ul>
-            {
-              LOCALES.map((l) => (
-                <li>
-                  {l === locale ? (
-                    <span aria-current="true">{localeNames[l]}</span>
-                  ) : (
-                    <a
-                      href={localeSwitchHrefs[l] ?? atlasPath(l)}
-                      hreflang={l}
-                      lang={l}
-                    >
-                      {localeNames[l]}
-                    </a>
-                  )}
-                </li>
-              ))
-            }
-          </ul>
-        </nav>
-        <ThemeToggle locale={locale} />
-        <a class="org-link" href={withBase("/")} title="Atlasez">Atlasez</a>
+        <div class="atlas-bar-search">
+          <HeaderSearch locale={locale} />
+        </div>
+        <div class="atlas-bar-actions">
+          <SettingsMenu locale={locale} />
+        </div>
       </div>
     </header>
     <main id="main">
@@ -150,8 +140,8 @@ const currentPath = Astro.url.pathname;
             </a>
           </p>
         </div>
-        <div>
-          <A11ySettings locale={locale} />
+        <div class="atlas-footer-language">
+          <LangSwitch locale={locale} hrefs={localeSwitchHrefs} />
         </div>
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
@@ -165,12 +155,33 @@ const currentPath = Astro.url.pathname;
     border-bottom: 1px solid var(--border-default);
     background: var(--background-primary);
   }
-  .atlas-header-inner {
+  /* 1段ヘッダー。添付デザインに合わせ、ロゴ・行き先・検索・表示設定の順 */
+  .atlas-bar {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    flex-wrap: wrap;
     padding-block: var(--space-1);
+  }
+  .atlas-logo {
+    order: 0;
+  }
+  .main-nav {
+    order: 1;
+    min-width: 0;
+  }
+  .atlas-bar-search {
+    order: 2;
+    flex: 1 1 20rem;
+    min-width: 0;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .atlas-bar-actions {
+    order: 3;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 0 auto;
   }
   .atlas-logo {
     display: inline-flex;
@@ -190,10 +201,6 @@ const currentPath = Astro.url.pathname;
     margin: 0;
     padding: 0;
   }
-  .nav-toggle {
-    display: none;
-    margin-left: auto;
-  }
   .atlas-nav a {
     display: inline-flex;
     align-items: center;
@@ -208,31 +215,26 @@ const currentPath = Astro.url.pathname;
     border-bottom-color: var(--accent-primary);
     color: var(--accent-primary);
   }
-  .lang-switch {
-    margin-left: auto;
-  }
-  .lang-switch ul {
+  /* 「はじめての方へ」は添付デザインと同じ囲みスタイル */
+  .nav-guide {
     display: flex;
-    gap: var(--space-2);
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    font-size: calc(0.9rem * var(--text-scale));
-  }
-  .lang-switch span[aria-current] {
-    font-weight: 700;
-    color: var(--accent-primary);
-  }
-  .lang-switch a,
-  .lang-switch span {
-    display: inline-flex;
     align-items: center;
-    min-height: var(--touch-target);
-    padding: 0 var(--space-1);
   }
-  .org-link {
-    font-size: calc(0.9rem * var(--text-scale));
-    color: var(--text-secondary);
+  .nav-guide a {
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius);
+    border-bottom-width: 1px;
+    background: var(--accent-primary);
+    color: var(--on-accent);
+    font-weight: 700;
+    padding: 0 var(--space-3);
+    margin-block: var(--space-1);
+  }
+  .nav-guide a:hover,
+  .nav-guide a[aria-current="page"] {
+    background: color-mix(in srgb, var(--accent-primary) 86%, black);
+    color: var(--on-accent);
+    border-color: var(--accent-primary);
   }
   main {
     min-height: 60vh;
@@ -253,58 +255,57 @@ const currentPath = Astro.url.pathname;
     font-weight: 700;
     margin-top: 0;
   }
+  .atlas-footer-language {
+    display: flex;
+    justify-content: flex-end;
+  }
   .atlas-copyright {
     margin-top: var(--space-4);
     color: var(--text-secondary);
   }
-  @media (max-width: 767px) {
-    .atlas-header-inner {
+  /* 狭い画面では1段に収まらないので3段に折る。畳まず全部出す。
+     1段目: アトラス・表示設定 / 2段目: 検索欄 / 3段目: 行き先
+     行き先は3つなので、常に見えていても1行に収まる。 */
+  @media (max-width: 900px) {
+    .atlas-bar {
       gap: var(--space-2);
+      flex-wrap: wrap;
+      row-gap: var(--space-1);
     }
     .atlas-logo {
+      order: 0;
       margin-right: auto;
     }
-    .nav-toggle {
-      display: inline-flex;
+    .atlas-bar-actions {
+      order: 1;
       margin-left: 0;
     }
-    .lang-switch {
-      margin-left: 0;
+    /* スマホの1段目は「アトラス」と「表示設定」だけにする */
+    .atlas-bar-search {
+      order: 2;
+      flex: 0 0 100%;
     }
     .main-nav {
-      display: none;
       order: 3;
       width: 100%;
+      padding-top: var(--space-1);
       border-top: 1px solid var(--border-default);
-    }
-    .main-nav[data-open] {
-      display: block;
     }
     .atlas-nav {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      /* 分野・学習リスト・はじめての方へ の3つを均等に並べる */
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       width: 100%;
-      padding-block: var(--space-1);
+      gap: var(--space-1);
     }
     .atlas-nav a {
       width: 100%;
-      padding-inline: var(--space-2);
+      justify-content: center;
+      padding-inline: var(--space-1);
+      font-size: calc(0.9rem * var(--text-scale));
     }
-    .org-link {
-      display: none;
+    .nav-guide a {
+      justify-content: center;
     }
   }
 </style>
-
-<script>
-  const navToggle =
-    document.querySelector<HTMLButtonElement>("[data-nav-toggle]");
-  const mainNav = document.querySelector<HTMLElement>("[data-main-nav]");
-
-  navToggle?.addEventListener("click", () => {
-    if (!mainNav) return;
-    const open = !mainNav.hasAttribute("data-open");
-    mainNav.toggleAttribute("data-open", open);
-    navToggle.setAttribute("aria-expanded", String(open));
-  });
-</script>

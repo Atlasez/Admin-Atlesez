@@ -1,0 +1,140 @@
+---
+/**
+ * UI 表示言語の切り替え。
+ *
+ * 記事本文は日本語のまま、画面まわりの文字だけをブラウザ側で差し替える。
+ * 差し替え対象は「テキストノードの中身が辞書のキーと完全一致するもの」と、
+ * aria-label / placeholder / title の各属性。
+ * 記事本文・数式・記事タイトルなど、翻訳してはいけない場所は除外する。
+ */
+import { UI_DICTIONARY, UI_LANGUAGES } from "../lib/ui-locales";
+
+const dictionary = JSON.stringify(UI_DICTIONARY);
+const languages = JSON.stringify(UI_LANGUAGES);
+---
+
+<script
+  type="application/json"
+  data-ui-dictionary
+  set:html={dictionary}
+  is:inline
+/>
+<script type="application/json" data-ui-languages set:html={languages} is:inline
+/>
+
+<script>
+  const KEY = "atlasez-prefs";
+
+  /** 翻訳してはいけない領域。記事の中身と固有名詞を守る */
+  const SKIP = [
+    ".article-body",
+    ".katex",
+    "#article-title",
+    ".breadcrumb",
+    "[data-search-results]",
+    ".map-canvas",
+    "code",
+    "pre",
+  ].join(",");
+
+  function readDict(name: string): unknown {
+    const el = document.querySelector(`[data-ui-${name}]`);
+    if (!el?.textContent) return null;
+    try {
+      return JSON.parse(el.textContent);
+    } catch {
+      return null;
+    }
+  }
+
+  const dictionary =
+    (readDict("dictionary") as Record<
+      string,
+      Record<string, string>
+    > | null) ?? {};
+
+  /** 元の日本語を覚えておき、言語を戻せるようにする */
+  const originals = new WeakMap<Node, string>();
+  const attrOriginals = new WeakMap<Element, Record<string, string>>();
+
+  function translateTo(lang: string): void {
+    const useOriginal = lang === "ja";
+
+    // --- テキストノード ---
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent || parent.closest(SKIP)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      },
+    );
+    const nodes: Text[] = [];
+    let current = walker.nextNode();
+    while (current) {
+      nodes.push(current as Text);
+      current = walker.nextNode();
+    }
+    for (const node of nodes) {
+      if (!originals.has(node)) {
+        const trimmed = (node.textContent ?? "").trim();
+        if (!dictionary[trimmed]) continue;
+        originals.set(node, node.textContent ?? "");
+      }
+      const source = originals.get(node) ?? "";
+      const key = source.trim();
+      if (useOriginal) {
+        node.textContent = source;
+        continue;
+      }
+      const translated = dictionary[key]?.[lang];
+      if (translated) node.textContent = source.replace(key, translated);
+    }
+
+    // --- 属性 ---
+    for (const attr of ["aria-label", "placeholder", "title"]) {
+      for (const el of document.querySelectorAll(`[${attr}]`)) {
+        if (el.closest(SKIP)) continue;
+        let saved = attrOriginals.get(el);
+        if (!saved) {
+          saved = {};
+          attrOriginals.set(el, saved);
+        }
+        if (saved[attr] === undefined) {
+          saved[attr] = el.getAttribute(attr) ?? "";
+        }
+        const source = saved[attr];
+        if (useOriginal) {
+          el.setAttribute(attr, source);
+          continue;
+        }
+        const translated = dictionary[source.trim()]?.[lang];
+        if (translated) el.setAttribute(attr, translated);
+      }
+    }
+
+    document.documentElement.lang = lang;
+  }
+
+  function currentLang(): string {
+    try {
+      return JSON.parse(localStorage.getItem(KEY) ?? "{}").lang ?? "ja";
+    } catch {
+      return "ja";
+    }
+  }
+
+  translateTo(currentLang());
+
+  // 表示設定で言語を変えたときに掛け直す
+  window.addEventListener("atlasez-lang-change", () =>
+    translateTo(currentLang()),
+  );
+  // ダーク表示などの切り替えでラベルが書き換わった後にも掛け直す
+  window.addEventListener("atlasez-theme-change", () =>
+    translateTo(currentLang()),
+  );
+</script>

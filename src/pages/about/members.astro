@@ -1,0 +1,322 @@
+---
+import OrgLayout from "../../layouts/OrgLayout.astro";
+import Breadcrumb from "../../components/Breadcrumb.astro";
+import { withBase } from "../../lib/site";
+import membersData from "../../data/atlasez-members.json";
+
+const members = membersData.members;
+const projectOptions = [
+  { value: "all", label: "すべて" },
+  { value: "leadership", label: "代表・運営事務局" },
+  { value: "atlas", label: "学習サイト「アトラス」" },
+  { value: "cafe", label: "考えるカフェ" },
+  { value: "seminar", label: "ゼミプラットフォーム" },
+  { value: "activities", label: "課外活動まとめサイト" },
+  { value: "other", label: "その他" },
+];
+
+function memberGroups(role: string): string[] {
+  const groups = [];
+  if (/(代表|副代表|運営事務局|部$)/.test(role)) groups.push("leadership");
+  if (role.includes("学習サイト「アトラス」")) groups.push("atlas");
+  if (role.includes("考えるカフェ")) groups.push("cafe");
+  if (role.includes("ゼミプラットフォーム")) groups.push("seminar");
+  if (role.includes("課外活動まとめサイト")) groups.push("activities");
+  if (groups.length === 0) groups.push("other");
+  return groups;
+}
+---
+
+<OrgLayout
+  title="運営紹介"
+  description="Atlasezの代表と各プロジェクトを運営するメンバーを紹介します。"
+>
+  <div class="container members-page">
+    <Breadcrumb
+      items={[
+        { label: "ホーム", href: withBase("/") },
+        { label: "Atlasezとは", href: withBase("/about/") },
+        { label: "運営紹介" },
+      ]}
+    />
+
+    <header class="members-intro">
+      <p class="section-number">ATLASEZ MEMBERS</p>
+      <h1>運営紹介</h1>
+      <p>
+        Atlasezの代表と、各プロジェクトの企画・運営・制作を担うメンバーを紹介します。
+      </p>
+      <p class="members-note">
+        掲載内容は随時更新しています。所属は、注記のないものについて2025年4月以降の情報です。
+      </p>
+    </header>
+
+    <section class="member-directory" aria-labelledby="directory-heading">
+      <div class="directory-heading-row">
+        <div>
+          <p class="section-number">01</p>
+          <h2 id="directory-heading">運営メンバー</h2>
+        </div>
+        <p class="member-total">{members.length}名</p>
+      </div>
+
+      <div class="member-filters" aria-label="運営メンバーの絞り込み">
+        <label>
+          <span>名前・所属・担当から検索</span>
+          <input
+            type="search"
+            placeholder="例：物理、東京大学"
+            data-member-search
+          />
+        </label>
+        <label>
+          <span>プロジェクト</span>
+          <select data-member-project>
+            {
+              projectOptions.map((option) => (
+                <option value={option.value}>{option.label}</option>
+              ))
+            }
+          </select>
+        </label>
+        <output data-member-count aria-live="polite">{members.length}名を表示</output>
+      </div>
+
+      <ul class="member-list" data-member-list>
+        {
+          members.map((member) => (
+            <li
+              class:list={[
+                "member-row",
+                { "member-row-lead": member.role === "代表" },
+              ]}
+              data-member
+              data-search={`${member.name} ${member.affiliation} ${member.role} ${member.bio}`.toLocaleLowerCase(
+                "ja",
+              )}
+              data-groups={memberGroups(member.role).join("|")}
+            >
+              <div class="member-identity">
+                <div class="member-name-row">
+                  <h3>{member.name}</h3>
+                  {member.role === "代表" && (
+                    <span class="lead-badge">代表</span>
+                  )}
+                </div>
+                <p class="member-affiliation">{member.affiliation}</p>
+              </div>
+              <div class="member-description">
+                <p class="member-role">{member.role}</p>
+                {member.bio && (
+                  <div class="member-bio">
+                    <p class="member-bio-label">自己紹介</p>
+                    <p>{member.bio}</p>
+                  </div>
+                )}
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+
+      <p class="member-source">
+        出典：<a
+          href={membersData.source}
+          target="_blank"
+          rel="noopener noreferrer">Atlasez旧公式サイト「運営紹介」</a
+        >
+      </p>
+    </section>
+  </div>
+</OrgLayout>
+
+<script>
+  const search = document.querySelector<HTMLInputElement>(
+    "[data-member-search]",
+  );
+  const project = document.querySelector<HTMLSelectElement>(
+    "[data-member-project]",
+  );
+  const count = document.querySelector<HTMLOutputElement>(
+    "[data-member-count]",
+  );
+  const cards = [
+    ...document.querySelectorAll<HTMLElement>("[data-member]"),
+  ];
+
+  const updateMembers = () => {
+    const query = search?.value.trim().toLocaleLowerCase("ja") ?? "";
+    const selectedProject = project?.value ?? "all";
+    let visible = 0;
+
+    for (const card of cards) {
+      const matchesQuery = (card.dataset.search ?? "").includes(query);
+      const groups = (card.dataset.groups ?? "").split("|");
+      const matchesProject =
+        selectedProject === "all" || groups.includes(selectedProject);
+      card.hidden = !(matchesQuery && matchesProject);
+      if (!card.hidden) visible += 1;
+    }
+
+    if (count) count.textContent = `${visible}名を表示`;
+  };
+
+  search?.addEventListener("input", updateMembers);
+  project?.addEventListener("change", updateMembers);
+</script>
+
+<style>
+  .members-page {
+    max-width: 72rem;
+  }
+  .members-intro {
+    max-width: var(--reading-width);
+    padding-bottom: var(--space-5);
+  }
+  .members-intro > p:not(.section-number) {
+    font-size: calc(1.05rem * var(--text-scale));
+  }
+  .members-intro .members-note {
+    color: var(--text-secondary);
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+  .section-number {
+    margin-bottom: var(--space-1);
+    color: var(--accent-primary);
+    font-size: calc(0.76rem * var(--text-scale));
+    font-weight: 700;
+    letter-spacing: 0.1em;
+  }
+  .member-directory {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-default);
+  }
+  .directory-heading-row {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .directory-heading-row h2,
+  .member-total {
+    margin: 0;
+  }
+  .member-total {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+  .member-filters {
+    display: grid;
+    grid-template-columns: minmax(15rem, 1fr) minmax(12rem, 0.55fr) auto;
+    gap: var(--space-3);
+    align-items: end;
+    margin-block: var(--space-4);
+    padding: var(--space-3);
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+  }
+  .member-filters label {
+    display: grid;
+    gap: var(--space-1);
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  .member-filters input,
+  .member-filters select {
+    width: 100%;
+    min-height: var(--touch-target);
+    padding-inline: var(--space-2);
+    border: 1px solid var(--border-strong);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+  }
+  .member-filters output {
+    min-width: 6.5rem;
+    padding-bottom: 0.65rem;
+    color: var(--text-secondary);
+    font-size: calc(0.86rem * var(--text-scale));
+    text-align: right;
+  }
+  .member-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .member-row {
+    display: grid;
+    grid-template-columns: minmax(13rem, 0.42fr) minmax(0, 1.58fr);
+    gap: clamp(var(--space-3), 5vw, var(--space-6));
+    padding-block: var(--space-4);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .member-row[hidden] {
+    display: none;
+  }
+  .member-row-lead {
+    padding-inline: var(--space-3);
+    background: var(--accent-subtle);
+  }
+  .member-name-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .member-row h3 {
+    margin: 0;
+    font-size: calc(1.08rem * var(--text-scale));
+  }
+  .lead-badge {
+    padding: 0.12rem 0.45rem;
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    font-size: calc(0.74rem * var(--text-scale));
+    font-weight: 700;
+  }
+  .member-affiliation {
+    margin: var(--space-1) 0 0;
+  }
+  .member-affiliation {
+    color: var(--text-secondary);
+    font-size: calc(0.84rem * var(--text-scale));
+  }
+  .member-role {
+    margin: 0;
+    font-weight: 700;
+  }
+  .member-bio {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-default);
+  }
+  .member-bio-label {
+    margin: 0;
+    color: var(--accent-primary);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-weight: 700;
+  }
+  .member-bio p:last-child {
+    margin: var(--space-1) 0 0;
+    color: var(--text-secondary);
+    font-size: calc(0.88rem * var(--text-scale));
+  }
+  .member-source {
+    margin-top: var(--space-4);
+    color: var(--text-secondary);
+    font-size: calc(0.82rem * var(--text-scale));
+  }
+  @media (max-width: 767px) {
+    .member-filters {
+      grid-template-columns: 1fr;
+    }
+    .member-filters output {
+      padding: 0;
+      text-align: left;
+    }
+    .member-row {
+      grid-template-columns: 1fr;
+      gap: var(--space-2);
+    }
+  }
+</style>

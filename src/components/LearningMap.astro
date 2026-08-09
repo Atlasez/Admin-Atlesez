@@ -1,0 +1,2314 @@
+---
+/**
+ * 学習地図（経路検索・概念マップ・リスト/表の代替表示）。
+ *
+ * 学習地図ページと総合ホームの「学習地図」タブの両方から使う。
+ * 総合ホームではタブが開かれるまで画面に入らないため、
+ * cytoscape の読み込みは IntersectionObserver によって自然に遅延される。
+ */
+import { atlasPath, withBase } from "../lib/site";
+import {
+  t,
+  localizedName,
+  edgeLabel,
+  type Locale,
+} from "../lib/i18n";
+import { getConcepts, getPublishedSubjects } from "../lib/content";
+
+interface Props {
+  locale: Locale;
+  /** 分野トップに埋め込む場合、その分野を初期表示として固定する。 */
+  subject?: string;
+  /** カテゴリトップに埋め込む場合、そのカテゴリを初期表示する。 */
+  category?: string;
+}
+const {
+  locale,
+  subject: fixedSubject = "",
+  category: fixedCategory = "",
+} = Astro.props;
+
+const { list } = await getConcepts();
+const subjects = (await getPublishedSubjects()).filter(
+  (s) => s.data.status === "published",
+);
+const selectableSubjects = fixedSubject
+  ? subjects.filter((s) => s.data.slug === fixedSubject)
+  : subjects;
+const graphUrl = withBase("/atlas/graph.json");
+
+const edgeKinds = [
+  "prerequisite",
+  "recommended-next",
+  "related",
+  "part-of",
+  "alternative",
+] as const;
+
+/** 分野ごとの色（グループ化・色分け用）。順に割り当てる。 */
+const subjectPalette = [
+  "#2f6f9f",
+  "#b5651d",
+  "#7a4fb5",
+  "#2e8b6f",
+  "#c2427a",
+  "#4a7a1f",
+  "#9a6a00",
+  "#3a6ea5",
+  "#a23e48",
+  "#5f6caf",
+];
+const subjectMeta = subjects.map((s, i) => ({
+  slug: s.data.slug,
+  name: localizedName(s.data.name, locale),
+  color: subjectPalette[i % subjectPalette.length],
+}));
+const subjectMetaJson = JSON.stringify(subjectMeta);
+
+/** 分野ごとの概念。ルート検索の選択肢とリスト表示で使う */
+const conceptsBySubject = subjects.map((s) => ({
+  slug: s.data.slug,
+  name: localizedName(s.data.name, locale),
+  concepts: list.filter((c) => c.subject === s.data.slug),
+}));
+
+/** カテゴリ名（地図のカテゴリ箱のラベルに使う） */
+const categoryMetaJson = JSON.stringify(
+  subjects.flatMap((s) =>
+    s.data.categories.map((cat) => ({
+      subject: s.data.slug,
+      slug: cat.slug,
+      name: localizedName(cat.name, locale),
+    })),
+  ),
+);
+const fixedSubjectEntry = subjects.find((s) => s.data.slug === fixedSubject);
+const fixedCategoryEntry = fixedSubjectEntry?.data.categories.find(
+  (category) => category.slug === fixedCategory,
+);
+const mapRootPath = atlasPath(locale, "map");
+const mapSubjectPath = fixedSubject
+  ? `${mapRootPath}?subject=${encodeURIComponent(fixedSubject)}`
+  : mapRootPath;
+const mapCategoryPath = fixedSubject && fixedCategory
+  ? `${mapSubjectPath}&category=${encodeURIComponent(`${fixedSubject}/${fixedCategory}`)}`
+  : mapSubjectPath;
+---
+
+<section aria-labelledby="graph-heading" class="map-section">
+  <h2 id="graph-heading" class="visually-hidden">
+    {locale === "ja" ? "概念マップ" : "Concept map"}
+  </h2>
+  <nav class="map-breadcrumb" aria-label={locale === "ja" ? "学習地図内の現在地" : "Map location"}>
+    <a href={mapRootPath}>{locale === "ja" ? "アトラス" : "Atlas"}</a>
+    {fixedSubjectEntry && <><span aria-hidden="true">›</span><a href={mapSubjectPath}>{localizedName(fixedSubjectEntry.data.name, locale)}</a></>}
+    {fixedCategoryEntry && <><span aria-hidden="true">›</span><a href={mapCategoryPath}>{localizedName(fixedCategoryEntry.name, locale)}</a></>}
+  </nav>
+
+  {/*
+    地図の操作はすべて枠の中に置く。枠の外に箱を並べると横幅を食うため、
+    経路検索も枠内のボタンから開くパネルにしている（地図アプリと同じ作法）。
+  */}
+  <div class="map-frame" data-map-frame>
+    <div class="map-toolbar" data-graph-controls hidden>
+      <label for="map-search" class="visually-hidden">
+        {t(locale, "search")}
+      </label>
+      <input
+        id="map-search"
+        type="search"
+        list="map-node-names"
+        placeholder={t(locale, "searchPlaceholder")}
+        data-map-search
+      />
+      <datalist id="map-node-names">
+        {list.map((c) => <option value={localizedName(c.name, locale)} />)}
+      </datalist>
+      <label for="map-subject" class="map-subject-label">
+        {t(locale, "subjects")}
+      </label>
+      <select id="map-subject" data-map-subject>
+        {!fixedSubject && <option value="">{t(locale, "all")}</option>}
+        {
+          selectableSubjects.map((s) => (
+            <option value={s.data.slug} selected={s.data.slug === fixedSubject}>
+              {localizedName(s.data.name, locale)}
+            </option>
+          ))
+        }
+      </select>
+      <span class="map-status" data-map-status aria-live="polite"></span>
+      <div
+        class="map-viewport-tools"
+        role="group"
+        aria-label={locale === "ja" ? "地図の表示倍率" : "Map zoom"}
+      >
+        <button
+          type="button"
+          data-map-zoom-out
+          aria-label={locale === "ja" ? "縮小" : "Zoom out"}
+        >
+          −
+        </button>
+        <output data-map-zoom-level aria-live="polite">100%</output>
+        <button
+          type="button"
+          data-map-zoom-in
+          aria-label={locale === "ja" ? "拡大" : "Zoom in"}
+        >
+          ＋
+        </button>
+        <button type="button" data-map-arrange>
+          {locale === "ja" ? "自動整列" : "Auto layout"}
+        </button>
+        <button type="button" data-map-fit>
+          {locale === "ja" ? "表示を戻す" : "Fit view"}
+        </button>
+      </div>
+      <button
+        type="button"
+        class="map-touch-toggle"
+        data-map-touch-toggle
+        aria-pressed="false"
+      >
+        {locale === "ja" ? "地図を操作" : "Control map"}
+      </button>
+      <div class="map-action-tools" data-graph-controls hidden>
+        <button type="button" class="map-tool" data-map-back hidden>
+          {locale === "ja" ? "▴ カテゴリを折りたたむ" : "▴ Fold category"}
+        </button>
+        <button
+          type="button"
+          class="map-tool"
+          data-route-open
+          aria-expanded="false"
+          aria-controls="map-route-panel"
+        >
+          {t(locale, "routeSearch")}
+        </button>
+        <button
+          type="button"
+          class="map-tool"
+          data-map-fullscreen
+          aria-pressed="false"
+        >
+          {locale === "ja" ? "全画面" : "Full screen"}
+        </button>
+        <button type="button" class="map-tool" data-map-share>
+          {t(locale, "shareView")}
+        </button>
+      </div>
+    </div>
+
+    {/* 検索中も地図の操作層と競合しないよう、経路検索はツールバー直下に展開する。 */}
+    <div class="map-route" id="map-route-panel" data-route-panel hidden>
+      <div class="map-route-head">
+        <h3>{t(locale, "routeSearch")}</h3>
+        <button type="button" class="map-route-close" data-route-close aria-label={locale === "ja" ? "閉じる" : "Close"}>×</button>
+      </div>
+      <p class="route-intro">
+        {locale === "ja"
+          ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
+          : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."}
+      </p>
+      <form data-route-form class="route-form">
+        <div>
+          <label for="route-subject">{t(locale, "subjects")}</label>
+          <select id="route-subject" data-route-subject>
+            {selectableSubjects.map((s) => <option value={s.data.slug}>{localizedName(s.data.name, locale)}</option>)}
+          </select>
+        </div>
+        <div>
+          <label for="route-start">{locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}</label>
+          <select id="route-start" data-route-start>
+            <option value="">{locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}</option>
+            {conceptsBySubject.flatMap(({ slug, concepts }) => concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>))}
+          </select>
+        </div>
+        <div>
+          <label for="route-goal">{t(locale, "routeGoal")}</label>
+          <select id="route-goal" data-route-goal required>
+            <option value="">---</option>
+            {conceptsBySubject.flatMap(({ slug, concepts }) => concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>))}
+          </select>
+        </div>
+        <button type="submit" class="button">{t(locale, "routeCompute")}</button>
+      </form>
+      <div data-route-result aria-live="polite"></div>
+    </div>
+
+    <div class="map-canvas" id="learning-map" role="application"
+      aria-label={t(locale, "map")}
+      data-graph-url={graphUrl}
+      data-locale={locale}
+      data-base={withBase("/")}
+      data-subjects={subjectMetaJson}
+      data-categories={categoryMetaJson}
+      data-fixed-subject={fixedSubject}
+      data-fixed-category={fixedCategory}
+    >
+      <noscript>
+        {
+          locale === "ja"
+            ? "概念マップの表示にはJavaScriptが必要です。分野・カテゴリ・記事の一覧は「リスト表示」からご覧いただけます。"
+            : "The concept map requires JavaScript. Use the list view to browse subjects, categories and articles."
+        }
+      </noscript>
+    </div>
+
+    {/* 共有されたグラフ画面と同じく、操作の説明と線の意味を地図内に置く。 */}
+    <div class="map-canvas-caption" data-graph-controls hidden aria-hidden="true">
+      <strong>{locale === "ja" ? "学習地図" : "Learning map"}</strong>
+      <small>
+        {locale === "ja"
+          ? "背景ドラッグで移動 · ノードを押すと詳細を表示"
+          : "Drag the background to pan · Select a node to open its article"}
+      </small>
+    </div>
+    <div class="map-canvas-legend" data-graph-controls hidden aria-hidden="true">
+      <span><i class="canvas-line canvas-line-solid"></i>{locale === "ja" ? "前提" : "Prerequisite"}</span>
+      <span><i class="canvas-line canvas-line-dash"></i>{locale === "ja" ? "次におすすめ" : "Recommended"}</span>
+      <span><i class="canvas-line canvas-line-dot"></i>{locale === "ja" ? "関連" : "Related"}</span>
+      <span><i class="canvas-state canvas-state-read"></i>{locale === "ja" ? "読んだ" : "Read"}</span>
+      <span><i class="canvas-state canvas-state-understood"></i>{locale === "ja" ? "理解した" : "Understood"}</span>
+    </div>
+
+    <div class="map-detail" data-map-detail aria-live="polite"></div>
+  </div>
+
+  <p class="map-thread-hint" data-graph-controls hidden>
+    {
+      locale === "ja"
+        ? "▸のカテゴリを押すと中の項目が開き、「▴ 折りたたむ」またはEscで閉じられます。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。"
+        : "Select a ▸ category to open it; use “▴ Fold” or Esc to close. Dotted nodes belong to other categories; double-click one to move there."
+    }
+  </p>
+  <ul
+    class="subject-legend"
+    data-graph-controls
+    hidden
+    aria-label={t(locale, "subjects")}
+  >
+    {
+      subjectMeta.map((s) => (
+        <li>
+          <span
+            class="subject-swatch"
+            style={`background:${s.color}`}
+            aria-hidden="true"
+          />
+          <span>{s.name}</span>
+        </li>
+      ))
+    }
+  </ul>
+  <details class="map-legend">
+    <summary>{t(locale, "legend")}</summary>
+    <ul class="details-body legend-list">
+      <li>
+        <span class="legend-state legend-state-read" aria-hidden="true" />
+        <span>{locale === "ja" ? "読んだ記事を含む概念" : "Concepts with a read article"}</span>
+      </li>
+      <li>
+        <span class="legend-state legend-state-understood" aria-hidden="true" />
+        <span>{locale === "ja" ? "理解した記事を含む概念" : "Concepts with an understood article"}</span>
+      </li>
+      <li>
+        <span class="legend-line legend-category-link" aria-hidden="true" />
+        <span>
+          {
+            locale === "ja"
+              ? "カテゴリ間のつながり（概要で表示）"
+              : "Link between categories (shown in the overview)"
+          }
+        </span>
+      </li>
+      {
+        edgeKinds.map((kind) => (
+          <li>
+            <span class={`legend-line legend-${kind}`} aria-hidden="true" />
+            <span>{edgeLabel(locale, kind)}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </details>
+</section>
+<style>
+  section {
+    margin-block: var(--space-6);
+  }
+  .map-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem;
+    margin: 0 0 var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(.84rem * var(--text-scale));
+  }
+  .map-breadcrumb a { color: inherit; text-decoration: none; }
+  .map-breadcrumb a:hover { color: var(--accent-primary); text-decoration: underline; }
+  /* 地図まわりの枠。道具立てと経路検索をこの中に重ねる */
+  .map-frame {
+    position: relative;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    overflow: hidden;
+  }
+  .map-toolbar {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    align-items: center;
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--background-secondary);
+  }
+  .map-toolbar input,
+  .map-toolbar select {
+    min-width: 12rem;
+  }
+  .map-toolbar input[type="search"] {
+    flex: 1 1 18rem;
+    max-width: 28rem;
+    min-width: 16rem;
+  }
+  .map-status {
+    flex: 1 1 14rem;
+  }
+  .map-viewport-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+  }
+  .map-viewport-tools button {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding-inline: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.82rem * var(--text-scale));
+    cursor: pointer;
+  }
+  .map-touch-toggle {
+    display: none;
+  }
+  .map-viewport-tools button:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .map-viewport-tools output {
+    min-width: 3.25rem;
+    color: var(--text-secondary);
+    font-size: calc(0.78rem * var(--text-scale));
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+  .map-canvas {
+    --map-grid-size: 24px;
+    --map-grid-x: 0px;
+    --map-grid-y: 0px;
+    position: relative;
+    height: 65vh;
+    min-height: 28rem;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    background-color: color-mix(
+      in srgb,
+      var(--background-primary) 86%,
+      #f7f3e9
+    );
+    background-image:
+      linear-gradient(
+        color-mix(in srgb, var(--border-strong) 10%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--border-strong) 10%, transparent) 1px,
+        transparent 1px
+      ),
+      radial-gradient(
+        circle at 50% 45%,
+        color-mix(in srgb, var(--background-primary) 96%, transparent),
+        color-mix(in srgb, var(--background-secondary) 55%, transparent)
+      );
+    background-position:
+      var(--map-grid-x) var(--map-grid-y),
+      var(--map-grid-x) var(--map-grid-y),
+      center;
+    background-size:
+      var(--map-grid-size) var(--map-grid-size),
+      var(--map-grid-size) var(--map-grid-size),
+      100% 100%;
+  }
+  .map-canvas:active {
+    cursor: grabbing;
+  }
+  .map-canvas-caption {
+    position: absolute;
+    z-index: 2;
+    top: calc(3.25rem + var(--touch-target) + var(--space-4));
+    left: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    max-width: min(22rem, 55%);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+    pointer-events: none;
+  }
+  /* 説明は地図の下に表示しているため、ノードの上には重ねない。 */
+  .map-canvas-caption {
+    display: none;
+  }
+  .map-canvas-caption strong {
+    font-size: calc(0.95rem * var(--text-scale));
+    letter-spacing: 0.06em;
+  }
+  .map-canvas-caption small {
+    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: calc(0.68rem * var(--text-scale));
+  }
+  .map-canvas-legend {
+    position: absolute;
+    z-index: 2;
+    right: var(--space-3);
+    bottom: var(--space-3);
+    /* 地図の上に凡例を重ねるとノードを隠すため、下部の凡例に集約する。 */
+    display: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid color-mix(in srgb, var(--border-default) 75%, transparent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.1);
+    color: var(--text-secondary);
+    font-size: calc(0.68rem * var(--text-scale));
+    pointer-events: none;
+  }
+  .map-canvas-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .canvas-line {
+    width: 1.4rem;
+    height: 0;
+    border-top: 2px solid var(--accent-primary);
+  }
+  .canvas-line-dash {
+    border-top-style: dashed;
+  }
+  .canvas-line-dot {
+    border-top-style: dotted;
+    border-top-color: var(--text-secondary);
+  }
+  .canvas-state {
+    width: 0.72rem;
+    height: 0.72rem;
+    border: 1px solid currentcolor;
+    border-radius: 0.18rem;
+  }
+  .canvas-state-read {
+    background: #176ea6;
+    color: #0e4f7b;
+  }
+  .canvas-state-understood {
+    background: #17803d;
+    color: #0b5427;
+  }
+  /* 全画面のときは画面いっぱいに広げる */
+  .map-frame:fullscreen {
+    border: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .map-frame:fullscreen .map-canvas {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  /* 地図の操作はツールバーにまとめる。キャンバス上には重ねない。 */
+  .map-action-tools {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-left: auto;
+  }
+  .map-tool {
+    min-height: var(--touch-target);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.85rem * var(--text-scale));
+    font-weight: 600;
+    box-shadow: none;
+    cursor: pointer;
+  }
+  .map-tool:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .map-tool:focus-visible,
+  .map-viewport-tools button:focus-visible,
+  .map-route-close:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent-primary) 45%, transparent);
+    outline-offset: 2px;
+  }
+  .map-tool[aria-expanded="true"],
+  .map-tool[aria-pressed="true"] {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: var(--on-accent);
+  }
+
+  /* 経路検索。地図とは独立した通常フローに置き、操作レイヤーと重ねない。 */
+  .map-route {
+    position: relative;
+    z-index: 1;
+    margin: var(--space-2);
+    max-width: 48rem;
+    padding: var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.24);
+  }
+  .map-route-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  .map-route-head h3 {
+    margin: 0;
+    font-size: calc(1rem * var(--text-scale));
+  }
+  .map-route-close {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(1.1rem * var(--text-scale));
+    line-height: 1;
+    cursor: pointer;
+  }
+  .map-route-close:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .map-subject-label {
+    font-weight: 700;
+  }
+  .map-status {
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .map-thread-hint {
+    margin: 0 0 var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .subject-legend {
+    list-style: none;
+    margin: 0 0 var(--space-2);
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  .subject-legend li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .subject-swatch {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 3px;
+  }
+  /* 押した項目の説明。枠の下辺に重ねる。中身が無いときは出さない */
+  .map-detail {
+    position: absolute;
+    left: var(--space-2);
+    right: var(--space-2);
+    bottom: var(--space-2);
+    z-index: 4;
+    padding: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+    font-size: calc(0.9rem * var(--text-scale));
+  }
+  .map-detail:empty {
+    display: none;
+  }
+  :global(.map-detail-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+  }
+  :global(.map-detail-actions button),
+  :global(.map-detail-actions a) {
+    min-height: 2rem;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: calc(0.82rem * var(--text-scale));
+    text-decoration: none;
+    cursor: pointer;
+  }
+  :global(.map-detail-actions button:hover),
+  :global(.map-detail-actions a:hover) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .map-legend {
+    margin-top: var(--space-2);
+    max-width: 24rem;
+  }
+  .legend-list {
+    list-style: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .legend-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .legend-line {
+    display: inline-block;
+    width: 3rem;
+    height: 0;
+    border-top: 3px solid var(--text-secondary);
+  }
+  .legend-state {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 3px solid;
+    border-radius: 0.28rem;
+  }
+  .legend-state-read {
+    border-color: #0b4f7d;
+    background: #176ea6;
+  }
+  .legend-state-understood {
+    border-color: #0b5427;
+    background: #17803d;
+  }
+  .legend-category-link {
+    border-top-style: solid;
+    border-top-color: var(--border-strong);
+  }
+  .legend-prerequisite {
+    border-top-style: solid;
+    border-top-color: var(--accent-primary);
+  }
+  .legend-recommended-next {
+    border-top-style: dashed;
+    border-top-color: var(--accent-primary);
+  }
+  .legend-related {
+    border-top-style: dotted;
+  }
+  .legend-part-of {
+    border-top-width: 5px;
+  }
+  .legend-alternative {
+    border-top-style: double;
+  }
+  .route-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+  .route-form select {
+    width: 100%;
+  }
+  .route-intro {
+    margin: var(--space-1) 0 var(--space-2);
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
+  }
+  :global(.route-steps) {
+    display: grid;
+    gap: var(--space-2);
+    list-style: none;
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    max-width: var(--reading-width);
+  }
+  :global(.route-steps li) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  :global(.route-number) {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 2rem;
+    min-height: 2rem;
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    font-weight: 700;
+  }
+  :global(.route-supplemental) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--space-2);
+    margin: var(--space-2) 0 0;
+    padding: 0;
+    list-style: none;
+    max-width: var(--reading-width);
+  }
+  :global(.route-supplemental li) {
+    padding: var(--space-2);
+    border: 1px solid var(--border-default);
+    background: var(--background-primary);
+  }
+  :global(.route-known) {
+    max-width: var(--reading-width);
+    margin-top: var(--space-3);
+  }
+  :global(.route-known ul) {
+    margin-bottom: 0;
+  }
+  @media (max-width: 767px) {
+    section {
+      margin-block: var(--space-3);
+    }
+    .map-frame {
+      border-radius: calc(var(--radius) - 2px);
+    }
+    /* iOS Safari は 16px 未満の入力欄で画面を拡大してしまう */
+    .map-toolbar input,
+    .map-toolbar select,
+    .route-form select {
+      font-size: max(16px, 1rem);
+    }
+    .map-toolbar input[type="search"] {
+      max-width: none;
+      min-width: 0;
+      width: 100%;
+    }
+    .map-status {
+      grid-column: 1 / -1;
+      min-height: 2.5em;
+      line-height: 1.35;
+    }
+    .map-viewport-tools {
+      display: grid;
+      grid-template-columns: 2.75rem minmax(3rem, 1fr) 2.75rem 1fr 1fr;
+      grid-column: 1 / -1;
+      width: 100%;
+      margin-left: 0;
+    }
+    .map-viewport-tools button {
+      min-width: 0;
+      padding-inline: var(--space-1);
+      white-space: nowrap;
+    }
+    .map-touch-toggle {
+      display: block;
+      grid-column: 1 / -1;
+      min-height: var(--touch-target);
+      border: 1px solid var(--accent-primary);
+      border-radius: var(--radius);
+      background: var(--background-primary);
+      color: var(--accent-primary);
+      font: inherit;
+      font-weight: 700;
+    }
+    .map-touch-toggle[aria-pressed="true"] {
+      background: var(--accent-primary);
+      color: var(--on-accent);
+    }
+    .route-form .button {
+      width: 100%;
+    }
+    .map-canvas {
+      height: 70svh;
+      min-height: 32rem;
+      max-height: 44rem;
+      touch-action: pan-y pinch-zoom;
+    }
+    .map-canvas[data-touch-active="true"] {
+      touch-action: none;
+    }
+    .map-canvas-caption,
+    .map-canvas-legend {
+      display: none;
+    }
+    .map-action-tools {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+      margin-left: 0;
+    }
+    .map-route {
+      margin: var(--space-2);
+      max-width: none;
+    }
+    .map-detail {
+      bottom: calc(var(--space-2) + var(--touch-target) + var(--space-1));
+    }
+    /* 道具立ては縦に積む。横に溢れて押せなくなるのを防ぐ */
+    .map-toolbar {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: var(--space-1) var(--space-2);
+      padding: var(--space-2);
+    }
+    .map-toolbar input[type="search"] {
+      grid-column: 1 / -1;
+    }
+    .map-toolbar select {
+      width: 100%;
+      min-width: 0;
+    }
+    .map-tool {
+      min-height: 2.5rem;
+      padding-inline: var(--space-2);
+      font-size: calc(0.78rem * var(--text-scale));
+    }
+    .map-toolbar .button,
+    .map-touch-toggle {
+      width: 100%;
+    }
+    .subject-legend {
+      gap: var(--space-1) var(--space-2);
+      font-size: calc(0.8rem * var(--text-scale));
+    }
+  }
+</style>
+
+<script>
+  // cytoscape（約440KB）は静的importにしない。地図が画面に入ってから
+  // 動的importで読み込む。リスト表示・表形式・経路検索はHTMLだけで完結して
+  // いるので、読み込みを待たずにページを使い始められる。
+  import {
+    toConceptMap,
+    computeLearningRoute,
+    type ConceptData,
+  } from "../lib/graph";
+  import {
+    highestHistoryState,
+    loadHistory,
+  } from "../lib/history";
+
+  interface GraphNode extends ConceptData {
+    articles: Record<
+      string,
+      { articleId: string; title: string; path: string }[]
+    >;
+  }
+  interface GraphData {
+    nodes: GraphNode[];
+    edges: { source: string; target: string; kind: string }[];
+  }
+
+  const container = document.getElementById("learning-map");
+  const controls = document.querySelectorAll<HTMLElement>("[data-graph-controls]");
+  const detail = document.querySelector<HTMLElement>("[data-map-detail]");
+  const frame = document.querySelector<HTMLElement>("[data-map-frame]");
+  const routePanel = document.querySelector<HTMLElement>("[data-route-panel]");
+  const routeOpen = document.querySelector<HTMLButtonElement>("[data-route-open]");
+  type RouteNodeSelection = { id?: string; mode?: "start" | "goal" };
+  const pendingRouteSelections: RouteNodeSelection[] = [];
+  let applyRouteSelection: ((selection: RouteNodeSelection) => void) | undefined;
+  window.addEventListener("atlas-map-route-select", (event) => {
+    const selection = (event as CustomEvent<RouteNodeSelection>).detail;
+    if (applyRouteSelection) applyRouteSelection(selection);
+    else pendingRouteSelections.push(selection);
+  });
+
+  /**
+   * 経路検索パネルの開閉。地図の枠内に重ねて出すので、
+   * 開いているかどうかをボタンの aria-expanded で示す。
+   */
+  function setRouteOpen(open: boolean): void {
+    if (!routePanel) return;
+    routePanel.hidden = !open;
+    routeOpen?.setAttribute("aria-expanded", String(open));
+    if (open) {
+      routePanel
+        .querySelector<HTMLSelectElement>("[data-route-subject]")
+        ?.focus();
+    }
+  }
+
+  routeOpen?.addEventListener("click", () => setRouteOpen(routePanel?.hidden ?? true));
+  document
+    .querySelector<HTMLButtonElement>("[data-route-close]")
+    ?.addEventListener("click", () => {
+      setRouteOpen(false);
+      routeOpen?.focus();
+    });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && routePanel && !routePanel.hidden) {
+      setRouteOpen(false);
+      routeOpen?.focus();
+    }
+  });
+
+  /** 全画面表示。対応していないブラウザではボタンを出さない。 */
+  const fullscreenBtn = document.querySelector<HTMLButtonElement>(
+    "[data-map-fullscreen]",
+  );
+  if (fullscreenBtn && frame) {
+    if (!frame.requestFullscreen) {
+      fullscreenBtn.hidden = true;
+    } else {
+      fullscreenBtn.addEventListener("click", () => {
+        if (document.fullscreenElement === frame) void document.exitFullscreen();
+        else void frame.requestFullscreen();
+      });
+      document.addEventListener("fullscreenchange", () => {
+        const on = document.fullscreenElement === frame;
+        fullscreenBtn.setAttribute("aria-pressed", String(on));
+        // 枠の大きさが変わるので、cytoscape に再計測させる
+        window.dispatchEvent(new Event("resize"));
+      });
+    }
+  }
+
+  async function initMap(): Promise<void> {
+    if (!container) return;
+    const { default: cytoscape } = await import("cytoscape");
+    const locale = container.dataset.locale === "en" ? "en" : "ja";
+    const res = await fetch(container.dataset.graphUrl ?? "");
+    const data: GraphData = await res.json();
+    const nodeById = new Map(data.nodes.map((n) => [n.id, n]));
+    const base = (container.dataset.base ?? "/").replace(/\/$/, "");
+    const label = (n: GraphNode) =>
+      locale === "en" && n.name.en ? n.name.en : n.name.ja;
+    const ja = locale === "ja";
+    const mobileViewport = window.matchMedia("(max-width: 767px)").matches;
+
+    controls.forEach((control) => (control.hidden = false));
+
+    const styles = getComputedStyle(document.documentElement);
+    const read = (name: string, fallback: string) =>
+      styles.getPropertyValue(name).trim() || fallback;
+    const accent = read("--accent-primary", "#176ea6");
+    const textColor = read("--text-primary", "#1c1c1c");
+    const muted = read("--border-strong", "#8d897f");
+    const canvasColor = read("--background-primary", "#ffffff");
+
+    const subjectMeta: { slug: string; name: string; color: string }[] =
+      JSON.parse(container.dataset.subjects ?? "[]");
+    const subjectOrder = subjectMeta.map((s) => s.slug);
+    const subjectName = new Map(subjectMeta.map((s) => [s.slug, s.name]));
+    const subjectColor = new Map(subjectMeta.map((s) => [s.slug, s.color]));
+    const colorFor = (slug: string) => subjectColor.get(slug) ?? accent;
+    /** 線がノードの下を透けないよう、分野色を淡い不透明色に変換する。 */
+    const pastelFor = (color: string) => {
+      const hex = color.replace("#", "");
+      if (!/^[0-9a-f]{6}$/i.test(hex)) return "#f4f6f8";
+      const channels = [0, 2, 4].map((index) =>
+        Number.parseInt(hex.slice(index, index + 2), 16),
+      );
+      return `rgb(${channels.map((value) => Math.round(value * 0.18 + 255 * 0.82)).join(", ")})`;
+    };
+
+    const categoryMeta: { subject: string; slug: string; name: string }[] =
+      JSON.parse(container.dataset.categories ?? "[]");
+    const categoryName = new Map(
+      categoryMeta.map((c) => [`${c.subject}/${c.slug}`, c.name]),
+    );
+
+    /* ------------------------------------------------------------------
+       地図は 2 段階で見る。
+
+       概要（level 1）… カテゴリを 1 つの箱にまとめて全体を見渡す。
+                        154 概念を一度に描くと読めないため。
+       詳細（level 2）… カテゴリを 1 つ選び、その中の概念と、
+                        外につながる概念だけを描く。
+       ------------------------------------------------------------------ */
+    const catKeyOf = (n: GraphNode) => `${n.subject}/${n.category}`;
+    const conceptsByCat = new Map<string, GraphNode[]>();
+    for (const n of data.nodes) {
+      const key = catKeyOf(n);
+      conceptsByCat.set(key, [...(conceptsByCat.get(key) ?? []), n]);
+    }
+    /** 概要で描くカテゴリ（概念が 1 つでもあるもの）を分野順に並べる */
+    const catKeys = [...conceptsByCat.keys()].sort((a, b) => {
+      const sa = subjectOrder.indexOf(a.split("/")[0]);
+      const sb = subjectOrder.indexOf(b.split("/")[0]);
+      return sa === sb ? a.localeCompare(b) : sa - sb;
+    });
+    const catLabel = (key: string) => {
+      const name = categoryName.get(key) ?? key.split("/")[1];
+      const count = conceptsByCat.get(key)?.length ?? 0;
+      return `▸ ${name}\n${count}${ja ? "項目" : " items"}`;
+    };
+    const relationName = new Map([
+      ["prerequisite", ja ? "前提" : "Prerequisite"],
+      ["recommended-next", ja ? "次におすすめ" : "Recommended next"],
+      ["related", ja ? "関連" : "Related"],
+      ["part-of", ja ? "一部" : "Part of"],
+      ["alternative", ja ? "別経路" : "Alternative"],
+    ]);
+
+    /** カテゴリ間のつながり（概念どうしの辺を集約したもの） */
+    const catEdges = new Map<string, { source: string; target: string }>();
+    for (const e of data.edges) {
+      const s = nodeById.get(e.source);
+      const t = nodeById.get(e.target);
+      if (!s || !t) continue;
+      const a = catKeyOf(s);
+      const b = catKeyOf(t);
+      if (a === b) continue;
+      const id = [a, b].sort().join("|");
+      if (!catEdges.has(id)) catEdges.set(id, { source: a, target: b });
+    }
+
+    const cy = cytoscape({
+      container,
+      elements: [
+        // 分野の枠（コンパウンド）
+        ...subjectOrder.map((slug) => ({
+          data: {
+            id: `subject:${slug}`,
+            label: subjectName.get(slug) ?? slug,
+            kind: "subject",
+            subjectColor: colorFor(slug),
+          },
+        })),
+        // カテゴリノード（概要で描く）
+        ...catKeys.map((key) => ({
+          data: {
+            id: `cat:${key}`,
+            label: catLabel(key),
+            kind: "category",
+            catKey: key,
+            subject: key.split("/")[0],
+            parent: `subject:${key.split("/")[0]}`,
+            subjectColor: colorFor(key.split("/")[0]),
+            nodeFill: pastelFor(colorFor(key.split("/")[0])),
+          },
+        })),
+        // 概念ノード（詳細で描く）
+        ...data.nodes.map((n) => ({
+          data: {
+            id: n.id,
+            label: label(n),
+            kind: "concept",
+            subject: n.subject,
+            catKey: catKeyOf(n),
+            parent: `subject:${n.subject}`,
+            subjectColor: colorFor(n.subject),
+            nodeFill: pastelFor(colorFor(n.subject)),
+            hasArticle: (n.articles[locale] ?? []).length > 0 ? "yes" : "no",
+          },
+        })),
+        // カテゴリ間の辺
+        ...[...catEdges.entries()].map(([id, e]) => ({
+          data: {
+            id: `ce:${id}`,
+            source: `cat:${e.source}`,
+            target: `cat:${e.target}`,
+            kind: "category-link",
+            relationLabel: "",
+          },
+        })),
+        // 概念間の辺
+        ...data.edges.map((e, i) => ({
+          data: {
+            id: `e${i}`,
+            source: e.source,
+            target: e.target,
+            kind: e.kind,
+            relationLabel: relationName.get(e.kind) ?? e.kind,
+          },
+        })),
+      ],
+      style: [
+        {
+          selector: 'node[kind = "concept"]',
+          style: {
+            label: "data(label)",
+            "font-size": "12px",
+            "font-weight": 600,
+            color: textColor,
+            "text-wrap": "wrap",
+            "text-max-width": "116px",
+            "text-valign": "center",
+            "text-halign": "center",
+            "text-justification": "left",
+            "line-height": 1.35,
+            "text-outline-width": 0,
+            shape: "round-rectangle",
+            width: 136,
+            height: 70,
+            "background-color": "data(nodeFill)",
+            "background-opacity": 1,
+            "border-width": 1,
+            "border-color": "data(subjectColor)",
+            "overlay-opacity": 0,
+          },
+        },
+        {
+          // カテゴリ（概要で押すと中に入れる）
+          selector: 'node[kind = "category"]',
+          style: {
+            label: "data(label)",
+            "font-size": "13px",
+            "font-weight": 700,
+            color: textColor,
+            "text-wrap": "wrap",
+            "text-max-width": "132px",
+            "text-valign": "center",
+            "text-halign": "center",
+            shape: "round-rectangle",
+            width: 150,
+            height: 70,
+            "background-color": "data(nodeFill)",
+            "background-opacity": 1,
+            "border-width": 1,
+            "border-color": "data(subjectColor)",
+            "overlay-opacity": 0,
+          },
+        },
+        {
+          // 詳細で、外の分野からつながってきている概念
+          selector: "node.outside",
+          style: {
+            "background-color": canvasColor,
+            "border-style": "dotted",
+            color: muted,
+            width: 128,
+            height: 58,
+            "font-size": "11px",
+          },
+        },
+        {
+          selector: 'node[kind = "subject"]',
+          style: {
+            label: "data(label)",
+            "font-size": "17px",
+            "font-weight": 700,
+            color: "data(subjectColor)",
+            "text-valign": "top",
+            "text-halign": "center",
+            "text-margin-y": -6,
+            shape: "round-rectangle",
+            "background-color": "data(subjectColor)",
+            "background-opacity": 0.06,
+            "border-width": 2,
+            "border-color": "data(subjectColor)",
+            "border-opacity": 0.5,
+            padding: "24px",
+            "z-index": 0,
+            events: "no",
+          },
+        },
+        {
+          // 詳細表示では、親ノードは子ノードを表示するために必要だが、
+          // 分野ごとの枠は外部概念どうしで重なりやすいので見せない。
+          selector: "node.detail-subject",
+          style: {
+            "background-opacity": 0,
+            "border-opacity": 0,
+            color: "transparent",
+          },
+        },
+        {
+          selector: 'node[hasArticle = "no"]',
+          style: {
+            "background-color": canvasColor,
+            "border-width": 2,
+            "border-style": "dashed",
+            color: muted,
+          },
+        },
+        {
+          selector: "node.history-read",
+          style: {
+            "background-color": "#176ea6",
+            "border-color": "#0b4f7d",
+            "border-width": 4,
+            color: "#ffffff",
+            "font-weight": 700,
+          },
+        },
+        {
+          selector: "node.history-understood",
+          style: {
+            "background-color": "#17803d",
+            "border-color": "#0b5427",
+            "border-width": 4,
+            color: "#ffffff",
+            "font-weight": 700,
+            "border-style": "double",
+          },
+        },
+        {
+          selector: "node:selected",
+          style: {
+            "border-width": 4,
+            "border-color": "#e4771b",
+            "background-color": "#fff4e8",
+          },
+        },
+        {
+          selector: "edge",
+          style: {
+            label: "data(relationLabel)",
+            "font-size": "9px",
+            color: muted,
+            "text-rotation": "none",
+            "text-background-color": canvasColor,
+            "text-background-opacity": 0.9,
+            "text-background-padding": "2px",
+            width: 1.5,
+            "line-color": muted,
+            "curve-style": "bezier",
+            "target-arrow-shape": "none",
+          },
+        },
+        {
+          selector: 'edge[kind = "category-link"]',
+          style: {
+            width: 2,
+            "line-color": muted,
+            "line-style": "solid",
+            opacity: 0.55,
+          },
+        },
+        {
+          selector: 'edge[kind = "prerequisite"]',
+          style: {
+            "line-color": accent,
+            "target-arrow-shape": "triangle",
+            "target-arrow-color": accent,
+            width: 2.5,
+          },
+        },
+        {
+          selector: 'edge[kind = "recommended-next"]',
+          style: {
+            "line-style": "dashed",
+            "line-color": accent,
+            "target-arrow-shape": "vee",
+            "target-arrow-color": accent,
+          },
+        },
+        {
+          selector: 'edge[kind = "related"]',
+          style: { "line-style": "dotted" },
+        },
+        {
+          selector: 'edge[kind = "part-of"]',
+          style: { width: 4, "target-arrow-shape": "diamond" },
+        },
+        {
+          selector: 'edge[kind = "alternative"]',
+          style: { "line-style": "dashed", width: 1 },
+        },
+        { selector: ".faded", style: { opacity: 0.15 } },
+        {
+          selector: "node.hover-target",
+          style: {
+            opacity: 1,
+            "background-color": "#e5f3ff",
+            "border-color": accent,
+            "border-width": 5,
+            color: accent,
+            "font-weight": 700,
+            "z-index": 999,
+          },
+        },
+        {
+          selector: "node.hover-neighbor",
+          style: {
+            opacity: 1,
+            "border-color": accent,
+            "border-width": 3,
+            "z-index": 998,
+          },
+        },
+        {
+          selector: "edge.hover-target, edge.hover-neighbor",
+          style: {
+            opacity: 1,
+            "line-color": accent,
+            "target-arrow-color": accent,
+            width: 3.5,
+            "z-index": 997,
+          },
+        },
+        {
+          selector: "node.route-highlight",
+          style: {
+            "background-color": "#fff4e8",
+            "border-color": "#e4771b",
+            "border-width": 3,
+            opacity: 1,
+          },
+        },
+        {
+          selector: "edge.route-highlight",
+          style: {
+            "line-color": "#e4771b",
+            "target-arrow-color": "#e4771b",
+            width: 4,
+            opacity: 1,
+          },
+        },
+        {
+          selector: ".route-start",
+          style: {
+            "background-color": "#e5f3ff",
+            "border-color": accent,
+            "border-width": 4,
+          },
+        },
+      ],
+      layout: { name: "preset", fit: false },
+      minZoom: 0.2,
+      maxZoom: 3,
+    });
+
+    /**
+     * 記事ごとの学習記録を概念ノードへ集約する。
+     * 1概念に複数の記事がある場合は、最も進んだ記事の状態を採用する。
+     */
+    const applyLearningHistory = () => {
+      const historyByArticle = new Map(
+        loadHistory().map((entry) => [entry.articleId, entry.state]),
+      );
+      cy.nodes('node[kind = "concept"]').forEach((element) => {
+        const node = nodeById.get(element.id());
+        const states = Object.values(node?.articles ?? {})
+          .flat()
+          .map((article) => historyByArticle.get(article.articleId));
+        const state = highestHistoryState(states);
+        element.removeClass("history-read history-understood");
+        const name = node ? label(node) : element.data("label");
+        if (state === "read") {
+          element.addClass("history-read");
+        } else if (state === "understood") {
+          element.addClass("history-understood");
+        }
+        // ラベルを増やすと小さいノードで折り返してはみ出すため、状態は色と枠で示す。
+        element.data("label", name);
+        element.data("learningState", state ?? "none");
+      });
+    };
+    applyLearningHistory();
+    window.addEventListener("atlasez-history-change", applyLearningHistory);
+    window.addEventListener("storage", (event) => {
+      if (event.key === "atlasez-history") applyLearningHistory();
+    });
+
+    /**
+     * スマホでは地図上の1本指ドラッグとページスクロールが競合する。
+     * 初期状態はページを縦に動かせるようにし、明示的に「地図を操作」を
+     * 押したときだけパン・ピンチズームを有効にする。
+     */
+    const touchToggle = document.querySelector<HTMLButtonElement>(
+      "[data-map-touch-toggle]",
+    );
+    const setTouchInteraction = (active: boolean) => {
+      container.dataset.touchActive = String(active);
+      touchToggle?.setAttribute("aria-pressed", String(active));
+      if (touchToggle) {
+        touchToggle.textContent = active
+          ? ja
+            ? "ページスクロールに戻す"
+            : "Return to page scrolling"
+          : ja
+            ? "地図を操作"
+            : "Control map";
+      }
+      cy.userPanningEnabled(!mobileViewport || active);
+      cy.userZoomingEnabled(!mobileViewport || active);
+    };
+    if (mobileViewport) {
+      setTouchInteraction(false);
+      touchToggle?.addEventListener("click", () => {
+        setTouchInteraction(touchToggle.getAttribute("aria-pressed") !== "true");
+      });
+    }
+
+    const mapStatus = document.querySelector<HTMLElement>("[data-map-status]");
+    const subjectSelect =
+      document.querySelector<HTMLSelectElement>("[data-map-subject]");
+    const backButton =
+      document.querySelector<HTMLButtonElement>("[data-map-back]");
+    const zoomLevel =
+      document.querySelector<HTMLOutputElement>("[data-map-zoom-level]");
+
+    /** いま詳細で開いているカテゴリ。null なら概要。 */
+    let focused: string | null = null;
+
+    const setStatus = (text: string) => {
+      if (mapStatus) mapStatus.textContent = text;
+    };
+
+    /** 倍率表示と格子背景を、地図のパン・ズームへ追従させる。 */
+    const syncViewportUi = () => {
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      if (zoomLevel) zoomLevel.value = `${Math.round(zoom * 100)}%`;
+      container.style.setProperty("--map-grid-size", `${24 * zoom}px`);
+      container.style.setProperty("--map-grid-x", `${pan.x}px`);
+      container.style.setProperty("--map-grid-y", `${pan.y}px`);
+    };
+    cy.on("pan zoom", syncViewportUi);
+
+    const hideAll = () => {
+      cy.elements().style("display", "none");
+      cy.elements().removeClass(
+        "faded route-highlight outside hover-target hover-neighbor detail-subject",
+      );
+    };
+
+    const show = (selector: string) =>
+      cy.elements(selector).style("display", "element");
+
+    /** 固定の初期位置から、辺の長さとノード同士の反発を使って余白を確保する。 */
+    function spreadNodes(elements: ReturnType<typeof cy.nodes>): void {
+      if (elements.length < 2) return;
+      const nodes = elements.toArray();
+      // 親ノードを含む部分グラフに汎用レイアウトをそのまま渡すと、
+      // Cytoscape の compound layout が隠れた子を参照してしまうため、
+      // 表示中のノードだけで小さな反発計算を行う。
+      cy.startBatch();
+      // 共有実装と同じく、反発→辺の引力→衝突解消を複数回繰り返す。
+      // 一度だけではラベル付きタイルの重なりが残るため、初期配置で収束させる。
+      for (let iteration = 0; iteration < 48; iteration += 1) {
+        const force = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const a = nodes[i];
+            const b = nodes[j];
+            const delta = { x: a.position("x") - b.position("x"), y: a.position("y") - b.position("y") };
+            const distance = Math.max(18, Math.hypot(delta.x, delta.y));
+            const magnitude = Math.min(10, 9_000 / (distance * distance));
+            const fx = (delta.x / distance) * magnitude;
+            const fy = (delta.y / distance) * magnitude;
+            const aForce = force.get(a.id());
+            const bForce = force.get(b.id());
+            if (aForce) { aForce.x += fx; aForce.y += fy; }
+            if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+
+            // 反発だけでは文字を含むタイルが少しずつ重なるため、
+            // 実際のタイル寸法に基づく衝突判定で必ず離す。
+            const minX = (a.outerWidth() + b.outerWidth()) / 2 + 30;
+            const minY = (a.outerHeight() + b.outerHeight()) / 2 + 22;
+            const overlapX = minX - Math.abs(delta.x);
+            const overlapY = minY - Math.abs(delta.y);
+            if (overlapX > 0 && overlapY > 0 && aForce && bForce) {
+              const separateHorizontally = overlapX < overlapY;
+              const direction = separateHorizontally
+                ? (delta.x || (i % 2 === 0 ? 1 : -1))
+                : (delta.y || (j % 2 === 0 ? 1 : -1));
+              const amount = (separateHorizontally ? overlapX : overlapY) * 0.18;
+              if (separateHorizontally) {
+                const sign = Math.sign(direction);
+                aForce.x += sign * amount;
+                bForce.x -= sign * amount;
+              } else {
+                const sign = Math.sign(direction);
+                aForce.y += sign * amount;
+                bForce.y -= sign * amount;
+              }
+            }
+          }
+        }
+        // つながるノードはほどよく引き寄せ、無関係なノードは反発させる。
+        // 参照元の ForceAtlas2 と同じ読みやすい塊を、描画のちらつきなしで再現する。
+        cy.edges(":visible").forEach((edge) => {
+          const a = edge.source();
+          const b = edge.target();
+          if (!force.has(a.id()) || !force.has(b.id())) return;
+          const delta = {
+            x: b.position("x") - a.position("x"),
+            y: b.position("y") - a.position("y"),
+          };
+          const distance = Math.max(1, Math.hypot(delta.x, delta.y));
+          const pull = Math.max(-2, Math.min(2, (distance - 220) * 0.01));
+          const fx = (delta.x / distance) * pull;
+          const fy = (delta.y / distance) * pull;
+          const aForce = force.get(a.id());
+          const bForce = force.get(b.id());
+          if (aForce) { aForce.x += fx; aForce.y += fy; }
+          if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+        });
+        nodes.forEach((node) => {
+          const f = force.get(node.id());
+          if (!f) return;
+          node.position({ x: node.position("x") + f.x, y: node.position("y") + f.y });
+        });
+      }
+      cy.endBatch();
+    }
+
+    /** 両端が見えている辺だけ表示する */
+    function showConnectingEdges(): void {
+      cy.edges().forEach((edge) => {
+        const visible =
+          edge.source().style("display") !== "none" &&
+          edge.target().style("display") !== "none";
+        edge.style("display", visible ? "element" : "none");
+      });
+    }
+
+    /** 概要: カテゴリの箱を分野ごとに格子に並べる */
+    function renderOverview(subject: string): void {
+      focused = null;
+      hideAll();
+      if (backButton) {
+        backButton.hidden = true;
+        backButton.textContent = ja ? "▴ カテゴリを折りたたむ" : "▴ Fold category";
+      }
+
+      const slugs = subject
+        ? subjectOrder.filter((s) => s === subject)
+        : subjectOrder;
+      const COLS = 3;
+      const COL_W = 210;
+      const ROW_H = 96;
+      const SUBJECT_GAP = 120;
+      // 分野を縦一列に積むと全体表示が極端に縮小されるため、
+      // 2列の区画にして、各分野の中では従来どおり3列に並べる。
+      const SUBJECT_COL_W = COLS * COL_W + 170;
+      const cursorYByColumn = [0, 0];
+
+      for (const [subjectIndex, slug] of slugs.entries()) {
+        const keys = catKeys.filter((k) => k.startsWith(`${slug}/`));
+        if (keys.length === 0) continue;
+        const column = subjectIndex % 2;
+        const cursorY = cursorYByColumn[column];
+        const baseX = 140 + column * SUBJECT_COL_W;
+        const subjectNode = cy.getElementById(`subject:${slug}`);
+        subjectNode.removeClass("detail-subject");
+        subjectNode.style("display", "element");
+        keys.forEach((key, index) => {
+          const node = cy.getElementById(`cat:${key}`);
+          node.style("display", "element");
+          node.position({
+            x: baseX + (index % COLS) * COL_W,
+            y: cursorY + 100 + Math.floor(index / COLS) * ROW_H,
+          });
+        });
+        cursorYByColumn[column] =
+          cursorY + 100 + Math.ceil(keys.length / COLS) * ROW_H + SUBJECT_GAP;
+      }
+
+      // 概要ではカテゴリ間の線が交差しすぎて読めなくなるため、
+      // 線はカテゴリを開いた詳細表示でのみ出す。
+      cy.edges().style("display", "none");
+      cy.layout({ name: "preset", fit: false }).run();
+      const visibleCategories = cy.nodes(':visible[kind = "category"]');
+      spreadNodes(visibleCategories);
+      fitReadable(visibleCategories);
+
+      const shown = cy.nodes(':visible[kind = "category"]').length;
+      setStatus(
+        ja
+          ? `${shown}カテゴリを表示（カテゴリを押すと中の項目が開きます）`
+          : `${shown} categories — select one to open it`,
+      );
+    }
+
+    /** 詳細: 1 カテゴリの概念と、外につながる概念だけを描く */
+    function renderCategory(key: string): void {
+      focused = key;
+      hideAll();
+      if (backButton) backButton.hidden = false;
+
+      const inside = conceptsByCat.get(key) ?? [];
+      const insideIds = new Set(inside.map((n) => n.id));
+
+      // 外につながっている概念を集める
+      const outsideIds = new Set<string>();
+      for (const e of data.edges) {
+        if (insideIds.has(e.source) && !insideIds.has(e.target)) {
+          outsideIds.add(e.target);
+        }
+        if (insideIds.has(e.target) && !insideIds.has(e.source)) {
+          outsideIds.add(e.source);
+        }
+      }
+
+      // 前提関係の深さで段を作る（前提のないものが左）
+      const children = new Map<string, string[]>();
+      for (const n of inside) {
+        const parent = n.prerequisites.find((id) => insideIds.has(id));
+        if (parent) children.set(parent, [...(children.get(parent) ?? []), n.id]);
+      }
+      const ordered: { id: string; depth: number }[] = [];
+      const visited = new Set<string>();
+      const walk = (id: string, depth: number) => {
+        if (visited.has(id)) return;
+        visited.add(id);
+        ordered.push({ id, depth });
+        for (const child of children.get(id) ?? []) walk(child, depth + 1);
+      };
+      for (const n of inside) {
+        if (!n.prerequisites.some((id) => insideIds.has(id))) walk(n.id, 0);
+      }
+      for (const n of inside) walk(n.id, 0);
+
+      // 同じ深さのものを縦に積む
+      const rowByDepth = new Map<number, number>();
+      for (const { id, depth } of ordered) {
+        const row = rowByDepth.get(depth) ?? 0;
+        rowByDepth.set(depth, row + 1);
+        const node = cy.getElementById(id);
+        node.style("display", "element");
+        node.position({ x: 150 + depth * 240, y: 90 + row * 102 });
+      }
+
+      // 外の概念は右側にまとめる
+      const maxDepth = Math.max(0, ...ordered.map((o) => o.depth));
+      [...outsideIds].forEach((id, index) => {
+        const node = cy.getElementById(id);
+        if (node.length === 0) return;
+        node.style("display", "element");
+        node.addClass("outside");
+        node.position({ x: 200 + (maxDepth + 1) * 200, y: 80 + index * 64 });
+      });
+
+      // 親ノードは子ノードを表示するために必要だが、詳細画面では
+      // 外部概念の分野枠どうしが重なりやすい。枠だけ透明化する。
+      const shownSubjects = new Set(
+        [...insideIds, ...outsideIds]
+          .map((id) => nodeById.get(id)?.subject)
+          .filter((slug): slug is string => Boolean(slug)),
+      );
+      shownSubjects.forEach((slug) => {
+        const subjectNode = cy.getElementById(`subject:${slug}`);
+        subjectNode.addClass("detail-subject");
+        subjectNode.style("display", "element");
+      });
+
+      showConnectingEdges();
+      cy.layout({ name: "preset", fit: false }).run();
+      const visibleConcepts = cy
+        .nodes(":visible")
+        .filter((n) => n.data("kind") !== "subject");
+      spreadNodes(visibleConcepts);
+      fitReadable(visibleConcepts);
+
+      const name = categoryName.get(key) ?? key;
+      if (backButton) {
+        backButton.textContent = ja
+          ? `▴ ${name}を折りたたむ`
+          : `▴ Fold ${name}`;
+      }
+      setStatus(
+        ja
+          ? `${name}: ${inside.length}項目（外とのつながり ${outsideIds.size}件）`
+          : `${name}: ${inside.length} items, ${outsideIds.size} external links`,
+      );
+    }
+
+    /** 計算した経路だけを地図上に残して、進む順番を視覚化する。 */
+    function renderRouteOnMap(stepIds: string[], skippedIds: string[], goalId: string) {
+      const routeIds = new Set([...stepIds, ...skippedIds]);
+      if (routeIds.size === 0) return;
+      focused = null;
+      hideAll();
+      if (backButton) backButton.hidden = false;
+      for (const id of routeIds) {
+        const node = cy.getElementById(id);
+        if (node.length === 0) continue;
+        node.style("display", "element");
+        node.addClass("route-highlight");
+        const subject = node.data("subject") as string;
+        show(`#subject\\:${subject}`);
+      }
+      cy.edges().forEach((edge) => {
+        const visible =
+          routeIds.has(edge.source().id()) && routeIds.has(edge.target().id());
+        edge.style("display", visible ? "element" : "none");
+        if (visible) edge.addClass("route-highlight");
+      });
+      const routeNodes = cy.nodes(":visible").filter((n) => n.data("kind") !== "subject");
+      spreadNodes(routeNodes);
+      fitReadable(routeNodes);
+      const goalName = nodeById.get(goalId);
+      setStatus(
+        ja
+          ? `学習経路を表示中: ${goalName ? label(goalName) : "目的地点"}`
+          : `Learning route: ${goalName ? label(goalName) : "Goal"}`,
+      );
+    }
+
+    window.addEventListener("atlas-map-route", (event) => {
+      const { stepIds, skippedIds, goalId } = (event as CustomEvent<{
+        stepIds?: string[];
+        skippedIds?: string[];
+        goalId?: string;
+      }>).detail;
+      if (!stepIds || !skippedIds || !goalId) return;
+      renderRouteOnMap(stepIds, skippedIds, goalId);
+      syncViewportUi();
+    });
+
+    window.addEventListener("atlas-map-route-select", (event) => {
+      const { id, mode } = (event as CustomEvent<{
+        id?: string;
+        mode?: "start" | "goal";
+      }>).detail;
+      if (!id || !mode) return;
+      cy.nodes().removeClass("route-start");
+      const node = cy.getElementById(id);
+      if (node.length > 0 && mode === "start") {
+        node.addClass("route-start");
+        setStatus(ja ? "開始地点を選択しました。次に目的地点を選んでください。" : "Start selected. Now select a goal.");
+      }
+    });
+
+    function fitReadable(elements: ReturnType<typeof cy.nodes>): void {
+      if (elements.length === 0) return;
+      cy.fit(elements, 50);
+      const minimumReadableZoom = mobileViewport ? 0.62 : 0.56;
+      if (cy.zoom() < minimumReadableZoom) {
+        cy.zoom(minimumReadableZoom);
+        cy.center(elements);
+      }
+      // 上部の検索・操作バーの下から地図を始め、ノードとUIを重ねない。
+      cy.panBy({ x: 0, y: mobileViewport ? 132 : 150 });
+    }
+
+    /** 共有グラフの「自動調整」と同様に、表示中の関係から読みやすく並べ直す。 */
+    function autoArrange(): void {
+      if (!focused) {
+        renderOverview(subjectSelect?.value ?? "");
+        return;
+      }
+      // この地図では前提の深さが学習順そのものなので、汎用の力学配置ではなく
+      // renderCategory の「前提が左、発展が右」という専用配置へ戻す。
+      renderCategory(focused);
+      syncViewportUi();
+    }
+
+    /** URL に今の表示状態を書き戻す */
+    function syncUrl(): void {
+      const url = new URL(location.href);
+      if (focused) url.searchParams.set("category", focused);
+      else url.searchParams.delete("category");
+      const subject = subjectSelect?.value ?? "";
+      if (subject) url.searchParams.set("subject", subject);
+      else url.searchParams.delete("subject");
+      history.replaceState(null, "", url);
+    }
+
+    function showDetail(id: string): void {
+      const n = nodeById.get(id);
+      if (!n || !detail) return;
+      const arts = n.articles[locale] ?? [];
+      const links = arts
+        .map(
+          (a) =>
+            `<a href="${base}${a.path}" class="map-detail-article-link">${a.title}</a>`,
+        )
+        .join(" / ");
+      const neighbors = [...n.prerequisites, ...n.recommendedNext, ...n.related]
+        .map((nid) => nodeById.get(nid))
+        .filter((nn): nn is GraphNode => Boolean(nn))
+        .map((nn) => label(nn))
+        .join("、");
+      const preparing = ja ? "記事は準備中" : "Article in preparation";
+      const neighborLabel = ja ? "隣接概念" : "Neighbors";
+      const learningState = cy.getElementById(id).data("learningState") as string;
+      const learningLabel = learningState === "understood"
+        ? ja ? "理解した" : "Understood"
+        : learningState === "read"
+          ? ja ? "読んだ" : "Read"
+          : ja ? "未記録" : "Not recorded";
+      detail.innerHTML = `<strong>${label(n)}</strong> — ${
+        links || preparing
+      }<br>${ja ? "学習記録" : "Learning record"}: ${learningLabel}<br>${neighborLabel}: ${neighbors || "—"}<div class="map-detail-actions"><button type="button" data-route-node="start" data-node-id="${id}">${
+        ja ? "開始地点にする" : "Set as start"
+      }</button><button type="button" data-route-node="goal" data-node-id="${id}">${
+        ja ? "目的地点にする" : "Set as goal"
+      }</button></div>`;
+    }
+
+    // Cytoscape は地図内のクリックを捕捉するため、詳細パネルのボタンは
+    // document の capture 段階で拾う。これでノード上に重なっていても確実に選択できる。
+    let lastRouteNodeClick = "";
+    let lastRouteNodeAt = 0;
+    const selectRouteNodeFromDetail = (event: Event) => {
+        const button = (event.target as Element).closest<HTMLButtonElement>(
+          "[data-route-node]",
+        );
+        if (!button) return;
+        const id = button.dataset.nodeId;
+        const mode = button.dataset.routeNode;
+        if (!id || (mode !== "start" && mode !== "goal")) return;
+        const selectionKey = `${id}:${mode}`;
+        const now = performance.now();
+        if (event.type === "click" && selectionKey === lastRouteNodeClick && now - lastRouteNodeAt < 500) return;
+        lastRouteNodeClick = selectionKey;
+        lastRouteNodeAt = now;
+        window.dispatchEvent(
+          new CustomEvent("atlas-map-route-select", { detail: { id, mode } }),
+        );
+      };
+    // Cytoscape が click を抑止する環境でも、pointerup は必ず届く。
+    document.addEventListener("pointerup", selectRouteNodeFromDetail, true);
+    document.addEventListener("click", selectRouteNodeFromDetail, true);
+
+    // カテゴリを押したら中に入る
+    cy.on("tap", 'node[kind = "category"]', (ev) => {
+      const key = ev.target.data("catKey") as string;
+      renderCategory(key);
+      syncUrl();
+    });
+
+    // 通常は詳細を開き、記事リンクまたは経路の始点・終点を選べるようにする。
+    cy.on("tap", 'node[kind = "concept"]', (ev) => {
+      const id: string = ev.target.id();
+      const node = nodeById.get(id);
+      if (!node) return;
+      if (routePanel && !routePanel.hidden) {
+        const routeStart = document.querySelector<HTMLSelectElement>(
+          "[data-route-start]",
+        );
+        window.dispatchEvent(
+          new CustomEvent("atlas-map-route-select", {
+            detail: { id, mode: routeStart?.value ? "goal" : "start" },
+          }),
+        );
+        return;
+      }
+      showDetail(id);
+      const url = new URL(location.href);
+      url.searchParams.set("selected", id);
+      history.replaceState(null, "", url);
+    });
+
+    /**
+     * 触れている要素、直接つながるノード、対応する辺をそれぞれ濃くする。
+     * それ以外は消さずに残すことで、地図全体の位置関係を見失わないようにする。
+     * ノードと辺の境界をまたぐ際に即座に
+     * class を外すと Cytoscape のヒット領域が変わり、点滅やクリック漏れを
+     * 起こすため、短い猶予を設けて次の hover が来たら取り消す。
+     */
+    let hoverClearTimer: number | undefined;
+    let hoveredElementId: string | undefined;
+    const clearHover = () => {
+      hoveredElementId = undefined;
+      cy.elements().removeClass("hover-target hover-neighbor");
+    };
+    cy.on("mouseover", "node, edge", (ev) => {
+      if (hoverClearTimer) window.clearTimeout(hoverClearTimer);
+      const target = ev.target;
+      if (hoveredElementId === target.id()) return;
+      cy.elements().removeClass("hover-target hover-neighbor");
+      hoveredElementId = target.id();
+      const connectedEdges = target.isNode()
+        ? target.connectedEdges()
+        : target;
+      const connectedNodes = target.isNode()
+        ? connectedEdges.connectedNodes().difference(target)
+        : target.connectedNodes();
+      target.addClass("hover-target");
+      connectedNodes.addClass("hover-neighbor");
+      connectedEdges.addClass("hover-neighbor");
+    });
+    cy.on("mouseout", "node, edge", () => {
+      if (hoverClearTimer) window.clearTimeout(hoverClearTimer);
+      hoverClearTimer = window.setTimeout(clearHover, 80);
+    });
+
+    cy.on("dbltap", 'node[kind = "concept"].outside', (ev) => {
+      const key = ev.target.data("catKey") as string;
+      renderCategory(key);
+      syncUrl();
+    });
+
+    // 全画面の切り替えなどで枠の大きさが変わったら測り直す
+    window.addEventListener("resize", () => {
+      cy.resize();
+      fitReadable(
+        cy.nodes(":visible").filter((node) => node.data("kind") !== "subject"),
+      );
+    });
+
+    /** カテゴリを閉じて概要に戻す（fold） */
+    function collapse(): void {
+      renderOverview(subjectSelect?.value ?? "");
+      syncUrl();
+    }
+
+    backButton?.addEventListener("click", collapse);
+
+    // Esc でも閉じられるようにする。開いていないときは何もしない。
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !focused) return;
+      // 経路検索が開いているときはそちらを先に閉じる
+      if (routePanel && !routePanel.hidden) return;
+      collapse();
+    });
+
+    // 何もない場所を押したときも閉じる（地図アプリと同じ感覚）
+    cy.on("tap", (ev) => {
+      if (ev.target === cy && focused) collapse();
+    });
+
+    /**
+     * 分野を選んだら、学習ルート検索の「目的地点」もその分野だけに絞る。
+     * 全 154 項目から探すのは大変なうえ、地図に出ていない分野を選べてしまうと
+     * 表示と操作が食い違うため。開始地点は分野をまたぐ前提を選べるよう絞らない。
+     */
+    function filterGoalOptions(subject: string): void {
+      const goal =
+        document.querySelector<HTMLSelectElement>("[data-route-goal]");
+      if (!goal) return;
+      let selectedHidden = false;
+      goal
+        .querySelectorAll<HTMLOptionElement>("option[data-route-option]")
+        .forEach((option) => {
+          const match = !subject || option.dataset.subject === subject;
+          option.hidden = !match;
+          option.disabled = !match;
+          if (!match && option.selected) selectedHidden = true;
+        });
+      // 絞り込みで消えた項目が選ばれたままにならないようにする
+      if (selectedHidden) goal.value = "";
+    }
+
+    subjectSelect?.addEventListener("change", () => {
+      renderOverview(subjectSelect.value);
+      filterGoalOptions(subjectSelect.value);
+      syncUrl();
+    });
+
+    document
+      .querySelector("[data-map-fit]")
+      ?.addEventListener("click", () => {
+        fitReadable(
+          cy.nodes(":visible").filter((n) => n.data("kind") !== "subject"),
+        );
+        syncViewportUi();
+      });
+
+    document
+      .querySelector("[data-map-arrange]")
+      ?.addEventListener("click", autoArrange);
+
+    document
+      .querySelector("[data-map-zoom-out]")
+      ?.addEventListener("click", () => {
+        cy.zoom(Math.max(cy.minZoom(), cy.zoom() / 1.2));
+        syncViewportUi();
+      });
+
+    document
+      .querySelector("[data-map-zoom-in]")
+      ?.addEventListener("click", () => {
+        cy.zoom(Math.min(cy.maxZoom(), cy.zoom() * 1.2));
+        syncViewportUi();
+      });
+
+    document.querySelector("[data-map-reset]")?.addEventListener("click", () => {
+      if (subjectSelect) subjectSelect.value = "";
+      renderOverview("");
+      syncUrl();
+    });
+
+    document
+      .querySelector("[data-map-share]")
+      ?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(location.href);
+          if (detail) detail.textContent = ja ? "URLをコピーしました" : "URL copied";
+        } catch {
+          if (detail) detail.textContent = location.href;
+        }
+      });
+
+    // 検索: 概念名を打つとそのカテゴリを開いて選択する
+    document
+      .querySelector<HTMLInputElement>("[data-map-search]")
+      ?.addEventListener("change", (ev) => {
+        const q = (ev.target as HTMLInputElement).value.trim().toLowerCase();
+        if (!q) return;
+        const found = data.nodes.find((n) => label(n).toLowerCase().includes(q));
+        if (!found) return;
+        renderCategory(catKeyOf(found));
+        const el = cy.getElementById(found.id);
+        cy.elements().unselect();
+        el.select();
+        cy.animate({ center: { eles: el }, zoom: 1.2, duration: 300 });
+        showDetail(found.id);
+        syncUrl();
+      });
+
+    // 初期表示: URL に category があればそこ、なければ概要
+    const params = new URL(location.href).searchParams;
+    const urlCategory =
+      params.get("category") ?? container.dataset.fixedCategory;
+    const fixedSubject = container.dataset.fixedSubject ?? "";
+    const urlSubject = params.get("subject") ?? fixedSubject;
+    const selected = params.get("selected");
+    const selectedNode = selected ? nodeById.get(selected) : undefined;
+
+    if (subjectSelect) subjectSelect.value = urlSubject;
+    // URL に分野が入っていた場合も、目的地点の絞り込みを初期状態から合わせる
+    filterGoalOptions(urlSubject);
+    if (urlCategory && conceptsByCat.has(urlCategory)) {
+      renderCategory(urlCategory);
+    } else if (selectedNode) {
+      renderCategory(catKeyOf(selectedNode));
+    } else {
+      renderOverview(urlSubject);
+    }
+    if (selected && cy.getElementById(selected).length > 0) {
+      cy.getElementById(selected).select();
+      showDetail(selected);
+    }
+    syncViewportUi();
+
+  }
+
+  async function initRoute(): Promise<void> {
+    const form = document.querySelector<HTMLFormElement>("[data-route-form]");
+    const result = document.querySelector<HTMLElement>("[data-route-result]");
+    const routeSubject =
+      document.querySelector<HTMLSelectElement>("[data-route-subject]");
+    const routeStart =
+      document.querySelector<HTMLSelectElement>("[data-route-start]");
+    const routeGoal =
+      document.querySelector<HTMLSelectElement>("[data-route-goal]");
+    if (!form || !result || !routeSubject || !routeStart || !routeGoal || !container) {
+      return;
+    }
+
+    const locale = container.dataset.locale === "en" ? "en" : "ja";
+    const ja = locale === "ja";
+    const base = (container.dataset.base ?? "/").replace(/\/$/, "");
+    const res = await fetch(container.dataset.graphUrl ?? "");
+    const data: GraphData = await res.json();
+    const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
+    const conceptMap = toConceptMap(data.nodes);
+    const label = (node: GraphNode) =>
+      locale === "en" && node.name.en ? node.name.en : node.name.ja;
+    const escapeHtml = (value: string) =>
+      value.replace(
+        /[&<>"']/g,
+        (char) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          })[char] ?? char,
+      );
+    const renderConcept = (id: string) => {
+      const node = nodeById.get(id);
+      if (!node) return "";
+      const first = (node.articles[locale] ?? [])[0];
+      return first
+        ? `<a href="${base}${first.path}">${escapeHtml(label(node))}</a>`
+        : `${escapeHtml(label(node))} <span class="badge">${
+            ja ? "準備中" : "in preparation"
+          }</span>`;
+    };
+
+    const filterRouteOptions = () => {
+      const subject = routeSubject.value;
+      for (const select of [routeStart, routeGoal]) {
+        select.value = "";
+        select
+          .querySelectorAll<HTMLOptionElement>("[data-route-option]")
+          .forEach((option) => {
+            const matches = option.dataset.subject === subject;
+            option.hidden = !matches;
+            option.disabled = !matches;
+          });
+      }
+      result.innerHTML = "";
+    };
+
+    const requestedSubject =
+      new URL(location.href).searchParams.get("subject") ??
+      container.dataset.fixedSubject;
+    if (
+      requestedSubject &&
+      [...routeSubject.options].some((option) => option.value === requestedSubject)
+    ) {
+      routeSubject.value = requestedSubject;
+    }
+    filterRouteOptions();
+    routeSubject.addEventListener("change", filterRouteOptions);
+
+    /** ノード詳細や地図上の選択から、経路検索の始点・目的地点を設定する。 */
+    applyRouteSelection = ({ id, mode }) => {
+      const node = id ? nodeById.get(id) : undefined;
+      if (!node || !mode) return;
+      if (routeSubject.value !== node.subject) {
+        routeSubject.value = node.subject;
+        filterRouteOptions();
+      }
+      if (mode === "start") {
+        routeStart.value = node.id;
+      } else {
+        routeGoal.value = node.id;
+      }
+      setRouteOpen(true);
+      if (mode === "goal") form.requestSubmit();
+    };
+    pendingRouteSelections.splice(0).forEach(applyRouteSelection);
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const start = routeStart.value;
+      const goal = routeGoal.value;
+      if (!goal) return;
+      try {
+        const route = computeLearningRoute(start ? [start] : [], goal, conceptMap);
+        const stepsHtml = route.steps
+          .map((id, index) => {
+            const item = renderConcept(id);
+            return item
+              ? `<li><span class="route-number">${index + 1}</span>${item}</li>`
+              : "";
+          })
+          .join("");
+
+        // 前提関係が少ない分野でも次に読む候補を見つけられるよう、
+        // 必須経路とは分けて同分野の項目を合計8件まで補う。
+        const goalNode = nodeById.get(goal);
+        const routeIds = new Set([...route.steps, ...route.skipped]);
+        const directConnections = new Set<string>();
+        for (const id of route.steps) {
+          const node = nodeById.get(id);
+          if (!node) continue;
+          for (const connected of [
+            ...node.related,
+            ...node.recommendedNext,
+            ...node.alternatives,
+          ]) {
+            directConnections.add(connected);
+          }
+        }
+        const supplementalLimit = Math.max(0, 8 - route.steps.length);
+        const supplemental = goalNode
+          ? data.nodes
+              .map((node, index) => ({ node, index }))
+              .filter(
+                ({ node }) =>
+                  node.subject === goalNode.subject && !routeIds.has(node.id),
+              )
+              .sort((a, b) => {
+                const rank = (node: GraphNode) => [
+                  directConnections.has(node.id) ? 0 : 1,
+                  node.category === goalNode.category ? 0 : 1,
+                  (node.articles[locale] ?? []).length > 0 ? 0 : 1,
+                ];
+                const ar = rank(a.node);
+                const br = rank(b.node);
+                for (let i = 0; i < ar.length; i += 1) {
+                  if (ar[i] !== br[i]) return ar[i] - br[i];
+                }
+                return a.index - b.index;
+              })
+              .slice(0, supplementalLimit)
+              .map(({ node }) => node.id)
+          : [];
+        const supplementalHtml = supplemental
+          .map((id) => `<li>${renderConcept(id)}</li>`)
+          .join("");
+        const skippedHtml = route.skipped
+          .map((id) => `<li>${renderConcept(id)}</li>`)
+          .join("");
+
+        result.innerHTML = `<h3>${
+          ja
+            ? `おすすめの学習順（${route.steps.length}件）`
+            : `Recommended learning order (${route.steps.length})`
+        }</h3><ol class="route-steps">${stepsHtml}</ol>${
+          supplemental.length > 0
+            ? `<h4>${
+                ja
+                  ? `同じ分野からあわせて読む（${supplemental.length}件）`
+                  : `Also read in this subject (${supplemental.length})`
+              }</h4><ul class="route-supplemental">${supplementalHtml}</ul>`
+            : ""
+        }${
+          route.skipped.length > 0
+            ? `<details class="route-known"><summary>${
+                ja
+                  ? `開始地点以前の前提（${route.skipped.length}件）`
+                  : `Prerequisites before the starting point (${route.skipped.length})`
+              }</summary><ul>${skippedHtml}</ul></details>`
+            : ""
+        }`;
+        window.dispatchEvent(
+          new CustomEvent("atlas-map-route", {
+            detail: {
+              stepIds: route.steps,
+              skippedIds: route.skipped,
+              goalId: goal,
+            },
+          }),
+        );
+      } catch {
+        result.textContent = ja
+          ? "この組み合わせでは学習経路を作成できませんでした。"
+          : "No learning route could be created for this selection.";
+      }
+    });
+  }
+
+  void initRoute();
+
+  const start = () =>
+    initMap().catch((err) => {
+      if (detail) {
+        detail.textContent = `学習地図の読み込みに失敗しました: ${String(err)}`;
+      }
+    });
+
+  // タブ内・画面下にある地図でも、検索や経路検索を押した直後から必ず使えるようにする。
+  // Cytoscape 自体は動的 import のままなので、初期 HTML の描画は妨げない。
+  start();
+</script>

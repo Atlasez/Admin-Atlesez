@@ -5,11 +5,20 @@
   name: { ja: 漢字, en: Kanji }
   status: published
   order: 1
+  introSlug: what-is-kanji
+  group: humanities
+  genre: language-learning
   description:
     ja: 漢字の成り立ち・読み・使い分けを学ぶ。
     en: Learn the origins, readings and usage of kanji.
   externalUrl: https://sites.google.com/view/atlas-kanji
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [kanji.overview.what-is-kanji]
+      relatedCategoryIds: []
     - id: supernatural-religion
       slug: supernatural-religion
       name: { ja: 超自然・宗教, en: Supernatural and Religion }
@@ -57,11 +66,20 @@
   name: { ja: 古文, en: Classical Japanese }
   status: published
   order: 2
+  introSlug: what-is-kobun
+  group: humanities
+  genre: language-learning
   description:
     ja: 古典文法と読解を基礎から学ぶ。
     en: Classical Japanese grammar and reading.
   externalUrl: https://sites.google.com/view/atlas-kobun
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [kobun.overview.what-is-kobun]
+      relatedCategoryIds: []
     - id: classical-literature
       slug: classical-literature
       name: { ja: 古典作品, en: Classical Literature }
@@ -74,6 +92,8 @@
   name: { ja: 漢文, en: Classical Chinese }
   status: preparing
   order: 3
+  group: humanities
+  genre: language-learning
   description:
     ja: 訓読の基礎から漢文読解へ。
     en: Kanbun reading from the basics.
@@ -82,6 +102,8 @@
   name: { ja: 地理, en: Geography }
   status: preparing
   order: 4
+  group: social
+  genre: society-region
   description:
     ja: 系統地理と地誌を体系的に学ぶ。
     en: Systematic and regional geography.
@@ -90,6 +112,8 @@
   name: { ja: 日本史, en: Japanese History }
   status: preparing
   order: 5
+  group: humanities
+  genre: history-thought-culture
   description:
     ja: 原始から現代までの日本の歴史。
     en: Japanese history from ancient to modern times.
@@ -98,6 +122,8 @@
   name: { ja: 世界史, en: World History }
   status: preparing
   order: 6
+  group: humanities
+  genre: history-thought-culture
   description:
     ja: 諸地域の歴史と世界の一体化を学ぶ。
     en: Regional histories and global integration.
@@ -106,6 +132,8 @@
   name: { ja: 哲学, en: Philosophy }
   status: preparing
   order: 7
+  group: humanities
+  genre: history-thought-culture
   description:
     ja: 問いから始める哲学入門。
     en: Philosophy, starting from questions.
@@ -114,6 +142,8 @@
   name: { ja: 考古学, en: Archaeology }
   status: preparing
   order: 8
+  group: humanities
+  genre: history-thought-culture
   description:
     ja: 遺物・遺構から過去を読み解く。
     en: Reading the past from material remains.
@@ -122,10 +152,19 @@
   name: { ja: 数学, en: Mathematics }
   status: published
   order: 9
+  introSlug: what-is-mathematics
+  group: natural
+  genre: mathematics-information
   description:
     ja: 集合論から代数学・線形代数まで、定義と証明を大切にしながら一歩ずつ学ぶ。
     en: From set theory to algebra and linear algebra, step by step with rigorous definitions.
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [math.overview.what-is-mathematics]
+      relatedCategoryIds: []
     - id: set-theory
       slug: set-theory
       name: { ja: 集合論, en: Set Theory }
@@ -161,11 +200,20 @@
   name: { ja: 物理, en: Physics }
   status: published
   order: 10
+  introSlug: what-is-physics
+  group: natural
+  genre: matter-space-earth
   description:
     ja: 力学から現代物理まで。
     en: From mechanics to modern physics.
   externalUrl: https://sites.google.com/view/atlas-physics
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [physics.overview.what-is-physics]
+      relatedCategoryIds: []
     - id: foundations
       slug: foundations
       name: { ja: 物理の基礎, en: Foundations of Physics }
@@ -227,10 +275,19 @@
   name: { ja: 化学, en: Chemistry }
   status: published
   order: 11
+  introSlug: what-is-chemistry
+  group: natural
+  genre: matter-space-earth
   description:
     ja: 物質の構成から反応まで、ミクロな視点で世界を理解する。
     en: Understanding the world at the molecular level, from matter to reactions.
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [chem.overview.what-is-chemistry]
+      relatedCategoryIds: []
     - id: matter
       slug: matter
       name: { ja: 物質の構成と状態, en: Matter and Its States }
@@ -262,6 +319,8 @@
   name: { ja: 地質, en: Geology }
   status: preparing
   order: 12
+  group: natural
+  genre: matter-space-earth
   description:
     ja: 大地の成り立ちを学ぶ。
     en: How the earth was formed.
@@ -270,6 +329,8 @@
   name: { ja: 気象, en: Meteorology }
   status: preparing
   order: 13
+  group: natural
+  genre: matter-space-earth
   description:
     ja: 大気の科学。
     en: The science of the atmosphere.
@@ -278,6 +339,8 @@
   name: { ja: 海洋, en: Oceanography }
   status: preparing
   order: 14
+  group: natural
+  genre: matter-space-earth
   description:
     ja: 海の科学。
     en: The science of the ocean.
@@ -286,11 +349,20 @@
   name: { ja: 天文, en: Astronomy }
   status: published
   order: 15
+  introSlug: what-is-astronomy
+  group: natural
+  genre: matter-space-earth
   description:
     ja: 宇宙の構造と進化を学ぶ。
     en: The structure and evolution of the universe.
   externalUrl: https://sites.google.com/view/atlas-astronomy
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [astronomy.overview.what-is-astronomy]
+      relatedCategoryIds: []
     - id: stellar-astronomy
       slug: stellar-astronomy
       name: { ja: 恒星, en: Stellar Astronomy }
@@ -302,11 +374,20 @@
   name: { ja: 生物, en: Biology }
   status: published
   order: 16
+  introSlug: what-is-biology
+  group: natural
+  genre: life-applied-science
   description:
     ja: 生命の仕組みを分子から生態系まで。
     en: Life from molecules to ecosystems.
   externalUrl: https://sites.google.com/view/atlas-biology
   categories:
+    - id: overview
+      slug: overview
+      name: { ja: 概要, en: Overview }
+      order: 0
+      entryConceptIds: [biology.overview.what-is-biology]
+      relatedCategoryIds: []
     - id: biochemistry
       slug: biochemistry
       name: { ja: 生化学, en: Biochemistry }
@@ -330,6 +411,8 @@
   name: { ja: 情報, en: Informatics }
   status: preparing
   order: 17
+  group: natural
+  genre: mathematics-information
   description:
     ja: 情報科学とプログラミングの基礎。
     en: Foundations of computer science and programming.
@@ -338,6 +421,8 @@
   name: { ja: 水産学, en: Fisheries Science }
   status: preparing
   order: 18
+  group: natural
+  genre: life-applied-science
   description:
     ja: 水圏の生物資源と利用。
     en: Aquatic bioresources and their use.
@@ -346,6 +431,8 @@
   name: { ja: 建築, en: Architecture }
   status: preparing
   order: 19
+  group: natural
+  genre: life-applied-science
   description:
     ja: 建築の計画・構造・環境。
     en: Architectural planning, structure and environment.
@@ -354,6 +441,8 @@
   name: { ja: 薬学, en: Pharmacy }
   status: preparing
   order: 20
+  group: natural
+  genre: life-applied-science
   description:
     ja: 薬と身体の科学。
     en: The science of drugs and the body.
@@ -362,6 +451,8 @@
   name: { ja: 中国語（普通話）, en: Chinese (Mandarin) }
   status: preparing
   order: 21
+  group: humanities
+  genre: language-learning
   description:
     ja: 発音から文法まで、普通話の基礎。
     en: Mandarin basics from pronunciation to grammar.
@@ -370,6 +461,8 @@
   name: { ja: 台湾華語, en: Taiwanese Mandarin }
   status: preparing
   order: 22
+  group: humanities
+  genre: language-learning
   description:
     ja: 台湾で話される華語を学ぶ。
     en: Mandarin as spoken in Taiwan.
@@ -378,6 +471,8 @@
   name: { ja: 言語学, en: Linguistics }
   status: preparing
   order: 23
+  group: humanities
+  genre: language-literature
   description:
     ja: ことばの仕組みを科学する。
     en: The science of language.
