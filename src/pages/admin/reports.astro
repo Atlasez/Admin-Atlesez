@@ -18,6 +18,7 @@ const subjects = (await getCollection("subjects")).sort(
         <h1>記事の問題報告</h1>
         <p>未確認の報告から確認し、必要なときだけ詳細と運営メモを開いて対応します。</p>
       </div>
+      <div class="admin-auth-actions" data-admin-auth-actions hidden></div>
     </header>
 
     <section class="permission-panel" data-permission-admin hidden aria-labelledby="permission-heading">
@@ -59,6 +60,10 @@ const subjects = (await getCollection("subjects")).sort(
   .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .45rem; }
   h1 { font-size: clamp(1.8rem, 4vw, 2.45rem); letter-spacing: -.025em; margin: 0; }
   .admin-reports-heading div > p:last-child { color: var(--muted); margin: .65rem 0 0; }
+  .admin-auth-actions { align-items: end; display: flex; flex: 0 0 auto; gap: .5rem; }
+  .admin-auth-actions a, .admin-auth-actions button { font: inherit; font-size: .82rem; }
+  .admin-auth-actions a { border: 1px solid var(--border); border-radius: .45rem; color: var(--text); padding: .55rem .7rem; text-decoration: none; }
+  .admin-auth-actions a:hover { background: var(--surface-alt); }
   .permission-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; display: grid; gap: .8rem; margin: 0 0 1.25rem; padding: 1rem; }
   .permission-panel h2 { font-size: 1.05rem; margin: 0; }
   .permission-panel p { color: var(--muted); font-size: .86rem; margin: .3rem 0 0; }
@@ -137,6 +142,7 @@ const subjects = (await getCollection("subjects")).sort(
     const permissionForm = root.querySelector<HTMLFormElement>("[data-permission-form]");
     const permissionList = root.querySelector<HTMLElement>("[data-permission-list]");
     const permissionFeedback = root.querySelector<HTMLElement>("[data-permission-feedback]");
+    const authActions = root.querySelector<HTMLElement>("[data-admin-auth-actions]");
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
     const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
     const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
@@ -161,6 +167,20 @@ const subjects = (await getCollection("subjects")).sort(
     ]);
     const setPermissionFeedback = (message: string) => {
       if (permissionFeedback) permissionFeedback.textContent = message;
+    };
+    const loadAuthStatus = async () => {
+      if (!authActions) return;
+      try {
+        const response = await fetch("/api/admin/auth-status", { credentials: "same-origin" });
+        const data = await readApiResponse<{ googlePreviewEnabled?: boolean; googleAuthenticated?: boolean }>(response);
+        if (!response.ok || !data.googlePreviewEnabled) return;
+        authActions.hidden = false;
+        authActions.innerHTML = data.googleAuthenticated
+          ? '<form method="post" action="/auth/logout"><button class="button button-outline" type="submit">Googleからログアウト</button></form>'
+          : '<a href="/auth/google/login?returnTo=%2Fadmin%2Freports">Googleログインを試す</a>';
+      } catch {
+        // 認証補助UIは表示できないだけで、一覧利用には影響させない。
+      }
     };
     const renderPermissions = (permissions: Permission[]) => {
       if (!permissionList) return;
@@ -263,5 +283,6 @@ const subjects = (await getCollection("subjects")).sort(
     });
     void load();
     void loadPermissions();
+    void loadAuthStatus();
   }
 </script>
