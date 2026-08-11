@@ -56,7 +56,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     </header>
 
     <section class="workflow-guide" aria-label="編集の流れ">
-      <span><b>1</b> 下書き</span><span aria-hidden="true">→</span><span><b>2</b> 査読中</span><span aria-hidden="true">→</span><span><b>3</b> 承認済み</span><span aria-hidden="true">→</span><span><b>4</b> GitHubで公開</span>
+      <span><b>1</b> 下書き</span><span aria-hidden="true">→</span><span><b>2</b> 査読中</span><span aria-hidden="true">→</span><span><b>3</b> 査読済み</span><span aria-hidden="true">→</span><span><b>4</b> 公開するか選択</span>
     </section>
 
     <div class="workspace-grid">
@@ -90,7 +90,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
               <output data-save-message aria-live="polite"></output>
               <label class="engine-control">数式組版<select data-preview-engine><option value="katex">KaTeX（高速）</option><option value="mathjax">MathJax（LaTeX互換）</option></select></label>
               <button type="button" class="quiet-action" data-copy-markdown>公開用Markdownをコピー</button>
-              <button type="button" class="primary-action" data-publish-document hidden>承認済み原稿を公開</button>
+              <button type="button" class="primary-action" data-publish-document hidden>査読済み原稿を公開</button>
               <button type="submit" class="primary-action">保存</button>
             </div>
           </section>
@@ -105,7 +105,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
               <label>URL用の名前<input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
               <label>概念ID<input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
               <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
-              <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="approved">承認済み（公開準備完了）</option></select></label>
+              <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select></label>
             </div>
           </details>
 
@@ -131,6 +131,17 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
         </form>
       </section>
     </div>
+    <dialog class="approval-dialog" data-approval-dialog aria-labelledby="approval-dialog-title">
+      <form method="dialog">
+        <p class="eyebrow">査読完了</p>
+        <h2 id="approval-dialog-title">この記事を公開しますか？</h2>
+        <p>「はい」を選ぶと、保存後にGitHubへ公開し、学習サイトの自動ビルドが始まります。</p>
+        <div class="approval-actions">
+          <button type="submit" value="no" class="quiet-action">いいえ（査読済みとして保存）</button>
+          <button type="submit" value="yes" class="primary-action">はい（保存して公開）</button>
+        </div>
+      </form>
+    </dialog>
   </main>
 
   <script is:inline id="editor-source-data" type="application/json" set:html={editorData}></script>
@@ -172,7 +183,8 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
   .document-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .document-card small { color: var(--muted); }
   .state { border-radius: 999px; font-size: .7rem; font-weight: 800; padding: .14rem .4rem; width: fit-content; }
-  .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-approved { background: #def4e6; color: #267143; }
+  .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-on-hold { background: #f4e5e7; color: #8a3b49; }.state-approved { background: #def4e6; color: #267143; }
+  .approval-dialog { width: min(92vw, 31rem); border: 1px solid #d9e3eb; border-radius: 1rem; padding: 1.5rem; color: #183047; box-shadow: 0 1.5rem 5rem #162c4030; }.approval-dialog::backdrop { background: #10203388; }.approval-dialog h2 { margin: .2rem 0 .65rem; }.approval-dialog p { line-height: 1.7; }.approval-actions { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1.25rem; flex-wrap: wrap; }
   .editor-panel { background: var(--surface); min-width: 0; padding: clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 8rem auto; max-width: 30rem; text-align: center; }.empty-state h2 { color: var(--text); }
   .document-form { display: grid; gap: 1rem; }
@@ -193,7 +205,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
 
   type Subject = { slug: string; name: string; categories: { slug: string; name: string }[] };
   type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string };
-  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; status: "draft" | "in-review" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null };
   type Comment = { id: string; body: string; created_by: string; created_at: string };
   const payloadElement = document.querySelector<HTMLScriptElement>("#editor-source-data");
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
@@ -217,13 +229,17 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const wordCount = root.querySelector<HTMLElement>("[data-word-count]")!;
     const previewEngine = root.querySelector<HTMLSelectElement>("[data-preview-engine]")!;
     const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
+    const approvalDialog = root.querySelector<HTMLDialogElement>("[data-approval-dialog]")!;
     const board = root.querySelector<HTMLElement>("[data-work-board]")!;
     const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
     let documents: Omit<Document, "body">[] = [];
     let currentComments: Comment[] = [];
     let isManager = false;
     let mathJaxLoading: Promise<void> | undefined;
-    const statusLabel = { draft: "下書き", "in-review": "査読中", approved: "承認済み・公開準備完了" } as const;
+    const statusLabel = { draft: "下書き", "in-review": "査読中", "on-hold": "保留", approved: "査読済み" } as const;
+    let currentStatus: Document["status"] = "draft";
+    let publishAfterApproval = false;
+    let approvalChoiceMade = false;
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
     const read = async <T,>(response: Response) => {
@@ -291,7 +307,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
       (form.elements.namedItem("conceptId") as HTMLInputElement).value = item.concept_id;
-      status.value = item.status; body.value = item.body;
+      status.value = item.status; currentStatus = item.status; publishAfterApproval = false; approvalChoiceMade = false; body.value = item.body;
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; currentComments = commentsForDocument; renderComments(); void renderPreview(); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved"); saveMessage.value = "";
     };
     const emptyDocument = (source?: SourceArticle) => {
@@ -307,12 +323,49 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
     const loadBoard = async () => { const response=await fetch("/api/admin/editor/board",{credentials:"same-origin"}); const data=await read<{board?:{subject:string;status:string;count:number}[]}>(response); board.innerHTML=(data.board??[]).map(x=>`<div><b>${esc(x.subject)}</b> ${esc(x.status)}: ${x.count}</div>`).join("")||"まだ原稿はありません。"; };
     const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
-    subject.addEventListener("change", () => fillCategories()); status.addEventListener("change", () => { state.textContent = statusLabel[status.value as keyof typeof statusLabel]; publishButton.hidden = !(isManager && (form.elements.namedItem("documentId") as HTMLInputElement).value && status.value === "approved"); }); body.addEventListener("input", () => void renderPreview()); previewEngine.addEventListener("change", () => void renderPreview());
+    subject.addEventListener("change", () => fillCategories());
+    status.addEventListener("change", () => {
+      state.textContent = statusLabel[status.value as keyof typeof statusLabel];
+      publishButton.hidden = !(isManager && (form.elements.namedItem("documentId") as HTMLInputElement).value && status.value === "approved");
+      if (status.value === "approved" && currentStatus !== "approved") {
+        approvalChoiceMade = false;
+        publishAfterApproval = false;
+        approvalDialog.showModal();
+      }
+    });
+    approvalDialog.addEventListener("close", () => {
+      if (approvalDialog.returnValue === "yes" || approvalDialog.returnValue === "no") {
+        approvalChoiceMade = true;
+        publishAfterApproval = approvalDialog.returnValue === "yes";
+        saveMessage.value = publishAfterApproval ? "保存時にGitHubへ公開します。" : "査読済みとして保存します。";
+      } else if (!approvalChoiceMade && status.value === "approved" && currentStatus !== "approved") {
+        status.value = currentStatus;
+        state.textContent = statusLabel[currentStatus];
+      }
+    });
+    body.addEventListener("input", () => void renderPreview()); previewEngine.addEventListener("change", () => void renderPreview());
     form.addEventListener("input", () => { heading.textContent = formValue("title") || "新規原稿"; });
     root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } emptyDocument(source); });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
-    form.addEventListener("submit", (event) => { event.preventDefault(); void (async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) }); const data = await read<{ id?: string; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "保存できませんでした。"); if (!id && data.id) (form.elements.namedItem("documentId") as HTMLInputElement).value = data.id; saveMessage.value = "保存しました。"; await loadDocuments(); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
+    form.addEventListener("submit", (event) => { event.preventDefault(); void (async () => {
+      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      if (status.value === "approved" && currentStatus !== "approved" && !approvalChoiceMade) { approvalDialog.showModal(); return; }
+      const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
+      const data = await read<{ id?: string; error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+      const savedId = id || data.id || "";
+      if (!id && data.id) (form.elements.namedItem("documentId") as HTMLInputElement).value = data.id;
+      currentStatus = status.value as Document["status"];
+      if (publishAfterApproval && savedId) {
+        const publishResponse = await fetch(`/api/admin/editor/documents/${savedId}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" });
+        const publishData = await read<{ error?: string }>(publishResponse);
+        if (!publishResponse.ok) throw new Error(`査読済みとして保存しましたが、公開できませんでした。${publishData.error ?? ""}`);
+        saveMessage.value = "査読済みとして保存し、GitHubへ公開しました。学習サイトの自動ビルド完了後に反映されます。";
+      } else saveMessage.value = "保存しました。";
+      publishAfterApproval = false; approvalChoiceMade = false;
+      await loadDocuments();
+    })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; await openDocument(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
     publishButton.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開できませんでした。"); saveMessage.value = data.commitUrl ? "公開しました。Cloudflareの自動ビルド完了後に学習サイトへ反映されます。" : "公開しました。"; })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開できませんでした。"; }); });
     const themeButton = root.querySelector<HTMLButtonElement>("[data-theme-toggle]")!; const applyTheme = (dark: boolean) => { document.documentElement.dataset.prefBg = dark ? "dark" : ""; themeButton.setAttribute("aria-pressed", String(dark)); themeButton.textContent = dark ? "ライト表示" : "ダーク表示"; localStorage.setItem("atlasez-editor-theme", dark ? "dark" : "light"); }; applyTheme(localStorage.getItem("atlasez-editor-theme") === "dark"); themeButton.addEventListener("click", () => applyTheme(document.documentElement.dataset.prefBg !== "dark"));

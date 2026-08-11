@@ -31,7 +31,7 @@ type ReportStatus = "new" | "reviewing" | "resolved";
 type AdminUpdatePayload = { status?: unknown; adminNote?: unknown };
 type PermissionPayload = { email?: unknown; subject?: unknown };
 type ReportAdminPermission = { email: string; subject: string };
-type EditorialDocumentStatus = "draft" | "in-review" | "approved";
+type EditorialDocumentStatus = "draft" | "in-review" | "on-hold" | "approved";
 type EditorialDocument = {
   id: string;
   source_article_id: string | null;
@@ -100,6 +100,7 @@ const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
 const EDITORIAL_DOCUMENT_STATUSES = new Set<EditorialDocumentStatus>([
   "draft",
   "in-review",
+  "on-hold",
   "approved",
 ]);
 const MAX_ADMIN_NOTE_LENGTH = 4_000;
