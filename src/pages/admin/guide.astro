@@ -1,0 +1,29 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminNav from "../../components/AdminNav.astro";
+---
+
+<AdminLayout title="作業の進め方" description="アトラス運営者向けの最初の案内と執筆マニュアル">
+  <main class="guide" id="main">
+    <AdminNav current="guide" />
+    <header class="guide-bar" hidden>
+      <a class="brand" href="/atlas/ja/"><img src="/images/atlasez-logo.png" alt="" width="34" height="34" />アトラス <span>運営用サイト</span></a>
+      <nav aria-label="編集室メニュー"><a href="/admin/editor">記事編集</a><a href="/admin/reports">問題報告・統計</a><a href="/admin/guide" aria-current="page">作業の進め方</a></nav>
+    </header>
+    <header class="guide-heading"><p>はじめに</p><h1>新しい編集室の使い方</h1><span>旧運営用サイトの内容を、日々の作業に必要な順にまとめ直しました。</span></header>
+    <div class="guide-grid">
+      <aside><strong>目次</strong><a href="#start">最初にすること</a><a href="#flow">記事を公開するまで</a><a href="#roles">役割分担</a><a href="#math">数式の書き方</a><a href="#legacy">旧サイト・各種リンク</a></aside>
+      <article>
+        <section id="start"><h2>最初にすること</h2><ol><li>Discordへ参加し、表示名と自己紹介を設定する。</li><li>Google Driveで「資料」および自分の担当分野フォルダが共有されているか確認する。</li><li>編集室へGoogleでログインし、担当分野が正しく表示されているか確認する。</li></ol><p>見られない分野や資料がある場合は、運営管理者へ連絡してください。</p></section>
+        <section id="flow"><h2>記事を公開するまで</h2><div class="flow"><b>記事案</b><span>→</span><b>下書き</b><span>→</span><b>査読中</b><span>→</span><b>承認済み</b><span>→</span><b>公開</b></div><ol><li>編集室で新規原稿を作る、または既存記事を下書きに取り込む。</li><li>左にMarkdown、右にプレビューを見ながら執筆する。</li><li>状態を「査読中」にして、コメント欄で校正・推敲を進める。</li><li>運営管理者が内容を確認して「承認済み」にする。</li><li>GitHub公開連携を設定済みなら、管理者が公開ボタンを押す。未設定なら公開用MarkdownをコピーしてPRを作る。</li></ol></section>
+        <section id="roles"><h2>役割と権限</h2><dl><dt>記事担当</dt><dd>自分が作成した原稿の執筆・修正を行えます。</dd><dt>分野担当</dt><dd>同分野の原稿を読み、査読コメントを追加できます。</dd><dt>運営管理者</dt><dd>全分野の承認・公開、分野権限の管理を行えます。</dd></dl><p>記事執筆、TeX入力、校正・推敲、図表作成、ページデザイン、Web開発、広報、運営内運営は兼務できます。</p></section>
+        <section id="math"><h2>数式の書き方</h2><p>旧サイトの方針どおり、数式はLaTeXで記述します。編集室ではKaTeX（高速）とMathJax（より広いLaTeX互換）を切り替えて確認できます。</p><ul><li>行内数式：<code>$...$</code> または <code>\(...\)</code></li><li>別行数式：<code>$$...$$</code> または <code>\[...\]</code></li><li>複数行・位置合わせ：<code>\begin&#123;align&#125; ... \end&#123;align&#125;</code></li></ul><p>MathJaxでは文書全体を組むLaTeXの<code>document</code>環境は使いません。数式環境の中で記述してください。</p></section>
+        <section id="legacy"><h2>旧サイト・各種リンク</h2><ul><li><a href="https://sites.google.com/view/atlasez-adm-lw" target="_blank" rel="noreferrer">旧・学習サイト運営用ページ</a>（従来の全マニュアル）</li><li><a href="https://discord.gg/ppaHTKtbek" target="_blank" rel="noreferrer">Discord</a></li><li><a href="https://drive.google.com/drive/folders/1UQAdXMwzOBilPx7JLtTj2-711bIYTu61" target="_blank" rel="noreferrer">Google Drive</a></li></ul></section>
+      </article>
+    </div>
+  </main>
+</AdminLayout>
+
+<style>
+  .guide { --accent:var(--accent-primary); --border:var(--border-default); --surface:var(--background-primary); --alt:var(--background-secondary); color:var(--text-primary); margin:0 auto; max-width:1100px; padding:0 1.25rem 4rem; }.guide-bar { align-items:center; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; min-height:4.15rem; }.brand { align-items:center; color:var(--accent); display:flex; font-size:1.15rem; font-weight:700; gap:.45rem; text-decoration:none; }.brand span { border-left:1px solid var(--border); color:var(--text-primary); font-size:.8rem; margin-left:.1rem; padding-left:.55rem; }.guide-bar nav { display:flex; min-height:4.15rem; }.guide-bar nav a { align-items:center; border-bottom:3px solid transparent; color:var(--text-primary); display:flex; font-size:.84rem; padding:0 .65rem; text-decoration:none; }.guide-bar nav a[aria-current="page"],.guide-bar nav a:hover { border-bottom-color:var(--accent); color:var(--accent); }.guide-heading { border-bottom:1px solid var(--border); padding:2rem 0 1.25rem; }.guide-heading p { color:var(--accent); font-size:.78rem; font-weight:800; letter-spacing:.08em; margin:0; }.guide-heading h1 { margin:.3rem 0; }.guide-heading span { color:var(--text-secondary); }.guide-grid { display:grid; gap:2.5rem; grid-template-columns:13rem minmax(0,1fr); padding-top:1.6rem; }.guide-grid aside { align-self:start; border-top:2px solid var(--accent); display:grid; gap:.15rem; padding-top:.6rem; position:sticky; top:1rem; }.guide-grid aside strong { margin-bottom:.35rem; }.guide-grid aside a { color:var(--text-primary); font-size:.88rem; padding:.3rem 0; }.guide-grid article { display:grid; gap:2.2rem; }.guide-grid section { border-top:1px solid var(--border); padding-top:1rem; }.guide-grid h2 { margin:0 0 .7rem; }.guide-grid li,.guide-grid p,.guide-grid dd { line-height:1.8; }.flow { align-items:center; display:flex; flex-wrap:wrap; gap:.5rem; margin:.8rem 0 1rem; }.flow b { background:var(--alt); border:1px solid var(--border); padding:.35rem .55rem; }.flow span { color:var(--accent); } dl { border-top:1px solid var(--border); margin:0; } dt { background:var(--alt); border-bottom:1px solid var(--border); font-weight:800; padding:.55rem .7rem; } dd { border-bottom:1px solid var(--border); margin:0; padding:.55rem .7rem; } code { background:var(--alt); border:1px solid var(--border); padding:.05rem .2rem; } @media(max-width:760px){.guide-bar{align-items:start;display:grid;padding-top:.45rem}.guide-bar nav{min-height:2.8rem}.guide-bar nav a{font-size:.76rem;padding:0 .35rem}.guide-grid{grid-template-columns:1fr}.guide-grid aside{position:static}.guide-heading{padding-top:1.4rem}}
+</style>

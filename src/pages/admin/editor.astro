@@ -1,0 +1,322 @@
+---
+import { getCollection } from "astro:content";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminNav from "../../components/AdminNav.astro";
+
+const subjects = (await getCollection("subjects"))
+  .sort((a, b) => a.data.order - b.data.order)
+  .map((subject) => ({
+    slug: subject.data.slug,
+    name: subject.data.name.ja,
+    categories: subject.data.categories.map((category) => ({
+      slug: category.slug,
+      name: category.name.ja,
+    })),
+  }));
+const articles = (await getCollection("articles"))
+  .filter((article) => article.data.locale === "ja")
+  .map((article) => ({
+    articleId: article.data.articleId,
+    title: article.data.title,
+    subject: article.data.subject,
+    category: article.data.category,
+    slug: article.data.slug,
+    summary: article.data.summary,
+    conceptId: article.data.concepts[0]?.id ?? "",
+    body: article.body,
+  }));
+const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c");
+---
+
+<AdminLayout title="記事編集ワークスペース" description="アトラス運営者用の記事執筆・査読画面">
+  <main class="editor-workspace" data-editor-workspace>
+    <AdminNav current="editor" />
+    <header class="workspace-appbar" hidden>
+      <a class="workspace-brand" href="/atlas/ja/" aria-label="アトラス学習サイトへ">
+        <img src="/images/atlasez-logo.png" alt="" width="34" height="34" />
+        <span>アトラス</span><em>運営用サイト</em>
+      </a>
+      <nav aria-label="編集室メニュー">
+        <a href="/admin/editor" aria-current="page">記事編集</a>
+        <a href="/admin/reports">問題報告・統計</a>
+        <a href="/admin/guide">作業の進め方</a>
+        <button type="button" data-theme-toggle aria-pressed="false">ダーク表示</button>
+      </nav>
+    </header>
+    <header class="workspace-header">
+      <div>
+        <p class="eyebrow">ATLASEZ / 運営用</p>
+        <h1>記事編集ワークスペース</h1>
+        <p>原稿を書く、数式を確かめる、コメントで査読する。公開用のMarkdownまで、この画面で準備できます。</p>
+      </div>
+      <nav aria-label="運営メニュー">
+        <a href="/admin/reports">問題報告・統計</a>
+        <form method="post" action="/auth/logout"><button type="submit">ログアウト</button></form>
+      </nav>
+    </header>
+
+    <section class="workflow-guide" aria-label="編集の流れ">
+      <span><b>1</b> 下書き</span><span aria-hidden="true">→</span><span><b>2</b> 査読中</span><span aria-hidden="true">→</span><span><b>3</b> 承認済み</span><span aria-hidden="true">→</span><span><b>4</b> GitHubで公開</span>
+    </section>
+
+    <div class="workspace-grid">
+      <aside class="document-sidebar" aria-label="原稿一覧">
+        <div class="sidebar-heading">
+          <div><p class="eyebrow">自分の担当分野</p><strong data-editor-scope>読み込み中…</strong></div>
+          <button type="button" class="primary-action" data-new-document>新規原稿</button>
+        </div>
+        <label class="source-picker">既存記事を下書きに取り込む
+          <select data-source-article><option value="">記事を選択…</option></select>
+        </label>
+        <button type="button" class="quiet-action" data-import-source>選んだ記事を編集する</button>
+        <section class="work-board" aria-labelledby="board-heading"><strong id="board-heading">分野ごとの作業状況</strong><div data-work-board>読み込み中…</div></section>
+        <div class="document-list" data-document-list aria-live="polite"></div>
+      </aside>
+
+      <section class="editor-panel" aria-label="原稿編集">
+        <div class="empty-state" data-editor-empty>
+          <h2>原稿を選んでください</h2>
+          <p>新規原稿を作るか、既存の記事を取り込むと、ここで執筆とプレビューを始められます。</p>
+        </div>
+
+        <form class="document-form" data-document-form hidden>
+          <input type="hidden" name="documentId" />
+          <section class="document-toolbar">
+            <div>
+              <p class="eyebrow" data-document-state>下書き</p>
+              <h2 data-document-heading>新規原稿</h2>
+            </div>
+            <div class="toolbar-actions">
+              <output data-save-message aria-live="polite"></output>
+              <label class="engine-control">数式組版<select data-preview-engine><option value="katex">KaTeX（高速）</option><option value="mathjax">MathJax（LaTeX互換）</option></select></label>
+              <button type="button" class="quiet-action" data-copy-markdown>公開用Markdownをコピー</button>
+              <button type="button" class="primary-action" data-publish-document hidden>承認済み原稿を公開</button>
+              <button type="submit" class="primary-action">保存</button>
+            </div>
+          </section>
+
+          <details class="metadata" open>
+            <summary>記事設定</summary>
+            <div class="metadata-grid">
+              <label>タイトル<input name="title" required maxlength="180" placeholder="例：群の定義" /></label>
+              <label>要約<input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
+              <label>分野<select name="subject" required data-subject></select></label>
+              <label>カテゴリ<select name="category" required data-category></select></label>
+              <label>URL用の名前<input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
+              <label>概念ID<input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
+              <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
+              <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="approved">承認済み（公開準備完了）</option></select></label>
+            </div>
+          </details>
+
+          <div class="editor-split" aria-label="原稿とプレビュー">
+            <section class="writing-area">
+              <div class="pane-heading"><div><h3>本文（Markdown）</h3><p><code>$...$</code> は行内数式、<code>$$...$$</code> は別行数式です。</p></div><span data-word-count>0文字</span></div>
+              <textarea name="body" data-body spellcheck="true" placeholder="## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"></textarea>
+            </section>
+
+            <section class="preview-area" aria-labelledby="preview-heading">
+              <div class="pane-heading"><div><h3 id="preview-heading">プレビュー</h3><p>KaTeXで数式を即時に組版します。エラーは赤で表示されます。</p></div><span class="live-badge">自動更新</span></div>
+              <article class="article-preview" data-preview></article>
+            </section>
+          </div>
+
+          <section class="review-panel" aria-labelledby="review-heading">
+            <div class="pane-heading"><div><h3 id="review-heading">査読・フィードバック</h3><p>本文の修正依頼や確認結果を記録します。コメントは同じ担当分野の運営者に共有されます。</p></div></div>
+            <div class="comment-list" data-comment-list></div>
+            <label class="comment-entry">コメントを追加<textarea data-comment-body maxlength="8000" placeholder="例：定義の前に具体例を一つ入れると読みやすくなりそうです。"></textarea></label>
+            <button type="button" class="quiet-action" data-send-comment>コメントを送る</button>
+            <details class="revision-panel"><summary>版履歴・差分確認</summary><div data-revision-list>原稿を保存すると履歴が残ります。</div></details>
+          </section>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script is:inline id="editor-source-data" type="application/json" set:html={editorData}></script>
+</AdminLayout>
+
+<style>
+  .editor-workspace { --surface: var(--background-primary); --surface-alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); box-sizing: border-box; margin: 0 auto; max-width: 1500px; padding: 0 clamp(1rem, 3vw, 2.5rem) 4rem; }
+  .workspace-appbar { align-items: center; border-bottom: 1px solid var(--border); display: flex; gap: var(--space-4); justify-content: space-between; min-height: 4.15rem; }
+  .workspace-brand { align-items: center; color: var(--accent); display: inline-flex; font-size: 1.2rem; font-weight: 700; gap: .5rem; text-decoration: none; }.workspace-brand img { height: 2.15rem; width: 2.15rem; }.workspace-brand em { border-left: 1px solid var(--border); color: var(--text); font-size: .82rem; font-style: normal; font-weight: 600; margin-left: .1rem; padding-left: .55rem; }
+  .workspace-appbar nav { align-items: stretch; display: flex; gap: .2rem; min-height: 4.15rem; }.workspace-appbar nav a, .workspace-appbar nav button { align-items: center; background: transparent; border: 0; border-bottom: 3px solid transparent; color: var(--text); cursor: pointer; display: inline-flex; font: inherit; font-size: .88rem; font-weight: 600; padding: 0 .8rem; text-decoration: none; }.workspace-appbar nav a:hover, .workspace-appbar nav a[aria-current="page"], .workspace-appbar nav button:hover { border-bottom-color: var(--accent); color: var(--accent); }
+  .workspace-header { align-items: start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; padding-bottom: 1.25rem; }
+  .eyebrow { color: var(--accent); font-size: .76rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .4rem; }
+  h1 { font-size: clamp(1.75rem, 3vw, 2.4rem); letter-spacing: -.03em; margin: 0; }
+  .workspace-header > div > p:last-child { color: var(--muted); margin: .55rem 0 0; max-width: 48rem; }
+  .workspace-header nav { align-items: center; display: flex; flex: 0 0 auto; gap: .55rem; }
+  .workspace-header nav a, .workspace-header nav button { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); cursor: pointer; font: inherit; font-size: .84rem; padding: .55rem .7rem; text-decoration: none; }
+  .workspace-header nav a:hover, .workspace-header nav button:hover { background: var(--surface-alt); }
+  .workspace-header nav form { margin: 0; }
+  .workflow-guide { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: .8rem; gap: .45rem; padding: 1rem 0; }
+  .workflow-guide span { align-items: center; display: inline-flex; gap: .3rem; }
+  .workflow-guide b { align-items: center; background: color-mix(in srgb, var(--accent), transparent 88%); border-radius: 999px; color: var(--accent); display: inline-flex; font-size: .72rem; height: 1.2rem; justify-content: center; width: 1.2rem; }
+  .workspace-grid { border-bottom: 1px solid var(--border); border-top: 2px solid var(--accent); display: grid; grid-template-columns: minmax(16rem, .65fr) minmax(0, 2fr); min-height: 46rem; overflow: hidden; }
+  .document-sidebar { background: var(--surface-alt); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: .7rem; min-width: 0; padding: 1rem; }
+  .sidebar-heading { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
+  .sidebar-heading strong { display: block; font-size: .9rem; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { font: inherit; }
+  .primary-action, .quiet-action { border-radius: .45rem; cursor: pointer; font-size: .82rem; font-weight: 800; min-height: 2.35rem; padding: .42rem .68rem; }
+  .primary-action { background: var(--accent); border: 1px solid var(--accent); color: white; }
+  .primary-action:hover { filter: brightness(.93); }
+  .quiet-action { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .quiet-action:hover { background: color-mix(in srgb, var(--accent), transparent 92%); border-color: var(--accent); color: var(--accent); }
+  .source-picker { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .35rem; margin-top: .3rem; }
+  select, input, textarea { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); font: inherit; }
+  select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
+  .document-list { display: grid; gap: .45rem; margin-top: .35rem; overflow: auto; padding-right: .1rem; }
+  .work-board { border-top:1px solid var(--border); display:grid; font-size:.78rem; gap:.35rem; margin-top:.25rem; padding-top:.65rem; }.work-board div { color:var(--muted); line-height:1.55; }.work-board b { color:var(--accent); }
+  .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: grid; gap: .3rem; padding: .7rem; text-align: left; width: 100%; }
+  .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
+  .document-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .document-card small { color: var(--muted); }
+  .state { border-radius: 999px; font-size: .7rem; font-weight: 800; padding: .14rem .4rem; width: fit-content; }
+  .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-approved { background: #def4e6; color: #267143; }
+  .editor-panel { background: var(--surface); min-width: 0; padding: clamp(1rem, 2vw, 1.5rem); }
+  .empty-state { color: var(--muted); margin: 8rem auto; max-width: 30rem; text-align: center; }.empty-state h2 { color: var(--text); }
+  .document-form { display: grid; gap: 1rem; }
+  .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
+  .document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); font-size: .8rem; max-width: 15rem; }.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.engine-control { color: var(--muted); display: grid; font-size: .7rem; font-weight: 800; gap: .18rem; letter-spacing: .02em; margin: 0; }.engine-control select { font-size: .78rem; min-height: 2.1rem; }
+  .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary { cursor: pointer; font-size: .88rem; font-weight: 800; }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
+  .editor-split { align-items: stretch; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }.writing-area, .preview-area, .review-panel { border: 1px solid var(--border); border-radius: 0; overflow: hidden; }.pane-heading { background: var(--surface-alt); border-bottom: 1px solid var(--border); padding: .75rem .9rem; }.pane-heading h3 { font-size: .95rem; margin: 0; }.pane-heading p { color: var(--muted); font-size: .77rem; margin: .22rem 0 0; }.pane-heading code { background: var(--surface); border: 1px solid var(--border); border-radius: 0; padding: .03rem .2rem; }.pane-heading > span { color: var(--muted); flex: 0 0 auto; font-size: .76rem; }.live-badge { color: var(--success) !important; font-weight: 800; }
+  [data-body] { background: #fcfdfe; border: 0; border-radius: 0; box-sizing: border-box; display: block; font-family: var(--font-mono); font-size: .9rem; line-height: 1.7; min-height: clamp(32rem, 66vh, 52rem); padding: 1rem; resize: vertical; width: 100%; }.article-preview { background: var(--surface); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); line-height: 1.8; overflow: auto; overflow-wrap: anywhere; padding: 1rem 1.15rem; }.article-preview :global(h2) { border-bottom: 1px solid var(--border); font-size: 1.25rem; margin: 1.3rem 0 .65rem; padding-bottom: .3rem; }.article-preview :global(h3) { font-size: 1.05rem; margin: 1rem 0 .5rem; }.article-preview :global(p) { margin: .65rem 0; }.article-preview :global(pre) { background: #18212b; border-radius: 0; color: #eef6ff; overflow-x: auto; padding: .7rem; }.article-preview :global(.math-display) { overflow-x: auto; padding: .4rem 0; }.article-preview :global(.katex-error) { color: var(--danger); }.article-preview :global(ul), .article-preview :global(ol) { padding-left: 1.5rem; }
+  .review-panel { padding-bottom: .85rem; }.comment-list { display: grid; gap: .6rem; max-height: 16rem; overflow: auto; padding: .85rem; }.comment { background: var(--surface-alt); border-left: 3px solid var(--accent); border-radius: .35rem; padding: .55rem .65rem; }.comment p { line-height: 1.55; margin: .25rem 0 0; white-space: pre-wrap; }.comment small { color: var(--muted); font-size: .72rem; }.comment-empty { color: var(--muted); font-size: .85rem; margin: 0; }.comment-entry { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; padding: 0 .85rem .6rem; }.comment-entry textarea { box-sizing: border-box; line-height: 1.5; min-height: 5rem; padding: .55rem; resize: vertical; width: 100%; }.review-panel > .quiet-action { margin-left: .85rem; }
+  .revision-panel { margin:1rem .85rem 0; }.revision-panel div { color:var(--muted); font-size:.8rem; padding:.7rem; }.revision-item { border-top:1px solid var(--border); padding:.45rem 0; }
+  @media (max-width: 1080px) { .editor-split { grid-template-columns: 1fr; }.article-preview { height: auto; min-height: 28rem; }.workspace-grid { grid-template-columns: 1fr; }.document-sidebar { border-bottom: 1px solid var(--border); border-right: 0; }.document-list { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); max-height: 16rem; }.workspace-header { display: grid; }.workspace-header nav { justify-content: start; }.document-toolbar { display: grid; }.toolbar-actions { justify-content: start; }.metadata-grid { grid-template-columns: 1fr; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: auto; } }
+  @media (max-width: 560px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-appbar { align-items: stretch; display: grid; gap: 0; padding-top: .4rem; }.workspace-appbar nav { min-height: 2.8rem; }.workspace-appbar nav a { font-size: .8rem; justify-content: center; padding: 0 .35rem; }.workspace-header nav { display: grid; grid-template-columns: 1fr 1fr; }.workspace-header nav a, .workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .72rem; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; } }
+</style>
+
+<script>
+  import renderMathInElement from "katex/contrib/auto-render";
+  import "katex/dist/katex.min.css";
+
+  type Subject = { slug: string; name: string; categories: { slug: string; name: string }[] };
+  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; status: "draft" | "in-review" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null };
+  type Comment = { id: string; body: string; created_by: string; created_at: string };
+  const payloadElement = document.querySelector<HTMLScriptElement>("#editor-source-data");
+  const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
+  if (root && payloadElement) {
+    const { subjects, articles } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[] };
+    const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
+    const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
+    const list = root.querySelector<HTMLElement>("[data-document-list]")!;
+    const scopeLabel = root.querySelector<HTMLElement>("[data-editor-scope]")!;
+    const sourcePicker = root.querySelector<HTMLSelectElement>("[data-source-article]")!;
+    const subject = form.elements.namedItem("subject") as HTMLSelectElement;
+    const category = form.elements.namedItem("category") as HTMLSelectElement;
+    const status = form.elements.namedItem("status") as HTMLSelectElement;
+    const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
+    const preview = root.querySelector<HTMLElement>("[data-preview]")!;
+    const comments = root.querySelector<HTMLElement>("[data-comment-list]")!;
+    const commentBody = root.querySelector<HTMLTextAreaElement>("[data-comment-body]")!;
+    const saveMessage = root.querySelector<HTMLOutputElement>("[data-save-message]")!;
+    const heading = root.querySelector<HTMLElement>("[data-document-heading]")!;
+    const state = root.querySelector<HTMLElement>("[data-document-state]")!;
+    const wordCount = root.querySelector<HTMLElement>("[data-word-count]")!;
+    const previewEngine = root.querySelector<HTMLSelectElement>("[data-preview-engine]")!;
+    const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
+    const board = root.querySelector<HTMLElement>("[data-work-board]")!;
+    const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
+    let documents: Omit<Document, "body">[] = [];
+    let currentComments: Comment[] = [];
+    let isManager = false;
+    let mathJaxLoading: Promise<void> | undefined;
+    const statusLabel = { draft: "下書き", "in-review": "査読中", approved: "承認済み・公開準備完了" } as const;
+    const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
+    const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const read = async <T,>(response: Response) => {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。");
+      return await response.json() as T;
+    };
+    const selectedSubject = () => subjects.find((item) => item.slug === subject.value) ?? subjects[0];
+    const fillCategories = (selected = "") => {
+      const subjectData = selectedSubject();
+      category.innerHTML = subjectData.categories.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
+      category.value = subjectData.categories.some((item) => item.slug === selected) ? selected : subjectData.categories[0]?.slug ?? "";
+    };
+    const initializeSelects = () => {
+      subject.innerHTML = subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
+      fillCategories();
+      sourcePicker.innerHTML = '<option value="">記事を選択…</option>' + articles.map((article) => `<option value="${esc(article.articleId)}">${esc(article.title)}（${esc(article.subject)} / ${esc(article.category)}）</option>`).join("");
+    };
+    const inline = (value: string) => esc(value).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    const previewMarkdown = (value: string) => {
+      const lines = value.replace(/\r\n/g, "\n").split("\n");
+      const result: string[] = [];
+      let inCode = false; let inMath = false; let math: string[] = [];
+      for (const raw of lines) {
+        if (raw.trim() === "$$") { if (inMath) { result.push(`<div class="math-display">$$${esc(math.join("\n"))}$$</div>`); math = []; } inMath = !inMath; continue; }
+        if (inMath) { math.push(raw); continue; }
+        if (raw.startsWith("```")) { inCode = !inCode; result.push(inCode ? "<pre><code>" : "</code></pre>"); continue; }
+        if (inCode) { result.push(`${esc(raw)}\n`); continue; }
+        if (/^###\s+/.test(raw)) { result.push(`<h3>${inline(raw.replace(/^###\s+/, ""))}</h3>`); continue; }
+        if (/^##\s+/.test(raw)) { result.push(`<h2>${inline(raw.replace(/^##\s+/, ""))}</h2>`); continue; }
+        if (/^[-*]\s+/.test(raw)) { result.push(`<ul><li>${inline(raw.replace(/^[-*]\s+/, ""))}</li></ul>`); continue; }
+        if (/^\d+\.\s+/.test(raw)) { result.push(`<ol><li>${inline(raw.replace(/^\d+\.\s+/, ""))}</li></ol>`); continue; }
+        if (raw.trim()) result.push(`<p>${inline(raw)}</p>`);
+      }
+      if (inMath) result.push(`<p class="katex-error">数式の閉じる $$ がありません。</p>`);
+      if (inCode) result.push("</code></pre>");
+      return result.join("").replace(/<\/ul><ul>/g, "").replace(/<\/ol><ol>/g, "");
+    };
+    const loadMathJax = () => mathJaxLoading ??= new Promise((resolve, reject) => {
+      (window as typeof window & { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax = { typesetPromise: async () => {} };
+      const script = document.createElement("script"); script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"; script.async = true;
+      script.onload = () => resolve(); script.onerror = () => reject(new Error("MathJaxを読み込めませんでした。ネットワーク接続を確認してください。")); document.head.append(script);
+    });
+    const renderPreview = async () => {
+      preview.innerHTML = previewMarkdown(body.value);
+      try {
+        if (previewEngine.value === "mathjax") {
+          await loadMathJax();
+          const mathJax = (window as typeof window & { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax;
+          await mathJax?.typesetPromise([preview]);
+        } else renderMathInElement(preview, { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" });
+      } catch (error) { preview.insertAdjacentHTML("afterbegin", `<p class="katex-error">${esc(error instanceof Error ? error.message : "数式を組版できませんでした。")}</p>`); }
+      wordCount.textContent = `${body.value.length.toLocaleString()}文字`;
+    };
+    const renderComments = () => { comments.innerHTML = currentComments.length ? currentComments.map((item) => `<article class="comment"><small>${esc(item.created_by)} ・ ${date(item.created_at)}</small><p>${esc(item.body)}</p></article>`).join("") : '<p class="comment-empty">まだコメントはありません。査読の観点や修正案を残せます。</p>'; };
+    const formValue = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
+    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, status: status.value });
+    const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
+      empty.hidden = true; form.hidden = false;
+      const id = form.elements.namedItem("documentId") as HTMLInputElement;
+      id.value = item.id; id.dataset.sourceArticleId = item.source_article_id ?? "";
+      subject.value = item.subject; fillCategories(item.category); category.value = item.category;
+      (form.elements.namedItem("locale") as HTMLSelectElement).value = item.locale;
+      (form.elements.namedItem("slug") as HTMLInputElement).value = item.slug;
+      (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
+      (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
+      (form.elements.namedItem("conceptId") as HTMLInputElement).value = item.concept_id;
+      status.value = item.status; body.value = item.body;
+      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; currentComments = commentsForDocument; renderComments(); void renderPreview(); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved"); saveMessage.value = "";
+    };
+    const emptyDocument = (source?: SourceArticle) => {
+      const selected = source ? subjects.find((item) => item.slug === source.subject) ?? subjects[0] : subjects[0];
+      const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
+      const now = new Date().toISOString();
+      setDocument({ id: "", source_article_id: source?.articleId ?? null, subject: source?.subject ?? selected.slug, category: categoryValue, locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null });
+      (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId ?? "";
+      heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
+    };
+    const renderDocuments = () => { list.innerHTML = documents.length ? documents.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}"><span class="state state-${item.status}">${statusLabel[item.status]}</span><strong>${esc(item.title)}</strong><small>${esc(item.subject)} / ${esc(item.category)} ・ ${date(item.updated_at)}</small></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); root.dataset.manager = String(isManager); scopeLabel.textContent = data.scope?.subjects.includes("*") ? "全分野・運営管理者" : (data.scope?.subjects.join("・") || "担当なし"); renderDocuments(); };
+    const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
+    const loadBoard = async () => { const response=await fetch("/api/admin/editor/board",{credentials:"same-origin"}); const data=await read<{board?:{subject:string;status:string;count:number}[]}>(response); board.innerHTML=(data.board??[]).map(x=>`<div><b>${esc(x.subject)}</b> ${esc(x.status)}: ${x.count}</div>`).join("")||"まだ原稿はありません。"; };
+    const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
+    subject.addEventListener("change", () => fillCategories()); status.addEventListener("change", () => { state.textContent = statusLabel[status.value as keyof typeof statusLabel]; publishButton.hidden = !(isManager && (form.elements.namedItem("documentId") as HTMLInputElement).value && status.value === "approved"); }); body.addEventListener("input", () => void renderPreview()); previewEngine.addEventListener("change", () => void renderPreview());
+    form.addEventListener("input", () => { heading.textContent = formValue("title") || "新規原稿"; });
+    root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
+    root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } emptyDocument(source); });
+    list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
+    form.addEventListener("submit", (event) => { event.preventDefault(); void (async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) }); const data = await read<{ id?: string; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "保存できませんでした。"); if (!id && data.id) (form.elements.namedItem("documentId") as HTMLInputElement).value = data.id; saveMessage.value = "保存しました。"; await loadDocuments(); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
+    root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; await openDocument(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
+    publishButton.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開できませんでした。"); saveMessage.value = data.commitUrl ? "公開しました。Cloudflareの自動ビルド完了後に学習サイトへ反映されます。" : "公開しました。"; })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開できませんでした。"; }); });
+    const themeButton = root.querySelector<HTMLButtonElement>("[data-theme-toggle]")!; const applyTheme = (dark: boolean) => { document.documentElement.dataset.prefBg = dark ? "dark" : ""; themeButton.setAttribute("aria-pressed", String(dark)); themeButton.textContent = dark ? "ライト表示" : "ダーク表示"; localStorage.setItem("atlasez-editor-theme", dark ? "dark" : "light"); }; applyTheme(localStorage.getItem("atlasez-editor-theme") === "dark"); themeButton.addEventListener("click", () => applyTheme(document.documentElement.dataset.prefBg !== "dark"));
+    root.querySelector<HTMLButtonElement>("[data-copy-markdown]")!.addEventListener("click", () => { const dateValue = new Date().toISOString().slice(0, 10); const outputStatus = status.value === "approved" ? "published" : status.value === "in-review" ? "in-review" : "draft"; const markdown = `---\narticleId: ja-${subject.value}-${formValue("slug")}\nlocale: ${formValue("locale")}\ntitle: ${formValue("title")}\nslug: ${formValue("slug")}\nsubject: ${subject.value}\ncategory: ${category.value}\nconcepts:\n  - id: ${formValue("conceptId")}\nauthors: [editorial-workspace]\nreviewers: []\nstatus: ${outputStatus}\ncreatedAt: ${dateValue}\nupdatedAt: ${dateValue}\nsummary: ${formValue("summary")}\ndifficulty: basic\nestimatedMinutes: 10\ntags: []\naliases: []\nexerciseIds: { pre: [], post: [] }\nreferences: []\n---\n\n${body.value}`; navigator.clipboard.writeText(markdown).then(() => { saveMessage.value = "公開用Markdownをコピーしました。GitHubのPRに貼り付けて公開できます。"; }).catch(() => { saveMessage.value = "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"; }); });
+    initializeSelects(); void loadDocuments().then(loadBoard).catch((error: unknown) => { scopeLabel.textContent = "読み込めませんでした"; list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+  }
+</script>

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "astro dev",
     "dev:reports": "npx --yes wrangler dev --config wrangler.local.jsonc --local --port 8787",
+    "dev:admin": "npx --yes wrangler dev --config wrangler.admin.local.jsonc --local --port 8787",
     "db:reports:local": "npx --yes wrangler d1 migrations apply atlasez-reports-local --local --config wrangler.local.jsonc",
     "new:article": "node scripts/new-article.mjs",
     "build": "astro build && npm run search:index",

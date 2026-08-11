@@ -1,6 +1,7 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
+import AdminNav from "../../components/AdminNav.astro";
 
 const subjects = (await getCollection("subjects")).sort(
   (a, b) => a.data.order - b.data.order,
@@ -12,6 +13,11 @@ const subjects = (await getCollection("subjects")).sort(
   description="運営用の記事問題報告管理画面"
 >
   <section class="admin-reports" data-reports-admin>
+    <AdminNav current="reports" />
+    <header class="admin-appbar" hidden>
+      <a class="admin-brand" href="/atlas/ja/"><img src="/images/atlasez-logo.png" alt="" width="34" height="34" />アトラス <span>運営用サイト</span></a>
+      <nav aria-label="運営用サイトメニュー"><a href="/admin/editor">記事編集</a><a href="/admin/reports" aria-current="page">問題報告・統計</a><a href="/admin/guide">作業の進め方</a></nav>
+    </header>
     <header class="admin-reports-heading">
       <div>
         <p class="eyebrow">ATLASEZ / 運営用</p>
@@ -39,7 +45,7 @@ const subjects = (await getCollection("subjects")).sort(
 
     <section class="permission-panel" data-permission-admin hidden aria-labelledby="permission-heading">
       <div>
-        <p class="eyebrow">全分野管理者のみ</p>
+        <p class="eyebrow">運営内運営（全分野管理者）のみ</p>
         <h2 id="permission-heading">担当分野の管理</h2>
         <p>運営者のメールアドレスごとに、確認・更新できる記事報告の分野を設定します。</p>
       </div>
@@ -71,7 +77,8 @@ const subjects = (await getCollection("subjects")).sort(
 </AdminLayout>
 
 <style>
-  .admin-reports { box-sizing: border-box; margin: 0 auto; max-width: 1080px; padding: 2.25rem 1.5rem 4rem; }
+  .admin-reports { --surface: var(--background-primary); --surface-alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); box-sizing: border-box; margin: 0 auto; max-width: 1080px; padding: 2.25rem 1.5rem 4rem; }
+  .admin-appbar { align-items:center; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; margin:-2.25rem 0 2.25rem; min-height:4.15rem; }.admin-brand { align-items:center; color:var(--accent); display:flex; font-size:1.15rem; font-weight:700; gap:.45rem; text-decoration:none; }.admin-brand span { border-left:1px solid var(--border); color:var(--text); font-size:.8rem; margin-left:.1rem; padding-left:.55rem; }.admin-appbar nav { display:flex; min-height:4.15rem; }.admin-appbar nav a { align-items:center; border-bottom:3px solid transparent; color:var(--text); display:flex; font-size:.84rem; padding:0 .65rem; text-decoration:none; }.admin-appbar nav a[aria-current="page"],.admin-appbar nav a:hover { border-bottom-color:var(--accent); color:var(--accent); }
   .admin-reports-heading { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1.25rem; }
   .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .45rem; }
   h1 { font-size: clamp(1.8rem, 4vw, 2.45rem); letter-spacing: -.025em; margin: 0; }
@@ -80,7 +87,7 @@ const subjects = (await getCollection("subjects")).sort(
   .admin-auth-actions a, .admin-auth-actions button { font: inherit; font-size: .82rem; }
   .admin-auth-actions a { border: 1px solid var(--border); border-radius: .45rem; color: var(--text); padding: .55rem .7rem; text-decoration: none; }
   .admin-auth-actions a:hover { background: var(--surface-alt); }
-  .analytics-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; margin: 0 0 1.25rem; padding: 1rem; }
+  .analytics-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; border-top: 2px solid var(--accent); margin: 0 0 1.25rem; padding: 1rem; }
   .analytics-heading { align-items: end; display: flex; gap: 1rem; justify-content: space-between; }
   .analytics-heading h2 { font-size: 1.05rem; margin: 0; }
   .analytics-heading p { color: var(--muted); font-size: .86rem; margin: .3rem 0 0; }
@@ -94,7 +101,7 @@ const subjects = (await getCollection("subjects")).sort(
   .analytics-table th:first-child, .analytics-table td:first-child { max-width: 32rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
   .analytics-table tr:last-child td { border-bottom: 0; }
   .analytics-table .analytics-meta { color: var(--muted); display: block; font-size: .72rem; margin-top: .15rem; }
-  .permission-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; display: grid; gap: .8rem; margin: 0 0 1.25rem; padding: 1rem; }
+  .permission-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; display: grid; gap: .8rem; margin: 0 0 1.25rem; padding: 1rem; }
   .permission-panel h2 { font-size: 1.05rem; margin: 0; }
   .permission-panel p { color: var(--muted); font-size: .86rem; margin: .3rem 0 0; }
   .permission-form { align-items: end; display: grid; gap: .65rem; grid-template-columns: minmax(14rem, 1fr) minmax(10rem, .7fr) auto; }
@@ -106,13 +113,13 @@ const subjects = (await getCollection("subjects")).sort(
   .permission-chip strong { color: var(--accent); }
   .permission-remove { background: transparent; border: 0; border-radius: 999px; color: var(--muted); cursor: pointer; font: inherit; font-size: 1rem; line-height: 1; padding: 0 .15rem; }
   .permission-remove:hover { background: var(--surface-alt); color: #a12828; }
-  .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: .7rem; display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: .55rem; padding: .7rem .8rem; }
+  .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: .55rem; padding: .7rem .8rem; }
   .report-controls label { display: grid; font-size: .82rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
   select, textarea { border: 1px solid var(--border); border-radius: .45rem; background: var(--surface); color: var(--text); font: inherit; }
   select { min-height: 2.35rem; min-width: 9rem; padding: .3rem .55rem; }
   .report-count { align-self: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .82rem; font-weight: 700; margin-left: auto; padding: .45rem .7rem; }
   .report-feedback { color: var(--muted); font-size: .83rem; min-height: 1.25rem; padding-left: .15rem; }
-  .report-list { border: 1px solid var(--border); border-radius: .7rem; display: grid; overflow: hidden; }
+  .report-list { border: 1px solid var(--border); border-radius: 0; display: grid; overflow: hidden; }
   .report-list :global(.report-card) { background: var(--surface); border-bottom: 1px solid var(--border); border-left: 4px solid var(--accent); margin: 0; }
   .report-list :global(.report-card:last-child) { border-bottom: 0; }
   .report-list :global(.report-card[data-status="reviewing"]) { border-left-color: #c78500; }
@@ -140,7 +147,7 @@ const subjects = (await getCollection("subjects")).sort(
   .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
   .report-list :global(.report-empty) { color: var(--muted); padding: 2.5rem 2rem; text-align: center; }
   @media (max-width: 700px) {
-    .admin-reports { padding: 1.5rem 1rem 3rem; }
+    .admin-reports { padding: 1.5rem 1rem 3rem; }.admin-appbar { align-items:start; display:grid; margin:-1.5rem 0 1.5rem; padding-top:.4rem; }.admin-appbar nav { min-height:2.8rem; }.admin-appbar nav a { font-size:.74rem; padding:0 .35rem; }
     .admin-reports-heading { display: grid; gap: 1rem; }
     .analytics-heading { align-items: stretch; display: grid; }
     .analytics-controls { align-items: end; }

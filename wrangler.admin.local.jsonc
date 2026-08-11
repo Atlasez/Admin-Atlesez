@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "atlasez-admin-local",
+  "main": "src/admin-worker.ts",
+  "compatibility_date": "2026-07-26",
+  "vars": {
+    "ADMIN_AUTH_MODE": "local",
+    "ADMIN_LOCAL_EMAIL": "local-editor@atlasez.test"
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*", "/admin/*", "/auth/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "REPORTS",
+      "database_name": "atlasez-reports-local",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "preview_database_id": "atlasez-reports-local"
+    }
+  ]
+}
