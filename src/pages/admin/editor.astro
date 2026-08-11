@@ -234,7 +234,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     let assignedSubjects: string[] = [];
     let mathJaxLoading: Promise<void> | undefined;
     const statusLabel = { draft: "下書き", "in-review": "査読中", "on-hold": "保留", approved: "査読済み" } as const;
-    let currentStatus: Document["status"] = "draft";
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
     const read = async <T,>(response: Response) => {
@@ -322,7 +321,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
       (form.elements.namedItem("conceptId") as HTMLInputElement).value = item.concept_id;
-      status.value = item.status; currentStatus = item.status; body.value = item.body;
+      status.value = item.status; body.value = item.body;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; currentComments = commentsForDocument; renderComments(); void renderPreview(); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved"); saveMessage.value = "";
@@ -371,7 +370,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
       const savedId = id || data.id || "";
       if (!id && data.id) (form.elements.namedItem("documentId") as HTMLInputElement).value = data.id;
-      currentStatus = status.value as Document["status"];
       publishButton.hidden = !(isManager && Boolean(savedId) && status.value === "approved");
       saveMessage.value = status.value === "approved" ? "査読済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
       await loadDocuments(); await loadBoard(); await loadReviewRequests();
