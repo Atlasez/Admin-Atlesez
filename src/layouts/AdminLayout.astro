@@ -1,5 +1,6 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
+import { ClientRouter } from "astro:transitions";
 
 interface Props {
   title: string;
@@ -14,6 +15,7 @@ const { title, description } = Astro.props;
     <BaseHead title={title} description={description} noindex={true} />
   </head>
   <body>
+    <ClientRouter />
     <main><slot /></main>
   </body>
 </html>
