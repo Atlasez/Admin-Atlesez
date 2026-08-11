@@ -14,10 +14,6 @@ const subjects = (await getCollection("subjects")).sort(
 >
   <section class="admin-reports" data-reports-admin>
     <AdminNav current="reports" />
-    <header class="admin-appbar" hidden>
-      <a class="admin-brand" href="/atlas/ja/"><img src="/images/atlasez-logo.png" alt="" width="34" height="34" />アトラス <span>運営用サイト</span></a>
-      <nav aria-label="運営用サイトメニュー"><a href="/admin/editor">記事編集</a><a href="/admin/reports" aria-current="page">問題報告・統計</a><a href="/admin/guide">作業の進め方</a></nav>
-    </header>
     <header class="admin-reports-heading">
       <div>
         <p class="eyebrow">ATLASEZ / 運営用</p>
@@ -78,7 +74,6 @@ const subjects = (await getCollection("subjects")).sort(
 
 <style>
   .admin-reports { --surface: var(--background-primary); --surface-alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); box-sizing: border-box; margin: 0 auto; max-width: 1080px; padding: 2.25rem 1.5rem 4rem; }
-  .admin-appbar { align-items:center; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; margin:-2.25rem 0 2.25rem; min-height:4.15rem; }.admin-brand { align-items:center; color:var(--accent); display:flex; font-size:1.15rem; font-weight:700; gap:.45rem; text-decoration:none; }.admin-brand span { border-left:1px solid var(--border); color:var(--text); font-size:.8rem; margin-left:.1rem; padding-left:.55rem; }.admin-appbar nav { display:flex; min-height:4.15rem; }.admin-appbar nav a { align-items:center; border-bottom:3px solid transparent; color:var(--text); display:flex; font-size:.84rem; padding:0 .65rem; text-decoration:none; }.admin-appbar nav a[aria-current="page"],.admin-appbar nav a:hover { border-bottom-color:var(--accent); color:var(--accent); }
   .admin-reports-heading { align-items: flex-start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; margin-bottom: 1.25rem; padding-bottom: 1.25rem; }
   .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .45rem; }
   h1 { font-size: clamp(1.8rem, 4vw, 2.45rem); letter-spacing: -.025em; margin: 0; }
@@ -147,7 +142,7 @@ const subjects = (await getCollection("subjects")).sort(
   .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
   .report-list :global(.report-empty) { color: var(--muted); padding: 2.5rem 2rem; text-align: center; }
   @media (max-width: 700px) {
-    .admin-reports { padding: 1.5rem 1rem 3rem; }.admin-appbar { align-items:start; display:grid; margin:-1.5rem 0 1.5rem; padding-top:.4rem; }.admin-appbar nav { min-height:2.8rem; }.admin-appbar nav a { font-size:.74rem; padding:0 .35rem; }
+    .admin-reports { padding: 1.5rem 1rem 3rem; }
     .admin-reports-heading { display: grid; gap: 1rem; }
     .analytics-heading { align-items: stretch; display: grid; }
     .analytics-controls { align-items: end; }

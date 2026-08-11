@@ -715,6 +715,62 @@ const githubBase64 = (value: string) => {
   return btoa(binary);
 };
 
+const githubText = (base64: string) => {
+  const binary = atob(base64.replace(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+};
+
+async function storeArticleBackup(
+  env: Env,
+  repository: string,
+  path: string,
+  gitSha: string,
+  body: string,
+  source: "scheduled" | "publish",
+) {
+  await env.REPORTS.prepare(
+    `INSERT OR IGNORE INTO article_source_backups
+      (id, repository, path, git_sha, body, source, captured_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    crypto.randomUUID(), repository, path, gitSha, body, source, new Date().toISOString(),
+  ).run();
+}
+
+/** GitHubの履歴に加え、公開済みMarkdownをD1へ世代バックアップする。 */
+async function syncPublishedArticleBackups(env: Env) {
+  const token = env.GITHUB_PUBLISH_TOKEN;
+  if (!token) return { synced: 0, skipped: true };
+  const repository = env.GITHUB_REPOSITORY ?? "mitukx/Atlasez01";
+  const headers = {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${token}`,
+    "user-agent": "atlasez-editorial-backup",
+    "x-github-api-version": "2022-11-28",
+  };
+  const treeResponse = await fetch(`https://api.github.com/repos/${repository}/git/trees/main?recursive=1`, { headers });
+  if (!treeResponse.ok) throw new Error("GitHubのバックアップ対象を取得できませんでした。");
+  const tree = await treeResponse.json() as { tree?: { path?: string; type?: string; sha?: string }[] };
+  const articles = (tree.tree ?? []).filter((entry) => entry.type === "blob" && entry.path?.startsWith("src/content/articles/") && entry.path.endsWith(".md") && entry.sha);
+  let synced = 0;
+  for (const entry of articles) {
+    const path = entry.path!;
+    const sha = entry.sha!;
+    const existing = await env.REPORTS.prepare(
+      "SELECT id FROM article_source_backups WHERE repository = ? AND path = ? AND git_sha = ? LIMIT 1",
+    ).bind(repository, path, sha).first<{ id: string }>();
+    if (existing) continue;
+    const contentResponse = await fetch(`https://api.github.com/repos/${repository}/contents/${path}`, { headers });
+    if (!contentResponse.ok) continue;
+    const content = await contentResponse.json() as { content?: string; sha?: string };
+    if (!content.content) continue;
+    await storeArticleBackup(env, repository, path, content.sha ?? sha, githubText(content.content), "scheduled");
+    synced += 1;
+  }
+  return { synced, skipped: false };
+}
+
 const editorialMarkdown = (document: EditorialDocument) => {
   const date = new Date().toISOString().slice(0, 10);
   return [
@@ -749,7 +805,8 @@ async function publishEditorialDocument(request: Request, env: Env, documentId: 
   else if (existing.status !== 404) return json({ error: "GitHub上の公開先を確認できませんでした。" }, 502);
   const publish = await fetch(endpoint, { method: "PUT", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ message: `Publish article: ${document.title}`, content: githubBase64(editorialMarkdown(document)), branch: "main", ...(sha ? { sha } : {}) }) });
   if (!publish.ok) return json({ error: "GitHubへの公開に失敗しました。トークンのContents権限と対象リポジトリを確認してください。" }, 502);
-  const result = await publish.json() as { commit?: { html_url?: string } };
+  const result = await publish.json() as { commit?: { html_url?: string }; content?: { sha?: string } };
+  await storeArticleBackup(env, repository, path, result.content?.sha ?? crypto.randomUUID(), editorialMarkdown(document), "publish");
   return json({ ok: true, commitUrl: result.commit?.html_url ?? null });
 }
 
@@ -1039,5 +1096,8 @@ export default {
       return env.ASSETS.fetch(request);
     }
     return new Response("Not found", { status: 404 });
+  },
+  async scheduled(_controller: unknown, env: Env, ctx: { waitUntil(promise: Promise<unknown>): void }) {
+    ctx.waitUntil(syncPublishedArticleBackups(env));
   },
 };
