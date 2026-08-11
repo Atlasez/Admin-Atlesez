@@ -13,8 +13,8 @@ authors:
   - atlas-physics-team
 reviewers: []
 status: published
-createdAt: 2026-07-28
-updatedAt: 2026-07-28
+createdAt: 2026-08-11
+updatedAt: 2026-08-11
 summary: 物理学を公式集ではなく「少数の原理から現象を導く体系」として捉えるための入口。単位と次元から量子力学までの階層と、読む順をまとめる。
 difficulty: introductory
 estimatedMinutes: 5
