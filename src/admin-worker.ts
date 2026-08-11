@@ -437,8 +437,7 @@ const editorialDocumentSelect = `SELECT id, source_article_id, subject, category
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
-  scope.subjects.includes(subject) ||
-  (scope.allSubjects && scope.email.endsWith("@atlasez.test"));
+  scope.allSubjects || scope.subjects.includes(subject);
 
 const canReviewDocument = (scope: AdminScope, subject: string, status: EditorialDocumentStatus) =>
   canEditSubject(scope, subject) || (scope.isManager && status === "in-review");
@@ -501,9 +500,11 @@ async function listEditorialDocuments(
   if (isResponse(scope)) return scope;
   const filters: string[] = [];
   const values: unknown[] = [];
-  if (!scope.subjects.length) return json({ documents: [], scope: { email: scope.email, subjects: [], isManager: scope.isManager } });
-  filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
-  values.push(...scope.subjects);
+  if (!scope.allSubjects) {
+    if (!scope.subjects.length) return json({ documents: [], scope: { email: scope.email, subjects: [], isManager: scope.isManager } });
+    filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
+    values.push(...scope.subjects);
+  }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id,
@@ -656,9 +657,9 @@ async function listEditorialRevisions(request: Request, env: Env, documentId: st
 
 async function editorialBoard(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env); if (isResponse(scope)) return scope;
-  if (!scope.subjects.length) return json({ board: [] });
-  const values:unknown[] = [...scope.subjects];
-  const where=` WHERE subject IN (${scope.subjects.map(()=>"?").join(",")})`;
+  if (!scope.allSubjects && !scope.subjects.length) return json({ board: [] });
+  const values:unknown[] = scope.allSubjects ? [] : [...scope.subjects];
+  const where=scope.allSubjects ? "" : ` WHERE subject IN (${scope.subjects.map(()=>"?").join(",")})`;
   const result=await env.REPORTS.prepare(`SELECT subject, status, COUNT(*) AS count FROM editorial_documents${where} GROUP BY subject,status ORDER BY subject,status`).bind(...values).all();
   return json({ board: result.results });
 }
