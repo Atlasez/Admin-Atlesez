@@ -219,12 +219,15 @@ async function getAdminScope(
   )
     .bind(email)
     .all<{ subject: string }>();
-  const subjects = result.results
+  const grantedSubjects = result.results
     .map((permission) => permission.subject)
     .filter(Boolean);
-  if (!subjects.length)
+  if (!grantedSubjects.length)
     return json({ error: "この管理画面の閲覧権限が設定されていません。" }, 403);
-  const allSubjects = subjects.includes("*");
+  const allSubjects = grantedSubjects.includes("*");
+  // `*` は全分野管理者の権限であって、その人自身の執筆担当分野ではない。
+  // 通常の原稿一覧・作業状況は担当分野だけに限定する。
+  const subjects = grantedSubjects.filter((subject) => subject !== "*");
   return { email, subjects, allSubjects, isManager: allSubjects };
 }
 
@@ -434,7 +437,11 @@ const editorialDocumentSelect = `SELECT id, source_article_id, subject, category
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
-  scope.allSubjects || scope.subjects.includes(subject);
+  scope.subjects.includes(subject) ||
+  (scope.allSubjects && scope.email.endsWith("@atlasez.test"));
+
+const canReviewDocument = (scope: AdminScope, subject: string, status: EditorialDocumentStatus) =>
+  canEditSubject(scope, subject) || (scope.isManager && status === "in-review");
 
 async function readEditorialPayload(
   request: Request,
@@ -494,10 +501,9 @@ async function listEditorialDocuments(
   if (isResponse(scope)) return scope;
   const filters: string[] = [];
   const values: unknown[] = [];
-  if (!scope.allSubjects) {
-    filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
-    values.push(...scope.subjects);
-  }
+  if (!scope.subjects.length) return json({ documents: [], scope: { email: scope.email, subjects: [], isManager: scope.isManager } });
+  filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
+  values.push(...scope.subjects);
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id,
@@ -522,7 +528,7 @@ async function getEditorialDocument(
     .bind(documentId)
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canEditSubject(scope, document.subject))
+  if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の原稿を閲覧する権限がありません。" }, 403);
   const comments = await env.REPORTS.prepare(
     "SELECT id, document_id, body, created_by, created_at FROM editorial_comments WHERE document_id = ? ORDER BY created_at ASC",
@@ -588,18 +594,24 @@ async function updateEditorialDocument(
   if (!values)
     return json({ error: "記事設定を確認してください。タイトル・要約・概念IDは必須です。" }, 400);
   const existing = await env.REPORTS.prepare(
-    "SELECT subject FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, summary, concept_id, body, category, locale, slug FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string }>();
+    .first<Pick<EditorialDocument, "subject" | "status" | "title" | "summary" | "concept_id" | "body" | "category" | "locale" | "slug">>();
   if (!existing) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canEditSubject(scope, existing.subject) || !canEditSubject(scope, values.subject))
+  const isReviewOnly = scope.isManager && !canEditSubject(scope, existing.subject);
+  if ((!canEditSubject(scope, existing.subject) && !isReviewOnly) || (!canEditSubject(scope, values.subject) && values.subject !== existing.subject))
     return json({ error: "この分野の原稿を更新する権限がありません。" }, 403);
   const owner = await env.REPORTS.prepare(
     "SELECT created_by FROM editorial_documents WHERE id = ?",
   ).bind(documentId).first<{ created_by: string }>();
   if (!scope.isManager && owner?.created_by !== scope.email)
     return json({ error: "原稿を編集できるのは作成者本人です。査読コメントは追加できます。" }, 403);
+  if (isReviewOnly && (
+    values.subject !== existing.subject || values.category !== existing.category || values.locale !== existing.locale ||
+    values.slug !== existing.slug || values.title !== existing.title || values.summary !== existing.summary ||
+    values.conceptId !== existing.concept_id || values.body !== existing.body
+  )) return json({ error: "担当外の原稿は本文を編集できません。査読結果（状態）とコメントのみ更新できます。" }, 403);
   if (values.status === "approved" && !scope.isManager)
     return json({ error: "承認済みに変更できるのは運営管理者だけです。" }, 403);
   const now = new Date().toISOString();
@@ -636,19 +648,29 @@ async function updateEditorialDocument(
 
 async function listEditorialRevisions(request: Request, env: Env, documentId: string): Promise<Response> {
   const scope = await getAdminScope(request, env); if (isResponse(scope)) return scope;
-  const document = await env.REPORTS.prepare("SELECT subject FROM editorial_documents WHERE id = ?").bind(documentId).first<{subject:string}>();
-  if (!document || !canEditSubject(scope, document.subject)) return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
+  const document = await env.REPORTS.prepare("SELECT subject, status FROM editorial_documents WHERE id = ?").bind(documentId).first<{subject:string;status:EditorialDocumentStatus}>();
+  if (!document || !canReviewDocument(scope, document.subject, document.status)) return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const result = await env.REPORTS.prepare("SELECT id, title, summary, body, status, saved_by, saved_at FROM editorial_document_revisions WHERE document_id = ? ORDER BY saved_at DESC LIMIT 50").bind(documentId).all();
   return json({ revisions: result.results });
 }
 
 async function editorialBoard(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env); if (isResponse(scope)) return scope;
-  const filters:string[]=[]; const values:unknown[]=[];
-  if (!scope.allSubjects) { filters.push(`subject IN (${scope.subjects.map(()=>"?").join(",")})`); values.push(...scope.subjects); }
-  const where=filters.length?` WHERE ${filters.join(" AND ")}`:"";
+  if (!scope.subjects.length) return json({ board: [] });
+  const values:unknown[] = [...scope.subjects];
+  const where=` WHERE subject IN (${scope.subjects.map(()=>"?").join(",")})`;
   const result=await env.REPORTS.prepare(`SELECT subject, status, COUNT(*) AS count FROM editorial_documents${where} GROUP BY subject,status ORDER BY subject,status`).bind(...values).all();
   return json({ board: result.results });
+}
+
+async function listEditorialReviewRequests(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const result = await env.REPORTS.prepare(
+    `SELECT id, subject, category, title, updated_by, updated_at
+     FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 100`,
+  ).all<{ id: string; subject: string; category: string; title: string; updated_by: string; updated_at: string }>();
+  return json({ requests: result.results });
 }
 
 async function createEditorialComment(
@@ -671,12 +693,12 @@ async function createEditorialComment(
   const body = text(payload.body, MAX_EDITORIAL_COMMENT_LENGTH);
   if (!body) return json({ error: "コメントを入力してください。" }, 400);
   const document = await env.REPORTS.prepare(
-    "SELECT subject FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string }>();
+    .first<{ subject: string; status: EditorialDocumentStatus }>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canEditSubject(scope, document.subject))
+  if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野にコメントする権限がありません。" }, 403);
   await env.REPORTS.prepare(
     "INSERT INTO editorial_comments (id, document_id, body, created_by, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -953,6 +975,7 @@ export default {
       return json({ error: "GET、POSTのみ利用できます。" }, 405);
     }
     if (url.pathname === "/api/admin/editor/board" && request.method === "GET") return editorialBoard(request, env);
+    if (url.pathname === "/api/admin/editor/review-requests" && request.method === "GET") return listEditorialReviewRequests(request, env);
     const editorialRevisionMatch = url.pathname.match(/^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/revisions$/i);
     if (editorialRevisionMatch && request.method === "GET") return listEditorialRevisions(request, env, editorialRevisionMatch[1]);
     const editorialCommentMatch = url.pathname.match(

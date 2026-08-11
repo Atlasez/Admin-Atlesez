@@ -58,6 +58,11 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
           <label>記事<select data-source-article disabled><option value="">先に分野を選択…</option></select></label>
         </div>
         <button type="button" class="quiet-action" data-import-source>選んだ記事を編集する</button>
+        <section class="review-requests" data-review-requests hidden aria-labelledby="review-requests-heading">
+          <strong id="review-requests-heading">査読依頼</strong>
+          <p>査読中にされた原稿です。全分野管理者だけが確認できます。</p>
+          <div data-review-request-list>読み込み中…</div>
+        </section>
         <section class="work-board" aria-labelledby="board-heading"><strong id="board-heading">分野ごとの作業状況</strong><div data-work-board>読み込み中…</div></section>
         <div class="document-list" data-document-list aria-live="polite"></div>
       </aside>
@@ -164,6 +169,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
   select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
   .document-list { display: grid; gap: .45rem; margin-top: .35rem; overflow: auto; padding-right: .1rem; }
   .work-board { border-top:1px solid var(--border); display:grid; font-size:.78rem; gap:.35rem; margin-top:.25rem; padding-top:.65rem; }.work-board div { color:var(--muted); line-height:1.55; }.work-board b { color:var(--accent); }
+  .review-requests { background: color-mix(in srgb, var(--accent), transparent 93%); border: 1px solid color-mix(in srgb, var(--accent), transparent 65%); display: grid; font-size: .78rem; gap: .4rem; padding: .7rem; }.review-requests > p { color: var(--muted); font-size: .72rem; line-height: 1.45; margin: 0; }.review-request-list { display: grid; gap: .35rem; }.review-request { background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; font: inherit; padding: .45rem; text-align: left; width: 100%; }.review-request:hover { border-color: var(--accent); }.review-request small { color: var(--muted); display: block; margin-top: .2rem; }
   .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: grid; gap: .3rem; padding: .7rem; text-align: left; width: 100%; }
   .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
   .document-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -219,9 +225,13 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const approvalDialog = root.querySelector<HTMLDialogElement>("[data-approval-dialog]")!;
     const board = root.querySelector<HTMLElement>("[data-work-board]")!;
     const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
+    const reviewRequests = root.querySelector<HTMLElement>("[data-review-requests]")!;
+    const reviewRequestList = root.querySelector<HTMLElement>("[data-review-request-list]")!;
+    const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
     let documents: Omit<Document, "body">[] = [];
     let currentComments: Comment[] = [];
     let isManager = false;
+    let assignedSubjects: string[] = [];
     let mathJaxLoading: Promise<void> | undefined;
     const statusLabel = { draft: "下書き", "in-review": "査読中", "on-hold": "保留", approved: "査読済み" } as const;
     let currentStatus: Document["status"] = "draft";
@@ -243,8 +253,13 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const initializeSelects = () => {
       subject.innerHTML = subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
       fillCategories();
-      sourceSubject.innerHTML = '<option value="">分野を選択…</option>' + subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
+      populateSourceSubjects();
       fillSourceArticles();
+    };
+    const populateSourceSubjects = () => {
+      const available = subjects.filter((item) => !assignedSubjects.length || assignedSubjects.includes(item.slug));
+      sourceSubject.innerHTML = '<option value="">分野を選択…</option>' + available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
+      sourceSubject.disabled = !available.length;
     };
     const fillSourceArticles = () => {
       const subjectData = subjects.find((item) => item.slug === sourceSubject.value);
@@ -310,6 +325,8 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
       (form.elements.namedItem("conceptId") as HTMLInputElement).value = item.concept_id;
       status.value = item.status; currentStatus = item.status; publishAfterApproval = false; approvalChoiceMade = false; body.value = item.body;
+      const reviewOnly = isManager && !assignedSubjects.includes(item.subject);
+      form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; currentComments = commentsForDocument; renderComments(); void renderPreview(); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved"); saveMessage.value = "";
     };
     const emptyDocument = (source?: SourceArticle) => {
@@ -321,9 +338,18 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
     const renderDocuments = () => { list.innerHTML = documents.length ? documents.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}"><span class="state state-${item.status}">${statusLabel[item.status]}</span><strong>${esc(item.title)}</strong><small>${esc(item.subject)} / ${esc(item.category)} ・ ${date(item.updated_at)}</small></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); root.dataset.manager = String(isManager); scopeLabel.textContent = data.scope?.subjects.includes("*") ? "全分野・運営管理者" : (data.scope?.subjects.join("・") || "担当なし"); renderDocuments(); };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : ""}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !assignedSubjects.length; (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
     const loadBoard = async () => { const response=await fetch("/api/admin/editor/board",{credentials:"same-origin"}); const data=await read<{board?:{subject:string;status:string;count:number}[]}>(response); board.innerHTML=(data.board??[]).map(x=>`<div><b>${esc(x.subject)}</b> ${esc(x.status)}: ${x.count}</div>`).join("")||"まだ原稿はありません。"; };
+    const loadReviewRequests = async () => {
+      if (!isManager) { reviewRequests.hidden = true; return; }
+      const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" });
+      const data = await read<{ requests?: { id: string; subject: string; category: string; title: string; updated_by: string; updated_at: string }[]; error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。");
+      reviewRequests.hidden = false;
+      reviewRequestList.className = "review-request-list";
+      reviewRequestList.innerHTML = data.requests?.length ? data.requests.map((item) => `<button type="button" class="review-request" data-review-document-id="${esc(item.id)}"><b>${esc(item.title)}</b><small>${esc(item.subject)} / ${esc(item.category)} ・ ${esc(item.updated_by)} ・ ${date(item.updated_at)}</small></button>`).join("") : "現在、査読依頼はありません。";
+    };
     const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
     subject.addEventListener("change", () => fillCategories()); sourceSubject.addEventListener("change", fillSourceArticles);
     status.addEventListener("change", () => {
@@ -350,6 +376,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } emptyDocument(source); });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
+    reviewRequestList.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-review-document-id]"); if (button) { const id = button.dataset.reviewDocumentId ?? ""; void openDocument(id).then(() => loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "査読依頼を開けませんでした。"; }); } });
     form.addEventListener("submit", (event) => { event.preventDefault(); void (async () => {
       const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
       if (status.value === "approved" && currentStatus !== "approved" && !approvalChoiceMade) { approvalDialog.showModal(); return; }
@@ -366,12 +393,12 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
         saveMessage.value = "査読済みとして保存し、GitHubへ公開しました。学習サイトの自動ビルド完了後に反映されます。";
       } else saveMessage.value = "保存しました。";
       publishAfterApproval = false; approvalChoiceMade = false;
-      await loadDocuments();
+      await loadDocuments(); await loadBoard(); await loadReviewRequests();
     })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; await openDocument(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
     publishButton.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開できませんでした。"); saveMessage.value = data.commitUrl ? "公開しました。Cloudflareの自動ビルド完了後に学習サイトへ反映されます。" : "公開しました。"; })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開できませんでした。"; }); });
     const themeButton = root.querySelector<HTMLButtonElement>("[data-theme-toggle]")!; const applyTheme = (dark: boolean) => { document.documentElement.dataset.prefBg = dark ? "dark" : ""; themeButton.setAttribute("aria-pressed", String(dark)); themeButton.textContent = dark ? "ライト表示" : "ダーク表示"; localStorage.setItem("atlasez-editor-theme", dark ? "dark" : "light"); }; applyTheme(localStorage.getItem("atlasez-editor-theme") === "dark"); themeButton.addEventListener("click", () => applyTheme(document.documentElement.dataset.prefBg !== "dark"));
     root.querySelector<HTMLButtonElement>("[data-copy-markdown]")!.addEventListener("click", () => { const dateValue = new Date().toISOString().slice(0, 10); const outputStatus = status.value === "approved" ? "published" : status.value === "in-review" ? "in-review" : "draft"; const markdown = `---\narticleId: ja-${subject.value}-${formValue("slug")}\nlocale: ${formValue("locale")}\ntitle: ${formValue("title")}\nslug: ${formValue("slug")}\nsubject: ${subject.value}\ncategory: ${category.value}\nconcepts:\n  - id: ${formValue("conceptId")}\nauthors: [editorial-workspace]\nreviewers: []\nstatus: ${outputStatus}\ncreatedAt: ${dateValue}\nupdatedAt: ${dateValue}\nsummary: ${formValue("summary")}\ndifficulty: basic\nestimatedMinutes: 10\ntags: []\naliases: []\nexerciseIds: { pre: [], post: [] }\nreferences: []\n---\n\n${body.value}`; navigator.clipboard.writeText(markdown).then(() => { saveMessage.value = "公開用Markdownをコピーしました。GitHubのPRに貼り付けて公開できます。"; }).catch(() => { saveMessage.value = "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"; }); });
-    initializeSelects(); void loadDocuments().then(loadBoard).catch((error: unknown) => { scopeLabel.textContent = "読み込めませんでした"; list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    initializeSelects(); void loadDocuments().then(async () => { await loadBoard(); await loadReviewRequests(); }).catch((error: unknown) => { scopeLabel.textContent = "読み込めませんでした"; list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   }
 </script>
