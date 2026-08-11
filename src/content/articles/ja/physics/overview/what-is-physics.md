@@ -1,7 +1,7 @@
 ---
 articleId: ja-physics-what-is-physics
 locale: ja
-title: 物理学とは
+title: 物理学とは．
 slug: what-is-physics
 subject: physics
 category: overview
