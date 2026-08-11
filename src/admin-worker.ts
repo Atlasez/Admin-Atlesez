@@ -1005,6 +1005,15 @@ export default {
       }
       return env.ASSETS.fetch(request);
     }
+    // Permit only the static support files used by the admin UI.  All learning
+    // site pages remain unreachable from this Worker.
+    if (
+      url.pathname.startsWith("/_astro/") ||
+      url.pathname.startsWith("/images/") ||
+      url.pathname === "/favicon.svg"
+    ) {
+      return env.ASSETS.fetch(request);
+    }
     return new Response("Not found", { status: 404 });
   },
 };
