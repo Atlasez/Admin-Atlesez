@@ -3869,7 +3869,12 @@ async function adminNotifications(
         "SELECT id, title, updated_at, reviewed_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' ORDER BY COALESCE(reviewed_at, updated_at) DESC LIMIT 12",
       )
         .bind(scope.email)
-        .all<{ id: string; title: string; updated_at: string; reviewed_at: string | null }>(),
+        .all<{
+          id: string;
+          title: string;
+          updated_at: string;
+          reviewed_at: string | null;
+        }>(),
       env.REPORTS.prepare(
         "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC LIMIT 12",
       )
