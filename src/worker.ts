@@ -92,7 +92,7 @@ const text = (value: unknown, maximum: number) =>
 const isTrustedReportOrigin = (origin: string | null, requestUrl: URL) =>
   Boolean(
     origin &&
-      (origin === requestUrl.origin || TRUSTED_REPORT_ORIGINS.has(origin)),
+    (origin === requestUrl.origin || TRUSTED_REPORT_ORIGINS.has(origin)),
   );
 
 const isTrustedArticleUrl = (value: string, requestUrl: URL) => {
