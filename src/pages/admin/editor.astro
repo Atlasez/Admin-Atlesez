@@ -107,7 +107,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
               <label>概念ID<input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
               <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
-              <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select></label>
+              <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved" disabled>査読完了（運営内運営のみ）</option></select></label>
             </div>
           </details>
 
@@ -441,8 +441,8 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       workflowCurrent.textContent = current === "published" ? "公開済み" : statusLabel[documentStatus];
       const help = isPublished
         ? "公開済みです。修正する場合は内容を保存し、必要に応じて公開を取り消して下書きへ戻します。"
-        : ({ draft: "原稿を書いたら「下書きを保存」します。保存後に査読依頼へ進めます。", "in-review": "コメントで確認を進めます。修正した場合は再度保存してください。", approved: "運営管理者の確認が完了しています。内容を確認して「査読済み原稿を公開」を押します。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
-      const saveLabel = ({ draft: "保存する", "in-review": "変更を保存", approved: "変更を保存", "on-hold": "変更を保存" } as const)[documentStatus];
+        : ({ draft: "原稿を書いたら「下書きを保存」します。保存後に査読依頼へ進めます。", "in-review": "コメントで確認を進めます。修正した場合は再度保存してください。", approved: "査読を完了しました。執筆者へ通知されます。公開する場合は、別途「公開する」を押します。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
+      const saveLabel = ({ draft: "保存する", "in-review": "変更を保存", approved: "査読完了として保存", "on-hold": "変更を保存" } as const)[documentStatus];
       workflowHelp.textContent = help;
       saveButton.textContent = saveLabel;
       workflow.querySelectorAll<HTMLElement>("[data-workflow-step]").forEach((step) => {
@@ -637,7 +637,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       setUnsavedChanges(false);
       saveMessage.value = status.value === "approved" ? "査読済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
       await loadDocuments();
-      progressDialog.showModal();
+      if (status.value !== "approved") progressDialog.showModal();
     })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; activeReplyId = null; selectedCommentRanges = []; renderSelectedRanges(); setCommentSelection(null); await openDocument(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-action]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.commentId; const action = button.dataset.commentAction; if (!documentId || !commentId || !action) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ action }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "コメントの状態を更新できませんでした。"); await openDocument(documentId); })().catch((error:unknown)=>{ saveMessage.value=error instanceof Error ? error.message : "コメントの状態を更新できませんでした。"; button.disabled=false; }); });

@@ -2799,6 +2799,8 @@ async function createEditorialDocument(
     );
   if (!canEditSubject(scope, values.subject))
     return json({ error: "この分野の原稿を作成する権限がありません。" }, 403);
+  if (values.status === "approved" && !scope.isManager)
+    return json({ error: "査読完了にできるのは運営内運営だけです。" }, 403);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
@@ -3864,10 +3866,10 @@ async function adminNotifications(
           title: string;
         }>(),
       env.REPORTS.prepare(
-        "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
+        "SELECT id, title, updated_at, reviewed_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' ORDER BY COALESCE(reviewed_at, updated_at) DESC LIMIT 12",
       )
         .bind(scope.email)
-        .all<{ id: string; title: string; updated_at: string }>(),
+        .all<{ id: string; title: string; updated_at: string; reviewed_at: string | null }>(),
       env.REPORTS.prepare(
         "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC LIMIT 12",
       )
@@ -3875,21 +3877,21 @@ async function adminNotifications(
         .all<{ id: string; title: string; published_at: string }>(),
       scope.isManager
         ? env.REPORTS.prepare(
-            "SELECT id, subject, title, updated_by, updated_at FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 30",
+            "SELECT d.id, d.subject, d.title, d.updated_at, COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS requester_display_name FROM editorial_documents d LEFT JOIN editorial_member_profiles p ON p.email = d.updated_by WHERE d.status = 'in-review' ORDER BY d.updated_at ASC LIMIT 30",
           ).all<{
             id: string;
             subject: string;
             title: string;
-            updated_by: string;
             updated_at: string;
+            requester_display_name: string;
           }>()
         : Promise.resolve({
             results: [] as {
               id: string;
               subject: string;
               title: string;
-              updated_by: string;
               updated_at: string;
+              requester_display_name: string;
             }[],
           }),
     ]);
@@ -3906,9 +3908,9 @@ async function adminNotifications(
       id: `approved-${item.id}`,
       kind: "approved",
       title: `査読完了：${item.title}`,
-      detail: "公開前の原稿を確認してください。",
+      detail: "査読が完了しました。公開は運営内運営が行います。",
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
-      updatedAt: item.updated_at,
+      updatedAt: item.reviewed_at ?? item.updated_at,
     })),
     ...(publishedRows.results ?? []).map((item) => ({
       id: `published-${item.id}`,
@@ -3923,7 +3925,7 @@ async function adminNotifications(
           id: `review-${item.id}`,
           kind: "review",
           title: `査読依頼：${item.title}`,
-          detail: `担当分野：${item.subject} ／ 依頼者：${item.updated_by}`,
+          detail: `担当分野：${item.subject} ／ 依頼者：${item.requester_display_name}`,
           href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
           updatedAt: item.updated_at,
         }))
