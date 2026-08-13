@@ -539,7 +539,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       return result.join("").replace(/<\/ul><ul>/g, "").replace(/<\/ol><ol>/g, "");
     };
     const loadMathJax = () => mathJaxLoading ??= new Promise((resolve, reject) => {
-      (window as typeof window & { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax = { typesetPromise: async () => {} };
+      (window as unknown as { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax = { typesetPromise: async () => {} };
       const script = document.createElement("script"); script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"; script.async = true;
       script.onload = () => resolve(); script.onerror = () => reject(new Error("MathJaxを読み込めませんでした。ネットワーク接続を確認してください。")); document.head.append(script);
     });

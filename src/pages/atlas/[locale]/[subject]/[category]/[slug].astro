@@ -23,7 +23,6 @@ import {
   translationArticles,
 } from "../../../../../lib/content";
 import { ORG } from "../../../../../lib/site";
-import "katex/dist/katex.min.css";
 
 export async function getStaticPaths() {
   const articles = await getPublishedArticles();
@@ -312,7 +311,28 @@ const structuredData = {
         )
       }
 
-      <div class="article-body reading">
+      {
+        entry.data.subject === "mathematics" && (
+          <button
+            class="proof-toggle"
+            type="button"
+            data-proof-toggle
+            aria-expanded="false"
+            hidden
+          >
+            証明を展開
+          </button>
+        )
+      }
+
+      <div
+        class:list={[
+          "article-body",
+          "reading",
+          entry.data.subject === "mathematics" && "math-article",
+        ]}
+        data-subject={entry.data.subject}
+      >
         <Content />
       </div>
 
@@ -706,6 +726,26 @@ const structuredData = {
   .article-body :global(ol) {
     margin-block: 0.7em;
   }
+  /* 数学本文だけに記事用の組版ルールを限定する。サイト共通の
+     リスト・カード用スタイルが定義枠へ漏れないよう、math-article を
+     境界クラスとして使う。 */
+  .article-body.math-article :global(ol) {
+    list-style: decimal;
+    padding-inline-start: 1.55rem;
+  }
+  .article-body.math-article :global(ul) {
+    list-style: disc;
+    padding-inline-start: 1.55rem;
+  }
+  .article-body.math-article :global(strong),
+  .article-body.math-article :global(b) {
+    font-weight: 700;
+  }
+  .article-body.math-article :global(a) {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
   /* 数学記事の定義・命題・定理は、サンプル記事の見た目を保ちつつ
      サイトのテーマ色に追従する。Markdown内の .defi/.prop 等にも、
      自動判定した記事本文にも同じスタイルを適用する。 */
@@ -786,7 +826,36 @@ const structuredData = {
     margin: 0.4rem 0 0 0.35rem;
     padding: 0.2rem 0.95rem;
   }
-  .article-body :global(.katex-display) {
+  /* 証明本文は上下の線を持たせず、左のガイド線だけで枠を示す。 */
+  .article-body.math-article :global(.proof-details),
+  .article-body.math-article :global(.proof) {
+    border-block: 0;
+    margin-block: 1.2rem;
+  }
+  .article-body.math-article :global(.proof-details-inner) {
+    border-block: 0;
+    border-inline-end: 0;
+  }
+  .proof-toggle {
+    position: fixed;
+    z-index: 20;
+    top: max(4.5rem, env(safe-area-inset-top));
+    right: max(1rem, env(safe-area-inset-right));
+    min-height: 2.6rem;
+    padding: 0.55rem 0.95rem;
+    border: 1px solid var(--accent-primary);
+    border-radius: 0.45rem;
+    background: var(--accent-primary);
+    color: var(--on-accent);
+    box-shadow: 0 0.25rem 0.8rem rgb(0 0 0 / 15%);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+  }
+  .proof-toggle:hover { background: var(--accent-hover); }
+  .proof-toggle:focus-visible { outline-offset: 3px; }
+  .article-body :global(.katex-display),
+  .article-body.math-article :global(mjx-container[display="true"]) {
     box-sizing: border-box;
     display: block;
     margin-block: 0.9rem;
@@ -810,6 +879,9 @@ const structuredData = {
   .article-body :global(.example > p),
   .article-body :global(.math-definition > p),
   .article-body :global(.math-theorem > p) { overflow-wrap: anywhere; }
+  .article-body.math-article :global(mjx-container) {
+    max-width: 100%;
+  }
   .article-body :global(.supp-details-summary) {
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
@@ -1012,8 +1084,16 @@ const structuredData = {
     }
   }
   @media (max-width: 767px) {
+    /* スマホでは本文の流れに置き、スクロールに追従させる。 */
+    .proof-toggle {
+      position: static;
+      display: block;
+      width: fit-content;
+      margin: 0.75rem 0 1rem auto;
+    }
     /* 別行立ての数式は画面幅を超えるので、その式だけ横に送れるようにする */
-    .article-body :global(.katex-display) {
+    .article-body :global(.katex-display),
+    .article-body.math-article :global(mjx-container[display="true"]) {
       overflow-x: auto;
       overflow-y: hidden;
     }
@@ -1433,7 +1513,9 @@ const structuredData = {
       const isTheoremLead = (node: Element) => node.tagName === "P" && theoremLead.test((node.textContent ?? "").trim());
       const isProofLead = (node: Element) => node.tagName === "P" && proofLead.test((node.textContent ?? "").trim());
       const isHeading = (node: Element) => ["H2", "H3"].includes(node.tagName);
-      const isMathBlock = (node: Element) => node.matches(".defi,.prop,.thm,.lemma,.cor,.example,.math-definition,.math-theorem,.proof-details");
+      const isDisplayMath = (node: Element) => node.matches(".katex-display,mjx-container[display=\"true\"]");
+      const isMathBlock = (node: Element) => node.matches(".defi,.prop,.thm,.lemma,.cor,.example,.math-definition,.math-theorem,.proof,.proof-details");
+      const isProofNode = (node: Element) => node.matches(".proof") || isProofLead(node);
       const addTheoremLabel = (wrapper: HTMLElement) => {
         const paragraph = wrapper.querySelector<HTMLElement>(":scope > p");
         if (!paragraph || paragraph.querySelector(":scope > .thmtitle")) return;
@@ -1464,7 +1546,7 @@ const structuredData = {
         let sawDisplayMath = false;
         while (next) {
           if (isHeading(next) || isMathBlock(next) || isTheoremLead(next) || isProofLead(next)) break;
-          if (next.matches(".katex-display")) {
+          if (isDisplayMath(next)) {
             const following = next.nextElementSibling;
             wrapper.append(next);
             next = following;
@@ -1484,26 +1566,50 @@ const structuredData = {
           break;
         }
       }
+      const removeProofLabel = (container: Element) => {
+        const strong = container.querySelector(":scope > strong");
+        if (strong && proofLead.test((strong.textContent ?? "").trim())) {
+          strong.remove();
+          return;
+        }
+        const firstText = [...container.childNodes].find((child) => child.nodeType === Node.TEXT_NODE && (child.textContent ?? "").trim());
+        if (firstText) firstText.textContent = (firstText.textContent ?? "").replace(/^証明[。\.\s]*/u, "");
+      };
       for (const node of topLevel()) {
-        if (!isProofLead(node)) continue;
+        if (!isProofNode(node)) continue;
         const details = document.createElement("details");
         details.className = "proof-details";
         const summary = document.createElement("summary");
         summary.textContent = "証明.";
         const inner = document.createElement("div");
         inner.className = "proof-details-inner";
-        const first = node.firstChild;
-        if (first?.nodeType === Node.ELEMENT_NODE && (first as HTMLElement).tagName === "STRONG") first.remove();
-        else node.textContent = (node.textContent ?? "").replace(/^証明[。\.\s]*/u, "");
         node.parentNode?.insertBefore(details, node);
         details.append(summary, inner);
-        inner.append(node);
+        if (node.matches(".proof")) {
+          while (node.firstChild) inner.append(node.firstChild);
+          removeProofLabel(inner);
+          node.remove();
+        } else {
+          removeProofLabel(node);
+          inner.append(node);
+        }
         let next = details.nextElementSibling;
-        while (next && !isHeading(next) && !isMathBlock(next) && !isTheoremLead(next) && !isProofLead(next)) {
+        while (next && !isHeading(next) && !isMathBlock(next) && !isTheoremLead(next) && !isProofNode(next)) {
           const following = next.nextElementSibling;
           inner.append(next);
           next = following;
         }
+      }
+      const proofToggle = document.querySelector<HTMLButtonElement>("[data-proof-toggle]");
+      const proofs = [...mathBody.querySelectorAll<HTMLDetailsElement>("details.proof-details")];
+      if (proofToggle && proofs.length > 0) {
+        proofToggle.hidden = false;
+        proofToggle.addEventListener("click", () => {
+          const expand = proofs.some((proof) => !proof.open);
+          proofs.forEach((proof) => { proof.open = expand; });
+          proofToggle.textContent = expand ? "証明を閉じる" : "証明を展開";
+          proofToggle.setAttribute("aria-expanded", String(expand));
+        });
       }
     }
   }

@@ -96,4 +96,6 @@ if (failures.length) {
   );
   process.exit(1);
 }
-console.log("Math audit passed: every delimited formula renders with KaTeX.");
+console.log(
+  "Math audit passed: every delimited formula passes the shared TeX compatibility check.",
+);

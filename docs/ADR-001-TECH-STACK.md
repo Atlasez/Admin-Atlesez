@@ -30,7 +30,7 @@ Docusaurusはドキュメントサイトとしては優秀だが、(1) 一対一
 
 - **TypeScript strict mode**: `astro/tsconfigs/strict` を継承
 - **Zod**: Content Collectionsのスキーマ検証（`docs/CONTENT_MODEL.md`）
-- **数式**: remark-math + rehype-katex（ビルド時レンダリング、クライアントJS不要）
+- **数式**: remark-math + rehype-mathjax/svg（ビルド時 SVG レンダリング、クライアントJS不要）。編集室のプレビューは用途に応じて KaTeX / MathJax を切り替える。
 - **コード**: Shiki（Astro組み込み、ビルド時ハイライト）
 - **学習地図**: Cytoscape.js。**PreactのIslandではなくAstroの`<script>`（バンドルされるvanilla TSモジュール）として実装**。理由: グラフページ以外にUIフレームワークが不要で、依存を1つ（cytoscape）に抑えられ、出力HTMLがより「基本HTML」に近くなる。機能要件（ドラッグ・ズーム・fold/経路探索・URL共有）はすべて満たす。将来コンポーネント化が必要になればPreact Island化は局所変更で可能
 - **検索**: Pagefind（ビルド後インデックス生成、完全静的、日本語対応）。検索UIは`src/lib/search.ts`の薄いラッパー越しに使い、将来Algolia等へ差し替え可能にする

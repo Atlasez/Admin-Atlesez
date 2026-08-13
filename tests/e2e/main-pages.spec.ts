@@ -229,6 +229,26 @@ test.describe("学習サイト", () => {
     ).toBeVisible();
   });
 
+  test("数学記事の証明を一括で開閉できる", async ({ page }) => {
+    await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
+    const toggle = page.locator("[data-proof-toggle]");
+    const proofs = page.locator("details.proof-details");
+    const openProofs = page.locator("details.proof-details[open]");
+    await expect(toggle).toBeVisible();
+    await expect(proofs).not.toHaveCount(0);
+    await expect(openProofs).toHaveCount(0);
+    await toggle.click();
+    await expect(openProofs).toHaveCount(await proofs.count());
+    await expect(toggle).toHaveText("証明を閉じる");
+    await toggle.click();
+    await expect(openProofs).toHaveCount(0);
+    await expect(toggle).toHaveText("証明を展開");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await expect(toggle).toHaveCSS("position", "static");
+  });
+
   test("学習記録は触れた位置へ移動し、記事の上下で同期する", async ({
     page,
   }) => {
