@@ -1,0 +1,24 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminNav from "../../components/AdminNav.astro";
+---
+<AdminLayout title="アトラス学習サイト運営" description="アトラス学習サイトの運営ワークスペース">
+  <main class="project-home">
+    <AdminNav current="atlas" />
+    <header class="project-heading">
+      <div><p>ATLASEZ / PROJECT</p><h1>アトラス学習サイト</h1><span>原稿・査読・問題報告・進捗を、このプロジェクト内で管理します。</span></div>
+      <a href="/admin/portal/">運営ポータルへ戻る</a>
+    </header>
+    <section class="project-links" aria-label="学習サイト運営メニュー">
+      <a href="/admin/articles/"><strong>原稿一覧</strong><small>分野・状態・公開状況から原稿を探す</small><span>開く →</span></a>
+      <a href="/admin/editor/"><strong>記事編集</strong><small>LaTeX・本文・査読コメントを編集</small><span>開く →</span></a>
+      <a href="/admin/review/"><strong>査読待ち</strong><small>査読依頼を確認してフィードバック</small><span>確認する →</span></a>
+      <a href="/admin/reports/"><strong>問題報告・統計</strong><small>読者からの報告と閲覧状況</small><span>確認する →</span></a>
+      <a href="/admin/operations/"><strong>進捗・ToDo・日程</strong><small>作業報告、担当タスク、同時作業会</small><span>管理する →</span></a>
+      <a href="/admin/guide/"><strong>作業の進め方</strong><small>このプロジェクトの執筆・査読手順</small><span>読む →</span></a>
+    </section>
+  </main>
+</AdminLayout>
+<style>
+  .project-home{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.project-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2.2rem 0 1.4rem}.project-heading p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.1em;margin:0}.project-heading h1{font-size:clamp(1.8rem,4vw,2.6rem);margin:.25rem 0}.project-heading span{color:var(--text-secondary);line-height:1.6}.project-heading>a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.project-links{display:grid;gap:.8rem;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1.5rem}.project-links a{background:var(--background-secondary);border:1px solid var(--border-default);border-top:3px solid var(--accent-primary);color:var(--text-primary);display:grid;gap:.35rem;padding:1rem;text-decoration:none}.project-links a:hover{border-color:var(--accent-primary);transform:translateY(-1px)}.project-links strong{font-size:1rem}.project-links small{color:var(--text-secondary);font-size:.76rem;line-height:1.5}.project-links span{color:var(--accent-primary);font-size:.76rem;font-weight:800;margin-top:.2rem}@media(max-width:800px){.project-home{padding:0 .8rem 3rem}.project-heading{align-items:start;display:grid}.project-links{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.project-links{grid-template-columns:1fr}}
+</style>

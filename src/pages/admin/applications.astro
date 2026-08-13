@@ -1,0 +1,38 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminNav from "../../components/AdminNav.astro";
+---
+<AdminLayout title="運営参加応募" description="運営参加応募の確認">
+  <main class="applications" data-applications>
+    <AdminNav current="applications" />
+    <header>
+      <p>ATLASEZ / MANAGEMENT</p><h1>運営参加応募</h1>
+      <span>受入時に運営者登録・プロフィール反映・Discordロール同期まで実行します。失敗した同期は同じ画面から安全に再試行できます。</span>
+    </header>
+    <output class="notice" data-notice aria-live="polite"></output>
+    <div data-list>読み込み中…</div>
+  </main>
+</AdminLayout>
+<style>
+  .applications{margin:0 auto;max-width:1100px;padding:0 1.25rem 4rem}.applications header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.2rem}.applications header p{color:var(--accent-primary);font-size:.75rem;font-weight:800;letter-spacing:.08em;margin:0}.applications h1{font-size:2rem;margin:.3rem 0}.applications header span,.app small{color:var(--text-secondary)}.notice{display:block;min-height:1.5rem;padding-top:.75rem}.notice[data-error="true"]{color:#b42318}.app{border:1px solid var(--border-default);display:grid;gap:.75rem;margin-top:1rem;padding:1rem}.top{align-items:center;display:flex;gap:1rem;justify-content:space-between}.top h2{font-size:1rem;margin:0}.actions{align-items:center;display:flex;flex-wrap:wrap;gap:.5rem}.actions select,.actions button{font:inherit;padding:.45rem .65rem}.actions button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font-weight:700}.actions button:disabled{cursor:wait;opacity:.55}.badge{border:1px solid var(--border-default);border-radius:999px;font-size:.72rem;font-weight:700;padding:.25rem .5rem}.badge[data-state="synced"]{background:#e8f7ed;border-color:#78bd8b;color:#176b32}.badge[data-state="failed"]{background:#fff1f0;border-color:#f2a6a0;color:#9f211b}.badge[data-state="skipped"]{background:#fff8e1;border-color:#dfbd65;color:#765600}.facts{display:flex;flex-wrap:wrap;gap:.35rem}.facts span{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.75rem;padding:.25rem .45rem}.app h3{font-size:.82rem;margin:.25rem 0 0}.app pre{font:inherit;line-height:1.65;margin:0;white-space:pre-wrap}.provisioning-error{background:#fff7f6;border-left:3px solid #b42318;color:#7a271a;font-size:.78rem;margin:0;padding:.6rem;white-space:pre-wrap}.member-link{color:var(--accent-primary);font-size:.78rem;font-weight:700}@media(max-width:650px){.applications{padding:0 .85rem 3rem}.top{align-items:start;display:grid}.actions,.actions select,.actions button{width:100%}}
+</style>
+<script>
+  const root=document.querySelector<HTMLElement>('[data-applications]');
+  if(root){
+    const esc=(value:unknown)=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]??char));
+    const notice=root.querySelector<HTMLOutputElement>('[data-notice]')!;
+    const list=root.querySelector<HTMLElement>('[data-list]')!;
+    const provisioningLabel:Record<string,string>={not_started:'未実行',pending:'同期準備中',synced:'Discord同期済み',skipped:'Discord未連携',failed:'Discord同期要確認'};
+    let subjectLabels:Record<string,string>={};
+    const setNotice=(message:string,error=false)=>{notice.value=message;notice.dataset.error=String(error)};
+    const displayName=(application:any)=>{const split=[application.form_language==='en'?application.given_name:application.family_name,application.form_language==='en'?application.middle_name:'',application.form_language==='en'?application.family_name:application.given_name].filter(Boolean).join(' ');return split||application.name||'氏名未設定'};
+    const fields=(application:any)=>`<div class="facts"><span>${esc(application.affiliation_type||'所属未設定')}：${esc(application.institution||'—')}</span><span>${esc(application.grade||'—')}</span><span>${esc(application.country||'—')} / ${esc(application.timezone||'—')}</span>${application.verified_discord_user_id?'<span>確認済みDiscord ID登録済み</span>':'<span>Discord ID未登録</span>'}</div>`;
+    const actions=(application:any)=>{const accepted=application.status==='accepted';const state=application.provisioning_status||'not_started';return `<div class="actions"><span class="badge" data-state="${esc(state)}">${esc(provisioningLabel[state]??state)}</span><select data-id="${esc(application.id)}" ${accepted?'disabled aria-label="受入済み"':''}><option value="new" ${application.status==='new'?'selected':''}>新規</option><option value="reviewing" ${application.status==='reviewing'?'selected':''}>確認中</option><option value="accepted" ${accepted?'selected':''}>受入・運営者登録</option><option value="rejected" ${application.status==='rejected'?'selected':''}>見送り</option></select>${accepted&&state!=='synced'?`<button type="button" data-retry="${esc(application.id)}">Discord同期を再試行</button>`:''}</div>`};
+    const render=(applications:any[])=>{list.innerHTML=applications.length?applications.map(application=>`<article class="app"><div class="top"><h2>${esc(displayName(application))} <small>${esc(application.email)}</small></h2>${actions(application)}</div>${fields(application)}<h3>希望分野</h3><div class="facts">${String(application.desired_subjects||'').split(',').filter(Boolean).map(subject=>`<span>${esc(subjectLabels[subject]??subject)}</span>`).join('')||'<span>旧形式応募：未設定</span>'}</div><h3>書きたい記事・テーマ</h3><pre>${esc(application.article_ideas||'—')}</pre><h3>できること・関心</h3><pre>${esc(application.interests)}</pre><h3>参加理由・自己紹介</h3><pre>${esc(application.message)}</pre>${application.availability_note?`<h3>参加可能な時間帯</h3><pre>${esc(application.availability_note)}</pre>`:''}${application.provisioning_error?`<p class="provisioning-error">${esc(application.provisioning_error)}</p>`:''}${application.status==='accepted'&&!application.verified_discord_user_id?'<a class="member-link" href="/admin/permissions/">本人確認後、参加者一覧でDiscordユーザーIDを登録する →</a>':''}</article>`).join(''):'応募はありません。'};
+    const load=async()=>{try{const response=await fetch('/api/admin/applications',{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};render(Array.isArray(data.applications)?data.applications:[])}catch(error){list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};
+    const update=async(id:string,status:string,button?:HTMLButtonElement)=>{button?.setAttribute('disabled','');setNotice(status==='accepted'?'運営者登録とDiscord同期を実行中…':'状態を更新中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'更新できませんでした。');const warning=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';setNotice(warning?`運営者登録は完了しました。${warning}`:'更新しました。',Boolean(warning));await load()}catch(error){setNotice(error instanceof Error?error.message:'更新できませんでした。',true);await load()}finally{button?.removeAttribute('disabled')}};
+    root.addEventListener('change',event=>{const select=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-id]');if(!select)return;if(select.value==='accepted'&&!confirm('受入を確定しますか？ 運営者登録・プロフィール反映・Discordロール同期を実行します。')){void load();return}void update(select.dataset.id??'',select.value)});
+    root.addEventListener('click',event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-retry]');if(button)void update(button.dataset.retry??'','accepted',button)});
+    void load();
+  }
+</script>

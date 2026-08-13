@@ -151,6 +151,32 @@ const categoryKeys = new Set(
     ),
   ),
 );
+
+// 分野・カテゴリ自体の重複と、概念の所属先を検査する。
+// 参照先IDだけが正しくても所属カテゴリが誤っていると、地図や一覧で概念が
+// 行方不明になるため、静的ビルドより前に分かるエラーとして扱う。
+const subjectSlugs = new Set();
+for (const subject of subjects) {
+  if (subjectSlugs.has(subject.slug)) {
+    errors.push(`分野slugが重複: ${subject.slug}`);
+  }
+  subjectSlugs.add(subject.slug);
+  const categorySlugs = new Set();
+  for (const category of subject.categories ?? []) {
+    if (categorySlugs.has(category.slug)) {
+      errors.push(`カテゴリslugが重複: ${subject.slug}/${category.slug}`);
+    }
+    categorySlugs.add(category.slug);
+  }
+}
+for (const concept of concepts) {
+  const categoryKey = `${concept.subject}/${concept.category}`;
+  if (!categoryKeys.has(categoryKey)) {
+    errors.push(
+      `概念 ${concept.id} が存在しない分野・カテゴリ ${categoryKey} に所属`,
+    );
+  }
+}
 // ---------- 記事の分野・カテゴリとファイルの置き場所 ----------
 for (const { file, fm } of articleMeta) {
   if (!fm.subject || !fm.category) continue;

@@ -12,7 +12,7 @@
  * 特定の記事にしか出ない文字列は内容とみなして無視する。
  */
 import { readFileSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { UI_DICTIONARY } from "../src/lib/ui-locales.ts";
@@ -30,6 +30,9 @@ const EXCLUDE = [
   ".breadcrumb",
   ".subject-name",
   ".subject-desc",
+  ".subject-home > h1",
+  ".map-breadcrumb",
+  "[aria-current='page']",
   ".recent-list",
   ".upcoming-list",
   ".toc-list",
@@ -54,6 +57,8 @@ const EXCLUDE = [
 
 /** 記号だけ・数字混じりなど、翻訳の必要がないもの */
 const IGNORE = new Set(["・", "|", "/"]);
+/** 記事数は数値を含む動的表示で、ラベル部分の「記事」は別途辞書化済み。 */
+const IGNORE_PATTERNS = [/^記事:\s*\d+$/];
 
 const JAPANESE = /[ぁ-ゟ゠-ヿ㐀-鿿]/;
 
@@ -67,7 +72,12 @@ function collectHtml(dir) {
   return out;
 }
 
-const files = collectHtml(distDir);
+// UI_LANGUAGE は学習サイトにだけ読み込まれる。公式サイトや認証必須の
+// 運営画面まで数えると、実際には翻訳対象でない管理用語が「未翻訳」として
+// 大量に混ざるため、/atlas/ 配下だけを監査する。
+const files = collectHtml(distDir).filter((file) =>
+  relative(distDir, file).replaceAll("\\", "/").startsWith("atlas/"),
+);
 const counts = new Map();
 
 for (const file of files) {
@@ -105,7 +115,10 @@ const shared = [...counts.entries()]
   .sort((a, b) => b[1] - a[1]);
 
 const missing = shared.filter(
-  ([text]) => !UI_DICTIONARY[text] && !IGNORE.has(text),
+  ([text]) =>
+    !UI_DICTIONARY[text] &&
+    !IGNORE.has(text) &&
+    !IGNORE_PATTERNS.some((pattern) => pattern.test(text)),
 );
 const covered = shared.length - missing.length;
 const rate = shared.length === 0 ? 100 : (covered / shared.length) * 100;

@@ -220,6 +220,31 @@ export const UI_DICTIONARY: Record<
     zh: "报告本文的问题",
     ko: "이 문서의 문제 신고",
   },
+  "記事名・URLは自動で添付されます。誤りや改善案をこの画面からお送りください。":
+    {
+      en: "The article title and URL are attached automatically. Send corrections or suggestions here.",
+      zh: "文章标题和网址会自动附上。请在此提交错误或改进建议。",
+      ko: "문서 제목과 URL은 자동으로 첨부됩니다. 오류나 개선 의견을 여기에서 보내 주세요.",
+    },
+  報告の種類: { en: "Report type", zh: "报告类型", ko: "신고 유형" },
+  内容: { en: "Details", zh: "内容", ko: "내용" },
+  "返信先（任意）": {
+    en: "Contact for reply (optional)",
+    zh: "回复联系方式（选填）",
+    ko: "답변 받을 연락처 (선택)",
+  },
+  報告を送信: { en: "Send report", zh: "提交报告", ko: "신고 보내기" },
+  この記事の主要概念: {
+    en: "Key concepts in this article",
+    zh: "本文的主要概念",
+    ko: "이 문서의 주요 개념",
+  },
+  主要概念: { en: "Key concepts", zh: "主要概念", ko: "주요 개념" },
+  "該当箇所と、どのように修正すべきかをお書きください。": {
+    en: "Describe the relevant section and how it should be corrected.",
+    zh: "请说明相关位置以及应如何修改。",
+    ko: "해당 부분과 어떻게 수정해야 하는지 적어 주세요.",
+  },
   GitHubで編集履歴を見る: {
     en: "View history on GitHub",
     zh: "在 GitHub 查看编辑历史",
@@ -232,6 +257,7 @@ export const UI_DICTIONARY: Record<
   },
   読んだ: { en: "Read", zh: "已读", ko: "읽음" },
   理解した: { en: "Understood", zh: "已理解", ko: "이해함" },
+  未記録: { en: "Not recorded", zh: "未记录", ko: "기록 없음" },
   保存済み: { en: "Saved", zh: "已保存", ko: "저장됨" },
   "事前演習（準備中）": {
     en: "Pre-exercise (coming soon)",
@@ -265,6 +291,75 @@ export const UI_DICTIONARY: Record<
     ko: "선행 지식:",
   },
   グリッド: { en: "Grid", zh: "网格", ko: "그리드" },
+
+  // --- 学習地図 ---
+  概念マップ: { en: "Concept map", zh: "概念图", ko: "개념 지도" },
+  学習ルート検索: {
+    en: "Learning route search",
+    zh: "学习路线搜索",
+    ko: "학습 경로 검색",
+  },
+  自動整列: { en: "Auto layout", zh: "自动排列", ko: "자동 정렬" },
+  表示を戻す: { en: "Fit view", zh: "恢复视图", ko: "화면 맞춤" },
+  地図を操作: { en: "Control map", zh: "操作地图", ko: "지도 조작" },
+  "▴ カテゴリを折りたたむ": {
+    en: "▴ Fold category",
+    zh: "▴ 折叠分类",
+    ko: "▴ 카테고리 접기",
+  },
+  全画面: { en: "Full screen", zh: "全屏", ko: "전체 화면" },
+  この表示を共有: {
+    en: "Share this view",
+    zh: "分享此视图",
+    ko: "이 화면 공유",
+  },
+  "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。":
+    {
+      en: "Choose a subject and a goal. Set a starting point only if there is a concept you already understand.",
+      zh: "请先选择领域和想理解的项目。只有在已有理解的项目时才设置起点。",
+      ko: "먼저 분야와 이해할 항목을 선택하세요. 이미 이해한 항목이 있을 때만 시작점을 지정하세요.",
+    },
+  "開始地点（任意）": {
+    en: "Starting point (optional)",
+    zh: "起点（选填）",
+    ko: "시작점 (선택)",
+  },
+  "目的地点（理解したい概念）": {
+    en: "Goal (concept to understand)",
+    zh: "目标（想理解的概念）",
+    ko: "목표 (이해할 개념)",
+  },
+  経路を表示: { en: "Show route", zh: "显示路线", ko: "경로 표시" },
+  "背景ドラッグで移動 · ノードを押すと詳細を表示": {
+    en: "Drag the background to pan · Select a node for details",
+    zh: "拖动背景来移动 · 选择节点查看详情",
+    ko: "배경을 드래그해 이동 · 노드를 눌러 상세 보기",
+  },
+  前提: { en: "Prerequisite", zh: "前置", ko: "선행" },
+  次におすすめ: {
+    en: "Recommended next",
+    zh: "下一步推荐",
+    ko: "다음 추천",
+  },
+  関連: { en: "Related", zh: "相关", ko: "관련" },
+  凡例: { en: "Legend", zh: "图例", ko: "범례" },
+  学習地図内の現在地: {
+    en: "Current location in the learning map",
+    zh: "学习地图中的当前位置",
+    ko: "학습 지도 내 현재 위치",
+  },
+  地図の表示倍率: {
+    en: "Map zoom",
+    zh: "地图缩放",
+    ko: "지도 확대/축소",
+  },
+  縮小: { en: "Zoom out", zh: "缩小", ko: "축소" },
+  拡大: { en: "Zoom in", zh: "放大", ko: "확대" },
+  表示の切り替え: {
+    en: "Switch view",
+    zh: "切换视图",
+    ko: "보기 전환",
+  },
   // --- 一覧の補足 ---
   "目次に予定されている、本文準備中の記事です。": {
     en: "This article is planned in the contents; the text is still being prepared.",

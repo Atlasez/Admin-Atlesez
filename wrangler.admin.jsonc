@@ -4,7 +4,8 @@
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
   "vars": {
-    "ADMIN_AUTH_MODE": "google-oauth"
+    "ADMIN_AUTH_MODE": "google-oauth",
+    "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin.ukyoukay0.workers.dev",
   },
   "assets": {
     "directory": "./dist",
@@ -20,6 +21,6 @@
     },
   ],
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": ["0 3 * * *"],
   },
 }

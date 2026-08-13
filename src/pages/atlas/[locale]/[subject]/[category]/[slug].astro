@@ -684,6 +684,134 @@ const structuredData = {
   .article-body :global(ol) {
     margin-block: 0.7em;
   }
+  /* 数学記事の定義・命題・定理は、サンプル記事の見た目を保ちつつ
+     サイトのテーマ色に追従する。Markdown内の .defi/.prop 等にも、
+     自動判定した記事本文にも同じスタイルを適用する。 */
+  .article-body :global(.defi),
+  .article-body :global(.math-definition) {
+    background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary));
+    border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default));
+    border-left: 4px solid #6cb4c2;
+    border-radius: 0 0.55rem 0.55rem 0.55rem;
+    box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
+    margin-block: 2.8rem 1.15rem;
+    padding: 1.1rem 1.25rem;
+    box-sizing: border-box;
+    min-width: 0;
+    overflow: visible;
+  }
+  .article-body :global(.prop),
+  .article-body :global(.thm),
+  .article-body :global(.lemma),
+  .article-body :global(.cor),
+  .article-body :global(.example),
+  .article-body :global(.math-theorem) {
+    background: color-mix(in srgb, #e0c375 12%, var(--background-primary));
+    border: 1px solid color-mix(in srgb, #e0c375 42%, var(--border-default));
+    border-left: 4px solid #d0a53b;
+    border-radius: 0 0.55rem 0.55rem 0.55rem;
+    box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
+    margin-block: 2.8rem 1.15rem;
+    padding: 1.1rem 1.25rem;
+    box-sizing: border-box;
+    min-width: 0;
+    overflow: visible;
+  }
+  .article-body :global(.defi) > :first-child,
+  .article-body :global(.prop) > :first-child,
+  .article-body :global(.thm) > :first-child,
+  .article-body :global(.lemma) > :first-child,
+  .article-body :global(.cor) > :first-child,
+  .article-body :global(.example) > :first-child,
+  .article-body :global(.math-definition) > :first-child,
+  .article-body :global(.math-theorem) > :first-child { margin-top: 0; }
+  .article-body :global(.defi) > :last-child,
+  .article-body :global(.prop) > :last-child,
+  .article-body :global(.thm) > :last-child,
+  .article-body :global(.lemma) > :last-child,
+  .article-body :global(.cor) > :last-child,
+  .article-body :global(.example) > :last-child,
+  .article-body :global(.math-definition) > :last-child,
+  .article-body :global(.math-theorem) > :last-child { margin-bottom: 0; }
+  .article-body :global(.thmtitle) {
+    background: #6cb4c2;
+    border-radius: 0.45rem 0.45rem 0 0;
+    color: #12333a;
+    display: inline-block;
+    font-size: 0.88em;
+    font-weight: 800;
+    margin: -2.55rem 0 0.55rem -1.3rem;
+    padding: 0.3rem 0.8rem;
+  }
+  .article-body :global(.prop .thmtitle),
+  .article-body :global(.thm .thmtitle),
+  .article-body :global(.lemma .thmtitle),
+  .article-body :global(.cor .thmtitle),
+  .article-body :global(.example .thmtitle) { background: #e0c375; color: #4b3a12; }
+  .article-body :global(.proof-details) { margin-block: 1.2rem; }
+  .article-body :global(.proof-details > summary) {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.4rem;
+    cursor: pointer;
+    display: inline-block;
+    font-weight: 800;
+    padding: 0.35rem 0.8rem;
+  }
+  .article-body :global(.proof-details > summary:hover) { border-color: var(--accent-primary); }
+  .article-body :global(.proof-details-inner) {
+    border-left: 3px solid var(--border-default);
+    margin: 0.4rem 0 0 0.35rem;
+    padding: 0.2rem 0.95rem;
+  }
+  .article-body :global(.katex-display) {
+    box-sizing: border-box;
+    display: block;
+    margin-block: 0.9rem;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.15rem;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  .article-body :global(.katex-display > .katex) {
+    display: inline-block;
+    max-width: none;
+    min-width: max-content;
+  }
+  .article-body :global(.defi > p),
+  .article-body :global(.prop > p),
+  .article-body :global(.thm > p),
+  .article-body :global(.lemma > p),
+  .article-body :global(.cor > p),
+  .article-body :global(.example > p),
+  .article-body :global(.math-definition > p),
+  .article-body :global(.math-theorem > p) { overflow-wrap: anywhere; }
+  .article-body :global(.supp-details-summary) {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.45rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 800;
+    list-style: none;
+    margin-block: 0.9rem 0;
+    padding: 0.55rem 0.8rem;
+    position: relative;
+    text-align: center;
+  }
+  .article-body :global(.supp-details-summary::-webkit-details-marker) { display: none; }
+  .article-body :global(.supp-details-summary::after) { content: "+"; position: absolute; right: 0.8rem; }
+  .article-body :global(.supp-details[open] .supp-details-summary::after) { content: "−"; }
+  .article-body :global(.supp-details-inner) { border: 1px solid var(--border-default); border-top: 0; border-radius: 0 0 0.45rem 0.45rem; padding: 0.8rem 1rem; }
+  .article-body :global(.rem) { background: color-mix(in srgb, var(--background-secondary) 75%, transparent); border: 1px solid var(--border-default); border-left: 4px solid var(--border-strong); border-radius: 0.35rem; color: var(--text-secondary); margin-block: 1.2rem; padding: 0.7rem 0.9rem; }
+  .article-body :global(details.folding) { border: 1px solid var(--border-default); border-radius: 0.45rem; margin-block: 1rem; overflow: hidden; }
+  .article-body :global(details.folding > summary) { background: var(--background-secondary); cursor: pointer; list-style: none; padding: 0.55rem 0.8rem 0.55rem 2rem; position: relative; }
+  .article-body :global(details.folding > summary::-webkit-details-marker) { display: none; }
+  .article-body :global(details.folding > summary::before) { border-bottom: 2px solid var(--text-secondary); border-right: 2px solid var(--text-secondary); content: ""; height: 0.45rem; left: 0.8rem; position: absolute; top: 0.75rem; transform: rotate(45deg); transition: transform .15s ease; width: 0.45rem; }
+  .article-body :global(details.folding[open] > summary::before) { transform: rotate(225deg); }
+  .article-body :global(.folding-content) { padding: 0.8rem 1rem; }
   .article-refs,
   .article-footer {
     max-width: var(--reading-width);
@@ -1208,5 +1336,90 @@ const structuredData = {
         }
       });
     });
+
+    // 数学記事のPandoc風マークアップを、読みやすいカードと折りたたみ証明へ整える。
+    // 明示的な .defi/.prop 等はそのまま尊重し、プレーンMarkdownの見出しも対象にする。
+    const mathBody = document.querySelector<HTMLElement>(".article-body");
+    const articleMeta = document.querySelector<HTMLElement>("[data-article-actions]");
+    if (mathBody && articleMeta?.dataset.subjectSlug === "mathematics") {
+      const labelToClass: Record<string, string> = { "定義": "defi", "命題": "prop", "定理": "thm", "補題": "lemma", "系": "cor", "例": "example" };
+      const theoremLead = /^(定義|命題|定理|補題|系|例)\s*(?:\d+|[（(:：．。\.])/u;
+      const proofLead = /^証明(?:\s|[．。\.:：]|$)/u;
+      const isTheoremLead = (node: Element) => node.tagName === "P" && theoremLead.test((node.textContent ?? "").trim());
+      const isProofLead = (node: Element) => node.tagName === "P" && proofLead.test((node.textContent ?? "").trim());
+      const isHeading = (node: Element) => ["H2", "H3"].includes(node.tagName);
+      const isMathBlock = (node: Element) => node.matches(".defi,.prop,.thm,.lemma,.cor,.example,.math-definition,.math-theorem,.proof-details");
+      const addTheoremLabel = (wrapper: HTMLElement) => {
+        const paragraph = wrapper.querySelector<HTMLElement>(":scope > p");
+        if (!paragraph || paragraph.querySelector(":scope > .thmtitle")) return;
+        const firstText = [...paragraph.childNodes].find((child) => child.nodeType === Node.TEXT_NODE && (child.textContent ?? "").trim());
+        if (!firstText) return;
+        const labelMatch = (firstText.textContent ?? "").match(/^(\s*(?:定義|命題|定理|補題|系|例)\s*(?:\d+\s*)?(?:[（(][^）)]*[）)])?\s*[.．。:：]?\s*)/u);
+        if (!labelMatch) return;
+        const label = labelMatch[1];
+        const rest = (firstText.textContent ?? "").slice(label.length);
+        const title = document.createElement("span");
+        title.className = "thmtitle";
+        title.textContent = label.trim();
+        firstText.parentNode?.insertBefore(title, firstText);
+        firstText.textContent = rest;
+      };
+      const topLevel = () => [...mathBody.children] as HTMLElement[];
+      for (const node of topLevel()) {
+        if (node.tagName !== "P" || node.closest(".defi,.prop,.thm,.lemma,.cor,.example,.proof-details")) continue;
+        const text = (node.textContent ?? "").trim();
+        const match = Object.keys(labelToClass).find((label) => text.startsWith(label) && theoremLead.test(text));
+        if (!match) continue;
+        const wrapper = document.createElement("div");
+        wrapper.className = labelToClass[match] ?? "math-theorem";
+        node.replaceWith(wrapper);
+        wrapper.append(node);
+        addTheoremLabel(wrapper);
+        let next = wrapper.nextElementSibling;
+        let sawDisplayMath = false;
+        while (next) {
+          if (isHeading(next) || isMathBlock(next) || isTheoremLead(next) || isProofLead(next)) break;
+          if (next.matches(".katex-display")) {
+            const following = next.nextElementSibling;
+            wrapper.append(next);
+            next = following;
+            sawDisplayMath = true;
+            continue;
+          }
+          if (next.tagName === "OL" || next.tagName === "UL") {
+            const following = next.nextElementSibling;
+            wrapper.append(next);
+            next = following;
+            continue;
+          }
+          // remark-math places a display equation between two paragraphs.
+          // Keep the continuation paragraph in the same card so text is not
+          // visually separated from its definition or theorem.
+          if (sawDisplayMath && next.tagName === "P") wrapper.append(next);
+          break;
+        }
+      }
+      for (const node of topLevel()) {
+        if (!isProofLead(node)) continue;
+        const details = document.createElement("details");
+        details.className = "proof-details";
+        const summary = document.createElement("summary");
+        summary.textContent = "証明.";
+        const inner = document.createElement("div");
+        inner.className = "proof-details-inner";
+        const first = node.firstChild;
+        if (first?.nodeType === Node.ELEMENT_NODE && (first as HTMLElement).tagName === "STRONG") first.remove();
+        else node.textContent = (node.textContent ?? "").replace(/^証明[。\.\s]*/u, "");
+        node.parentNode?.insertBefore(details, node);
+        details.append(summary, inner);
+        inner.append(node);
+        let next = details.nextElementSibling;
+        while (next && !isHeading(next) && !isMathBlock(next) && !isTheoremLead(next) && !isProofLead(next)) {
+          const following = next.nextElementSibling;
+          inner.append(next);
+          next = following;
+        }
+      }
+    }
   }
 </script>

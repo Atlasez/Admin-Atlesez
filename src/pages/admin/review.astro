@@ -1,0 +1,38 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminNav from "../../components/AdminNav.astro";
+---
+
+<AdminLayout title="査読スペース" description="運営内運営が査読依頼を確認する画面">
+  <main class="review-space" data-review-space>
+    <AdminNav current="review" />
+    <header class="review-heading"><div><p class="eyebrow">ATLASEZ / 運営内運営</p><h1>査読スペース</h1><p>査読中の原稿を確認し、コメント・保留・査読完了を行います。全分野管理者だけが利用できます。</p></div><button type="button" class="quiet-action" data-review-refresh>一覧を更新</button></header>
+    <section class="review-intro"><strong>査読の流れ</strong><ol><li>原稿を開き、本文とプレビューを確認する。</li><li>コメント欄へ修正依頼または確認結果を残す。</li><li>修正が必要なら「査読中」または「保留」、完了なら「査読済み」として保存する。</li><li>公開判断は「記事編集」の公開ボタンで行う。</li></ol></section>
+    <output class="review-feedback" data-review-feedback aria-live="polite">読み込み中…</output>
+    <section class="review-list" data-review-list aria-label="査読依頼一覧"></section>
+  </main>
+</AdminLayout>
+
+<style>
+  .review-space { --surface:var(--background-primary); --alt:var(--background-secondary); --border:var(--border-default); --text:var(--text-primary); --muted:var(--text-secondary); --accent:var(--accent-primary); box-sizing:border-box; color:var(--text); margin:0 auto; max-width:1050px; padding:0 1.25rem 4rem; }.review-heading { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:2rem 0 1.25rem; }.eyebrow { color:var(--accent); font-size:.76rem; font-weight:800; letter-spacing:.08em; margin:0 0 .35rem; }.review-heading h1 { font-size:clamp(1.8rem,4vw,2.35rem); margin:0; }.review-heading p { color:var(--muted); line-height:1.6; margin:.45rem 0 0; }.quiet-action { background:var(--surface); border:1px solid var(--border); color:var(--text); cursor:pointer; font:inherit; font-size:.82rem; font-weight:800; min-height:2.35rem; padding:.45rem .7rem; }.quiet-action:hover { border-color:var(--accent); color:var(--accent); }.review-intro { background:var(--alt); border:1px solid var(--border); border-left:3px solid var(--accent); margin:1.25rem 0; padding:.8rem .95rem; }.review-intro ol { color:var(--muted); line-height:1.7; margin:.45rem 0 0; padding-left:1.25rem; }.review-feedback { color:var(--muted); display:block; font-size:.85rem; min-height:1.3rem; }.review-list { border:1px solid var(--border); display:grid; margin-top:.3rem; }.review-card { align-items:center; background:var(--surface); border-bottom:1px solid var(--border); display:grid; gap:.6rem; grid-template-columns:minmax(0,1fr) auto; padding:.8rem .9rem; }.review-card:last-child { border-bottom:0; }.review-card:hover { background:var(--alt); }.review-card h2 { font-size:1rem; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.review-card p { color:var(--muted); font-size:.76rem; margin:.26rem 0 0; }.review-card a { background:var(--accent); color:#fff; font-size:.8rem; font-weight:800; padding:.5rem .65rem; text-decoration:none; white-space:nowrap; }.review-empty { color:var(--muted); padding:3rem 1rem; text-align:center; } @media(max-width:650px){.review-space{padding:0 .9rem 3rem}.review-heading,.review-card{display:grid;grid-template-columns:1fr}.review-card a{justify-self:start}}
+</style>
+
+<script>
+  type ReviewRequest = { id: string; subject: string; category: string; title: string; updated_by: string; updated_at: string };
+  const initializeReviewSpace = () => {
+    const root = document.querySelector<HTMLElement>("[data-review-space]");
+    if (!root || root.dataset.reviewSpaceInitialized === "true") return;
+    root.dataset.reviewSpaceInitialized = "true";
+    const list = root.querySelector<HTMLElement>("[data-review-list]")!;
+    const feedback = root.querySelector<HTMLOutputElement>("[data-review-feedback]")!;
+    const refresh = root.querySelector<HTMLButtonElement>("[data-review-refresh]")!;
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+    const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const read = async <T,>(response: Response) => { if (!(response.headers.get("content-type") ?? "").includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。"); return await response.json() as T; };
+    const load = async () => { feedback.value = "読み込み中…"; refresh.disabled = true; try { const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" }); const data = await read<{ requests?: ReviewRequest[]; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。"); const requests = data.requests ?? []; list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.subject)} / ${escapeHtml(item.category)} ・ 依頼者: ${escapeHtml(item.updated_by)} ・ ${formatDate(item.updated_at)}</p></div><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">原稿を開いて査読</a></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; feedback.value = `${requests.length}件の査読依頼`; } catch (error) { const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。"; list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`; feedback.value = ""; } finally { refresh.disabled = false; } };
+    refresh.addEventListener("click", () => void load());
+    void load();
+  };
+  document.addEventListener("astro:page-load", initializeReviewSpace);
+  initializeReviewSpace();
+</script>

@@ -934,13 +934,13 @@ const views = [
     right: 0;
     bottom: 0;
     left: 0;
-    height: 3.1rem;
+    height: 4rem;
     content: "";
     pointer-events: none;
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--background-primary), transparent 100%),
-      var(--background-primary) 88%
+      color-mix(in srgb, var(--background-inset) 34%, transparent),
+      color-mix(in srgb, var(--background-inset) 94%, var(--background-primary))
     );
   }
   .recent-scroll::-webkit-scrollbar,
