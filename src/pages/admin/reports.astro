@@ -1,29 +1,28 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import { getCollection } from "astro:content";
 import AdminNav from "../../components/AdminNav.astro";
-
-const subjects = (await getCollection("subjects")).sort(
-  (a, b) => a.data.order - b.data.order,
-);
 ---
 
 <AdminLayout
-  title="記事の問題報告"
-  description="運営用の記事問題報告管理画面"
+  title="問題報告・閲覧統計"
+  description="運営用の記事問題報告と閲覧統計の管理画面"
 >
   <section class="admin-reports" data-reports-admin>
     <AdminNav current="reports" />
     <header class="admin-reports-heading">
       <div>
         <p class="eyebrow">ATLASEZ / 運営用</p>
-        <h1>記事の問題報告</h1>
-        <p>未確認の報告から確認し、必要なときだけ詳細と運営メモを開いて対応します。</p>
+        <h1>問題報告・閲覧統計</h1>
+        <p>問題報告の対応と、個人情報を保存しない閲覧統計を分けて確認できます。</p>
       </div>
-      <div class="admin-auth-actions" data-admin-auth-actions hidden></div>
     </header>
 
-    <section class="analytics-panel" data-analytics-admin aria-labelledby="analytics-heading">
+    <div class="admin-section-tabs" role="tablist" aria-label="問題報告・閲覧統計の表示切り替え">
+      <button type="button" role="tab" aria-selected="true" aria-controls="reports-panel" data-admin-view="reports">問題報告</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="analytics-panel" data-admin-view="analytics">閲覧統計</button>
+    </div>
+
+    <section class="analytics-panel" id="analytics-panel" data-admin-view-panel="analytics" data-analytics-admin aria-labelledby="analytics-heading" hidden>
       <div class="analytics-heading">
         <div>
           <p class="eyebrow">匿名集計</p>
@@ -39,21 +38,7 @@ const subjects = (await getCollection("subjects")).sort(
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
     </section>
 
-    <section class="permission-panel" data-permission-admin hidden aria-labelledby="permission-heading">
-      <div>
-        <p class="eyebrow">運営内運営（全分野管理者）のみ</p>
-        <h2 id="permission-heading">担当分野の管理</h2>
-        <p>運営者のメールアドレスごとに、確認・更新できる記事報告の分野を設定します。</p>
-      </div>
-      <form class="permission-form" data-permission-form>
-        <label>運営者のメールアドレス<input type="email" name="email" required maxlength="320" autocomplete="email" placeholder="editor@example.com" /></label>
-        <label>担当分野<select name="subject" required><option value="*">全分野（全体管理者）</option>{subjects.map((subject) => <option value={subject.data.slug}>{subject.data.name.ja}</option>)}</select></label>
-        <button class="button" type="submit">担当を追加</button>
-      </form>
-      <p class="permission-feedback" data-permission-feedback aria-live="polite"></p>
-      <div class="permission-list" data-permission-list></div>
-    </section>
-
+    <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告">
     <div class="report-controls">
       <label>
         表示する状態
@@ -69,6 +54,7 @@ const subjects = (await getCollection("subjects")).sort(
     </div>
     <p class="report-feedback" data-report-feedback aria-live="polite">読み込み中です…</p>
     <div class="report-list" data-report-list></div>
+    </section>
   </section>
 </AdminLayout>
 
@@ -78,10 +64,7 @@ const subjects = (await getCollection("subjects")).sort(
   .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .45rem; }
   h1 { font-size: clamp(1.8rem, 4vw, 2.45rem); letter-spacing: -.025em; margin: 0; }
   .admin-reports-heading div > p:last-child { color: var(--muted); margin: .65rem 0 0; }
-  .admin-auth-actions { align-items: end; display: flex; flex: 0 0 auto; gap: .5rem; }
-  .admin-auth-actions a, .admin-auth-actions button { font: inherit; font-size: .82rem; }
-  .admin-auth-actions a { border: 1px solid var(--border); border-radius: .45rem; color: var(--text); padding: .55rem .7rem; text-decoration: none; }
-  .admin-auth-actions a:hover { background: var(--surface-alt); }
+  .admin-section-tabs { border-bottom: 1px solid var(--border); display: flex; gap: .15rem; margin: 0 0 1.25rem; }.admin-section-tabs button { background: transparent; border: 0; border-bottom: 3px solid transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: .88rem; font-weight: 800; padding: .65rem .85rem; }.admin-section-tabs button[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--accent); }.admin-section-tabs button:hover { background: var(--surface-alt); color: var(--text); }.reports-panel { display: grid; gap: .75rem; }
   .analytics-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; border-top: 2px solid var(--accent); margin: 0 0 1.25rem; padding: 1rem; }
   .analytics-heading { align-items: end; display: flex; gap: 1rem; justify-content: space-between; }
   .analytics-heading h2 { font-size: 1.05rem; margin: 0; }
@@ -103,11 +86,13 @@ const subjects = (await getCollection("subjects")).sort(
   .permission-form label { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
   .permission-form input { border: 1px solid var(--border); border-radius: .45rem; background: var(--surface); color: var(--text); font: inherit; min-height: 2.35rem; padding: .3rem .55rem; }
   .permission-feedback { min-height: 1.1rem; }
-  .permission-list { display: flex; flex-wrap: wrap; gap: .45rem; }
-  .permission-chip { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; display: inline-flex; font-size: .78rem; gap: .35rem; padding: .28rem .32rem .28rem .55rem; }
-  .permission-chip strong { color: var(--accent); }
-  .permission-remove { background: transparent; border: 0; border-radius: 999px; color: var(--muted); cursor: pointer; font: inherit; font-size: 1rem; line-height: 1; padding: 0 .15rem; }
-  .permission-remove:hover { background: var(--surface-alt); color: #a12828; }
+  .permission-list { background: var(--surface); border: 1px solid var(--border); display: grid; gap: 0; overflow: hidden; }
+  .permission-row { align-items: center; display: grid; gap: .8rem; grid-template-columns: minmax(15rem, 1fr) minmax(10rem, .65fr) auto; padding: .65rem .75rem; }
+  .permission-row + .permission-row { border-top: 1px solid var(--border); }
+  .permission-email { font-size: .84rem; font-weight: 750; overflow-wrap: anywhere; }
+  .permission-scope { color: var(--accent); font-size: .8rem; font-weight: 800; }
+  .permission-remove { align-items: center; background: transparent; border: 1px solid var(--border); border-radius: .4rem; color: var(--muted); cursor: pointer; display: inline-flex; font: inherit; font-size: .78rem; justify-content: center; min-height: 2.2rem; min-width: 4.6rem; padding: .35rem .65rem; }
+  .permission-remove:hover, .permission-remove:focus-visible { background: var(--surface-alt); border-color: #a12828; color: #a12828; }
   .report-controls { align-items: end; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; display: flex; flex-wrap: wrap; gap: .65rem; margin-bottom: .55rem; padding: .7rem .8rem; }
   .report-controls label { display: grid; font-size: .82rem; font-weight: 800; gap: .35rem; letter-spacing: .02em; }
   select, textarea { border: 1px solid var(--border); border-radius: .45rem; background: var(--surface); color: var(--text); font: inherit; }
@@ -126,9 +111,12 @@ const subjects = (await getCollection("subjects")).sort(
   .report-list :global(.report-summary:hover) { background: var(--surface-alt); }
   .report-list :global(.report-main) { min-width: 0; }
   .report-list :global(.report-article) { font-size: .96rem; font-weight: 800; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .report-list :global(.report-label), .report-list :global(.report-type small), .report-list :global(.status-badge small) { color: var(--muted); display: block; font-size: .64rem; font-weight: 800; letter-spacing: .08em; margin: 0 0 .15rem; }
   .report-list :global(.report-meta) { color: var(--muted); font-size: .76rem; margin: .22rem 0 0; }
   .report-list :global(.report-subject) { background: color-mix(in srgb, var(--accent), transparent 90%); border-radius: 999px; color: var(--accent); display: inline-block; font-size: .72rem; font-weight: 800; margin-right: .35rem; padding: .12rem .42rem; }
   .report-list :global(.report-type) { color: var(--muted); font-size: .76rem; font-weight: 700; white-space: nowrap; }
+  .report-list :global(.report-status) { display: grid; gap: .15rem; justify-items: start; }
+  .report-list :global(.report-status small) { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .08em; }
   .report-list :global(.report-article a) { color: var(--text); text-decoration-color: color-mix(in srgb, var(--accent), transparent 55%); text-underline-offset: .2em; }
   .report-list :global(.report-article a:hover) { color: var(--accent); }
   .report-list :global(.report-content) { border-top: 1px solid var(--border); padding: .8rem .9rem .9rem; }
@@ -152,7 +140,7 @@ const subjects = (await getCollection("subjects")).sort(
     .report-count { justify-self: start; margin-left: 0; }
     .report-list :global(.report-summary), .report-list :global(.report-actions) { display: grid; grid-template-columns: 1fr; }
     .report-list :global(.report-summary::after) { display: none; }
-    .report-list :global(.report-type), .report-list :global(.status-badge) { justify-self: start; }
+    .report-list :global(.report-type), .report-list :global(.report-status) { justify-self: start; }
     .report-list :global(.status-badge) { justify-self: start; }
   }
 </style>
@@ -170,8 +158,10 @@ const subjects = (await getCollection("subjects")).sort(
     views: number; engaged_reads: number; completed_reads: number;
   };
 
-  const root = document.querySelector<HTMLElement>("[data-reports-admin]");
-  if (root) {
+  const initializeReportsAdmin = () => {
+    const root = document.querySelector<HTMLElement>("[data-reports-admin]");
+    if (!root || root.dataset.reportsInitialized === "true") return;
+    root.dataset.reportsInitialized = "true";
     const filter = root.querySelector<HTMLSelectElement>("[data-report-filter]")!;
     const list = root.querySelector<HTMLElement>("[data-report-list]")!;
     const feedback = root.querySelector<HTMLElement>("[data-report-feedback]")!;
@@ -184,6 +174,8 @@ const subjects = (await getCollection("subjects")).sort(
     const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
     const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
+    const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-admin-view]");
+    const viewPanels = root.querySelectorAll<HTMLElement>("[data-admin-view-panel]");
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
     const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
     const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
@@ -208,6 +200,10 @@ const subjects = (await getCollection("subjects")).sort(
     ]);
     const setPermissionFeedback = (message: string) => {
       if (permissionFeedback) permissionFeedback.textContent = message;
+    };
+    const selectView = (view: "reports" | "analytics") => {
+      viewButtons.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.adminView === view)));
+      viewPanels.forEach((panel) => { panel.hidden = panel.dataset.adminViewPanel !== view; });
     };
     const renderAnalytics = (articles: Analytics[], days: number) => {
       if (!analyticsList || !analyticsSummary) return;
@@ -254,7 +250,7 @@ const subjects = (await getCollection("subjects")).sort(
     const renderPermissions = (permissions: Permission[]) => {
       if (!permissionList) return;
       permissionList.innerHTML = permissions.length
-        ? permissions.map((permission) => `<span class="permission-chip"><span>${escapeHtml(permission.email)}</span><strong>${escapeHtml(subjectNames.get(permission.subject) ?? permission.subject)}</strong><button type="button" class="permission-remove" aria-label="${escapeHtml(permission.email)} の ${escapeHtml(subjectNames.get(permission.subject) ?? permission.subject)} 担当を削除" data-permission-remove data-email="${escapeHtml(permission.email)}" data-subject="${escapeHtml(permission.subject)}">×</button></span>`).join("")
+        ? permissions.map((permission) => `<div class="permission-row"><span class="permission-email">${escapeHtml(permission.email)}</span><span class="permission-scope">${escapeHtml(subjectNames.get(permission.subject) ?? permission.subject)}${permission.subject === "*" ? "（全分野管理者）" : "（担当）"}</span><button type="button" class="permission-remove" aria-label="${escapeHtml(permission.email)} の ${escapeHtml(subjectNames.get(permission.subject) ?? permission.subject)} 担当を削除" data-permission-remove data-email="${escapeHtml(permission.email)}" data-subject="${escapeHtml(permission.subject)}">削除</button></div>`).join("")
         : '<span class="report-meta">担当分野はまだ設定されていません。</span>';
     };
     const loadPermissions = async () => {
@@ -279,8 +275,8 @@ const subjects = (await getCollection("subjects")).sort(
         const url = safeUrl(report.article_url);
         return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
           <summary class="report-summary">
-            <div class="report-main"><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
-            <span class="report-type">${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="status-badge">${labels[report.status]}</span>
+            <div class="report-main"><p class="report-label">記事</p><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
+            <span class="report-type"><small>種別</small>${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="report-status"><small>状態</small><b class="status-badge">${labels[report.status]}</b></span>
           </summary>
           <div class="report-content">
           ${url ? `<a class="report-link" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">記事を開く</a>` : ""}
@@ -302,6 +298,7 @@ const subjects = (await getCollection("subjects")).sort(
       } catch (error) { list.innerHTML = ""; count.value = ""; feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
     };
     filter.addEventListener("change", load);
+    viewButtons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.adminView === "analytics" ? "analytics" : "reports")));
     root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
     analyticsDays?.addEventListener("change", loadAnalytics);
     root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", loadAnalytics);
@@ -356,5 +353,8 @@ const subjects = (await getCollection("subjects")).sort(
     void loadAnalytics();
     void loadPermissions();
     void loadAuthStatus();
-  }
+  };
+
+  document.addEventListener("astro:page-load", initializeReportsAdmin);
+  initializeReportsAdmin();
 </script>

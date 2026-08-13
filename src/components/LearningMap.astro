@@ -951,6 +951,21 @@ const mapCategoryPath = fixedSubject && fixedCategory
   const frame = document.querySelector<HTMLElement>("[data-map-frame]");
   const routePanel = document.querySelector<HTMLElement>("[data-route-panel]");
   const routeOpen = document.querySelector<HTMLButtonElement>("[data-route-open]");
+  let graphDataPromise: Promise<GraphData> | null = null;
+
+  /** 地図本体と経路検索で同じJSONを共有し、二重取得と失敗時の未処理例外を防ぐ。 */
+  function loadGraphData(): Promise<GraphData> {
+    if (!container) return Promise.reject(new Error("学習地図の表示先がありません。"));
+    if (!graphDataPromise) {
+      graphDataPromise = fetch(container.dataset.graphUrl ?? "").then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`グラフデータを取得できませんでした (${response.status})`);
+        }
+        return (await response.json()) as GraphData;
+      });
+    }
+    return graphDataPromise;
+  }
   type RouteNodeSelection = { id?: string; mode?: "start" | "goal" };
   const pendingRouteSelections: RouteNodeSelection[] = [];
   let applyRouteSelection: ((selection: RouteNodeSelection) => void) | undefined;
@@ -1014,8 +1029,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
     if (!container) return;
     const { default: cytoscape } = await import("cytoscape");
     const locale = container.dataset.locale === "en" ? "en" : "ja";
-    const res = await fetch(container.dataset.graphUrl ?? "");
-    const data: GraphData = await res.json();
+    const data = await loadGraphData();
     const nodeById = new Map(data.nodes.map((n) => [n.id, n]));
     const base = (container.dataset.base ?? "/").replace(/\/$/, "");
     const label = (n: GraphNode) =>
@@ -1841,12 +1855,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
       const n = nodeById.get(id);
       if (!n || !detail) return;
       const arts = n.articles[locale] ?? [];
-      const links = arts
-        .map(
-          (a) =>
-            `<a href="${base}${a.path}" class="map-detail-article-link">${a.title}</a>`,
-        )
-        .join(" / ");
       const neighbors = [...n.prerequisites, ...n.recommendedNext, ...n.related]
         .map((nid) => nodeById.get(nid))
         .filter((nn): nn is GraphNode => Boolean(nn))
@@ -1860,13 +1868,44 @@ const mapCategoryPath = fixedSubject && fixedCategory
         : learningState === "read"
           ? ja ? "読んだ" : "Read"
           : ja ? "未記録" : "Not recorded";
-      detail.innerHTML = `<strong>${label(n)}</strong> — ${
-        links || preparing
-      }<br>${ja ? "学習記録" : "Learning record"}: ${learningLabel}<br>${neighborLabel}: ${neighbors || "—"}<div class="map-detail-actions"><button type="button" data-route-node="start" data-node-id="${id}">${
-        ja ? "開始地点にする" : "Set as start"
-      }</button><button type="button" data-route-node="goal" data-node-id="${id}">${
-        ja ? "目的地点にする" : "Set as goal"
-      }</button></div>`;
+
+      // 記事タイトルなどは編集者が入力するデータなので、innerHTML に連結しない。
+      // DOM API と textContent を使い、将来の外部投稿連携でもHTMLを実行させない。
+      const heading = document.createElement("strong");
+      heading.textContent = label(n);
+      detail.replaceChildren(heading, document.createTextNode(" — "));
+      if (arts.length > 0) {
+        arts.forEach((article, index) => {
+          if (index > 0) detail.append(document.createTextNode(" / "));
+          const link = document.createElement("a");
+          link.href = `${base}${article.path}`;
+          link.className = "map-detail-article-link";
+          link.textContent = article.title;
+          detail.append(link);
+        });
+      } else {
+        detail.append(document.createTextNode(preparing));
+      }
+      detail.append(
+        document.createElement("br"),
+        document.createTextNode(`${ja ? "学習記録" : "Learning record"}: ${learningLabel}`),
+        document.createElement("br"),
+        document.createTextNode(`${neighborLabel}: ${neighbors || "—"}`),
+      );
+      const actions = document.createElement("div");
+      actions.className = "map-detail-actions";
+      for (const [mode, text] of [
+        ["start", ja ? "開始地点にする" : "Set as start"],
+        ["goal", ja ? "目的地点にする" : "Set as goal"],
+      ] as const) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.routeNode = mode;
+        button.dataset.nodeId = id;
+        button.textContent = text;
+        actions.append(button);
+      }
+      detail.append(actions);
     }
 
     // Cytoscape は地図内のクリックを捕捉するため、詳細パネルのボタンは
@@ -2124,8 +2163,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
     const locale = container.dataset.locale === "en" ? "en" : "ja";
     const ja = locale === "ja";
     const base = (container.dataset.base ?? "/").replace(/\/$/, "");
-    const res = await fetch(container.dataset.graphUrl ?? "");
-    const data: GraphData = await res.json();
+    const data = await loadGraphData();
     const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
     const conceptMap = toConceptMap(data.nodes);
     const label = (node: GraphNode) =>
@@ -2299,7 +2337,15 @@ const mapCategoryPath = fixedSubject && fixedCategory
     });
   }
 
-  void initRoute();
+  void initRoute().catch((error) => {
+    const result = document.querySelector<HTMLElement>("[data-route-result]");
+    if (result) {
+      result.textContent = document.documentElement.lang === "ja"
+        ? "学習ルートを読み込めませんでした。時間をおいて再度お試しください。"
+        : "Could not load the learning route. Please try again later.";
+    }
+    console.error("Learning route initialization failed", error);
+  });
 
   const start = () =>
     initMap().catch((err) => {

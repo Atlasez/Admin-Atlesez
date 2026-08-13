@@ -90,7 +90,26 @@ const text = (value: unknown, maximum: number) =>
   typeof value === "string" ? value.trim().slice(0, maximum) : "";
 
 const isTrustedReportOrigin = (origin: string | null, requestUrl: URL) =>
-  !origin || origin === requestUrl.origin || TRUSTED_REPORT_ORIGINS.has(origin);
+  Boolean(
+    origin &&
+      (origin === requestUrl.origin || TRUSTED_REPORT_ORIGINS.has(origin)),
+  );
+
+const isTrustedArticleUrl = (value: string, requestUrl: URL) => {
+  try {
+    const target = new URL(value);
+    return (
+      (target.protocol === "https:" ||
+        target.hostname === "localhost" ||
+        target.hostname === "127.0.0.1") &&
+      (target.origin === requestUrl.origin ||
+        TRUSTED_REPORT_ORIGINS.has(target.origin)) &&
+      target.pathname.startsWith("/atlas/")
+    );
+  } catch {
+    return false;
+  }
+};
 
 const withCors = (response: Response, request: Request) => {
   const origin = request.headers.get("origin");
@@ -217,6 +236,9 @@ async function saveArticleReport(
   ) {
     return json({ error: "必須項目を確認してください。" }, 400);
   }
+  if (contact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    return json({ error: "連絡先メールアドレスを確認してください。" }, 400);
+  }
   const elapsed = Date.now() - openedAt;
   if (
     !Number.isFinite(openedAt) ||
@@ -228,11 +250,7 @@ async function saveArticleReport(
       400,
     );
   }
-  try {
-    const target = new URL(articleUrl);
-    if (target.protocol !== "http:" && target.protocol !== "https:")
-      throw new Error();
-  } catch {
+  if (!isTrustedArticleUrl(articleUrl, new URL(request.url))) {
     return json({ error: "記事URLを確認してください。" }, 400);
   }
 

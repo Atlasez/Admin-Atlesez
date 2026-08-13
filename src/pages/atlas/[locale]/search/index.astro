@@ -240,16 +240,21 @@ const filterLabels: Record<string, string> = {
     if (status) status.textContent = resultCount;
   }
 
+  // Pagefind は動的 import なので、回線や端末によってはページ表示直後の
+  // 最初の送信が初期化より先に到達する。初期化完了を待ってから検索することで、
+  // 「検索を押したのに結果が空のまま」という競合を防ぐ。
+  const adapterReady = init();
+
   form?.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    void run();
+    void adapterReady.then(run);
   });
   input?.addEventListener("input", () => {
-    if ((input?.value.length ?? 0) >= 2) void run();
+    if ((input?.value.length ?? 0) >= 2) void adapterReady.then(run);
   });
 
   // ヘッダーの検索欄から ?q= 付きで来たときは、そのまま結果まで出す
-  void init().then(() => {
+  void adapterReady.then(() => {
     const q = new URL(location.href).searchParams.get("q");
     if (q && input) {
       input.value = q;
