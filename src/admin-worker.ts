@@ -58,6 +58,7 @@ type EditorialDocument = {
   summary: string;
   concept_id: string;
   body: string;
+  editorial_note: string;
   latex_engine: LatexEngine;
   status: EditorialDocumentStatus;
   created_by: string;
@@ -95,6 +96,7 @@ type EditorialComment = {
   selection_start: number | null;
   selection_end: number | null;
   selection_text: string | null;
+  tags: string;
   acknowledged_at: string | null;
   acknowledged_by: string | null;
   resolved_at: string | null;
@@ -119,6 +121,7 @@ type EditorialDocumentPayload = {
   summary?: unknown;
   conceptId?: unknown;
   body?: unknown;
+  editorialNote?: unknown;
   latexEngine?: unknown;
   status?: unknown;
 };
@@ -129,6 +132,7 @@ type EditorialCommentPayload = {
   selectionText?: unknown;
   parentCommentId?: unknown;
   selections?: unknown;
+  tags?: unknown;
 };
 type ArticleReport = {
   id: string;
@@ -173,9 +177,37 @@ const LATEX_ENGINES = new Set<LatexEngine>([
 ]);
 const MAX_ADMIN_NOTE_LENGTH = 4_000;
 const MAX_EDITORIAL_BODY_LENGTH = 240_000;
+const MAX_EDITORIAL_NOTE_LENGTH = 12_000;
 const MAX_EDITORIAL_COMMENT_LENGTH = 8_000;
 const MAX_PERSONAL_WORKSPACE_NOTE_LENGTH = 12_000;
 const MAX_OPERATION_TEXT_LENGTH = 8_000;
+const EDITORIAL_COMMENT_TAGS = [
+  "定義不足",
+  "未定義",
+  "誤字",
+  "脱字",
+  "削除",
+  "要確認",
+  "表現改善",
+  "出典不足",
+] as const;
+const editorialCommentTags = (value: unknown): string[] => {
+  const parsed: unknown = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? (() => {
+          try {
+            return JSON.parse(value) as unknown;
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+  const raw = Array.isArray(parsed) ? parsed : [];
+  return [...new Set(raw.filter((tag): tag is string =>
+    typeof tag === "string" && (EDITORIAL_COMMENT_TAGS as readonly string[]).includes(tag),
+  ))];
+};
 const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SUBJECT_SLUG = /^[a-z0-9-]+$/;
@@ -1147,7 +1179,7 @@ async function deleteReportAdminPermission(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
+  title, summary, concept_id, body, editorial_note, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -1185,6 +1217,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
   const summary = text(payload.summary, 800);
   const conceptId = text(payload.conceptId, 180);
   const body = text(payload.body, MAX_EDITORIAL_BODY_LENGTH);
+  const editorialNote = text(payload.editorialNote, MAX_EDITORIAL_NOTE_LENGTH);
   const latexEngine =
     (text(payload.latexEngine, 24) as LatexEngine) || "mathjax";
   const status = text(payload.status, 20) as EditorialDocumentStatus;
@@ -1211,6 +1244,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     summary,
     conceptId,
     body,
+    editorialNote,
     latexEngine,
     status,
   };
@@ -1235,7 +1269,7 @@ async function listEditorialDocuments(
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
-    `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
+    `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, editorial_note, latex_engine,
       status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
      FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
   )
@@ -2656,7 +2690,7 @@ async function getEditorialDocument(
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の原稿を閲覧する権限がありません。" }, 403);
   const comments = await env.REPORTS.prepare(
-    `SELECT id, document_id, parent_comment_id, body, created_by, created_at, selection_start, selection_end, selection_text,
+    `SELECT id, document_id, parent_comment_id, body, created_by, created_at, selection_start, selection_end, selection_text, tags,
       acknowledged_at, acknowledged_by, resolved_at, resolved_by
      FROM editorial_comments WHERE document_id = ? ORDER BY resolved_at IS NOT NULL, created_at ASC`,
   )
@@ -2702,6 +2736,7 @@ async function getEditorialDocument(
     ]);
   const commentsWithSelections = commentRows.map((comment) => ({
     ...comment,
+    tags: editorialCommentTags(comment.tags),
     author_display_name:
       authorProfileByEmail.get(comment.created_by)?.display_name?.trim() ||
       "運営メンバー",
@@ -2830,9 +2865,9 @@ async function createEditorialDocument(
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_documents
-      (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, latex_engine,
+      (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, editorial_note, latex_engine,
        status, created_by, updated_by, created_at, updated_at, reviewed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -2845,6 +2880,7 @@ async function createEditorialDocument(
       values.summary,
       values.conceptId,
       values.body,
+      values.editorialNote,
       values.latexEngine,
       values.status,
       scope.email,
@@ -2875,7 +2911,7 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT subject, status, title, summary, concept_id, body, category, locale, slug, latex_engine, published_at FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, summary, concept_id, body, editorial_note, category, locale, slug, latex_engine, published_at FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
@@ -2887,6 +2923,7 @@ async function updateEditorialDocument(
         | "summary"
         | "concept_id"
         | "body"
+        | "editorial_note"
         | "category"
         | "locale"
         | "slug"
@@ -2926,6 +2963,7 @@ async function updateEditorialDocument(
       values.summary !== existing.summary ||
       values.conceptId !== existing.concept_id ||
       values.body !== existing.body ||
+      values.editorialNote !== existing.editorial_note ||
       values.latexEngine !== existing.latex_engine)
   )
     return json(
@@ -2968,7 +3006,7 @@ async function updateEditorialDocument(
       .run();
   await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
-      slug = ?, title = ?, summary = ?, concept_id = ?, body = ?, latex_engine = ?, status = ?, updated_by = ?,
+      slug = ?, title = ?, summary = ?, concept_id = ?, body = ?, editorial_note = ?, latex_engine = ?, status = ?, updated_by = ?,
       updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END
      WHERE id = ?`,
   )
@@ -2982,6 +3020,7 @@ async function updateEditorialDocument(
       values.summary,
       values.conceptId,
       values.body,
+      values.editorialNote,
       values.latexEngine,
       values.status,
       scope.email,
@@ -3072,7 +3111,9 @@ async function createEditorialComment(
     return json({ error: "コメントを読み取れませんでした。" }, 400);
   }
   const body = text(payload.body, MAX_EDITORIAL_COMMENT_LENGTH);
-  if (!body) return json({ error: "コメントを入力してください。" }, 400);
+  const tags = editorialCommentTags(payload.tags);
+  if (!body && !tags.length)
+    return json({ error: "コメント本文またはタグを1つ以上選択してください。" }, 400);
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
   const document = await env.REPORTS.prepare(
@@ -3101,8 +3142,8 @@ async function createEditorialComment(
   const firstSelection = selections[0] ?? null;
   await env.REPORTS.prepare(
     `INSERT INTO editorial_comments
-      (id, document_id, parent_comment_id, body, created_by, created_at, selection_start, selection_end, selection_text)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, document_id, parent_comment_id, body, created_by, created_at, selection_start, selection_end, selection_text, tags)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       commentId,
@@ -3114,6 +3155,7 @@ async function createEditorialComment(
       firstSelection?.start ?? null,
       firstSelection?.end ?? null,
       firstSelection?.text ?? null,
+      JSON.stringify(tags),
     )
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
@@ -3198,7 +3240,9 @@ async function editEditorialComment(
     return json({ error: "コメントを読み取れませんでした。" }, 400);
   }
   const body = text(payload.body, MAX_EDITORIAL_COMMENT_LENGTH);
-  if (!body) return json({ error: "コメントを入力してください。" }, 400);
+  const tags = payload.tags === undefined ? null : editorialCommentTags(payload.tags);
+  if (!body && !(tags?.length ?? 0))
+    return json({ error: "コメント本文またはタグを1つ以上選択してください。" }, 400);
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
   const comment = await env.REPORTS.prepare(
@@ -3222,16 +3266,27 @@ async function editEditorialComment(
       403,
     );
   const firstSelection = selections[0] ?? null;
-  await env.REPORTS.prepare(
-    "UPDATE editorial_comments SET body = ?, selection_start = ?, selection_end = ?, selection_text = ? WHERE id = ?",
-  )
-    .bind(
-      body,
-      firstSelection?.start ?? null,
-      firstSelection?.end ?? null,
-      firstSelection?.text ?? null,
-      commentId,
-    )
+  const update = tags
+    ? env.REPORTS.prepare(
+        "UPDATE editorial_comments SET body = ?, tags = ?, selection_start = ?, selection_end = ?, selection_text = ? WHERE id = ?",
+      ).bind(
+        body,
+        JSON.stringify(tags),
+        firstSelection?.start ?? null,
+        firstSelection?.end ?? null,
+        firstSelection?.text ?? null,
+        commentId,
+      )
+    : env.REPORTS.prepare(
+        "UPDATE editorial_comments SET body = ?, selection_start = ?, selection_end = ?, selection_text = ? WHERE id = ?",
+      ).bind(
+        body,
+        firstSelection?.start ?? null,
+        firstSelection?.end ?? null,
+        firstSelection?.text ?? null,
+        commentId,
+      );
+  await update
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
   return json({ ok: true });
