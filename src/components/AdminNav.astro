@@ -70,6 +70,23 @@ const { current } = Astro.props;
       let notifications: Array<{ id: string; title: string; detail: string; href: string; kind?: string; updatedAt?: string; read?: boolean }> = [];
       const escape = (value: string) => value.replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character] ?? character);
       const formatNotificationTime = (value?: string) => value ? new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
+      const profileCacheKey = 'atlasez-admin-profile-cache';
+      type CachedProfile = { email?: string; display_name?: string; avatar_url?: string };
+      const readCachedProfile = (): CachedProfile | null => {
+        try {
+          const cached = sessionStorage.getItem(profileCacheKey);
+          return cached ? JSON.parse(cached) as CachedProfile : null;
+        } catch { return null; }
+      };
+      const applyProfile = (profile: CachedProfile, fallbackEmail = '') => {
+        const image = profile.avatar_url?.trim() ?? '';
+        if (avatar) { avatar.style.backgroundImage = ''; avatar.classList.toggle('has-image', Boolean(image)); }
+        if (avatarFallback) { avatarFallback.hidden = Boolean(image); avatarFallback.textContent = (fallbackEmail[0] ?? 'A').toUpperCase(); }
+        if (avatarImage) { avatarImage.hidden = !image; if (image) avatarImage.src = image; else avatarImage.removeAttribute('src'); }
+        if (email) email.textContent = profile.display_name?.trim() || 'アカウント';
+      };
+      const cachedProfile = readCachedProfile();
+      if (cachedProfile) applyProfile(cachedProfile);
       const loadAccount = async () => {
         try {
           const statusResponse = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
@@ -79,22 +96,23 @@ const { current } = Astro.props;
           if (!statusResponse.ok || !status.email) throw new Error(status.error ?? 'ログイン情報を取得できませんでした');
           document.querySelectorAll<HTMLElement>('[data-manager-only]').forEach((item) => { item.hidden = !status.isManager; });
           if (email) { email.title = status.email; }
-          if (avatarFallback) avatarFallback.textContent = (status.email[0] ?? 'A').toUpperCase();
-          if (avatarImage) { avatarImage.hidden = true; avatarImage.removeAttribute('src'); }
+          const cachedForAccount = cachedProfile?.email === status.email ? cachedProfile : null;
+          if (cachedProfile && !cachedForAccount) {
+            try { sessionStorage.removeItem(profileCacheKey); } catch { /* storage may be unavailable */ }
+            applyProfile({}, status.email);
+          } else if (!cachedProfile) applyProfile({}, status.email);
           try {
             const profileResponse = await fetch('/api/admin/profile', { credentials: 'same-origin', cache: 'no-store' });
             if (profileResponse.ok) {
               const profile = await profileResponse.json() as { profile?: { display_name?: string; avatar_url?: string } };
-              const image = profile.profile?.avatar_url;
-              if (avatar) { avatar.style.backgroundImage = ''; avatar.classList.toggle('has-image', Boolean(image)); }
-              if (avatarFallback) { avatarFallback.hidden = Boolean(image); avatarFallback.textContent = (status.email[0] ?? 'A').toUpperCase(); }
-              if (avatarImage) { avatarImage.hidden = !image; if (image) avatarImage.src = image; else avatarImage.removeAttribute('src'); }
-          if (email) email.textContent = profile.profile?.display_name?.trim() || 'プロフィール';
+              const nextProfile = { ...(profile.profile ?? {}), email: status.email };
+              applyProfile(nextProfile, status.email);
+              try { sessionStorage.setItem(profileCacheKey, JSON.stringify(nextProfile)); } catch { /* storage may be unavailable */ }
             }
           } catch { /* アカウント表示はメールアドレスだけでも利用できます */ }
         } catch (error) {
           if (email) {
-            email.textContent = 'アカウント';
+            if (!cachedProfile?.display_name) email.textContent = 'アカウント';
             email.title = error instanceof Error ? error.message : 'ログイン情報を取得できませんでした';
           }
         } finally { account.hidden = false; }

@@ -3012,15 +3012,18 @@ async function listEditorialReviewRequests(
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const result = await env.REPORTS.prepare(
-    `SELECT id, subject, category, title, updated_by, updated_at
-     FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 100`,
+    `SELECT d.id, d.subject, d.category, d.title, d.updated_at,
+       COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS requester_display_name
+     FROM editorial_documents d
+     LEFT JOIN editorial_member_profiles p ON p.email = d.updated_by
+     WHERE d.status = 'in-review' ORDER BY d.updated_at ASC LIMIT 100`,
   ).all<{
     id: string;
     subject: string;
     category: string;
     title: string;
-    updated_by: string;
     updated_at: string;
+    requester_display_name: string;
   }>();
   return json({ requests: result.results });
 }

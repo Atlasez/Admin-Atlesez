@@ -18,7 +18,7 @@ import AdminNav from "../../components/AdminNav.astro";
 </style>
 
 <script>
-  type ReviewRequest = { id: string; subject: string; category: string; title: string; updated_by: string; updated_at: string };
+  type ReviewRequest = { id: string; subject: string; category: string; title: string; requester_display_name: string; updated_at: string };
   const initializeReviewSpace = () => {
     const root = document.querySelector<HTMLElement>("[data-review-space]");
     if (!root || root.dataset.reviewSpaceInitialized === "true") return;
@@ -29,7 +29,7 @@ import AdminNav from "../../components/AdminNav.astro";
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
     const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
     const read = async <T,>(response: Response) => { if (!(response.headers.get("content-type") ?? "").includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。"); return await response.json() as T; };
-    const load = async () => { feedback.value = "読み込み中…"; refresh.disabled = true; try { const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" }); const data = await read<{ requests?: ReviewRequest[]; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。"); const requests = data.requests ?? []; list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.subject)} / ${escapeHtml(item.category)} ・ 依頼者: ${escapeHtml(item.updated_by)} ・ ${formatDate(item.updated_at)}</p></div><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">原稿を開いて査読</a></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; feedback.value = `${requests.length}件の査読依頼`; } catch (error) { const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。"; list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`; feedback.value = ""; } finally { refresh.disabled = false; } };
+    const load = async () => { feedback.value = "読み込み中…"; refresh.disabled = true; try { const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" }); const data = await read<{ requests?: ReviewRequest[]; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。"); const requests = data.requests ?? []; list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.subject)} / ${escapeHtml(item.category)} ・ 依頼者: ${escapeHtml(item.requester_display_name)} ・ ${formatDate(item.updated_at)}</p></div><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">原稿を開いて査読</a></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; feedback.value = `${requests.length}件の査読依頼`; } catch (error) { const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。"; list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`; feedback.value = ""; } finally { refresh.disabled = false; } };
     refresh.addEventListener("click", () => void load());
     void load();
   };
