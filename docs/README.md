@@ -60,7 +60,7 @@
 | `npm run new:article -- ...`          | 記事の雛形と概念を作る（[使い方](ADDING_ARTICLES.md)） |
 | `node scripts/validate-content.mjs`   | 必須項目・ID 重複・概念参照・循環・置き場所を検査      |
 | `node scripts/check-links.mjs dist /` | ビルド結果の内部リンク切れを検査                       |
-| `node scripts/audit-math.mjs`         | 公開組版と互換性のない数式を検査                         |
+| `node scripts/audit-math.mjs`         | 公開組版と互換性のない数式を検査                       |
 
 ### 一括修正（原則もう使わないが、再発時の道具）
 
