@@ -20,7 +20,7 @@ export async function GET() {
 
   const articleLinks: Record<
     string,
-    Record<string, { articleId: string; title: string; path: string }[]>
+    Record<string, { articleId: string; title: string; path: string; conceptIds: string[] }[]>
   > = {};
   for (const locale of LOCALES) {
     const articles = await getPublishedArticles(locale);
@@ -32,6 +32,7 @@ export async function GET() {
           articleId: a.data.articleId,
           title: a.data.title,
           path: `/atlas/${locale}/${a.data.subject}/${a.data.category}/${a.data.slug}/`,
+          conceptIds: a.data.concepts.map((concept) => concept.id),
         });
       }
     }

@@ -39,6 +39,10 @@ interface Env {
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
+  /** 応募通知用。ResendのAPIキーと受信先はCloudflare Secretに保存する。 */
+  RESEND_API_KEY?: string;
+  APPLICATION_NOTIFICATION_EMAIL?: string;
+  EMAIL_FROM?: string;
 }
 
 type ReportStatus = "new" | "reviewing" | "resolved";
@@ -102,6 +106,13 @@ type EditorialComment = {
   resolved_at: string | null;
   resolved_by: string | null;
   selections?: EditorialCommentSelection[];
+  feedback?: EditorialFeedback[];
+  viewerFeedbackStatus?: "confirmed" | "unreflected" | null;
+};
+type EditorialFeedback = {
+  displayName: string;
+  status: "confirmed" | "unreflected";
+  updatedAt: string;
 };
 type EditorialCommentSelection = {
   id: string;
@@ -1389,6 +1400,52 @@ async function postDiscordWebhook(url: string | undefined, content: string) {
   }
 }
 
+const emailSafe = (value: unknown) =>
+  String(value ?? "").replace(/[&<>\"']/g, (character) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+      character
+    ] ?? character,
+  );
+
+async function notifyApplicationByEmail(
+  env: Env,
+  application: { name: string; email: string; institution: string; desiredSubjects: string },
+) {
+  if (!env.RESEND_API_KEY || !env.APPLICATION_NOTIFICATION_EMAIL) return false;
+  const recipients = env.APPLICATION_NOTIFICATION_EMAIL.split(",")
+    .map((value) => value.trim())
+    .filter((value) => EMAIL_PATTERN.test(value));
+  if (!recipients.length) return false;
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM ?? "Atlasez運営 <onboarding@resend.dev>",
+        to: recipients,
+        subject: "Atlasez運営参加応募が届きました",
+        html: `<h2>運営参加応募が届きました</h2><p><b>名前：</b>${emailSafe(application.name)}</p><p><b>所属：</b>${emailSafe(application.institution)}</p><p><b>希望分野：</b>${emailSafe(application.desiredSubjects)}</p><p>詳細は運営サイトの応募管理で確認してください。</p>`,
+      }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function notifyApplicationToDiscord(env: Env) {
+  // 応募の存在だけを通知し、氏名・所属・メールアドレスなどはDiscordへ送らない。
+  const message = "📨 新しい運営参加応募が届きました。詳細は運営サイトの応募管理で確認してください。";
+  await Promise.all([
+    postDiscordWebhook(env.DISCORD_PROGRESS_WEBHOOK_URL, message),
+    postDiscordChannel(env, env.DISCORD_PROGRESS_CHANNEL_ID, message),
+  ]);
+  return Boolean(env.DISCORD_PROGRESS_WEBHOOK_URL || (env.DISCORD_BOT_TOKEN && env.DISCORD_PROGRESS_CHANNEL_ID));
+}
+
 async function notifyProgressToDiscord(
   env: Env,
   subject: string | null,
@@ -2174,6 +2231,30 @@ async function operationsOverview(
       display_name: string;
     }>(),
   ]);
+  const taskRows = (tasks.results ?? []) as Array<{ id: string; assignee_email?: string | null; created_by?: string }>;
+  const taskIds = taskRows.map((task) => task.id);
+  const taskFeedbackRows = taskIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT task_id,email,status,updated_at FROM editorial_task_feedback WHERE task_id IN (${taskIds.map(() => "?").join(",")}) ORDER BY updated_at ASC`,
+      )
+        .bind(...taskIds)
+        .all<{ task_id: string; email: string; status: "confirmed" | "unreflected"; updated_at: string }>()
+    : { results: [] as { task_id: string; email: string; status: "confirmed" | "unreflected"; updated_at: string }[] };
+  const taskFeedbackEmails = [...new Set((taskFeedbackRows.results ?? []).map((row) => row.email))];
+  const taskFeedbackProfiles = taskFeedbackEmails.length
+    ? await env.REPORTS.prepare(
+        `SELECT email,display_name FROM editorial_member_profiles WHERE email IN (${taskFeedbackEmails.map(() => "?").join(",")})`,
+      ).bind(...taskFeedbackEmails).all<{ email: string; display_name: string }>()
+    : { results: [] as { email: string; display_name: string }[] };
+  const taskDisplayNames = new Map(
+    (taskFeedbackProfiles.results ?? []).map((profile) => [profile.email, profile.display_name?.trim() || "運営メンバー"]),
+  );
+  const taskFeedbackById = new Map<string, EditorialFeedback[]>();
+  for (const row of taskFeedbackRows.results ?? []) {
+    const rows = taskFeedbackById.get(row.task_id) ?? [];
+    rows.push({ displayName: taskDisplayNames.get(row.email) ?? "運営メンバー", status: row.status, updatedAt: row.updated_at });
+    taskFeedbackById.set(row.task_id, rows);
+  }
   const participantRows = availability.results ?? [];
   const participantsByEvent = new Map<string, typeof participantRows>();
   for (const item of participantRows) {
@@ -2187,7 +2268,12 @@ async function operationsOverview(
       subjects: scope.subjects,
       isManager: scope.isManager,
     },
-    tasks: tasks.results,
+    tasks: taskRows.map((task) => ({
+      ...task,
+      feedback: taskFeedbackById.get(task.id) ?? [],
+      viewerFeedbackStatus:
+        (taskFeedbackRows.results ?? []).find((row) => row.task_id === task.id && row.email === scope.email)?.status ?? null,
+    })),
     events: (events.results ?? []).map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
       return {
@@ -2333,15 +2419,18 @@ async function updateTask(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { status?: unknown };
+  let payload: { status?: unknown; feedbackAction?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const status = text(payload.status, 20);
-  if (!taskStatus.has(status))
+  const requestedStatus = payload.status === undefined ? null : text(payload.status, 20);
+  const feedbackAction = payload.feedbackAction === undefined ? null : text(payload.feedbackAction, 30);
+  if (requestedStatus !== null && !taskStatus.has(requestedStatus))
     return json({ error: "状態を確認してください。" }, 400);
+  if (feedbackAction && !new Set(["acknowledge", "unacknowledge", "unreflected", "clear-unreflected"]).has(feedbackAction))
+    return json({ error: "確認状態を確認してください。" }, 400);
   const task = await env.REPORTS.prepare(
     "SELECT subject,assignee_email,created_by FROM editorial_tasks WHERE id=?",
   )
@@ -2358,11 +2447,31 @@ async function updateTask(
     task.created_by !== scope.email
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
-  await env.REPORTS.prepare(
-    "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
-  )
-    .bind(status, new Date().toISOString(), taskId)
-    .run();
+  const now = new Date().toISOString();
+  if (feedbackAction) {
+    if (feedbackAction === "acknowledge" || feedbackAction === "unreflected")
+      await env.REPORTS.prepare(
+        `INSERT INTO editorial_task_feedback (task_id,email,status,updated_at) VALUES (?,?,?,?)
+         ON CONFLICT(task_id,email) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at`,
+      ).bind(taskId, scope.email, feedbackAction === "acknowledge" ? "confirmed" : "unreflected", now).run();
+    else
+      await env.REPORTS.prepare("DELETE FROM editorial_task_feedback WHERE task_id=? AND email=?").bind(taskId, scope.email).run();
+  }
+  const feedback = await env.REPORTS.prepare(
+    "SELECT email,status FROM editorial_task_feedback WHERE task_id=?",
+  ).bind(taskId).all<{ email: string; status: "confirmed" | "unreflected" }>();
+  const feedbackRows = feedback.results ?? [];
+  const creatorConfirmed = feedbackRows.some((row) => row.email === task.created_by && row.status === "confirmed");
+  const assigneeConfirmed = task.assignee_email
+    ? feedbackRows.some((row) => row.email === task.assignee_email && row.status === "confirmed")
+    : feedbackRows.some((row) => row.email !== task.created_by && row.status === "confirmed");
+  const resolved = creatorConfirmed && assigneeConfirmed && !feedbackRows.some((row) => row.status === "unreflected");
+  if (requestedStatus === "done" && !resolved)
+    return json({ error: "依頼者と担当者（または確認者）の確認がそろうまで完了にできません。" }, 409);
+  if (requestedStatus !== null || feedbackAction)
+    await env.REPORTS.prepare(
+      "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
+    ).bind(feedbackAction ? (resolved ? "done" : requestedStatus === "done" ? "doing" : requestedStatus ?? "doing") : requestedStatus, now, taskId).run();
   return json({ ok: true });
 }
 
@@ -2625,9 +2734,21 @@ async function submitMemberApplication(
       availabilityNote,
     )
     .run();
-  // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
+  // 応募本文はD1と通知先メールへ保存し、Discordには応募が届いた事実だけを送る。
+  const emailNotified = await notifyApplicationByEmail(env, {
+    name,
+    email,
+    institution,
+    desiredSubjects: desiredSubjectSlugs.join(", "),
+  });
+  const discordNotified = await notifyApplicationToDiscord(env);
   return json(
-    { ok: true, turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY) },
+    {
+      ok: true,
+      turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY),
+      emailNotified,
+      discordNotified,
+    },
     201,
   );
 }
@@ -2719,6 +2840,36 @@ async function getEditorialDocument(
     (authorProfiles.results ?? []).map((profile) => [profile.email, profile]),
   );
   const commentIds = commentRows.map((comment) => comment.id);
+  const feedbackRows = commentIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT comment_id, email, status, updated_at FROM editorial_comment_feedback WHERE comment_id IN (${commentIds.map(() => "?").join(",")}) ORDER BY updated_at ASC`,
+      )
+        .bind(...commentIds)
+        .all<{ comment_id: string; email: string; status: "confirmed" | "unreflected"; updated_at: string }>()
+    : { results: [] as { comment_id: string; email: string; status: "confirmed" | "unreflected"; updated_at: string }[] };
+  const feedbackEmails = [...new Set((feedbackRows.results ?? []).map((row) => row.email))].filter(
+    (email) => !authorProfileByEmail.has(email),
+  );
+  const feedbackProfiles = feedbackEmails.length
+    ? await env.REPORTS.prepare(
+        `SELECT email, display_name FROM editorial_member_profiles WHERE email IN (${feedbackEmails.map(() => "?").join(",")})`,
+      )
+        .bind(...feedbackEmails)
+        .all<{ email: string; display_name: string }>()
+    : { results: [] as { email: string; display_name: string }[] };
+  const feedbackProfileByEmail = new Map(
+    (feedbackProfiles.results ?? []).map((profile) => [profile.email, profile]),
+  );
+  const feedbackByComment = new Map<string, EditorialFeedback[]>();
+  for (const row of feedbackRows.results ?? []) {
+    const displayName =
+      (authorProfileByEmail.get(row.email)?.display_name ??
+        feedbackProfileByEmail.get(row.email)?.display_name ??
+        "運営メンバー").trim() || "運営メンバー";
+    const rows = feedbackByComment.get(row.comment_id) ?? [];
+    rows.push({ displayName, status: row.status, updatedAt: row.updated_at });
+    feedbackByComment.set(row.comment_id, rows);
+  }
   const selectionRows = commentIds.length
     ? await env.REPORTS.prepare(
         `SELECT id, comment_id, position, selection_start, selection_end, selection_text
@@ -2757,6 +2908,11 @@ async function getEditorialDocument(
             },
           ]
         : []),
+    feedback: feedbackByComment.get(comment.id) ?? [],
+    viewerFeedbackStatus:
+      (feedbackRows.results ?? []).find(
+        (row) => row.comment_id === comment.id && row.email === scope.email,
+      )?.status ?? null,
   }));
   return json({
     document: {
@@ -3182,6 +3338,8 @@ async function updateEditorialCommentStatus(
   if (
     action !== "acknowledge" &&
     action !== "unacknowledge" &&
+    action !== "unreflected" &&
+    action !== "clear-unreflected" &&
     action !== "resolve" &&
     action !== "reopen"
   )
@@ -3196,17 +3354,18 @@ async function updateEditorialCommentStatus(
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
   const now = new Date().toISOString();
-  if (action === "acknowledge")
+  if (action === "acknowledge" || action === "unreflected")
     await env.REPORTS.prepare(
-      "UPDATE editorial_comments SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?",
+      `INSERT INTO editorial_comment_feedback (comment_id,email,status,updated_at) VALUES (?,?,?,?)
+       ON CONFLICT(comment_id,email) DO UPDATE SET status=excluded.status,updated_at=excluded.updated_at`,
     )
-      .bind(now, scope.email, commentId)
+      .bind(commentId, scope.email, action === "acknowledge" ? "confirmed" : "unreflected", now)
       .run();
-  else if (action === "unacknowledge")
+  else if (action === "unacknowledge" || action === "clear-unreflected")
     await env.REPORTS.prepare(
-      "UPDATE editorial_comments SET acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ?",
+      "DELETE FROM editorial_comment_feedback WHERE comment_id = ? AND email = ?",
     )
-      .bind(commentId)
+      .bind(commentId, scope.email)
       .run();
   else if (action === "resolve")
     await env.REPORTS.prepare(
@@ -3220,6 +3379,33 @@ async function updateEditorialCommentStatus(
     )
       .bind(commentId)
       .run();
+  if (action === "acknowledge" || action === "unacknowledge" || action === "unreflected" || action === "clear-unreflected") {
+    const target = await env.REPORTS.prepare(
+      "SELECT created_by FROM editorial_comments WHERE id=?",
+    ).bind(commentId).first<{ created_by: string }>();
+    const replies = await env.REPORTS.prepare(
+      "SELECT created_by FROM editorial_comments WHERE parent_comment_id=?",
+    ).bind(commentId).all<{ created_by: string }>();
+    const feedback = await env.REPORTS.prepare(
+      "SELECT email,status FROM editorial_comment_feedback WHERE comment_id=?",
+    ).bind(commentId).all<{ email: string; status: "confirmed" | "unreflected" }>();
+    const rows = feedback.results ?? [];
+    const creatorConfirmed = Boolean(target?.created_by && rows.some((row) => row.email === target.created_by && row.status === "confirmed"));
+    const responderEmails = new Set((replies.results ?? []).map((reply) => reply.created_by));
+    const responderConfirmed = [...responderEmails].some((email) => rows.some((row) => row.email === email && row.status === "confirmed"));
+    const hasUnreflected = rows.some((row) => row.status === "unreflected");
+    const confirmedBy = rows.find((row) => row.status === "confirmed")?.email ?? null;
+    const resolved = creatorConfirmed && responderConfirmed && !hasUnreflected;
+    await env.REPORTS.prepare(
+      "UPDATE editorial_comments SET acknowledged_at=?, acknowledged_by=?, resolved_at=?, resolved_by=? WHERE id=?",
+    ).bind(
+      confirmedBy ? now : null,
+      confirmedBy,
+      resolved ? now : null,
+      resolved ? scope.email : null,
+      commentId,
+    ).run();
+  }
   return json({ ok: true });
 }
 

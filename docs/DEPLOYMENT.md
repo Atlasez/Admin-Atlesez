@@ -43,6 +43,16 @@ Settings → Environment variables
 | ---------- | ------------------------ | ---------- |
 | `SITE_URL` | `https://<独自ドメイン>` | 設定しない |
 
+運営参加応募のメール通知（任意）には、Cloudflare Worker の Secret／Variable として次を設定する。
+
+| 変数 | 種類 | 用途 |
+| --- | --- | --- |
+| `RESEND_API_KEY` | Secret | Resend の送信APIキー。リポジトリには保存しない |
+| `APPLICATION_NOTIFICATION_EMAIL` | Variable | 応募通知の受信先（複数はカンマ区切り） |
+| `EMAIL_FROM` | Variable | Resendで検証済みの送信元（例：`Atlasez運営 <noreply@example.org>`） |
+
+未設定の場合も応募内容の保存は行われ、メール通知だけが停止する。Resend側で送信元ドメインを検証してから本番Secretを登録すること。
+
 独自ドメインを取るまでは `SITE_URL` に発行済みの `https://<project>.pages.dev`
 を入れておく。ドメイン取得後はこの1箇所を書き換えるだけでよい。
 

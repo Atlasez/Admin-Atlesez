@@ -99,10 +99,10 @@ const mapCategoryPath = fixedSubject && fixedCategory
   <h2 id="graph-heading" class="visually-hidden">
     {locale === "ja" ? "概念マップ" : "Concept map"}
   </h2>
-  <nav class="map-breadcrumb" aria-label={locale === "ja" ? "学習地図内の現在地" : "Map location"}>
+  <nav class="map-breadcrumb" data-map-breadcrumb data-map-root={mapRootPath} aria-label={locale === "ja" ? "学習地図内の現在地" : "Map location"}>
     <a href={mapRootPath}>{locale === "ja" ? "アトラス" : "Atlas"}</a>
-    {fixedSubjectEntry && <><span aria-hidden="true">›</span><a href={mapSubjectPath}>{localizedName(fixedSubjectEntry.data.name, locale)}</a></>}
-    {fixedCategoryEntry && <><span aria-hidden="true">›</span><a href={mapCategoryPath}>{localizedName(fixedCategoryEntry.name, locale)}</a></>}
+    <span data-map-breadcrumb-subject-separator aria-hidden="true" hidden={!fixedSubjectEntry}>›</span><a data-map-breadcrumb-subject href={mapSubjectPath} hidden={!fixedSubjectEntry}>{fixedSubjectEntry ? localizedName(fixedSubjectEntry.data.name, locale) : ""}</a>
+    <span data-map-breadcrumb-category-separator aria-hidden="true" hidden={!fixedCategoryEntry}>›</span><a data-map-breadcrumb-category href={mapCategoryPath} hidden={!fixedCategoryEntry}>{fixedCategoryEntry ? localizedName(fixedCategoryEntry.name, locale) : ""}</a>
   </nav>
 
   {/*
@@ -586,8 +586,8 @@ const mapCategoryPath = fixedSubject && fixedCategory
     position: relative;
     z-index: 1;
     margin: var(--space-2);
-    max-width: 48rem;
-    padding: var(--space-3);
+    max-width: 34rem;
+    padding: var(--space-2);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     background: var(--background-primary);
@@ -668,6 +668,13 @@ const mapCategoryPath = fixedSubject && fixedCategory
   .map-detail:empty {
     display: none;
   }
+  :global(.map-detail-articles) { display:grid; gap:.35rem; margin-top:.3rem; max-height:9rem; overflow:auto; }
+  :global(.map-detail-article) { display:grid; gap:.18rem; }
+  :global(.map-detail-article-link) { color:var(--accent-primary); font-weight:700; text-decoration:underline; }
+  :global(.map-detail-children) { align-items:center; display:flex; flex-wrap:wrap; gap:.25rem; padding-left:.65rem; }
+  :global(.map-detail-children span) { color:var(--text-secondary); font-size:.72rem; font-weight:700; }
+  :global(.map-detail-children a) { background:var(--background-secondary); border:1px solid var(--border-default); border-radius:999px; color:var(--text-primary); font-size:.72rem; padding:.12rem .4rem; text-decoration:none; }
+  :global(.map-detail-children a:hover) { border-color:var(--accent-primary); color:var(--accent-primary); }
   :global(.map-detail-actions) {
     display: flex;
     flex-wrap: wrap;
@@ -937,7 +944,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
   interface GraphNode extends ConceptData {
     articles: Record<
       string,
-      { articleId: string; title: string; path: string }[]
+      { articleId: string; title: string; path: string; conceptIds?: string[] }[]
     >;
   }
   interface GraphData {
@@ -1035,6 +1042,28 @@ const mapCategoryPath = fixedSubject && fixedCategory
     const label = (n: GraphNode) =>
       locale === "en" && n.name.en ? n.name.en : n.name.ja;
     const ja = locale === "ja";
+    const breadcrumb = document.querySelector<HTMLElement>("[data-map-breadcrumb]");
+    const breadcrumbSubject = breadcrumb?.querySelector<HTMLAnchorElement>("[data-map-breadcrumb-subject]");
+    const breadcrumbSubjectSeparator = breadcrumb?.querySelector<HTMLElement>("[data-map-breadcrumb-subject-separator]");
+    const breadcrumbCategory = breadcrumb?.querySelector<HTMLAnchorElement>("[data-map-breadcrumb-category]");
+    const breadcrumbCategorySeparator = breadcrumb?.querySelector<HTMLElement>("[data-map-breadcrumb-category-separator]");
+    const mapRoot = breadcrumb?.dataset.mapRoot ?? `${base}/atlas/${locale}/map/`;
+    const syncBreadcrumb = () => {
+      const selectedSubject = subjectSelect?.value ?? container.dataset.fixedSubject ?? "";
+      const selectedCategory = focused ?? "";
+      if (breadcrumbSubject) {
+        breadcrumbSubject.hidden = !selectedSubject;
+        breadcrumbSubject.textContent = subjectName.get(selectedSubject) ?? selectedSubject;
+        breadcrumbSubject.href = `${mapRoot}?subject=${encodeURIComponent(selectedSubject)}`;
+      }
+      if (breadcrumbSubjectSeparator) breadcrumbSubjectSeparator.hidden = !selectedSubject;
+      if (breadcrumbCategory) {
+        breadcrumbCategory.hidden = !selectedCategory;
+        breadcrumbCategory.textContent = categoryName.get(selectedCategory) ?? selectedCategory.split("/").at(-1) ?? selectedCategory;
+        breadcrumbCategory.href = `${mapRoot}?subject=${encodeURIComponent(selectedSubject)}&category=${encodeURIComponent(selectedCategory)}`;
+      }
+      if (breadcrumbCategorySeparator) breadcrumbCategorySeparator.hidden = !selectedCategory;
+    };
     const mobileViewport = window.matchMedia("(max-width: 767px)").matches;
 
     controls.forEach((control) => (control.hidden = false));
@@ -1859,6 +1888,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
       if (subject) url.searchParams.set("subject", subject);
       else url.searchParams.delete("subject");
       history.replaceState(null, "", url);
+      syncBreadcrumb();
     }
 
     function showDetail(id: string): void {
@@ -1885,14 +1915,36 @@ const mapCategoryPath = fixedSubject && fixedCategory
       heading.textContent = label(n);
       detail.replaceChildren(heading, document.createTextNode(" — "));
       if (arts.length > 0) {
-        arts.forEach((article, index) => {
-          if (index > 0) detail.append(document.createTextNode(" / "));
+        const articleList = document.createElement("div");
+        articleList.className = "map-detail-articles";
+        arts.forEach((article) => {
+          const articleRow = document.createElement("div");
+          articleRow.className = "map-detail-article";
           const link = document.createElement("a");
           link.href = `${base}${article.path}`;
           link.className = "map-detail-article-link";
           link.textContent = article.title;
-          detail.append(link);
+          articleRow.append(link);
+          const conceptIds = article.conceptIds ?? [id];
+          if (conceptIds.length) {
+            const children = document.createElement("div");
+            children.className = "map-detail-children";
+            const labelNode = document.createElement("span");
+            labelNode.textContent = ja ? "主要概念" : "Key concepts";
+            children.append(labelNode);
+            conceptIds.forEach((conceptId) => {
+              const concept = nodeById.get(conceptId);
+              if (!concept) return;
+              const child = document.createElement("a");
+              child.href = `${mapRoot}?subject=${encodeURIComponent(concept.subject)}&category=${encodeURIComponent(catKeyOf(concept))}&selected=${encodeURIComponent(concept.id)}`;
+              child.textContent = label(concept);
+              children.append(child);
+            });
+            articleRow.append(children);
+          }
+          articleList.append(articleRow);
         });
+        detail.append(articleList);
       } else {
         detail.append(document.createTextNode(preparing));
       }
@@ -2153,6 +2205,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
       cy.getElementById(selected).select();
       showDetail(selected);
     }
+    syncBreadcrumb();
     syncViewportUi();
 
   }
