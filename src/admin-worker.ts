@@ -2499,12 +2499,21 @@ async function updateTask(
       created_by: string;
     }>();
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
-  if (
-    !scope.isManager &&
-    task.assignee_email !== scope.email &&
-    task.created_by !== scope.email
-  )
-    return json({ error: "このタスクを更新する権限がありません。" }, 403);
+  const canEditTask =
+    scope.isManager ||
+    task.assignee_email === scope.email ||
+    task.created_by === scope.email;
+  const canFeedbackTask =
+    scope.allSubjects || !task.subject || scope.subjects.includes(task.subject);
+  if (feedbackAction ? !canFeedbackTask : !canEditTask)
+    return json(
+      {
+        error: feedbackAction
+          ? "この分野の確認権限がありません。"
+          : "このタスクを更新する権限がありません。",
+      },
+      403,
+    );
   const now = new Date().toISOString();
   if (feedbackAction) {
     if (feedbackAction === "acknowledge" || feedbackAction === "unreflected")
