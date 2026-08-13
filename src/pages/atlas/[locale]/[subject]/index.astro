@@ -202,9 +202,16 @@ const summary =
                   <details
                     class="toc-category-details"
                     data-category={category.slug}
+                    data-collapse-key={`list:category:${category.slug}`}
                   >
                     <summary class="toc-cat-head">
-                      <h3>{localizedName(category.name, locale)}</h3>
+                      <h3>
+                        <a
+                          href={`${atlasPath(locale, subject.data.slug, category.slug)}?view=list`}
+                        >
+                          {localizedName(category.name, locale)}
+                        </a>
+                      </h3>
                       <span class="badge">
                         {t(locale, "articles")}: {articles.length}
                       </span>
@@ -345,6 +352,28 @@ const summary =
     }
     activateSubjectView(initialView ?? "tiles");
   }
+
+  // リスト表示のカテゴリ折りたたみ状態を分野ごとに保存する。
+  const collapsePrefix = `atlasez-subject-collapse:${location.pathname}:`;
+  document
+    .querySelectorAll<HTMLDetailsElement>("[data-collapse-key]")
+    .forEach((details) => {
+      const key = `${collapsePrefix}${details.dataset.collapseKey}`;
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored === "open" || stored === "closed")
+          details.open = stored === "open";
+      } catch {
+        /* 保存できなくても折りたたみ自体は利用できる */
+      }
+      details.addEventListener("toggle", () => {
+        try {
+          localStorage.setItem(key, details.open ? "open" : "closed");
+        } catch {
+          /* 保存できない環境では現在の表示だけ維持する */
+        }
+      });
+    });
 </script>
 
 <style>
@@ -481,10 +510,6 @@ const summary =
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    counter-reset: toc-cat;
-  }
-  .toc-category {
-    counter-increment: toc-cat;
   }
   .toc-category-details {
     border: 0;
@@ -514,10 +539,11 @@ const summary =
     margin: 0;
     flex: 1;
   }
-  .toc-cat-head h3::before {
-    content: counter(toc-cat) ". ";
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
+  .toc-cat-head h3 a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
   }
   .toc-category-body {
     padding: 0 0 var(--space-2) calc(var(--space-3) + 0.7rem);

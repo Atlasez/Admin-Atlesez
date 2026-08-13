@@ -65,6 +65,43 @@ const ALLOWED_REPORT_TYPES = new Set([
   "other",
 ]);
 const ALLOWED_ANALYTICS_EVENTS = new Set(["view", "engaged", "complete"]);
+const ISO639_3_BY_LOCALE: Record<string, string> = {
+  ja: "jpn",
+  en: "eng",
+  jpn: "jpn",
+  eng: "eng",
+  zh: "zho",
+  "zh-Hans": "zho",
+  "zh-Hant": "zho",
+  zho: "zho",
+  ko: "kor",
+  kor: "kor",
+  es: "spa",
+  spa: "spa",
+  fr: "fra",
+  fra: "fra",
+  de: "deu",
+  deu: "deu",
+  pt: "por",
+  por: "por",
+  it: "ita",
+  ita: "ita",
+  ru: "rus",
+  rus: "rus",
+  vi: "vie",
+  vie: "vie",
+  th: "tha",
+  tha: "tha",
+  id: "ind",
+  ind: "ind",
+  hi: "hin",
+  hin: "hin",
+  ar: "ara",
+  ara: "ara",
+};
+
+const normalizeLanguageCode = (value: string): string | null =>
+  ISO639_3_BY_LOCALE[value] ?? null;
 const REPORT_TYPE_LABEL: Record<string, string> = {
   error: "誤り・不具合",
   suggestion: "改善提案",
@@ -223,7 +260,7 @@ async function saveArticleReport(
   const reportType = text(payload.reportType, 40);
   const details = text(payload.details, MAX_DETAILS_LENGTH);
   const contact = text(payload.contact, MAX_CONTACT_LENGTH);
-  const locale = text(payload.locale, 16) || "ja";
+  const locale = normalizeLanguageCode(text(payload.locale, 16) || "jpn");
   const openedAt = Number(payload.openedAt);
 
   if (
@@ -232,7 +269,8 @@ async function saveArticleReport(
     !TAXONOMY_SLUG.test(subject) ||
     !TAXONOMY_SLUG.test(category) ||
     !details ||
-    !ALLOWED_REPORT_TYPES.has(reportType)
+    !ALLOWED_REPORT_TYPES.has(reportType) ||
+    !locale
   ) {
     return json({ error: "必須項目を確認してください。" }, 400);
   }
@@ -363,14 +401,14 @@ async function saveArticleAnalytics(
   const articleTitle = text(payload.articleTitle, 200);
   const subject = text(payload.subject, 80);
   const category = text(payload.category, 80);
-  const locale = text(payload.locale, 16) || "ja";
+  const locale = normalizeLanguageCode(text(payload.locale, 16) || "jpn");
   const event = text(payload.event, 20);
   if (
     !TAXONOMY_SLUG.test(articleId) ||
     !articleTitle ||
     !TAXONOMY_SLUG.test(subject) ||
     !TAXONOMY_SLUG.test(category) ||
-    !/^[a-z]{2}(?:-[A-Z]{2})?$/.test(locale) ||
+    !locale ||
     !ALLOWED_ANALYTICS_EVENTS.has(event)
   ) {
     return json({ error: "統計データを確認してください。" }, 400);

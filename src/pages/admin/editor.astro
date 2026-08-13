@@ -105,7 +105,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
               <label>カテゴリ<select name="category" required data-category></select></label>
               <label>URL用の名前<input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
               <label>概念ID<input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
-              <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
+              <label>言語<select name="locale"><option value="jpn">日本語（jpn）</option><option value="eng">English（eng）</option></select></label>
               <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
               <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select></label>
             </div>
@@ -583,7 +583,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       const selected = source ? subjects.find((item) => item.slug === source.subject) ?? subjects[0] : subjects[0];
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
-      setDocument({ id: "", source_article_id: source?.articleId ?? null, subject: source?.subject ?? selected.slug, category: categoryValue, locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      setDocument({ id: "", source_article_id: source?.articleId ?? null, subject: source?.subject ?? selected.slug, category: categoryValue, locale: "jpn", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId ?? "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };

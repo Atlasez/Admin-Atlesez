@@ -67,6 +67,24 @@ type EditorialDocument = {
   reviewed_at: string | null;
   published_at: string | null;
 };
+
+/**
+ * 編集室で扱う言語コードは ISO 639-3 に統一する。
+ * 既存の D1 データに残る ja/en は読み取り時だけ受け入れ、
+ * GitHub のコンテンツパスへ出すときに従来のディレクトリ名へ戻す。
+ */
+const EDITORIAL_LANGUAGE_CODES: Record<string, "jpn" | "eng"> = {
+  ja: "jpn",
+  jpn: "jpn",
+  en: "eng",
+  eng: "eng",
+};
+const editorialLanguageCode = (value: string): "jpn" | "eng" | null =>
+  EDITORIAL_LANGUAGE_CODES[value] ?? null;
+const contentLanguageDirectory = (value: string): "ja" | "en" | null => {
+  const code = editorialLanguageCode(value);
+  return code === "jpn" ? "ja" : code === "eng" ? "en" : null;
+};
 type EditorialComment = {
   id: string;
   document_id: string;
@@ -1161,7 +1179,7 @@ async function readEditorialPayload(
 const editorialValues = (payload: EditorialDocumentPayload) => {
   const subject = text(payload.subject, 80);
   const category = text(payload.category, 80);
-  const locale = text(payload.locale, 8);
+  const locale = editorialLanguageCode(text(payload.locale, 8));
   const slug = text(payload.slug, 100);
   const title = text(payload.title, 180);
   const summary = text(payload.summary, 800);
@@ -1174,7 +1192,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
   if (
     !SUBJECT_SLUG.test(subject) ||
     !SUBJECT_SLUG.test(category) ||
-    !["ja", "en"].includes(locale) ||
+    !locale ||
     !SUBJECT_SLUG.test(slug) ||
     !title ||
     !summary ||
@@ -1224,7 +1242,10 @@ async function listEditorialDocuments(
     .bind(...values)
     .all<Omit<EditorialDocument, "body">>();
   return json({
-    documents: result.results,
+    documents: result.results.map((document) => ({
+      ...document,
+      locale: editorialLanguageCode(document.locale) ?? document.locale,
+    })),
     scope: {
       email: scope.email,
       subjects: scope.subjects,
@@ -2702,7 +2723,13 @@ async function getEditorialDocument(
           ]
         : []),
   }));
-  return json({ document, comments: commentsWithSelections });
+  return json({
+    document: {
+      ...document,
+      locale: editorialLanguageCode(document.locale) ?? document.locale,
+    },
+    comments: commentsWithSelections,
+  });
 }
 
 type CommentSelectionInput = {
@@ -2893,7 +2920,7 @@ async function updateEditorialDocument(
     isReviewOnly &&
     (values.subject !== existing.subject ||
       values.category !== existing.category ||
-      values.locale !== existing.locale ||
+      values.locale !== editorialLanguageCode(existing.locale) ||
       values.slug !== existing.slug ||
       values.title !== existing.title ||
       values.summary !== existing.summary ||
@@ -3383,7 +3410,10 @@ async function syncEditorialPublicationStatus(env: Env) {
   let pending = 0;
   const now = new Date().toISOString();
   for (const document of documents.results) {
-    const path = `src/content/articles/${document.locale}/${document.subject}/${document.category}/${document.slug}.md`;
+    const contentLocale = contentLanguageDirectory(document.locale);
+    if (!contentLocale)
+      throw new Error("原稿の言語コードを確認できませんでした。");
+    const path = `src/content/articles/${contentLocale}/${document.subject}/${document.category}/${document.slug}.md`;
     const response = await fetch(
       `https://api.github.com/repos/${repository}/contents/${path}`,
       { headers },
@@ -3445,10 +3475,15 @@ const editorialMarkdown = (
   publicationStatus: "published" | "draft" = "published",
 ) => {
   const date = new Date().toISOString().slice(0, 10);
+  const managementLocale =
+    editorialLanguageCode(document.locale) ?? document.locale;
+  const contentLocale = contentLanguageDirectory(document.locale);
+  if (!contentLocale)
+    throw new Error("原稿の言語コードを確認できませんでした。");
   return [
     "---",
-    `articleId: ${document.locale}-${document.subject}-${document.slug}`,
-    `locale: ${document.locale}`,
+    `articleId: ${managementLocale}-${document.subject}-${document.slug}`,
+    `locale: ${contentLocale}`,
     `title: ${document.title}`,
     `slug: ${document.slug}`,
     `subject: ${document.subject}`,
@@ -3489,7 +3524,10 @@ async function writeEditorialDocumentToGitHub(
       },
       503,
     );
-  const path = `src/content/articles/${document.locale}/${document.subject}/${document.category}/${document.slug}.md`;
+  const contentLocale = contentLanguageDirectory(document.locale);
+  if (!contentLocale)
+    return json({ error: "原稿の言語コードを確認できませんでした。" }, 400);
+  const path = `src/content/articles/${contentLocale}/${document.subject}/${document.category}/${document.slug}.md`;
   const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
   const headers = {
     accept: "application/vnd.github+json",

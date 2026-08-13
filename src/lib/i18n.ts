@@ -19,6 +19,8 @@ export type Locale = (typeof LOCALES)[number];
  * dir を "rtl" にすればアラビア語などにも対応できる。
  */
 export interface LocaleMeta {
+  /** ISO 639-2/3 の3文字コード。記事・統計・運営データの正規化に使う。 */
+  iso6393: string;
   /** 母語での表記（例: 日本語） */
   native: string;
   /** 英語での表記（例: Japanese）。検索・並べ替えに使う */
@@ -28,23 +30,37 @@ export interface LocaleMeta {
 }
 
 export const localeMeta: Record<string, LocaleMeta> = {
-  ja: { native: "日本語", english: "Japanese" },
-  en: { native: "English", english: "English" },
-  "zh-Hans": { native: "简体中文", english: "Chinese (Simplified)" },
-  "zh-Hant": { native: "繁體中文", english: "Chinese (Traditional)" },
-  ko: { native: "한국어", english: "Korean" },
-  es: { native: "Español", english: "Spanish" },
-  fr: { native: "Français", english: "French" },
-  de: { native: "Deutsch", english: "German" },
-  pt: { native: "Português", english: "Portuguese" },
-  it: { native: "Italiano", english: "Italian" },
-  ru: { native: "Русский", english: "Russian" },
-  vi: { native: "Tiếng Việt", english: "Vietnamese" },
-  th: { native: "ไทย", english: "Thai" },
-  id: { native: "Bahasa Indonesia", english: "Indonesian" },
-  hi: { native: "हिन्दी", english: "Hindi" },
-  ar: { native: "العربية", english: "Arabic", dir: "rtl" },
+  ja: { iso6393: "jpn", native: "日本語", english: "Japanese" },
+  en: { iso6393: "eng", native: "English", english: "English" },
+  "zh-Hans": {
+    iso6393: "zho",
+    native: "简体中文",
+    english: "Chinese (Simplified)",
+  },
+  "zh-Hant": {
+    iso6393: "zho",
+    native: "繁體中文",
+    english: "Chinese (Traditional)",
+  },
+  ko: { iso6393: "kor", native: "한국어", english: "Korean" },
+  es: { iso6393: "spa", native: "Español", english: "Spanish" },
+  fr: { iso6393: "fra", native: "Français", english: "French" },
+  de: { iso6393: "deu", native: "Deutsch", english: "German" },
+  pt: { iso6393: "por", native: "Português", english: "Portuguese" },
+  it: { iso6393: "ita", native: "Italiano", english: "Italian" },
+  ru: { iso6393: "rus", native: "Русский", english: "Russian" },
+  vi: { iso6393: "vie", native: "Tiếng Việt", english: "Vietnamese" },
+  th: { iso6393: "tha", native: "ไทย", english: "Thai" },
+  id: { iso6393: "ind", native: "Bahasa Indonesia", english: "Indonesian" },
+  hi: { iso6393: "hin", native: "हिन्दी", english: "Hindi" },
+  ar: { iso6393: "ara", native: "العربية", english: "Arabic", dir: "rtl" },
 };
+
+/** UIルートの短縮コードや既存データを、管理用ISO 639-3コードへ正規化する。 */
+export function localeIso6393(code: string): string {
+  if (/^[a-z]{3}$/.test(code)) return code;
+  return localeMeta[code]?.iso6393 ?? code;
+}
 
 /** 後方互換: コード → 母語表記 */
 export const localeNames: Record<string, string> = Object.fromEntries(

@@ -166,7 +166,11 @@ const views = [
         >
           {
             grouped.map((group) => (
-              <details class="group-block" open>
+              <details
+                class="group-block"
+                open
+                data-collapse-key={`tiles:group:${group.group}`}
+              >
                 <summary class="group-heading">
                   <h2 id={`group-${group.group}`}>{group.label}</h2>
                 </summary>
@@ -261,13 +265,21 @@ const views = [
         >
           {
             grouped.map((group) => (
-              <details class="list-group" open>
+              <details
+                class="list-group"
+                open
+                data-collapse-key={`list:group:${group.group}`}
+              >
                 <summary class="group-heading">
                   <h2>{group.label}</h2>
                 </summary>
                 <div class="list-group-body">
                   {group.genres.map((genre) => (
-                  <details class="list-genre" open>
+                  <details
+                    class="list-genre"
+                    open
+                    data-collapse-key={`list:genre:${group.group}:${genre.genre}`}
+                  >
                     <summary class="list-genre-heading">
                       <h3>{genre.label}</h3>
                     </summary>
@@ -281,7 +293,11 @@ const views = [
                         return (
                           <li class="subject-list-item">
                             {published && sortedCategories.length > 0 ? (
-                              <details class="subject-list-details" open>
+                              <details
+                                class="subject-list-details"
+                                open
+                                data-collapse-key={`list:subject:${s.data.slug}`}
+                              >
                                 <summary class="subject-list-head">
                                   <a href={`${atlasPath(locale, s.data.slug)}?view=list`}>
                                     {name}
@@ -303,7 +319,10 @@ const views = [
                                     );
                                     return (
                                       <li class="category-list-item">
-                                        <details class="category-list-details">
+                                        <details
+                                          class="category-list-details"
+                                          data-collapse-key={`list:category:${s.data.slug}:${cat.slug}`}
+                                        >
                                           <summary class="category-list-head">
                                             <a
                                               href={`${atlasPath(locale, s.data.slug)}${cat.slug}/?view=list`}
@@ -510,6 +529,29 @@ const views = [
     }
     activate(initial ?? "tiles");
   }
+
+  // タイル／リスト内の折りたたみ状態をページごとに保存する。
+  // 画面を再訪したときも、最後に見ていた階層をそのまま復元する。
+  const collapsePrefix = `atlasez-home-collapse:${location.pathname}:`;
+  document
+    .querySelectorAll<HTMLDetailsElement>("[data-collapse-key]")
+    .forEach((details) => {
+      const key = `${collapsePrefix}${details.dataset.collapseKey}`;
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored === "open" || stored === "closed")
+          details.open = stored === "open";
+      } catch {
+        /* 保存できなくても折りたたみ自体は利用できる */
+      }
+      details.addEventListener("toggle", () => {
+        try {
+          localStorage.setItem(key, details.open ? "open" : "closed");
+        } catch {
+          /* 保存できない環境では現在の表示だけ維持する */
+        }
+      });
+    });
 
   // OSの設定でスクロールバーが常時表示されない場合でも、下に続きが
   // あることを視覚的に示す。最後まで到達した時点では覆いを消す。
