@@ -20,7 +20,10 @@ export async function GET() {
 
   const articleLinks: Record<
     string,
-    Record<string, { articleId: string; title: string; path: string; conceptIds: string[] }[]>
+    Record<
+      string,
+      { articleId: string; title: string; path: string; conceptIds: string[] }[]
+    >
   > = {};
   for (const locale of LOCALES) {
     const articles = await getPublishedArticles(locale);
