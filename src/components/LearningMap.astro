@@ -1277,9 +1277,12 @@ const mapCategoryPath = fixedSubject && fixedCategory
         {
           selector: "node.history-read",
           style: {
+            // 読んだ状態は青い塗り＋太い枠で、未記録との差を一目で示す。
             "background-color": "#176ea6",
+            "background-opacity": 1,
             "border-color": "#0b4f7d",
-            "border-width": 4,
+            "border-width": 5,
+            "border-style": "solid",
             color: "#ffffff",
             "font-weight": 700,
           },
@@ -1287,9 +1290,11 @@ const mapCategoryPath = fixedSubject && fixedCategory
         {
           selector: "node.history-understood",
           style: {
+            // 理解した状態は緑＋二重線。読んだ状態とも判別しやすい。
             "background-color": "#17803d",
+            "background-opacity": 1,
             "border-color": "#0b5427",
-            "border-width": 4,
+            "border-width": 5,
             color: "#ffffff",
             "font-weight": 700,
             "border-style": "double",
@@ -1425,6 +1430,10 @@ const mapCategoryPath = fixedSubject && fixedCategory
     /**
      * 記事ごとの学習記録を概念ノードへ集約する。
      * 1概念に複数の記事がある場合は、最も進んだ記事の状態を採用する。
+     *
+     * 学習記録はロケールごとの記事に保存されるため、いま表示している
+     * 言語のリンクだけを対象にする。別言語の記事を読んだだけで、現在の
+     * 地図まで学習済みに見えてしまうのを防ぐためである。
      */
     const applyLearningHistory = () => {
       const historyByArticle = new Map(
@@ -1432,8 +1441,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
       );
       cy.nodes('node[kind = "concept"]').forEach((element) => {
         const node = nodeById.get(element.id());
-        const states = Object.values(node?.articles ?? {})
-          .flat()
+        const states = (node?.articles[locale] ?? [])
           .map((article) => historyByArticle.get(article.articleId));
         const state = highestHistoryState(states);
         element.removeClass("history-read history-understood");
@@ -1528,9 +1536,11 @@ const mapCategoryPath = fixedSubject && fixedCategory
       // Cytoscape の compound layout が隠れた子を参照してしまうため、
       // 表示中のノードだけで小さな反発計算を行う。
       cy.startBatch();
-      // 共有実装と同じく、反発→辺の引力→衝突解消を複数回繰り返す。
-      // 一度だけではラベル付きタイルの重なりが残るため、初期配置で収束させる。
-      for (let iteration = 0; iteration < 48; iteration += 1) {
+      // 参照実装と同じく、反発→辺の引力→衝突解消を複数回繰り返す。
+      // 反発距離はラベル付きタイルの実寸より少し大きく取り、重なりを
+      // 解消してから表示する。アニメーションさせないのでカーソル移動時
+      // に点滅せず、カテゴリを開くたびに同じ入力から同じ配置になる。
+      for (let iteration = 0; iteration < 64; iteration += 1) {
         const force = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
         for (let i = 0; i < nodes.length; i += 1) {
           for (let j = i + 1; j < nodes.length; j += 1) {
@@ -1538,7 +1548,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
             const b = nodes[j];
             const delta = { x: a.position("x") - b.position("x"), y: a.position("y") - b.position("y") };
             const distance = Math.max(18, Math.hypot(delta.x, delta.y));
-            const magnitude = Math.min(10, 9_000 / (distance * distance));
+            const magnitude = Math.min(9, 12_000 / (distance * distance));
             const fx = (delta.x / distance) * magnitude;
             const fy = (delta.y / distance) * magnitude;
             const aForce = force.get(a.id());
@@ -1548,8 +1558,8 @@ const mapCategoryPath = fixedSubject && fixedCategory
 
             // 反発だけでは文字を含むタイルが少しずつ重なるため、
             // 実際のタイル寸法に基づく衝突判定で必ず離す。
-            const minX = (a.outerWidth() + b.outerWidth()) / 2 + 30;
-            const minY = (a.outerHeight() + b.outerHeight()) / 2 + 22;
+            const minX = (a.outerWidth() + b.outerWidth()) / 2 + 34;
+            const minY = (a.outerHeight() + b.outerHeight()) / 2 + 26;
             const overlapX = minX - Math.abs(delta.x);
             const overlapY = minY - Math.abs(delta.y);
             if (overlapX > 0 && overlapY > 0 && aForce && bForce) {
@@ -1557,7 +1567,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
               const direction = separateHorizontally
                 ? (delta.x || (i % 2 === 0 ? 1 : -1))
                 : (delta.y || (j % 2 === 0 ? 1 : -1));
-              const amount = (separateHorizontally ? overlapX : overlapY) * 0.18;
+              const amount = (separateHorizontally ? overlapX : overlapY) * 0.22;
               if (separateHorizontally) {
                 const sign = Math.sign(direction);
                 aForce.x += sign * amount;
