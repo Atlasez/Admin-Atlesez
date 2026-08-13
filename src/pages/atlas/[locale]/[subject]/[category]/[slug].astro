@@ -120,7 +120,10 @@ const tocLabel = (text: string) =>
     .replace(/\$([^$]+)\$/g, "$1")
     .replace(/\\(?:mathrm|mathbb|operatorname|mathop|text)\{([^}]+)\}/g, "$1")
     .replace(/\\[a-zA-Z]+/g, "")
-    .replace(/[{}]/g, "");
+    .replace(/[{}]/g, "")
+    // KaTeX の見出しテキストは MathML・注釈・表示用HTMLが
+    // 連結され、単一文字の数式が「GGG」のように見えることがある。
+    .replace(/([A-Za-z])\1{2,}/g, "$1");
 
 const historyUrl = `${ORG.githubRepo}/commits/main/src/content/articles/${entry.id}.md`;
 
@@ -172,7 +175,13 @@ const structuredData = {
         </ol>
       </details>
     </nav>
-    <button type="button" class="mobile-toc-trigger" data-mobile-toc>
+    <button
+      type="button"
+      class="mobile-toc-trigger"
+      data-mobile-toc
+      aria-controls="article-toc"
+      aria-expanded="false"
+    >
       {t(locale, "toc")}
     </button>
 
@@ -221,17 +230,19 @@ const structuredData = {
         )
       }
       <header class="article-header">
-        <h1 id="article-title">{entry.data.title}</h1>
-        {/* 要約は本文冒頭と重複しがちなので記事ページでは出さない。
-            一覧ページ・検索結果・meta description では引き続き使う。 */}
-        <p class="article-badges">
-          <span class="badge">
-            {t(locale, "updatedAt")}:
-            <time datetime={entry.data.updatedAt.toISOString().slice(0, 10)}>
-              {formatDate(entry.data.updatedAt, locale)}
-            </time>
-          </span>
-        </p>
+        <div class="article-title-row">
+          <h1 id="article-title">{entry.data.title}</h1>
+          {/* 要約は本文冒頭と重複しがちなので記事ページでは出さない。
+              一覧ページ・検索結果・meta description では引き続き使う。 */}
+          <p class="article-badges">
+            <span class="badge">
+              {t(locale, "updatedAt")}:
+              <time datetime={entry.data.updatedAt.toISOString().slice(0, 10)}>
+                {formatDate(entry.data.updatedAt, locale)}
+              </time>
+            </span>
+          </p>
+        </div>
         {/* 「あとで読む」= これから読むもの / 「読んだ・理解した」= 済んだもの */}
         <div
           class="article-actions"
@@ -614,13 +625,24 @@ const structuredData = {
     padding-bottom: var(--space-3);
     border-bottom: 2px solid var(--accent-primary);
   }
-  .article-header h1 {
-    margin-bottom: var(--space-2);
+  .article-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .article-title-row h1 {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
   }
   .article-badges {
     display: flex;
     gap: var(--space-1);
     flex-wrap: wrap;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    margin: 0;
   }
   .article-actions {
     display: flex;
@@ -1003,14 +1025,27 @@ const structuredData = {
       overflow-wrap: break-word;
     }
     .bookmark-btn {
-      width: 100%;
-      justify-content: center;
+      flex: 0 0 auto;
+      min-height: 2.35rem;
+      padding-inline: var(--space-2);
+      white-space: nowrap;
+    }
+    .article-actions {
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .article-title-row {
+      flex-wrap: wrap;
+      gap: var(--space-1) var(--space-2);
+    }
+    .article-badges {
+      margin-inline-start: auto;
     }
     .mobile-toc-trigger {
       position: fixed;
       right: var(--space-3);
       bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
-      z-index: 20;
+      z-index: 50;
       min-height: 2.75rem;
       border: 1px solid var(--accent-primary);
       border-radius: 999px;
@@ -1019,6 +1054,40 @@ const structuredData = {
       color: var(--accent-primary);
       font-weight: 700;
       padding: 0 var(--space-3);
+    }
+    /* 読み進めた位置から目次を開いても本文を離れないよう、
+       目次は浮いたパネルとして表示する。閉じるときは見出し帯を押す。 */
+    .article-toc {
+      position: fixed;
+      top: auto;
+      right: var(--space-3);
+      bottom: calc(4.35rem + env(safe-area-inset-bottom));
+      left: var(--space-3);
+      z-index: 45;
+      max-height: min(70vh, 34rem);
+      pointer-events: none;
+    }
+    .article-toc .toc-details {
+      max-height: min(70vh, 34rem);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius);
+      background: var(--background-primary);
+      overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(0.5rem);
+      transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+    }
+    .article-toc .toc-details[open] {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(0);
+      box-shadow: var(--shadow);
+    }
+    .article-toc .toc-details[open] .toc-list {
+      max-height: calc(min(70vh, 34rem) - 3.25rem);
     }
     /* 学習の記録のトグルも横幅いっぱいに広げ、2段で分け合う */
     .history-steps {
@@ -1144,12 +1213,28 @@ const structuredData = {
   // モバイルでは目次を初期状態で閉じる
   const mq = window.matchMedia("(max-width: 1023px)");
   const details = document.querySelector<HTMLDetailsElement>(".toc-details");
+  const mobileTocTrigger = document.querySelector<HTMLButtonElement>("[data-mobile-toc]");
+  const syncMobileTocState = () => {
+    mobileTocTrigger?.setAttribute("aria-expanded", String(details?.open ?? false));
+  };
   if (details && mq.matches) details.open = false;
-  document.querySelector<HTMLButtonElement>("[data-mobile-toc]")?.addEventListener("click", () => {
+  syncMobileTocState();
+  details?.addEventListener("toggle", syncMobileTocState);
+  details?.querySelectorAll<HTMLAnchorElement>("[data-toc-link]").forEach((link) => {
+    link.addEventListener("click", () => {
+      if (mq.matches) {
+        details.open = false;
+        syncMobileTocState();
+      }
+    });
+  });
+  mobileTocTrigger?.addEventListener("click", () => {
     if (!details) return;
-    details.open = true;
-    document.getElementById("article-toc")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => details.querySelector<HTMLAnchorElement>("a")?.focus(), 350);
+    details.open = !details.open;
+    syncMobileTocState();
+    if (details.open) {
+      window.setTimeout(() => details.querySelector<HTMLAnchorElement>("a")?.focus(), 120);
+    }
   });
 </script>
 

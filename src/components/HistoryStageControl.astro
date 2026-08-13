@@ -92,8 +92,8 @@ const { locale } = Astro.props;
     border-radius: 999px;
     background: var(--background-secondary);
     transition:
-      border-color 0.16s ease,
-      background-color 0.16s ease;
+      border-color 0.12s ease-out,
+      background-color 0.12s ease-out;
   }
   .history-stage-position {
     position: absolute;
@@ -126,7 +126,7 @@ const { locale } = Astro.props;
     background: var(--background-primary);
     box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 24%, transparent);
     transform: translateY(-50%);
-    transition: left 0.16s ease;
+    transition: left 0.12s ease-out;
   }
   .history-stage-toggle[data-state="read"] .history-stage-track {
     border-color: var(--accent-primary);
