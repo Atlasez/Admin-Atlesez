@@ -3860,15 +3860,16 @@ async function getEditorialDocument(
   ];
   const authorProfiles = authorEmails.length
     ? await env.REPORTS.prepare(
-        `SELECT email, display_name, avatar_url FROM editorial_member_profiles WHERE email IN (${authorEmails.map(() => "?").join(",")})`,
+        `SELECT email, display_name, avatar_url, updated_at FROM editorial_member_profiles WHERE email IN (${authorEmails.map(() => "?").join(",")})`,
       )
         .bind(...authorEmails)
-        .all<{ email: string; display_name: string; avatar_url: string }>()
+        .all<{ email: string; display_name: string; avatar_url: string; updated_at: string }>()
     : {
         results: [] as {
           email: string;
           display_name: string;
           avatar_url: string;
+          updated_at: string;
         }[],
       };
   const authorProfileByEmail = new Map(
@@ -3942,6 +3943,8 @@ async function getEditorialDocument(
     ),
     author_avatar_url:
       authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
+    author_avatar_updated_at:
+      authorProfileByEmail.get(comment.created_by)?.updated_at ?? "",
     // 旧コメントの一件だけの引用も、同じUIで読めるようにする。
     selections:
       selectionsByComment.get(comment.id) ??

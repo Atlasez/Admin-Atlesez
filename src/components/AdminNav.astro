@@ -151,7 +151,8 @@ const showHomeNav = current !== "portal" && current !== "global";
           else if (email) email.title = status.email;
           try {
             const profileResponse = await fetch('/api/admin/profile', { credentials: 'same-origin', cache: 'no-store' });
-            if (profileResponse.ok) {
+            const profileType = profileResponse.headers.get('content-type') ?? '';
+            if (profileResponse.ok && profileType.includes('application/json')) {
               const profile = await profileResponse.json() as { profile?: { display_name?: string; avatar_url?: string } };
               const image = profile.profile?.avatar_url;
               const snapshot = { email: status.email, displayName: profile.profile?.display_name?.trim() || '', avatarUrl: image || '' };
@@ -180,7 +181,16 @@ const showHomeNav = current !== "portal" && current !== "global";
           showAdminError(error instanceof Error ? error.message : 'ログイン情報を取得できませんでした。');
         } finally { account.hidden = false; }
       };
-      document.addEventListener('atlasez-profile-updated', () => { void loadAccount(); });
+      document.addEventListener('atlasez-profile-updated', (event) => {
+        const detail = event instanceof CustomEvent ? event.detail as { avatarUrl?: unknown } : undefined;
+        // 保存直後はAPI再取得を待たず、同じタブのヘッダーへ新しい画像を反映する。
+        if (cachedAccount && typeof detail?.avatarUrl === 'string') {
+          cachedAccount = { ...cachedAccount, avatarUrl: detail.avatarUrl };
+          writeAccountCache(cachedAccount);
+          applyAccountSnapshot(cachedAccount);
+        }
+        void loadAccount();
+      });
       const loadNotifications = async () => {
         if (!notificationList) return;
         if (notificationRetry) notificationRetry.hidden = true;
