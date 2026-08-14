@@ -3,55 +3,48 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
 ---
 
-<AdminLayout title="作業の進め方" description="アトラス運営サイトの使い方と運営マニュアル">
+<AdminLayout title="作業の進め方" description="記事を書く人向けのアトラス運営サイトガイド">
   <main class="guide" id="main">
     <AdminNav current="guide" />
     <header class="guide-heading">
-      <p>ATLASEZ / 学習サイト運営</p>
-      <h1>運営用ガイド</h1>
-      <span>現在の編集室・査読・公開・進捗管理に合わせた、運営者向けの使い方です。</span>
+      <p>ATLASEZ / 学習サイト</p>
+      <h1>記事を書く人向けガイド</h1>
+      <span>記事の作成、確認、コメント、公開までの基本的な使い方です。</span>
     </header>
 
     <div class="guide-grid">
       <aside aria-label="ガイドの目次">
         <strong>目次</strong>
         <a href="#start">まず確認すること</a>
-        <a href="#roles">権限と画面</a>
+        <a href="#roles">画面の見方</a>
         <a href="#articles">記事の作成・公開</a>
         <a href="#comments">コメント・査読</a>
         <a href="#operations">ToDo・日程・進捗</a>
-        <a href="#members">応募・参加者・Discord</a>
         <a href="#reports">問題報告・通知</a>
         <a href="#math">数式とプレビュー</a>
         <a href="#trouble">困ったとき</a>
-        <a href="#developers">開発者向け</a>
       </aside>
 
       <article>
         <section id="start">
           <h2>まず確認すること</h2>
-          <p class="lead">運営サイトは、学習者向けサイトとは別のGoogle OAuth認証付きサイトです。</p>
+          <p class="lead">この画面では、記事を書き、みんなで確認し、学習サイトへ公開できます。</p>
           <div class="link-grid">
-            <a href="/admin/portal/"><strong>メンバー用ホーム</strong><span>参加プロジェクトと横断ToDo</span></a>
-            <a href="/admin/atlas/"><strong>学習サイト「アトラス」運営用サイト</strong><span>原稿・査読・問題報告・進捗</span></a>
+            <a href="/admin/atlas/"><strong>ホーム</strong><span>学習サイトの作業を始める</span></a>
+            <a href="/admin/articles/"><strong>編集・査読</strong><span>記事を探して書く・直す</span></a>
             <a href="/admin/guide/"><strong>このガイド</strong><span>現在の運用手順</span></a>
           </div>
           <p>ロゴとパンくずからホームや上位ページへ戻れます。</p>
         </section>
 
         <section id="roles">
-          <h2>権限と画面</h2>
-          <ul class="roles">
-            <li><b>分野担当</b><span>自分に割り当てられた分野の原稿・コメント・ToDoを扱います。</span></li>
-            <li><b>全分野管理者</b><span>参加者管理、応募承認、Discordロール同期、査読完了、公開・公開取消を行います。</span></li>
-          </ul>
-          <p>表示されないメニューをURL直入力で迂回することはできません。権限は画面だけでなく管理WorkerのAPIでも検査されます。管理メニューは外側クリックまたはEscで閉じられます。</p>
+          <h2>画面の見方</h2>
+          <p>上のメニューから、記事を探す「編集・査読」、作業を確認する「進捗・ToDo・日程」、読者からの連絡を見る「問題報告・統計」へ移動できます。表示される項目は、担当している作業によって異なります。</p>
           <div class="table-wrap"><table><thead><tr><th>画面</th><th>用途</th></tr></thead><tbody>
             <tr><td><a href="/admin/articles/">編集・査読</a></td><td>原稿の検索、絞り込み、編集画面への移動</td></tr>
             <tr><td><a href="/admin/editor/">記事編集</a></td><td>本文、プレビュー、メモ、コメント、版履歴</td></tr>
             <tr><td><a href="/admin/operations/">進捗・ToDo・日程</a></td><td>自分の作業、依頼、報告、予定</td></tr>
             <tr><td><a href="/admin/reports/">問題報告・統計</a></td><td>読者からの報告と匿名閲覧統計</td></tr>
-            <tr><td>管理メニュー</td><td>運営者・担当管理、応募管理、連携設定など（権限により表示）</td></tr>
           </tbody></table></div>
         </section>
 
@@ -60,12 +53,12 @@ import AdminNav from "../../components/AdminNav.astro";
           <div class="flow"><b>下書き保存</b><span>→</span><b>査読を依頼</b><span>→</span><b>査読完了</b><span>→</span><b>公開</b></div>
           <ol>
             <li>「編集・査読」で <strong>新規記事作成</strong>、<strong>加筆・修正</strong>、または既存記事の絞り込みを選びます。</li>
-            <li>本文とWebプレビューを確認し、「記事設定」で分野・カテゴリ・slug・言語を確認します。言語ディレクトリはISO 639-3（日本語 <code>jpn</code>、英語 <code>eng</code>）です。</li>
+            <li>本文とWebプレビューを確認し、「記事設定」の項目を入力します。</li>
             <li><strong>保存する</strong>で下書きを保存します。保存状態は画面上部で確認でき、未保存のまま移動すると警告が出ます。</li>
-            <li>執筆者が<strong>査読を依頼する</strong>と、運営内運営へ通知されます。査読は匿名で行います。</li>
-            <li>全分野管理者が査読結果を確認し、必要なら保留・修正依頼にします。査読完了後は公開操作へ進めます。</li>
-            <li>全分野管理者が<strong>公開する</strong>を押し、確認ダイアログで実行します。学習サイトへの反映には数十秒から数分かかります。</li>
-            <li>公開後に修正する場合は<strong>公開を取り消す</strong>で下書きへ戻し、修正後に再査読します。</li>
+            <li><strong>査読を依頼する</strong>を押すと、ほかのメンバーが内容を確認します。</li>
+            <li>コメントを確認して修正します。確認が終わると、公開できる状態になります。</li>
+            <li>表示された<strong>公開する</strong>を押し、確認画面で実行します。学習サイトへの反映には少し時間がかかります。</li>
+            <li>公開後に修正する場合は、表示された<strong>公開を取り消す</strong>を使います。</li>
           </ol>
           <p class="notice">「原稿状態（下書き・査読中・査読済み）」と「公開状態（未公開・公開済み）」は別の情報です。公開済み記事が査読済みと表示されても異常ではありません。</p>
         </section>
@@ -73,26 +66,20 @@ import AdminNav from "../../components/AdminNav.astro";
         <section id="comments">
           <h2>コメント・査読</h2>
           <p>本文をドラッグして範囲を選び、コメントを追加します。「定義不足」「誤字」「脱字」などのタグだけでも送信できます。返信にもタグと引用を付けられ、<code>@</code> を入力すると候補が表示されます。</p>
-          <ul><li>未反映・確認済みなどの状態で対応状況を共有する。</li><li>コメントや返信は記事の版履歴と一緒に残る。</li><li>査読者の氏名やメールアドレスは記事執筆者へ表示しない。</li></ul>
+          <ul><li>未反映・確認済みなどの状態で対応状況を共有する。</li><li>返信には引用やタグを付けられる。</li><li><code>@</code> を入力すると、メンバーの候補から呼びかける相手を選べる。</li></ul>
         </section>
 
         <section id="operations">
           <h2>ToDo・日程・進捗</h2>
           <p>「進捗・ToDo・日程」では、<strong>自分が担当するToDo</strong>、<strong>自分が依頼したToDo</strong>、<strong>自分が送った進捗報告</strong>を切り替えて確認できます。</p>
           <ul><li>期限が近い順、期限切れ、今日まで、担当者、依頼者で絞り込む。</li><li>期限日時、タイムゾーン、繰り返しリマインダーを設定する。</li><li>日程調整で地域別タイムゾーン、予定、参加可否を登録する。</li></ul>
-          <p class="notice">進捗報告を保存すると、設定済みのDiscord分野チャンネルと全体進捗チャンネルへ自動通知されます。カレンダーはD1の予定データをブラウザで表示します。</p>
-        </section>
-
-        <section id="members">
-          <h2>応募・参加者・Discord</h2>
-          <p>運営参加応募はログイン不要です。氏名（姓・名・ふりがな）、所属区分、学校・研究機関、学年、タイムゾーン、関心分野を入力します。候補にない学校は自由入力でき、承認時に運営側が確認します。</p>
-          <p>応募の承認、所属・学年・担当分野の変更、DiscordユーザーIDの登録、ロール同期は全分野管理者だけが行います。参加者カードの<strong>変更を保存してDiscordロールを同期</strong>で、属性保存とロール同期を一度に実行します。</p>
+          <p class="notice">進捗報告を保存すると、必要なメンバーへ自動で知らせることができます。</p>
         </section>
 
         <section id="reports">
           <h2>問題報告・通知</h2>
-          <p>学習サイトの記事から送られた問題報告は「問題報告・統計」で確認します。分野に応じたDiscordチャンネルへ通知され、必要な通知は右上のベルにも届きます。既読にすると未読数からは消えますが、通知履歴は残ります。</p>
-          <p>APIエラーや読み込み失敗が出た場合は、再読み込み・再ログインを試してください。アクセストークン、Webhook、個人情報を画面やGitHubのIssueへ貼らないでください。</p>
+          <p>学習サイトの記事から送られた問題報告は「問題報告・統計」で確認します。自分の記事へのコメントや確認が必要な知らせは、右上のベルに届きます。既読にすると未読数から消えますが、通知履歴は残ります。</p>
+          <p>報告には記事のURL、どこで困ったか、どう直すとよいかを分かる範囲で書いてください。個人情報は書かないでください。</p>
         </section>
 
         <section id="math">
@@ -103,19 +90,7 @@ import AdminNav from "../../components/AdminNav.astro";
 
         <section id="trouble">
           <h2>困ったとき</h2>
-          <ul><li>読み込み中のままなら、ページを再読み込みしてGoogleアカウントのログイン状態を確認する。</li><li><code>Unexpected token '&lt;'</code> や <code>Unexpected end of JSON</code> が出たら再ログインして再試行する。</li><li>公開後の反映は数十秒から数分待ってから、学習サイトの同じURLを確認する。</li><li>解決しない場合は、記事URL・発生時刻・操作・エラー文だけを問題報告に記録する。</li></ul>
-        </section>
-
-        <section id="developers">
-          <h2>開発者向け</h2>
-          <p>運営UIは <code>src/pages/admin/</code>、管理API・認証・D1は <code>src/admin-worker.ts</code>、公開サイトと公開APIは <code>src/worker.ts</code> です。日常の確認は次のコマンドで行います。</p>
-          <pre><code>npm ci
-npm run check
-npm run lint
-npm test
-npm run build
-npm run dev:admin</code></pre>
-          <p><a href="https://github.com/mitukx/Atlasez01" target="_blank" rel="noreferrer">GitHubリポジトリ</a>の変更は、秘密情報を含めずPull Requestで確認します。構成やD1・デプロイの詳細はGitHubの <a href="https://github.com/mitukx/Atlasez01/blob/main/docs/DEVELOPMENT_GUIDE.md" target="_blank" rel="noreferrer">開発・引き継ぎガイド</a> と <a href="https://github.com/mitukx/Atlasez01/blob/main/docs/ADMIN_GUIDE.md" target="_blank" rel="noreferrer">運営サイト管理ガイド</a> を参照してください。</p>
+          <ul><li>読み込み中のままなら、ページを再読み込みしてもう一度試す。</li><li>ログイン画面に戻った場合は、使っているGoogleアカウントを確認する。</li><li>公開後の反映には少し時間がかかることがあります。</li><li>解決しない場合は、記事URL・操作・画面に出た文章を添えて相談する。</li></ul>
         </section>
       </article>
     </div>
