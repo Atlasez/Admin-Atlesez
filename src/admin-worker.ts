@@ -47,7 +47,7 @@ interface Env {
   EMAIL_FROM?: string;
 }
 
-type ReportStatus = "new" | "reviewing" | "resolved";
+type ReportStatus = "new" | "reviewing" | "resolved" | "recheck";
 type AdminUpdatePayload = { status?: unknown; adminNote?: unknown };
 type PermissionPayload = { email?: unknown; subject?: unknown };
 type EditorialDocumentStatus = "draft" | "in-review" | "on-hold" | "approved";
@@ -178,7 +178,12 @@ type ArticleAnalytics = {
   completed_reads: number;
 };
 
-const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
+const REPORT_STATUSES = new Set<ReportStatus>([
+  "new",
+  "reviewing",
+  "resolved",
+  "recheck",
+]);
 const EDITORIAL_DOCUMENT_STATUSES = new Set<EditorialDocumentStatus>([
   "draft",
   "in-review",
@@ -627,7 +632,7 @@ async function listArticleReports(
     return json({ error: "状態を確認してください。" }, 400);
   const select = `SELECT id, article_title, article_url, article_id, subject, category, report_type, details,
       contact, locale, status, admin_note, created_at, updated_at FROM article_reports`;
-  const order = ` ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, created_at DESC LIMIT 250`;
+  const order = ` ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'recheck' THEN 1 WHEN 'reviewing' THEN 2 ELSE 3 END, created_at DESC LIMIT 250`;
   const filters: string[] = [];
   const values: unknown[] = [];
   if (status) {

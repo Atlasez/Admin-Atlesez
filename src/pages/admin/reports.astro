@@ -45,8 +45,9 @@ import AdminNav from "../../components/AdminNav.astro";
         <select data-report-filter>
           <option value="all">すべて</option>
           <option value="new">未確認</option>
-          <option value="reviewing">確認中</option>
-          <option value="resolved">対応済み</option>
+          <option value="reviewing">対応中</option>
+          <option value="recheck">再確認</option>
+          <option value="resolved">解決済み</option>
         </select>
       </label>
       <button class="button button-outline" type="button" data-reports-refresh>一覧を更新</button>
@@ -102,9 +103,10 @@ import AdminNav from "../../components/AdminNav.astro";
   .report-list { border: 1px solid var(--border); border-radius: 0; display: grid; overflow: hidden; }
   .report-list :global(.report-card) { background: var(--surface); border-bottom: 1px solid var(--border); border-left: 4px solid var(--accent); margin: 0; }
   .report-list :global(.report-card:last-child) { border-bottom: 0; }
-  .report-list :global(.report-card[data-status="reviewing"]) { border-left-color: #c78500; }
+  .report-list :global(.report-card[data-status="reviewing"]) { border-left-color: #2c78b8; }
+  .report-list :global(.report-card[data-status="recheck"]) { border-left-color: #b53a3a; }
   .report-list :global(.report-card[data-status="resolved"]) { border-left-color: #328455; }
-  .report-list :global(.report-summary) { align-items: center; cursor: pointer; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) auto auto 1rem; list-style: none; padding: .7rem .9rem; }
+  .report-list :global(.report-summary) { align-items: center; cursor: pointer; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) minmax(8rem, auto) minmax(8rem, auto) auto 1rem; list-style: none; padding: .7rem .9rem; }
   .report-list :global(.report-summary::-webkit-details-marker) { display: none; }
   .report-list :global(.report-summary::after) { color: var(--muted); content: "⌄"; font-size: 1rem; grid-column: 4; grid-row: 1; transform: rotate(-90deg); transition: transform .15s ease; }
   .report-list :global(.report-card[open] .report-summary::after) { transform: rotate(0); }
@@ -114,6 +116,9 @@ import AdminNav from "../../components/AdminNav.astro";
   .report-list :global(.report-label), .report-list :global(.report-type small), .report-list :global(.status-badge small) { color: var(--muted); display: block; font-size: .64rem; font-weight: 800; letter-spacing: .08em; margin: 0 0 .15rem; }
   .report-list :global(.report-meta) { color: var(--muted); font-size: .76rem; margin: .22rem 0 0; }
   .report-list :global(.report-subject) { background: color-mix(in srgb, var(--accent), transparent 90%); border-radius: 999px; color: var(--accent); display: inline-block; font-size: .72rem; font-weight: 800; margin-right: .35rem; padding: .12rem .42rem; }
+  .report-list :global(.report-date) { display: grid; gap: .15rem; min-width: 7rem; }
+  .report-list :global(.report-date small) { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .08em; }
+  .report-list :global(.report-date time) { color: var(--muted); font-size: .74rem; white-space: nowrap; }
   .report-list :global(.report-type) { color: var(--muted); font-size: .76rem; font-weight: 700; white-space: nowrap; }
   .report-list :global(.report-status) { display: grid; gap: .15rem; justify-items: start; }
   .report-list :global(.report-status small) { color: var(--muted); font-size: .64rem; font-weight: 800; letter-spacing: .08em; }
@@ -126,7 +131,8 @@ import AdminNav from "../../components/AdminNav.astro";
   .report-list :global(.report-card textarea) { box-sizing: border-box; line-height: 1.5; min-height: 4.5rem; padding: .55rem; resize: vertical; width: 100%; }
   .report-list :global(.report-actions) { align-items: end; display: grid; gap: .75rem; grid-template-columns: 9rem minmax(0, 1fr) auto; margin-top: .8rem; }
   .report-list :global(.status-badge) { background: color-mix(in srgb, var(--accent), transparent 90%); border: 1px solid currentColor; border-radius: 999px; color: var(--accent); font-size: .74rem; font-weight: 800; padding: .28rem .55rem; white-space: nowrap; }
-  .report-list :global(.report-card[data-status="reviewing"] .status-badge) { background: #fff4d6; color: #9a6400; }
+  .report-list :global(.report-card[data-status="reviewing"] .status-badge) { background: #e8f3fb; color: #185c86; }
+  .report-list :global(.report-card[data-status="recheck"] .status-badge) { background: #fde7e7; color: #a33838; }
   .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
   .report-list :global(.report-empty) { color: var(--muted); padding: 2.5rem 2rem; text-align: center; }
   @media (max-width: 700px) {
@@ -139,6 +145,7 @@ import AdminNav from "../../components/AdminNav.astro";
     .report-controls label, .report-controls select { width: 100%; }
     .report-count { justify-self: start; margin-left: 0; }
     .report-list :global(.report-summary), .report-list :global(.report-actions) { display: grid; grid-template-columns: 1fr; }
+    .report-list :global(.report-date) { min-width: 0; }
     .report-list :global(.report-summary::after) { display: none; }
     .report-list :global(.report-type), .report-list :global(.report-status) { justify-self: start; }
     .report-list :global(.status-badge) { justify-self: start; }
@@ -146,7 +153,7 @@ import AdminNav from "../../components/AdminNav.astro";
 </style>
 
 <script>
-  type ReportStatus = "new" | "reviewing" | "resolved";
+  type ReportStatus = "new" | "reviewing" | "resolved" | "recheck";
   type Report = {
     id: string; article_title: string; article_url: string; report_type: string;
     details: string; contact: string | null; locale: string; subject: string; category: string; status: ReportStatus;
@@ -176,7 +183,7 @@ import AdminNav from "../../components/AdminNav.astro";
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
     const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-admin-view]");
     const viewPanels = root.querySelectorAll<HTMLElement>("[data-admin-view-panel]");
-    const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
+    const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "対応中", recheck: "再確認", resolved: "解決済み" };
     const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
     const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -275,8 +282,8 @@ import AdminNav from "../../components/AdminNav.astro";
         const url = safeUrl(report.article_url);
         return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
           <summary class="report-summary">
-            <div class="report-main"><p class="report-label">記事</p><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
-            <span class="report-type"><small>種別</small>${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="report-status"><small>状態</small><b class="status-badge">${labels[report.status]}</b></span>
+            <div class="report-main"><p class="report-label">記事</p><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${escapeHtml(report.locale)}</p></div>
+            <span class="report-date"><small>受信日時</small><time datetime="${escapeHtml(report.created_at)}">${date(report.created_at)}</time></span><span class="report-date"><small>最終対応日時</small><time datetime="${escapeHtml(report.updated_at)}">${date(report.updated_at)}</time></span><span class="report-type"><small>種別</small>${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="report-status"><small>状態</small><b class="status-badge">${labels[report.status] ?? "未確認"}</b></span>
           </summary>
           <div class="report-content">
           ${url ? `<a class="report-link" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">記事を開く</a>` : ""}
