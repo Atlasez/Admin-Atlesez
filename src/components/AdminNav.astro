@@ -67,12 +67,13 @@ const showHomeNav = current !== "portal" && current !== "global";
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
       button.addEventListener('click', () => applyTheme(document.documentElement.dataset.prefBg !== 'dark', true));
     });
-    const account = document.querySelector<HTMLElement>('[data-admin-account]');
-    if (account && account.dataset.loaded !== 'true') {
-      account.dataset.loaded = 'true';
+      const account = document.querySelector<HTMLElement>('[data-admin-account]');
+      if (account && account.dataset.loaded !== 'true') {
+        account.dataset.loaded = 'true';
       type AccountSnapshot = { email: string; displayName: string; avatarUrl: string };
       const accountCacheKey = 'atlasez-admin-account-v1';
       const email = account.querySelector<HTMLElement>('[data-admin-account-email]');
+      const avatar = account.querySelector<HTMLElement>('[data-admin-account-avatar]');
       const avatarImage = account.querySelector<HTMLImageElement>('[data-admin-account-image]');
       const avatarFallback = account.querySelector<HTMLElement>('[data-admin-account-fallback]');
       const notificationButton = document.querySelector<HTMLButtonElement>('[data-admin-notifications]');
@@ -109,15 +110,19 @@ const showHomeNav = current !== "portal" && current !== "global";
         const label = !displayName || displayName === '表示名未設定' ? anonymousMemberLabel(snapshot.email) : displayName;
         if (email) { email.textContent = label; email.title = snapshot.email; }
         if (avatarFallback) avatarFallback.textContent = (label[0] || snapshot.email[0] || 'A').toUpperCase();
+        avatar?.classList.remove('admin-account-avatar--skeleton');
         if (avatarImage) {
           if (snapshot.avatarUrl) {
             const sameImage = avatarImage.getAttribute('src') === snapshot.avatarUrl;
-            avatarImage.onload = () => { avatarImage!.hidden = false; if (avatarFallback) avatarFallback.hidden = true; };
+            const revealImage = () => { avatarImage!.hidden = false; if (avatarFallback) avatarFallback.hidden = true; };
+            avatarImage.onload = revealImage;
+            avatarImage.onerror = () => { avatarImage!.hidden = true; if (avatarFallback) avatarFallback.hidden = false; };
             if (!sameImage) avatarImage.src = snapshot.avatarUrl;
-            avatarImage.hidden = false;
-            if (avatarFallback) avatarFallback.hidden = true;
+            if (avatarImage.complete && avatarImage.naturalWidth > 0) revealImage();
+            else { avatarImage.hidden = true; if (avatarFallback) avatarFallback.hidden = false; }
           } else {
             avatarImage.onload = null;
+            avatarImage.onerror = null;
             avatarImage.hidden = true;
             avatarImage.removeAttribute('src');
             if (avatarFallback) avatarFallback.hidden = false;
@@ -169,6 +174,7 @@ const showHomeNav = current !== "portal" && current !== "global";
           account.classList.remove('is-loading');
           account.removeAttribute('aria-busy');
           account.removeAttribute('data-account-loading');
+          avatar?.classList.remove('admin-account-avatar--skeleton');
           if (avatarImage) { avatarImage.hidden = true; avatarImage.removeAttribute('src'); }
           if (avatarFallback) { avatarFallback.hidden = false; avatarFallback.textContent = '?'; }
           showAdminError(error instanceof Error ? error.message : 'ログイン情報を取得できませんでした。');
@@ -189,8 +195,7 @@ const showHomeNav = current !== "portal" && current !== "global";
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
           const kindLabel = (kind: string) => ({ comment: 'コメント', review: '査読依頼', approved: '査読完了', published: '公開', task: 'ToDo' } as Record<string, string>)[kind] ?? '記事';
-          const unreadNotifications = notifications.filter((item) => !item.read);
-          notificationList.innerHTML = unreadNotifications.length ? unreadNotifications.map((item) => `<div class="admin-notification-item"><a href="${item.href}" data-astro-reload data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a><button type="button" data-read-notification="${escape(item.id)}">既読にする</button></div>`).join('') : '<span class="admin-notification-empty">あなたの記事に関する新しい通知はありません。</span>';
+          notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-astro-reload data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read">確認済み</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はありません。</span>';
         } catch (error) {
           notificationList.textContent = error instanceof Error ? error.message : '通知を取得できませんでした。';
           if (notificationRetry) notificationRetry.hidden = false;
@@ -291,14 +296,14 @@ const showHomeNav = current !== "portal" && current !== "global";
   .admin-nav .admin-notification-item small { line-height: 1.4; }
   .admin-nav .notification-kind { color: var(--accent-primary); font-size: .65rem; font-weight: 900; letter-spacing: .04em; }
   .admin-nav .admin-notification-item > button { align-self: center; }
+  .admin-nav .notification-read { align-self: center; color: var(--text-secondary); font-size: .65rem; padding: .35rem .25rem; white-space: nowrap; }
   .admin-account-avatar { background-position: center; background-repeat: no-repeat; background-size: cover; }
   .admin-account-avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
   .admin-account-avatar img[hidden] { display: none; }
-  .admin-account-avatar--skeleton { animation: admin-nav-pulse 1.25s ease-in-out infinite; background: var(--background-secondary); color: transparent; }
+  .admin-account-avatar--skeleton { background: var(--background-secondary); color: transparent; }
   .admin-account.is-loading .admin-account-email { color: var(--text-secondary); }
   .notification-retry { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .35rem; color: var(--accent-primary); cursor: pointer; display: block; font: inherit; font-size: .72rem; font-weight: 800; margin: .5rem auto .35rem; padding: .35rem .7rem; }
   .notification-retry:hover { border-color: var(--accent-primary); }
-  @keyframes admin-nav-pulse { 0%, 100% { opacity: .58; } 50% { opacity: 1; } }
   .admin-nav .admin-notification-panel { border-radius: .85rem; padding: .35rem; }
   .admin-nav .notification-panel-heading { padding: .55rem .7rem .65rem; }
   .admin-nav .notification-panel-heading strong { font-size: 1rem; letter-spacing: .02em; }
