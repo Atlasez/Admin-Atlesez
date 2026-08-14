@@ -4289,7 +4289,7 @@ async function listEditorialReviewRequests(
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const result = await env.REPORTS.prepare(
-    `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at
+    `SELECT d.id, d.subject, d.category, d.title, d.updated_at
      FROM editorial_documents d
      WHERE d.status = 'in-review'
      ORDER BY d.updated_at ASC LIMIT 100`,
@@ -4298,7 +4298,6 @@ async function listEditorialReviewRequests(
     subject: string;
     category: string;
     title: string;
-    updated_by: string;
     updated_at: string;
   }>();
   return json({
