@@ -184,12 +184,16 @@ export default defineConfig({
             // 折りたたみ内の式やオフライン閲覧でも同じ結果になる。
             tex: {
               // `macros` is supported by MathJax's configmacros package.
+              // `configmacros` expects command names without the leading `\\`
+              // and argument-bearing definitions as `[body, argumentCount]`.
+              // Keeping these definitions here makes the authored physics
+              // notation work consistently in every article at build time.
               macros: {
-                "\\dv": "\\frac{\\mathrm{d}#1}{\\mathrm{d}#2}",
-                "\\dvtwo": "\\frac{\\mathrm{d}^{2}#1}{\\mathrm{d}#2^{2}}",
-                "\\dd": "\\,\\mathrm{d}#1",
-                "\\vdot": "\\mathbin{\\cdot}",
-                "\\divergence": "\\nabla\\mathbin{\\cdot}",
+                dv: ["\\frac{\\mathrm{d}#1}{\\mathrm{d}#2}", 2],
+                dvtwo: ["\\frac{\\mathrm{d}^{2}#1}{\\mathrm{d}#2^{2}}", 2],
+                dd: ["\\,\\mathrm{d}#1", 1],
+                vdot: "\\mathbin{\\cdot}",
+                divergence: "\\nabla\\mathbin{\\cdot}",
               },
             },
             svg: {
