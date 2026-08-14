@@ -1316,7 +1316,7 @@ async function listEditorialDocuments(
         mentionNames: [],
         scope: { email: scope.email, subjects: [], isManager: scope.isManager },
       });
-    filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
+    filters.push(`d.subject IN (${scope.subjects.map(() => "?").join(", ")})`);
     values.push(...scope.subjects);
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
@@ -1325,12 +1325,14 @@ async function listEditorialDocuments(
     : ` WHERE p.subject IN (${scope.subjects.map(() => "?").join(", ")})`;
   const [result, memberResult] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, editorial_note, latex_engine,
-        status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
-       FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
+      `SELECT d.id, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.editorial_note, d.latex_engine,
+        d.status, d.created_by, d.updated_by, d.created_at, d.updated_at, d.reviewed_at, d.published_at,
+        r.reviewer_email AS review_reviewer_email
+       FROM editorial_documents d
+       LEFT JOIN editorial_review_assignments r ON r.document_id = d.id${where} ORDER BY d.updated_at DESC LIMIT 200`,
     )
       .bind(...values)
-      .all<Omit<EditorialDocument, "body">>(),
+      .all<Omit<EditorialDocument, "body"> & { review_reviewer_email: string | null }>(),
     env.REPORTS.prepare(
       `SELECT DISTINCT COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
        FROM report_admin_permissions p
@@ -1344,6 +1346,7 @@ async function listEditorialDocuments(
     documents: result.results.map((document) => ({
       ...document,
       locale: editorialLanguageCode(document.locale) ?? document.locale,
+      reviewAssignedToMe: document.review_reviewer_email === scope.email,
     })),
     mentionNames: memberResult.results
       .map((member) => member.display_name.trim())
@@ -4187,6 +4190,12 @@ async function updateEditorialDocument(
       documentId,
     )
     .run();
+  if (values.status !== "in-review")
+    await env.REPORTS.prepare(
+      "DELETE FROM editorial_review_assignments WHERE document_id = ?",
+    )
+      .bind(documentId)
+      .run();
   return json({ ok: true });
 }
 
@@ -4234,18 +4243,102 @@ async function listEditorialReviewRequests(
 ): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const result = await env.REPORTS.prepare(
-    `SELECT id, subject, category, title, updated_by, updated_at
-     FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 100`,
-  ).all<{
-    id: string;
-    subject: string;
-    category: string;
-    title: string;
-    updated_by: string;
-    updated_at: string;
-  }>();
-  return json({ requests: result.results });
+  const [result, reviewerResult] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
+        r.reviewer_email, COALESCE(NULLIF(TRIM(p.display_name), ''), '') AS reviewer_display_name
+       FROM editorial_documents d
+       LEFT JOIN editorial_review_assignments r ON r.document_id = d.id
+       LEFT JOIN editorial_member_profiles p ON p.email = r.reviewer_email
+       WHERE d.status = 'in-review'
+       ORDER BY CASE WHEN r.reviewer_email = ? THEN 0 WHEN r.reviewer_email IS NULL THEN 2 ELSE 1 END,
+                d.updated_at ASC LIMIT 100`,
+    )
+      .bind(scope.email)
+      .all<{
+        id: string;
+        subject: string;
+        category: string;
+        title: string;
+        updated_by: string;
+        updated_at: string;
+        reviewer_email: string | null;
+        reviewer_display_name: string;
+      }>(),
+    env.REPORTS.prepare(
+      `SELECT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name,
+        GROUP_CONCAT(DISTINCT p.subject) AS subjects
+       FROM report_admin_permissions p
+       LEFT JOIN editorial_member_profiles m ON m.email = p.email
+       GROUP BY p.email, m.display_name
+       ORDER BY display_name, p.email`,
+    ).all<{ email: string; display_name: string; subjects: string | null }>(),
+  ]);
+  return json({
+    requests: result.results.map((item) => ({
+      ...item,
+      reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
+      assignedToMe: item.reviewer_email === scope.email,
+    })),
+    reviewers: reviewerResult.results.map((item) => ({
+      email: item.email,
+      displayName: item.display_name,
+      subjects: item.subjects?.split(",").filter(Boolean) ?? [],
+    })),
+  });
+}
+
+async function updateEditorialReviewAssignment(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  let payload: { reviewerEmail?: unknown };
+  try {
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const document = await env.REPORTS.prepare(
+    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+  )
+    .bind(documentId)
+    .first<{ subject: string; status: EditorialDocumentStatus }>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (document.status !== "in-review")
+    return json({ error: "査読中の原稿だけ担当者を設定できます。" }, 400);
+  const reviewerEmail = text(payload.reviewerEmail, 320).toLowerCase();
+  if (!reviewerEmail) {
+    await env.REPORTS.prepare(
+      "DELETE FROM editorial_review_assignments WHERE document_id = ?",
+    )
+      .bind(documentId)
+      .run();
+    return json({ ok: true, reviewerEmail: null });
+  }
+  if (!EMAIL_PATTERN.test(reviewerEmail))
+    return json({ error: "査読担当者のメールアドレスを確認してください。" }, 400);
+  const reviewer = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM report_admin_permissions WHERE email = ? AND (subject = '*' OR subject = ?) LIMIT 1",
+  )
+    .bind(reviewerEmail, document.subject)
+    .first<{ found: number }>();
+  if (!reviewer)
+    return json({ error: "この原稿の分野を担当できる運営者を選択してください。" }, 400);
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
+       requested_by = excluded.requested_by, updated_at = excluded.updated_at`,
+  )
+    .bind(documentId, reviewerEmail, scope.email, now, now)
+    .run();
+  return json({ ok: true, reviewerEmail });
 }
 
 async function createEditorialComment(
@@ -4938,6 +5031,11 @@ async function unpublishEditorialDocument(
   )
     .bind(now, scope.email, documentId)
     .run();
+  await env.REPORTS.prepare(
+    "DELETE FROM editorial_review_assignments WHERE document_id = ?",
+  )
+    .bind(documentId)
+    .run();
   return json({ ok: true, commitUrl: result.commitUrl });
 }
 
@@ -5577,6 +5675,15 @@ export default {
       request.method === "GET"
     )
       return listEditorialReviewRequests(request, env);
+    const editorialReviewAssignmentMatch = url.pathname.match(
+      /^\/api\/admin\/editor\/review-requests\/([0-9a-f-]{36})$/i,
+    );
+    if (editorialReviewAssignmentMatch && request.method === "PATCH")
+      return updateEditorialReviewAssignment(
+        request,
+        env,
+        editorialReviewAssignmentMatch[1],
+      );
     const editorialRevisionMatch = url.pathname.match(
       /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/revisions$/i,
     );

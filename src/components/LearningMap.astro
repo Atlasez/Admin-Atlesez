@@ -94,19 +94,6 @@ const categoryMetaJson = JSON.stringify(
   */}
   <div class="map-frame" data-map-frame>
     <div class="map-toolbar" data-graph-controls hidden>
-      <label for="map-search" class="visually-hidden">
-        {t(locale, "search")}
-      </label>
-      <input
-        id="map-search"
-        type="search"
-        list="map-node-names"
-        placeholder={t(locale, "searchPlaceholder")}
-        data-map-search
-      />
-      <datalist id="map-node-names">
-        {list.map((c) => <option value={localizedName(c.name, locale)} />)}
-      </datalist>
       <span class="map-status" data-map-status aria-live="polite"></span>
       <div
         class="map-viewport-tools"
@@ -328,11 +315,6 @@ const categoryMetaJson = JSON.stringify(
   .map-toolbar input,
   .map-toolbar select {
     min-width: 12rem;
-  }
-  .map-toolbar input[type="search"] {
-    flex: 1 1 18rem;
-    max-width: 28rem;
-    min-width: 16rem;
   }
   .map-status {
     flex: 1 1 14rem;
@@ -828,11 +810,6 @@ const categoryMetaJson = JSON.stringify(
     .route-form select {
       font-size: max(16px, 1rem);
     }
-    .map-toolbar input[type="search"] {
-      max-width: none;
-      min-width: 0;
-      width: 100%;
-    }
     .map-status {
       grid-column: 1 / -1;
       min-height: 2.5em;
@@ -902,9 +879,6 @@ const categoryMetaJson = JSON.stringify(
       align-items: center;
       gap: var(--space-1) var(--space-2);
       padding: var(--space-2);
-    }
-    .map-toolbar input[type="search"] {
-      grid-column: 1 / -1;
     }
     .map-toolbar select {
       width: 100%;
@@ -2269,23 +2243,6 @@ const categoryMetaJson = JSON.stringify(
         } catch {
           if (detail) detail.textContent = location.href;
         }
-      });
-
-    // 検索: 概念名を打つとそのカテゴリを開いて選択する
-    document
-      .querySelector<HTMLInputElement>("[data-map-search]")
-      ?.addEventListener("change", (ev) => {
-        const q = (ev.target as HTMLInputElement).value.trim().toLowerCase();
-        if (!q) return;
-        const found = data.nodes.find((n) => label(n).toLowerCase().includes(q));
-        if (!found) return;
-        renderCategory(catKeyOf(found));
-        const el = cy.getElementById(found.id);
-        cy.elements().unselect();
-        el.select();
-        cy.animate({ center: { eles: el }, zoom: 1.2, duration: 300 });
-        showDetail(found.id);
-        syncUrl();
       });
 
     // 初期表示: URL に category があればそこ、なければ概要

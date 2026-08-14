@@ -368,16 +368,8 @@ test.describe("学習サイト", () => {
       )
       .toBeGreaterThan(initialZoom);
 
-    await page.locator("[data-map-search]").fill("群の定義");
-    await page.locator("[data-map-search]").dispatchEvent("change");
-    const fold = page.getByRole("button", { name: /群論を折りたたむ/ });
-    await expect(fold).toBeVisible();
-    await fold.click();
-    await expect(fold).not.toBeVisible();
-    const detail = page.locator("[data-map-detail]");
-    await expect(detail).toContainText("群の定義");
-    await page.getByRole("button", { name: "記事の詳細を閉じる" }).click();
-    await expect(detail).toBeEmpty();
+    // 記事・概念の検索は上部の共通検索欄へ統一し、地図内に個別検索欄は置かない。
+    await expect(page.locator("[data-map-search]")).toHaveCount(0);
 
     const open = page.getByRole("button", { name: "学習ルート検索" });
     // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す
@@ -462,15 +454,14 @@ test.describe("学習サイト", () => {
 
   test("地図上で選んだノードを経路の始点・終点にできる", async ({ page }) => {
     await page.goto("atlas/ja/map/");
-    const search = page.locator("[data-map-search]");
-
-    await search.fill("群の定義");
-    await search.dispatchEvent("change");
-    await page.getByRole("button", { name: "開始地点にする" }).click();
-
-    await search.fill("Schurの補題");
-    await search.dispatchEvent("change");
-    await page.getByRole("button", { name: "目的地点にする" }).click();
+    await page.getByRole("button", { name: "学習ルート検索" }).click();
+    await page
+      .locator("[data-route-start]")
+      .selectOption({ label: "群の定義" });
+    await page
+      .locator("[data-route-goal]")
+      .selectOption({ label: "Schurの補題" });
+    await page.getByRole("button", { name: "経路を表示" }).click();
 
     await expect(page.locator("[data-route-result]")).toContainText(
       "Schurの補題",
