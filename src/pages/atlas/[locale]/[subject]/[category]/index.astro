@@ -1,5 +1,5 @@
 ---
-/** カテゴリの記事一覧。グリッド／リスト切替・検索・絞り込み付き */
+/** カテゴリの記事一覧。グリッド／リスト切替付き */
 import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../../components/Breadcrumb.astro";
 import LearningMap from "../../../../../components/LearningMap.astro";
@@ -152,18 +152,6 @@ const items = articles.map((a) => ({
       <p class="section-meta">{summary}</p>
     </div>
 
-    <div class="filters">
-      <label for="filter-text">{t(locale, "search")}</label>
-      <input
-        id="filter-text"
-        type="search"
-        data-filter-text
-        placeholder={t(locale, "searchPlaceholder")}
-      />
-    </div>
-
-    <p class="visually-hidden" aria-live="polite" data-filter-status></p>
-
     <div
       id="category-view-panel-articles"
       class="view-panel"
@@ -311,21 +299,6 @@ const items = articles.map((a) => ({
   .view-panel {
     padding-top: var(--space-3);
   }
-  .filters {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: var(--space-3);
-  }
-  .filters label {
-    margin: 0;
-    font-weight: 400;
-    color: var(--text-secondary);
-  }
-  [data-category-layout][data-active-view="map"] > .filters {
-    display: none;
-  }
   .article-collection {
     list-style: none;
     margin: 0;
@@ -469,13 +442,6 @@ const items = articles.map((a) => ({
   ];
   const viewKey =
     categoryLayout?.dataset.viewStorageKey ?? "atlasez-category-view";
-  const items = Array.from(
-    document.querySelectorAll<HTMLElement>(".article-item"),
-  );
-  const textInput = document.querySelector<HTMLInputElement>(
-    "[data-filter-text]",
-  );
-  const status = document.querySelector<HTMLElement>("[data-filter-status]");
 
   function setView(view: string, focus = false): void {
     if (!tabs.some((tab) => tab.dataset.viewTab === view)) view = "tiles";
@@ -545,18 +511,4 @@ const items = articles.map((a) => ({
     setView(initial ?? "tiles");
   }
 
-  function applyFilters(): void {
-    const q = (textInput?.value ?? "").trim().toLowerCase();
-    let visible = 0;
-    for (const item of items) {
-      const show =
-        q === "" || (item.dataset.title ?? "").toLowerCase().includes(q);
-      item.hidden = !show;
-      if (show) visible += 1;
-    }
-    if (status) {
-      status.textContent = `${visible} / ${items.length}`;
-    }
-  }
-  textInput?.addEventListener("input", applyFilters);
 </script>
