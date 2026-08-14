@@ -147,7 +147,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
             <div class="selection-action" data-selection-action hidden><span data-selection-action-text></span><button type="button" class="quiet-action" data-use-selection>選択範囲を追加</button></div>
             <div class="selected-ranges" data-selected-ranges hidden></div>
             <fieldset class="comment-tags"><legend>コメントタグ（複数選択可）</legend><div data-comment-tags></div><small>タグだけでも送信できます。</small></fieldset>
-            <label class="comment-entry"><span>新しいコメント（任意）</span><output class="selection-hint" data-comment-selection>範囲未選択：記事全体へのコメントとして送信します。</output><textarea data-comment-body maxlength="8000" placeholder="例：定義の前に具体例を一つ入れると読みやすくなりそうです。@表示名でメンションできます"></textarea></label>
+            <label class="comment-entry"><span>新しいコメント（任意）</span><output class="selection-hint" data-comment-selection>範囲未選択：記事全体へのコメントとして送信します。</output><textarea data-comment-body autocomplete="off" maxlength="8000" placeholder="例：定義の前に具体例を一つ入れると読みやすくなりそうです。@表示名でメンションできます"></textarea></label>
             <button type="button" class="primary-action review-submit" data-send-comment>この内容でコメントを追加</button>
             <datalist id="comment-mention-members" data-comment-mention-members></datalist>
             <details class="revision-panel"><summary>版履歴・差分確認</summary><div data-revision-list>原稿を保存すると履歴が残ります。</div></details>
@@ -491,6 +491,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     let currentUserEmail = "";
     let isManager = false;
     let assignedSubjects: string[] = [];
+    let availableMentionNames: string[] = [];
     let mathJaxLoading: Promise<void> | undefined;
     let hasUnsavedChanges = false;
     const paneKeys = ["writing", "preview", "note", "comments"] as const;
@@ -766,7 +767,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       const unreflectedAction = viewer === "unreflected" ? "clear-unreflected" : "unreflected";
       const edit = canChange ? `<button type="button" data-edit-comment="${item.id}">編集</button><button type="button" class="comment-delete" data-delete-comment="${item.id}">削除</button>` : "";
       const editTags = commentTagOptions.map((tag) => `<label class="comment-tag-option"><input type="checkbox" value="${esc(tag)}" data-edit-comment-tag="${item.id}"${(item.tags ?? []).includes(tag) ? " checked" : ""}><span>${esc(tag)}</span></label>`).join("");
-      return `<article class="comment${isReply ? " comment-reply" : ""}"><div class="comment-row"><span class="comment-avatar"${avatarStyle} aria-hidden="true">${item.author_avatar_url ? "" : esc(avatar)}</span><div class="comment-main"><header class="comment-header"><b>${esc(displayName)}</b><time>${isReply ? "返信・" : ""}${date(item.created_at)}</time></header><div class="comment-content">${tagMarkup ? `<div class="comment-tags-list">${tagMarkup}</div>` : ""}${quotes}${item.body ? `<p>${renderCommentBody(item.body)}</p>` : ""}</div><div class="comment-actions"><button type="button" data-feedback-menu="${item.id}" aria-expanded="false" title="右クリックでリアクションしたメンバーを表示" data-comment-action="${confirmAction}" data-comment-id="${item.id}">${viewer === "confirmed" ? "✓ 確認を取り消す" : "確認済みにする"}（${confirmed.length}）</button><button type="button" class="comment-unreflected" data-comment-action="${unreflectedAction}" data-comment-id="${item.id}">${viewer === "unreflected" ? "未反映を取り消す" : "未反映"}（${unreflected.length}）</button>${edit}</div>${feedbackMarkup}</div></div>${canChange ? `<div class="comment-edit-entry" data-comment-edit-entry="${item.id}" hidden><span>コメントを編集</span><textarea data-edit-comment-body="${item.id}" maxlength="8000">${esc(item.body)}</textarea><fieldset class="comment-edit-tags"><legend>タグ</legend><div>${editTags}</div></fieldset><div><button type="button" class="quiet-action" data-cancel-edit="${item.id}">キャンセル</button><button type="button" class="primary-action" data-save-edit="${item.id}">保存</button></div></div>` : ""}</article>`;
+      return `<article class="comment${isReply ? " comment-reply" : ""}"><div class="comment-row"><span class="comment-avatar"${avatarStyle} aria-hidden="true">${item.author_avatar_url ? "" : esc(avatar)}</span><div class="comment-main"><header class="comment-header"><b>${esc(displayName)}</b><time>${isReply ? "返信・" : ""}${date(item.created_at)}</time></header><div class="comment-content">${tagMarkup ? `<div class="comment-tags-list">${tagMarkup}</div>` : ""}${quotes}${item.body ? `<p>${renderCommentBody(item.body)}</p>` : ""}</div><div class="comment-actions"><button type="button" data-feedback-menu="${item.id}" aria-expanded="false" title="右クリックでリアクションしたメンバーを表示" data-comment-action="${confirmAction}" data-comment-id="${item.id}">${viewer === "confirmed" ? "✓ 確認を取り消す" : "確認済みにする"}（${confirmed.length}）</button><button type="button" class="comment-unreflected" data-comment-action="${unreflectedAction}" data-comment-id="${item.id}">${viewer === "unreflected" ? "未反映を取り消す" : "未反映"}（${unreflected.length}）</button>${edit}</div>${feedbackMarkup}</div></div>${canChange ? `<div class="comment-edit-entry" data-comment-edit-entry="${item.id}" hidden><span>コメントを編集</span><textarea data-edit-comment-body="${item.id}" autocomplete="off" maxlength="8000">${esc(item.body)}</textarea><fieldset class="comment-edit-tags"><legend>タグ</legend><div>${editTags}</div></fieldset><div><button type="button" class="quiet-action" data-cancel-edit="${item.id}">キャンセル</button><button type="button" class="primary-action" data-save-edit="${item.id}">保存</button></div></div>` : ""}</article>`;
     };
     let commentQuery = "";
     let commentFilter = "all";
@@ -776,15 +777,114 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       const haystack = `${item.body} ${(item.tags ?? []).join(" ")} ${item.author_display_name ?? ""}`.toLocaleLowerCase();
       return (commentFilter === "all" || commentFilter === status) && (!commentQuery || haystack.includes(commentQuery));
     };
+    const refreshMentionMembers = () => {
+      const names = [...new Set([...availableMentionNames, ...currentComments.map((item) => item.author_display_name?.trim())].filter((name): name is string => Boolean(name)))];
+      mentionMembers.replaceChildren(...names.map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; }));
+    };
     const renderComments = () => {
       const matching = new Set(currentComments.filter(commentMatches).map((item) => item.id));
       const roots = currentComments.filter((item) => !item.parent_comment_id && (matching.has(item.id) || currentComments.some((reply) => reply.parent_comment_id === item.id && matching.has(reply.id))));
       const replies = new Map<string, Comment[]>();
       currentComments.filter((item) => item.parent_comment_id && matching.has(item.id)).forEach((item) => { const key = item.parent_comment_id!; replies.set(key, [...(replies.get(key) ?? []), item]); });
+      refreshMentionMembers();
       if (!roots.length) { comments.innerHTML = '<p class="comment-empty">条件に一致するコメントはありません。</p>'; return; }
-      comments.innerHTML = roots.map((item) => { const threadReplies = replies.get(item.id) ?? []; const feedback = item.feedback ?? []; const confirmed = feedback.filter((entry) => entry.status === "confirmed").length; const unreflected = feedback.filter((entry) => entry.status === "unreflected").length; const status = item.resolved_at ? ["is-resolved", "解決済み"] : unreflected ? ["is-unreflected", `未反映（${unreflected}）`] : confirmed ? ["is-acknowledged", `確認済み（${confirmed}）`] : ["is-pending", "対応待ち"]; return `<section class="comment-thread"><div class="thread-summary"><span class="thread-status ${status[0]}">${status[1]}</span></div>${renderCommentCard(item)}${threadReplies.length ? `<button type="button" class="reply-toggle" data-toggle-replies="${item.id}">返信 ${threadReplies.length}件を表示</button><div class="comment-replies" data-replies="${item.id}" hidden>${threadReplies.map((reply) => renderCommentCard(reply, true)).join("")}</div>` : ""}<button type="button" class="reply-open" data-open-reply="${item.id}">返信</button><label class="reply-entry" data-reply-entry="${item.id}" hidden><textarea data-reply-body="${item.id}" list="comment-mention-members" maxlength="8000" placeholder="返信を書く（@表示名でメンション）"></textarea><fieldset class="reply-tags"><legend>タグ（任意）</legend><div>${renderTagOptions(`reply-tag="${item.id}"`)}</div></fieldset><div class="reply-actions"><button type="button" class="quiet-action" data-cancel-reply="${item.id}">キャンセル</button><button type="button" class="primary-action" data-send-reply="${item.id}">返信する</button></div></label></section>`; }).join("");
-      mentionMembers.replaceChildren(...[...new Map(currentComments.map((item) => [item.author_display_name?.trim(), item.author_display_name?.trim()])).values()].filter((name): name is string => Boolean(name)).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; }));
+      comments.innerHTML = roots.map((item) => { const threadReplies = replies.get(item.id) ?? []; const feedback = item.feedback ?? []; const confirmed = feedback.filter((entry) => entry.status === "confirmed").length; const unreflected = feedback.filter((entry) => entry.status === "unreflected").length; const status = item.resolved_at ? ["is-resolved", "解決済み"] : unreflected ? ["is-unreflected", `未反映（${unreflected}）`] : confirmed ? ["is-acknowledged", `確認済み（${confirmed}）`] : ["is-pending", "対応待ち"]; return `<section class="comment-thread"><div class="thread-summary"><span class="thread-status ${status[0]}">${status[1]}</span></div>${renderCommentCard(item)}${threadReplies.length ? `<button type="button" class="reply-toggle" data-toggle-replies="${item.id}">返信 ${threadReplies.length}件を表示</button><div class="comment-replies" data-replies="${item.id}" hidden>${threadReplies.map((reply) => renderCommentCard(reply, true)).join("")}</div>` : ""}<button type="button" class="reply-open" data-open-reply="${item.id}">返信</button><label class="reply-entry" data-reply-entry="${item.id}" hidden><textarea data-reply-body="${item.id}" autocomplete="off" list="comment-mention-members" maxlength="8000" placeholder="返信を書く（@表示名でメンション）"></textarea><fieldset class="reply-tags"><legend>タグ（任意）</legend><div>${renderTagOptions(`reply-tag="${item.id}"`)}</div></fieldset><div class="reply-actions"><button type="button" class="quiet-action" data-cancel-reply="${item.id}">キャンセル</button><button type="button" class="primary-action" data-send-reply="${item.id}">返信する</button></div></label></section>`; }).join("");
     };
+    const mentionSuggestions = document.createElement("div");
+    mentionSuggestions.className = "mention-suggestions";
+    mentionSuggestions.id = "comment-mention-suggestions";
+    mentionSuggestions.setAttribute("role", "listbox");
+    mentionSuggestions.hidden = true;
+    root.append(mentionSuggestions);
+    let mentionTarget: HTMLTextAreaElement | null = null;
+    let mentionCandidates: string[] = [];
+    let mentionIndex = 0;
+    let mentionHideTimer: number | undefined;
+    const mentionContext = (textarea: HTMLTextAreaElement) => {
+      const caret = textarea.selectionStart ?? textarea.value.length;
+      const before = textarea.value.slice(0, caret);
+      const match = before.match(/(^|[\s([{「（])@([^\s@]*)$/u);
+      if (!match) return null;
+      return { caret, prefix: match[2], start: caret - match[0].length + (match[1] ? 1 : 0) };
+    };
+    const positionMentionSuggestions = () => {
+      if (!mentionTarget || mentionSuggestions.hidden) return;
+      const rect = mentionTarget.getBoundingClientRect();
+      const width = Math.min(Math.max(rect.width, 220), window.innerWidth - 24);
+      const left = Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - width - 12));
+      const top = Math.min(rect.bottom + 6, Math.max(12, window.innerHeight - 12));
+      mentionSuggestions.style.width = `${width}px`;
+      mentionSuggestions.style.left = `${left}px`;
+      mentionSuggestions.style.top = `${top}px`;
+    };
+    const hideMentionSuggestions = () => {
+      mentionSuggestions.hidden = true;
+      mentionSuggestions.replaceChildren();
+      mentionTarget?.removeAttribute("aria-activedescendant");
+      mentionTarget = null;
+      mentionCandidates = [];
+      mentionIndex = 0;
+    };
+    const paintMentionSelection = () => {
+      mentionSuggestions.querySelectorAll<HTMLButtonElement>("[role=option]").forEach((option, index) => {
+        const active = index === mentionIndex;
+        option.classList.toggle("is-active", active);
+        option.setAttribute("aria-selected", String(active));
+        if (active && mentionTarget) mentionTarget.setAttribute("aria-activedescendant", option.id);
+      });
+    };
+    const chooseMention = (index = mentionIndex) => {
+      if (!mentionTarget || !mentionCandidates[index]) return;
+      const context = mentionContext(mentionTarget);
+      if (!context) return hideMentionSuggestions();
+      const name = mentionCandidates[index];
+      const suffix = `@${name} `;
+      mentionTarget.value = `${mentionTarget.value.slice(0, context.start)}${suffix}${mentionTarget.value.slice(context.caret)}`;
+      const nextCaret = context.start + suffix.length;
+      mentionTarget.focus();
+      mentionTarget.setSelectionRange(nextCaret, nextCaret);
+      mentionTarget.dispatchEvent(new Event("input", { bubbles: true }));
+      hideMentionSuggestions();
+    };
+    const showMentionSuggestions = (textarea: HTMLTextAreaElement) => {
+      const context = mentionContext(textarea);
+      if (!context) return hideMentionSuggestions();
+      const query = context.prefix.toLocaleLowerCase();
+      const names = [...new Set([...mentionMembers.options].map((option) => option.value.replace(/^@/, "")).filter(Boolean))];
+      const matches = names.filter((name) => name.toLocaleLowerCase().startsWith(query)).slice(0, 8);
+      if (!matches.length) return hideMentionSuggestions();
+      window.clearTimeout(mentionHideTimer);
+      mentionTarget = textarea;
+      mentionCandidates = matches;
+      mentionIndex = 0;
+      mentionSuggestions.replaceChildren(...matches.map((name, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.id = `comment-mention-option-${index}`;
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", String(index === 0));
+        option.textContent = `@${name}`;
+        option.addEventListener("mousedown", (event) => { event.preventDefault(); chooseMention(index); });
+        return option;
+      }));
+      mentionSuggestions.hidden = false;
+      textarea.setAttribute("aria-controls", mentionSuggestions.id);
+      positionMentionSuggestions();
+      paintMentionSelection();
+    };
+    const isMentionTextarea = (element: EventTarget | null): element is HTMLTextAreaElement => element instanceof HTMLTextAreaElement && (element.matches("[data-comment-body], [data-reply-body], [data-edit-comment-body]"));
+    root.addEventListener("input", (event) => { if (isMentionTextarea(event.target)) showMentionSuggestions(event.target); });
+    root.addEventListener("focusin", (event) => { if (isMentionTextarea(event.target)) showMentionSuggestions(event.target); });
+    root.addEventListener("keydown", (event) => {
+      if (!isMentionTextarea(event.target) || mentionTarget !== event.target || mentionSuggestions.hidden || !mentionCandidates.length) return;
+      if (event.key === "ArrowDown") { event.preventDefault(); mentionIndex = (mentionIndex + 1) % mentionCandidates.length; paintMentionSelection(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); mentionIndex = (mentionIndex - 1 + mentionCandidates.length) % mentionCandidates.length; paintMentionSelection(); }
+      else if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); chooseMention(); }
+      else if (event.key === "Escape") { event.preventDefault(); hideMentionSuggestions(); }
+    });
+    root.addEventListener("focusout", (event) => { if (!isMentionTextarea(event.target)) return; mentionHideTimer = window.setTimeout(() => { if (!mentionSuggestions.matches(":hover")) hideMentionSuggestions(); }, 140); });
+    window.addEventListener("resize", positionMentionSuggestions, { passive: true });
+    window.addEventListener("scroll", positionMentionSuggestions, { passive: true });
     const formValue = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
     const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, editorialNote: editorialNote.value, latexEngine: formValue("latexEngine"), status: status.value });
     let autosaveTimer: number | undefined;
@@ -831,7 +931,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
     const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || `${item.subject}/${item.category}/${item.slug}`, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : " / 全分野"}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; availableMentionNames = data.mentionNames ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : " / 全分野"}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
     const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
     subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
@@ -936,5 +1036,9 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
   .comment-edit-tags legend { color:var(--muted); font-size:.7rem; font-weight:800; padding:0; }
   .review-panel .comment-edit-tags > div { display:flex; flex-wrap:wrap; gap:.25rem; justify-content:flex-start; }
   .comment-edit-entry .comment-tag-option { font-size:.68rem; padding:.2rem .4rem; }
+  .mention-suggestions { background:var(--surface, #fff); border:1px solid var(--border, #d5dde2); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:15rem; overflow:auto; padding:.3rem; position:fixed; z-index:80; }
+  .mention-suggestions[hidden] { display:none; }
+  .mention-suggestions button { background:transparent; border:0; border-radius:.35rem; color:var(--text, #182027); cursor:pointer; display:block; font:inherit; font-size:.82rem; padding:.45rem .55rem; text-align:left; width:100%; }
+  .mention-suggestions button:hover, .mention-suggestions button.is-active { background:var(--accent-subtle, #e5f2fa); color:var(--accent, #176ea6); }
   @media (max-width: 700px) { .editor-pane-host, .editor-pane-host[data-pane-direction="horizontal"] { grid-template-columns:1fr; } .editor-tabs { position:sticky; top:0; z-index:12; } .editor-tabs .pane-tabs-divider { display:none; } }
 </style>
