@@ -96,7 +96,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
             </div>
           </section>
 
-          <details class="metadata" open>
+          <details class="metadata">
             <summary>記事設定</summary>
             <div class="metadata-grid">
               <label>タイトル<input name="title" required maxlength="180" placeholder="例：群の定義" /></label>
@@ -123,6 +123,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
             <button type="button" data-pane-tab="preview" aria-pressed="true">プレビュー</button>
             <button type="button" data-pane-tab="note" aria-pressed="false">執筆メモ</button>
             <button type="button" data-pane-tab="comments" aria-pressed="false">コメント</button>
+            <button type="button" data-pane-tab="history" aria-pressed="false">履歴</button>
             <span class="pane-tabs-help">枠線の矢印で配置を変更</span>
           </div>
           <details class="heading-outline"><summary>見出し一覧</summary><nav data-heading-outline>本文の見出しがここに表示されます。</nav></details>
@@ -481,6 +482,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const unpublishDialog = root.querySelector<HTMLDialogElement>("[data-unpublish-dialog]")!;
     const progressDialog = root.querySelector<HTMLDialogElement>("[data-progress-dialog]")!;
     const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
+    const revisionPanel = root.querySelector<HTMLDetailsElement>(".revision-panel")!;
     const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     let documents: Omit<Document, "body">[] = [];
@@ -547,6 +549,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     };
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const paneButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]")];
+    const historyButton = root.querySelector<HTMLButtonElement>('[data-pane-tab="history"]');
     const paneToolbar = root.querySelector<HTMLElement>(".editor-tabs");
     if (paneToolbar) paneToolbar.style.display = "flex";
     const paneStorageKey = "atlasez-editor-pane-layout";
@@ -586,9 +589,16 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     };
     let paneLayout = defaultPaneLayout;
     try { paneLayout = normalizePaneLayout(JSON.parse(localStorage.getItem(paneStorageKey) ?? "null")); } catch { paneLayout = defaultPaneLayout; }
+    historyButton?.addEventListener("click", () => {
+      revisionPanel.open = true;
+      historyButton.setAttribute("aria-pressed", "true");
+      revisionPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     paneButtons.forEach((button) => button.addEventListener("click", () => {
-      const key = button.dataset.paneTab as PaneKey | undefined;
-      if (!key) return;
+      const rawKey = button.dataset.paneTab;
+      if (!rawKey || rawKey === "history") return;
+      const key = rawKey as PaneKey;
+      historyButton?.setAttribute("aria-pressed", "false");
       const visible = paneLayout.visible.includes(key)
         ? paneLayout.visible.filter((item) => item !== key)
         : [...paneLayout.visible, key].slice(-paneLayout.count);
@@ -771,6 +781,13 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     };
     let commentQuery = "";
     let commentFilter = "all";
+    const updatePaneCounts = () => {
+      const commentButton = root.querySelector<HTMLButtonElement>('[data-pane-tab="comments"]');
+      if (commentButton) {
+        const unresolved = currentComments.filter((item) => !item.resolved_at).length;
+        commentButton.textContent = `コメント${currentComments.length ? ` (${currentComments.length}${unresolved ? `・未対応${unresolved}` : ""})` : ""}`;
+      }
+    };
     const commentMatches = (item: Comment) => {
       const feedback = item.feedback ?? [];
       const status = item.resolved_at ? "resolved" : feedback.some((entry) => entry.status === "unreflected") ? "unreflected" : feedback.some((entry) => entry.status === "confirmed") ? "acknowledged" : "pending";
@@ -782,6 +799,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       mentionMembers.replaceChildren(...names.map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; }));
     };
     const renderComments = () => {
+      updatePaneCounts();
       const matching = new Set(currentComments.filter(commentMatches).map((item) => item.id));
       const roots = currentComments.filter((item) => !item.parent_comment_id && (matching.has(item.id) || currentComments.some((reply) => reply.parent_comment_id === item.id && matching.has(reply.id))));
       const replies = new Map<string, Comment[]>();
@@ -933,7 +951,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || `${item.subject}/${item.category}/${item.slug}`, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
     const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; availableMentionNames = data.mentionNames ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : " / 全分野"}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
-    const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
+    const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); const revisionItems = data.revisions ?? []; revisions.innerHTML=revisionItems.map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; if (historyButton) historyButton.textContent = `履歴${revisionItems.length ? ` (${revisionItems.length})` : ""}`; };
     subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
     sidebarCollapseButton.addEventListener("click", () => setSidebarCollapsed(!root.classList.contains("sidebar-collapsed"), true));
     status.addEventListener("change", () => {
@@ -1012,7 +1030,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
   .editor-pane-host[data-pane-direction="vertical"] { grid-template-columns: 1fr; }
   .editor-pane-host > [data-editor-pane] { min-width: 0; }
   .editor-pane-host > [data-editor-pane][hidden] { display: none !important; }
-  .editor-tabs { align-items: center; background: var(--surface-alt); border: 1px solid var(--border); border-radius: .55rem; display: flex; flex-wrap: wrap; gap: .25rem; margin: .45rem 0; padding: .3rem .4rem; }
+  .editor-tabs { align-items: center; background: var(--surface-alt); border: 1px solid var(--border); border-radius: .55rem; display: flex; flex-wrap: wrap; gap: .25rem; margin: .45rem 0; padding: .3rem .4rem; position: sticky; top: 4.2rem; z-index: 12; }
   .editor-tabs button { background: transparent; border: 1px solid transparent; border-radius: .35rem; color: var(--muted); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 800; padding: .38rem .58rem; }
   .editor-tabs button:hover, .editor-tabs button[aria-pressed="true"] { background: var(--surface); border-color: var(--accent); color: var(--accent); }
   .editor-tabs .pane-tabs-label { color: var(--muted); font-size: .7rem; font-weight: 800; margin: 0 .15rem; }

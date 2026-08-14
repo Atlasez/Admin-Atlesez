@@ -1327,12 +1327,12 @@ async function listEditorialDocuments(
     env.REPORTS.prepare(
       `SELECT d.id, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.editorial_note, d.latex_engine,
         d.status, d.created_by, d.updated_by, d.created_at, d.updated_at, d.reviewed_at, d.published_at,
-        r.reviewer_email AS review_reviewer_email
+        r.reviewer_email AS review_reviewer_email, r.due_at AS review_due_at
        FROM editorial_documents d
        LEFT JOIN editorial_review_assignments r ON r.document_id = d.id${where} ORDER BY d.updated_at DESC LIMIT 200`,
     )
       .bind(...values)
-      .all<Omit<EditorialDocument, "body"> & { review_reviewer_email: string | null }>(),
+      .all<Omit<EditorialDocument, "body"> & { review_reviewer_email: string | null; review_due_at: string | null }>(),
     env.REPORTS.prepare(
       `SELECT DISTINCT COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
        FROM report_admin_permissions p
@@ -1347,6 +1347,8 @@ async function listEditorialDocuments(
       ...document,
       locale: editorialLanguageCode(document.locale) ?? document.locale,
       reviewAssignedToMe: document.review_reviewer_email === scope.email,
+      reviewAssigned: Boolean(document.review_reviewer_email),
+      reviewDueAt: document.review_due_at,
     })),
     mentionNames: memberResult.results
       .map((member) => member.display_name.trim())
@@ -4246,7 +4248,7 @@ async function listEditorialReviewRequests(
   const [result, reviewerResult] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
-        r.reviewer_email, COALESCE(NULLIF(TRIM(p.display_name), ''), '') AS reviewer_display_name
+        r.reviewer_email, r.due_at, COALESCE(NULLIF(TRIM(p.display_name), ''), '') AS reviewer_display_name
        FROM editorial_documents d
        LEFT JOIN editorial_review_assignments r ON r.document_id = d.id
        LEFT JOIN editorial_member_profiles p ON p.email = r.reviewer_email
@@ -4263,6 +4265,7 @@ async function listEditorialReviewRequests(
         updated_by: string;
         updated_at: string;
         reviewer_email: string | null;
+        due_at: string | null;
         reviewer_display_name: string;
       }>(),
     env.REPORTS.prepare(
@@ -4279,6 +4282,7 @@ async function listEditorialReviewRequests(
       ...item,
       reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
       assignedToMe: item.reviewer_email === scope.email,
+      dueAt: item.due_at,
     })),
     reviewers: reviewerResult.results.map((item) => ({
       email: item.email,
@@ -4297,7 +4301,7 @@ async function updateEditorialReviewAssignment(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { reviewerEmail?: unknown };
+  let payload: { reviewerEmail?: unknown; dueAt?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -4312,13 +4316,21 @@ async function updateEditorialReviewAssignment(
   if (document.status !== "in-review")
     return json({ error: "査読中の原稿だけ担当者を設定できます。" }, 400);
   const reviewerEmail = text(payload.reviewerEmail, 320).toLowerCase();
+  const dueAtInput = text(payload.dueAt, 80);
+  let dueAt: string | null = null;
+  if (dueAtInput) {
+    const parsedDueAt = new Date(dueAtInput);
+    if (!Number.isFinite(parsedDueAt.getTime()))
+      return json({ error: "査読期限の日時を確認してください。" }, 400);
+    dueAt = parsedDueAt.toISOString();
+  }
   if (!reviewerEmail) {
     await env.REPORTS.prepare(
       "DELETE FROM editorial_review_assignments WHERE document_id = ?",
     )
       .bind(documentId)
       .run();
-    return json({ ok: true, reviewerEmail: null });
+    return json({ ok: true, reviewerEmail: null, dueAt: null });
   }
   if (!EMAIL_PATTERN.test(reviewerEmail))
     return json({ error: "査読担当者のメールアドレスを確認してください。" }, 400);
@@ -4331,14 +4343,14 @@ async function updateEditorialReviewAssignment(
     return json({ error: "この原稿の分野を担当できる運営者を選択してください。" }, 400);
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
-    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, due_at)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
-       requested_by = excluded.requested_by, updated_at = excluded.updated_at`,
+       requested_by = excluded.requested_by, updated_at = excluded.updated_at, due_at = excluded.due_at`,
   )
-    .bind(documentId, reviewerEmail, scope.email, now, now)
+    .bind(documentId, reviewerEmail, scope.email, now, now, dueAt)
     .run();
-  return json({ ok: true, reviewerEmail });
+  return json({ ok: true, reviewerEmail, dueAt });
 }
 
 async function createEditorialComment(

@@ -94,6 +94,13 @@ const categoryMetaJson = JSON.stringify(
   */}
   <div class="map-frame" data-map-frame>
     <div class="map-toolbar" data-graph-controls hidden>
+      <div class="map-concept-search">
+        <label for="map-search">{locale === "ja" ? "地図上の概念を検索" : "Search concepts on this map"}</label>
+        <input id="map-search" type="search" list="map-node-names" placeholder={locale === "ja" ? "地図上の概念を検索" : "Search map concepts"} data-map-search />
+        <datalist id="map-node-names">
+          {list.map((c) => <option value={localizedName(c.name, locale)} />)}
+        </datalist>
+      </div>
       <span class="map-status" data-map-status aria-live="polite"></span>
       <div
         class="map-viewport-tools"
@@ -311,6 +318,27 @@ const categoryMetaJson = JSON.stringify(
     padding: var(--space-2);
     border-bottom: 1px solid var(--border-default);
     background: var(--background-secondary);
+  }
+  .map-concept-search {
+    display: grid;
+    flex: 1 1 18rem;
+    gap: .2rem;
+    min-width: 16rem;
+  }
+  .map-concept-search label {
+    color: var(--text-secondary);
+    font-size: .68rem;
+    font-weight: 800;
+  }
+  .map-concept-search input {
+    background: var(--background-primary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font: inherit;
+    min-height: 2.25rem;
+    padding: .4rem .55rem;
+    width: 100%;
   }
   .map-toolbar input,
   .map-toolbar select {
@@ -879,6 +907,11 @@ const categoryMetaJson = JSON.stringify(
       align-items: center;
       gap: var(--space-1) var(--space-2);
       padding: var(--space-2);
+    }
+    .map-concept-search {
+      grid-column: 1 / -1;
+      min-width: 0;
+      width: 100%;
     }
     .map-toolbar select {
       width: 100%;
@@ -2233,6 +2266,25 @@ const categoryMetaJson = JSON.stringify(
       renderOverview(container.dataset.fixedSubject ?? "");
       syncUrl();
     });
+
+    document
+      .querySelector<HTMLInputElement>("[data-map-search]")
+      ?.addEventListener("change", (event) => {
+        const query = (event.target as HTMLInputElement).value.trim().toLowerCase();
+        if (!query) return;
+        const found = data.nodes.find((node) => label(node).toLowerCase().includes(query));
+        if (!found) {
+          if (mapStatus) mapStatus.textContent = ja ? "一致する概念がありません" : "No matching concept";
+          return;
+        }
+        renderCategory(catKeyOf(found));
+        const element = cy.getElementById(found.id);
+        cy.elements().unselect();
+        element.select();
+        cy.animate({ center: { eles: element }, zoom: 1.2, duration: 300 });
+        showDetail(found.id);
+        syncUrl();
+      });
 
     document
       .querySelector("[data-map-share]")

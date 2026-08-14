@@ -368,8 +368,18 @@ test.describe("学習サイト", () => {
       )
       .toBeGreaterThan(initialZoom);
 
-    // 記事・概念の検索は上部の共通検索欄へ統一し、地図内に個別検索欄は置かない。
-    await expect(page.locator("[data-map-search]")).toHaveCount(0);
+    // 共通検索は記事検索、地図内検索は概念検索として役割を明示する。
+    await expect(page.getByLabel("地図上の概念を検索")).toBeVisible();
+    await page.locator("[data-map-search]").fill("群の定義");
+    await page.locator("[data-map-search]").dispatchEvent("change");
+    const fold = page.getByRole("button", { name: /群論を折りたたむ/ });
+    await expect(fold).toBeVisible();
+    await fold.click();
+    await expect(fold).not.toBeVisible();
+    const detail = page.locator("[data-map-detail]");
+    await expect(detail).toContainText("群の定義");
+    await page.getByRole("button", { name: "記事の詳細を閉じる" }).click();
+    await expect(detail).toBeEmpty();
 
     const open = page.getByRole("button", { name: "学習ルート検索" });
     // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す

@@ -23,7 +23,7 @@ const showHomeNav = current !== "portal" && current !== "global";
       <a href="/admin/articles" data-astro-reload aria-current={current === "articles" ? "page" : undefined}>編集・査読</a>
       <a href="/admin/operations" data-astro-reload aria-current={current === "operations" ? "page" : undefined}>進捗・ToDo・日程</a>
     </>}
-    {projectNavigation && <details class="admin-management-menu" open={(["reports", "permissions", "guide", "applications", "introductions"] as string[]).includes(current)}>
+    {projectNavigation && <details class="admin-management-menu" data-management-menu>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
         <a href="/admin/permissions" data-manager-only hidden data-astro-reload aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
@@ -34,15 +34,15 @@ const showHomeNav = current !== "portal" && current !== "global";
       </div>
     </details>}
   </nav>
-  <div class="admin-account" data-admin-account hidden>
+  <div class="admin-account is-loading" data-admin-account data-account-loading="true" aria-busy="true">
     <SettingsMenu locale="ja" />
     {projectNavigation && <>
       <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-label="学習サイトの通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
-      <div class="admin-notification-panel" data-admin-notification-panel hidden><div class="notification-panel-heading"><strong>学習サイトの通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list><span class="admin-notification-loading">通知を確認しています…</span></div></div>
+      <div class="admin-notification-panel" data-admin-notification-panel hidden><div class="notification-panel-heading"><strong>学習サイトの通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list><span class="admin-notification-loading">通知を確認しています…</span></div><button type="button" class="notification-retry" data-notification-retry hidden>再読み込み</button></div>
     </>}
     <a class="admin-account-profile" href={profileHref} data-astro-reload aria-label="プロフィールを開く">
-      <span class="admin-account-avatar" data-admin-account-avatar aria-hidden="true"><img data-admin-account-image alt="" hidden /><span data-admin-account-fallback>A</span></span>
-      <span class="admin-account-email" data-admin-account-email>アカウント</span>
+      <span class="admin-account-avatar admin-account-avatar--skeleton" data-admin-account-avatar aria-hidden="true"><img data-admin-account-image alt="" hidden /><span data-admin-account-fallback>•••</span></span>
+      <span class="admin-account-email" data-admin-account-email>読み込み中…</span>
     </a>
     <form method="post" action="/auth/logout">
       <button type="submit" class="admin-logout">ログアウト</button>
@@ -83,6 +83,9 @@ const showHomeNav = current !== "portal" && current !== "global";
       const markAllRead = document.querySelector<HTMLButtonElement>('[data-mark-all-notifications-read]');
       const menuToggle = document.querySelector<HTMLButtonElement>('[data-admin-menu-toggle]');
       const primaryNav = document.querySelector<HTMLElement>('#admin-primary-nav');
+      const managementMenu = document.querySelector<HTMLDetailsElement>('[data-management-menu]');
+      const notificationRetry = document.querySelector<HTMLButtonElement>('[data-notification-retry]');
+      const closeManagementMenu = () => { if (managementMenu) managementMenu.open = false; };
       const readAccountCache = (): AccountSnapshot | null => {
         try {
           const cached = JSON.parse(sessionStorage.getItem(accountCacheKey) ?? 'null') as Partial<AccountSnapshot> | null;
@@ -113,6 +116,9 @@ const showHomeNav = current !== "portal" && current !== "global";
           }
         }
         account.hidden = false;
+        account.classList.remove('is-loading');
+        account.removeAttribute('aria-busy');
+        account.removeAttribute('data-account-loading');
       };
       let cachedAccount = readAccountCache();
       if (cachedAccount) applyAccountSnapshot(cachedAccount);
@@ -149,17 +155,26 @@ const showHomeNav = current !== "portal" && current !== "global";
           clearAccountCache();
           cachedAccount = null;
           if (email) {
-            email.textContent = 'アカウント';
+            email.textContent = '読み込み失敗';
             email.title = error instanceof Error ? error.message : 'ログイン情報を取得できませんでした';
           }
+          account.classList.remove('is-loading');
+          account.removeAttribute('aria-busy');
+          account.removeAttribute('data-account-loading');
+          if (avatarImage) { avatarImage.hidden = true; avatarImage.removeAttribute('src'); }
+          if (avatarFallback) { avatarFallback.hidden = false; avatarFallback.textContent = '?'; }
         } finally { account.hidden = false; }
       };
       document.addEventListener('atlasez-profile-updated', () => { void loadAccount(); });
       const loadNotifications = async () => {
         if (!notificationList) return;
+        if (notificationRetry) notificationRetry.hidden = true;
         try {
           const response = await fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' });
-          const data = await response.json() as { notifications?: typeof notifications };
+          const contentType = response.headers.get('content-type') ?? '';
+          if (!contentType.includes('application/json')) throw new Error('通知の応答を読み取れませんでした。');
+          const data = await response.json() as { notifications?: typeof notifications; error?: string };
+          if (!response.ok) throw new Error(data.error ?? '通知を取得できませんでした。');
           notifications = data.notifications ?? [];
           const unreadCount = notifications.filter((item) => !item.read).length;
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
@@ -167,7 +182,10 @@ const showHomeNav = current !== "portal" && current !== "global";
           const kindLabel = (kind: string) => ({ comment: 'コメント', review: '査読依頼', approved: '査読完了', published: '公開', task: 'ToDo' } as Record<string, string>)[kind] ?? '記事';
           const unreadNotifications = notifications.filter((item) => !item.read);
           notificationList.innerHTML = unreadNotifications.length ? unreadNotifications.map((item) => `<div class="admin-notification-item"><a href="${item.href}" data-astro-reload data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a><button type="button" data-read-notification="${escape(item.id)}">既読にする</button></div>`).join('') : '<span class="admin-notification-empty">あなたの記事に関する新しい通知はありません。</span>';
-        } catch { notificationList.textContent = '通知を取得できませんでした'; }
+        } catch (error) {
+          notificationList.textContent = error instanceof Error ? error.message : '通知を取得できませんでした。';
+          if (notificationRetry) notificationRetry.hidden = false;
+        }
       };
       notificationButton?.addEventListener('click', () => {
         const open = !notificationPanel?.hidden;
@@ -179,6 +197,24 @@ const showHomeNav = current !== "portal" && current !== "global";
       });
       closeNotifications?.addEventListener('click', () => { if (notificationPanel) notificationPanel.hidden = true; notificationButton?.setAttribute('aria-expanded', 'false'); });
       menuToggle?.addEventListener('click', () => { const open = !primaryNav?.classList.contains('is-open'); primaryNav?.classList.toggle('is-open', open); menuToggle.setAttribute('aria-expanded', String(open)); });
+      notificationRetry?.addEventListener('click', () => { void loadNotifications(); });
+      document.addEventListener('click', (event) => {
+        const target = event.target as Node;
+        if (managementMenu && !managementMenu.contains(target)) closeManagementMenu();
+        if (primaryNav?.classList.contains('is-open') && !primaryNav.contains(target) && target !== menuToggle) {
+          primaryNav.classList.remove('is-open');
+          menuToggle?.setAttribute('aria-expanded', 'false');
+        }
+        const navigation = (event.target as HTMLElement).closest('a[data-astro-reload]');
+        if (navigation) closeManagementMenu();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        closeManagementMenu();
+        if (notificationPanel && !notificationPanel.hidden) { notificationPanel.hidden = true; notificationButton?.setAttribute('aria-expanded', 'false'); }
+        primaryNav?.classList.remove('is-open');
+        menuToggle?.setAttribute('aria-expanded', 'false');
+      });
       const markRead = async (ids: string[]) => {
         if (!ids.length) return;
         const response = await fetch('/api/admin/notifications/read', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) });
@@ -248,6 +284,11 @@ const showHomeNav = current !== "portal" && current !== "global";
   .admin-account-avatar { background-position: center; background-repeat: no-repeat; background-size: cover; }
   .admin-account-avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
   .admin-account-avatar img[hidden] { display: none; }
+  .admin-account-avatar--skeleton { animation: admin-nav-pulse 1.25s ease-in-out infinite; background: var(--background-secondary); color: transparent; }
+  .admin-account.is-loading .admin-account-email { color: var(--text-secondary); }
+  .notification-retry { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .35rem; color: var(--accent-primary); cursor: pointer; display: block; font: inherit; font-size: .72rem; font-weight: 800; margin: .5rem auto .35rem; padding: .35rem .7rem; }
+  .notification-retry:hover { border-color: var(--accent-primary); }
+  @keyframes admin-nav-pulse { 0%, 100% { opacity: .58; } 50% { opacity: 1; } }
   .admin-nav .admin-notification-panel { border-radius: .85rem; padding: .35rem; }
   .admin-nav .notification-panel-heading { padding: .55rem .7rem .65rem; }
   .admin-nav .notification-panel-heading strong { font-size: 1rem; letter-spacing: .02em; }
