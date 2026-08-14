@@ -45,7 +45,7 @@ import AdminNav from "../../components/AdminNav.astro";
         const data=type.includes('application/json')?await response.json() as {projects?:PortalProject[];todos?:PortalTodo[];error?:string}:null;
         if(!response.ok||!data)throw new Error(data?.error??'Homeを読み込めませんでした。');
         const projects=data.projects??[];
-        projectsView.innerHTML=projects.length?projects.map(project=>`<a class="project-card" href="${projectHref(project.slug)}" aria-label="${esc(project.name)}"><span class="project-title">${esc(project.name)}</span></a>`).join(''):'<p class="empty">参加中のプロジェクトはありません。</p>';
+        projectsView.innerHTML=projects.length?projects.map(project=>{const name=project.slug==='atlas'?'アトラス学習サイト':project.name;return `<a class="project-card" href="${projectHref(project.slug)}" aria-label="${esc(name)}"><span class="project-title">${esc(name)}</span></a>`}).join(''):'<p class="empty">参加中のプロジェクトはありません。</p>';
         const todos=data.todos??[];
         todosView.innerHTML=todos.length?todos.map(todo=>`<article class="task-card"><b>${esc(todo.title)}</b><small><span class="task-project">${esc(todo.project_name??todo.project_id)}</span>${todo.subject?` / ${esc(todo.subject)}`:''} ・ ${esc(todo.status)}</small>${todo.details?`<small>${esc(todo.details)}</small>`:''}</article>`).join(''):'<p class="empty">未完了のタスクはありません。</p>';
       }catch(error){
