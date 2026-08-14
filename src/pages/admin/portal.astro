@@ -1,13 +1,11 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
-import AdminBreadcrumb from "../../components/AdminBreadcrumb.astro";
 ---
 
 <AdminLayout title="Atlasezメンバー用サイト" description="Atlasezのプロジェクトを横断して確認するホーム">
   <main class="member-home" data-member-home>
     <AdminNav current="portal" />
-    <AdminBreadcrumb items={[{ label: "メンバー用サイト" }]} />
     <header class="home-heading">
       <p class="eyebrow">ATLASEZ / MEMBERS</p>
       <h1>Home</h1>
