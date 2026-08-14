@@ -246,6 +246,9 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
   /* YouTubeのコメント欄のように、発言者・本文・操作が読み取りやすい会話の単位になるよう整える。 */
   .comment-thread { background:var(--surface); border:0; border-radius:.7rem; box-shadow:0 1px 3px rgb(24 32 39 / .12); overflow:hidden; }.thread-summary { background:transparent; border:0; padding:.65rem .8rem 0; }.comment { background:transparent; border:0; border-radius:0; padding:.55rem .8rem .7rem; }.comment.is-resolved { opacity:.68; }.comment-author { align-items:center; display:flex; gap:.55rem; }.comment-avatar { align-items:center; background:var(--accent); border-radius:50%; color:#fff; display:inline-flex; flex:0 0 2rem; font-size:.78rem; font-weight:800; height:2rem; justify-content:center; width:2rem; }.comment-author-copy { display:grid; gap:.05rem; min-width:0; }.comment-author-copy b { font-size:.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.comment-author-copy small { font-size:.68rem; }.comment-meta { margin-left:auto; }.comment-content { font-size:.88rem; margin:.55rem 0 .6rem; padding-left:2.55rem; }.comment-content p { margin:.25rem 0; }.comment-content .comment-quote { margin:.45rem 0; }.comment-actions { padding-left:2.55rem; }.comment-actions button,.reply-open { background:transparent; border:0; border-radius:999px; color:var(--text-muted); font-weight:800; padding:.35rem .6rem; }.comment-actions button:hover,.reply-open:hover { background:var(--accent-subtle); color:var(--accent); }.comment-replies { border-left:0; gap:.35rem; margin:.1rem .7rem .25rem 2.25rem; padding-left:0; }.comment-reply { background:var(--background-secondary); border-radius:.5rem; padding:.55rem .65rem; }.comment-reply .comment-content,.comment-reply .comment-actions { padding-left:2.55rem; }.reply-open { margin:.2rem 0 .55rem 2.45rem; }.reply-entry { background:var(--background-secondary); border:0; border-radius:.55rem; margin:.1rem .8rem .8rem 2.25rem; padding:.7rem; }.reply-entry textarea { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; }.reply-entry button { justify-self:end; }.reply-target { background:var(--surface); border-radius:.25rem; }.comment-status { border-radius:999px; }.thread-status { border-radius:999px; }
   .comment-avatar { overflow:hidden; position:relative; }
+  .comment-avatar[data-avatar-url] .comment-avatar-fallback { display:none; }
+  .comment-avatar[data-avatar-url][data-avatar-ready="failed"] .comment-avatar-fallback { display:inline-flex; }
+  .comment-avatar-fallback[hidden] { display:none!important; }
   .comment-avatar img { display:block; height:100%; object-fit:cover; width:100%; }
   .comment-avatar-fallback { align-items:center; display:inline-flex; height:100%; justify-content:center; width:100%; }
   .review-help { border-bottom:1px solid var(--border); color:var(--muted); font-size:.76rem; padding:.45rem .85rem; }.review-help summary { cursor:pointer; font-weight:800; }.review-help p { line-height:1.55; margin:.45rem 0 .1rem; }.thread-summary { justify-content:flex-end; padding:.65rem .8rem 0; }.thread-status { font-size:.68rem; }.reply-toggle { background:transparent; border:0; color:var(--accent); cursor:pointer; font-size:.76rem; font-weight:800; margin:-.15rem 0 .25rem 2.45rem; padding:.3rem .45rem; }.reply-toggle:hover { text-decoration:underline; }.comment-replies[hidden] { display:none; }.reply-actions { display:flex; gap:.4rem; justify-content:flex-end; }.reply-actions button { width:auto; }.reply-entry { gap:.55rem; }.reply-entry[hidden] { display:none; }
@@ -832,13 +835,18 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
         if (!source) return;
         const fallback = avatarElement.querySelector<HTMLElement>("[data-comment-avatar-fallback]");
         const image = document.createElement("img");
-        image.src = versionedAvatarUrl(source, avatarElement.dataset.avatarVersion ?? "");
         image.alt = "";
         image.decoding = "async";
-        image.addEventListener("load", () => { if (fallback) fallback.hidden = true; });
+        const reveal = () => { if (fallback) fallback.hidden = true; };
+        image.addEventListener("load", reveal);
         image.addEventListener("error", () => { image.remove(); if (fallback) fallback.hidden = false; avatarElement.dataset.avatarReady = "failed"; });
         avatarElement.prepend(image);
+        image.src = versionedAvatarUrl(source, avatarElement.dataset.avatarVersion ?? "");
         avatarElement.dataset.avatarReady = "true";
+        if (image.complete) {
+          if (image.naturalWidth > 0) reveal();
+          else { image.remove(); if (fallback) fallback.hidden = false; avatarElement.dataset.avatarReady = "failed"; }
+        }
       });
     };
     new MutationObserver(hydrateCommentAvatars).observe(comments, { childList: true, subtree: true });
