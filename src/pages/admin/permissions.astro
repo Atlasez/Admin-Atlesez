@@ -76,14 +76,15 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const years = ["中1","中2","中3","高1","高2","高3","高専1","高専2","高専3","高専4","高専5","B1","B2","B3","B4","M1","M2","D1","D2","D3","教職員・研究者","社会人","その他"];
     const fields = ["漢字","古文","漢文","地理","日本史","世界史","哲学","考古学","数学","物理","化学","地質","気象","海洋","天文","生物","情報","水産学","建築","薬学","中国語（普通話）","台湾華語","言語学","ページデザイン"];
     const opts = (items: string[], selected: string, multiple = false) => items.map(item => `<option value="${esc(item)}" ${multiple ? selected.split(",").includes(item) : selected === item ? "selected" : ""}>${esc(item)}</option>`).join("");
-    const avatar = (member: any) => { const label = displayName(member).slice(0,1); const source = String(member.avatar_url ?? '').trim(); return `<span class="member-avatar${source ? ' member-avatar--image' : ' member-avatar--fallback'}"${source ? ` data-member-avatar-url="${esc(source)}"` : ''} aria-hidden="true"><span class="member-avatar-fallback" data-member-avatar-fallback>${esc(label)}</span></span>`; };
+    const avatar = (member: any) => { const label = displayName(member).slice(0,1); const source = String(member.avatar_url ?? '').trim(); const version = String(member.avatar_updated_at ?? '').trim(); return `<span class="member-avatar${source ? ' member-avatar--image' : ' member-avatar--fallback'}"${source ? ` data-member-avatar-url="${esc(source)}" data-member-avatar-version="${esc(version)}"` : ''} aria-hidden="true"><span class="member-avatar-fallback" data-member-avatar-fallback>${esc(label)}</span></span>`; };
+    const versionedAvatarUrl = (source: string, version: string) => { if (!source || !version || !/^https:\/\//i.test(source)) return source; try { const url = new URL(source); url.searchParams.set("atlasez_avatar_version", version); return url.toString(); } catch { return source; } };
     const hydrateMemberAvatars = () => list.querySelectorAll<HTMLElement>('[data-member-avatar-url]').forEach((avatarElement) => {
       if (avatarElement.dataset.avatarReady) return;
       const source = avatarElement.dataset.memberAvatarUrl;
       if (!source) return;
       const fallback = avatarElement.querySelector<HTMLElement>('[data-member-avatar-fallback]');
       const image = document.createElement('img');
-      image.src = source;
+      image.src = versionedAvatarUrl(source, avatarElement.dataset.memberAvatarVersion ?? "");
       image.alt = '';
       image.decoding = 'async';
       image.addEventListener('load', () => { if (fallback) fallback.hidden = true; });

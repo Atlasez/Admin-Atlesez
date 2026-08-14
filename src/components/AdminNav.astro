@@ -70,7 +70,7 @@ const showHomeNav = current !== "portal" && current !== "global";
       const account = document.querySelector<HTMLElement>('[data-admin-account]');
       if (account && account.dataset.loaded !== 'true') {
         account.dataset.loaded = 'true';
-      type AccountSnapshot = { email: string; displayName: string; avatarUrl: string };
+      type AccountSnapshot = { email: string; displayName: string; avatarUrl: string; avatarUpdatedAt: string };
       const accountCacheKey = 'atlasez-admin-account-v1';
       const email = account.querySelector<HTMLElement>('[data-admin-account-email]');
       const avatar = account.querySelector<HTMLElement>('[data-admin-account-avatar]');
@@ -92,7 +92,7 @@ const showHomeNav = current !== "portal" && current !== "global";
         try {
           const cached = JSON.parse(sessionStorage.getItem(accountCacheKey) ?? 'null') as Partial<AccountSnapshot> | null;
           if (!cached || typeof cached.email !== 'string' || !cached.email) return null;
-          return { email: cached.email, displayName: typeof cached.displayName === 'string' ? cached.displayName : '', avatarUrl: typeof cached.avatarUrl === 'string' ? cached.avatarUrl : '' };
+          return { email: cached.email, displayName: typeof cached.displayName === 'string' ? cached.displayName : '', avatarUrl: typeof cached.avatarUrl === 'string' ? cached.avatarUrl : '', avatarUpdatedAt: typeof cached.avatarUpdatedAt === 'string' ? cached.avatarUpdatedAt : '' };
         } catch { return null; }
       };
       const writeAccountCache = (snapshot: AccountSnapshot) => {
@@ -105,6 +105,14 @@ const showHomeNav = current !== "portal" && current !== "global";
         for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); }
         return String((hash >>> 0) % 9000 + 1000);
       };
+      const versionedAvatarUrl = (source: string, version: string) => {
+        if (!source || !version || !/^https:\/\//i.test(source)) return source;
+        try {
+          const url = new URL(source);
+          url.searchParams.set('atlasez_avatar_version', version);
+          return url.toString();
+        } catch { return source; }
+      };
       const applyAccountSnapshot = (snapshot: AccountSnapshot) => {
         const displayName = snapshot.displayName.trim();
         const label = !displayName || displayName === '表示名未設定' ? anonymousMemberLabel(snapshot.email) : displayName;
@@ -113,11 +121,12 @@ const showHomeNav = current !== "portal" && current !== "global";
         avatar?.classList.remove('admin-account-avatar--skeleton');
         if (avatarImage) {
           if (snapshot.avatarUrl) {
-            const sameImage = avatarImage.getAttribute('src') === snapshot.avatarUrl;
+            const imageSource = versionedAvatarUrl(snapshot.avatarUrl, snapshot.avatarUpdatedAt);
+            const sameImage = avatarImage.getAttribute('src') === imageSource;
             const revealImage = () => { avatarImage!.hidden = false; if (avatarFallback) avatarFallback.hidden = true; };
             avatarImage.onload = revealImage;
             avatarImage.onerror = () => { avatarImage!.hidden = true; if (avatarFallback) avatarFallback.hidden = false; };
-            if (!sameImage) avatarImage.src = snapshot.avatarUrl;
+            if (!sameImage) avatarImage.src = imageSource;
             if (avatarImage.complete && avatarImage.naturalWidth > 0) revealImage();
             else { avatarImage.hidden = true; if (avatarFallback) avatarFallback.hidden = false; }
           } else {
@@ -153,17 +162,17 @@ const showHomeNav = current !== "portal" && current !== "global";
             const profileResponse = await fetch('/api/admin/profile', { credentials: 'same-origin', cache: 'no-store' });
             const profileType = profileResponse.headers.get('content-type') ?? '';
             if (profileResponse.ok && profileType.includes('application/json')) {
-              const profile = await profileResponse.json() as { profile?: { display_name?: string; avatar_url?: string } };
+              const profile = await profileResponse.json() as { profile?: { display_name?: string; avatar_url?: string; updated_at?: string | null } };
               const image = profile.profile?.avatar_url;
-              const snapshot = { email: status.email, displayName: profile.profile?.display_name?.trim() || '', avatarUrl: image || '' };
+              const snapshot = { email: status.email, displayName: profile.profile?.display_name?.trim() || '', avatarUrl: image || '', avatarUpdatedAt: profile.profile?.updated_at ?? '' };
               cachedAccount = snapshot;
               applyAccountSnapshot(snapshot);
               writeAccountCache(snapshot);
             } else if (!cachedAccount) {
-              applyAccountSnapshot({ email: status.email, displayName: '', avatarUrl: '' });
+              applyAccountSnapshot({ email: status.email, displayName: '', avatarUrl: '', avatarUpdatedAt: '' });
             }
           } catch {
-            if (!cachedAccount) applyAccountSnapshot({ email: status.email, displayName: '', avatarUrl: '' });
+            if (!cachedAccount) applyAccountSnapshot({ email: status.email, displayName: '', avatarUrl: '', avatarUpdatedAt: '' });
           }
         } catch (error) {
           clearAccountCache();
@@ -182,10 +191,10 @@ const showHomeNav = current !== "portal" && current !== "global";
         } finally { account.hidden = false; }
       };
       document.addEventListener('atlasez-profile-updated', (event) => {
-        const detail = event instanceof CustomEvent ? event.detail as { avatarUrl?: unknown } : undefined;
+        const detail = event instanceof CustomEvent ? event.detail as { avatarUrl?: unknown; updatedAt?: unknown } : undefined;
         // 保存直後はAPI再取得を待たず、同じタブのヘッダーへ新しい画像を反映する。
         if (cachedAccount && typeof detail?.avatarUrl === 'string') {
-          cachedAccount = { ...cachedAccount, avatarUrl: detail.avatarUrl };
+          cachedAccount = { ...cachedAccount, avatarUrl: detail.avatarUrl, avatarUpdatedAt: typeof detail.updatedAt === 'string' ? detail.updatedAt : new Date().toISOString() };
           writeAccountCache(cachedAccount);
           applyAccountSnapshot(cachedAccount);
         }

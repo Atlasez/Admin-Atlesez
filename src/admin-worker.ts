@@ -758,11 +758,12 @@ async function listReportAdminPermissions(
       COALESCE(m.year, '') AS year,
       COALESCE(m.interests, '') AS interests,
       COALESCE(m.avatar_url, '') AS avatar_url,
+      COALESCE(m.updated_at, '') AS avatar_updated_at,
       COALESCE(d.discord_user_id, '') AS discord_user_id
      FROM report_admin_permissions p
      LEFT JOIN editorial_member_profiles m ON m.email = p.email
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = p.email
-     GROUP BY p.email, m.display_name, m.university, m.year, m.interests
+     GROUP BY p.email, m.display_name, m.university, m.year, m.interests, m.avatar_url, m.updated_at, d.discord_user_id
      ORDER BY display_name, p.email`,
   ).all<{
     email: string;
@@ -772,6 +773,7 @@ async function listReportAdminPermissions(
     year: string;
     interests: string;
     avatar_url: string;
+    avatar_updated_at: string;
     discord_user_id: string;
   }>();
   const permissions = result.results

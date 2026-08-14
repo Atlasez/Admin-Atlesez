@@ -771,6 +771,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const renderCommentBody = (value: string) => esc(value).replace(/(^|[\s([{「（])(@[\p{L}\p{N}_-]+(?:\s+\d{4})?)/gu, "$1<mark class=\"comment-mention\">$2</mark>");
     const renderTagOptions = (attribute: string, selected: string[] = []) => commentTagOptions.map((tag) => `<label class="comment-tag-option"><input type="checkbox" value="${esc(tag)}" data-${attribute} ${selected.includes(tag) ? "checked" : ""}><span>${esc(tag)}</span></label>`).join("");
     const anonymousMemberLabel = (value: string) => { const normalized = value.trim().toLowerCase(); let hash = 2166136261; for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); } return String((hash >>> 0) % 9000 + 1000); };
+    const versionedAvatarUrl = (source: string, version: string) => { if (!source || !version || !/^https:\/\//i.test(source)) return source; try { const url = new URL(source); url.searchParams.set("atlasez_avatar_version", version); return url.toString(); } catch { return source; } };
     const renderCommentCard = (item: Comment, isReply = false) => {
       const name = item.author_display_name?.trim();
       const displayName = name && name !== "表示名未設定" ? name : anonymousMemberLabel(item.created_by);
@@ -831,9 +832,8 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
         if (!source) return;
         const fallback = avatarElement.querySelector<HTMLElement>("[data-comment-avatar-fallback]");
         const image = document.createElement("img");
-        image.src = source;
+        image.src = versionedAvatarUrl(source, avatarElement.dataset.avatarVersion ?? "");
         image.alt = "";
-        image.loading = "lazy";
         image.decoding = "async";
         image.addEventListener("load", () => { if (fallback) fallback.hidden = true; });
         image.addEventListener("error", () => { image.remove(); if (fallback) fallback.hidden = false; avatarElement.dataset.avatarReady = "failed"; });
@@ -843,10 +843,10 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     };
     new MutationObserver(hydrateCommentAvatars).observe(comments, { childList: true, subtree: true });
     document.addEventListener("atlasez-profile-updated", (event) => {
-      const detail = event instanceof CustomEvent ? event.detail as { avatarUrl?: unknown } : undefined;
+      const detail = event instanceof CustomEvent ? event.detail as { avatarUrl?: unknown; updatedAt?: unknown } : undefined;
       const avatarUrl = detail?.avatarUrl;
       if (!currentUserEmail || typeof avatarUrl !== "string") return;
-      currentComments = currentComments.map((item) => item.created_by === currentUserEmail ? { ...item, author_avatar_url: avatarUrl, author_avatar_updated_at: new Date().toISOString() } : item);
+      currentComments = currentComments.map((item) => item.created_by === currentUserEmail ? { ...item, author_avatar_url: avatarUrl, author_avatar_updated_at: typeof detail?.updatedAt === "string" ? detail.updatedAt : new Date().toISOString() } : item);
       renderComments();
     });
     const mentionSuggestions = document.createElement("div");
