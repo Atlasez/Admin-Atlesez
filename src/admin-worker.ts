@@ -442,6 +442,66 @@ const json = (body: unknown, status = 200) =>
 const text = (value: unknown, maximum: number) =>
   typeof value === "string" ? value.trim().slice(0, maximum) : "";
 
+/**
+ * プロフィール画像はD1にdata URLとして保存されることがあります。参加者一覧や
+ * コメントのHTML/JSONへそのまま埋め込むと、画面の初期化が遅くなり、古い画像が
+ * ブラウザに残りやすくなります。認証済みの同一オリジンURLから配信することで、
+ * すべての管理画面が同じ画像取得経路とキャッシュ制御を使えるようにします。
+ */
+const memberAvatarEndpoint = (email: string, updatedAt?: string | null) => {
+  const version = updatedAt?.trim() || "0";
+  return `/api/admin/avatar?email=${encodeURIComponent(email)}&v=${encodeURIComponent(version)}`;
+};
+
+const AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i;
+
+async function getMemberAvatar(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const email = new URL(request.url).searchParams.get("email")?.trim().toLowerCase() ?? "";
+  if (!EMAIL_PATTERN.test(email)) return new Response("Not found", { status: 404 });
+  const profile = await env.REPORTS.prepare(
+    "SELECT avatar_url, updated_at FROM editorial_member_profiles WHERE email = ?",
+  ).bind(email).first<{ avatar_url: string; updated_at: string }>();
+  const source = profile?.avatar_url?.trim() ?? "";
+  if (!source) return new Response("Not found", { status: 404 });
+  const etag = profile?.updated_at ? `\"${profile.updated_at}\"` : undefined;
+  if (etag && request.headers.get("if-none-match") === etag)
+    return new Response(null, { status: 304, headers: { ETag: etag } });
+
+  const dataUrl = source.match(AVATAR_DATA_URL);
+  if (dataUrl) {
+    try {
+      const binary = atob(dataUrl[2]);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+      const headers = new Headers({
+        "Cache-Control": "private, no-store, max-age=0",
+        "Content-Type": dataUrl[1].toLowerCase(),
+        "X-Content-Type-Options": "nosniff",
+      });
+      if (etag) headers.set("ETag", etag);
+      return new Response(bytes, { headers });
+    } catch {
+      return new Response("Invalid avatar", { status: 422 });
+    }
+  }
+  if (!/^https:\/\//i.test(source)) return new Response("Not found", { status: 404 });
+  try {
+    const upstream = await fetch(source);
+    if (!upstream.ok || !upstream.body) return new Response("Not found", { status: 404 });
+    const headers = new Headers({
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
+    });
+    headers.set("Content-Type", upstream.headers.get("content-type")?.split(";")[0] || "image/*");
+    if (etag) headers.set("ETag", etag);
+    return new Response(upstream.body, { status: 200, headers });
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
+}
+
 const normalizedText = (value: unknown, maximum: number) =>
   text(value, maximum)
     .normalize("NFKC")
@@ -781,6 +841,10 @@ async function listReportAdminPermissions(
       const rawDisplayName = member.display_name?.trim() ?? "";
       return {
         ...member,
+        // 画像本体はAPIレスポンスに埋め込まず、認証済みの同一オリジンから取得する。
+        avatar_url: member.avatar_url
+          ? memberAvatarEndpoint(member.email, member.avatar_updated_at)
+          : "",
         display_name: memberDisplayName(rawDisplayName, member.email),
         display_name_auto: !rawDisplayName || rawDisplayName === "表示名未設定",
       };
@@ -3944,7 +4008,12 @@ async function getEditorialDocument(
       comment.created_by,
     ),
     author_avatar_url:
-      authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
+      authorProfileByEmail.get(comment.created_by)?.avatar_url
+        ? memberAvatarEndpoint(
+            comment.created_by,
+            authorProfileByEmail.get(comment.created_by)?.updated_at,
+          )
+        : "",
     author_avatar_updated_at:
       authorProfileByEmail.get(comment.created_by)?.updated_at ?? "",
     // 旧コメントの一件だけの引用も、同じUIで読めるようにする。
@@ -5553,6 +5622,8 @@ export default {
       if (request.method === "PUT") return saveMyProfile(request, env);
       return json({ error: "GET、PUTのみ利用できます。" }, 405);
     }
+    if (url.pathname === "/api/admin/avatar" && request.method === "GET")
+      return getMemberAvatar(request, env);
     if (url.pathname === "/api/admin/portal" && request.method === "GET")
       return portalOverview(request, env);
     const projectOperationsMatch = url.pathname.match(
