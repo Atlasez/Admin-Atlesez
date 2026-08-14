@@ -159,7 +159,7 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
   type Report = {
     id: string; article_title: string; article_url: string; report_type: string;
     details: string; contact: string | null; locale: string; subject: string; category: string; status: ReportStatus;
-    admin_note: string; created_at: string; updated_at: string;
+    admin_note: string; created_at: string | null; updated_at: string | null;
   };
   type Permission = { email: string; subject: string };
   type Analytics = {
@@ -188,7 +188,21 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "対応中", recheck: "再確認", resolved: "解決済み" };
     const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
     const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
-    const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    // D1 の旧レコードには空の updated_at が残っているため、日時表示は必ず検証する。
+    // Intl.DateTimeFormat.format は不正な日時で RangeError を投げるので、画面全体の
+    // 読み込みが失敗しないように未設定表示へフォールバックする。
+    const validDateValue = (value: unknown): string | null => {
+      if (typeof value !== "string" && typeof value !== "number") return null;
+      const dateValue = new Date(value);
+      return Number.isNaN(dateValue.getTime()) ? null : dateValue.toISOString();
+    };
+    const date = (value: unknown) => {
+      const normalized = validDateValue(value);
+      return normalized
+        ? new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(normalized))
+        : "日時未設定";
+    };
+    const dateAttribute = (value: unknown) => validDateValue(value) ?? "";
     const safeUrl = (value: string) => {
       try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; }
     };
@@ -290,7 +304,7 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
         return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
           <summary class="report-summary">
             <div class="report-main"><p class="report-label">記事</p><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${escapeHtml(report.locale)}</p></div>
-            <span class="report-date"><small>受信日時</small><time datetime="${escapeHtml(report.created_at)}">${date(report.created_at)}</time></span><span class="report-date"><small>最終対応日時</small><time datetime="${escapeHtml(report.updated_at)}">${date(report.updated_at)}</time></span><span class="report-type"><small>種別</small>${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="report-status"><small>状態</small><b class="status-badge">${labels[report.status] ?? "未確認"}</b></span>
+            <span class="report-date"><small>受信日時</small><time datetime="${escapeHtml(dateAttribute(report.created_at))}">${date(report.created_at)}</time></span><span class="report-date"><small>最終対応日時</small><time datetime="${escapeHtml(dateAttribute(report.updated_at))}">${date(report.updated_at)}</time></span><span class="report-type"><small>種別</small>${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="report-status"><small>状態</small><b class="status-badge">${labels[report.status] ?? "未確認"}</b></span>
           </summary>
           <div class="report-content">
           ${url ? `<a class="report-link" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">記事を開く</a>` : ""}

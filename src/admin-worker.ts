@@ -648,10 +648,22 @@ async function listArticleReports(
     : await statement.all<ArticleReport>();
   // 問題内容は全運営者が確認できるが、送信者の連絡先は全分野管理者だけに開示する。
   return json({
-    reports: result.results.map((report) => ({
-      ...report,
-      contact: scope.isManager ? report.contact : null,
-    })),
+    reports: result.results.map((report) => {
+      // 旧レコードの updated_at が空でも、受信日時を最終対応日時として返す。
+      // これによりクライアントが Invalid time value を生成しない。
+      const createdAt = typeof report.created_at === "string" && report.created_at.trim()
+        ? report.created_at
+        : null;
+      const updatedAt = typeof report.updated_at === "string" && report.updated_at.trim()
+        ? report.updated_at
+        : createdAt;
+      return {
+        ...report,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        contact: scope.isManager ? report.contact : null,
+      };
+    }),
   });
 }
 
