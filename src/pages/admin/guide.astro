@@ -3,37 +3,157 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
 ---
 
-<AdminLayout title="作業の進め方" description="アトラス運営者向けの統合マニュアル">
+<AdminLayout title="作業の進め方" description="アトラス運営サイトの使い方と運営マニュアル">
   <main class="guide" id="main">
     <AdminNav current="guide" />
-    <header class="guide-heading"><p>運営マニュアル</p><h1>アトラス運営用ガイド</h1><span>旧・学習サイト運営用ページのマニュアルを、現在の編集室での作業に合わせて移行・整理しています。</span></header>
+    <header class="guide-heading">
+      <p>ATLASEZ / 学習サイト運営</p>
+      <h1>運営用ガイド</h1>
+      <span>現在の編集室・査読・公開・進捗管理に合わせた、運営者向けの使い方です。</span>
+    </header>
+
     <div class="guide-grid">
-      <aside aria-label="ガイドの目次"><strong>目次</strong><a href="#start">はじめに</a><a href="#vision">コンセプト・方針</a><a href="#scope">対象分野</a><a href="#flow">役割と作業の流れ</a><a href="#sessions">同時作業会</a><a href="#discord">Discord</a><a href="#drive">Google Drive</a><a href="#legacy-sites">旧Google Sites方式</a><a href="#math">LaTeX・MathJax</a><a href="#links">リンク集</a></aside>
+      <aside aria-label="ガイドの目次">
+        <strong>目次</strong>
+        <a href="#start">まず確認すること</a>
+        <a href="#roles">権限と画面</a>
+        <a href="#articles">記事の作成・公開</a>
+        <a href="#comments">コメント・査読</a>
+        <a href="#operations">ToDo・日程・進捗</a>
+        <a href="#members">応募・参加者・Discord</a>
+        <a href="#reports">問題報告・通知</a>
+        <a href="#math">数式とプレビュー</a>
+        <a href="#trouble">困ったとき</a>
+        <a href="#developers">開発者向け</a>
+      </aside>
+
       <article>
-        <section id="start"><h2>はじめに：参加後にすること</h2><ol><li><a href="https://discord.gg/ppaHTKtbek" target="_blank" rel="noreferrer">Discord</a>へ参加し、サーバーの表示名を本名フルネームに設定します。通称名・日常的に使う名前・文化的なニックネームも使えます。姓と名の間は半角スペース、必要なら末尾に読み仮名を付けてください。</li><li>「#はじめに」の案内に従い、運営内運営による確認後に「運営メンバー」ロールを受け取ります。ロール付与後に全チャンネルを閲覧できます。</li><li>「#ロール付与」と所属校向けの詳細ロールから、自分に合うロールを設定します。</li><li>「#自己紹介」で簡単な自己紹介をします。加入手続きが完了して初めて正式参加です。</li><li><a href="https://drive.google.com/drive/folders/1UQAdXMwzOBilPx7JLtTj2-711bIYTu61" target="_blank" rel="noreferrer">Google Drive</a>で「※資料」フォルダと担当分野のフォルダが共有されているか確認します。見られない場合は運営管理者へ連絡してください。</li><li>この運営用サイトをGoogleアカウントで開き、記事編集で自分の担当分野が正しく表示されるか確認します。</li></ol><p class="notice">Discord、Google Drive、この運営用サイトはブックマークしておくことを推奨します。</p></section>
+        <section id="start">
+          <h2>まず確認すること</h2>
+          <p class="lead">運営サイトは、学習者向けサイトとは別のGoogle OAuth認証付きサイトです。</p>
+          <div class="link-grid">
+            <a href="/admin/portal/"><strong>メンバー用ホーム</strong><span>参加プロジェクトと横断ToDo</span></a>
+            <a href="/admin/atlas/"><strong>学習サイト「アトラス」運営用サイト</strong><span>原稿・査読・問題報告・進捗</span></a>
+            <a href="/admin/guide/"><strong>このガイド</strong><span>現在の運用手順</span></a>
+          </div>
+          <p>本番URLは <code>https://atlasez-admin.ukyoukay0.workers.dev</code> です。学習者向けサイトは <code>https://atlasez-web-1.ukyoukay0.workers.dev/atlas/ja/</code> です。ロゴとパンくずからホームや上位ページへ戻れます。</p>
+        </section>
 
-        <section id="vision"><h2>学習サイトのコンセプト・方針</h2><p class="lead">「一人一人の自学自習をみんなで支える学習サイト」</p><h3>作る動機</h3><ul><li>学びを、より楽しく効率よくできるようにする。</li><li>効率化で生まれた時間を、別の学びへ使えるようにする。</li><li>分かることの面白さを起点に、学びを続けられるようにする。</li><li>初学者が、正確で整理された情報に最初から到達できるようにする。</li><li>良質な学習資源を無料で届ける。</li></ul><h3>目指すコンテンツ</h3><ul><li>学問を学ぶ面白み・目的・意味を明確にする。</li><li>単元を断片化せず、体系的な流れを作る。前提・関連・次の学習先を明示し、現在地と目標の距離が分かるようにする。</li><li>中高から大学・専門段階までを視野に入れ、日本国内で扱われにくい内容も含めて世界水準の網羅性を目指す。</li><li>つまずきを先回りし、例だけで分かった気にさせず、定義の理由・考え方まで扱う。</li><li>簡潔で整理された説明と、効果的な図表を組み合わせる。図で一目で分かることを長文で繰り返さない。</li><li>複数の見方・別解・現象的理解と数学的理解を併記し、多面的な理解を支える。</li><li>身近な事象・実験・歴史的背景・人物紹介も取り入れ、読み物としても楽しめる記事にする。</li></ul></section>
+        <section id="roles">
+          <h2>権限と画面</h2>
+          <ul class="roles">
+            <li><b>分野担当</b><span>自分に割り当てられた分野の原稿・コメント・ToDoを扱います。</span></li>
+            <li><b>全分野管理者</b><span>参加者管理、応募承認、Discordロール同期、査読完了、公開・公開取消を行います。</span></li>
+          </ul>
+          <p>表示されないメニューをURL直入力で迂回することはできません。権限は画面だけでなく管理WorkerのAPIでも検査されます。管理メニューは外側クリックまたはEscで閉じられます。</p>
+          <div class="table-wrap"><table><thead><tr><th>画面</th><th>用途</th></tr></thead><tbody>
+            <tr><td><a href="/admin/articles/">編集・査読</a></td><td>原稿の検索、絞り込み、編集画面への移動</td></tr>
+            <tr><td><a href="/admin/editor/">記事編集</a></td><td>本文、プレビュー、メモ、コメント、版履歴</td></tr>
+            <tr><td><a href="/admin/operations/">進捗・ToDo・日程</a></td><td>自分の作業、依頼、報告、予定</td></tr>
+            <tr><td><a href="/admin/reports/">問題報告・統計</a></td><td>読者からの報告と匿名閲覧統計</td></tr>
+            <tr><td>管理メニュー</td><td>運営者・担当管理、応募管理、連携設定など（権限により表示）</td></tr>
+          </tbody></table></div>
+        </section>
 
-        <section id="scope"><h2>対象分野と横断的な役割</h2><p>旧ページでは、漢字・古文・漢文・地理・日本史・世界史・哲学・考古学・認知心理学、数学・物理・化学・生物、地質・気象・海洋・天文・薬学、情報・水産学・建築・言語学・英語などを扱う方針でした。加えて英語版・タイ語版・韓国語版・ネパール語版・中国語版の作成、ページデザイン、マニュアル作成などの横断的な担当があります。</p><p>担当分野は一つに限りません。現在の権限は、運営管理者がメールアドレスごとに設定します。自分の担当以外を見られない、または編集できない場合は、問題報告・統計ページの「担当分野の管理」を利用できる運営管理者へ依頼してください。</p></section>
+        <section id="articles">
+          <h2>記事の作成・公開</h2>
+          <div class="flow"><b>下書き保存</b><span>→</span><b>査読を依頼</b><span>→</span><b>査読完了</b><span>→</span><b>公開</b></div>
+          <ol>
+            <li>「編集・査読」で <strong>新規記事作成</strong>、<strong>加筆・修正</strong>、または既存記事の絞り込みを選びます。</li>
+            <li>本文とWebプレビューを確認し、「記事設定」で分野・カテゴリ・slug・言語を確認します。言語ディレクトリはISO 639-3（日本語 <code>jpn</code>、英語 <code>eng</code>）です。</li>
+            <li><strong>保存する</strong>で下書きを保存します。保存状態は画面上部で確認でき、未保存のまま移動すると警告が出ます。</li>
+            <li>執筆者が<strong>査読を依頼する</strong>と、運営内運営へ通知されます。査読は匿名で行います。</li>
+            <li>全分野管理者が査読結果を確認し、必要なら保留・修正依頼にします。査読完了後は公開操作へ進めます。</li>
+            <li>全分野管理者が<strong>公開する</strong>を押し、確認ダイアログで実行します。学習サイトへの反映には数十秒から数分かかります。</li>
+            <li>公開後に修正する場合は<strong>公開を取り消す</strong>で下書きへ戻し、修正後に再査読します。</li>
+          </ol>
+          <p class="notice">「原稿状態（下書き・査読中・査読済み）」と「公開状態（未公開・公開済み）」は別の情報です。公開済み記事が査読済みと表示されても異常ではありません。</p>
+        </section>
 
-        <section id="flow"><h2>役割と作業の流れ</h2><h3>主な役割</h3><dl><dt>記事執筆</dt><dd>構成メモを作り、メモ以上・記事未満の下書きを経て、記事として仕上げます。単独執筆・複数人の共同執筆のどちらでも構いません。</dd><dt>サイト全体の構成・ページデザイン</dt><dd>記事のつながり、一覧性、図表・レイアウト、操作性を設計します。</dd><dt>LaTeX・図表・校正</dt><dd>数式入力、図表作成、表記確認、論理や説明の推敲を担います。</dd><dt>Web開発・広報・運営内運営</dt><dd>サイト機能、SNS・募集、運営内の交流や作業会の企画を担います。</dd></dl><h3>現在の編集室での標準フロー</h3><div class="flow"><b>記事案</b><span>→</span><b>下書き</b><span>→</span><b>査読中</b><span>→</span><b>査読済み</b><span>→</span><b>公開</b></div><ol><li>記事編集で新規原稿を作成するか、既存記事を下書きに取り込みます。</li><li>左のMarkdown原稿と右のプレビューを見ながら執筆し、必要な記事設定を入力して保存します。</li><li>状態を「査読中」に変更し、査読・フィードバック欄で修正依頼や確認結果を残します。</li><li>運営管理者が内容を確認して「査読済み」にします。保留にする場合は理由をコメントに残します。</li><li>運営管理者が「査読済み原稿を公開」を押し、確認画面で承認すると、学習サイトへの自動ビルドが始まります。反映まで数十秒から数分かかります。</li><li>公開後も、誤りや改善点は問題報告・コメントから確認し、必要に応じて下書きへ戻して改訂します。</li></ol><p class="notice">旧ページにあった「記事案出し→記事執筆→ページ作成→校正/推敲→公開→振り返り」という考え方は維持しつつ、現在は編集室・版履歴・コメント・公開操作に集約しています。</p></section>
+        <section id="comments">
+          <h2>コメント・査読</h2>
+          <p>本文をドラッグして範囲を選び、コメントを追加します。「定義不足」「誤字」「脱字」などのタグだけでも送信できます。返信にもタグと引用を付けられ、<code>@</code> を入力すると候補が表示されます。</p>
+          <ul><li>未反映・確認済みなどの状態で対応状況を共有する。</li><li>コメントや返信は記事の版履歴と一緒に残る。</li><li>査読者の氏名やメールアドレスは記事執筆者へ表示しない。</li></ul>
+        </section>
 
-        <section id="sessions"><h2>同時作業会</h2><p>旧ページには、世界史・数学・物理・化学・生物・天文・情報・地学分野・駒場キャンパス横断の同時作業会が案内されていました。開催日時は変更されうるため、現在の予定はDiscordの各分野チャンネルで確認してください。</p><ul><li>数学・物理・化学・生物などは、Discord VCまたは対面で、原稿執筆・相談・査読を同時に進めます。</li><li>分野横断の作業会では、専門外の記事の読み手として参加し、説明の分かりやすさや導線の確認に協力できます。</li><li>参加できない場合も、Discordで作業内容・相談事項・次の担当を共有してください。</li></ul></section>
+        <section id="operations">
+          <h2>ToDo・日程・進捗</h2>
+          <p>「進捗・ToDo・日程」では、<strong>自分が担当するToDo</strong>、<strong>自分が依頼したToDo</strong>、<strong>自分が送った進捗報告</strong>を切り替えて確認できます。</p>
+          <ul><li>期限が近い順、期限切れ、今日まで、担当者、依頼者で絞り込む。</li><li>期限日時、タイムゾーン、繰り返しリマインダーを設定する。</li><li>日程調整で地域別タイムゾーン、予定、参加可否を登録する。</li></ul>
+          <p class="notice">進捗報告を保存すると、設定済みのDiscord分野チャンネルと全体進捗チャンネルへ自動通知されます。カレンダーはD1の予定データをブラウザで表示します。</p>
+        </section>
 
-        <section id="discord"><h2>Discordの使い方</h2><h3>参加と基本操作</h3><ol><li>招待リンクから参加すると、最初は「#ようこそ」と「#はじめに」のみ閲覧できます。</li><li>表示名の設定と運営メンバーロールの付与後、全チャンネルを閲覧できます。</li><li>メンションは <code>@</code> の後に個人名またはロール名を入力し、候補から選択します。文字を入力するだけでは通知されないため、候補を必ず選んでください。</li><li>リアクションは、スマホではメッセージ長押し、PCではカーソルを合わせて右上に出る絵文字から追加します。</li><li>スレッドは、スマホでは長押しして「スレッドを作成」、PCでは「…」から作成します。議論が続く内容はスレッドにまとめます。</li><li>送信済みメッセージの編集・別チャンネルへの転送は、スマホでは長押し、PCではカーソルを合わせて表示される操作メニューから行います。</li></ol><p>分からない操作がある場合も、スマホでは長押し、PCではカーソルを合わせると利用できる操作が表示されます。ブラウザ版よりアプリ版の利用を推奨します。</p></section>
+        <section id="members">
+          <h2>応募・参加者・Discord</h2>
+          <p>運営参加応募はログイン不要です。氏名（姓・名・ふりがな）、所属区分、学校・研究機関、学年、タイムゾーン、関心分野を入力します。候補にない学校は自由入力でき、承認時に運営側が確認します。</p>
+          <p>応募の承認、所属・学年・担当分野の変更、DiscordユーザーIDの登録、ロール同期は全分野管理者だけが行います。参加者カードの<strong>変更を保存してDiscordロールを同期</strong>で、属性保存とロール同期を一度に実行します。</p>
+        </section>
 
-        <section id="drive"><h2>Google Driveの使い方</h2><p>資料・画像・参考コンテンツの管理にはGoogle Driveを使います。「学習コンテンツ集」は、既存のサイト・動画・書籍から、構成や説明の良い点・改善点を調べて蓄積するための資料です。</p><ul><li>新たに参考になるコンテンツを見つけたら追加します。</li><li>Windowsでは <code>Ctrl + F</code>、Macでは <code>command + F</code> で検索し、重複を避けます。</li><li>各項目を調べたら、A列の「調査」にチェックを入れます。</li><li>サイト・YouTube・書籍は別シートで管理します。</li><li>担当フォルダの閲覧・編集権限がない場合は、運営管理者へ依頼します。</li></ul></section>
+        <section id="reports">
+          <h2>問題報告・通知</h2>
+          <p>学習サイトの記事から送られた問題報告は「問題報告・統計」で確認します。分野に応じたDiscordチャンネルへ通知され、必要な通知は右上のベルにも届きます。既読にすると未読数からは消えますが、通知履歴は残ります。</p>
+          <p>APIエラーや読み込み失敗が出た場合は、再読み込み・再ログインを試してください。アクセストークン、Webhook、個人情報を画面やGitHubのIssueへ貼らないでください。</p>
+        </section>
 
-        <section id="legacy-sites"><h2>旧Google Sites方式（移行済み・参照用）</h2><p>旧ページではGoogle Sitesを用いてページを作成していました。Google Driveからサイトを作り、右側メニューの「挿入」「ページ」を使って通常ページ・ページ全体の埋め込み・メニュー・リンクを管理する方式です。編集はPCのGoogle Chromeが推奨されていました。</p><p>現在のアトラスはこの方式ではなく、記事編集ワークスペースで原稿を保存・査読・公開します。新規記事の作成を旧Google Sitesで始める必要はありません。ただし、過去コンテンツの移行や旧資料を読む際のために、以下の手順を記録します。</p><h3>画像の旧手順</h3><ol><li>運営のGoogle Driveへ画像をアップロードし、オーナーを組織アカウントへ移し、「リンクを知っている全員」が閲覧できる設定にします。</li><li>共有リンクを、未ログインのブラウザまたはプライベートウィンドウで開きます。</li><li>開発者ツールから <code>lh3.googleusercontent.com</code> の <code>drive-viewer</code> にある画像URLを確認します。</li><li><code>img</code>タグの<code>src</code>へ画像そのもののURLを指定し、末尾のサイズ指定や <code>u/0/</code> などを取り除きます。</li></ol><h3>フォームの旧手順</h3><p>旧方式はサーバーを持たないためGoogle Formsを利用し、フォームの<code>action</code>属性と入力欄の<code>name</code>属性を使って独自デザインのフォームを作っていました。画面離脱を防ぐため<code>iframe</code>の<code>srcdoc</code>へフォームHTMLを書き、必要に応じて送信完了時の表示を独自に用意していました。</p><p>現在の問題報告フォームは運営サイトのデータベースへ直接送信されるため、新規フォームにこの旧方式を使う必要はありません。</p></section>
+        <section id="math">
+          <h2>数式とプレビュー</h2>
+          <p>WebプレビューはKaTeX（高速）またはMathJax（互換性重視）を選べます。LaTeXエンジンは upLaTeX / pdfLaTeX / XeLaTeX / LuaLaTeX から記事設定で選びます。本文へ <code>script</code> タグを追加する必要はありません。</p>
+          <p>行内数式は <code>\(...\)</code>、別行数式は <code>\[...\]</code> または <code>$$...$$</code> を使います。表示が崩れた場合はまずMathJaxへ切り替え、括弧・中括弧・環境の閉じ忘れを確認してください。</p>
+        </section>
 
-        <section id="math"><h2>LaTeX・MathJaxの書き方</h2><p>数式はLaTeXで記述します。編集室ではKaTeX（高速）とMathJax（より広いLaTeX互換）を切り替えてプレビューできます。現在は読み込み用の<code>script</code>タグを原稿へ書く必要はありません。</p><h3>数式環境</h3><ul><li>行内数式：<code>\(...\)</code> または <code>$...$</code></li><li>別行数式：<code>\[...\]</code> または <code>$$...$$</code></li><li>1行の番号付き数式：<code>\begin&#123;equation&#125; ... \end&#123;equation&#125;</code></li><li>位置合わせをする数式：<code>\begin&#123;align&#125; ... \end&#123;align&#125;</code></li><li>数式内で複数行に分ける：<code>split</code>、行列・表：<code>array</code></li></ul><p>MathJaxでは数式に関する環境のみを使用します。論文用の<code>document</code>環境は使えません。<code>eqnarray</code>などの非推奨環境も避けてください。</p><h3>基本記法</h3><ul><li>分数：<code>\frac&#123;分子&#125;&#123;分母&#125;</code>、n乗根：<code>\sqrt[n]&#123;中身&#125;</code></li><li>大きさを自動調整する括弧：<code>\left( ... \right)</code>、<code>\left[ ... \right]</code>、<code>\left\&#123; ... \right\&#125;</code></li><li>上付き・下付き：<code>^</code>、<code>_</code>。複数文字は<code>&#123;...&#125;</code>でまとめます。</li><li>代表的な演算子：<code>\cdot</code>（内積）、<code>\times</code>（外積）、<code>\sum</code>、<code>\prod</code>、<code>\int</code>、<code>\oint</code>、<code>\lim_&#123;n\to\infty&#125;</code></li><li>関数名：<code>\sin</code>、<code>\cos</code>、<code>\log</code>、<code>\ln</code>、<code>\exp</code>などを使います。</li><li>新しいコマンド：<code>\def\コマンド名&#123;定義&#125;</code>。引数を取る場合は<code>#1</code>、<code>#2</code>を用います。</li></ul><h3>拡張</h3><p>物理では<code>physics</code>、化学では<code>mhchem</code>を利用できます。MathJaxで拡張を使う際は原稿冒頭に<code>\[\require&#123;パッケージ名&#125;\]</code>を置く方法が旧マニュアルに記載されています。表示が崩れる場合は、編集室の組版方式をMathJaxに切り替えて確認してください。</p></section>
+        <section id="trouble">
+          <h2>困ったとき</h2>
+          <ul><li>読み込み中のままなら、ページを再読み込みしてGoogleアカウントのログイン状態を確認する。</li><li><code>Unexpected token '&lt;'</code> や <code>Unexpected end of JSON</code> が出たら再ログインして再試行する。</li><li>公開後の反映は数十秒から数分待ってから、学習サイトの同じURLを確認する。</li><li>解決しない場合は、記事URL・発生時刻・操作・エラー文だけを問題報告に記録する。</li></ul>
+        </section>
 
-        <section id="links"><h2>リンク集・更新方針</h2><ul><li><a href="/admin/editor/">記事編集ワークスペース</a></li><li><a href="/admin/reports/">問題報告・統計</a></li><li><a href="https://discord.gg/ppaHTKtbek" target="_blank" rel="noreferrer">Discord</a></li><li><a href="https://drive.google.com/drive/folders/1UQAdXMwzOBilPx7JLtTj2-711bIYTu61" target="_blank" rel="noreferrer">Google Drive</a></li><li><a href="https://sites.google.com/view/atlasez-adm-lw" target="_blank" rel="noreferrer">旧・学習サイト運営用ページ</a>（移行元・履歴確認用）</li><li><a href="https://atlasez-web-1.ukyoukay0.workers.dev/atlas/ja/" target="_blank" rel="noreferrer">学習サイト「アトラス」</a></li></ul><p>このガイドは旧ページの内容を移行したものです。開催日時、担当者、外部サービスの画面仕様など、変わりやすい情報はDiscord・Google Drive・現在の運営画面を正として更新してください。</p></section>
+        <section id="developers">
+          <h2>開発者向け</h2>
+          <p>運営UIは <code>src/pages/admin/</code>、管理API・認証・D1は <code>src/admin-worker.ts</code>、公開サイトと公開APIは <code>src/worker.ts</code> です。日常の確認は次のコマンドで行います。</p>
+          <pre><code>npm ci
+npm run check
+npm run lint
+npm test
+npm run build
+npm run dev:admin</code></pre>
+          <p><a href="https://github.com/mitukx/Atlasez01" target="_blank" rel="noreferrer">GitHubリポジトリ</a>の変更は、秘密情報を含めずPull Requestで確認します。構成やD1・デプロイの詳細はGitHubの <a href="https://github.com/mitukx/Atlasez01/blob/main/docs/DEVELOPMENT_GUIDE.md" target="_blank" rel="noreferrer">開発・引き継ぎガイド</a> と <a href="https://github.com/mitukx/Atlasez01/blob/main/docs/ADMIN_GUIDE.md" target="_blank" rel="noreferrer">運営サイト管理ガイド</a> を参照してください。</p>
+        </section>
       </article>
     </div>
   </main>
 </AdminLayout>
 
 <style>
-  .guide { --accent:var(--accent-primary); --border:var(--border-default); --surface:var(--background-primary); --alt:var(--background-secondary); color:var(--text-primary); margin:0 auto; max-width:1100px; padding:0 1.25rem 4rem; }.guide-heading { border-bottom:1px solid var(--border); padding:2rem 0 1.25rem; }.guide-heading p { color:var(--accent); font-size:.78rem; font-weight:800; letter-spacing:.08em; margin:0; }.guide-heading h1 { margin:.3rem 0; }.guide-heading span { color:var(--text-secondary); }.guide-grid { display:grid; gap:2.5rem; grid-template-columns:13rem minmax(0,1fr); padding-top:1.6rem; }.guide-grid aside { align-self:start; border-top:2px solid var(--accent); display:grid; gap:.15rem; padding-top:.6rem; position:sticky; top:1rem; }.guide-grid aside strong { margin-bottom:.35rem; }.guide-grid aside a { color:var(--text-primary); font-size:.88rem; padding:.3rem 0; }.guide-grid article { display:grid; gap:2.2rem; }.guide-grid section { border-top:1px solid var(--border); padding-top:1rem; scroll-margin-top:1rem; }.guide-grid h2 { margin:0 0 .7rem; }.guide-grid h3 { font-size:1rem; margin:1.25rem 0 .4rem; }.guide-grid li,.guide-grid p,.guide-grid dd { line-height:1.8; }.lead { color:var(--accent); font-size:1.12rem; font-weight:800; }.notice { background:var(--alt); border-left:3px solid var(--accent); padding:.65rem .8rem; }.flow { align-items:center; display:flex; flex-wrap:wrap; gap:.5rem; margin:.8rem 0 1rem; }.flow b { background:var(--alt); border:1px solid var(--border); padding:.35rem .55rem; }.flow span { color:var(--accent); } dl { border-top:1px solid var(--border); margin:0; } dt { background:var(--alt); border-bottom:1px solid var(--border); font-weight:800; padding:.55rem .7rem; } dd { border-bottom:1px solid var(--border); margin:0; padding:.55rem .7rem; } code { background:var(--alt); border:1px solid var(--border); overflow-wrap:anywhere; padding:.05rem .2rem; } @media(max-width:760px){.guide-grid{grid-template-columns:1fr}.guide-grid aside{position:static}.guide-heading{padding-top:1.4rem}}
+  .guide { --accent:var(--accent-primary); --border:var(--border-default); --surface:var(--background-primary); --alt:var(--background-secondary); color:var(--text-primary); margin:0 auto; max-width:1120px; padding:0 1.25rem 4rem; }
+  .guide-heading { border-bottom:1px solid var(--border); padding:2rem 0 1.25rem; }
+  .guide-heading p { color:var(--accent); font-size:.78rem; font-weight:800; letter-spacing:.08em; margin:0; }
+  .guide-heading h1 { margin:.3rem 0; }
+  .guide-heading span { color:var(--text-secondary); }
+  .guide-grid { display:grid; gap:2.5rem; grid-template-columns:14rem minmax(0,1fr); padding-top:1.6rem; }
+  .guide-grid aside { align-self:start; border-top:2px solid var(--accent); display:grid; gap:.15rem; padding-top:.6rem; position:sticky; top:1rem; }
+  .guide-grid aside strong { margin-bottom:.35rem; }
+  .guide-grid aside a { color:var(--text-primary); font-size:.88rem; padding:.3rem 0; }
+  .guide-grid article { display:grid; gap:2rem; }
+  .guide-grid section { border-top:1px solid var(--border); padding-top:1rem; scroll-margin-top:1rem; }
+  .guide-grid h2 { margin:0 0 .7rem; }
+  .guide-grid li,.guide-grid p { line-height:1.8; }
+  .lead { color:var(--accent); font-size:1.12rem; font-weight:800; }
+  .notice { background:var(--alt); border-left:3px solid var(--accent); padding:.65rem .8rem; }
+  .flow { align-items:center; display:flex; flex-wrap:wrap; gap:.5rem; margin:.8rem 0 1rem; }
+  .flow b { background:var(--alt); border:1px solid var(--border); padding:.35rem .55rem; }
+  .flow span { color:var(--accent); }
+  .link-grid { display:grid; gap:.75rem; grid-template-columns:repeat(3,minmax(0,1fr)); margin:1rem 0; }
+  .link-grid a { background:var(--alt); border:1px solid var(--border); color:var(--text-primary); display:grid; gap:.25rem; padding:1rem; text-decoration:none; }
+  .link-grid a:hover,.link-grid a:focus-visible { border-color:var(--accent); }
+  .link-grid span { color:var(--text-secondary); font-size:.9rem; }
+  .roles { display:grid; gap:.5rem; list-style:none; padding:0; }
+  .roles li { background:var(--alt); border-left:3px solid var(--accent); display:grid; gap:.15rem; padding:.65rem .8rem; }
+  .roles span { color:var(--text-secondary); }
+  .table-wrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; }
+  th,td { border-bottom:1px solid var(--border); padding:.55rem .65rem; text-align:left; vertical-align:top; }
+  th { background:var(--alt); }
+  code { background:var(--alt); border:1px solid var(--border); overflow-wrap:anywhere; padding:.05rem .2rem; }
+  pre { background:var(--alt); border:1px solid var(--border); overflow:auto; padding:.8rem; }
+  pre code { background:none; border:0; padding:0; }
+  @media(max-width:760px){ .guide-grid{grid-template-columns:1fr}.guide-grid aside{position:static}.guide-heading{padding-top:1.4rem}.link-grid{grid-template-columns:1fr} }
 </style>

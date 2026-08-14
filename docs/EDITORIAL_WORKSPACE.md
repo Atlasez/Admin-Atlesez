@@ -1,45 +1,54 @@
 # 記事編集ワークスペース
 
-`/admin/editor` は、公開学習サイトとは分離された運営者向けの執筆・査読画面です。
-Google OAuthでログインし、既存の `report_admin_permissions` に設定された担当分野だけを扱えます。`*` は全分野です。
+`/admin/editor/` は、学習者向けサイトとは分離された運営者用の執筆・査読画面です。Google OAuthでログインし、担当分野の権限を持つ人だけが原稿を扱えます。日常の操作は [ADMIN_GUIDE.md](ADMIN_GUIDE.md) を正とし、この文書では実装上の境界を説明します。
 
-## できること
+## 画面の役割
 
-- 新規記事の下書き、または公開済みMarkdownを下書きとして取り込む
-- Markdown本文を編集し、`$...$` / `$$...$$` の数式をKaTeXまたはMathJaxで即時プレビューする
-- 原稿単位でコメントを残し、`下書き → 査読中 → 承認済み` を共有する
-- 承認後、公開サイトの形式に合うMarkdown原稿をクリップボードへ出力する
+- `/admin/articles/`: 原稿を検索・絞り込みし、編集画面へ移動する一覧。新規記事作成、加筆・修正、（全分野管理者のみ）査読待ちを選べます。
+- `/admin/editor/`: 本文、Webプレビュー、記事設定、執筆メモ、コメント、版履歴を扱う画面です。
+- `/admin/operations/`: ToDo、進捗報告、日程調整を扱います。
 
-原稿とコメントはD1の `editorial_documents` / `editorial_comments` に保存されます。
-公開済み記事のMarkdownや公開サイトの表示は、この操作だけでは変更されません。
+原稿一覧と編集画面は意図的に分離しています。記事を選んでから編集を始め、一覧へ戻るときはパンくずまたは一覧リンクを使います。
 
-## 現在の公開手順
+## 編集画面でできること
 
-1. ワークスペースで原稿を`承認済み`にする
-2. **公開用Markdownをコピー**を押す
-3. GitHub上で `src/content/articles/jpn/<分野>/<カテゴリ>/<slug>.md` を作成・更新し、Pull Requestを出す
-4. CIが通り、査読者がマージすると本番サイトへ自動デプロイされる
+- 新規原稿の作成、公開済み記事の取り込み、Markdown本文の編集
+- KaTeX / MathJax のWebプレビュー切り替え
+- upLaTeX / pdfLaTeX / XeLaTeX / LuaLaTeX の記事設定
+- 執筆メモ、版履歴、コメント、範囲引用、タグ、返信、メンション
+- 自動保存、保存状態表示、未保存のままページを離れるときの警告
 
-この方式により、執筆・数式確認・査読は内部サイトに集約しつつ、公開履歴と最終レビューはGitHubのPRに残せます。
+「公開用Markdownをコピー」などの手動コピーを前提にしたUIはありません。保存データは管理WorkerのD1へ保存され、公開操作は全分野管理者だけが実行します。
 
-## 将来のワンクリック公開
+## 現在の状態遷移
 
-「承認済み」から自動でPRを作るには、管理Workerへ**GitHub App**を接続します。個人アクセストークンを画面へ入力する設計にはしません。
+```text
+下書き保存 → 査読を依頼 → 査読中 → 査読完了 → 公開
+```
 
-必要になるものは次の3点です。
+1. 執筆者が **保存する** を押して下書きを保存します。
+2. 執筆者が **査読を依頼する** を押すと、運営内運営へ通知されます。
+3. コメントで範囲を指定し、タグや返信を使って修正点を共有します。査読者は匿名で扱います。
+4. 全分野管理者が査読結果を確認して査読完了または保留にします。
+5. 全分野管理者が **公開する** を押し、確認ダイアログで実行します。学習サイトへの反映には数十秒から数分かかります。
+6. 公開後に修正するときは **公開を取り消す** で下書きへ戻し、修正後に再査読します。
 
-1. `mitukx/Atlasez01` のContents read/write とPull requests read/writeだけを許可したGitHub App
-2. Cloudflare WorkersのSecretへ入れるApp ID・Installation ID・Private Key
-3. Workerで短命のInstallation Tokenを作り、専用ブランチとPRを作成する処理
+原稿状態と公開状態は別の値です。公開済み原稿で原稿状態が査読済みと表示されるのは正常です。
 
-この追加後も、原稿・コメント・分野権限のデータモデルはそのまま使えます。
+## データと権限
 
-## ローカル確認
+原稿・コメント・版履歴は管理WorkerのD1（`editorial_documents`、`editorial_comments` など）に保存します。公開サイトの本文データは `src/content/articles/<locale>/...` にあり、運営画面の保存と公開操作が公開処理へ連携します。言語ディレクトリはISO 639-3（日本語 `jpn`、英語 `eng`）を使います。
+
+権限はUIの表示だけでなく `src/admin-worker.ts` のAPIでも検査されます。分野担当が全分野管理者専用の公開・参加者管理APIを呼び出すことはできません。メールアドレス、Google subject、Discord IDは必要な管理者以外へ返しません。
+
+## ローカルで確認する
 
 ```bash
-npm run build
+npm ci
 npx wrangler d1 migrations apply atlasez-reports-local --local --config wrangler.admin.local.jsonc
 npm run dev:admin
 ```
 
-`http://localhost:8787/admin/editor` を開きます。ローカル設定では開発専用の全分野権限を使うため、Googleログインは不要です。`wrangler.admin.local.jsonc` の `ADMIN_AUTH_MODE: local` はlocalhost以外では無効になり、本番用の `wrangler.admin.jsonc` には含めません。
+`http://localhost:8787/admin/atlas/` または `http://localhost:8787/admin/editor/` を開きます。ローカルの認証バイパスは `wrangler.admin.local.jsonc` の開発設定でのみ有効です。本番用設定や秘密情報をローカル設定へコピーしないでください。
+
+変更前後に `npm run check`、`npm run lint`、`npm test`、`npm run build` を実行します。

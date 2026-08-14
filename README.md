@@ -14,6 +14,7 @@ Cloudflare Worker + D1で認証付きの運営機能とAPIを提供します。
 全体像、どのファイルを直すか、D1・認証・Discordの扱い、テストとデプロイ手順は
 [開発・引き継ぎガイド](docs/DEVELOPMENT_GUIDE.md)にまとめています。LLMや自動化エージェントは
 作業前にルートの [AGENTS.md](AGENTS.md) も読んでください。
+日常の運営者向け操作は [運営サイト管理ガイド](docs/ADMIN_GUIDE.md) を参照してください。
 
 ---
 
@@ -24,6 +25,7 @@ Cloudflare Worker + D1で認証付きの運営機能とAPIを提供します。
 | 目的                                   | まず読む文書                                                         |
 | -------------------------------------- | -------------------------------------------------------------------- |
 | サイト全体を引き継ぐ                   | [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md)               |
+| 運営サイトを使う                       | [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)                            |
 | リポジトリを分割・移行する             | [docs/REPOSITORY_BOUNDARIES.md](docs/REPOSITORY_BOUNDARIES.md)       |
 | ナビゲーションやサイトの境界を理解する | [docs/INFORMATION_ARCHITECTURE.md](docs/INFORMATION_ARCHITECTURE.md) |
 | 本番へ公開する                         | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                             |
@@ -82,13 +84,14 @@ versions/           # 過去バージョンのスナップショット（ビル�
 
 ## 記事が公開されるまで
 
-1. `src/content/articles/jpn/<分野>/<カテゴリ>/<slug>.md` を追加（`npm run new:article` が楽）
-2. `status: published` にして PR
-3. CI が検証（スキーマ・概念参照・循環・リンク・型・lint・テスト・E2E・axe）
-4. main へマージすると Cloudflare Pages が自動でビルドして公開
+日常の執筆・査読は、認証付きの運営サイトで行います。`/admin/articles/` で原稿を選び、
+`保存する → 査読を依頼する →（全分野管理者が）査読完了 → 公開する` の順に進めます。
+公開後の反映は数十秒から数分かかる場合があります。詳しい操作は
+[運営サイト管理ガイド](docs/ADMIN_GUIDE.md) を参照してください。
 
-`draft` と `in-review` の記事はビルドから除外されるため、
-main にマージされていても公開されません。
+記事本文や翻訳データをGitHubで直接変更する開発作業では、`draft` / `in-review` を公開せず、
+CIで検証してからPull Requestをマージします。運営サイトのD1データとGit管理の本文は役割が異なるため、
+個人情報や秘密情報をGitへ保存しないでください。
 
 ## デプロイ
 
