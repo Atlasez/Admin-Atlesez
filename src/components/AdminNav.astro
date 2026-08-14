@@ -102,7 +102,7 @@ const showHomeNav = current !== "portal" && current !== "global";
         const normalized = value.trim().toLowerCase();
         let hash = 2166136261;
         for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); }
-        return `運営メンバー ${(hash >>> 0) % 9000 + 1000}`;
+        return String((hash >>> 0) % 9000 + 1000);
       };
       const applyAccountSnapshot = (snapshot: AccountSnapshot) => {
         const displayName = snapshot.displayName.trim();

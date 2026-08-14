@@ -11,7 +11,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       <p>ATLASEZ / 管理</p>
       <h1>運営者・担当分野管理</h1>
       <span>参加者の権限・所属・学年・分野を管理します。メールアドレスは全分野管理者のみに表示されます。</span>
-      <p class="member-name-notice">表示名を登録していない参加者には、区別しやすい匿名の自動表示名（例：運営メンバー 4821）が割り当てられます。本人が正式な表示名を登録すると自動表示名から置き換わります。</p>
+      <p class="member-name-notice">表示名を登録していない参加者には、区別しやすい匿名の番号（例：4821）が割り当てられます。本人が正式な表示名を登録すると番号から置き換わります。</p>
     </header>
 
     <section class="member-admin__add" aria-labelledby="add-member-title">
@@ -69,7 +69,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
     const count = root.querySelector<HTMLElement>("[data-member-count]")!;
     const esc = (value: string) => value.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char] ?? char));
-    const anonymousMemberLabel = (value: string) => { const normalized = value.trim().toLowerCase(); let hash = 2166136261; for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); } return `運営メンバー ${(hash >>> 0) % 9000 + 1000}`; };
+    const anonymousMemberLabel = (value: string) => { const normalized = value.trim().toLowerCase(); let hash = 2166136261; for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); } return String((hash >>> 0) % 9000 + 1000); };
     const displayName = (member: any) => { const value = String(member.display_name ?? '').trim(); return !value || value === '表示名未設定' ? anonymousMemberLabel(String(member.email ?? '')) : value; };
     const subjectLabels = new Map(Array.from(form.querySelectorAll("option")).map(option => [option.value, option.textContent ?? option.value]));
     const universities = ["北海道大学","東北大学","東京大学","東京科学大学","東京都立大学","早稲田大学","横浜国立大学","静岡大学","新潟大学","岐阜大学","立命館大学","京都大学","大阪大学","大阪公立大学","神戸大学","広島大学","九州大学","長崎大学","東洋大学","UCL","国立台湾大学","山口大学","慶應義塾大学","東京理科大学","中央大学","名古屋大学","筑波大学","名古屋市立大学","名城大学","Korea university, School of biomedical engineering","立教大学","Swarthmore College","北見工業大学","ZEN大学"];

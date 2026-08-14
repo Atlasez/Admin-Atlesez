@@ -13,7 +13,7 @@ export function anonymousMemberLabel(email: string): string {
     hash = Math.imul(hash, 16777619);
   }
   const number = (hash >>> 0) % 9000 + 1000;
-  return `運営メンバー ${number}`;
+  return String(number);
 }
 
 export function memberDisplayName(
