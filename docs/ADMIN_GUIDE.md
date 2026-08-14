@@ -14,7 +14,7 @@
 | 問題報告・閲覧統計 | `/admin/reports/` |
 | 運営用ガイド | `/admin/guide/` |
 
-本番では `https://atlasez-admin.ukyoukay0.workers.dev` の後ろに上記パスを付けます。学習者向けサイトは `https://atlasez-web-1.ukyoukay0.workers.dev/atlas/ja/` です。ロゴはそれぞれのホームへ戻るリンクで、パンくずは現在地と一つ上の場所を示します。
+ロゴはそれぞれのホームへ戻るリンクで、パンくずは現在地と一つ上の場所を示します。
 
 ## 2. ログインと権限
 
