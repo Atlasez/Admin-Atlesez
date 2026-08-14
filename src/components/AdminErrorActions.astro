@@ -1,0 +1,84 @@
+<section class="admin-error-actions" data-admin-error-actions hidden role="alert" aria-live="assertive">
+  <div class="admin-error-copy">
+    <strong>読み込みに失敗しました</strong>
+    <p data-admin-error-message>ページの情報を取得できませんでした。</p>
+  </div>
+  <div class="admin-error-buttons" aria-label="エラー時の操作">
+    <button type="button" data-admin-error-retry>再読み込み</button>
+    <button type="button" data-admin-error-back>前のページへ戻る</button>
+    <a data-admin-error-login href="/auth/google/login">ログイン状態を確認</a>
+  </div>
+</section>
+
+<script is:inline>
+  (() => {
+    const setup = () => {
+      document.querySelectorAll('[data-admin-error-actions]').forEach((panel) => {
+        if (panel.dataset.ready === 'true') return;
+        panel.dataset.ready = 'true';
+        const message = panel.querySelector('[data-admin-error-message]');
+        panel.querySelector('[data-admin-error-retry]')?.addEventListener('click', () => window.location.reload());
+        panel.querySelector('[data-admin-error-back]')?.addEventListener('click', () => {
+          if (window.history.length > 1) window.history.back();
+          else window.location.assign('/admin/portal/');
+        });
+        panel.querySelector('[data-admin-error-login]')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          const returnTo = `${window.location.pathname}${window.location.search}`;
+          window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
+        });
+        panel.dataset.messageTarget = message ? 'ready' : 'missing';
+      });
+      const pending = document.documentElement.dataset.adminErrorMessage;
+      if (pending) {
+        delete document.documentElement.dataset.adminErrorMessage;
+        show({ detail: { message: pending } });
+      }
+    };
+    const show = (event) => {
+      setup();
+      const message = typeof event?.detail?.message === 'string' && event.detail.message.trim()
+        ? event.detail.message.trim()
+        : 'ページの情報を取得できませんでした。';
+      document.querySelectorAll('[data-admin-error-actions]').forEach((panel) => {
+        const target = panel.querySelector('[data-admin-error-message]');
+        if (target) target.textContent = message;
+        panel.hidden = false;
+      });
+    };
+    if (!window.__atlasezAdminErrorActionsReady) {
+      window.__atlasezAdminErrorActionsReady = true;
+      window.addEventListener('atlasez-admin-error', show);
+    }
+    document.addEventListener('astro:page-load', setup);
+    setup();
+  })();
+</script>
+
+<style is="global">
+  .admin-error-actions {
+    align-items: center;
+    background: color-mix(in srgb, var(--background-secondary) 92%, #d9485f 8%);
+    border: 1px solid color-mix(in srgb, var(--border-default) 70%, #d9485f 30%);
+    border-radius: .65rem;
+    color: var(--text-primary);
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin: 1rem auto 0;
+    max-width: 60rem;
+    padding: .75rem .9rem;
+  }
+  .admin-error-actions[hidden] { display: none !important; }
+  .admin-error-copy { min-width: 0; }
+  .admin-error-copy strong { color: #a43636; display: block; font-size: .82rem; }
+  .admin-error-copy p { color: var(--text-secondary); font-size: .76rem; line-height: 1.45; margin: .2rem 0 0; overflow-wrap: anywhere; }
+  .admin-error-buttons { align-items: center; display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: .35rem; justify-content: end; }
+  .admin-error-buttons button, .admin-error-buttons a { background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .4rem; color: var(--text-primary); cursor: pointer; font: inherit; font-size: .72rem; font-weight: 800; padding: .42rem .55rem; text-decoration: none; white-space: nowrap; }
+  .admin-error-buttons button:hover, .admin-error-buttons button:focus-visible, .admin-error-buttons a:hover, .admin-error-buttons a:focus-visible { border-color: var(--accent-primary); color: var(--accent-primary); }
+  @media (max-width: 680px) {
+    .admin-error-actions { align-items: stretch; display: grid; gap: .6rem; margin-inline: 0; }
+    .admin-error-buttons { justify-content: start; }
+    .admin-error-buttons button, .admin-error-buttons a { flex: 1 1 auto; text-align: center; }
+  }
+</style>

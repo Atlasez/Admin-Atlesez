@@ -1,6 +1,7 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
+import AdminErrorActions from "../../components/AdminErrorActions.astro";
 ---
 
 <AdminLayout
@@ -9,6 +10,7 @@ import AdminNav from "../../components/AdminNav.astro";
 >
   <section class="admin-reports" data-reports-admin>
     <AdminNav current="reports" />
+    <AdminErrorActions />
     <header class="admin-reports-heading">
       <div>
         <p class="eyebrow">ATLASEZ / 運営用</p>
@@ -200,6 +202,7 @@ import AdminNav from "../../components/AdminNav.astro";
       }
       throw new Error("管理サーバーから想定外の応答が返されました。時間をおいて再度お試しください。");
     };
+    const showError = (message: string) => window.dispatchEvent(new CustomEvent("atlasez-admin-error", { detail: { message } }));
     const subjectNames = new Map<string, string>([
       ["*", "全分野"],
       ...Array.from(permissionForm?.querySelectorAll<HTMLOptionElement>('select[name="subject"] option') ?? [])
@@ -236,8 +239,10 @@ import AdminNav from "../../components/AdminNav.astro";
         if (!response.ok) throw new Error(data.error ?? "統計を読み込めませんでした。");
         renderAnalytics(data.articles ?? [], data.days ?? Number(analyticsDays.value));
       } catch (error) {
-        analyticsSummary.value = error instanceof Error ? error.message : "統計を読み込めませんでした。";
+        const message = error instanceof Error ? error.message : "統計を読み込めませんでした。";
+        analyticsSummary.value = message;
         if (analyticsList) analyticsList.innerHTML = "";
+        showError(message);
       }
     };
     const loadAuthStatus = async () => {
@@ -271,7 +276,9 @@ import AdminNav from "../../components/AdminNav.astro";
         renderPermissions(data.permissions ?? []);
       } catch (error) {
         permissionPanel.hidden = false;
-        setPermissionFeedback(error instanceof Error ? error.message : "担当分野を読み込めませんでした。");
+        const message = error instanceof Error ? error.message : "担当分野を読み込めませんでした。";
+        setPermissionFeedback(message);
+        showError(message);
       }
     };
 
@@ -302,7 +309,7 @@ import AdminNav from "../../components/AdminNav.astro";
         const data = await readApiResponse<{ reports?: Report[]; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "読み込めませんでした。");
         render(data.reports ?? []); feedback.textContent = "";
-      } catch (error) { list.innerHTML = ""; count.value = ""; feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
+      } catch (error) { list.innerHTML = ""; count.value = ""; const message = error instanceof Error ? error.message : "読み込めませんでした。"; feedback.textContent = message; showError(message); }
     };
     filter.addEventListener("change", load);
     viewButtons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.adminView === "analytics" ? "analytics" : "reports")));
@@ -321,7 +328,7 @@ import AdminNav from "../../components/AdminNav.astro";
         const data = await readApiResponse<{ error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "担当を追加できませんでした。");
         permissionForm.reset(); setPermissionFeedback("担当を追加しました。"); await loadPermissions();
-      } catch (error) { setPermissionFeedback(error instanceof Error ? error.message : "担当を追加できませんでした。"); }
+      } catch (error) { const message = error instanceof Error ? error.message : "担当を追加できませんでした。"; setPermissionFeedback(message); showError(message); }
       finally { submit?.removeAttribute("disabled"); }
     });
     permissionList?.addEventListener("click", async (event) => {
@@ -337,7 +344,7 @@ import AdminNav from "../../components/AdminNav.astro";
         const data = await readApiResponse<{ error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "担当を削除できませんでした。");
         setPermissionFeedback("担当を削除しました。"); await loadPermissions();
-      } catch (error) { setPermissionFeedback(error instanceof Error ? error.message : "担当を削除できませんでした。"); }
+      } catch (error) { const message = error instanceof Error ? error.message : "担当を削除できませんでした。"; setPermissionFeedback(message); showError(message); }
       finally { button.disabled = false; }
     });
     list.addEventListener("click", async (event) => {
@@ -353,7 +360,7 @@ import AdminNav from "../../components/AdminNav.astro";
         const data = await readApiResponse<{ error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
         feedback.textContent = "保存しました。"; await load();
-      } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
+      } catch (error) { const message = error instanceof Error ? error.message : "保存できませんでした。"; feedback.textContent = message; showError(message); }
       finally { button.disabled = false; button.textContent = "保存"; }
     });
     void load();

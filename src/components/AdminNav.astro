@@ -85,6 +85,7 @@ const showHomeNav = current !== "portal" && current !== "global";
       const primaryNav = document.querySelector<HTMLElement>('#admin-primary-nav');
       const managementMenu = document.querySelector<HTMLDetailsElement>('[data-management-menu]');
       const notificationRetry = document.querySelector<HTMLButtonElement>('[data-notification-retry]');
+      const showAdminError = (message: string) => { document.documentElement.dataset.adminErrorMessage = message; window.dispatchEvent(new CustomEvent('atlasez-admin-error', { detail: { message } })); };
       const closeManagementMenu = () => { if (managementMenu) managementMenu.open = false; };
       const readAccountCache = (): AccountSnapshot | null => {
         try {
@@ -163,6 +164,7 @@ const showHomeNav = current !== "portal" && current !== "global";
           account.removeAttribute('data-account-loading');
           if (avatarImage) { avatarImage.hidden = true; avatarImage.removeAttribute('src'); }
           if (avatarFallback) { avatarFallback.hidden = false; avatarFallback.textContent = '?'; }
+          showAdminError(error instanceof Error ? error.message : 'ログイン情報を取得できませんでした。');
         } finally { account.hidden = false; }
       };
       document.addEventListener('atlasez-profile-updated', () => { void loadAccount(); });
@@ -185,6 +187,7 @@ const showHomeNav = current !== "portal" && current !== "global";
         } catch (error) {
           notificationList.textContent = error instanceof Error ? error.message : '通知を取得できませんでした。';
           if (notificationRetry) notificationRetry.hidden = false;
+          showAdminError(error instanceof Error ? error.message : '通知を取得できませんでした。');
         }
       };
       notificationButton?.addEventListener('click', () => {
