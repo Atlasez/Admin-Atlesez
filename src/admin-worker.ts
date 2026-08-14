@@ -461,7 +461,7 @@ async function getMemberAvatar(request: Request, env: Env): Promise<Response> {
   const email = new URL(request.url).searchParams.get("email")?.trim().toLowerCase() ?? "";
   if (!EMAIL_PATTERN.test(email)) return new Response("Not found", { status: 404 });
   const profile = await env.REPORTS.prepare(
-    "SELECT avatar_url, updated_at FROM editorial_member_profiles WHERE email = ?",
+    "SELECT avatar_url, updated_at FROM editorial_member_profiles WHERE lower(email) = ?",
   ).bind(email).first<{ avatar_url: string; updated_at: string }>();
   const source = profile?.avatar_url?.trim() ?? "";
   if (!source) return new Response("Not found", { status: 404 });
@@ -821,9 +821,9 @@ async function listReportAdminPermissions(
       COALESCE(m.updated_at, '') AS avatar_updated_at,
       COALESCE(d.discord_user_id, '') AS discord_user_id
      FROM report_admin_permissions p
-     LEFT JOIN editorial_member_profiles m ON m.email = p.email
-     LEFT JOIN atlasez_member_discord_accounts d ON d.email = p.email
-     GROUP BY p.email, m.display_name, m.university, m.year, m.interests, m.avatar_url, m.updated_at, d.discord_user_id
+     LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(p.email)
+     LEFT JOIN atlasez_member_discord_accounts d ON lower(d.email) = lower(p.email)
+      GROUP BY p.email, m.display_name, m.university, m.year, m.interests, m.avatar_url, m.updated_at, d.discord_user_id
      ORDER BY display_name, p.email`,
   ).all<{
     email: string;
@@ -3921,12 +3921,14 @@ async function getEditorialDocument(
   const commentRows = comments.results ?? [];
   const authorEmails = [
     ...new Set(
-      commentRows.map((comment) => comment.created_by).filter(Boolean),
+      commentRows
+        .map((comment) => comment.created_by.trim().toLowerCase())
+        .filter(Boolean),
     ),
   ];
   const authorProfiles = authorEmails.length
     ? await env.REPORTS.prepare(
-        `SELECT email, display_name, avatar_url, updated_at FROM editorial_member_profiles WHERE email IN (${authorEmails.map(() => "?").join(",")})`,
+        `SELECT email, display_name, avatar_url, updated_at FROM editorial_member_profiles WHERE lower(email) IN (${authorEmails.map(() => "?").join(",")})`,
       )
         .bind(...authorEmails)
         .all<{ email: string; display_name: string; avatar_url: string; updated_at: string }>()
@@ -3939,7 +3941,7 @@ async function getEditorialDocument(
         }[],
       };
   const authorProfileByEmail = new Map(
-    (authorProfiles.results ?? []).map((profile) => [profile.email, profile]),
+    (authorProfiles.results ?? []).map((profile) => [profile.email.toLowerCase(), profile]),
   );
   const commentIds = commentRows.map((comment) => comment.id);
   const feedbackRows = commentIds.length
@@ -3962,23 +3964,23 @@ async function getEditorialDocument(
         }[],
       };
   const feedbackEmails = [
-    ...new Set((feedbackRows.results ?? []).map((row) => row.email)),
-  ].filter((email) => !authorProfileByEmail.has(email));
+    ...new Set((feedbackRows.results ?? []).map((row) => row.email.trim().toLowerCase())),
+  ].filter((email) => !authorProfileByEmail.has(email.toLowerCase()));
   const feedbackProfiles = feedbackEmails.length
     ? await env.REPORTS.prepare(
-        `SELECT email, display_name FROM editorial_member_profiles WHERE email IN (${feedbackEmails.map(() => "?").join(",")})`,
+        `SELECT email, display_name FROM editorial_member_profiles WHERE lower(email) IN (${feedbackEmails.map(() => "?").join(",")})`,
       )
         .bind(...feedbackEmails)
         .all<{ email: string; display_name: string }>()
     : { results: [] as { email: string; display_name: string }[] };
   const feedbackProfileByEmail = new Map(
-    (feedbackProfiles.results ?? []).map((profile) => [profile.email, profile]),
+    (feedbackProfiles.results ?? []).map((profile) => [profile.email.toLowerCase(), profile]),
   );
   const feedbackByComment = new Map<string, EditorialFeedback[]>();
   for (const row of feedbackRows.results ?? []) {
     const displayName = memberDisplayName(
-      authorProfileByEmail.get(row.email)?.display_name ??
-        feedbackProfileByEmail.get(row.email)?.display_name,
+      authorProfileByEmail.get(row.email.toLowerCase())?.display_name ??
+        feedbackProfileByEmail.get(row.email.toLowerCase())?.display_name,
       row.email,
     );
     const rows = feedbackByComment.get(row.comment_id) ?? [];
@@ -4004,18 +4006,18 @@ async function getEditorialDocument(
     ...comment,
     tags: editorialCommentTags(comment.tags),
     author_display_name: memberDisplayName(
-      authorProfileByEmail.get(comment.created_by)?.display_name,
+      authorProfileByEmail.get(comment.created_by.toLowerCase())?.display_name,
       comment.created_by,
     ),
     author_avatar_url:
-      authorProfileByEmail.get(comment.created_by)?.avatar_url
+      authorProfileByEmail.get(comment.created_by.toLowerCase())?.avatar_url
         ? memberAvatarEndpoint(
             comment.created_by,
-            authorProfileByEmail.get(comment.created_by)?.updated_at,
+            authorProfileByEmail.get(comment.created_by.toLowerCase())?.updated_at,
           )
         : "",
     author_avatar_updated_at:
-      authorProfileByEmail.get(comment.created_by)?.updated_at ?? "",
+      authorProfileByEmail.get(comment.created_by.toLowerCase())?.updated_at ?? "",
     // 旧コメントの一件だけの引用も、同じUIで読めるようにする。
     selections:
       selectionsByComment.get(comment.id) ??
