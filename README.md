@@ -50,7 +50,7 @@ src/
 ├── content/        # ★ コンテンツ（概念・記事・お知らせ・プロジェクト・分野）
 │   ├── concepts/concepts.yaml   # 概念グラフ（学習地図と記事間リンクの元）
 │   ├── subjects/subjects.yaml   # 分野とカテゴリの定義
-│   └── articles/ja/<分野>/<カテゴリ>/<slug>.md
+│   └── articles/jpn/<分野>/<カテゴリ>/<slug>.md
 ├── pages/          # ルーティング（/ = 公式, /atlas/ = 学習サイト）
 ├── layouts/        # OrgLayout / AtlasLayout
 ├── components/     # 共通UI（BaseHead, Breadcrumb, A11ySettings, ThemeToggle）
@@ -66,7 +66,7 @@ versions/           # 過去バージョンのスナップショット（ビル�
 
 ## 記事が公開されるまで
 
-1. `src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` を追加（`npm run new:article` が楽）
+1. `src/content/articles/jpn/<分野>/<カテゴリ>/<slug>.md` を追加（`npm run new:article` が楽）
 2. `status: published` にして PR
 3. CI が検証（スキーマ・概念参照・循環・リンク・型・lint・テスト・E2E・axe）
 4. main へマージすると Cloudflare Pages が自動でビルドして公開
@@ -87,7 +87,7 @@ URL は環境変数 `SITE_URL`（未設定なら Cloudflare の `CF_PAGES_URL`�
 
 英語版は翻訳が 4 記事しかなく日本語版との差が大きすぎたため、一旦取り下げました。
 仕組みは残してあるので、`src/lib/i18n.ts` の `LOCALES` に `"en"` を戻し、
-`src/content/articles/en/` に記事を置けばルーティング・言語切替・hreflang が動きます。
+`src/content/articles/eng/` に記事を置けばルーティング・言語切替・hreflang が動きます。
 
 ## ライセンス
 

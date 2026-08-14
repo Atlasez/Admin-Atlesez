@@ -1,0 +1,59 @@
+---
+/**
+ * 運営サイト用の軽量なパンくず。
+ * AdminNav の Home 項目を減らしても、現在地と戻り先が分かるようにする。
+ */
+interface Crumb {
+  label: string;
+  href?: string;
+}
+interface Props {
+  items: Crumb[];
+}
+const { items } = Astro.props;
+---
+
+<nav class="admin-breadcrumb" aria-label="パンくずリスト">
+  <ol>
+    {items.map((item, index) => (
+      <li>
+        {item.href && index < items.length - 1 ? (
+          <a href={item.href} data-astro-reload>{item.label}</a>
+        ) : (
+          <span aria-current="page">{item.label}</span>
+        )}
+      </li>
+    ))}
+  </ol>
+</nav>
+
+<style>
+  .admin-breadcrumb {
+    box-sizing: border-box;
+    margin: 0 auto;
+    max-width: 64rem;
+    padding: .8rem 0 0;
+    width: 100%;
+  }
+  .admin-breadcrumb ol {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: .74rem;
+    gap: .35rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .admin-breadcrumb li { align-items: center; display: inline-flex; gap: .35rem; }
+  .admin-breadcrumb li:not(:last-child)::after { color: var(--text-secondary); content: "›"; }
+  .admin-breadcrumb a { color: var(--accent-primary); text-decoration: none; }
+  .admin-breadcrumb a:hover,
+  .admin-breadcrumb a:focus-visible { text-decoration: underline; }
+  .admin-breadcrumb [aria-current="page"] { color: var(--text-secondary); }
+  @media (max-width: 700px) {
+    .admin-breadcrumb { padding-top: .65rem; }
+    .admin-breadcrumb ol { font-size: .7rem; }
+  }
+</style>

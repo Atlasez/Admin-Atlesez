@@ -189,8 +189,8 @@ test.describe("学習サイト", () => {
 
     await page.getByRole("tab", { name: "学習地図" }).click();
     await expect(page.locator("[data-view-panel='map']")).toBeVisible();
-    await expect(page.locator("[data-map-subject]")).toHaveValue("mathematics");
-    await expect(page.locator("[data-map-subject] option")).toHaveCount(1);
+    // 分野トップでは地図が対象分野に固定され、冗長な分野プルダウンは表示しない。
+    await expect(page.locator("[data-map-subject]")).toHaveCount(0);
 
     await page.getByRole("tab", { name: "リスト表示" }).click();
     await expect(page.locator(".toc-category-details[open]")).toHaveCount(0);
@@ -335,7 +335,7 @@ test.describe("学習サイト", () => {
 
     await page.getByRole("tab", { name: "学習地図" }).click();
     await expect(page.locator("[data-map-view-panel]")).toBeVisible();
-    await expect(page.locator("[data-map-subject]")).toHaveValue("mathematics");
+    await expect(page.locator("[data-map-subject]")).toHaveCount(0);
 
     await page.getByRole("tab", { name: "リスト表示" }).click();
     await expect(list).toHaveAttribute("data-view", "list");
@@ -374,6 +374,10 @@ test.describe("学習サイト", () => {
     await expect(fold).toBeVisible();
     await fold.click();
     await expect(fold).not.toBeVisible();
+    const detail = page.locator("[data-map-detail]");
+    await expect(detail).toContainText("群の定義");
+    await page.getByRole("button", { name: "記事の詳細を閉じる" }).click();
+    await expect(detail).toBeEmpty();
 
     const open = page.getByRole("button", { name: "学習ルート検索" });
     // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す
@@ -492,8 +496,9 @@ test.describe("学習サイト", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("atlas/ja/");
     const mainNav = page.locator("#atlas-main-nav");
-    // メニューで畳まず、3つの行き先と検索欄を最初から見せる
-    for (const name of ["分野", "学習リスト", "はじめての方へ"]) {
+    // ロゴをホーム導線にし、重複する「分野」は廃止。残る主要導線と検索欄を最初から見せる
+    await expect(mainNav.getByRole("link", { name: "分野" })).toHaveCount(0);
+    for (const name of ["学習リスト", "はじめての方へ"]) {
       await expect(mainNav.getByRole("link", { name })).toBeVisible();
     }
     await expect(page.locator("#header-search-input")).toBeVisible();

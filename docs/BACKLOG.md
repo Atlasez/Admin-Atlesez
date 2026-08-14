@@ -22,7 +22,7 @@
 7分野の「〇〇とは」は入口の説明までしか書いていない。
 各記事の末尾「これから書き足すこと」に、続きの見出し案を挙げてある。
 
-- 置き場所: `src/content/articles/ja/<分野>/overview/what-is-<分野>.md`
+- 置き場所: `src/content/articles/jpn/<分野>/overview/what-is-<分野>.md`
 - 飛び先の指定: `subjects.yaml` の `introSlug`
 
 ## 4. トップページのHTMLが重い

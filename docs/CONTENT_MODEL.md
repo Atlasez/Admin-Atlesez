@@ -39,12 +39,14 @@
 - IDは一度公開したら変更しない（URLのslugとは独立）
 - `prerequisites` は循環禁止（CIとビルドで検査）
 
-## 3. 記事（`src/content/articles/<locale>/<subject>/<category>/<slug>.md`）
+## 3. 記事（`src/content/articles/<ISO 639-3>/<subject>/<category>/<slug>.md`）
+
+記事を保存するディレクトリ名はISO 639-3の3文字コード（日本語=`jpn`、英語=`eng`）を使う。frontmatterの`locale`と公開URLは既存利用者との互換性のため`ja`／`en`を維持できるが、リポジトリ上の新しい言語ディレクトリは3文字コードで作成する。
 
 ```yaml
 ---
 articleId: ja-math-vector-space-introduction # 記事の永続ID
-locale: ja
+locale: ja # 公開URL用。日本語の格納ディレクトリは jpn
 title: 線形空間の定義
 slug: vector-space # URL用（変更可能。変更時はリダイレクト検討）
 subject: mathematics

@@ -90,7 +90,7 @@ const articles = defineCollection({
   loader: glob({
     pattern: "**/*.md",
     base: "./src/content/articles",
-    // slug frontmatterではなくファイルパスをIDにする（ja/enで同名slugを許すため）
+    // slug frontmatterではなくファイルパスをIDにする（jpn/engで同名slugを許すため）
     generateId: ({ entry }) => entry.replace(/\.md$/, ""),
   }),
   schema: z.object({

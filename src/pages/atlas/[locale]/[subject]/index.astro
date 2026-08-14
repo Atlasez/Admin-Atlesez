@@ -66,6 +66,19 @@ const categoryItems = categories.map((cat) => ({
   planned: getPlannedArticles(subject.data.slug, cat.slug),
 }));
 
+const recentArticles = [...subjectArticles]
+  .sort((a, b) => b.data.updatedAt.getTime() - a.data.updatedAt.getTime())
+  .slice(0, 6);
+const upcomingArticles = categories
+  .flatMap((category) =>
+    getPlannedArticles(subject.data.slug, category.slug).map((item) => ({
+      item,
+      category,
+    })),
+  )
+  .sort((a, b) => a.item.order - b.item.order)
+  .slice(0, 6);
+
 const views = [
   { id: "tiles", label: t(locale, "tileView") },
   { id: "map", label: t(locale, "map") },
@@ -93,14 +106,40 @@ const summary =
     data-subject-layout
     data-view-storage-key={`atlasez-subject-view-v3:${subject.data.slug}`}
   >
-    <Breadcrumb
-      items={[
-        { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
-        { label: subjectName },
-      ]}
-    />
     <h1>{subjectName}</h1>
     <p class="reading">{localizedName(subject.data.description, locale)}</p>
+
+    <section class="subject-highlights" aria-label={locale === "ja" ? "記事の更新情報" : "Article updates"}>
+      <div class="highlight-panel">
+        <h2>{locale === "ja" ? "最近公開された記事" : "Recently published"}</h2>
+        {recentArticles.length > 0 ? (
+          <ul>
+            {recentArticles.map((article) => (
+              <li><a href={articlePath(locale, article.data.subject, article.data.category, article.data.slug)}>{article.data.title}</a><time datetime={article.data.updatedAt.toISOString()}>{article.data.updatedAt.toLocaleDateString(locale === "ja" ? "ja-JP" : "en-US")}</time></li>
+            ))}
+          </ul>
+        ) : <p class="highlight-empty">{locale === "ja" ? "現在ありません。" : "Nothing yet."}</p>}
+      </div>
+      <div class="highlight-panel">
+        <h2>{locale === "ja" ? "近日公開予定の記事" : "Coming soon"}</h2>
+        {upcomingArticles.length > 0 ? (
+          <ul>
+            {upcomingArticles.map(({ item, category }) => (
+              <li><a href={`${atlasPath(locale, subject.data.slug, category.slug)}?view=list`}>{plannedArticleTitle(item, locale)}</a><span>{localizedName(category.name, locale)}</span></li>
+            ))}
+          </ul>
+        ) : <p class="highlight-empty">{locale === "ja" ? "現在ありません。" : "Nothing yet."}</p>}
+      </div>
+    </section>
+
+    <div data-subject-breadcrumb>
+      <Breadcrumb
+        items={[
+          { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
+          { label: subjectName },
+        ]}
+      />
+    </div>
 
     <div class="view-bar">
       <div
@@ -374,6 +413,69 @@ const summary =
         }
       });
     });
+
+  /**
+   * 学習地図で開いたカテゴリをリスト表示にも引き継ぐ。
+   * URL の category は再読み込みでも復元し、同時にパンくずを
+   * 「アトラス › 分野 › カテゴリ」の一つだけに更新する。
+   */
+  const subjectBreadcrumb = subjectLayout?.querySelector<HTMLElement>(
+    "[data-subject-breadcrumb] .breadcrumb",
+  );
+  const subjectBreadcrumbList = subjectBreadcrumb?.querySelector<HTMLOListElement>("ol");
+  const subjectBreadcrumbCurrent = subjectBreadcrumbList?.lastElementChild;
+  const subjectBreadcrumbTemplate = subjectBreadcrumbCurrent?.innerHTML ?? "";
+  const categoryDetails = [
+    ...document.querySelectorAll<HTMLDetailsElement>(".toc-category-details"),
+  ];
+
+  function syncSubjectMapCategory(categoryKey: string | null): void {
+    const slug = categoryKey?.split("/").at(-1) ?? "";
+    const selected = categoryDetails.find((details) => details.dataset.category === slug);
+    categoryDetails.forEach((details) => {
+      if (slug) details.open = details === selected;
+    });
+    if (!subjectBreadcrumbList || !subjectBreadcrumbCurrent) return;
+    subjectBreadcrumbList
+      .querySelector("[data-map-breadcrumb-category]")
+      ?.remove();
+    if (!selected) {
+      subjectBreadcrumbCurrent.innerHTML = subjectBreadcrumbTemplate;
+      return;
+    }
+    const categoryLink = selected.querySelector<HTMLAnchorElement>("summary a");
+    const categoryName = categoryLink?.textContent?.trim() ?? slug;
+    const subjectName = subjectBreadcrumbCurrent.textContent?.trim() ?? "";
+    const subjectHref = categoryLink?.href
+      ? categoryLink.href.split("?")[0].replace(/[^/]+\/$/, "")
+      : "#";
+    const subjectAnchor = document.createElement("a");
+    subjectAnchor.href = subjectHref;
+    subjectAnchor.textContent = subjectName;
+    subjectBreadcrumbCurrent.replaceChildren(subjectAnchor);
+    const categoryCrumb = document.createElement("li");
+    categoryCrumb.dataset.mapBreadcrumbCategory = "true";
+    const categoryCurrent = document.createElement("span");
+    categoryCurrent.setAttribute("aria-current", "page");
+    categoryCurrent.textContent = categoryName;
+    categoryCrumb.append(categoryCurrent);
+    subjectBreadcrumbList.append(categoryCrumb);
+  }
+
+  window.addEventListener("atlas-map-category-change", (event) => {
+    const detail = (event as CustomEvent<{
+      subject?: string;
+      categoryKey?: string | null;
+    }>).detail;
+    const currentSubject = subjectLayout?.querySelector<HTMLAnchorElement>(
+      ".breadcrumb li:nth-child(2) a",
+    )?.href;
+    if (detail.subject && currentSubject && !currentSubject.includes(`/${detail.subject}/`)) return;
+    syncSubjectMapCategory(detail.categoryKey ?? null);
+  });
+
+  const initialMapCategory = new URL(location.href).searchParams.get("category");
+  if (initialMapCategory) syncSubjectMapCategory(initialMapCategory);
 </script>
 
 <style>
@@ -575,6 +677,15 @@ const summary =
   .planned-article > span:first-child {
     color: var(--text-secondary);
   }
+  .subject-highlights { display: grid; gap: var(--space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--space-4) 0 var(--space-3); }
+  .highlight-panel { background: var(--background-secondary); border: 1px solid var(--border); border-top: 3px solid var(--accent-primary); min-width: 0; padding: var(--space-2) var(--space-3); }
+  .highlight-panel h2 { font-size: calc(1rem * var(--text-scale)); margin: 0 0 var(--space-1); }
+  .highlight-panel ul { display: grid; gap: .15rem; list-style: none; margin: 0; padding: 0; }
+  .highlight-panel li { align-items: baseline; display: flex; gap: var(--space-2); justify-content: space-between; min-width: 0; padding: .35rem 0; }
+  .highlight-panel li + li { border-top: 1px solid var(--border); }
+  .highlight-panel a { min-width: 0; overflow-wrap: anywhere; }
+  .highlight-panel time, .highlight-panel li > span { color: var(--text-secondary); flex: 0 0 auto; font-size: calc(.72rem * var(--text-scale)); }
+  .highlight-empty { color: var(--text-secondary); font-size: calc(.8rem * var(--text-scale)); margin: 0; }
   @media (max-width: 767px) {
     .view-tabs {
       width: 100%;
@@ -595,5 +706,6 @@ const summary =
     .category-tiles {
       grid-template-columns: 1fr;
     }
+    .subject-highlights { grid-template-columns: 1fr; }
   }
 </style>

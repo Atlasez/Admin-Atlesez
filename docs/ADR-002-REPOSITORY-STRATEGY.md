@@ -15,7 +15,7 @@ atlasez-web/
 │   ├── components/       # 共通UI
 │   ├── content/          # ★ コンテンツ（執筆者が触るのはここだけ）
 │   │   ├── concepts/     #   言語非依存の概念層 (YAML)
-│   │   ├── articles/     #   言語別記事 (Markdown) ja/ en/ ...
+│   │   ├── articles/     #   言語別記事 (Markdown) ISO 639-3 (jpn/eng/...) ...
 │   │   ├── news/         #   お知らせ (Markdown)
 │   │   ├── projects/     #   プロジェクト (YAML)
 │   │   └── subjects/     #   分野・カテゴリ定義 (YAML)
@@ -26,6 +26,22 @@ atlasez-web/
 ├── docs/                 # 本ドキュメント群
 └── .github/workflows/    # CI / デプロイ
 ```
+
+## データ境界（将来分割できる単位）
+
+リポジトリをすぐに分割するのではなく、フォルダ・API・権限の境界を先に固定する。分割が必要になった場合も、下記の境界をそのまま別リポジトリまたは別ストレージへ移せるようにする。
+
+| 境界 | 現在の置き場所 | 役割と取り扱い |
+| --- | --- | --- |
+| サイト／管理画面コード | `src/pages/`, `src/layouts/`, `src/components/`, `src/lib/` | 公開してよいUIとビルド設定。個人情報・秘密鍵は置かない |
+| 記事本文・翻訳 | `src/content/articles/<ISO 639-3>/` | `jpn`, `eng` など3文字コードを保存単位にする。公開URLの `ja`, `en` は互換エイリアス |
+| 概念・分類 | `src/content/concepts/`, `src/content/subjects/` | 言語に依存しない記事間関係と分類 |
+| 画像・動画など大容量ファイル | 現在は `public/` など | 増加時はCloudflare R2等のオブジェクトストレージへ移し、本文から安定したアセットIDで参照 |
+| コメント・履歴・ToDo | 管理WorkerのD1 | 個人情報を含む運用データ。記事リポジトリと分離し、共通APIのプロジェクトIDで参照 |
+
+学習サイトとゼミ等の各プロジェクトのToDoは、同じスキーマ（`project_id`, `assignee_email`, `due_at`, `status`, `reminder_*`）で保存する。画面やAPIがプロジェクトごとに分かれていても、保存先と状態値は共通にすることで、メンバー用 Home の横断表示と将来のリポジトリ分割を両立する。
+
+R2への移行時も、本文・翻訳・運用データの境界は変えない。Gitには小さなサムネイルやメタデータだけを残し、元画像・動画と世代管理が必要なバイナリはR2のバージョン付きキーで管理する。
 
 ## 三案の比較
 
@@ -47,7 +63,7 @@ atlasez-web/
 
 ## 編集フロー（手動コピーの代替）
 
-1. 執筆者が `src/content/articles/ja/...` にMarkdownを追加・編集（`status: draft`）
+1. 執筆者が `src/content/articles/jpn/...` にMarkdownを追加・編集（`status: draft`）
 2. Pull Requestを作成（GitHub Web UIからでも可能。非エンジニアはブラウザ編集で完結）
 3. CIが自動実行: スキーマ検証（Zod）／重複ID・リンク・循環検査／型チェック／ビルド／アクセシビリティ検査
 4. 査読者がPRをレビューし、`reviewers` frontmatterに記名して承認

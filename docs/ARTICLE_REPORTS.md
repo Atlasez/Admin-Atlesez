@@ -8,6 +8,12 @@
 
 Cloudflare Dashboardで Worker & Pages → `atlasez-web-1` → Settings → Variables and Secrets を開き、**Secret** として `DISCORD_REPORT_WEBHOOK_URL` を追加してください。値にはDiscordで新規発行したIncoming Webhook URLを入力します。Webhook URLは外部に共有した場合は無効化し、再発行してください。
 
+### 分野別チャンネルへの通知
+
+本番ではBotトークンを学習サイトへ置かず、`atlasez-admin` Workerの内部中継を利用します。学習サイトの各分野名をDiscordのカテゴリ（折りたたみ見出し）として作成し、その中に運営用チャンネルと `問題報告` チャンネルを配置します。分野とチャンネルの対応はD1に保存し、同じ準備処理を再実行しても二重作成しません。問題報告には記事名・分野・カテゴリ・報告種別だけを投稿し、本文・連絡先はDiscordへ送信しません。
+
+初回のチャンネル準備には、Botが対象Guildに所属し、**チャンネルの管理（Manage Channels）**、**チャンネルを見る**、**メッセージを送信**の権限を持っている必要があります。準備APIは共有シークレットで保護され、通常の管理画面認証や読者向けAPIからは呼び出せません。権限不足の場合はDiscord APIの `Missing Permissions (50013)` を返します。権限を付与した後に同じ準備処理を再実行すれば、既存チャンネルを再利用して二重作成を避けます。
+
 ## 運営用の確認画面
 
 `/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。読者向けWorkerとは別の `atlasez-admin` Workerで公開し、Worker全体を **Cloudflare Access** で運営者だけに制限します。

@@ -4,7 +4,7 @@
  * 公開するロケール。
  *
  * 英語版は翻訳が 4 記事しかなく、日本語版との差が大きすぎたため一旦取り下げた。
- * 再開するときはここに "en" を戻し、`src/content/articles/en/` に記事を置けば
+ * 再開するときはここに "en" を戻し、`src/content/articles/eng/` に記事を置けば
  * ルーティング・言語切替・hreflang はそのまま動く（UI 文言は下の ui.en に残置）。
  */
 export const LOCALES = ["ja"] as const;

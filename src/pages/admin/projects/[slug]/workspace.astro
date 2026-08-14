@@ -1,0 +1,47 @@
+---
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import AdminNav from "../../../../components/AdminNav.astro";
+import AdminBreadcrumb from "../../../../components/AdminBreadcrumb.astro";
+
+export function getStaticPaths() {
+  return [
+    { params: { slug: "atlas" } },
+    { params: { slug: "seminar-platform" } },
+    { params: { slug: "secretariat" } },
+  ];
+}
+
+const { slug } = Astro.params;
+const isAtlas = slug === "atlas";
+const isSeminar = slug === "seminar-platform";
+const projectName = isAtlas ? "アトラス学習サイト" : isSeminar ? "ゼミプラットフォーム" : "Atlasez運営事務局";
+---
+
+<AdminLayout title={`${projectName}のマイページ`} description={`${projectName}内のプロフィールと個人メモ`}>
+  <main class="project-workspace" data-project-workspace data-project-slug={slug}>
+    <AdminNav current={isAtlas ? "atlas" : isSeminar ? "seminar" : "secretariat"} />
+    <AdminBreadcrumb items={[{ label: "メンバー用サイト", href: "/admin/portal/" }, { label: projectName, href: isAtlas ? "/admin/atlas/" : isSeminar ? "/admin/projects/seminar-platform/" : "/admin/projects/secretariat/" }, { label: "マイページ" }]} />
+    <header class="workspace-heading">
+      <div><p class="eyebrow">ATLASEZ / PROJECT</p><h1>{projectName}のマイページ</h1><p>このプロジェクト内で表示するプロフィールとメモを管理します。</p></div>
+      <a class="back-link" href={isAtlas ? "/admin/atlas/" : isSeminar ? "/admin/projects/seminar-platform/" : "/admin/projects/secretariat/"}>プロジェクトへ戻る</a>
+    </header>
+    <section class="profile-card" aria-labelledby="profile-title">
+      <div><p class="eyebrow">共通プロフィール</p><h2 id="profile-title" data-profile-name>読み込み中…</h2><div class="facts"><span><b>所属</b><strong data-profile-university>確認中…</strong></span><span><b>学年</b><strong data-profile-year>確認中…</strong></span><span><b>担当・権限</b><strong data-profile-roles>確認中…</strong></span></div></div>
+      <p class="muted">表示名・所属・学年・担当は全分野管理者が管理します。</p>
+    </section>
+    <section class="intro-card" aria-labelledby="intro-title">
+      <div class="section-heading"><div><p class="eyebrow">PROJECT INTRODUCTION</p><h2 id="intro-title">このプロジェクトでの自己紹介</h2><p>プロジェクトのメンバーに共有する内容を入力できます。</p></div><output data-message aria-live="polite"></output></div>
+      <textarea data-introduction maxlength="12000" placeholder="担当や関心、参加できることなど"></textarea>
+      <button type="button" class="primary-action" data-save>自己紹介を保存</button>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .project-workspace{box-sizing:border-box;margin:0 auto;max-width:1100px;padding:0 1.25rem 4rem}.workspace-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2.4rem 0 1.4rem}.eyebrow{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.1em;margin:0 0 .35rem}.workspace-heading h1{font-size:clamp(1.75rem,4vw,2.5rem);letter-spacing:-.04em;margin:0}.workspace-heading p:last-child{color:var(--text-secondary);line-height:1.6;margin:.45rem 0 0}.back-link{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.profile-card,.intro-card{border:1px solid var(--border-default);border-top:3px solid var(--accent-primary);display:grid;gap:.8rem;margin:1.5rem auto 0;padding:1rem;width:min(100%,64rem)}.profile-card h2,.intro-card h2{font-size:1.2rem;margin:.2rem 0 0}.facts{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.8rem}.facts span{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.1rem;min-width:9rem;padding:.4rem .55rem}.facts b{color:var(--text-secondary);font-size:.68rem}.facts strong{font-size:.82rem;overflow-wrap:anywhere}.muted,.section-heading p:last-child{color:var(--text-secondary);font-size:.82rem;line-height:1.6;margin:0}.section-heading{align-items:start;border-bottom:1px solid var(--border-default);display:flex;gap:.7rem;justify-content:space-between;padding-bottom:.7rem}.section-heading output{color:var(--text-secondary);font-size:.78rem}.intro-card textarea{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;line-height:1.65;min-height:14rem;padding:.7rem;resize:vertical;width:100%}.primary-action{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font:inherit;font-size:.82rem;font-weight:800;justify-self:start;padding:.6rem .8rem}.primary-action:disabled{opacity:.6}@media(max-width:700px){.project-workspace{padding:0 .85rem 3rem}.workspace-heading{align-items:start;display:grid}.back-link{justify-self:start}.section-heading{display:grid}.facts{display:grid;grid-template-columns:1fr 1fr}.facts span{min-width:0}}
+</style>
+
+<script>
+  type Profile={profile?:{display_name?:string;university?:string;year?:string};roles?:string[]};
+  const initializeProjectWorkspace=()=>{const root=document.querySelector<HTMLElement>('[data-project-workspace]');if(!root||root.dataset.initialized==='true')return;root.dataset.initialized='true';const slug=root.dataset.projectSlug??'';const name=root.querySelector<HTMLElement>('[data-profile-name]')!;const university=root.querySelector<HTMLElement>('[data-profile-university]')!;const year=root.querySelector<HTMLElement>('[data-profile-year]')!;const roles=root.querySelector<HTMLElement>('[data-profile-roles]')!;const intro=root.querySelector<HTMLTextAreaElement>('[data-introduction]')!;const save=root.querySelector<HTMLButtonElement>('[data-save]')!;const message=root.querySelector<HTMLOutputElement>('[data-message]')!;const api=async<T,>(url:string,options:RequestInit={})=>{const response=await fetch(url,{...options,credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json',...(options.headers??{})}});const type=response.headers.get('content-type')??'';const data=type.includes('application/json')?await response.json() as T&{error?:string}:null;if(!response.ok||!data)throw new Error(data?.error??'情報を読み込めませんでした。');return data;};const load=async()=>{const [profile,project]=await Promise.all([api<Profile>('/api/admin/profile'),api<{introduction?:string}>(`/api/admin/projects/${encodeURIComponent(slug)}/profile`)]);name.textContent=profile.profile?.display_name?.trim()||'表示名未設定';university.textContent=profile.profile?.university?.trim()||'未登録';year.textContent=profile.profile?.year?.trim()||'未登録';roles.textContent=profile.roles?.join('・')||'未設定';intro.value=project.introduction??'';};save.addEventListener('click',()=>{save.disabled=true;message.value='保存中…';void api(`/api/admin/projects/${encodeURIComponent(slug)}/profile`,{method:'PUT',body:JSON.stringify({introduction:intro.value})}).then(()=>{message.value='保存しました。';}).catch(error=>{message.value=error instanceof Error?error.message:'保存できませんでした。';}).finally(()=>{save.disabled=false;});});void load().catch(error=>{message.value=error instanceof Error?error.message:'プロフィールを読み込めませんでした。';});};document.addEventListener('astro:page-load',initializeProjectWorkspace);initializeProjectWorkspace();
+</script>

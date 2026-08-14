@@ -40,35 +40,45 @@ const roles = [
       Atlasezでは、いっしょに「学びの地図」をつくる仲間を募集しています。
       学年・専攻は問いません。できる範囲・できる頻度での参加が可能です。
     </p>
-    <h2>募集している役割</h2>
-    <ul class="card-grid">
-      {
-        roles.map((r) => (
-          <li class="card">
-            <h3>{r.name}</h3>
-            <p>{r.desc}</p>
-          </li>
-        ))
-      }
+    <h2>募集しているプロジェクト</h2>
+    <p class="reading">参加したいプロジェクトを選び、専用の案内を確認してから応募できます。応募内容は運営内運営のみが確認します。</p>
+    <ul class="recruitment-grid">
+      <li class="recruitment-card">
+        <p class="eyebrow">ATLASEZ / SECRETARIAT</p>
+        <h3>運営事務局</h3>
+        <p>団体全体の広報、メンバーサポート、企画、会計などを担当します。</p>
+        <ul>{roles.filter((role) => ["サイト開発", "イベント・広報"].includes(role.name)).map((role) => <li><strong>{role.name}</strong>：{role.desc}</li>)}</ul>
+        <a class="button" href={withBase("/apply/?project=secretariat")}>運営事務局に応募する</a>
+      </li>
+      <li class="recruitment-card">
+        <p class="eyebrow">ATLASEZ / ATLAS</p>
+        <h3>学習サイト運営</h3>
+        <p>学習記事の執筆・査読・翻訳、学習地図やサイトの改善に取り組みます。</p>
+        <ul>{roles.filter((role) => ["記事執筆", "査読", "翻訳", "サイト開発"].includes(role.name)).map((role) => <li><strong>{role.name}</strong>：{role.desc}</li>)}</ul>
+        <a class="button" href={withBase("/apply/?project=atlas")}>学習サイト運営に応募する</a>
+      </li>
+      <li class="recruitment-card">
+        <p class="eyebrow">ATLASEZ / SEMINAR</p>
+        <h3>ゼミプラットフォーム運営</h3>
+        <p>ゼミの企画、参加者サポート、日程調整、記録の作成を担当します。</p>
+        <ul><li><strong>企画・進行</strong>：ゼミのテーマ設計や当日の運営</li><li><strong>広報・記録</strong>：参加者への案内と活動記録</li></ul>
+        <a class="button" href={withBase("/apply/?project=seminar-platform")}>ゼミ運営に応募する</a>
+      </li>
     </ul>
-    <h2>応募方法</h2>
+    <h2>共通応募フォーム</h2>
     <div class="reading">
-      <p>
-        以下の応募フォームからご連絡ください。追って運営からご案内します。
-      </p>
-      <p>
-        <a
-          class="button"
-          href="https://forms.gle/NMXFgxzasbBsf3gX6"
-          rel="noopener noreferrer"
-          target="_blank">応募フォームを開く（Googleフォーム）</a
-        >
-      </p>
-      <p>
-        フォームが使えない場合は<a href={withBase("/contact/")}
-          >お問い合わせ</a
-        >からメールでご連絡ください。
-      </p>
+      <p>上記のフォームは同じ応募項目を使い、希望プロジェクトを選択して送信できます。複数のプロジェクトに関心がある場合も一度の入力で応募できます。</p>
+      <p><a class="button" href={withBase("/apply/")}>応募フォームを開く</a></p>
+      <p><a href="https://forms.gle/NMXFgxzasbBsf3gX6" rel="noopener noreferrer" target="_blank">従来の応募フォーム（Googleフォーム）を開く</a></p>
+      <p>フォームが使えない場合は<a href={withBase("/contact/")}>お問い合わせ</a>からご連絡ください。</p>
     </div>
   </div>
 </OrgLayout>
+
+<style>
+  .recruitment-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-3);list-style:none;margin:var(--space-4) 0;padding:0}
+  .recruitment-card{border:1px solid var(--border-default);border-top:3px solid var(--accent-primary);display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3)}
+  .recruitment-card .eyebrow{color:var(--accent-primary);font-size:.7rem;font-weight:800;letter-spacing:.08em;margin:0}
+  .recruitment-card h3,.recruitment-card p{margin:0}.recruitment-card p{color:var(--text-secondary);line-height:1.6}.recruitment-card ul{color:var(--text-secondary);font-size:.86rem;line-height:1.55;margin:0;padding-left:1.15rem}.recruitment-card .button{align-self:flex-start;margin-top:auto}
+  @media(max-width:850px){.recruitment-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.recruitment-grid{grid-template-columns:1fr}}
+</style>

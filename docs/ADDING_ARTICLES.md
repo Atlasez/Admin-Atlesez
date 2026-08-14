@@ -15,7 +15,7 @@ npm run new:article -- --subject chemistry --category matter --slug gases --titl
 
 これで次の 2 つが用意されます。
 
-- `src/content/articles/ja/chemistry/matter/gases.md`（`status: draft` の雛形）
+- `src/content/articles/jpn/chemistry/matter/gases.md`（`status: draft` の雛形）
 - `src/content/concepts/concepts.yaml` に概念 `chem.matter.gases` を追記
 
 あとは本文を書いて、下の「公開前のチェック」を通すだけです。
@@ -47,7 +47,7 @@ $ npm run new:article -- --subject chemistry --category typo --slug x --title X
 確実です。置き場所は必ず次の形にします。
 
 ```
-src/content/articles/<locale>/<subject>/<category>/<slug>.md
+src/content/articles/<ISO 639-3>/<subject>/<category>/<slug>.md
                      └ ja     └ 分野    └ カテゴリ  └ URLに出る名前
 ```
 
@@ -59,7 +59,7 @@ frontmatter とファイルの置き場所がずれていると検証で止ま�
 ```yaml
 ---
 articleId: ja-chemistry-gases # <locale>-<subject>-<slug> の形
-locale: ja
+locale: ja # 公開URLの表示コード。格納ディレクトリは jpn
 title: 気体
 slug: gases
 subject: chemistry

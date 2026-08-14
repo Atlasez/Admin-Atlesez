@@ -53,6 +53,15 @@ Settings → Environment variables
 
 未設定の場合も応募内容の保存は行われ、メール通知だけが停止する。Resend側で送信元ドメインを検証してから本番Secretを登録すること。
 
+設定例（値はCloudflareにだけ保存し、リポジトリには書かない）:
+
+```sh
+npx wrangler secret put RESEND_API_KEY --config wrangler.admin.jsonc
+npx wrangler deploy --config wrangler.admin.jsonc --var APPLICATION_NOTIFICATION_EMAIL:受信先@example.com --var EMAIL_FROM:'Atlasez運営 <noreply@example.com>'
+```
+
+`APPLICATION_NOTIFICATION_EMAIL` はカンマ区切りで複数の運営者を指定できる。ResendのAPIキーが未登録の間は、応募をD1とDiscordへ保存・通知し、メールだけを送信しない。
+
 独自ドメインを取るまでは `SITE_URL` に発行済みの `https://<project>.pages.dev`
 を入れておく。ドメイン取得後はこの1箇所を書き換えるだけでよい。
 

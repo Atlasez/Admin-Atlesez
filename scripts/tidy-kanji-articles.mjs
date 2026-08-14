@@ -21,7 +21,7 @@ import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { ROOT } from "./import-utils.mjs";
 
-const KANJI_DIR = join(ROOT, "src/content/articles/ja/kanji");
+const KANJI_DIR = join(ROOT, "src/content/articles/jpn/kanji");
 const dryRun = process.argv.includes("--dry");
 
 const COMPOUNDS_HEADING = "#### 【熟語】";

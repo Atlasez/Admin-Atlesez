@@ -182,7 +182,7 @@ src/content/articles/<locale>/<subject>/<category>/<slug>.md
 例:
 
 ```text
-src/content/articles/ja/mathematics/set-theory/sets.md
+src/content/articles/jpn/mathematics/set-theory/sets.md
 ```
 
 記事の先頭にはfrontmatterがあります。

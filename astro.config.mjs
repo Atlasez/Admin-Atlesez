@@ -3,7 +3,126 @@ import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
 import remarkMath from "remark-math";
+import rehypeRaw from "rehype-raw";
 import rehypeMathjax from "rehype-mathjax/svg";
+
+/**
+ * 旧記事には Pandoc が出力した `<span class="math inline">\(...\)</span>`
+ * が残っている。remark-math が扱えるのは Markdown の `$...$` なので、
+ * そのままだと HTML の中の数式だけが文字列として残ってしまう。raw HTML
+ * を HAST に展開したあと、MathJax が認識する math-inline / math-display
+ * クラスへ正規化する。
+ */
+const normalizeLegacyMath = () => (/** @type {any} */ tree) => {
+  /** @param {any} node */
+  const visit = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "element" && node.tagName === "span") {
+      const classes = Array.isArray(node.properties?.className)
+        ? node.properties.className.map(String)
+        : [];
+      const isInline = classes.includes("math-inline") ||
+        (classes.includes("math") && classes.includes("inline"));
+      const isDisplay = classes.includes("math-display") ||
+        (classes.includes("math") && classes.includes("display"));
+      if (isInline || isDisplay) {
+        const text = (node.children ?? [])
+          .filter((child) => child?.type === "text")
+          .map((child) => String(child.value ?? ""))
+          .join("")
+          .trim();
+        // Markdown's raw-HTML parser removes the backslashes from \\(…\\) and
+        // \\[…\\]. The wrapper is still unambiguous from the legacy class.
+        const value = isDisplay
+          ? text.replace(/^\[/u, "").replace(/\]$/u, "").trim()
+          : text.replace(/^\(/u, "").replace(/\)$/u, "").trim();
+        node.properties = {
+          ...(node.properties ?? {}),
+          className: [isDisplay ? "math-display" : "math-inline"],
+        };
+        node.children = [{ type: "text", value }];
+      }
+    }
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  visit(tree);
+};
+
+/**
+ * 旧記事の折りたたみは `<div class="folding">` / `<div class="supp">`
+ * のまま保存されていることがある。CSS だけでは開閉できず、ブラウザの
+ * JavaScript にも依存してしまうため、ビルド時に標準の details/summary
+ * へ変換する。class は残すので既存の見た目と後方互換性も維持する。
+ */
+const normalizeLegacyFolding = () => (/** @type {any} */ tree) => {
+  /** @param {any} node */
+  const textContent = (node) => {
+    if (!node || typeof node !== "object") return "";
+    if (node.type === "text") return String(node.value ?? "");
+    return Array.isArray(node.children) ? node.children.map(textContent).join("") : "";
+  };
+
+  /** @param {any} node */
+  const visit = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "element" && node.tagName === "div") {
+      const classes = Array.isArray(node.properties?.className)
+        ? node.properties.className.map(String)
+        : [];
+      const isSupplement = classes.includes("supp");
+      const isFolding = classes.includes("folding");
+      if (isSupplement || isFolding) {
+        const children = Array.isArray(node.children) ? [...node.children] : [];
+        const existingSummary = children.find(
+          (child) => child?.type === "element" && child.tagName === "summary",
+        );
+        const titleElement = children.find(
+          (child) => child?.type === "element" &&
+            (child.tagName === "h4" ||
+              (Array.isArray(child.properties?.className) &&
+                child.properties.className.some((name) =>
+                  ["folding-title", "supp-title"].includes(String(name)),
+                ))),
+        );
+        const explicitTitle = node.properties?.dataSummary
+          ?? node.properties?.dataTitle
+          ?? node.properties?.["data-summary"]
+          ?? node.properties?.["data-title"];
+        const title = String(
+          explicitTitle || textContent(titleElement) ||
+            (isSupplement ? "補足." : "折りたたみ"),
+        ).trim();
+        const summary = existingSummary ?? {
+          type: "element",
+          tagName: "summary",
+          properties: {
+            className: [isSupplement ? "supp-details-summary" : "folding-summary"],
+          },
+          children: [{ type: "text", value: title }],
+        };
+        const body = existingSummary
+          ? children.filter((child) => child !== existingSummary)
+          : children.filter((child) => child !== titleElement);
+        const inner = {
+          type: "element",
+          tagName: "div",
+          properties: {
+            className: [isSupplement ? "supp-details-inner" : "folding-content"],
+          },
+          children: body,
+        };
+        node.tagName = "details";
+        node.properties = {
+          ...(node.properties ?? {}),
+          className: [isSupplement ? "supp-details" : "folding"],
+        };
+        node.children = [summary, inner];
+      }
+    }
+    if (Array.isArray(node.children)) node.children.forEach(visit);
+  };
+  visit(tree);
+};
 
 // MathJax SVG は意味のある数式画像として扱えるよう、axe/スクリーン
 // リーダー向けの名前を付ける。本文の数式自体は SVG 内に保持される。
@@ -53,6 +172,11 @@ export default defineConfig({
     processor: unified({
       remarkPlugins: [remarkMath],
       rehypePlugins: [
+        // Preserve legacy theorem/folding HTML and authored links before the
+        // MathJax pass. Content is repository-controlled Markdown/HTML.
+        rehypeRaw,
+        normalizeLegacyFolding,
+        normalizeLegacyMath,
         [
           rehypeMathjax,
           {

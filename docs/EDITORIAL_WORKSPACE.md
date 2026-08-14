@@ -17,7 +17,7 @@ Google OAuthでログインし、既存の `report_admin_permissions` に設定�
 
 1. ワークスペースで原稿を`承認済み`にする
 2. **公開用Markdownをコピー**を押す
-3. GitHub上で `src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` を作成・更新し、Pull Requestを出す
+3. GitHub上で `src/content/articles/jpn/<分野>/<カテゴリ>/<slug>.md` を作成・更新し、Pull Requestを出す
 4. CIが通り、査読者がマージすると本番サイトへ自動デプロイされる
 
 この方式により、執筆・数式確認・査読は内部サイトに集約しつつ、公開履歴と最終レビューはGitHubのPRに残せます。

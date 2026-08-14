@@ -165,7 +165,7 @@ export function writeArticle({
   };
   const file = join(
     ROOT,
-    "src/content/articles/ja",
+    "src/content/articles/jpn",
     subject,
     category,
     `${slug}.md`,

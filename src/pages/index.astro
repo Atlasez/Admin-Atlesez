@@ -42,11 +42,6 @@ const structuredData = {
           <a href={withBase("/join/")}>運営に参加する</a>
         </div>
       </div>
-      <dl class="outline" aria-label="団体概要">
-        <div><dt>主体</dt><dd>学生などの若者</dd></div>
-        <div><dt>構成</dt><dd>複数のプロジェクトと運営事務局</dd></div>
-        <div><dt>名前の由来</dt><dd>「地図帳」を意味する英語「Atlas」の複数形「Atlases」をもとにした造語「Atlasez」</dd></div>
-      </dl>
     </section>
 
     <div class="home-body">
@@ -101,9 +96,7 @@ const structuredData = {
     max-width: 70rem;
   }
   .lead {
-    display: grid;
-    grid-template-columns: minmax(0, 1.65fr) minmax(16rem, 0.75fr);
-    gap: clamp(2rem, 6vw, 5rem);
+    display: block;
     padding: var(--space-5) 0 var(--space-6);
     border-bottom: 1px solid var(--border-default);
   }
@@ -126,24 +119,6 @@ const structuredData = {
     align-items: center;
     gap: var(--space-3);
     margin-top: var(--space-4);
-  }
-  .outline {
-    margin: 0;
-    padding: var(--space-3) 0;
-    align-self: start;
-    border-top: 3px solid var(--accent-primary);
-  }
-  .outline div {
-    padding: var(--space-2) 0;
-    border-bottom: 1px solid var(--border-default);
-  }
-  .outline dt {
-    margin-bottom: var(--space-1);
-    color: var(--text-secondary);
-    font-size: calc(0.82rem * var(--text-scale));
-  }
-  .outline dd {
-    margin: 0;
   }
   .home-body {
     display: grid;

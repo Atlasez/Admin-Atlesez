@@ -2,8 +2,7 @@
 /** Atlasez公式サイトの共通レイアウト */
 import BaseHead from "../components/BaseHead.astro";
 import UiLanguage from "../components/UiLanguage.astro";
-import A11ySettings from "../components/A11ySettings.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
+import SettingsMenu from "../components/SettingsMenu.astro";
 import { withBase, ORG } from "../lib/site";
 
 interface Props {
@@ -48,6 +47,7 @@ const currentPath = Astro.url.pathname;
           />
           <span>Atlasez</span>
         </a>
+        <SettingsMenu locale="ja" />
         <nav aria-label="メインナビゲーション" class="org-nav">
           <ul>
             {
@@ -66,10 +66,6 @@ const currentPath = Astro.url.pathname;
             }
           </ul>
         </nav>
-        <a class="button atlas-link" href={withBase("/atlas/ja/")}
-          >学習サイト アトラス</a
-        >
-        <ThemeToggle locale="ja" />
       </div>
     </header>
     <main id="main">
@@ -126,9 +122,6 @@ const currentPath = Astro.url.pathname;
               </li>
             </ul>
           </nav>
-          <div>
-            <A11ySettings locale="ja" />
-          </div>
         </div>
         <p class="org-copyright">© 2022-2026 Atlasez</p>
       </div>

@@ -6,7 +6,7 @@
  * 総合ホームではタブが開かれるまで画面に入らないため、
  * cytoscape の読み込みは IntersectionObserver によって自然に遅延される。
  */
-import { atlasPath, withBase } from "../lib/site";
+import { withBase } from "../lib/site";
 import {
   t,
   localizedName,
@@ -32,9 +32,6 @@ const { list } = await getConcepts();
 const subjects = (await getPublishedSubjects()).filter(
   (s) => s.data.status === "published",
 );
-const selectableSubjects = fixedSubject
-  ? subjects.filter((s) => s.data.slug === fixedSubject)
-  : subjects;
 const graphUrl = withBase("/atlas/graph.json");
 
 const edgeKinds = [
@@ -71,6 +68,9 @@ const conceptsBySubject = subjects.map((s) => ({
   name: localizedName(s.data.name, locale),
   concepts: list.filter((c) => c.subject === s.data.slug),
 }));
+const routeConceptGroups = fixedSubject
+  ? conceptsBySubject.filter((group) => group.slug === fixedSubject)
+  : conceptsBySubject;
 
 /** カテゴリ名（地図のカテゴリ箱のラベルに使う） */
 const categoryMetaJson = JSON.stringify(
@@ -82,29 +82,12 @@ const categoryMetaJson = JSON.stringify(
     })),
   ),
 );
-const fixedSubjectEntry = subjects.find((s) => s.data.slug === fixedSubject);
-const fixedCategoryEntry = fixedSubjectEntry?.data.categories.find(
-  (category) => category.slug === fixedCategory,
-);
-const mapRootPath = atlasPath(locale, "map");
-const mapSubjectPath = fixedSubject
-  ? `${mapRootPath}?subject=${encodeURIComponent(fixedSubject)}`
-  : mapRootPath;
-const mapCategoryPath = fixedSubject && fixedCategory
-  ? `${mapSubjectPath}&category=${encodeURIComponent(`${fixedSubject}/${fixedCategory}`)}`
-  : mapSubjectPath;
 ---
 
 <section aria-labelledby="graph-heading" class="map-section">
   <h2 id="graph-heading" class="visually-hidden">
     {locale === "ja" ? "概念マップ" : "Concept map"}
   </h2>
-  <nav class="map-breadcrumb" data-map-breadcrumb data-map-root={mapRootPath} aria-label={locale === "ja" ? "学習地図内の現在地" : "Map location"}>
-    <a href={mapRootPath}>{locale === "ja" ? "アトラス" : "Atlas"}</a>
-    <span data-map-breadcrumb-subject-separator aria-hidden="true" hidden={!fixedSubjectEntry}>›</span><a data-map-breadcrumb-subject href={mapSubjectPath} hidden={!fixedSubjectEntry}>{fixedSubjectEntry ? localizedName(fixedSubjectEntry.data.name, locale) : ""}</a>
-    <span data-map-breadcrumb-category-separator aria-hidden="true" hidden={!fixedCategoryEntry}>›</span><a data-map-breadcrumb-category href={mapCategoryPath} hidden={!fixedCategoryEntry}>{fixedCategoryEntry ? localizedName(fixedCategoryEntry.name, locale) : ""}</a>
-  </nav>
-
   {/*
     地図の操作はすべて枠の中に置く。枠の外に箱を並べると横幅を食うため、
     経路検索も枠内のボタンから開くパネルにしている（地図アプリと同じ作法）。
@@ -124,19 +107,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
       <datalist id="map-node-names">
         {list.map((c) => <option value={localizedName(c.name, locale)} />)}
       </datalist>
-      <label for="map-subject" class="map-subject-label">
-        {t(locale, "subjects")}
-      </label>
-      <select id="map-subject" data-map-subject>
-        {!fixedSubject && <option value="">{t(locale, "all")}</option>}
-        {
-          selectableSubjects.map((s) => (
-            <option value={s.data.slug} selected={s.data.slug === fixedSubject}>
-              {localizedName(s.data.name, locale)}
-            </option>
-          ))
-        }
-      </select>
       <span class="map-status" data-map-status aria-live="polite"></span>
       <div
         class="map-viewport-tools"
@@ -208,28 +178,28 @@ const mapCategoryPath = fixedSubject && fixedCategory
       </div>
       <p class="route-intro">
         {locale === "ja"
-          ? "まず分野を選び、理解したい項目を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。"
-          : "Choose a subject and a goal. Set a starting point only if there is a concept you already understand."}
+          ? "目的地点を選択してください。開始地点は、すでに理解している項目がある場合だけ指定します。分野ごとにまとまった候補から選べます。"
+          : "Choose a goal. Set a starting point only if there is a concept you already understand. Concepts are grouped by subject."}
       </p>
       <form data-route-form class="route-form">
-        <div>
-          <label for="route-subject">{t(locale, "subjects")}</label>
-          <select id="route-subject" data-route-subject>
-            {selectableSubjects.map((s) => <option value={s.data.slug}>{localizedName(s.data.name, locale)}</option>)}
-          </select>
-        </div>
+        {/* 分野の選択UIは廃止したが、旧ブックマークや自動操作との互換用に
+            非表示の値だけを残す。表示上は候補を分野ごとの optgroup で整理する。 */}
+        <select class="map-route-subject-compat" data-route-subject aria-hidden="true" tabindex="-1">
+          <option value="">{locale === "ja" ? "すべて" : "All subjects"}</option>
+          {routeConceptGroups.map(({ slug, name }) => <option value={slug}>{name}</option>)}
+        </select>
         <div>
           <label for="route-start">{locale === "ja" ? "開始地点（任意）" : "Starting point (optional)"}</label>
           <select id="route-start" data-route-start>
             <option value="">{locale === "ja" ? "（最初から学ぶ）" : "(start from zero)"}</option>
-            {conceptsBySubject.flatMap(({ slug, concepts }) => concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>))}
+            {routeConceptGroups.map(({ slug, name, concepts }) => <optgroup label={name}>{concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>)}</optgroup>)}
           </select>
         </div>
         <div>
           <label for="route-goal">{t(locale, "routeGoal")}</label>
           <select id="route-goal" data-route-goal required>
             <option value="">---</option>
-            {conceptsBySubject.flatMap(({ slug, concepts }) => concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>))}
+            {routeConceptGroups.map(({ slug, name, concepts }) => <optgroup label={name}>{concepts.map((c) => <option value={c.id} data-route-option data-subject={slug}>{localizedName(c.name, locale)}</option>)}</optgroup>)}
           </select>
         </div>
         <button type="submit" class="button">{t(locale, "routeCompute")}</button>
@@ -338,17 +308,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
   section {
     margin-block: var(--space-6);
   }
-  .map-breadcrumb {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .35rem;
-    margin: 0 0 var(--space-2);
-    color: var(--text-secondary);
-    font-size: calc(.84rem * var(--text-scale));
-  }
-  .map-breadcrumb a { color: inherit; text-decoration: none; }
-  .map-breadcrumb a:hover { color: var(--accent-primary); text-decoration: underline; }
   /* 地図まわりの枠。道具立てと経路検索をこの中に重ねる */
   .map-frame {
     position: relative;
@@ -523,12 +482,13 @@ const mapCategoryPath = fixedSubject && fixedCategory
     border-radius: 0.18rem;
   }
   .canvas-state-read {
-    background: #176ea6;
-    color: #0e4f7b;
+    background: #edf5fa;
+    color: #2f6f9f;
   }
   .canvas-state-understood {
-    background: #17803d;
-    color: #0b5427;
+    background: #eef8f3;
+    color: #2e8b6f;
+    border-style: double;
   }
   /* 全画面のときは画面いっぱいに広げる */
   .map-frame:fullscreen {
@@ -585,13 +545,25 @@ const mapCategoryPath = fixedSubject && fixedCategory
   .map-route {
     position: relative;
     z-index: 1;
-    margin: var(--space-2);
-    max-width: 34rem;
-    padding: var(--space-2);
+    margin: .5rem auto;
+    max-width: 26rem;
+    max-height: min(70vh, 34rem);
+    overflow: auto;
+    padding: .75rem;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     background: var(--background-primary);
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.24);
+  }
+  /* 旧URL・自動操作との互換用。分野の選択は画面には表示しない。 */
+  .map-route-subject-compat {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
   .map-route-head {
     display: flex;
@@ -618,9 +590,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
   .map-route-close:hover {
     border-color: var(--accent-primary);
     color: var(--accent-primary);
-  }
-  .map-subject-label {
-    font-weight: 700;
   }
   .map-status {
     color: var(--text-secondary);
@@ -664,6 +633,35 @@ const mapCategoryPath = fixedSubject && fixedCategory
     background: var(--background-primary);
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
     font-size: calc(0.9rem * var(--text-scale));
+  }
+  :global(.map-detail-header) {
+    align-items: start;
+    display: flex;
+    gap: var(--space-2);
+    justify-content: space-between;
+  }
+  :global(.map-detail-header strong) { min-width: 0; }
+  :global(.map-detail-close) {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: 50%;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 1.8rem;
+    font: inherit;
+    font-size: 1.2rem;
+    height: 1.8rem;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    width: 1.8rem;
+  }
+  :global(.map-detail-close:hover),
+  :global(.map-detail-close:focus-visible) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
   .map-detail:empty {
     display: none;
@@ -729,12 +727,13 @@ const mapCategoryPath = fixedSubject && fixedCategory
     border-radius: 0.28rem;
   }
   .legend-state-read {
-    border-color: #0b4f7d;
-    background: #176ea6;
+    border-color: #2f6f9f;
+    background: #edf5fa;
   }
   .legend-state-understood {
-    border-color: #0b5427;
-    background: #17803d;
+    border-color: #2e8b6f;
+    background: #eef8f3;
+    border-style: double;
   }
   .legend-category-link {
     border-top-style: solid;
@@ -992,7 +991,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
     routeOpen?.setAttribute("aria-expanded", String(open));
     if (open) {
       routePanel
-        .querySelector<HTMLSelectElement>("[data-route-subject]")
+        .querySelector<HTMLSelectElement>("[data-route-goal]")
         ?.focus();
     }
   }
@@ -1004,6 +1003,11 @@ const mapCategoryPath = fixedSubject && fixedCategory
       setRouteOpen(false);
       routeOpen?.focus();
     });
+  document.addEventListener("click", (event) => {
+    const target = event.target as Element;
+    if (!target.closest("[data-map-detail-close]")) return;
+    detail?.replaceChildren();
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && routePanel && !routePanel.hidden) {
       setRouteOpen(false);
@@ -1039,31 +1043,10 @@ const mapCategoryPath = fixedSubject && fixedCategory
     const data = await loadGraphData();
     const nodeById = new Map(data.nodes.map((n) => [n.id, n]));
     const base = (container.dataset.base ?? "/").replace(/\/$/, "");
+    const mapRoot = `${base}/atlas/${locale}/map/`;
     const label = (n: GraphNode) =>
       locale === "en" && n.name.en ? n.name.en : n.name.ja;
     const ja = locale === "ja";
-    const breadcrumb = document.querySelector<HTMLElement>("[data-map-breadcrumb]");
-    const breadcrumbSubject = breadcrumb?.querySelector<HTMLAnchorElement>("[data-map-breadcrumb-subject]");
-    const breadcrumbSubjectSeparator = breadcrumb?.querySelector<HTMLElement>("[data-map-breadcrumb-subject-separator]");
-    const breadcrumbCategory = breadcrumb?.querySelector<HTMLAnchorElement>("[data-map-breadcrumb-category]");
-    const breadcrumbCategorySeparator = breadcrumb?.querySelector<HTMLElement>("[data-map-breadcrumb-category-separator]");
-    const mapRoot = breadcrumb?.dataset.mapRoot ?? `${base}/atlas/${locale}/map/`;
-    const syncBreadcrumb = () => {
-      const selectedSubject = subjectSelect?.value ?? container.dataset.fixedSubject ?? "";
-      const selectedCategory = focused ?? "";
-      if (breadcrumbSubject) {
-        breadcrumbSubject.hidden = !selectedSubject;
-        breadcrumbSubject.textContent = subjectName.get(selectedSubject) ?? selectedSubject;
-        breadcrumbSubject.href = `${mapRoot}?subject=${encodeURIComponent(selectedSubject)}`;
-      }
-      if (breadcrumbSubjectSeparator) breadcrumbSubjectSeparator.hidden = !selectedSubject;
-      if (breadcrumbCategory) {
-        breadcrumbCategory.hidden = !selectedCategory;
-        breadcrumbCategory.textContent = categoryName.get(selectedCategory) ?? selectedCategory.split("/").at(-1) ?? selectedCategory;
-        breadcrumbCategory.href = `${mapRoot}?subject=${encodeURIComponent(selectedSubject)}&category=${encodeURIComponent(selectedCategory)}`;
-      }
-      if (breadcrumbCategorySeparator) breadcrumbCategorySeparator.hidden = !selectedCategory;
-    };
     const mobileViewport = window.matchMedia("(max-width: 767px)").matches;
 
     controls.forEach((control) => (control.hidden = false));
@@ -1306,27 +1289,25 @@ const mapCategoryPath = fixedSubject && fixedCategory
         {
           selector: "node.history-read",
           style: {
-            // 読んだ状態は青い塗り＋太い枠で、未記録との差を一目で示す。
-            "background-color": "#176ea6",
+            // 学習状態は本文色を反転させず、淡いノード色＋枠線だけで示す。
+            "background-color": "data(nodeFill)",
             "background-opacity": 1,
-            "border-color": "#0b4f7d",
-            "border-width": 5,
+            "border-color": "#2f6f9f",
+            "border-width": 3,
             "border-style": "solid",
-            color: "#ffffff",
-            "font-weight": 700,
+            color: textColor,
           },
         },
         {
           selector: "node.history-understood",
           style: {
-            // 理解した状態は緑＋二重線。読んだ状態とも判別しやすい。
-            "background-color": "#17803d",
+            // 理解した状態は緑の二重枠。色の反転を避けて本文を読みやすく保つ。
+            "background-color": "data(nodeFill)",
             "background-opacity": 1,
-            "border-color": "#0b5427",
-            "border-width": 5,
-            color: "#ffffff",
-            "font-weight": 700,
+            "border-color": "#2e8b6f",
+            "border-width": 3,
             "border-style": "double",
+            color: textColor,
           },
         },
         {
@@ -1452,6 +1433,10 @@ const mapCategoryPath = fixedSubject && fixedCategory
         },
       ],
       layout: { name: "preset", fit: false },
+      // Cytoscape は内部キャンバスを CSS ピクセルのまま描くと、Retina
+      // 画面で縮小したときに文字・辺がぼやける。端末の密度に合わせた
+      // バッファを確保し、極端な高密度端末では 2 倍に抑えて軽さも保つ。
+      pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
       minZoom: 0.2,
       maxZoom: 3,
     });
@@ -1522,8 +1507,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
     }
 
     const mapStatus = document.querySelector<HTMLElement>("[data-map-status]");
-    const subjectSelect =
-      document.querySelector<HTMLSelectElement>("[data-map-subject]");
     const backButton =
       document.querySelector<HTMLButtonElement>("[data-map-back]");
     const zoomLevel =
@@ -1531,6 +1514,23 @@ const mapCategoryPath = fixedSubject && fixedCategory
 
     /** いま詳細で開いているカテゴリ。null なら概要。 */
     let focused: string | null = null;
+
+    /**
+     * 親ページ（分野トップ）のタブと地図を同じ現在地に保つ。
+     * 地図は独立ページにも埋め込まれるため、親がいなくても安全な
+     * CustomEvent にしている。
+     */
+    const notifyCategorySelection = (categoryKey: string | null) => {
+      const [subject, category] = categoryKey?.split("/") ?? [
+        container.dataset.fixedSubject ?? "",
+        "",
+      ];
+      window.dispatchEvent(
+        new CustomEvent("atlas-map-category-change", {
+          detail: { subject, category, categoryKey },
+        }),
+      );
+    };
 
     const setStatus = (text: string) => {
       if (mapStatus) mapStatus.textContent = text;
@@ -1557,81 +1557,128 @@ const mapCategoryPath = fixedSubject && fixedCategory
     const show = (selector: string) =>
       cy.elements(selector).style("display", "element");
 
-    /** 固定の初期位置から、辺の長さとノード同士の反発を使って余白を確保する。 */
+    /**
+     * 固定の初期配置を、参照グラフと同じ「長い辺は引く・近いノードは
+     * 押す」力学配置で整える。レイアウト中の DOM/Cytoscape アニメーション
+     * は行わないため、カーソル移動時の点滅やクリック漏れも起こさない。
+     */
     function spreadNodes(elements: ReturnType<typeof cy.nodes>): void {
       if (elements.length < 2) return;
       const nodes = elements.toArray();
-      // 親ノードを含む部分グラフに汎用レイアウトをそのまま渡すと、
-      // Cytoscape の compound layout が隠れた子を参照してしまうため、
-      // 表示中のノードだけで小さな反発計算を行う。
-      cy.startBatch();
-      // 参照実装と同じく、反発→辺の引力→衝突解消を複数回繰り返す。
-      // 反発距離はラベル付きタイルの実寸より少し大きく取り、重なりを
-      // 解消してから表示する。アニメーションさせないのでカーソル移動時
-      // に点滅せず、カテゴリを開くたびに同じ入力から同じ配置になる。
-      for (let iteration = 0; iteration < 64; iteration += 1) {
-        const force = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
-        for (let i = 0; i < nodes.length; i += 1) {
-          for (let j = i + 1; j < nodes.length; j += 1) {
-            const a = nodes[i];
-            const b = nodes[j];
-            const delta = { x: a.position("x") - b.position("x"), y: a.position("y") - b.position("y") };
-            const distance = Math.max(18, Math.hypot(delta.x, delta.y));
-            const magnitude = Math.min(9, 12_000 / (distance * distance));
-            const fx = (delta.x / distance) * magnitude;
-            const fy = (delta.y / distance) * magnitude;
-            const aForce = force.get(a.id());
-            const bForce = force.get(b.id());
-            if (aForce) { aForce.x += fx; aForce.y += fy; }
-            if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+      const nodeIds = new Set(nodes.map((node) => node.id()));
+      const visibleEdges = cy
+        .edges(":visible")
+        .filter((edge) => nodeIds.has(edge.source().id()) && nodeIds.has(edge.target().id()));
+      const velocities = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
+      const cellSize = 260;
+      const repulsionRange = 245;
+      const desiredEdgeLength = 235;
+      let energy = Number.POSITIVE_INFINITY;
 
-            // 反発だけでは文字を含むタイルが少しずつ重なるため、
-            // 実際のタイル寸法に基づく衝突判定で必ず離す。
-            const minX = (a.outerWidth() + b.outerWidth()) / 2 + 34;
-            const minY = (a.outerHeight() + b.outerHeight()) / 2 + 26;
-            const overlapX = minX - Math.abs(delta.x);
-            const overlapY = minY - Math.abs(delta.y);
-            if (overlapX > 0 && overlapY > 0 && aForce && bForce) {
-              const separateHorizontally = overlapX < overlapY;
-              const direction = separateHorizontally
-                ? (delta.x || (i % 2 === 0 ? 1 : -1))
-                : (delta.y || (j % 2 === 0 ? 1 : -1));
-              const amount = (separateHorizontally ? overlapX : overlapY) * 0.22;
-              if (separateHorizontally) {
-                const sign = Math.sign(direction);
-                aForce.x += sign * amount;
-                bForce.x -= sign * amount;
-              } else {
-                const sign = Math.sign(direction);
-                aForce.y += sign * amount;
-                bForce.y -= sign * amount;
+      cy.startBatch();
+      // 参照実装の forceLayoutStep（逆二乗反発、ばね状の辺、衝突判定）を
+      // Cytoscape の表示中ノードへ適用する。140 回程度で安定させることで、
+      // 長距離の辺も十分に縮み、初期の格子配置の癖を残さない。
+      for (let iteration = 0; iteration < 140 && energy > 0.06; iteration += 1) {
+        const forces = new Map(nodes.map((node) => [node.id(), { x: 0, y: 0 }]));
+        const cells = new Map<string, number[]>();
+        nodes.forEach((node, index) => {
+          const key = `${Math.floor(node.position("x") / cellSize)},${Math.floor(node.position("y") / cellSize)}`;
+          cells.set(key, [...(cells.get(key) ?? []), index]);
+        });
+
+        for (let i = 0; i < nodes.length; i += 1) {
+          const a = nodes[i];
+          const cellX = Math.floor(a.position("x") / cellSize);
+          const cellY = Math.floor(a.position("y") / cellSize);
+          for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+            for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+              const candidates = cells.get(`${cellX + offsetX},${cellY + offsetY}`) ?? [];
+              for (const j of candidates) {
+                if (j <= i) continue;
+                const b = nodes[j];
+                let dx = b.position("x") - a.position("x");
+                let dy = b.position("y") - a.position("y");
+                if (dx === 0 && dy === 0) {
+                  // 同じ初期座標でも常に同じ方向へ逃がしてちらつきを防ぐ。
+                  dx = (i % 2 === 0 ? 1 : -1) * 0.1;
+                  dy = (j % 2 === 0 ? 1 : -1) * 0.1;
+                }
+                const distance = Math.max(1, Math.hypot(dx, dy));
+                const ux = dx / distance;
+                const uy = dy / distance;
+                const aForce = forces.get(a.id());
+                const bForce = forces.get(b.id());
+                if (!aForce || !bForce) continue;
+
+                // 近距離だけ逆二乗で反発。遠くのノードを無用に散らさない。
+                if (distance < repulsionRange) {
+                  const magnitude = Math.min(2.2, 1500 / (distance * distance));
+                  aForce.x -= ux * magnitude;
+                  aForce.y -= uy * magnitude;
+                  bForce.x += ux * magnitude;
+                  bForce.y += uy * magnitude;
+                }
+
+                // 見た目の矩形を基準にした衝突解消。斥力で押し出された
+                // ノード同士にも同じ処理を反復し、重なりを残さない。
+                const minX = (a.outerWidth() + b.outerWidth()) / 2 + 34;
+                const minY = (a.outerHeight() + b.outerHeight()) / 2 + 26;
+                const overlapX = minX - Math.abs(dx);
+                const overlapY = minY - Math.abs(dy);
+                if (overlapX > 0 && overlapY > 0) {
+                  if (overlapX < overlapY) {
+                    const amount = Math.min(4.4, overlapX * 0.12);
+                    const sign = Math.sign(dx) || (i % 2 === 0 ? 1 : -1);
+                    aForce.x -= sign * amount;
+                    bForce.x += sign * amount;
+                  } else {
+                    const amount = Math.min(4.4, overlapY * 0.12);
+                    const sign = Math.sign(dy) || (j % 2 === 0 ? 1 : -1);
+                    aForce.y -= sign * amount;
+                    bForce.y += sign * amount;
+                  }
+                }
               }
             }
           }
         }
-        // つながるノードはほどよく引き寄せ、無関係なノードは反発させる。
-        // 参照元の ForceAtlas2 と同じ読みやすい塊を、描画のちらつきなしで再現する。
-        cy.edges(":visible").forEach((edge) => {
+
+        // 辺は距離が離れていても働く長距離ばね。カテゴリ内の概念を
+        // 一本道に固めすぎず、関係のあるノードだけを読みやすく結ぶ。
+        visibleEdges.forEach((edge) => {
           const a = edge.source();
           const b = edge.target();
-          if (!force.has(a.id()) || !force.has(b.id())) return;
-          const delta = {
-            x: b.position("x") - a.position("x"),
-            y: b.position("y") - a.position("y"),
-          };
-          const distance = Math.max(1, Math.hypot(delta.x, delta.y));
-          const pull = Math.max(-2, Math.min(2, (distance - 220) * 0.01));
-          const fx = (delta.x / distance) * pull;
-          const fy = (delta.y / distance) * pull;
-          const aForce = force.get(a.id());
-          const bForce = force.get(b.id());
-          if (aForce) { aForce.x += fx; aForce.y += fy; }
-          if (bForce) { bForce.x -= fx; bForce.y -= fy; }
+          const aForce = forces.get(a.id());
+          const bForce = forces.get(b.id());
+          if (!aForce || !bForce) return;
+          const dx = b.position("x") - a.position("x");
+          const dy = b.position("y") - a.position("y");
+          const distance = Math.max(1, Math.hypot(dx, dy));
+          const pull = Math.max(-2.8, Math.min(2.8, (distance - desiredEdgeLength) * 0.012));
+          const fx = (dx / distance) * pull;
+          const fy = (dy / distance) * pull;
+          aForce.x += fx;
+          aForce.y += fy;
+          bForce.x -= fx;
+          bForce.y -= fy;
         });
+
+        energy = 0;
         nodes.forEach((node) => {
-          const f = force.get(node.id());
-          if (!f) return;
-          node.position({ x: node.position("x") + f.x, y: node.position("y") + f.y });
+          const force = forces.get(node.id());
+          if (!force) return;
+          const previous = velocities.get(node.id()) ?? { x: 0, y: 0 };
+          const velocity = {
+            x: Math.max(-5, Math.min(5, (previous.x + force.x) * 0.76)),
+            y: Math.max(-5, Math.min(5, (previous.y + force.y) * 0.76)),
+          };
+          velocities.set(node.id(), velocity);
+          energy += Math.abs(velocity.x) + Math.abs(velocity.y);
+          node.position({
+            x: node.position("x") + velocity.x,
+            y: node.position("y") + velocity.y,
+          });
         });
       }
       cy.endBatch();
@@ -1650,6 +1697,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
     /** 概要: カテゴリの箱を分野ごとに格子に並べる */
     function renderOverview(subject: string): void {
       focused = null;
+      notifyCategorySelection(null);
       hideAll();
       if (backButton) {
         backButton.hidden = true;
@@ -1659,7 +1707,9 @@ const mapCategoryPath = fixedSubject && fixedCategory
       const slugs = subject
         ? subjectOrder.filter((s) => s === subject)
         : subjectOrder;
-      const COLS = 3;
+      // スマホでは3列にするとカードが縮みすぎるため2列にして、
+      // 引いて見てもカテゴリ名を読める大きさを保つ。
+      const COLS = mobileViewport ? 2 : 3;
       const COL_W = 210;
       const ROW_H = 96;
       const SUBJECT_GAP = 120;
@@ -1708,6 +1758,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
     /** 詳細: 1 カテゴリの概念と、外につながる概念だけを描く */
     function renderCategory(key: string): void {
       focused = key;
+      notifyCategorySelection(key);
       hideAll();
       if (backButton) backButton.hidden = false;
 
@@ -1870,7 +1921,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
     /** 共有グラフの「自動調整」と同様に、表示中の関係から読みやすく並べ直す。 */
     function autoArrange(): void {
       if (!focused) {
-        renderOverview(subjectSelect?.value ?? "");
+        renderOverview(container?.dataset.fixedSubject ?? "");
         return;
       }
       // この地図では前提の深さが学習順そのものなので、汎用の力学配置ではなく
@@ -1884,11 +1935,10 @@ const mapCategoryPath = fixedSubject && fixedCategory
       const url = new URL(location.href);
       if (focused) url.searchParams.set("category", focused);
       else url.searchParams.delete("category");
-      const subject = subjectSelect?.value ?? "";
+      const subject = container?.dataset.fixedSubject || focused?.split("/")[0] || "";
       if (subject) url.searchParams.set("subject", subject);
       else url.searchParams.delete("subject");
       history.replaceState(null, "", url);
-      syncBreadcrumb();
     }
 
     function showDetail(id: string): void {
@@ -1913,7 +1963,16 @@ const mapCategoryPath = fixedSubject && fixedCategory
       // DOM API と textContent を使い、将来の外部投稿連携でもHTMLを実行させない。
       const heading = document.createElement("strong");
       heading.textContent = label(n);
-      detail.replaceChildren(heading, document.createTextNode(" — "));
+      const header = document.createElement("div");
+      header.className = "map-detail-header";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "map-detail-close";
+      close.dataset.mapDetailClose = "true";
+      close.setAttribute("aria-label", ja ? "記事の詳細を閉じる" : "Close article details");
+      close.textContent = "×";
+      header.append(heading, close);
+      detail.replaceChildren(header, document.createTextNode(" — "));
       if (arts.length > 0) {
         const articleList = document.createElement("div");
         articleList.className = "map-detail-articles";
@@ -2025,6 +2084,82 @@ const mapCategoryPath = fixedSubject && fixedCategory
     });
 
     /**
+     * ドラッグ中のタイル同士の衝突をその場で解消する。
+     *
+     * 初期配置の spreadNodes は表示切り替え時にしか実行されないため、
+     * ドラッグしたノードが別のノードへ重なったままになることがあった。
+     * ここでは掴んでいるノードを固定し、周囲の表示中ノードだけを最小距離
+     * の外側へ押し出す。2回反復することで、押し出されたノード同士の
+     * 二次的な重なりも短い操作中に解消する。
+     */
+    const resolveDraggedCollisions = (dragged: {
+      id(): string;
+      position(axis: "x" | "y"): number;
+      position(value: { x: number; y: number }): void;
+      outerWidth(): number;
+      outerHeight(): number;
+    }): void => {
+      const movable = cy
+        .nodes(":visible")
+        .filter((node) => node.data("kind") !== "subject" && node.id() !== dragged.id());
+      if (movable.length === 0) return;
+
+      // 押し出したノードも別のノードにぶつかるため、掴んだノードだけを
+      // 基準にせず、表示中の全タイルをペアごとに解決する。これを複数回
+      // 反復することで、A→B→C のような連鎖的な押し出しでも重なりを残さない。
+      const nodes = [dragged, ...movable];
+      cy.startBatch();
+      for (let pass = 0; pass < 10; pass += 1) {
+        let moved = false;
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const first = nodes[i];
+            const second = nodes[j];
+            const dx = second.position("x") - first.position("x");
+            const dy = second.position("y") - first.position("y");
+            const minX = (first.outerWidth() + second.outerWidth()) / 2 + 28;
+            const minY = (first.outerHeight() + second.outerHeight()) / 2 + 24;
+            const overlapX = minX - Math.abs(dx);
+            const overlapY = minY - Math.abs(dy);
+            if (overlapX <= 0 || overlapY <= 0) continue;
+
+            const horizontal = overlapX < overlapY;
+            const direction = horizontal
+              ? dx || (i % 2 === 0 ? 1 : -1)
+              : dy || (i % 2 === 0 ? 1 : -1);
+            const sign = Math.sign(direction) || 1;
+            const firstIsDragged = first.id() === dragged.id();
+            const secondIsDragged = second.id() === dragged.id();
+            // 掴んでいるタイルはポインタ位置を優先し、相手を全量押し出す。
+            // それ以外のペアは半分ずつ動かし、押し出し先でも斥力が働くようにする。
+            const firstAmount = secondIsDragged ? overlapX : firstIsDragged ? 0 : overlapX / 2;
+            const secondAmount = firstIsDragged ? overlapX : secondIsDragged ? 0 : overlapX / 2;
+            const firstVerticalAmount = secondIsDragged ? overlapY : firstIsDragged ? 0 : overlapY / 2;
+            const secondVerticalAmount = firstIsDragged ? overlapY : secondIsDragged ? 0 : overlapY / 2;
+            if (horizontal) {
+              first.position({ x: first.position("x") - sign * firstAmount, y: first.position("y") });
+              second.position({ x: second.position("x") + sign * secondAmount, y: second.position("y") });
+            } else {
+              first.position({ x: first.position("x"), y: first.position("y") - sign * firstVerticalAmount });
+              second.position({ x: second.position("x"), y: second.position("y") + sign * secondVerticalAmount });
+            }
+            moved = true;
+          }
+        }
+        if (!moved) break;
+      }
+      cy.endBatch();
+    };
+
+    // ドラッグ中は連続的に周囲を避け、離した直後にも最終位置を確認する。
+    cy.on("drag", 'node[kind = "concept"], node[kind = "category"]', (ev) => {
+      resolveDraggedCollisions(ev.target);
+    });
+    cy.on("dragfree", 'node[kind = "concept"], node[kind = "category"]', (ev) => {
+      resolveDraggedCollisions(ev.target);
+    });
+
+    /**
      * 触れている要素、直接つながるノード、対応する辺をそれぞれ濃くする。
      * それ以外は消さずに残すことで、地図全体の位置関係を見失わないようにする。
      * ノードと辺の境界をまたぐ際に即座に
@@ -2074,7 +2209,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
 
     /** カテゴリを閉じて概要に戻す（fold） */
     function collapse(): void {
-      renderOverview(subjectSelect?.value ?? "");
+      renderOverview(container?.dataset.fixedSubject ?? "");
       syncUrl();
     }
 
@@ -2091,34 +2226,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
     // 何もない場所を押したときも閉じる（地図アプリと同じ感覚）
     cy.on("tap", (ev) => {
       if (ev.target === cy && focused) collapse();
-    });
-
-    /**
-     * 分野を選んだら、学習ルート検索の「目的地点」もその分野だけに絞る。
-     * 全 154 項目から探すのは大変なうえ、地図に出ていない分野を選べてしまうと
-     * 表示と操作が食い違うため。開始地点は分野をまたぐ前提を選べるよう絞らない。
-     */
-    function filterGoalOptions(subject: string): void {
-      const goal =
-        document.querySelector<HTMLSelectElement>("[data-route-goal]");
-      if (!goal) return;
-      let selectedHidden = false;
-      goal
-        .querySelectorAll<HTMLOptionElement>("option[data-route-option]")
-        .forEach((option) => {
-          const match = !subject || option.dataset.subject === subject;
-          option.hidden = !match;
-          option.disabled = !match;
-          if (!match && option.selected) selectedHidden = true;
-        });
-      // 絞り込みで消えた項目が選ばれたままにならないようにする
-      if (selectedHidden) goal.value = "";
-    }
-
-    subjectSelect?.addEventListener("change", () => {
-      renderOverview(subjectSelect.value);
-      filterGoalOptions(subjectSelect.value);
-      syncUrl();
     });
 
     document
@@ -2149,8 +2256,7 @@ const mapCategoryPath = fixedSubject && fixedCategory
       });
 
     document.querySelector("[data-map-reset]")?.addEventListener("click", () => {
-      if (subjectSelect) subjectSelect.value = "";
-      renderOverview("");
+      renderOverview(container.dataset.fixedSubject ?? "");
       syncUrl();
     });
 
@@ -2191,9 +2297,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
     const selected = params.get("selected");
     const selectedNode = selected ? nodeById.get(selected) : undefined;
 
-    if (subjectSelect) subjectSelect.value = urlSubject;
-    // URL に分野が入っていた場合も、目的地点の絞り込みを初期状態から合わせる
-    filterGoalOptions(urlSubject);
     if (urlCategory && conceptsByCat.has(urlCategory)) {
       renderCategory(urlCategory);
     } else if (selectedNode) {
@@ -2205,7 +2308,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
       cy.getElementById(selected).select();
       showDetail(selected);
     }
-    syncBreadcrumb();
     syncViewportUi();
 
   }
@@ -2213,13 +2315,11 @@ const mapCategoryPath = fixedSubject && fixedCategory
   async function initRoute(): Promise<void> {
     const form = document.querySelector<HTMLFormElement>("[data-route-form]");
     const result = document.querySelector<HTMLElement>("[data-route-result]");
-    const routeSubject =
-      document.querySelector<HTMLSelectElement>("[data-route-subject]");
     const routeStart =
       document.querySelector<HTMLSelectElement>("[data-route-start]");
     const routeGoal =
       document.querySelector<HTMLSelectElement>("[data-route-goal]");
-    if (!form || !result || !routeSubject || !routeStart || !routeGoal || !container) {
+    if (!form || !result || !routeStart || !routeGoal || !container) {
       return;
     }
 
@@ -2254,41 +2354,14 @@ const mapCategoryPath = fixedSubject && fixedCategory
           }</span>`;
     };
 
-    const filterRouteOptions = () => {
-      const subject = routeSubject.value;
-      for (const select of [routeStart, routeGoal]) {
-        select.value = "";
-        select
-          .querySelectorAll<HTMLOptionElement>("[data-route-option]")
-          .forEach((option) => {
-            const matches = option.dataset.subject === subject;
-            option.hidden = !matches;
-            option.disabled = !matches;
-          });
-      }
-      result.innerHTML = "";
-    };
-
-    const requestedSubject =
-      new URL(location.href).searchParams.get("subject") ??
-      container.dataset.fixedSubject;
-    if (
-      requestedSubject &&
-      [...routeSubject.options].some((option) => option.value === requestedSubject)
-    ) {
-      routeSubject.value = requestedSubject;
-    }
-    filterRouteOptions();
-    routeSubject.addEventListener("change", filterRouteOptions);
+    routeStart.value = "";
+    routeGoal.value = "";
+    result.innerHTML = "";
 
     /** ノード詳細や地図上の選択から、経路検索の始点・目的地点を設定する。 */
     applyRouteSelection = ({ id, mode }) => {
       const node = id ? nodeById.get(id) : undefined;
       if (!node || !mode) return;
-      if (routeSubject.value !== node.subject) {
-        routeSubject.value = node.subject;
-        filterRouteOptions();
-      }
       if (mode === "start") {
         routeStart.value = node.id;
       } else {

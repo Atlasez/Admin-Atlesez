@@ -3,6 +3,9 @@
   "name": "atlasez-web-1",
   "main": "src/worker.ts",
   "compatibility_date": "2026-07-26",
+  "vars": {
+    "DISCORD_REPORT_SYNC_URL": "https://atlasez-admin.ukyoukay0.workers.dev/internal/article-report-discord"
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

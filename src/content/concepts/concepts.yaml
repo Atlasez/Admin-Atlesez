@@ -1,4 +1,84 @@
 # 言語非依存の概念層。IDは永続（subject.category.name）
+- id: kanji.vocabulary.documents-letters
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: 文書・手紙
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.entirely
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: ことごとく
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.namely
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: すなわち
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.remaining-preserving
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: のこる・のこす
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.correctness
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: ただす・ただしい
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.learning-habituation
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: ならう・なれる
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.assistance
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: たすける
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
+- id: kanji.vocabulary.fulfillment
+  subject: kanji
+  category: vocabulary
+  name:
+    ja: かなう
+  prerequisites: []
+  recommendedNext: []
+  related: []
+  alternatives: []
+
 # ---------- 数学: 集合論 ----------
 - id: math.set-theory.sets
   subject: mathematics

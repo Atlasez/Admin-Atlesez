@@ -5,7 +5,7 @@ Atlasezのサイトへの貢献ありがとうございます。記事執筆・�
 ## 記事の執筆・翻訳
 
 1. [docs/CONTENT_MODEL.md](docs/CONTENT_MODEL.md) でfrontmatterの書き方を確認
-2. `src/content/articles/<locale>/<subject>/<category>/<slug>.md` を作成（`status: draft`）
+2. `src/content/articles/<ISO 639-3>/<subject>/<category>/<slug>.md` を作成（日本語は `jpn`、`status: draft`）
 3. PRを作成 → CIの検証が通ることを確認 → 査読を受ける
 4. 詳細は [docs/EDITORIAL_WORKFLOW.md](docs/EDITORIAL_WORKFLOW.md)
 

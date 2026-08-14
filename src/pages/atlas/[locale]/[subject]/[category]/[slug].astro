@@ -64,14 +64,82 @@ const categoryName = category
   : entry.data.category;
 
 /**
- * 目次は h3 まで拾う。ただし漢字記事の「【一字】」「【熟語】」のように
- * どのセクションにも同じ名前で現れる構造ラベルは、並べても道しるべにならず
- * 目次を埋めてしまうだけなので除く。
+ * MathJax は見出し内の数式を SVG に置き換えるため、Astro の見出し一覧では
+ * `$G$` のようなインライン数式が空文字になったり、MathML の補助文字まで
+ * 連結されたりすることがある。目次だけはMarkdown原文からラベルを復元し、
+ * 数式の文字を落とさないようにする。
  */
 const isStructuralLabel = (text: string) => /^【.+】$/u.test(text.trim());
-const toc = headings.filter(
+const rawHeadingEntries: Array<{ depth: number; text: string }> = [];
+if (typeof entry.body === "string") {
+  let inFence = false;
+  for (const line of entry.body.split(/\r?\n/u)) {
+    if (/^\s*(```|~~~)/u.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = line.match(/^(#{1,3})\s+(.+?)\s*#*\s*$/u);
+    if (match?.[1] && match[2]) {
+      rawHeadingEntries.push({ depth: match[1].length, text: match[2].trim() });
+    }
+  }
+}
+const rawTocEntries = rawHeadingEntries.filter(
   (h) => h.depth <= 3 && !(h.depth === 3 && isStructuralLabel(h.text)),
 );
+const toc = headings
+  .filter((h) => h.depth <= 3 && !(h.depth === 3 && isStructuralLabel(h.text)))
+  .map((heading, index) => ({
+    ...heading,
+    text: rawTocEntries[index]?.text ?? heading.text,
+  }));
+
+const inlineMathSymbols: Record<string, string> = {
+  colon: ":",
+  cdot: "·",
+  cong: "≅",
+  in: "∈",
+  mapsto: "↦",
+  mathbb: "",
+  mathcal: "",
+  mathfrak: "",
+  mathrm: "",
+  neq: "≠",
+  notin: "∉",
+  partial: "∂",
+  pm: "±",
+  rightarrow: "→",
+  sim: "∼",
+  subset: "⊂",
+  subseteq: "⊆",
+  times: "×",
+  to: "→",
+  forall: "∀",
+};
+const unwrapMathCommands = (value: string): string => {
+  let result = value;
+  // Nested commands such as `\\mathop{\\mathrm{Ker}}` need more than one pass.
+  for (let pass = 0; pass < 4; pass += 1) {
+    const next = result.replace(
+      /\\(?:mathrm|mathbb|mathbf|mathcal|mathfrak|mathit|mathsf|mathtt|operatorname|mathop|text|boldsymbol|bm)\s*\{([^{}]*)\}/gu,
+      "$1",
+    );
+    if (next === result) break;
+    result = next;
+  }
+  return result
+    .replace(/\\([A-Za-z]+)\s*/gu, (_command, name: string) => inlineMathSymbols[name] ?? "")
+    .replace(/[{}]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+};
+const tocLabel = (text: string) =>
+  text
+    .replace(/\$([^$]+)\$/gu, (_math, value: string) => unwrapMathCommands(value))
+    .replace(/[*_`]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
 
 /** 言語切替: 対応記事があればそこへ、なければ各言語の総合ホームへ */
 const localeSwitchHrefs: Record<string, string> = {};
@@ -112,18 +180,6 @@ const conceptNames = entry.data.concepts.map((c) => {
   const node = map.get(c.id);
   return { id: c.id, name: node ? localizedName(node.name, locale) : c.id };
 });
-const tocLabel = (text: string) =>
-  text
-    // 目次の文字列はMarkdown由来の生テキストなので、数式を再解釈させない。
-    // `$G$` が描画環境によって「GGG」のように崩れるのを避ける。
-    .replace(/\$([^$]+)\$/g, "$1")
-    .replace(/\\(?:mathrm|mathbb|operatorname|mathop|text)\{([^}]+)\}/g, "$1")
-    .replace(/\\[a-zA-Z]+/g, "")
-    .replace(/[{}]/g, "")
-    // KaTeX の見出しテキストは MathML・注釈・表示用HTMLが
-    // 連結され、単一文字の数式が「GGG」のように見えることがある。
-    .replace(/([A-Za-z])\1{2,}/g, "$1");
-
 const historyUrl = `${ORG.githubRepo}/commits/main/src/content/articles/${entry.id}.md`;
 
 const structuredData = {
@@ -641,6 +697,35 @@ const structuredData = {
   .toc-depth-3 a {
     padding-left: var(--space-4);
   }
+  .toc-depth-4 a {
+    padding-left: var(--space-5);
+  }
+  /* 数学枠の目次項目はクライアント側で追加されるため、子要素は
+     :global() で指定してAstroのスコープ属性に依存しないようにする。 */
+  .article-toc :global(.math-toc-sublist) {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 var(--space-2);
+  }
+  .article-toc :global(.math-toc-sublist a) {
+    display: block;
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+    border-left: 3px solid transparent;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .article-toc :global(.math-toc-sublist .toc-depth-4 a) {
+    padding-left: var(--space-5);
+  }
+  .article-toc :global(.math-toc-sublist a:hover) {
+    color: var(--accent-primary);
+  }
+  .article-toc :global(.math-toc-sublist a[aria-current="true"]) {
+    border-left-color: var(--accent-primary);
+    color: var(--accent-primary);
+    font-weight: 600;
+    background: var(--accent-subtle);
+  }
   .article-header {
     padding-bottom: var(--space-3);
     border-bottom: 2px solid var(--accent-primary);
@@ -671,7 +756,7 @@ const structuredData = {
     margin-top: var(--space-2);
   }
   .bookmark-btn {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: var(--space-1);
     padding: var(--space-1) var(--space-3);
@@ -710,6 +795,9 @@ const structuredData = {
   }
   .article-body {
     margin-block: var(--space-3);
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
   }
   .article-body :global(h2) {
     border-bottom: 1px solid var(--border-default);
@@ -730,16 +818,22 @@ const structuredData = {
      リスト・カード用スタイルが定義枠へ漏れないよう、math-article を
      境界クラスとして使う。 */
   .article-body.math-article :global(ol) {
-    list-style: decimal;
+    list-style: decimal outside;
     padding-inline-start: 1.55rem;
   }
   .article-body.math-article :global(ul) {
-    list-style: disc;
+    list-style: disc outside;
     padding-inline-start: 1.55rem;
+  }
+  .article-body.math-article :global(ol > li),
+  .article-body.math-article :global(ul > li) {
+    display: list-item;
+    padding-inline-start: 0.15rem;
   }
   .article-body.math-article :global(strong),
   .article-body.math-article :global(b) {
     font-weight: 700;
+    font-synthesis: weight;
   }
   .article-body.math-article :global(a) {
     color: var(--link);
@@ -753,7 +847,7 @@ const structuredData = {
   .article-body :global(.math-definition) {
     background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary));
     border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default));
-    border-left: 4px solid #6cb4c2;
+    border-left: 3px solid #6cb4c2;
     border-radius: 0 0.55rem 0.55rem 0.55rem;
     box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
     margin-block: 2.8rem 1.15rem;
@@ -770,7 +864,7 @@ const structuredData = {
   .article-body :global(.math-theorem) {
     background: color-mix(in srgb, #e0c375 12%, var(--background-primary));
     border: 1px solid color-mix(in srgb, #e0c375 42%, var(--border-default));
-    border-left: 4px solid #d0a53b;
+    border-left: 3px solid #d0a53b;
     border-radius: 0 0.55rem 0.55rem 0.55rem;
     box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
     margin-block: 2.8rem 1.15rem;
@@ -799,17 +893,41 @@ const structuredData = {
     background: #6cb4c2;
     border-radius: 0.45rem 0.45rem 0 0;
     color: #12333a;
-    display: inline-block;
-    font-size: 0.88em;
+    display: block;
+    float: left;
+    font-size: 0.95em;
     font-weight: 800;
-    margin: -2.55rem 0 0.55rem -1.3rem;
-    padding: 0.3rem 0.8rem;
+    /* 見出し下端を枠本文の上端に揃える（元CSSの行高・paddingに合わせた値）。 */
+    /* 現行本文の枠線(1px)・内側余白(1.1rem)とタイトルの
+       行高/上下paddingを合算し、下端を枠の上端へぴったり揃える。 */
+    margin: -52.4px 0 0 -23px;
+    line-height: 1.5;
+    padding: 4px 14px;
+    border: 3px solid;
+    border-color: #6cb4c2;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    box-sizing: border-box;
+  }
+  .article-body :global(.defi > p:first-child::after),
+  .article-body :global(.prop > p:first-child::after),
+  .article-body :global(.thm > p:first-child::after),
+  .article-body :global(.lemma > p:first-child::after),
+  .article-body :global(.cor > p:first-child::after),
+  .article-body :global(.example > p:first-child::after) {
+    content: "";
+    display: table;
+    clear: both;
   }
   .article-body :global(.prop .thmtitle),
   .article-body :global(.thm .thmtitle),
   .article-body :global(.lemma .thmtitle),
   .article-body :global(.cor .thmtitle),
-  .article-body :global(.example .thmtitle) { background: #e0c375; color: #4b3a12; }
+  .article-body :global(.example .thmtitle) {
+    background: #e0c375;
+    border-color: #e0c375;
+    color: #4b3a12;
+  }
   .article-body :global(.proof-details) { margin-block: 1.2rem; }
   .article-body :global(.proof-details > summary) {
     background: var(--background-secondary);
@@ -837,11 +955,17 @@ const structuredData = {
     border-inline-end: 0;
   }
   .proof-toggle {
-    position: fixed;
-    z-index: 20;
-    top: max(4.5rem, env(safe-area-inset-top));
-    right: max(1rem, env(safe-area-inset-right));
+    position: static;
+    /* ブロック幅を確保して auto マージンで右端へ寄せつつ、
+       flex の中央揃えでラベルが常にボタン中央に来るようにする。 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: fit-content;
+    margin: 0.75rem 0 1rem auto;
     min-height: 2.6rem;
+    min-width: 8.5rem;
     padding: 0.55rem 0.95rem;
     border: 1px solid var(--accent-primary);
     border-radius: 0.45rem;
@@ -851,6 +975,9 @@ const structuredData = {
     cursor: pointer;
     font: inherit;
     font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
   }
   .proof-toggle:hover { background: var(--accent-hover); }
   .proof-toggle:focus-visible { outline-offset: 3px; }
@@ -878,9 +1005,29 @@ const structuredData = {
   .article-body :global(.cor > p),
   .article-body :global(.example > p),
   .article-body :global(.math-definition > p),
-  .article-body :global(.math-theorem > p) { overflow-wrap: anywhere; }
+  .article-body :global(.math-theorem > p) {
+    margin: 0;
+    text-indent: 0;
+    overflow-wrap: anywhere;
+  }
   .article-body.math-article :global(mjx-container) {
+    display: inline-block;
     max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    vertical-align: middle;
+  }
+  /* インライン数式も本文幅を押し広げない。長い式だけ要素内で横スクロールする。 */
+  .article-body.math-article :global(.katex) {
+    display: inline-block;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    vertical-align: middle;
+  }
+  .article-body.math-article :global(.katex-display > .katex) {
+    max-width: none;
+    overflow: visible;
   }
   .article-body :global(.supp-details-summary) {
     background: var(--background-secondary);
@@ -1096,6 +1243,20 @@ const structuredData = {
     .article-body.math-article :global(mjx-container[display="true"]) {
       overflow-x: auto;
       overflow-y: hidden;
+    }
+    /* 長いインライン数式は本文側で幅を制約し、枠のタイトルを上下に
+       はみ出させる従来のレイアウトを保つ。 */
+    .article-body.math-article :global(.katex) {
+      display: inline-block;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      vertical-align: middle;
+    }
+    /* 別行立ての式は外側の .katex-display がスクロール領域を担当する。 */
+    .article-body.math-article :global(.katex-display > .katex) {
+      max-width: none;
+      overflow: visible;
     }
     /* 記事情報・関連の枠は狭い画面では余白を詰める */
     .article-aside section {
@@ -1514,11 +1675,57 @@ const structuredData = {
       const isProofLead = (node: Element) => node.tagName === "P" && proofLead.test((node.textContent ?? "").trim());
       const isHeading = (node: Element) => ["H2", "H3"].includes(node.tagName);
       const isDisplayMath = (node: Element) => node.matches(".katex-display,mjx-container[display=\"true\"]");
-      const isMathBlock = (node: Element) => node.matches(".defi,.prop,.thm,.lemma,.cor,.example,.math-definition,.math-theorem,.proof,.proof-details");
+      const isMathBlock = (node: Element) => node.matches(
+        ".defi,.prop,.thm,.lemma,.cor,.example,.math-definition,.math-theorem,.proof,.proof-details,.folding,.supp,.supp-details",
+      );
       const isProofNode = (node: Element) => node.matches(".proof") || isProofLead(node);
+      const legacyDetails = (node: HTMLElement) => {
+        const isSupplement = node.classList.contains("supp");
+        const details = document.createElement("details");
+        details.className = isSupplement ? "supp-details" : "folding";
+        const explicitSummary = node.dataset.summary || node.dataset.title;
+        const first = node.firstElementChild;
+        let summary: HTMLElement;
+        if (first?.tagName === "SUMMARY") {
+          summary = first as HTMLElement;
+          first.remove();
+        } else {
+          summary = document.createElement("summary");
+          summary.className = isSupplement ? "supp-details-summary" : "folding-summary";
+          const title = explicitSummary
+            || (first?.matches(".folding-title,.supp-title,h4") ? first.textContent?.trim() : "")
+            || (isSupplement ? "補足." : "折りたたみ");
+          summary.textContent = title;
+          if (first?.matches(".folding-title,.supp-title,h4")) first.remove();
+        }
+        const inner = document.createElement("div");
+        inner.className = isSupplement ? "supp-details-inner" : "folding-content";
+        while (node.firstChild) inner.append(node.firstChild);
+        details.append(summary, inner);
+        node.replaceWith(details);
+        return details;
+      };
+      // 旧 Pandoc 原稿では折りたたみが div.folding / div.supp として
+      // 保存されていた。CSS だけでは div の中身は開閉できず、変換時に
+      // 取りこぼされることがあるため、本文を移動して details に昇格する。
+      [...mathBody.querySelectorAll<HTMLElement>("div.folding,div.supp")].forEach((node) => {
+        if (node.closest("details.folding,details.supp-details")) return;
+        legacyDetails(node);
+      });
       const addTheoremLabel = (wrapper: HTMLElement) => {
         const paragraph = wrapper.querySelector<HTMLElement>(":scope > p");
         if (!paragraph || paragraph.querySelector(":scope > .thmtitle")) return;
+        const firstElement = paragraph.firstElementChild;
+        if (firstElement?.matches("strong,b")) {
+          const label = firstElement.textContent?.trim() ?? "";
+          if (/^(定義|命題|定理|補題|系|例)/u.test(label)) {
+            const title = document.createElement("span");
+            title.className = "thmtitle";
+            title.textContent = label;
+            firstElement.replaceWith(title);
+            return;
+          }
+        }
         const firstText = [...paragraph.childNodes].find((child) => child.nodeType === Node.TEXT_NODE && (child.textContent ?? "").trim());
         if (!firstText) return;
         const labelMatch = (firstText.textContent ?? "").match(/^(\s*(?:定義|命題|定理|補題|系|例)\s*(?:\d+\s*)?(?:[（(][^）)]*[）)])?\s*[.．。:：]?\s*)/u);
@@ -1578,11 +1785,13 @@ const structuredData = {
       for (const node of topLevel()) {
         if (!isProofNode(node)) continue;
         const details = document.createElement("details");
-        details.className = "proof-details";
+        // `folding` は旧記事CSSが想定していた共通クラス。証明も同じ
+        // details/summary の折りたたみとして扱い、既存のCSSを失わない。
+        details.className = "proof-details folding";
         const summary = document.createElement("summary");
         summary.textContent = "証明.";
         const inner = document.createElement("div");
-        inner.className = "proof-details-inner";
+        inner.className = "proof-details-inner folding-content";
         node.parentNode?.insertBefore(details, node);
         details.append(summary, inner);
         if (node.matches(".proof")) {
@@ -1611,6 +1820,63 @@ const structuredData = {
           proofToggle.setAttribute("aria-expanded", String(expand));
         });
       }
+
+      // 定義・命題・定理などは Markdown の見出しではなく本文の段落から
+      // 自動生成されるため、変換後のカードにも目次リンクを追加する。
+      // `.thmtitle` は数式を含む見出し文字列を MathJax が置き換える前に
+      // 保存しているので、目次から数式だけが消えることも防げる。
+      const tocList = document.querySelector<HTMLOListElement>(".toc-list");
+      const theoremCards = [...mathBody.children].filter((node): node is HTMLElement =>
+        node instanceof HTMLElement && node.matches(".defi,.prop,.thm,.lemma,.cor,.example,.math-definition,.math-theorem"),
+      );
+      const tocHeadingItems = new Map<string, HTMLLIElement>();
+      tocList?.querySelectorAll<HTMLAnchorElement>("a[data-toc-link]").forEach((link) => {
+        const item = link.closest("li");
+        if (item instanceof HTMLLIElement && link.dataset.tocLink) {
+          tocHeadingItems.set(link.dataset.tocLink, item);
+        }
+      });
+      const tocSubLists = new Map<string, HTMLOListElement>();
+      theoremCards.forEach((card, index) => {
+        const id = `math-block-${index + 1}`;
+        card.id = id;
+        if (!tocList || tocList.querySelector(`[data-math-toc="${id}"]`)) return;
+        const title = card.querySelector<HTMLElement>(":scope > p > .thmtitle")?.textContent?.trim()
+          || card.querySelector<HTMLElement>(":scope > .thmtitle")?.textContent?.trim()
+          || (card.textContent ?? "").trim().split(/\n/u)[0]?.slice(0, 120)
+          || "数学の定理・定義";
+        const item = document.createElement("li");
+        const previousHeading = (() => {
+          let sibling = card.previousElementSibling;
+          while (sibling) {
+            if (isHeading(sibling)) return sibling;
+            sibling = sibling.previousElementSibling;
+          }
+          return null;
+        })();
+        const headingId = previousHeading?.id ?? "";
+        const headingItem = headingId ? tocHeadingItems.get(headingId) : undefined;
+        const headingDepth = previousHeading?.tagName === "H3" ? 4 : 3;
+        item.className = `toc-depth-${headingDepth} math-toc-entry`;
+        item.dataset.mathToc = id;
+        const link = document.createElement("a");
+        link.href = `#${id}`;
+        link.dataset.tocLink = id;
+        link.textContent = title;
+        item.append(link);
+        if (!headingItem) {
+          tocList.append(item);
+          return;
+        }
+        let subList = headingId ? tocSubLists.get(headingId) : undefined;
+        if (!subList) {
+          subList = document.createElement("ol");
+          subList.className = "math-toc-sublist";
+          headingItem.append(subList);
+          if (headingId) tocSubLists.set(headingId, subList);
+        }
+        subList.append(item);
+      });
     }
   }
 </script>

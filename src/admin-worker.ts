@@ -36,6 +36,8 @@ interface Env {
   DISCORD_GUILD_ID?: string;
   /** 分野別通知を集約する、全体進捗チャンネルのID。 */
   DISCORD_PROGRESS_CHANNEL_ID?: string;
+  /** 学習サイトから問題報告通知を中継する内部共有シークレット。 */
+  REPORT_DISCORD_SYNC_SECRET?: string;
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
@@ -76,7 +78,7 @@ type EditorialDocument = {
 /**
  * 編集室で扱う言語コードは ISO 639-3 に統一する。
  * 既存の D1 データに残る ja/en は読み取り時だけ受け入れ、
- * GitHub のコンテンツパスへ出すときに従来のディレクトリ名へ戻す。
+ * GitHub のコンテンツパスへ出すときは ISO 639-3 のディレクトリ名を使う。
  */
 const EDITORIAL_LANGUAGE_CODES: Record<string, "jpn" | "eng"> = {
   ja: "jpn",
@@ -86,7 +88,12 @@ const EDITORIAL_LANGUAGE_CODES: Record<string, "jpn" | "eng"> = {
 };
 const editorialLanguageCode = (value: string): "jpn" | "eng" | null =>
   EDITORIAL_LANGUAGE_CODES[value] ?? null;
-const contentLanguageDirectory = (value: string): "ja" | "en" | null => {
+const contentLanguageDirectory = (value: string): "jpn" | "eng" | null => {
+  const code = editorialLanguageCode(value);
+  return code === "jpn" ? "jpn" : code === "eng" ? "eng" : null;
+};
+/** 公開URL・Astroの表示用frontmatterは従来の短縮コードを維持する。 */
+const publicLanguageCode = (value: string): "ja" | "en" | null => {
   const code = editorialLanguageCode(value);
   return code === "jpn" ? "ja" : code === "eng" ? "en" : null;
 };
@@ -351,6 +358,33 @@ const APPLICATION_SUBJECT_LABELS: Record<string, string> = {
   linguistics: "言語学",
   other: "その他",
 };
+
+/** 学習サイトに存在する全分野。問題報告用チャンネルをこの一覧から冪等に準備する。 */
+const ARTICLE_REPORT_SUBJECTS = [
+  "kanji",
+  "kobun",
+  "kanbun",
+  "geography",
+  "japanese-history",
+  "world-history",
+  "philosophy",
+  "archaeology",
+  "mathematics",
+  "physics",
+  "chemistry",
+  "geology",
+  "meteorology",
+  "oceanography",
+  "astronomy",
+  "biology",
+  "informatics",
+  "fisheries-science",
+  "architecture",
+  "pharmacy",
+  "chinese",
+  "taiwanese-mandarin",
+  "linguistics",
+] as const;
 const APPLICATION_AFFILIATION_ALIASES: Record<string, string> = {
   中学: "中学校",
   中学生: "中学校",
@@ -1311,35 +1345,26 @@ async function getPersonalWorkspace(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const [documents, workspace] = await Promise.all([
-    env.REPORTS.prepare(
-      `SELECT id, subject, category, title, status, updated_at, published_at
-       FROM editorial_documents WHERE created_by = ? ORDER BY updated_at DESC LIMIT 100`,
-    )
-      .bind(scope.email)
-      .all<
-        Pick<
-          EditorialDocument,
-          | "id"
-          | "subject"
-          | "category"
-          | "title"
-          | "status"
-          | "updated_at"
-          | "published_at"
-        >
-      >(),
+  await ensurePortalProjectSchema(env);
+  const [workspace, projects] = await Promise.all([
     env.REPORTS.prepare(
       "SELECT private_note, updated_at FROM editorial_personal_workspaces WHERE email = ?",
     )
       .bind(scope.email)
       .first<{ private_note: string; updated_at: string }>(),
+    scope.isManager
+      ? env.REPORTS.prepare(
+          "SELECT p.slug,p.name,p.description FROM atlasez_projects p ORDER BY p.name",
+        ).all<{ slug: string; name: string; description: string }>()
+      : env.REPORTS.prepare(
+          "SELECT p.slug,p.name,p.description FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name",
+        ).bind(scope.email).all<{ slug: string; name: string; description: string }>(),
   ]);
   return json({
     email: scope.email,
     privateNote: workspace?.private_note ?? "",
     privateNoteUpdatedAt: workspace?.updated_at ?? null,
-    documents: documents.results,
+    projects: projects.results,
   });
 }
 
@@ -1390,6 +1415,29 @@ async function ensureAtlasMembership(env: Env, scope: AdminScope) {
     .run();
 }
 
+/**
+ * 新しいプロジェクトを追加した直後でも、D1のマイグレーション適用権限が
+ * 一時的に使えない環境でポータルが停止しないようにする軽量な自己修復。
+ * 通常は migrations/0033 まで先に実行されるため、各文は冪等です。
+ */
+async function ensurePortalProjectSchema(env: Env) {
+  await env.REPORTS.prepare(
+    "CREATE TABLE IF NOT EXISTS atlasez_project_profiles (project_id TEXT NOT NULL, email TEXT NOT NULL, introduction TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY(project_id,email))",
+  ).run();
+  await env.REPORTS.prepare(
+    "INSERT OR IGNORE INTO atlasez_projects (id,slug,name,description,created_at) VALUES ('seminar-platform','seminar-platform','ゼミプラットフォーム','ゼミの企画・参加・タスクを管理するプロジェクト','2026-08-14T00:00:00.000Z')",
+  ).run();
+  await env.REPORTS.prepare(
+    "INSERT OR IGNORE INTO atlasez_projects (id,slug,name,description,created_at) VALUES ('secretariat','secretariat','Atlasez運営事務局','Atlasez全体の広報・メンバーサポート・企画を管理するプロジェクト','2026-08-15T00:00:00.000Z')",
+  ).run();
+  await env.REPORTS.prepare(
+    "INSERT OR IGNORE INTO atlasez_project_memberships (project_id,email,role,joined_at) SELECT 'seminar-platform',email,CASE WHEN subject='*' THEN 'manager' ELSE 'member' END,'2026-08-14T00:00:00.000Z' FROM report_admin_permissions WHERE email IS NOT NULL AND trim(email) <> ''",
+  ).run();
+  await env.REPORTS.prepare(
+    "INSERT OR IGNORE INTO atlasez_project_memberships (project_id,email,role,joined_at) SELECT 'secretariat',email,CASE WHEN subject='*' THEN 'manager' ELSE 'member' END,'2026-08-15T00:00:00.000Z' FROM report_admin_permissions WHERE email IS NOT NULL AND trim(email) <> ''",
+  ).run();
+}
+
 async function postDiscordWebhook(url: string | undefined, content: string) {
   if (!url) return;
   try {
@@ -1404,6 +1452,387 @@ async function postDiscordWebhook(url: string | undefined, content: string) {
   } catch {
     /* 通知失敗は本文保存を妨げない。 */
   }
+}
+
+type ArticleReportDiscordPayload = {
+  articleTitle?: unknown;
+  articleUrl?: unknown;
+  subject?: unknown;
+  category?: unknown;
+  reportType?: unknown;
+};
+
+const discordLabel = (subject: string) =>
+  APPLICATION_SUBJECT_LABELS[subject] ?? subject;
+
+const articleReportChannelName = () =>
+  "問題報告";
+
+async function discordError(response: Response, action: string) {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { message?: unknown; code?: unknown };
+    detail = [body.message, body.code].filter(Boolean).join(" ").slice(0, 160);
+  } catch {
+    /* Discordの応答本文がJSONでない場合は詳細を出さない。 */
+  }
+  return `${action}に失敗しました（${response.status}${detail ? `: ${detail}` : ""}）。`;
+}
+
+/**
+ * 問題報告用チャンネルをBotの所属Guild内に冪等に作成し、D1へ対応を保存する。
+ * 既存チャンネル名も再利用するため、同じ処理を何度実行しても増殖しない。
+ */
+async function ensureArticleReportChannel(
+  env: Env,
+  subject: string,
+): Promise<{ id: string; name: string }> {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID)
+    throw new Error("Discord Botまたはサーバー設定がありません。");
+  const authHeaders = { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` };
+  const existing = await env.REPORTS.prepare(
+    "SELECT discord_channel_id FROM atlasez_discord_report_channel_mappings WHERE project_id = 'atlas' AND subject = ?",
+  )
+    .bind(subject)
+    .first<{ discord_channel_id: string }>();
+  const name = articleReportChannelName();
+  if (existing?.discord_channel_id) {
+    // D1に既存の対応表がある場合も、命名規則を更新できるようにする。
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${existing.discord_channel_id}`,
+      { headers: authHeaders },
+    );
+    if (!response.ok)
+      throw new Error(await discordError(response, "Discordチャンネル確認"));
+    const current = (await response.json()) as { name?: string };
+    if (current.name !== name) {
+      const renameResponse = await fetch(
+        `https://discord.com/api/v10/channels/${existing.discord_channel_id}`,
+        {
+          method: "PATCH",
+          headers: { ...authHeaders, "content-type": "application/json" },
+          body: JSON.stringify({ name }),
+        },
+      );
+      if (!renameResponse.ok)
+        throw new Error(await discordError(renameResponse, "Discordチャンネル名変更"));
+    }
+    return { id: existing.discord_channel_id, name };
+  }
+
+  const channelsResponse = await fetch(
+    `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/channels`,
+    { headers: authHeaders },
+  );
+  if (!channelsResponse.ok)
+    throw new Error(await discordError(channelsResponse, "Discordのチャンネル一覧取得"));
+  const channels = (await channelsResponse.json()) as Array<{
+    id?: string;
+    name?: string;
+    type?: number;
+  }>;
+  const found = channels.find(
+    (channel) => channel.type === 0 && channel.name === name && channel.id,
+  );
+  let channelId = found?.id;
+  if (!channelId) {
+    const createdResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/channels`,
+      {
+        method: "POST",
+        headers: { ...authHeaders, "content-type": "application/json" },
+        body: JSON.stringify({
+          name,
+          type: 0,
+          topic: `Atlasezの記事問題報告（${discordLabel(subject)}）`,
+        }),
+      },
+    );
+    if (!createdResponse.ok)
+      throw new Error(await discordError(createdResponse, "Discordのチャンネル作成"));
+    const created = (await createdResponse.json()) as { id?: string };
+    channelId = created.id;
+  }
+  if (!channelId) throw new Error("DiscordチャンネルIDを取得できませんでした。");
+  await env.REPORTS.prepare(
+    "INSERT INTO atlasez_discord_report_channel_mappings (project_id, subject, discord_channel_id) VALUES ('atlas', ?, ?) ON CONFLICT(project_id, subject) DO UPDATE SET discord_channel_id = excluded.discord_channel_id",
+  )
+    .bind(subject, channelId)
+    .run();
+  return { id: channelId, name };
+}
+
+async function postArticleReportDiscord(
+  env: Env,
+  channelId: string,
+  payload: {
+    articleTitle: string;
+    articleUrl: string;
+    subject: string;
+    category: string;
+    reportType: string;
+  },
+) {
+  if (!env.DISCORD_BOT_TOKEN) throw new Error("Discord Bot設定がありません。");
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${channelId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        username: "Atlasez 記事報告",
+        allowed_mentions: { parse: [] },
+        embeds: [
+          {
+            title: "新しい記事報告",
+            url: payload.articleUrl,
+            color: 0xd97706,
+            fields: [
+              { name: "記事", value: payload.articleTitle, inline: false },
+              {
+                name: "分野・カテゴリ",
+                value: `${discordLabel(payload.subject)} / ${payload.category}`,
+                inline: true,
+              },
+              { name: "種類", value: payload.reportType, inline: true },
+            ],
+            footer: { text: "本文・連絡先は運営用の報告管理画面で確認" },
+          },
+        ],
+      }),
+    },
+  );
+  if (!response.ok)
+    throw new Error(await discordError(response, "Discordへの通知"));
+}
+
+const hasReportSyncSecret = (request: Request, env: Env) => {
+  const expected = env.REPORT_DISCORD_SYNC_SECRET?.trim();
+  const received = request.headers.get("x-atlasez-report-sync-secret")?.trim();
+  return Boolean(expected && received && expected === received);
+};
+
+async function provisionArticleReportChannels(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "POST" || !hasReportSyncSecret(request, env))
+    return json({ error: "Not found" }, 404);
+  const operationChannels: Array<{ subject: string; channelId: string; name: string }> = [];
+  const reportChannels: Array<{ subject: string; channelId: string; name: string }> = [];
+  const requestedSubject = new URL(request.url).searchParams.get("subject")?.trim();
+  const subjects = requestedSubject ? [requestedSubject] : ARTICLE_REPORT_SUBJECTS;
+  if (!subjects.every((subject) => ARTICLE_REPORT_SUBJECTS.includes(subject as (typeof ARTICLE_REPORT_SUBJECTS)[number])))
+    return json({ error: "対象の分野を確認してください。" }, 400);
+  try {
+    if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID)
+      throw new Error("Discord Botまたはサーバー設定がありません。");
+    const authHeaders = { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` };
+    const channelsResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/channels`,
+      { headers: authHeaders },
+    );
+    if (!channelsResponse.ok)
+      throw new Error(await discordError(channelsResponse, "Discordのチャンネル一覧取得"));
+    const guildChannels = (await channelsResponse.json()) as Array<{
+      id?: string; name?: string; type?: number; parent_id?: string | null;
+    }>;
+    const wait = (milliseconds: number) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds));
+    const mutateDiscordChannel = async (
+      channelId: string | null,
+      body: Record<string, unknown>,
+      action: string,
+    ) => {
+      const endpoint = channelId
+        ? `https://discord.com/api/v10/channels/${channelId}`
+        : `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/channels`;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await fetch(endpoint, {
+          method: channelId ? "PATCH" : "POST",
+          headers: { ...authHeaders, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (response.ok) return (await response.json()) as {
+          id?: string; name?: string; type?: number; parent_id?: string | null;
+        };
+        if (response.status !== 429 || attempt === 2)
+          throw new Error(await discordError(response, action));
+        const retryAfter = Number(response.headers.get("retry-after"));
+        await wait(Math.max(500, Math.min(5_000, Number.isFinite(retryAfter) ? retryAfter * 1_000 : 1_000)));
+      }
+      throw new Error(`${action}に失敗しました。`);
+    };
+    const ensureSubjectCategory = async (label: string) => {
+      let category = guildChannels.find(
+        (channel) => channel.type === 4 && channel.name === label,
+      );
+      if (!category?.id) {
+        category = await mutateDiscordChannel(
+          null,
+          { name: label, type: 4 },
+          "分野カテゴリ作成",
+        );
+        if (!category?.id) throw new Error("分野カテゴリIDを取得できませんでした。");
+        guildChannels.push(category);
+      }
+      return category;
+    };
+    for (const subject of subjects) {
+      const label = discordLabel(subject);
+      const category = await ensureSubjectCategory(label);
+      let channel = guildChannels.find(
+        (item) => item.type === 0 && item.name === label,
+      );
+      if (!channel?.id) {
+        const createdChannel = await mutateDiscordChannel(
+          null,
+          { name: label, type: 0, ...(category.id ? { parent_id: category.id } : {}) },
+          "運営用チャンネル作成",
+        );
+        if (!createdChannel.id) throw new Error("運営用チャンネルIDを取得できませんでした。");
+        channel = createdChannel;
+        guildChannels.push(createdChannel);
+      }
+      if (!channel?.id) throw new Error("運営用チャンネルIDを取得できませんでした。");
+      if (channel.parent_id !== category.id)
+        await mutateDiscordChannel(channel.id, { parent_id: category.id }, "運営用チャンネル移動");
+      const channelId = channel.id;
+      await env.REPORTS.prepare(
+        "INSERT INTO atlasez_discord_channel_mappings (project_id, subject, discord_channel_id) VALUES ('atlas', ?, ?) ON CONFLICT(project_id, subject) DO UPDATE SET discord_channel_id = excluded.discord_channel_id",
+      ).bind(subject, channelId).run();
+      operationChannels.push({ subject, channelId, name: label });
+    }
+    for (const subject of subjects) {
+      const category = await ensureSubjectCategory(discordLabel(subject));
+      const channel = await ensureArticleReportChannel(env, subject);
+      await mutateDiscordChannel(channel.id, { name: articleReportChannelName(), parent_id: category.id }, "問題報告チャンネル移動");
+      reportChannels.push({ subject, channelId: channel.id, name: channel.name });
+    }
+  } catch (error) {
+    return json(
+      {
+        error:
+          error instanceof Error ? error.message : "Discordチャンネルを準備できませんでした。",
+        operationChannels,
+        reportChannels,
+      },
+      502,
+    );
+  }
+  return json({ ok: true, operationChannels, reportChannels });
+}
+
+async function relayArticleReportDiscord(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "POST" || !hasReportSyncSecret(request, env))
+    return json({ error: "Not found" }, 404);
+  let payload: ArticleReportDiscordPayload;
+  try {
+    payload = (await request.json()) as ArticleReportDiscordPayload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const articleTitle = text(payload.articleTitle, 200);
+  const articleUrl = text(payload.articleUrl, 2_000);
+  const subject = text(payload.subject, 80);
+  const category = text(payload.category, 80);
+  const reportType = text(payload.reportType, 80);
+  if (
+    !articleTitle ||
+    !articleUrl ||
+    !/^[a-z0-9-]+$/.test(subject) ||
+    !/^[a-z0-9-]+$/.test(category) ||
+    !reportType
+  )
+    return json({ error: "問題報告の通知内容を確認してください。" }, 400);
+  try {
+    const channel = await ensureArticleReportChannel(env, subject);
+    await postArticleReportDiscord(env, channel.id, {
+      articleTitle,
+      articleUrl,
+      subject,
+      category,
+      reportType,
+    });
+    return json({ ok: true, channelId: channel.id, channelName: channel.name });
+  } catch (error) {
+    return json(
+      {
+        error:
+          error instanceof Error ? error.message : "Discordへ通知できませんでした。",
+      },
+      502,
+    );
+  }
+}
+
+/** Botが参照できるGuildとチャンネルの名前だけを返す内部診断。トークンは返さない。 */
+async function discordInventory(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET" || !hasReportSyncSecret(request, env))
+    return json({ error: "Not found" }, 404);
+  if (!env.DISCORD_BOT_TOKEN)
+    return json({ error: "Discord Bot設定がありません。" }, 503);
+  try {
+    const guildsResponse = await fetch(
+      "https://discord.com/api/v10/users/@me/guilds",
+      { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
+    );
+    if (!guildsResponse.ok)
+      return json({ error: await discordError(guildsResponse, "Discordサーバー一覧取得") }, 502);
+    const guilds = (await guildsResponse.json()) as Array<{ id: string; name: string; permissions?: string }>;
+    const result = [];
+    for (const guild of guilds.slice(0, 20)) {
+      const channelsResponse = await fetch(
+        `https://discord.com/api/v10/guilds/${guild.id}/channels`,
+        { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
+      );
+      if (!channelsResponse.ok) continue;
+      const channels = (await channelsResponse.json()) as Array<{
+        id: string;
+        name: string;
+        type: number;
+        parent_id?: string | null;
+        position?: number;
+      }>;
+      result.push({
+        id: guild.id,
+        name: guild.name,
+        permissions: guild.permissions ?? null,
+        channels: channels
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .map(({ id, name, type, parent_id: parentId, position }) => ({ id, name, type, parentId, position })),
+      });
+    }
+    return json({ guildId: env.DISCORD_GUILD_ID ?? null, guilds: result });
+  } catch {
+    return json({ error: "Discordの診断に失敗しました。" }, 502);
+  }
+}
+
+/** 問題報告チャンネルへのテスト通知を確認するため、直近の公開情報だけを返す。 */
+async function discordReportChannelCheck(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET" || !hasReportSyncSecret(request, env))
+    return json({ error: "Not found" }, 404);
+  const subject = new URL(request.url).searchParams.get("subject")?.trim() ?? "";
+  if (!/^[a-z0-9-]+$/.test(subject)) return json({ error: "分野を指定してください。" }, 400);
+  if (!env.DISCORD_BOT_TOKEN) return json({ error: "Discord Bot設定がありません。" }, 503);
+  const mapping = await env.REPORTS.prepare(
+    "SELECT discord_channel_id FROM atlasez_discord_report_channel_mappings WHERE project_id = 'atlas' AND subject = ?",
+  ).bind(subject).first<{ discord_channel_id: string }>();
+  if (!mapping) return json({ error: "問題報告チャンネルが未作成です。" }, 404);
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${mapping.discord_channel_id}/messages?limit=5`,
+    { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
+  );
+  if (!response.ok) return json({ error: await discordError(response, "Discord通知確認") }, 502);
+  const messages = (await response.json()) as Array<{ id?: string; timestamp?: string; content?: string; embeds?: Array<{ title?: string; url?: string }> }>;
+  return json({ channelId: mapping.discord_channel_id, messages: messages.map((message) => ({ id: message.id, timestamp: message.timestamp, content: message.content, embeds: message.embeds })) });
 }
 
 const emailSafe = (value: unknown) =>
@@ -1440,6 +1869,7 @@ async function notifyApplicationByEmail(
         from: env.EMAIL_FROM ?? "Atlasez運営 <onboarding@resend.dev>",
         to: recipients,
         subject: "Atlasez運営参加応募が届きました",
+        text: `Atlasez運営参加応募が届きました\n\n名前：${String(application.name)}\n所属：${String(application.institution)}\n希望分野：${String(application.desiredSubjects)}\n\n詳細は運営サイトの応募管理で確認してください。`,
         html: `<h2>運営参加応募が届きました</h2><p><b>名前：</b>${emailSafe(application.name)}</p><p><b>所属：</b>${emailSafe(application.institution)}</p><p><b>希望分野：</b>${emailSafe(application.desiredSubjects)}</p><p>詳細は運営サイトの応募管理で確認してください。</p>`,
       }),
     });
@@ -1871,24 +2301,190 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
 async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  await ensurePortalProjectSchema(env);
   await ensureAtlasMembership(env, scope);
+  const requestedProject = new URL(request.url).searchParams.get("project");
   const [projects, todos] = await Promise.all([
-    env.REPORTS.prepare(
-      `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
-    )
-      .bind(scope.email)
-      .all(),
-    env.REPORTS.prepare(
-      `SELECT id,project_id,subject,assignee_email,title,details,status,updated_at FROM atlasez_project_todos WHERE assignee_email=? AND status != 'done' ORDER BY updated_at DESC LIMIT 100`,
-    )
-      .bind(scope.email)
-      .all(),
+    scope.isManager
+      ? env.REPORTS.prepare(
+          `SELECT p.id,p.slug,p.name,p.description,COALESCE(m.role,'manager') AS role
+           FROM atlasez_projects p
+           LEFT JOIN atlasez_project_memberships m ON m.project_id=p.id AND m.email=?
+           ORDER BY p.name`,
+        ).bind(scope.email).all()
+      : env.REPORTS.prepare(
+          `SELECT p.id,p.slug,p.name,p.description,m.role
+           FROM atlasez_projects p
+           JOIN atlasez_project_memberships m ON m.project_id=p.id
+           WHERE m.email=? ORDER BY p.name`,
+        ).bind(scope.email).all(),
+    requestedProject
+      ? env.REPORTS.prepare(
+          `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.title,t.details,t.status,t.due_at,t.due_timezone,t.reminder_at,t.reminder_repeat,t.updated_at,p.name AS project_name
+           FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
+           WHERE t.assignee_email=? AND t.project_id IN (SELECT id FROM atlasez_projects WHERE slug=?)
+             AND t.status != 'done' ORDER BY t.updated_at DESC LIMIT 100`,
+        ).bind(scope.email, requestedProject).all()
+      : env.REPORTS.prepare(
+          `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.title,t.details,t.status,t.due_at,t.due_timezone,t.reminder_at,t.reminder_repeat,t.updated_at,p.name AS project_name
+           FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
+           WHERE t.assignee_email=? AND t.status != 'done' ORDER BY t.updated_at DESC LIMIT 100`,
+        ).bind(scope.email).all(),
   ]);
   return json({
     email: scope.email,
     projects: projects.results,
     todos: todos.results,
   });
+}
+
+async function projectProfile(
+  request: Request,
+  env: Env,
+  slug: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensurePortalProjectSchema(env);
+  const project = await env.REPORTS.prepare(
+    "SELECT id,slug,name FROM atlasez_projects WHERE slug = ?",
+  ).bind(slug).first<{ id: string; slug: string; name: string }>();
+  if (!project) return json({ error: "プロジェクトが見つかりません。" }, 404);
+  const membership = await env.REPORTS.prepare(
+    "SELECT role FROM atlasez_project_memberships WHERE project_id = ? AND email = ?",
+  ).bind(project.id, scope.email).first<{ role: string }>();
+  if (!scope.isManager && !membership)
+    return json({ error: "このプロジェクトへのアクセス権がありません。" }, 403);
+  if (request.method === "GET") {
+    const profile = await env.REPORTS.prepare(
+      "SELECT introduction,updated_at FROM atlasez_project_profiles WHERE project_id = ? AND email = ?",
+    ).bind(project.id, scope.email).first<{ introduction: string; updated_at: string }>();
+    return json({ project: { slug: project.slug, name: project.name }, introduction: profile?.introduction ?? "", updatedAt: profile?.updated_at ?? null });
+  }
+  if (request.method !== "PUT")
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  if (!isSameOrigin(request))
+    return json({ error: "許可されていない送信元です。" }, 403);
+  const payload = await request.json().catch(() => null) as { introduction?: unknown } | null;
+  const introduction = text(payload?.introduction, MAX_PERSONAL_WORKSPACE_NOTE_LENGTH);
+  const updatedAt = new Date().toISOString();
+  await env.REPORTS.prepare(
+    "INSERT INTO atlasez_project_profiles (project_id,email,introduction,updated_at) VALUES (?,?,?,?) ON CONFLICT(project_id,email) DO UPDATE SET introduction=excluded.introduction,updated_at=excluded.updated_at",
+  ).bind(project.id, scope.email, introduction, updatedAt).run();
+  return json({ ok: true, updatedAt });
+}
+
+/**
+ * 全プロジェクト共通の運営ボード。学習サイトの旧 editorial_tasks と
+ * プロジェクトToDoを同じ editorial_tasks（project_id付き）で扱う。
+ */
+async function projectOperations(
+  request: Request,
+  env: Env,
+  slug: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensurePortalProjectSchema(env);
+  const project = await env.REPORTS.prepare(
+    "SELECT id,slug,name FROM atlasez_projects WHERE slug=?",
+  ).bind(slug).first<{ id: string; slug: string; name: string }>();
+  if (!project) return json({ error: "プロジェクトが見つかりません。" }, 404);
+  const membership = await env.REPORTS.prepare(
+    "SELECT role FROM atlasez_project_memberships WHERE project_id=? AND email=?",
+  ).bind(project.id, scope.email).first<{ role: string }>();
+  if (!scope.isManager && !membership)
+    return json({ error: "このプロジェクトへのアクセス権がありません。" }, 403);
+
+  if (request.method === "GET") {
+    const [todos, events, participants, members] = await Promise.all([
+      env.REPORTS.prepare(
+        "SELECT id,project_id,title,details,status,assignee_email,created_by,created_at,updated_at,due_at,due_timezone,reminder_at,reminder_repeat FROM editorial_tasks WHERE project_id=? AND status != 'done' ORDER BY updated_at DESC LIMIT 200",
+      ).bind(project.id).all(),
+      env.REPORTS.prepare(
+        "SELECT id,title,details,starts_at,ends_at,timezone,created_at FROM editorial_events WHERE subject=? ORDER BY starts_at ASC LIMIT 100",
+      ).bind(`project:${project.slug}`).all<{ id:string; title:string; details:string; starts_at:string; ends_at:string|null; timezone:string; created_at:string }>(),
+      env.REPORTS.prepare(
+        "SELECT a.event_id,a.email,a.availability,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name FROM editorial_event_availability a LEFT JOIN editorial_member_profiles p ON p.email=a.email WHERE a.event_id IN (SELECT id FROM editorial_events WHERE subject=?)",
+      ).bind(`project:${project.slug}`).all<{ event_id:string; email:string; availability:string; display_name:string }>(),
+      env.REPORTS.prepare(
+        "SELECT DISTINCT p.email,COALESCE(NULLIF(TRIM(m.display_name),''),'表示名未設定') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles m ON m.email=p.email ORDER BY display_name,p.email",
+      ).all<{ email:string; display_name:string }>(),
+    ]);
+    const byEvent = new Map<string, typeof participants.results>();
+    for (const row of participants.results ?? []) {
+      const list = byEvent.get(row.event_id) ?? [];
+      list.push(row);
+      byEvent.set(row.event_id, list);
+    }
+    return json({
+      scope: { email: scope.email, isManager: scope.isManager },
+      project,
+      members: members.results ?? [],
+      todos: todos.results ?? [],
+      events: (events.results ?? []).map((event) => {
+        const rows = byEvent.get(event.id) ?? [];
+        return {
+          ...event,
+          availability: rows.find((row) => row.email === scope.email)?.availability ?? null,
+          participants: rows.map((row) => ({ displayName: row.display_name, availability: row.availability, isSelf: row.email === scope.email })),
+        };
+      }),
+    });
+  }
+  if (!isSameOrigin(request)) return json({ error: "許可されていない送信元です。" }, 403);
+  if (request.method !== "POST") return json({ error: "GET、POSTのみ利用できます。" }, 405);
+  let payload: Record<string, unknown>;
+  try { payload = await request.json() as Record<string, unknown>; } catch { return json({ error: "入力内容を読み取れませんでした。" }, 400); }
+  const type = text(payload.type, 20);
+  const now = new Date().toISOString();
+  if (type === "todo") {
+    const title = text(payload.title, 200);
+    if (!title) return json({ error: "タスク名を入力してください。" }, 400);
+    const assignee = text(payload.assigneeEmail, 320) || null;
+    if (assignee && !scope.isManager && assignee !== scope.email) return json({ error: "他のメンバーへの依頼は管理者のみ作成できます。" }, 403);
+    const dueAt = text(payload.dueAt, 32);
+    const dueTimezone = text(payload.dueTimezone, 80) || "Asia/Tokyo";
+    const reminderAt = text(payload.reminderAt, 32);
+    const reminderRepeat = text(payload.reminderRepeat, 12) || "none";
+    if (dueAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAt)) return json({ error: "期限はカレンダーから指定してください。" }, 400);
+    if (dueAt && !validTimeZone(dueTimezone)) return json({ error: "期限のタイムゾーンを確認してください。" }, 400);
+    if (reminderAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderAt)) return json({ error: "リマインダー日時はカレンダーから指定してください。" }, 400);
+    if (reminderAt && !validTimeZone(dueTimezone)) return json({ error: "リマインダーのタイムゾーンを確認してください。" }, 400);
+    if (!(new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminderRepeat))) return json({ error: "リマインダーの繰り返しを確認してください。" }, 400);
+    await env.REPORTS.prepare(
+      "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,created_by,created_at,updated_at) VALUES (?,?,NULL,?,?,?,'open',?,?,?,?,?,?,?)",
+    ).bind(crypto.randomUUID(), project.id, assignee, title, text(payload.details, MAX_OPERATION_TEXT_LENGTH), dueAt || null, dueTimezone, reminderAt || null, reminderRepeat, scope.email, now, now).run();
+    return json({ ok: true });
+  }
+  if (type === "event") {
+    if (!scope.isManager) return json({ error: "日程の作成は運営内運営のみ行えます。" }, 403);
+    const title = text(payload.title, 200), startsAt = text(payload.startsAt, 40);
+    if (!title || !startsAt) return json({ error: "催し名と日時を入力してください。" }, 400);
+    const timezone = text(payload.timezone, 80) || "Asia/Tokyo";
+    if (!validTimeZone(timezone)) return json({ error: "タイムゾーンを確認してください。" }, 400);
+    await env.REPORTS.prepare(
+      "INSERT INTO editorial_events (id,subject,title,details,starts_at,ends_at,timezone,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+    ).bind(crypto.randomUUID(), `project:${project.slug}`, title, text(payload.details, MAX_OPERATION_TEXT_LENGTH), startsAt, text(payload.endsAt, 40) || null, timezone, scope.email, now).run();
+    return json({ ok: true });
+  }
+  return json({ error: "todoまたはeventを指定してください。" }, 400);
+}
+
+async function updateProjectTodo(request: Request, env: Env, slug: string, todoId: string): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request)) return json({ error: "許可されていない送信元です。" }, 403);
+  const todo = await env.REPORTS.prepare(
+    "SELECT t.id,t.assignee_email,t.created_by FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id WHERE t.id=? AND p.slug=?",
+  ).bind(todoId, slug).first<{ id:string; assignee_email:string|null; created_by:string }>();
+  if (!todo) return json({ error: "タスクが見つかりません。" }, 404);
+  if (!scope.isManager && todo.assignee_email !== scope.email && todo.created_by !== scope.email) return json({ error: "このタスクを更新する権限がありません。" }, 403);
+  const payload = await request.json().catch(() => null) as { status?: unknown } | null;
+  const status = text(payload?.status, 20);
+  if (!new Set(["open", "doing", "done"]).has(status)) return json({ error: "状態を確認してください。" }, 400);
+  await env.REPORTS.prepare("UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?").bind(status, new Date().toISOString(), todoId).run();
+  return json({ ok: true });
 }
 
 async function createAtlasezProject(
@@ -2193,18 +2789,20 @@ async function operationsOverview(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   await ensureAtlasMembership(env, scope);
-  const filters = scope.allSubjects
-    ? []
-    : [
-        "(assignee_email = ? OR subject IS NULL" +
-          (scope.subjects.length
-            ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
-            : "") +
-          ")",
-      ];
-  const values: unknown[] = scope.allSubjects
-    ? []
-    : [scope.email, ...scope.subjects];
+  // 学習サイトの運営画面では、共通ToDo表のうち atlas プロジェクトだけを表示する。
+  // 他プロジェクトのタスクはメンバーHome／各プロジェクト画面から横断して扱う。
+  const filters = ["project_id = 'atlas'"];
+  const values: unknown[] = [];
+  if (!scope.allSubjects) {
+    filters.push(
+      "(assignee_email = ? OR created_by = ? OR subject IS NULL" +
+        (scope.subjects.length
+          ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
+          : "") +
+        ")",
+    );
+    values.push(scope.email, scope.email, ...scope.subjects);
+  }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const memberWhere = scope.allSubjects
     ? ""
@@ -2212,7 +2810,7 @@ async function operationsOverview(
   const memberValues: unknown[] = scope.allSubjects ? [] : scope.subjects;
   const [tasks, events, progress, members, availability] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT id, subject, assignee_email, title, details, status, due_at, due_timezone, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+      `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
     )
       .bind(...values)
       .all(),
@@ -2409,12 +3007,20 @@ async function createOperation(
       );
     const dueAt = text(payload.dueAt, 32);
     const dueTimezone = text(payload.dueTimezone, 80) || "Asia/Tokyo";
+    const reminderAt = text(payload.reminderAt, 32);
+    const reminderRepeat = text(payload.reminderRepeat, 12) || "none";
     if (dueAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAt))
       return json({ error: "期限はカレンダーから指定してください。" }, 400);
     if (dueAt && !validTimeZone(dueTimezone))
       return json({ error: "期限のタイムゾーンを確認してください。" }, 400);
+    if (reminderAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminderAt))
+      return json({ error: "リマインダー日時はカレンダーから指定してください。" }, 400);
+    if (reminderAt && !validTimeZone(dueTimezone))
+      return json({ error: "リマインダーのタイムゾーンを確認してください。" }, 400);
+    if (!(new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminderRepeat)))
+      return json({ error: "リマインダーの繰り返しを確認してください。" }, 400);
     await env.REPORTS.prepare(
-      "INSERT INTO editorial_tasks (id,subject,assignee_email,title,details,status,due_at,due_timezone,created_by,created_at,updated_at) VALUES (?,?,?,?,?,'open',?,?,?,?,?)",
+      "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,created_by,created_at,updated_at) VALUES (?,'atlas',?,?,?,?, 'open',?,?,?,?,?,?,?)",
     )
       .bind(
         crypto.randomUUID(),
@@ -2424,6 +3030,8 @@ async function createOperation(
         text(payload.details, MAX_OPERATION_TEXT_LENGTH),
         dueAt || null,
         dueTimezone,
+        reminderAt || null,
+        reminderRepeat,
         scope.email,
         now,
         now,
@@ -2490,15 +3098,17 @@ async function updateTask(
   )
     return json({ error: "確認状態を確認してください。" }, 400);
   const task = await env.REPORTS.prepare(
-    "SELECT subject,assignee_email,created_by FROM editorial_tasks WHERE id=?",
+    "SELECT project_id,subject,assignee_email,created_by FROM editorial_tasks WHERE id=?",
   )
     .bind(taskId)
     .first<{
+      project_id: string;
       subject: string | null;
       assignee_email: string | null;
       created_by: string;
     }>();
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
+  if (task.project_id !== "atlas") return json({ error: "このタスクはプロジェクト画面から更新してください。" }, 403);
   const canEditTask =
     scope.isManager ||
     task.assignee_email === scope.email ||
@@ -2549,9 +3159,7 @@ async function updateTask(
         (row) =>
           row.email === task.assignee_email && row.status === "confirmed",
       )
-    : feedbackRows.some(
-        (row) => row.email !== task.created_by && row.status === "confirmed",
-      );
+    : feedbackRows.some((row) => row.status === "confirmed");
   const resolved =
     creatorConfirmed &&
     assigneeConfirmed &&
@@ -3540,6 +4148,11 @@ async function updateEditorialCommentStatus(
     const responderEmails = new Set(
       (replies.results ?? []).map((reply) => reply.created_by),
     );
+    // 返信がない自己コメントは、コメント作成者自身の確認を
+    // 「対応者の確認」として扱う。これにより、自分で付けた指摘を
+    // 自分で修正・確認した場合も対応済みへ進められる。
+    if (!responderEmails.size && target?.created_by)
+      responderEmails.add(target.created_by);
     const responderConfirmed = [...responderEmails].some((email) =>
       rows.some((row) => row.email === email && row.status === "confirmed"),
     );
@@ -3581,11 +4194,8 @@ async function editEditorialComment(
   const body = text(payload.body, MAX_EDITORIAL_COMMENT_LENGTH);
   const tags =
     payload.tags === undefined ? null : editorialCommentTags(payload.tags);
-  if (!body && !(tags?.length ?? 0))
-    return json(
-      { error: "コメント本文またはタグを1つ以上選択してください。" },
-      400,
-    );
+  // 編集では本文を空にしてタグだけ残す、または本文を消して空欄にする操作も許可する。
+  // 新規コメントの入力チェックは createEditorialComment 側で行う。
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
   const comment = await env.REPORTS.prepare(
@@ -3874,13 +4484,14 @@ const editorialMarkdown = (
   const date = new Date().toISOString().slice(0, 10);
   const managementLocale =
     editorialLanguageCode(document.locale) ?? document.locale;
-  const contentLocale = contentLanguageDirectory(document.locale);
-  if (!contentLocale)
+  const contentDirectory = contentLanguageDirectory(document.locale);
+  const publicLocale = publicLanguageCode(document.locale);
+  if (!contentDirectory || !publicLocale)
     throw new Error("原稿の言語コードを確認できませんでした。");
   return [
     "---",
     `articleId: ${managementLocale}-${document.subject}-${document.slug}`,
-    `locale: ${contentLocale}`,
+    `locale: ${publicLocale}`,
     `title: ${document.title}`,
     `slug: ${document.slug}`,
     `subject: ${document.subject}`,
@@ -4082,7 +4693,19 @@ const adminReturnPath = (value: string | null) =>
   value === "/admin/guide" ||
   value === "/admin/guide/" ||
   value === "/admin/introductions" ||
-  value === "/admin/introductions/"
+  value === "/admin/introductions/" ||
+  value === "/admin/projects/atlas" ||
+  value === "/admin/projects/atlas/" ||
+  value === "/admin/projects/atlas/workspace" ||
+  value === "/admin/projects/atlas/workspace/" ||
+  value === "/admin/projects/seminar-platform" ||
+  value === "/admin/projects/seminar-platform/" ||
+  value === "/admin/projects/seminar-platform/workspace" ||
+  value === "/admin/projects/seminar-platform/workspace/" ||
+  value === "/admin/projects/secretariat" ||
+  value === "/admin/projects/secretariat/" ||
+  value === "/admin/projects/secretariat/workspace" ||
+  value === "/admin/projects/secretariat/workspace/"
     ? value
     : "/admin/reports";
 
@@ -4281,7 +4904,14 @@ async function adminNotifications(
   if (isResponse(scope)) return scope;
   if (!scope.isManager && !scope.subjects.length)
     return json({ notifications: [] });
-  const [commentRows, approvedRows, publishedRows, reviewRows] =
+  const viewerProfile = await env.REPORTS.prepare(
+    "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
+  )
+    .bind(scope.email)
+    .first<{ display_name: string | null }>();
+  const mentionName = viewerProfile?.display_name?.trim() ?? "";
+  const mentionPattern = mentionName.replace(/[\\%_]/g, "\\$&");
+  const [commentRows, approvedRows, publishedRows, reviewRows, reminderRows] =
     await Promise.all([
       env.REPORTS.prepare(
         "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
@@ -4324,7 +4954,41 @@ async function adminNotifications(
               updated_at: string;
             }[],
           }),
+      env.REPORTS.prepare(
+        "SELECT id, title, reminder_at, reminder_repeat, due_timezone, assignee_email, created_by FROM editorial_tasks WHERE project_id = 'atlas' AND status != 'done' AND reminder_at IS NOT NULL AND reminder_at <= ? AND (assignee_email = ? OR created_by = ?) ORDER BY reminder_at DESC LIMIT 20",
+      )
+        .bind(new Date().toISOString().slice(0, 16), scope.email, scope.email)
+        .all<{
+          id: string;
+          title: string;
+          reminder_at: string;
+          reminder_repeat: string;
+          due_timezone: string;
+          assignee_email: string | null;
+          created_by: string;
+        }>(),
     ]);
+  const mentionRows = mentionName
+    ? await env.REPORTS.prepare(
+        "SELECT c.id, c.body, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE c.body LIKE ? ESCAPE '\\' AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
+      )
+        .bind(`%@${mentionPattern}%`, scope.email)
+        .all<{
+          id: string;
+          body: string;
+          created_at: string;
+          document_id: string;
+          title: string;
+        }>()
+    : {
+        results: [] as {
+          id: string;
+          body: string;
+          created_at: string;
+          document_id: string;
+          title: string;
+        }[],
+      };
   const notifications = [
     ...(commentRows.results ?? []).map((item) => ({
       id: `comment-${item.id}`,
@@ -4349,6 +5013,22 @@ async function adminNotifications(
       detail: "学習サイトへの反映を確認できます。",
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.published_at,
+    })),
+    ...(mentionRows.results ?? []).map((item) => ({
+      id: `mention-${item.id}`,
+      kind: "mention",
+      title: `コメントでメンションされました：${item.title}`,
+      detail: item.body.slice(0, 90),
+      href: `/admin/editor/?document=${encodeURIComponent(item.document_id)}`,
+      updatedAt: item.created_at,
+    })),
+    ...(reminderRows.results ?? []).map((item) => ({
+      id: `task-reminder-${item.id}-${item.reminder_at}`,
+      kind: "task",
+      title: `ToDoのリマインダー：${item.title}`,
+      detail: item.reminder_repeat === "none" ? "設定した日時になりました。" : `繰り返し：${item.reminder_repeat}`,
+      href: "/admin/operations/",
+      updatedAt: item.reminder_at,
     })),
     ...(scope.isManager
       ? (reviewRows.results ?? []).map((item) => ({
@@ -4444,6 +5124,16 @@ export default {
       return publicApplicationConfig(env);
     if (url.pathname === "/api/apply" && request.method === "POST")
       return submitMemberApplication(request, env);
+    // 学習サイトの問題報告を、Botトークンを持つ管理Workerへ安全に中継する。
+    // 共有シークレットがないリクエストには存在自体を返さない。
+    if (url.pathname === "/internal/article-report-discord/provision")
+      return provisionArticleReportChannels(request, env);
+    if (url.pathname === "/internal/article-report-discord")
+      return relayArticleReportDiscord(request, env);
+    if (url.pathname === "/internal/discord-inventory")
+      return discordInventory(request, env);
+    if (url.pathname === "/internal/discord-report-channel-check")
+      return discordReportChannelCheck(request, env);
     if (url.pathname === "/api/admin/auth-status" && request.method === "GET")
       return adminAuthStatus(request, env);
     if (url.pathname === "/api/admin/notifications" && request.method === "GET")
@@ -4524,6 +5214,21 @@ export default {
     }
     if (url.pathname === "/api/admin/portal" && request.method === "GET")
       return portalOverview(request, env);
+    const projectOperationsMatch = url.pathname.match(
+      /^\/api\/admin\/projects\/([a-z0-9-]{2,60})\/operations\/?$/i,
+    );
+    if (projectOperationsMatch && (request.method === "GET" || request.method === "POST"))
+      return projectOperations(request, env, projectOperationsMatch[1].toLowerCase());
+    const projectTodoMatch = url.pathname.match(
+      /^\/api\/admin\/projects\/([a-z0-9-]{2,60})\/operations\/todos\/([0-9a-f-]{36})\/?$/i,
+    );
+    if (projectTodoMatch && request.method === "PATCH")
+      return updateProjectTodo(request, env, projectTodoMatch[1].toLowerCase(), projectTodoMatch[2]);
+    const projectProfileMatch = url.pathname.match(
+      /^\/api\/admin\/projects\/([a-z0-9-]{2,60})\/profile\/?$/i,
+    );
+    if (projectProfileMatch && (request.method === "GET" || request.method === "PUT"))
+      return projectProfile(request, env, projectProfileMatch[1].toLowerCase());
     if (url.pathname === "/api/admin/projects" && request.method === "POST")
       return createAtlasezProject(request, env);
     if (url.pathname === "/api/admin/applications" && request.method === "GET")
@@ -4682,7 +5387,19 @@ export default {
       url.pathname === "/admin/guide" ||
       url.pathname === "/admin/guide/" ||
       url.pathname === "/admin/introductions" ||
-      url.pathname === "/admin/introductions/"
+      url.pathname === "/admin/introductions/" ||
+      url.pathname === "/admin/projects/atlas" ||
+      url.pathname === "/admin/projects/atlas/" ||
+      url.pathname === "/admin/projects/atlas/workspace" ||
+      url.pathname === "/admin/projects/atlas/workspace/" ||
+      url.pathname === "/admin/projects/seminar-platform" ||
+      url.pathname === "/admin/projects/seminar-platform/" ||
+      url.pathname === "/admin/projects/seminar-platform/workspace" ||
+      url.pathname === "/admin/projects/seminar-platform/workspace/" ||
+      url.pathname === "/admin/projects/secretariat" ||
+      url.pathname === "/admin/projects/secretariat/" ||
+      url.pathname === "/admin/projects/secretariat/workspace" ||
+      url.pathname === "/admin/projects/secretariat/workspace/"
     ) {
       if (url.pathname === "/apply" || url.pathname === "/apply/")
         return fetchAdminAsset(request, env);

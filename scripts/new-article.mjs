@@ -53,6 +53,9 @@ function fail(message) {
 const args = parseArgs(process.argv.slice(2));
 const { subject, category, slug, title } = args;
 const locale = args.locale ?? "ja";
+const localeDirectory = { ja: "jpn", jpn: "jpn", en: "eng", eng: "eng" }[locale];
+if (!localeDirectory) fail(`対応していない言語コードです: ${locale}（ja/jpn または en/eng）`);
+const publicLocale = localeDirectory === "jpn" ? "ja" : "en";
 
 if (!subject || !category || !slug || !title) {
   fail(
@@ -63,7 +66,7 @@ if (!subject || !category || !slug || !title) {
       "任意:",
       "  --concept <概念ID>   既存の概念に紐づける（省略時は subject.category.slug で新規作成）",
       "  --difficulty <段階>  introductory | basic | intermediate | advanced（既定 basic）",
-      "  --locale <ロケール>  既定 ja",
+      "  --locale <言語コード>  既定 ja（格納先はISO 639-3のjpn。jpn/engも指定可）",
       "",
       "例:",
       "  npm run new:article -- --subject chemistry --category matter --slug gases --title 気体",
@@ -97,7 +100,7 @@ if (!categoryEntry) {
 const articlePath = join(
   ROOT,
   "src/content/articles",
-  locale,
+  localeDirectory,
   subject,
   category,
   `${slug}.md`,
@@ -139,8 +142,8 @@ if (!conceptExists) {
 // --- 記事の雛形 -------------------------------------------------------------
 const today = new Date().toISOString().slice(0, 10);
 const frontmatter = {
-  articleId: `${locale}-${subject}-${slug}`,
-  locale,
+  articleId: `${publicLocale}-${subject}-${slug}`,
+  locale: publicLocale,
   title,
   slug,
   subject,

@@ -47,6 +47,9 @@ const articles = (await getPublishedArticles(locale)).filter(
 const subjectName = localizedName(subject.data.name, locale);
 const categoryName = localizedName(category.name, locale);
 const planned = getPlannedArticles(subject.data.slug, category.slug);
+const recentArticles = [...articles]
+  .sort((a, b) => b.data.updatedAt.getTime() - a.data.updatedAt.getTime())
+  .slice(0, 6);
 const views = [
   { id: "tiles", label: t(locale, "tileView") },
   { id: "map", label: t(locale, "map") },
@@ -87,6 +90,31 @@ const items = articles.map((a) => ({
     data-active-view="tiles"
     data-view-storage-key={`atlasez-category-view:${subject.data.slug}/${category.slug}`}
   >
+    <h1>{categoryName}</h1>
+
+    <section class="category-highlights" aria-label={locale === "ja" ? "記事の更新情報" : "Article updates"}>
+      <div class="highlight-panel">
+        <h2>{locale === "ja" ? "最近公開された記事" : "Recently published"}</h2>
+        {recentArticles.length > 0 ? (
+          <ul>
+            {recentArticles.map((article) => (
+              <li><a href={articlePath(locale, article.data.subject, article.data.category, article.data.slug)}>{article.data.title}</a><time datetime={article.data.updatedAt.toISOString()}>{article.data.updatedAt.toLocaleDateString(locale === "ja" ? "ja-JP" : "en-US")}</time></li>
+            ))}
+          </ul>
+        ) : <p class="highlight-empty">{locale === "ja" ? "現在ありません。" : "Nothing yet."}</p>}
+      </div>
+      <div class="highlight-panel">
+        <h2>{locale === "ja" ? "近日公開予定の記事" : "Coming soon"}</h2>
+        {planned.length > 0 ? (
+          <ul>
+            {planned.slice(0, 6).map((item) => (
+              <li><a href="#planned-articles">{plannedArticleTitle(item, locale)}</a><span>{plannedProgress(item) === "in-progress" ? (locale === "ja" ? "準備中" : "In progress") : (locale === "ja" ? "予定" : "Planned")}</span></li>
+            ))}
+          </ul>
+        ) : <p class="highlight-empty">{locale === "ja" ? "現在ありません。" : "Nothing yet."}</p>}
+      </div>
+    </section>
+
     <Breadcrumb
       items={[
         { label: t(locale, "breadcrumbHome"), href: atlasPath(locale) },
@@ -94,7 +122,6 @@ const items = articles.map((a) => ({
         { label: categoryName },
       ]}
     />
-    <h1>{categoryName}</h1>
 
     <div class="view-bar">
       <div
@@ -179,9 +206,10 @@ const items = articles.map((a) => ({
         ))
       }
       {
-        planned.map((item) => (
+        planned.map((item, index) => (
           <li
             class="article-item card planned-article"
+            id={index === 0 ? "planned-articles" : undefined}
             data-title={plannedArticleTitle(item, locale)}
           >
             <p class="article-status">
@@ -334,6 +362,15 @@ const items = articles.map((a) => ({
     border-style: dashed;
     background: var(--background-secondary);
   }
+  .category-highlights { display: grid; gap: var(--space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--space-4) 0 var(--space-3); }
+  .highlight-panel { background: var(--background-secondary); border: 1px solid var(--border); border-top: 3px solid var(--accent-primary); min-width: 0; padding: var(--space-2) var(--space-3); }
+  .highlight-panel h2 { font-size: calc(1rem * var(--text-scale)); margin: 0 0 var(--space-1); }
+  .highlight-panel ul { display: grid; gap: .15rem; list-style: none; margin: 0; padding: 0; }
+  .highlight-panel li { align-items: baseline; display: flex; gap: var(--space-2); justify-content: space-between; min-width: 0; padding: .35rem 0; }
+  .highlight-panel li + li { border-top: 1px solid var(--border); }
+  .highlight-panel a { min-width: 0; overflow-wrap: anywhere; }
+  .highlight-panel time, .highlight-panel li > span { color: var(--text-secondary); flex: 0 0 auto; font-size: calc(.72rem * var(--text-scale)); }
+  .highlight-empty { color: var(--text-secondary); font-size: calc(.8rem * var(--text-scale)); margin: 0; }
   .article-status {
     display: flex;
     align-items: center;
@@ -410,6 +447,7 @@ const items = articles.map((a) => ({
       padding-top: var(--space-2);
       padding-bottom: 0;
     }
+    .category-highlights { grid-template-columns: 1fr; }
   }
 </style>
 

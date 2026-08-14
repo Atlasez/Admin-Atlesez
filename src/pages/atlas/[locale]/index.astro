@@ -1,6 +1,7 @@
 ---
 import AtlasLayout from "../../../layouts/AtlasLayout.astro";
 import LearningMap from "../../../components/LearningMap.astro";
+import Breadcrumb from "../../../components/Breadcrumb.astro";
 import { atlasPath, articlePath, formatDate } from "../../../lib/site";
 import { t, LOCALES, localizedName, type Locale } from "../../../lib/i18n";
 import { groupSubjects } from "../../../lib/taxonomy";
@@ -127,6 +128,10 @@ const views = [
         <h1 id="subjects-heading" class="visually-hidden">
           {t(locale, "subjects")}
         </h1>
+
+        <div data-home-map-breadcrumb>
+          <Breadcrumb items={[{ label: t(locale, "breadcrumbHome") }]} />
+        </div>
 
         {/* ブラウザのタブのように、ページ遷移せず表示を切り替える */}
         <div class="view-bar">
@@ -321,6 +326,7 @@ const views = [
                                       <li class="category-list-item">
                                         <details
                                           class="category-list-details"
+                                          data-category-key={`${s.data.slug}/${cat.slug}`}
                                           data-collapse-key={`list:category:${s.data.slug}:${cat.slug}`}
                                         >
                                           <summary class="category-list-head">
@@ -467,6 +473,56 @@ const views = [
   const panels = [
     ...document.querySelectorAll<HTMLElement>("[data-view-panel]"),
   ];
+  const homeBreadcrumb = document.querySelector<HTMLElement>(
+    "[data-home-map-breadcrumb] .breadcrumb",
+  );
+  const homeBreadcrumbList = homeBreadcrumb?.querySelector<HTMLOListElement>("ol");
+  const homeBreadcrumbTemplate = homeBreadcrumbList?.innerHTML ?? "";
+  const homeCategoryDetails = [
+    ...document.querySelectorAll<HTMLDetailsElement>("[data-category-key]"),
+  ];
+  let mapCategoryKey = new URL(location.href).searchParams.get("category");
+
+  function syncHomeMapContext(categoryKey: string | null): void {
+    mapCategoryKey = categoryKey || null;
+    const selected = homeCategoryDetails.find(
+      (details) => details.dataset.categoryKey === mapCategoryKey,
+    );
+    homeCategoryDetails.forEach((details) => {
+      if (details === selected) details.open = true;
+    });
+    if (!homeBreadcrumbList) return;
+    homeBreadcrumbList.innerHTML = homeBreadcrumbTemplate;
+    if (!selected) return;
+    const subjectDetails = selected.closest<HTMLDetailsElement>(
+      ".subject-list-details",
+    );
+    if (subjectDetails) subjectDetails.open = true;
+    const subjectLink = subjectDetails?.querySelector<HTMLAnchorElement>(
+      ".subject-list-head > a",
+    );
+    const categoryLink = selected.querySelector<HTMLAnchorElement>(
+      ".category-list-head > a",
+    );
+    const current = homeBreadcrumbList.lastElementChild;
+    if (!current || !subjectLink || !categoryLink) return;
+    const subjectCrumb = document.createElement("li");
+    const subjectAnchor = document.createElement("a");
+    subjectAnchor.href = subjectLink.href;
+    subjectAnchor.textContent = subjectLink.textContent?.trim() ?? "";
+    subjectCrumb.append(subjectAnchor);
+    const categoryCrumb = document.createElement("li");
+    const categoryCurrent = document.createElement("span");
+    categoryCurrent.setAttribute("aria-current", "page");
+    categoryCurrent.textContent = categoryLink.textContent?.trim() ?? "";
+    categoryCrumb.append(categoryCurrent);
+    current.replaceWith(subjectCrumb, categoryCrumb);
+  }
+
+  window.addEventListener("atlas-map-category-change", (event) => {
+    const detail = (event as CustomEvent<{ categoryKey?: string | null }>).detail;
+    syncHomeMapContext(detail.categoryKey ?? null);
+  });
 
   function activate(view: string, focus = false): void {
     if (!tabs.some((tab) => tab.dataset.viewTab === view)) view = "tiles";
@@ -479,6 +535,14 @@ const views = [
     }
     for (const panel of panels) {
       panel.hidden = panel.dataset.viewPanel !== view;
+    }
+    if (view === "list" && mapCategoryKey) {
+      syncHomeMapContext(mapCategoryKey);
+      document
+        .querySelector<HTMLDetailsElement>(
+          `[data-category-key="${CSS.escape(mapCategoryKey)}"]`,
+        )
+        ?.scrollIntoView({ block: "nearest" });
     }
     if (layout) layout.dataset.activeView = view;
     try {
