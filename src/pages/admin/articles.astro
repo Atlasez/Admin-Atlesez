@@ -9,9 +9,9 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
     <AdminErrorActions />
     <header><div><p>ATLASEZ / 原稿管理</p><h1>編集・査読</h1><span>記事の作成、加筆・修正、査読をここから始められます。</span></div></header>
     <nav class="workflow-grid" aria-label="記事作業を選択">
-      <a class="workflow-card workflow-card-primary" href="/admin/editor/?new=1"><span class="workflow-card-kicker">01</span><strong>新規記事作成</strong><small>新しい記事を書き始める</small><span class="workflow-card-action">作成する →</span></a>
-      <a class="workflow-card" href="/admin/articles/?workflow=edit"><span class="workflow-card-kicker">02</span><strong>加筆・修正</strong><small>自分が関わった記事を優先して表示</small><span class="workflow-card-action">記事を選ぶ →</span></a>
-      <a class="workflow-card" href="/admin/articles/?workflow=review"><span class="workflow-card-kicker">03</span><strong>査読</strong><small>査読前の記事を優先して表示</small><span class="workflow-card-action">査読する →</span></a>
+      <a class="workflow-card workflow-card-primary" href="/admin/editor/?new=1"><strong>新規記事作成</strong><small>新しい記事を書き始める</small><span class="workflow-card-action">作成する →</span></a>
+      <a class="workflow-card" href="/admin/articles/?workflow=edit"><strong>加筆・修正</strong><small>自分が関わった記事を優先して表示</small><span class="workflow-card-action">記事を選ぶ →</span></a>
+      <a class="workflow-card" href="/admin/articles/?workflow=review"><strong>査読</strong><small>査読前の記事を優先して表示</small><span class="workflow-card-action">査読する →</span></a>
     </nav>
     <p class="workflow-note" data-workflow-note hidden></p>
     <section class="filters"><input data-query placeholder="タイトル・分野・カテゴリで検索" /><select data-status><option value="all">すべての状態</option><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select><select data-public><option value="all">公開状況：すべて</option><option value="published">公開済み</option><option value="unpublished">未公開</option></select><select data-review-filter aria-label="査読担当で絞り込み"><option value="all">査読担当：すべて</option><option value="mine">自分への依頼</option><option value="unassigned">未担当</option></select><select data-test><option value="exclude">テスト原稿を除く</option><option value="all">テスト原稿を含む</option><option value="only">テスト原稿のみ</option></select><output data-count></output></section>
