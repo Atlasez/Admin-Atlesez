@@ -763,8 +763,10 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const commentSelections = (item: Comment) => item.selections?.length ? item.selections : item.selection_text ? [{ selection_start: item.selection_start, selection_end: item.selection_end, selection_text: item.selection_text }] : [];
     const renderCommentBody = (value: string) => esc(value).replace(/(^|\s)(@[\p{L}\p{N}_-]+)/gu, "$1<mark class=\"comment-mention\">$2</mark>");
     const renderTagOptions = (attribute: string, selected: string[] = []) => commentTagOptions.map((tag) => `<label class="comment-tag-option"><input type="checkbox" value="${esc(tag)}" data-${attribute} ${selected.includes(tag) ? "checked" : ""}><span>${esc(tag)}</span></label>`).join("");
+    const anonymousMemberLabel = (value: string) => { const normalized = value.trim().toLowerCase(); let hash = 2166136261; for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); } return `運営メンバー ${(hash >>> 0) % 9000 + 1000}`; };
     const renderCommentCard = (item: Comment, isReply = false) => {
-      const displayName = item.author_display_name?.trim() || "運営メンバー";
+      const name = item.author_display_name?.trim();
+      const displayName = name && name !== "表示名未設定" ? name : anonymousMemberLabel(item.created_by);
       const avatar = displayName.charAt(0).toUpperCase() || "運";
       const avatarStyle = item.author_avatar_url ? ` style="background-image:url('${esc(item.author_avatar_url)}')"` : "";
       const ranges = commentSelections(item);

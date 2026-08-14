@@ -1,3 +1,5 @@
+import { memberDisplayName } from "./lib/anonymous-member";
+
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
@@ -739,7 +741,7 @@ async function listReportAdminPermissions(
   const result = await env.REPORTS.prepare(
     `SELECT p.email,
       GROUP_CONCAT(DISTINCT p.subject) AS subjects,
-      COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name,
+      COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name,
       COALESCE(m.university, '') AS university,
       COALESCE(m.year, '') AS year,
       COALESCE(m.interests, '') AS interests,
@@ -760,7 +762,17 @@ async function listReportAdminPermissions(
     avatar_url: string;
     discord_user_id: string;
   }>();
-  return json({ permissions: result.results });
+  const permissions = result.results
+    .map((member) => {
+      const rawDisplayName = member.display_name?.trim() ?? "";
+      return {
+        ...member,
+        display_name: memberDisplayName(rawDisplayName, member.email),
+        display_name_auto: !rawDisplayName || rawDisplayName === "表示名未設定",
+      };
+    })
+    .sort((a, b) => a.display_name.localeCompare(b.display_name, "ja") || a.email.localeCompare(b.email));
+  return json({ permissions });
 }
 
 async function updateMemberDiscordUserId(
@@ -1339,13 +1351,13 @@ async function listEditorialDocuments(
       .bind(...values)
       .all<Omit<EditorialDocument, "body"> & { review_reviewer_email: string | null; review_due_at: string | null }>(),
     env.REPORTS.prepare(
-      `SELECT DISTINCT COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
+      `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
        FROM report_admin_permissions p
        LEFT JOIN editorial_member_profiles m ON m.email = p.email${memberWhere}
        ORDER BY display_name`,
     )
       .bind(...(scope.allSubjects ? [] : scope.subjects))
-      .all<{ display_name: string }>(),
+      .all<{ email: string; display_name: string }>(),
   ]);
   return json({
     documents: result.results.map((document) => ({
@@ -1356,7 +1368,7 @@ async function listEditorialDocuments(
       reviewDueAt: document.review_due_at,
     })),
     mentionNames: memberResult.results
-      .map((member) => member.display_name.trim())
+      .map((member) => memberDisplayName(member.display_name, member.email))
       .filter(Boolean),
     scope: {
       email: scope.email,
@@ -2584,7 +2596,7 @@ async function projectOperations(
           created_at: string;
         }>(),
       env.REPORTS.prepare(
-        "SELECT a.event_id,a.email,a.availability,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name FROM editorial_event_availability a LEFT JOIN editorial_member_profiles p ON p.email=a.email WHERE a.event_id IN (SELECT id FROM editorial_events WHERE subject=?)",
+        "SELECT a.event_id,a.email,a.availability,COALESCE(NULLIF(TRIM(p.display_name),''),'') AS display_name FROM editorial_event_availability a LEFT JOIN editorial_member_profiles p ON p.email=a.email WHERE a.event_id IN (SELECT id FROM editorial_events WHERE subject=?)",
       )
         .bind(`project:${project.slug}`)
         .all<{
@@ -2594,11 +2606,21 @@ async function projectOperations(
           display_name: string;
         }>(),
       env.REPORTS.prepare(
-        "SELECT DISTINCT p.email,COALESCE(NULLIF(TRIM(m.display_name),''),'表示名未設定') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles m ON m.email=p.email ORDER BY display_name,p.email",
+        "SELECT DISTINCT p.email,COALESCE(NULLIF(TRIM(m.display_name),''),'') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles m ON m.email=p.email ORDER BY display_name,p.email",
       ).all<{ email: string; display_name: string }>(),
     ]);
-    const byEvent = new Map<string, typeof participants.results>();
-    for (const row of participants.results ?? []) {
+    const normalizedParticipants = (participants.results ?? []).map((row) => ({
+      ...row,
+      display_name: memberDisplayName(row.display_name, row.email),
+    }));
+    const normalizedMembers = (members.results ?? [])
+      .map((member) => ({
+        ...member,
+        display_name: memberDisplayName(member.display_name, member.email),
+      }))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name, "ja") || a.email.localeCompare(b.email));
+    const byEvent = new Map<string, typeof normalizedParticipants>();
+    for (const row of normalizedParticipants) {
       const list = byEvent.get(row.event_id) ?? [];
       list.push(row);
       byEvent.set(row.event_id, list);
@@ -2606,7 +2628,7 @@ async function projectOperations(
     return json({
       scope: { email: scope.email, isManager: scope.isManager },
       project,
-      members: members.results ?? [],
+      members: normalizedMembers,
       todos: todos.results ?? [],
       events: (events.results ?? []).map((event) => {
         const rows = byEvent.get(event.id) ?? [];
@@ -3100,12 +3122,12 @@ async function operationsOverview(
       .bind(scope.email)
       .all(),
     env.REPORTS.prepare(
-      `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles profile ON profile.email = p.email${memberWhere.replaceAll("subject", "p.subject")} ORDER BY display_name, p.email`,
+      `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles profile ON profile.email = p.email${memberWhere.replaceAll("subject", "p.subject")} ORDER BY display_name, p.email`,
     )
       .bind(...memberValues)
       .all<{ email: string; display_name: string }>(),
     env.REPORTS.prepare(
-      "SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a LEFT JOIN editorial_member_profiles p ON p.email = a.email",
+      "SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a LEFT JOIN editorial_member_profiles p ON p.email = a.email",
     ).all<{
       event_id: string;
       email: string;
@@ -3151,20 +3173,29 @@ async function operationsOverview(
   const taskDisplayNames = new Map(
     (taskFeedbackProfiles.results ?? []).map((profile) => [
       profile.email,
-      profile.display_name?.trim() || "運営メンバー",
+      memberDisplayName(profile.display_name, profile.email),
     ]),
   );
   const taskFeedbackById = new Map<string, EditorialFeedback[]>();
   for (const row of taskFeedbackRows.results ?? []) {
     const rows = taskFeedbackById.get(row.task_id) ?? [];
     rows.push({
-      displayName: taskDisplayNames.get(row.email) ?? "運営メンバー",
+      displayName: taskDisplayNames.get(row.email) ?? memberDisplayName("", row.email),
       status: row.status,
       updatedAt: row.updated_at,
     });
     taskFeedbackById.set(row.task_id, rows);
   }
-  const participantRows = availability.results ?? [];
+  const participantRows = (availability.results ?? []).map((row) => ({
+    ...row,
+    display_name: memberDisplayName(row.display_name, row.email),
+  }));
+  const memberRows = (members.results ?? [])
+    .map((member) => ({
+      ...member,
+      display_name: memberDisplayName(member.display_name, member.email),
+    }))
+    .sort((a, b) => a.display_name.localeCompare(b.display_name, "ja") || a.email.localeCompare(b.email));
   const participantsByEvent = new Map<string, typeof participantRows>();
   for (const item of participantRows) {
     const rows = participantsByEvent.get(item.event_id) ?? [];
@@ -3217,7 +3248,7 @@ async function operationsOverview(
       };
     }),
     progress: progress.results,
-    members: members.results ?? [],
+    members: memberRows,
   });
 }
 
@@ -3871,12 +3902,11 @@ async function getEditorialDocument(
   );
   const feedbackByComment = new Map<string, EditorialFeedback[]>();
   for (const row of feedbackRows.results ?? []) {
-    const displayName =
-      (
-        authorProfileByEmail.get(row.email)?.display_name ??
-        feedbackProfileByEmail.get(row.email)?.display_name ??
-        "運営メンバー"
-      ).trim() || "運営メンバー";
+    const displayName = memberDisplayName(
+      authorProfileByEmail.get(row.email)?.display_name ??
+        feedbackProfileByEmail.get(row.email)?.display_name,
+      row.email,
+    );
     const rows = feedbackByComment.get(row.comment_id) ?? [];
     rows.push({ displayName, status: row.status, updatedAt: row.updated_at });
     feedbackByComment.set(row.comment_id, rows);
@@ -3899,9 +3929,10 @@ async function getEditorialDocument(
   const commentsWithSelections = commentRows.map((comment) => ({
     ...comment,
     tags: editorialCommentTags(comment.tags),
-    author_display_name:
-      authorProfileByEmail.get(comment.created_by)?.display_name?.trim() ||
-      "運営メンバー",
+    author_display_name: memberDisplayName(
+      authorProfileByEmail.get(comment.created_by)?.display_name,
+      comment.created_by,
+    ),
     author_avatar_url:
       authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
     // 旧コメントの一件だけの引用も、同じUIで読めるようにする。
@@ -4274,7 +4305,7 @@ async function listEditorialReviewRequests(
         reviewer_display_name: string;
       }>(),
     env.REPORTS.prepare(
-      `SELECT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name,
+      `SELECT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name,
         GROUP_CONCAT(DISTINCT p.subject) AS subjects
        FROM report_admin_permissions p
        LEFT JOIN editorial_member_profiles m ON m.email = p.email
@@ -4285,13 +4316,15 @@ async function listEditorialReviewRequests(
   return json({
     requests: result.results.map((item) => ({
       ...item,
-      reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
+      reviewerDisplayName: item.reviewer_email
+        ? memberDisplayName(item.reviewer_display_name, item.reviewer_email)
+        : "未割り当て",
       assignedToMe: item.reviewer_email === scope.email,
       dueAt: item.due_at,
     })),
     reviewers: reviewerResult.results.map((item) => ({
       email: item.email,
-      displayName: item.display_name,
+      displayName: memberDisplayName(item.display_name, item.email),
       subjects: item.subjects?.split(",").filter(Boolean) ?? [],
     })),
   });
@@ -5295,7 +5328,7 @@ async function adminNotifications(
   )
     .bind(scope.email)
     .first<{ display_name: string | null }>();
-  const mentionName = viewerProfile?.display_name?.trim() ?? "";
+  const mentionName = memberDisplayName(viewerProfile?.display_name, scope.email);
   const mentionPattern = mentionName.replace(/[\\%_]/g, "\\$&");
   const [commentRows, approvedRows, publishedRows, reviewRows, reminderRows] =
     await Promise.all([

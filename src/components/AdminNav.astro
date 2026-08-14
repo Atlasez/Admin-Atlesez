@@ -98,8 +98,15 @@ const showHomeNav = current !== "portal" && current !== "global";
         try { sessionStorage.setItem(accountCacheKey, JSON.stringify(snapshot)); } catch { /* 容量制限時も画面表示は継続する */ }
       };
       const clearAccountCache = () => { try { sessionStorage.removeItem(accountCacheKey); } catch { /* ignore */ } };
+      const anonymousMemberLabel = (value: string) => {
+        const normalized = value.trim().toLowerCase();
+        let hash = 2166136261;
+        for (const character of normalized) { hash ^= character.codePointAt(0) ?? 0; hash = Math.imul(hash, 16777619); }
+        return `運営メンバー ${(hash >>> 0) % 9000 + 1000}`;
+      };
       const applyAccountSnapshot = (snapshot: AccountSnapshot) => {
-        const label = snapshot.displayName.trim() || '表示名未設定';
+        const displayName = snapshot.displayName.trim();
+        const label = !displayName || displayName === '表示名未設定' ? anonymousMemberLabel(snapshot.email) : displayName;
         if (email) { email.textContent = label; email.title = snapshot.email; }
         if (avatarFallback) avatarFallback.textContent = (label[0] || snapshot.email[0] || 'A').toUpperCase();
         if (avatarImage) {
