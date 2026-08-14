@@ -301,6 +301,42 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
 <!-- JavaScriptで追加するコメント要素にも確実に適用する。 -->
 <style is:global>
   /* YouTubeのように、カードを並べるのではなく会話の流れを読むコメント欄にする。 */
+  /* コメントはJavaScriptで後から追加するため、画像用の基本スタイルは
+     Astroのスコープ外で明示する。これがないと返信の画像だけが自然寸法で
+     描画され、円形の枠からはみ出して見える。 */
+  .review-panel .comment-avatar {
+    align-items: center;
+    border-radius: 50%;
+    display: inline-flex;
+    flex: 0 0 2.4rem;
+    height: 2.4rem;
+    justify-content: center;
+    overflow: hidden !important;
+    position: relative;
+    width: 2.4rem;
+  }
+  .review-panel .comment-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+  .review-panel .comment-avatar .comment-avatar-fallback {
+    align-items: center;
+    display: inline-flex;
+    height: 100%;
+    justify-content: center;
+    width: 100%;
+  }
+  .review-panel .comment-avatar[data-avatar-url] .comment-avatar-fallback {
+    display: none;
+  }
+  .review-panel .comment-avatar[data-avatar-url][data-avatar-ready="failed"] .comment-avatar-fallback {
+    display: inline-flex;
+  }
+  .review-panel .comment-avatar .comment-avatar-fallback[hidden] {
+    display: none !important;
+  }
   .review-panel .comment-list {
     display: grid;
     gap: 1.1rem;
