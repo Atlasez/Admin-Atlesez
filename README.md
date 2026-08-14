@@ -1,16 +1,32 @@
 # Atlasez01 (atlasez-web)
 
-学生団体 **Atlasez** の公式サイトと、学習サイト **「アトラス」** のソースコード。
-Astro で純粋な静的 HTML を生成し、Cloudflare Pages で公開しています。
+学生団体 **Atlasez** の公式サイト、学習サイト **「アトラス」**、メンバー用サイト、
+学習サイト運営用サイトを一つのモノレポで管理しています。Astroで公開ページを生成し、
+Cloudflare Worker + D1で認証付きの運営機能とAPIを提供します。
 
 - 公式サイト: `/`（団体紹介・プロジェクト・お知らせ・運営募集）
 - 学習サイト: `/atlas/ja/`（記事・学習地図・検索・表示設定・運営紹介）
+- メンバー用サイト: `/admin/portal/`（参加プロジェクトと横断ToDo）
+- 学習サイト運営用サイト: `/admin/atlas/`（原稿・査読・問題報告・進捗）
+
+## 引き継ぎ用の入口
+
+全体像、どのファイルを直すか、D1・認証・Discordの扱い、テストとデプロイ手順は
+[開発・引き継ぎガイド](docs/DEVELOPMENT_GUIDE.md)にまとめています。LLMや自動化エージェントは
+作業前にルートの [AGENTS.md](AGENTS.md) も読んでください。
 
 ---
 
 ## はじめての人へ
 
 やりたいことが決まっているなら、**[docs/README.md](docs/README.md) の索引**から探すのが早いです。
+
+| 目的                                   | まず読む文書                                                         |
+| -------------------------------------- | -------------------------------------------------------------------- |
+| サイト全体を引き継ぐ                   | [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md)               |
+| リポジトリを分割・移行する             | [docs/REPOSITORY_BOUNDARIES.md](docs/REPOSITORY_BOUNDARIES.md)       |
+| ナビゲーションやサイトの境界を理解する | [docs/INFORMATION_ARCHITECTURE.md](docs/INFORMATION_ARCHITECTURE.md) |
+| 本番へ公開する                         | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                             |
 
 - **記事を追加したい** → [docs/ADDING_ARTICLES.md](docs/ADDING_ARTICLES.md)
 - **公開まわりを触りたい** → [docs/PUBLISH.md](docs/PUBLISH.md) / [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
@@ -76,12 +92,15 @@ main にマージされていても公開されません。
 
 ## デプロイ
 
-Cloudflare Pages がこのリポジトリを直接ビルドします。
-GitHub Actions は検証専用でデプロイしません。
+公開ページはCloudflare側のGit連携でビルドされます。運営機能のWorkerは
+`wrangler.jsonc`（学習サイト）と `wrangler.admin.jsonc`（運営サイト）で別々にデプロイします。
+GitHub Actions は検証専用で、Secretをリポジトリに置きません。
 
 URL は環境変数 `SITE_URL`（未設定なら Cloudflare の `CF_PAGES_URL`）で決まります。
 `main` 以外のブランチのビルドは自動で `noindex` になります。
 詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+
+ローカル管理WorkerやD1を含む手順は [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) を参照してください。
 
 ## 多言語について
 

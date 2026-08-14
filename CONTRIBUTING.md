@@ -2,6 +2,10 @@
 
 Atlasezのサイトへの貢献ありがとうございます。記事執筆・査読・翻訳・開発のどれでも歓迎します。
 
+初めてコードを変更する人やLLMは、先に [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) と
+ルートの [AGENTS.md](AGENTS.md) を読んでください。サイトごとの責任範囲、運営データと記事データの境界、
+認証・個人情報の扱い、ローカルWorkerの起動方法をまとめています。
+
 ## 記事の執筆・翻訳
 
 1. [docs/CONTENT_MODEL.md](docs/CONTENT_MODEL.md) でfrontmatterの書き方を確認
@@ -20,9 +24,13 @@ npm run dev
 
 PR前チェック: `npm run check && npm run lint && npm run format:check && npm test && node scripts/validate-content.mjs`
 
+UI、Worker、D1、学習地図を変更した場合は、変更範囲に応じて `npm run build`、`npm run test:e2e`、
+`git diff --check` も実行してください。D1は既存migrationを書き換えず、新しい連番migrationを追加します。
+
 - ブランチ名: `article/<articleId>` / `feature/<name>` / `fix/<name>`
 - コミットは日本語・英語どちらでも可。何を・なぜ変えたかを書く
 - UIを変更する場合は `docs/DESIGN_DECISIONS.md` の原則（簡素・アクセシブル・色は最小限）に従う
+- Secret、OAuth情報、Discord token/webhook、個人情報、本番D1の内容をコミットしない
 
 ## 記事コンテンツのライセンス
 
