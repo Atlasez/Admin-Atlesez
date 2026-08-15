@@ -9,7 +9,7 @@ import AdminBreadcrumb from "../../components/AdminBreadcrumb.astro";
     <AdminNav current="global" />
     <AdminBreadcrumb items={[{ label: "メンバー用サイト", href: "/admin/portal/" }, { label: "マイページ" }]} />
     <header class="workspace-heading">
-      <div><p class="eyebrow">ATLASEZ / メンバー</p><h1>マイページ</h1><p>Atlasez全体のアカウント情報と、参加中のプロジェクトを確認できます。</p></div>
+      <div><h1>マイページ</h1><p>Atlasez全体のアカウント情報と、参加中のプロジェクトを確認できます。</p></div>
       <a class="primary-action" href="/admin/portal/">Homeへ戻る</a>
     </header>
 
@@ -35,7 +35,7 @@ import AdminBreadcrumb from "../../components/AdminBreadcrumb.astro";
 
     <div class="workspace-grid">
       <section class="personal-note" aria-labelledby="note-heading"><div class="section-heading"><div><p class="eyebrow">本人専用</p><h2 id="note-heading">個人メモ</h2><p>記事案、次に行うこと、個人的な下調べなどを記録できます。</p></div><output data-note-message aria-live="polite"></output></div><textarea data-private-note maxlength="12000" placeholder="例：次は群作用の記事の具体例を追加する。参考文献：…"></textarea><div class="note-actions"><small data-note-updated></small><button type="button" class="primary-action" data-save-note>個人メモを保存</button></div></section>
-      <section class="my-documents" aria-labelledby="projects-heading"><div class="section-heading"><div><p class="eyebrow">PROJECTS</p><h2 id="projects-heading">参加中のプロジェクト</h2><p>プロジェクトを選ぶと、そのプロジェクト専用のページを開けます。</p></div></div><div class="document-list" data-my-documents>読み込み中…</div></section>
+      <section class="my-documents" aria-labelledby="projects-heading"><div class="section-heading"><div><h2 id="projects-heading">参加中のプロジェクト</h2><p>プロジェクトを選ぶと、そのプロジェクト専用のページを開けます。</p></div></div><div class="document-list" data-my-documents>読み込み中…</div></section>
     </div>
   </main>
 </AdminLayout>

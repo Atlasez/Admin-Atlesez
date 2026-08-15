@@ -22,7 +22,7 @@ const projectName = isAtlas ? "アトラス学習サイト" : isSeminar ? "ゼ�
     <AdminNav current={isAtlas ? "atlas" : isSeminar ? "seminar" : "secretariat"} />
     <AdminBreadcrumb items={[{ label: "メンバー用サイト", href: "/admin/portal/" }, { label: projectName, href: isAtlas ? "/admin/atlas/" : isSeminar ? "/admin/projects/seminar-platform/" : "/admin/projects/secretariat/" }, { label: "マイページ" }]} />
     <header class="workspace-heading">
-      <div><p class="eyebrow">ATLASEZ / PROJECT</p><h1>{projectName}のマイページ</h1><p>このプロジェクト内で表示するプロフィールとメモを管理します。</p></div>
+      <div><h1>{projectName}のマイページ</h1><p>このプロジェクト内で表示するプロフィールとメモを管理します。</p></div>
       <a class="back-link" href={isAtlas ? "/admin/atlas/" : isSeminar ? "/admin/projects/seminar-platform/" : "/admin/projects/secretariat/"}>プロジェクトへ戻る</a>
     </header>
     <section class="profile-card" aria-labelledby="profile-title">
@@ -30,7 +30,7 @@ const projectName = isAtlas ? "アトラス学習サイト" : isSeminar ? "ゼ�
       <p class="muted">表示名・所属・学年・担当は全分野管理者が管理します。</p>
     </section>
     <section class="intro-card" aria-labelledby="intro-title">
-      <div class="section-heading"><div><p class="eyebrow">PROJECT INTRODUCTION</p><h2 id="intro-title">このプロジェクトでの自己紹介</h2><p>プロジェクトのメンバーに共有する内容を入力できます。</p></div><output data-message aria-live="polite"></output></div>
+      <div class="section-heading"><div><h2 id="intro-title">このプロジェクトでの自己紹介</h2><p>プロジェクトのメンバーに共有する内容を入力できます。</p></div><output data-message aria-live="polite"></output></div>
       <textarea data-introduction maxlength="12000" placeholder="担当や関心、参加できることなど"></textarea>
       <button type="button" class="primary-action" data-save>自己紹介を保存</button>
     </section>

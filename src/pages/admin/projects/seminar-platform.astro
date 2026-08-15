@@ -9,14 +9,14 @@ import AdminBreadcrumb from "../../../components/AdminBreadcrumb.astro";
     <AdminNav current="seminar" />
     <AdminBreadcrumb items={[{ label: "メンバー用サイト", href: "/admin/portal/" }, { label: "ゼミプラットフォーム運営用ページ" }]} />
     <header class="project-heading">
-      <div><p class="eyebrow">ATLASEZ / PROJECT</p><h1>ゼミプラットフォーム運営用ページ</h1><p>このプロジェクトで担当しているタスクを確認できます。</p></div>
+      <div><h1>ゼミプラットフォーム運営用ページ</h1><p>このプロジェクトで担当しているタスクを確認できます。</p></div>
       <a class="back-link" href="/admin/portal/">Homeへ戻る</a>
     </header>
     <section class="project-actions" aria-label="プロジェクトメニュー">
       <a href="/admin/projects/seminar-platform/workspace/"><strong>このプロジェクトのマイページ</strong><small>プロジェクト内の自己紹介と個人メモ</small><span>開く →</span></a>
     </section>
     <section class="task-section" aria-labelledby="task-heading">
-      <div class="section-heading"><div><p class="eyebrow">MY TASKS</p><h2 id="task-heading">担当タスク</h2><p>完了していないタスクだけを表示しています。</p></div></div>
+      <div class="section-heading"><div><h2 id="task-heading">担当タスク</h2><p>完了していないタスクだけを表示しています。</p></div></div>
       <div class="task-list" data-tasks>タスクを読み込んでいます…</div>
     </section>
   </main>

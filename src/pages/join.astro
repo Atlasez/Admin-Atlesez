@@ -44,21 +44,18 @@ const roles = [
     <p class="reading">参加したいプロジェクトを選び、専用の案内を確認してから応募できます。応募内容は運営内運営のみが確認します。</p>
     <ul class="recruitment-grid">
       <li class="recruitment-card">
-        <p class="eyebrow">ATLASEZ / SECRETARIAT</p>
         <h3>運営事務局</h3>
         <p>団体全体の広報、メンバーサポート、企画、会計などを担当します。</p>
         <ul>{roles.filter((role) => ["サイト開発", "イベント・広報"].includes(role.name)).map((role) => <li><strong>{role.name}</strong>：{role.desc}</li>)}</ul>
         <a class="button" href={withBase("/apply/?project=secretariat")}>運営事務局に応募する</a>
       </li>
       <li class="recruitment-card">
-        <p class="eyebrow">ATLASEZ / ATLAS</p>
         <h3>学習サイト運営</h3>
         <p>学習記事の執筆・査読・翻訳、学習地図やサイトの改善に取り組みます。</p>
         <ul>{roles.filter((role) => ["記事執筆", "査読", "翻訳", "サイト開発"].includes(role.name)).map((role) => <li><strong>{role.name}</strong>：{role.desc}</li>)}</ul>
         <a class="button" href={withBase("/apply/?project=atlas")}>学習サイト運営に応募する</a>
       </li>
       <li class="recruitment-card">
-        <p class="eyebrow">ATLASEZ / SEMINAR</p>
         <h3>ゼミプラットフォーム運営</h3>
         <p>ゼミの企画、参加者サポート、日程調整、記録の作成を担当します。</p>
         <ul><li><strong>企画・進行</strong>：ゼミのテーマ設計や当日の運営</li><li><strong>広報・記録</strong>：参加者への案内と活動記録</li></ul>

@@ -7,7 +7,7 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
   <main class="admin-page" data-article-index>
     <AdminNav current="articles" />
     <AdminErrorActions />
-    <header><div><p>ATLASEZ / 原稿管理</p><h1>編集・査読</h1><span data-articles-description>記事の作成と加筆・修正をここから始められます。</span></div></header>
+    <header><div><h1>編集・査読</h1><span data-articles-description>記事の作成と加筆・修正をここから始められます。</span></div></header>
     <nav class="workflow-grid" aria-label="記事作業を選択">
       <a class="workflow-card" href="/admin/editor/?new=1"><strong>新規記事作成</strong><small>新しい記事を書き始める</small><span class="workflow-card-action">作成する →</span></a>
       <a class="workflow-card" href="/admin/articles/?workflow=edit"><strong>加筆・修正</strong><small>自分が関わった記事を優先して表示</small><span class="workflow-card-action">記事を選ぶ →</span></a>

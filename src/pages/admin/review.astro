@@ -20,7 +20,7 @@ const categoryLabels = Object.fromEntries(subjectEntries.flatMap((subject) =>
   <main class="review-space" data-review-space>
     <AdminNav current="review" />
     <header class="review-heading">
-      <div><p class="eyebrow">ATLASEZ / 運営内運営</p><h1>査読スペース</h1><p>査読中の原稿を確認し、コメント・保留・査読完了を行います。全分野管理者だけが利用できます。</p></div>
+      <div><h1>査読スペース</h1><p>査読中の原稿を確認し、コメント・保留・査読完了を行います。全分野管理者だけが利用できます。</p></div>
       <button type="button" class="quiet-action" data-review-refresh>一覧を更新</button>
     </header>
     <details class="review-intro"><summary>査読の流れ</summary><ol><li>原稿を開き、本文とプレビューを確認する。</li><li>コメント欄へ修正依頼または確認結果を残す。</li><li>修正が必要なら「査読中」または「保留」、完了なら「査読済み」として保存する。</li><li>公開判断は「記事編集」の公開ボタンで行う。</li></ol></details>
