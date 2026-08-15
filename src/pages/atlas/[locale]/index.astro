@@ -360,11 +360,6 @@ const views = [
                                                 >
                                                   {article.data.title}
                                                 </a>
-                                                {/* 読む前に所要時間が分かるようにする */}
-                                                <span class="article-minutes">
-                                                  {article.data.estimatedMinutes}
-                                                  {t(locale, "minutes")}
-                                                </span>
                                               </li>
                                             ))}
                                             {planned.map((item) => (
@@ -1032,14 +1027,6 @@ const views = [
     flex: 0 0 auto;
     font-size: calc(0.72rem * var(--text-scale));
     font-weight: 600;
-  }
-
-  /* 読む前に所要時間が分かるようにする補助表示 */
-  .article-minutes {
-    color: var(--text-secondary);
-    flex: 0 0 auto;
-    font-size: calc(0.72rem * var(--text-scale));
-    margin-left: 0.4rem;
   }
 
   /* 本文準備中の項目から、書き手として応募できる導線 */

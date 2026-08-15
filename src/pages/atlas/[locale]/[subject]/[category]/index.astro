@@ -26,7 +26,6 @@ import {
   plannedProgress,
   plannedArticleTitle,
 } from "../../../../../lib/planned";
-import ArticleMeta from "../../../../../components/ArticleMeta.astro";
 
 export async function getStaticPaths() {
   const subjects = (await getPublishedSubjects()).filter(
@@ -177,11 +176,6 @@ const items = articles.map((a) => ({
             </h2>
             <p class="article-summary">{a.data.summary}</p>
             <p class="article-badges">
-              <ArticleMeta
-                locale={locale}
-                difficulty={a.data.difficulty}
-                estimatedMinutes={a.data.estimatedMinutes}
-              />
               <span class="badge">
                 {t(locale, "updatedAt")}:
                 <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>

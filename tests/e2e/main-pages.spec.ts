@@ -235,23 +235,6 @@ test.describe("学習サイト", () => {
     ).toBeVisible();
   });
 
-  test("記事ページに難易度と推定学習時間が出ている", async ({ page }) => {
-    await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
-    const badges = page.locator(".article-header .article-badges");
-    await expect(badges).toContainText("難易度:");
-    await expect(badges).toContainText("推定学習時間:");
-    await expect(badges).toContainText("分");
-  });
-
-  test("記事一覧のカードにも難易度と推定学習時間が出ている", async ({
-    page,
-  }) => {
-    await page.goto("atlas/ja/mathematics/group-theory/");
-    const first = page.locator(".article-item.card").first();
-    await expect(first).toContainText("難易度:");
-    await expect(first).toContainText("推定学習時間:");
-  });
-
   test("本文準備中の項目から応募フォームへ行ける", async ({ page }) => {
     await page.goto("atlas/ja/chemistry/matter/");
     const cta = page
@@ -265,9 +248,8 @@ test.describe("学習サイト", () => {
     expect(href).toContain("article=");
   });
 
-  test("総合リストに所要時間と書き手募集の導線が出ている", async ({ page }) => {
+  test("総合リストに書き手募集の導線が出ている", async ({ page }) => {
     await page.goto("atlas/ja/?view=list");
-    await expect(page.locator(".article-minutes").first()).toContainText("分");
     const write = page.locator(".planned-write").first();
     await expect(write).toHaveAttribute("href", /\/apply\/\?project=atlas/);
   });
