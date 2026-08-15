@@ -31,6 +31,8 @@ interface Env {
   /** Botトークンを学習サイトへ置かず、管理Workerへ問題報告を中継する。 */
   DISCORD_REPORT_SYNC_URL?: string;
   REPORT_DISCORD_SYNC_SECRET?: string;
+  /** 報告者ハッシュのソルト。Cloudflare の Secret として登録する。 */
+  REPORT_IP_HASH_SALT?: string;
 }
 
 type ReportPayload = {
@@ -169,6 +171,35 @@ async function fingerprint(value: string): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/**
+ * 報告者の識別子。IPアドレスそのものは保存も送信もせず、短時間の連続送信を
+ * 止めるための一方向ハッシュだけを残す。
+ *
+ * ソルトなしの SHA-256 では、IPv4 は全空間が 2^32 しかないため総当たりで元の
+ * アドレスを復元できてしまい、「IPアドレスは保存しない」と言えなくなる。
+ * Cloudflare の Secret として REPORT_IP_HASH_SALT を必ず登録すること。
+ *
+ * ソルトを変更・新規登録すると既存の reporter_hash とは一致しなくなるため、
+ * その時点で送信回数の集計が一度だけリセットされる（保存済みの報告は残る）。
+ */
+async function reporterFingerprint(
+  env: Env,
+  request: Request,
+): Promise<string> {
+  const salt = env.REPORT_IP_HASH_SALT?.trim();
+  if (!salt) {
+    // 値そのものは出さず、設定漏れだけを運用者に伝える。
+    console.error(
+      "REPORT_IP_HASH_SALT is not configured: reporter hashes are reversible",
+    );
+  }
+  const address =
+    request.headers.get("CF-Connecting-IP") ??
+    request.headers.get("x-forwarded-for") ??
+    "local";
+  return fingerprint(`${salt ?? ""}\n${address}`);
 }
 
 type DiscordReport = {
@@ -328,11 +359,7 @@ async function saveArticleReport(
   }
 
   // IPアドレスそのものは保存せず、時間帯ごとの送信回数だけを制限する。
-  const reporterHash = await fingerprint(
-    request.headers.get("CF-Connecting-IP") ??
-      request.headers.get("x-forwarded-for") ??
-      "local",
-  );
+  const reporterHash = await reporterFingerprint(env, request);
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1_000).toISOString();
   const todayAgo = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
   const recentHour = await env.REPORTS.prepare(

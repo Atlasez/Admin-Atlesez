@@ -161,7 +161,13 @@ test.describe("学習サイト", () => {
       .filter({ hasText: "集合族" });
     await expect(planned).toBeVisible();
     await expect(planned).toContainText("準備中");
-    await expect(planned.getByRole("link")).toHaveCount(0);
+    // 本文が無いので、タイトル自体はリンクにしない
+    await expect(planned.locator(".article-title a")).toHaveCount(0);
+    // 代わりに、書き手として応募できる導線を1つだけ置く
+    await expect(planned.getByRole("link")).toHaveCount(1);
+    await expect(
+      planned.getByRole("link", { name: "この記事を書いてみませんか" }),
+    ).toBeVisible();
   });
 
   test("分野の目次にジャンル紹介文を表示しない", async ({ page }) => {
@@ -227,6 +233,43 @@ test.describe("学習サイト", () => {
     await expect(
       page.getByRole("button", { name: "報告を送信" }),
     ).toBeVisible();
+  });
+
+  test("記事ページに難易度と推定学習時間が出ている", async ({ page }) => {
+    await page.goto("atlas/ja/mathematics/group-theory/group-definition/");
+    const badges = page.locator(".article-header .article-badges");
+    await expect(badges).toContainText("難易度:");
+    await expect(badges).toContainText("推定学習時間:");
+    await expect(badges).toContainText("分");
+  });
+
+  test("記事一覧のカードにも難易度と推定学習時間が出ている", async ({
+    page,
+  }) => {
+    await page.goto("atlas/ja/mathematics/group-theory/");
+    const first = page.locator(".article-item.card").first();
+    await expect(first).toContainText("難易度:");
+    await expect(first).toContainText("推定学習時間:");
+  });
+
+  test("本文準備中の項目から応募フォームへ行ける", async ({ page }) => {
+    await page.goto("atlas/ja/chemistry/matter/");
+    const cta = page
+      .getByRole("link", { name: "この記事を書いてみませんか" })
+      .first();
+    await expect(cta).toBeVisible();
+    const href = await cta.getAttribute("href");
+    expect(href).toContain("/apply/");
+    expect(href).toContain("project=atlas");
+    expect(href).toContain("subject=chemistry");
+    expect(href).toContain("article=");
+  });
+
+  test("総合リストに所要時間と書き手募集の導線が出ている", async ({ page }) => {
+    await page.goto("atlas/ja/?view=list");
+    await expect(page.locator(".article-minutes").first()).toContainText("分");
+    const write = page.locator(".planned-write").first();
+    await expect(write).toHaveAttribute("href", /\/apply\/\?project=atlas/);
   });
 
   test("数学記事の証明を一括で開閉できる", async ({ page }) => {

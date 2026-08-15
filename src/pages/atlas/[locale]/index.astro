@@ -2,7 +2,12 @@
 import AtlasLayout from "../../../layouts/AtlasLayout.astro";
 import LearningMap from "../../../components/LearningMap.astro";
 import Breadcrumb from "../../../components/Breadcrumb.astro";
-import { atlasPath, articlePath, formatDate } from "../../../lib/site";
+import {
+  atlasPath,
+  articlePath,
+  formatDate,
+  applyUrl,
+} from "../../../lib/site";
 import { t, LOCALES, localizedName, type Locale } from "../../../lib/i18n";
 import { groupSubjects } from "../../../lib/taxonomy";
 import {
@@ -355,6 +360,11 @@ const views = [
                                                 >
                                                   {article.data.title}
                                                 </a>
+                                                {/* 読む前に所要時間が分かるようにする */}
+                                                <span class="article-minutes">
+                                                  {article.data.estimatedMinutes}
+                                                  {t(locale, "minutes")}
+                                                </span>
                                               </li>
                                             ))}
                                             {planned.map((item) => (
@@ -365,6 +375,19 @@ const views = [
                                                 <span class="planned-label">
                                                   {t(locale, "preparing")}
                                                 </span>
+                                                {/* 足りないと感じた人がそのまま書き手になれる導線 */}
+                                                <a
+                                                  class="planned-write"
+                                                  href={applyUrl(
+                                                    `?project=atlas&subject=${encodeURIComponent(s.data.slug)}&article=${encodeURIComponent(plannedArticleTitle(item, locale))}`,
+                                                  )}
+                                                  rel="noopener noreferrer"
+                                                  target="_blank"
+                                                >
+                                                  {locale === "ja"
+                                                    ? "書いてみませんか"
+                                                    : "Write this"}
+                                                </a>
                                               </li>
                                             ))}
                                           </ul>
@@ -1009,6 +1032,28 @@ const views = [
     flex: 0 0 auto;
     font-size: calc(0.72rem * var(--text-scale));
     font-weight: 600;
+  }
+
+  /* 読む前に所要時間が分かるようにする補助表示 */
+  .article-minutes {
+    color: var(--text-secondary);
+    flex: 0 0 auto;
+    font-size: calc(0.72rem * var(--text-scale));
+    margin-left: 0.4rem;
+  }
+
+  /* 本文準備中の項目から、書き手として応募できる導線 */
+  .planned-write {
+    color: var(--accent-primary);
+    flex: 0 0 auto;
+    font-size: calc(0.72rem * var(--text-scale));
+    font-weight: 700;
+    margin-left: 0.4rem;
+    text-decoration: none;
+  }
+  .planned-write:hover,
+  .planned-write:focus-visible {
+    text-decoration: underline;
   }
 
 

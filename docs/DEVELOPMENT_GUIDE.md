@@ -174,6 +174,7 @@ npx wrangler deploy --config wrangler.admin.jsonc   # 運営サイトWorker
 - Cloudflare API token / D1 credential
 - Discord Bot token / webhook URL
 - Resend API key
+- `REPORT_IP_HASH_SALT`（記事報告の送信回数ハッシュのソルト）
 - 個人のメールアドレスや本番D1のダンプ
 
 SecretはCloudflareのSecretとして登録し、設定名だけをwrangler設定・文書に記載します。誤って公開した場合は、値を削除するだけでなく直ちに失効・再発行します。

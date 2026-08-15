@@ -4,6 +4,7 @@ import { render } from "astro:content";
 import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../../components/Breadcrumb.astro";
 import HistoryStageControl from "../../../../../components/HistoryStageControl.astro";
+import ArticleMeta from "../../../../../components/ArticleMeta.astro";
 import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
 import {
   t,
@@ -290,6 +291,11 @@ const structuredData = {
           {/* 要約は本文冒頭と重複しがちなので記事ページでは出さない。
               一覧ページ・検索結果・meta description では引き続き使う。 */}
           <p class="article-badges">
+            <ArticleMeta
+              locale={locale}
+              difficulty={entry.data.difficulty}
+              estimatedMinutes={entry.data.estimatedMinutes}
+            />
             <span class="badge">
               {t(locale, "updatedAt")}:
               <time datetime={entry.data.updatedAt.toISOString().slice(0, 10)}>

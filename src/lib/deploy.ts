@@ -13,6 +13,11 @@ function env(name: string): string | undefined {
 
 /** 本番として検索エンジンに公開してよいビルドかどうか */
 export const IS_PRODUCTION_DEPLOY: boolean = (() => {
+  // 明示指定が最優先。GitHub Pages のミラーのように、canonical や sitemap の
+  // URL は正しく組み立てたいが検索エンジンには載せたくないビルドで NOINDEX=1
+  // を渡す。同じ内容のサイトが複数のURLで索引されるのを防ぐ。
+  const noindex = env("NOINDEX");
+  if (noindex === "1" || noindex === "true") return false;
   // Cloudflare Pages 上のビルド。main 以外はプレビュー扱い。
   if (env("CF_PAGES")) return env("CF_PAGES_BRANCH") === "main";
   // それ以外（ローカル・GitHub Actions）は SITE_URL が明示された時だけ本番扱い。

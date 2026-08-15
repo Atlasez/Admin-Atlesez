@@ -97,10 +97,12 @@ CIで検証してからPull Requestをマージします。運営サイトのD1�
 
 公開ページはCloudflare側のGit連携でビルドされます。運営機能のWorkerは
 `wrangler.jsonc`（学習サイト）と `wrangler.admin.jsonc`（運営サイト）で別々にデプロイします。
-GitHub Actions は検証専用で、Secretをリポジトリに置きません。
+GitHub Actions は `ci.yml` が検証、`deploy-pages.yml` が動作確認用の
+GitHub Pages ミラー配信を担当します。Secretはリポジトリに置きません。
 
 URL は環境変数 `SITE_URL`（未設定なら Cloudflare の `CF_PAGES_URL`）で決まります。
-`main` 以外のブランチのビルドは自動で `noindex` になります。
+`main` 以外のブランチのビルドと `NOINDEX=1` のビルドは自動で `noindex` になります。
+公式サイトから運営参加応募へ誘導するには `ADMIN_ORIGIN` の設定が必要です。
 詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ローカル管理WorkerやD1を含む手順は [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) を参照してください。

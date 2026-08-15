@@ -23,6 +23,30 @@ export function articlePath(
   return atlasPath(locale, subject, category, slug);
 }
 
+/**
+ * 運営参加応募フォームのURL。
+ *
+ * 応募の受け口 `/api/apply` を持つのは管理Worker（`src/admin-worker.ts`）だけで、
+ * 学習サイトWorkerは `/api/article-reports` と `/api/article-analytics` しか
+ * 処理しない。公式サイトと同一オリジンの `/apply/` へ誘導すると、フォームは
+ * 開けても送信だけが404になる。そのため公式サイトからは必ず管理Workerの
+ * 絶対URLへ送る。
+ *
+ * ビルド時の環境変数 `ADMIN_ORIGIN` で配信元を指定する（例:
+ * `https://atlasez-admin.example.workers.dev`）。未設定のときは同一オリジンへ
+ * フォールバックするので、管理Workerを `npm run dev:admin` で動かしている
+ * ローカル確認では `ADMIN_ORIGIN=http://localhost:8787` を渡すこと。
+ */
+export function applyUrl(query = ""): string {
+  const origin = (
+    typeof process === "undefined" ? undefined : process.env.ADMIN_ORIGIN
+  )
+    ?.trim()
+    .replace(/\/$/, "");
+  const path = `/apply/${query}`;
+  return origin ? `${origin}${path}` : withBase(path);
+}
+
 export const ORG = {
   name: "Atlasez",
   slogan: "未来の学びを創る。学びで未来を創る。",

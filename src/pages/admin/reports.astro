@@ -32,11 +32,12 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
         </div>
         <div class="analytics-controls">
           <label>期間<select data-analytics-days><option value="7">直近7日</option><option value="30" selected>直近30日</option><option value="90">直近90日</option></select></label>
+          <label>並べ替え<select data-analytics-sort><option value="completed" selected>よく読まれた順</option><option value="needs-work">直す価値が高い順</option></select></label>
           <button class="button button-outline" type="button" data-analytics-refresh>更新</button>
         </div>
       </div>
       <output class="analytics-summary" data-analytics-summary>読み込み中です…</output>
-      <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
+      <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th><th>完読率</th><th>報告</th></tr></thead><tbody data-analytics-list></tbody></table></div>
     </section>
 
     <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告">
@@ -78,6 +79,8 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
   .analytics-table { border-collapse: collapse; font-size: .84rem; min-width: 36rem; width: 100%; }
   .analytics-table th, .analytics-table td { border-bottom: 1px solid var(--border); padding: .6rem .7rem; text-align: right; white-space: nowrap; }
   .analytics-table th { background: var(--surface-alt); color: var(--muted); font-size: .73rem; letter-spacing: .03em; }
+  /* 色だけに頼らず「要改善」の文字も添える */
+  .analytics-low { color: var(--accent); font-weight: 800; }
   .analytics-table th:first-child, .analytics-table td:first-child { max-width: 32rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
   .analytics-table tr:last-child td { border-bottom: 0; }
   .analytics-table .analytics-meta { color: var(--muted); display: block; font-size: .72rem; margin-top: .15rem; }
@@ -164,6 +167,7 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
   type Analytics = {
     article_id: string; article_title: string; subject: string; category: string;
     views: number; engaged_reads: number; completed_reads: number;
+    completion_rate: number | null; engagement_rate: number | null; report_count: number;
   };
 
   const initializeReportsAdmin = () => {
@@ -182,6 +186,7 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
     const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
     const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
+    const analyticsSort = root.querySelector<HTMLSelectElement>("[data-analytics-sort]");
     const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-admin-view]");
     const viewPanels = root.querySelectorAll<HTMLElement>("[data-admin-view-panel]");
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "対応中", recheck: "再確認", resolved: "解決済み" };
@@ -239,15 +244,20 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
         { views: 0, engaged: 0, completed: 0 },
       );
       analyticsSummary.value = `直近${days}日・${articles.length}記事 ／ 閲覧 ${totals.views.toLocaleString()} ・ 読まれた ${totals.engaged.toLocaleString()} ・ 90%到達 ${totals.completed.toLocaleString()}`;
+      // 完読率は「閲覧のうち最後まで読まれた割合」。低いほど途中で離脱されている。
+      const percent = (value: number | null) => value === null ? "—" : `${Math.round(value * 100)}%`;
       analyticsList.innerHTML = articles.length
-        ? articles.map((article) => `<tr><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td>${article.views.toLocaleString()}</td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td></tr>`).join("")
-        : '<tr><td colspan="4" class="report-empty">この期間の統計はまだありません。</td></tr>';
+        ? articles.map((article) => {
+            const low = article.completion_rate !== null && article.views >= 5 && article.completion_rate < 0.3;
+            return `<tr><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td>${article.views.toLocaleString()}</td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td><td class="${low ? "analytics-low" : ""}">${percent(article.completion_rate)}${low ? '<span class="analytics-meta">要改善</span>' : ""}</td><td>${article.report_count > 0 ? article.report_count.toLocaleString() : "—"}</td></tr>`;
+          }).join("")
+        : '<tr><td colspan="6" class="report-empty">この期間の統計はまだありません。</td></tr>';
     };
     const loadAnalytics = async () => {
       if (!analyticsDays || !analyticsSummary) return;
       analyticsSummary.value = "読み込み中です…";
       try {
-        const response = await fetch(`/api/admin/article-analytics?days=${encodeURIComponent(analyticsDays.value)}`, { credentials: "same-origin" });
+        const response = await fetch(`/api/admin/article-analytics?days=${encodeURIComponent(analyticsDays.value)}&sort=${encodeURIComponent(analyticsSort?.value ?? "completed")}`, { credentials: "same-origin" });
         const data = await readApiResponse<{ articles?: Analytics[]; days?: number; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "統計を読み込めませんでした。");
         renderAnalytics(data.articles ?? [], data.days ?? Number(analyticsDays.value));
@@ -328,6 +338,7 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
     viewButtons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.adminView === "analytics" ? "analytics" : "reports")));
     root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
     analyticsDays?.addEventListener("change", loadAnalytics);
+    analyticsSort?.addEventListener("change", loadAnalytics);
     root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", loadAnalytics);
     permissionForm?.addEventListener("submit", async (event) => {
       event.preventDefault();

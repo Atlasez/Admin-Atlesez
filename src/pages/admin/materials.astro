@@ -1,0 +1,64 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminNav from "../../components/AdminNav.astro";
+import AdminErrorActions from "../../components/AdminErrorActions.astro";
+---
+
+<AdminLayout title="資料 | アトラス運営用サイト" description="アトラス運営資料の一覧">
+  <main class="materials-page" data-materials-page>
+    <AdminNav current="materials" />
+    <AdminErrorActions />
+    <header class="materials-heading">
+      <h1>資料</h1>
+      <p>分野別の資料を探し、必要な資料を開けます。</p>
+    </header>
+
+    <section class="materials-panel" aria-labelledby="materials-list-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="materials-list-heading">資料ライブラリ</h2>
+          <p>移行済み資料はこの画面で検索・閲覧・整理できるようになります。</p>
+        </div>
+      </div>
+      <div class="collection-list" data-material-collections>
+        <p class="loading">資料を読み込んでいます…</p>
+      </div>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .materials-page{box-sizing:border-box;margin:0 auto;max-width:1100px;min-width:0;padding:0 1.25rem 4rem}.materials-heading{border-bottom:1px solid var(--border-default);margin:0 auto;min-width:0;padding:2.7rem 0 1.6rem;width:min(100%,64rem)}.materials-heading h1{font-size:clamp(2rem,4vw,2.8rem);letter-spacing:-.04em;margin:0}.materials-heading p{color:var(--text-secondary);font-size:.95rem;line-height:1.6;margin:.55rem 0 0}.materials-panel{margin:1.5rem auto 0;width:min(100%,64rem)}.panel-heading{border-bottom:1px solid var(--border-default);padding-bottom:.75rem}.panel-heading h2{font-size:1.2rem;margin:0}.panel-heading p{color:var(--text-secondary);font-size:.84rem;line-height:1.55;margin:.35rem 0 0}.collection-list{display:grid;gap:.75rem;margin-top:.85rem}.collection-card{background:var(--background-secondary);border:1px solid var(--border-default);border-top:3px solid var(--accent-primary);box-sizing:border-box;display:grid;gap:.7rem;min-width:0;padding:1rem}.collection-card h3{font-size:1.08rem;margin:0}.collection-card p{color:var(--text-secondary);font-size:.86rem;line-height:1.55;margin:0}.collection-meta{align-items:center;display:flex;flex-wrap:wrap;gap:.45rem}.status{border:1px solid var(--border-default);border-radius:99px;color:var(--text-secondary);font-size:.75rem;font-weight:700;padding:.2rem .5rem}.status-ready{background:#edf6ef;border-color:#b8dbc0;color:#286338}.status-preparing{background:#f6f2e8;border-color:#e5d7ad;color:#7a5c13}.collection-actions{display:flex;flex-wrap:wrap;gap:.55rem}.collection-actions a,.collection-actions button{appearance:none;background:var(--background-primary);border:1px solid var(--border-default);border-radius:.5rem;color:var(--text-primary);cursor:pointer;font:inherit;font-size:.85rem;font-weight:750;padding:.55rem .75rem;text-decoration:none}.collection-actions a:hover,.collection-actions a:focus-visible,.collection-actions button:hover,.collection-actions button:focus-visible{border-color:var(--accent-primary);color:var(--accent-primary)}.collection-actions button:disabled{cursor:not-allowed;opacity:.55}.item-list{border-top:1px solid var(--border-default);display:grid;gap:.35rem;padding-top:.65rem}.item-row{align-items:center;display:flex;gap:.6rem;justify-content:space-between;min-width:0}.item-row a{color:var(--text-primary);font-size:.86rem;min-width:0;overflow-wrap:anywhere}.item-row small{color:var(--text-secondary);flex:0 0 auto;font-size:.72rem}.empty,.loading{color:var(--text-secondary);font-size:.85rem;padding:.8rem 0}.empty{border:1px dashed var(--border-default);padding:.9rem}@media(max-width:700px){.materials-page{padding:0 .85rem 3rem}.materials-heading{padding:2rem 0 1.3rem}.collection-card{padding:.9rem}}
+</style>
+
+<script>
+  type MaterialItem={id:string;title:string;mime_type:string;size_bytes:number;status:string;updated_at:string;download_url?:string};
+  type MaterialCollection={id:string;title:string;description:string;source_type:string;source_url?:string;imported_at?:string|null;items:MaterialItem[]};
+  const initializeMaterials=()=>{
+    const root=document.querySelector<HTMLElement>('[data-materials-page]');
+    if(!root||root.dataset.initialized==='true')return;
+    root.dataset.initialized='true';
+    const target=root.querySelector<HTMLElement>('[data-material-collections]')!;
+    const esc=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
+    const formatBytes=(value:number)=>value<1024?`${value} B`:value<1024*1024?`${Math.round(value/1024)} KB`:`${(value/(1024*1024)).toFixed(1)} MB`;
+    const render=(collections:MaterialCollection[])=>{
+      target.innerHTML=collections.length?collections.map(collection=>{
+        const migrated=Boolean(collection.imported_at);
+        const items=collection.items.length?`<div class="item-list">${collection.items.map(item=>`<div class="item-row">${item.download_url?`<a href="${esc(item.download_url)}">${esc(item.title)}</a>`:`<span>${esc(item.title)}</span>`}<small>${esc(item.mime_type)}${item.size_bytes?`・${formatBytes(item.size_bytes)}`:''}</small></div>`).join('')}</div>`:'<p class="empty">まだ移行済みの資料はありません。</p>';
+        return `<article class="collection-card"><div><h3>${esc(collection.title)}</h3><p>${esc(collection.description)}</p></div><div class="collection-meta"><span class="status ${migrated?'status-ready':'status-preparing'}">${migrated?'移行済み':'移行準備中'}</span>${collection.source_type==='google-drive'?'<span class="status">Google Drive由来</span>':''}</div><div class="collection-actions">${collection.source_url?`<a href="${esc(collection.source_url)}" target="_blank" rel="noreferrer">元の資料を開く</a>`:''}</div>${items}</article>`;
+      }).join(''):'<p class="empty">表示できる資料はありません。</p>';
+    };
+    const load=async()=>{
+      try{
+        const response=await fetch('/api/admin/materials',{credentials:'same-origin',cache:'no-store'});
+        const contentType=response.headers.get('content-type')??'';
+        const data=contentType.includes('application/json')?await response.json() as {collections?:MaterialCollection[];error?:string}:null;
+        if(!response.ok||!data)throw new Error(data?.error??'資料を読み込めませんでした。');
+        render(data.collections??[]);
+      }catch(error){target.textContent=error instanceof Error?error.message:'資料を読み込めませんでした。';}
+    };
+    void load();
+  };
+  document.addEventListener('astro:page-load',initializeMaterials);
+  initializeMaterials();
+</script>

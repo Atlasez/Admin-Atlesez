@@ -4,6 +4,17 @@ interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
 
+interface R2Object {
+  body: ReadableStream;
+  size: number;
+  etag: string;
+  httpMetadata?: { contentType?: string };
+}
+
+interface R2Bucket {
+  get(key: string): Promise<R2Object | null>;
+}
+
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   run(): Promise<unknown>;
@@ -19,6 +30,8 @@ interface D1Database {
 interface Env {
   ASSETS: Fetcher;
   REPORTS: D1Database;
+  /** 非公開の運営資料（画像・PDF・Office資料など）。 */
+  MATERIALS?: R2Bucket;
   /** 既定は cloudflare-access。Google移行時のみ google-oauth を設定する。 */
   ADMIN_AUTH_MODE?: string;
   /** Google OAuth後に必ず戻す運営サイトの固定URL。Preview URLでは認証を完結させない。 */
@@ -513,6 +526,82 @@ async function getMemberAvatar(request: Request, env: Env): Promise<Response> {
   }
 }
 
+type MaterialCollectionRow = {
+  id: string;
+  title: string;
+  description: string;
+  source_type: string;
+  source_url: string | null;
+  imported_at: string | null;
+};
+
+type MaterialItemRow = {
+  id: string;
+  collection_id: string;
+  title: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_key: string | null;
+  status: string;
+  updated_at: string;
+};
+
+async function listMaterialLibrary(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const collections = await env.REPORTS.prepare(
+    "SELECT id, title, description, source_type, source_url, imported_at FROM material_collections WHERE project_id = 'atlas' ORDER BY updated_at DESC, title COLLATE NOCASE",
+  ).all<MaterialCollectionRow>();
+  const items = await env.REPORTS.prepare(
+    "SELECT id, collection_id, title, mime_type, size_bytes, storage_key, status, updated_at FROM material_items WHERE status <> 'archived' ORDER BY parent_path COLLATE NOCASE, title COLLATE NOCASE",
+  ).all<MaterialItemRow>();
+  return json({
+    collections: collections.results.map((collection) => ({
+      ...collection,
+      items: items.results
+        .filter((item) => item.collection_id === collection.id)
+        .map((item) => ({
+          ...item,
+          download_url: item.storage_key
+            ? `/api/admin/materials/items/${encodeURIComponent(item.id)}/download`
+            : undefined,
+        })),
+    })),
+    storageReady: Boolean(env.MATERIALS),
+    scope: { isManager: scope.isManager },
+  });
+}
+
+async function downloadMaterialItem(
+  request: Request,
+  env: Env,
+  itemId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const item = await env.REPORTS.prepare(
+    "SELECT id, title, mime_type, storage_key FROM material_items WHERE id = ? AND status = 'ready'",
+  )
+    .bind(itemId)
+    .first<{ id: string; title: string; mime_type: string; storage_key: string | null }>();
+  if (!item?.storage_key) return new Response("Not found", { status: 404 });
+  if (!env.MATERIALS)
+    return json({ error: "資料ストレージはまだ有効化されていません。" }, 503);
+  const object = await env.MATERIALS.get(item.storage_key);
+  if (!object) return new Response("Not found", { status: 404 });
+  const safeName = item.title.replace(/[\\\\/:*?\"<>|\u0000-\u001f]+/g, "_").slice(0, 180) || "material";
+  return new Response(object.body, {
+    headers: {
+      "content-type": object.httpMetadata?.contentType || item.mime_type || "application/octet-stream",
+      "content-length": String(object.size),
+      "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+      etag: `\"${object.etag}\"`,
+    },
+  });
+}
+
 const normalizedText = (value: unknown, maximum: number) =>
   text(value, maximum)
     .normalize("NFKC")
@@ -753,12 +842,26 @@ async function listArticleAnalytics(
   const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
     .toISOString()
     .slice(0, 10);
+  // 並べ替え。既定は「よく読まれた順」、needs-work は「直す価値が高い順」。
+  // 完読率は分母が小さいと暴れるので、一定の閲覧数に届いた記事を先に並べる。
+  const sort =
+    new URL(request.url).searchParams.get("sort") === "needs-work"
+      ? "needs-work"
+      : "completed";
+  const MIN_VIEWS_FOR_RATE = 5;
+
   const filters = ["day >= ?"];
   const values: unknown[] = [since];
   if (!scope.allSubjects) {
     filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
     values.push(...scope.subjects);
   }
+  const order =
+    sort === "needs-work"
+      ? `CASE WHEN SUM(views) >= ${MIN_VIEWS_FOR_RATE} THEN 0 ELSE 1 END,
+         CAST(SUM(completed_reads) AS REAL) / COALESCE(NULLIF(SUM(views), 0), 1) ASC,
+         SUM(views) DESC, article_title ASC`
+      : `completed_reads DESC, engaged_reads DESC, views DESC, article_title ASC`;
   const result = await env.REPORTS.prepare(
     `SELECT article_id, MAX(article_title) AS article_title, subject, category,
         SUM(views) AS views, SUM(engaged_reads) AS engaged_reads,
@@ -766,12 +869,47 @@ async function listArticleAnalytics(
      FROM article_analytics_daily
      WHERE ${filters.join(" AND ")}
      GROUP BY article_id, subject, category
-     ORDER BY completed_reads DESC, engaged_reads DESC, views DESC, article_title ASC
+     ORDER BY ${order}
      LIMIT 50`,
   )
     .bind(...values)
     .all<ArticleAnalytics>();
-  return json({ days, articles: result.results });
+
+  // 同じ期間の問題報告の件数を並べる。統計だけでは分からない
+  // 「読者が何を引っかかりだと感じたか」を同じ表で見られるようにする。
+  // created_at はISO文字列なので日付との辞書順比較でそのまま絞り込める。
+  const reportFilters = ["created_at >= ?", "article_id IS NOT NULL"];
+  const reportValues: unknown[] = [since];
+  if (!scope.allSubjects) {
+    reportFilters.push(
+      `subject IN (${scope.subjects.map(() => "?").join(", ")})`,
+    );
+    reportValues.push(...scope.subjects);
+  }
+  const reportCounts = await env.REPORTS.prepare(
+    `SELECT article_id, COUNT(*) AS report_count
+     FROM article_reports
+     WHERE ${reportFilters.join(" AND ")}
+     GROUP BY article_id`,
+  )
+    .bind(...reportValues)
+    .all<{ article_id: string; report_count: number }>();
+  const reportsByArticle = new Map(
+    reportCounts.results.map((row) => [row.article_id, row.report_count]),
+  );
+
+  const articles = result.results.map((row) => {
+    const views = row.views ?? 0;
+    const rate = (value: number) =>
+      views > 0 ? Math.round((value / views) * 1000) / 1000 : null;
+    return {
+      ...row,
+      engagement_rate: rate(row.engaged_reads ?? 0),
+      completion_rate: rate(row.completed_reads ?? 0),
+      report_count: reportsByArticle.get(row.article_id) ?? 0,
+    };
+  });
+  return json({ days, sort, minViewsForRate: MIN_VIEWS_FOR_RATE, articles });
 }
 
 async function updateArticleReport(
@@ -3891,6 +4029,16 @@ async function purgeExpiredPersonalData(env: Env) {
   const expiredRateLimits = Math.floor(
     (now.getTime() - 24 * 60 * 60 * 1_000) / 600_000,
   );
+  // 報告者ハッシュは連続送信の抑止だけに使い、判定窓は最長24時間しかない。
+  // 30日を過ぎたものは目的を終えているので消す。
+  const expiredReporterHashes = new Date(
+    now.getTime() - 30 * 24 * 60 * 60 * 1_000,
+  ).toISOString();
+  // 対応の済んだ報告に残る連絡先は、応募データと同じ考え方で期限を設ける。
+  // 本文・対応履歴は改善の記録として残し、個人に結びつく情報だけを消す。
+  const expiredReportContacts = new Date(
+    now.getTime() - 180 * 24 * 60 * 60 * 1_000,
+  ).toISOString();
   await Promise.all([
     env.REPORTS.prepare("DELETE FROM admin_auth_sessions WHERE expires_at < ?")
       .bind(expiredSessions)
@@ -3904,6 +4052,16 @@ async function purgeExpiredPersonalData(env: Env) {
       "DELETE FROM atlasez_member_applications WHERE status IN ('rejected','accepted') AND updated_at < ?",
     )
       .bind(expiredApplications)
+      .run(),
+    env.REPORTS.prepare(
+      "UPDATE article_reports SET reporter_hash = '' WHERE reporter_hash <> '' AND created_at < ?",
+    )
+      .bind(expiredReporterHashes)
+      .run(),
+    env.REPORTS.prepare(
+      "UPDATE article_reports SET contact = NULL WHERE contact IS NOT NULL AND status = 'resolved' AND updated_at < ?",
+    )
+      .bind(expiredReportContacts)
       .run(),
   ]);
 }
@@ -5682,6 +5840,13 @@ export default {
     }
     if (url.pathname === "/api/admin/avatar" && request.method === "GET")
       return getMemberAvatar(request, env);
+    if (url.pathname === "/api/admin/materials" && request.method === "GET")
+      return listMaterialLibrary(request, env);
+    const materialDownloadMatch = url.pathname.match(
+      /^\/api\/admin\/materials\/items\/([0-9a-f-]{36})\/download$/i,
+    );
+    if (materialDownloadMatch && request.method === "GET")
+      return downloadMaterialItem(request, env, materialDownloadMatch[1]);
     if (url.pathname === "/api/admin/portal" && request.method === "GET")
       return portalOverview(request, env);
     const projectOperationsMatch = url.pathname.match(
@@ -5851,6 +6016,8 @@ export default {
       url.pathname === "/apply/" ||
       url.pathname === "/admin/reports" ||
       url.pathname === "/admin/reports/" ||
+      url.pathname === "/admin/materials" ||
+      url.pathname === "/admin/materials/" ||
       url.pathname === "/admin/permissions" ||
       url.pathname === "/admin/permissions/" ||
       url.pathname === "/admin/editor" ||

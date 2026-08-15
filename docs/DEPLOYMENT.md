@@ -1,14 +1,23 @@
 # デプロイ（DEPLOYMENT）
 
-本番配信は **Cloudflare Pages** が GitHub リポジトリを直接ビルドして行う。
-GitHub Actions は検証（CI）専用で、デプロイはしない。
+本番配信は **Cloudflare** が GitHub リポジトリを直接ビルドして行う。
+GitHub Actions の `ci.yml` は検証専用だが、`deploy-pages.yml` は
+**動作確認用の GitHub Pages ミラー**を配信している（§7）。ミラーは
+`NOINDEX=1` で検索エンジンには載せない。
 
 ## 1. 構成の切り替えは環境変数のみ
 
-| 変数        | 役割                                    | 本番で入れる値            |
-| ----------- | --------------------------------------- | ------------------------- |
-| `SITE_URL`  | canonical・OGP・sitemap の絶対URLのもと | `https://<独自ドメイン>`  |
-| `BASE_PATH` | サブディレクトリ配信のときだけ使う      | `/`（既定値なので省略可） |
+| 変数           | 役割                                                         | 本番で入れる値                         |
+| -------------- | ------------------------------------------------------------ | -------------------------------------- |
+| `SITE_URL`     | canonical・OGP・sitemap の絶対URLのもと                      | `https://<独自ドメイン>`               |
+| `BASE_PATH`    | サブディレクトリ配信のときだけ使う                           | `/`（既定値なので省略可）              |
+| `ADMIN_ORIGIN` | 公式サイトから運営参加応募フォームへ送るときの配信元         | `https://<管理Workerのホスト>`         |
+| `NOINDEX`      | `1` にすると全ページ `noindex` ＋ `robots.txt` が `Disallow` | 本番では設定しない（ミラー配信でのみ） |
+
+`ADMIN_ORIGIN` は必ず設定する。応募の受け口 `/api/apply` を持つのは管理Worker
+（`src/admin-worker.ts`）だけで、学習サイトWorkerは `/api/article-reports` と
+`/api/article-analytics` しか処理しない。未設定だと公式サイトの「応募フォームを開く」が
+同一オリジンの `/apply/` を指し、フォームは開けても送信だけが404になる。
 
 `astro.config.mjs` のフォールバックは次の順:
 
@@ -39,9 +48,10 @@ Node のバージョンはリポジトリの `.nvmrc`（22）が使われる。
 
 Settings → Environment variables
 
-| 変数       | Production               | Preview    |
-| ---------- | ------------------------ | ---------- |
-| `SITE_URL` | `https://<独自ドメイン>` | 設定しない |
+| 変数           | Production                     | Preview            |
+| -------------- | ------------------------------ | ------------------ |
+| `SITE_URL`     | `https://<独自ドメイン>`       | 設定しない         |
+| `ADMIN_ORIGIN` | `https://<管理Workerのホスト>` | 本番と同じ値でよい |
 
 運営参加応募のメール通知（任意）には、Cloudflare Worker の Secret／Variable として次を設定する。
 
@@ -61,6 +71,27 @@ npx wrangler deploy --config wrangler.admin.jsonc --var APPLICATION_NOTIFICATION
 ```
 
 `APPLICATION_NOTIFICATION_EMAIL` はカンマ区切りで複数の運営者を指定できる。ResendのAPIキーが未登録の間は、応募をD1とDiscordへ保存・通知し、メールだけを送信しない。
+
+### 学習サイトWorker の Secret
+
+`wrangler.jsonc` 側には次を登録する。
+
+| 変数                  | 種類   | 用途                                                   |
+| --------------------- | ------ | ------------------------------------------------------ |
+| `REPORT_IP_HASH_SALT` | Secret | 記事報告の送信回数を数えるハッシュのソルト（下記参照） |
+
+```sh
+# 十分な長さのランダム文字列を生成して登録する（値は控えを残さない）
+npx wrangler secret put REPORT_IP_HASH_SALT --config wrangler.jsonc
+```
+
+**必ず設定すること。** 報告APIはIPアドレスを保存せず一方向ハッシュだけをD1へ残すが、
+IPv4は全空間が 2^32 しかないため、ソルトなしのSHA-256は総当たりで元のアドレスを
+復元できてしまう。未設定のままだと「IPアドレスは保存しない」という説明が成り立たない。
+未設定のときは Worker のログに警告が出る（値そのものは出さない）。
+
+ソルトを変更・新規登録した直後は、既存の `reporter_hash` と一致しなくなるため
+送信回数の集計が一度だけリセットされる（保存済みの報告は消えない）。
 
 独自ドメインを取るまでは `SITE_URL` に発行済みの `https://<project>.pages.dev`
 を入れておく。ドメイン取得後はこの1箇所を書き換えるだけでよい。
@@ -142,12 +173,27 @@ GitHub 側を戻したい場合は該当コミットを `git revert` して push
 
 ## 7. GitHub Pages について
 
-以前は GitHub Actions から `actions/deploy-pages` で公開していたが、
-Cloudflare Pages と二重公開になり重複コンテンツになるため停止した。
-戻す場合は `.github/workflows/ci.yml` に `deploy` ジョブを復活させ、
-`BASE_PATH` を `/<リポジトリ名>` に戻す必要がある。
+`.github/workflows/deploy-pages.yml` が `main` への push ごとに GitHub Pages へ
+配信している。**これは動作確認用のミラーであり、本番ではない。**
 
-GitHub 側の設定も Settings → Pages → Source を「None」に戻しておくとよい。
+| 項目        | 値                                                  |
+| ----------- | --------------------------------------------------- |
+| `SITE_URL`  | `https://mitukx.github.io`                          |
+| `BASE_PATH` | `/Atlasez01`                                        |
+| `NOINDEX`   | `1`（全ページ noindex ＋ `robots.txt` は Disallow） |
+
+`NOINDEX=1` を外してはいけない。外すと Cloudflare 版と同じ内容が二重に
+インデックスされ、重複コンテンツになる。
+
+ミラーには次の制約がある。運営に案内するときは注意する。
+
+- 管理Worker がないため、`/apply/` から先の送信（`/api/apply`）は動かない
+- `/api/article-reports`・`/api/article-analytics` も無いため、記事報告と閲覧統計は
+  Cloudflare 側の Worker へCORSで送られる（`src/worker.ts` の `TRUSTED_REPORT_ORIGINS`
+  に `https://mitukx.github.io` を登録済み）
+
+ミラーを止める場合は `deploy-pages.yml` を削除し、`TRUSTED_REPORT_ORIGINS` からも
+`https://mitukx.github.io` を外し、GitHub の Settings → Pages → Source を「None」にする。
 
 ## 8. ローカルでの確認
 

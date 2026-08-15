@@ -1,7 +1,7 @@
 ---
 import OrgLayout from "../layouts/OrgLayout.astro";
 import Breadcrumb from "../components/Breadcrumb.astro";
-import { withBase } from "../lib/site";
+import { applyUrl, withBase } from "../lib/site";
 
 const roles = [
   {
@@ -47,25 +47,25 @@ const roles = [
         <h3>運営事務局</h3>
         <p>団体全体の広報、メンバーサポート、企画、会計などを担当します。</p>
         <ul>{roles.filter((role) => ["サイト開発", "イベント・広報"].includes(role.name)).map((role) => <li><strong>{role.name}</strong>：{role.desc}</li>)}</ul>
-        <a class="button" href={withBase("/apply/?project=secretariat")}>運営事務局に応募する</a>
+        <a class="button" href={applyUrl("?project=secretariat")}>運営事務局に応募する</a>
       </li>
       <li class="recruitment-card">
         <h3>学習サイト運営</h3>
         <p>学習記事の執筆・査読・翻訳、学習地図やサイトの改善に取り組みます。</p>
         <ul>{roles.filter((role) => ["記事執筆", "査読", "翻訳", "サイト開発"].includes(role.name)).map((role) => <li><strong>{role.name}</strong>：{role.desc}</li>)}</ul>
-        <a class="button" href={withBase("/apply/?project=atlas")}>学習サイト運営に応募する</a>
+        <a class="button" href={applyUrl("?project=atlas")}>学習サイト運営に応募する</a>
       </li>
       <li class="recruitment-card">
         <h3>ゼミプラットフォーム運営</h3>
         <p>ゼミの企画、参加者サポート、日程調整、記録の作成を担当します。</p>
         <ul><li><strong>企画・進行</strong>：ゼミのテーマ設計や当日の運営</li><li><strong>広報・記録</strong>：参加者への案内と活動記録</li></ul>
-        <a class="button" href={withBase("/apply/?project=seminar-platform")}>ゼミ運営に応募する</a>
+        <a class="button" href={applyUrl("?project=seminar-platform")}>ゼミ運営に応募する</a>
       </li>
     </ul>
     <h2>共通応募フォーム</h2>
     <div class="reading">
       <p>上記のフォームは同じ応募項目を使い、希望プロジェクトを選択して送信できます。複数のプロジェクトに関心がある場合も一度の入力で応募できます。</p>
-      <p><a class="button" href={withBase("/apply/")}>応募フォームを開く</a></p>
+      <p><a class="button" href={applyUrl()}>応募フォームを開く</a></p>
       <p><a href="https://forms.gle/NMXFgxzasbBsf3gX6" rel="noopener noreferrer" target="_blank">従来の応募フォーム（Googleフォーム）を開く</a></p>
       <p>フォームが使えない場合は<a href={withBase("/contact/")}>お問い合わせ</a>からご連絡ください。</p>
     </div>

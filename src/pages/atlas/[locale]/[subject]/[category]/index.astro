@@ -3,7 +3,12 @@
 import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../../components/Breadcrumb.astro";
 import LearningMap from "../../../../../components/LearningMap.astro";
-import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
+import {
+  atlasPath,
+  articlePath,
+  formatDate,
+  applyUrl,
+} from "../../../../../lib/site";
 import {
   t,
   LOCALES,
@@ -21,6 +26,7 @@ import {
   plannedProgress,
   plannedArticleTitle,
 } from "../../../../../lib/planned";
+import ArticleMeta from "../../../../../components/ArticleMeta.astro";
 
 export async function getStaticPaths() {
   const subjects = (await getPublishedSubjects()).filter(
@@ -171,6 +177,11 @@ const items = articles.map((a) => ({
             </h2>
             <p class="article-summary">{a.data.summary}</p>
             <p class="article-badges">
+              <ArticleMeta
+                locale={locale}
+                difficulty={a.data.difficulty}
+                estimatedMinutes={a.data.estimatedMinutes}
+              />
               <span class="badge">
                 {t(locale, "updatedAt")}:
                 <time datetime={a.data.updatedAt.toISOString().slice(0, 10)}>
@@ -220,6 +231,19 @@ const items = articles.map((a) => ({
               {locale === "ja"
                 ? "目次に予定されている、本文準備中の記事です。"
                 : "This article is planned; the text is still being prepared."}
+            </p>
+            <p class="planned-cta">
+              <a
+                href={applyUrl(
+                  `?project=atlas&subject=${encodeURIComponent(subject.data.slug)}&article=${encodeURIComponent(plannedArticleTitle(item, locale))}`,
+                )}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {locale === "ja"
+                  ? "この記事を書いてみませんか"
+                  : "Would you like to write this article?"}
+              </a>
             </p>
           </li>
         ))
@@ -335,6 +359,22 @@ const items = articles.map((a) => ({
     border-style: dashed;
     background: var(--background-secondary);
   }
+
+  /* 「読んでいて足りないと感じた人」が書き手になれる導線 */
+  .planned-cta {
+    margin: 0.6rem 0 0;
+  }
+  .planned-cta a {
+    color: var(--accent-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .planned-cta a:hover,
+  .planned-cta a:focus-visible {
+    text-decoration: underline;
+  }
+
   .category-highlights { display: grid; gap: var(--space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--space-4) 0 var(--space-3); }
   .highlight-panel { background: var(--background-secondary); border: 1px solid var(--border); border-top: 3px solid var(--accent-primary); min-width: 0; padding: var(--space-2) var(--space-3); }
   .highlight-panel h2 { font-size: calc(1rem * var(--text-scale)); margin: 0 0 var(--space-1); }

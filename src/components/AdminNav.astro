@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 import UiLanguage from "./UiLanguage.astro";
 
-interface Props { current: "portal" | "global" | "seminar" | "secretariat" | "atlas" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions"; }
+interface Props { current: "portal" | "global" | "seminar" | "secretariat" | "atlas" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "materials"; }
 const { current } = Astro.props;
 const projectNavigation = !["portal", "global", "seminar", "secretariat"].includes(current);
 const profileHref = current === "seminar" ? "/admin/projects/seminar-platform/workspace/" : current === "secretariat" ? "/admin/projects/secretariat/workspace/" : projectNavigation ? "/admin/projects/atlas/workspace/" : "/admin/workspace/";
@@ -28,6 +28,7 @@ const showHomeNav = current !== "portal" && current !== "global";
       <div>
         <a href="/admin/permissions" data-manager-only hidden data-astro-reload aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
         <a href="/admin/reports" data-astro-reload aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
+        <a href="/admin/materials" data-astro-reload aria-current={current === "materials" ? "page" : undefined}>資料</a>
         <a href="/admin/guide" data-astro-reload aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
         <a href="/admin/introductions" data-astro-reload aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
         <a href="/admin/applications" data-manager-only hidden data-astro-reload aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
