@@ -53,8 +53,11 @@ function fail(message) {
 const args = parseArgs(process.argv.slice(2));
 const { subject, category, slug, title } = args;
 const locale = args.locale ?? "ja";
-const localeDirectory = { ja: "jpn", jpn: "jpn", en: "eng", eng: "eng" }[locale];
-if (!localeDirectory) fail(`対応していない言語コードです: ${locale}（ja/jpn または en/eng）`);
+const localeDirectory = { ja: "jpn", jpn: "jpn", en: "eng", eng: "eng" }[
+  locale
+];
+if (!localeDirectory)
+  fail(`対応していない言語コードです: ${locale}（ja/jpn または en/eng）`);
 const publicLocale = localeDirectory === "jpn" ? "ja" : "en";
 
 if (!subject || !category || !slug || !title) {

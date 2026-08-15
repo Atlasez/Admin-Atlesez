@@ -25,7 +25,7 @@ Cloudflare Worker + D1で認証付きの運営機能とAPIを提供します。
 | 目的                                   | まず読む文書                                                         |
 | -------------------------------------- | -------------------------------------------------------------------- |
 | サイト全体を引き継ぐ                   | [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md)               |
-| 記事を書く人向けの運営サイトを使う     | [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)                            |
+| 記事を書く人向けの運営サイトを使う     | [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)                           |
 | リポジトリを分割・移行する             | [docs/REPOSITORY_BOUNDARIES.md](docs/REPOSITORY_BOUNDARIES.md)       |
 | ナビゲーションやサイトの境界を理解する | [docs/INFORMATION_ARCHITECTURE.md](docs/INFORMATION_ARCHITECTURE.md) |
 | 本番へ公開する                         | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                             |

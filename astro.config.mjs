@@ -21,9 +21,11 @@ const normalizeLegacyMath = () => (/** @type {any} */ tree) => {
       const classes = Array.isArray(node.properties?.className)
         ? node.properties.className.map(String)
         : [];
-      const isInline = classes.includes("math-inline") ||
+      const isInline =
+        classes.includes("math-inline") ||
         (classes.includes("math") && classes.includes("inline"));
-      const isDisplay = classes.includes("math-display") ||
+      const isDisplay =
+        classes.includes("math-display") ||
         (classes.includes("math") && classes.includes("display"));
       if (isInline || isDisplay) {
         const text = (node.children ?? [])
@@ -59,7 +61,9 @@ const normalizeLegacyFolding = () => (/** @type {any} */ tree) => {
   const textContent = (node) => {
     if (!node || typeof node !== "object") return "";
     if (node.type === "text") return String(node.value ?? "");
-    return Array.isArray(node.children) ? node.children.map(textContent).join("") : "";
+    return Array.isArray(node.children)
+      ? node.children.map(textContent).join("")
+      : "";
   };
 
   /** @param {any} node */
@@ -77,26 +81,31 @@ const normalizeLegacyFolding = () => (/** @type {any} */ tree) => {
           (child) => child?.type === "element" && child.tagName === "summary",
         );
         const titleElement = children.find(
-          (child) => child?.type === "element" &&
+          (child) =>
+            child?.type === "element" &&
             (child.tagName === "h4" ||
               (Array.isArray(child.properties?.className) &&
                 child.properties.className.some((name) =>
                   ["folding-title", "supp-title"].includes(String(name)),
                 ))),
         );
-        const explicitTitle = node.properties?.dataSummary
-          ?? node.properties?.dataTitle
-          ?? node.properties?.["data-summary"]
-          ?? node.properties?.["data-title"];
+        const explicitTitle =
+          node.properties?.dataSummary ??
+          node.properties?.dataTitle ??
+          node.properties?.["data-summary"] ??
+          node.properties?.["data-title"];
         const title = String(
-          explicitTitle || textContent(titleElement) ||
+          explicitTitle ||
+            textContent(titleElement) ||
             (isSupplement ? "補足." : "折りたたみ"),
         ).trim();
         const summary = existingSummary ?? {
           type: "element",
           tagName: "summary",
           properties: {
-            className: [isSupplement ? "supp-details-summary" : "folding-summary"],
+            className: [
+              isSupplement ? "supp-details-summary" : "folding-summary",
+            ],
           },
           children: [{ type: "text", value: title }],
         };
@@ -107,7 +116,9 @@ const normalizeLegacyFolding = () => (/** @type {any} */ tree) => {
           type: "element",
           tagName: "div",
           properties: {
-            className: [isSupplement ? "supp-details-inner" : "folding-content"],
+            className: [
+              isSupplement ? "supp-details-inner" : "folding-content",
+            ],
           },
           children: body,
         };

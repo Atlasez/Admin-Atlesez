@@ -453,16 +453,21 @@ const memberAvatarEndpoint = (email: string, updatedAt?: string | null) => {
   return `/api/admin/avatar?email=${encodeURIComponent(email)}&v=${encodeURIComponent(version)}`;
 };
 
-const AVATAR_DATA_URL = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i;
+const AVATAR_DATA_URL =
+  /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i;
 
 async function getMemberAvatar(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const email = new URL(request.url).searchParams.get("email")?.trim().toLowerCase() ?? "";
-  if (!EMAIL_PATTERN.test(email)) return new Response("Not found", { status: 404 });
+  const email =
+    new URL(request.url).searchParams.get("email")?.trim().toLowerCase() ?? "";
+  if (!EMAIL_PATTERN.test(email))
+    return new Response("Not found", { status: 404 });
   const profile = await env.REPORTS.prepare(
     "SELECT avatar_url, updated_at FROM editorial_member_profiles WHERE lower(email) = ?",
-  ).bind(email).first<{ avatar_url: string; updated_at: string }>();
+  )
+    .bind(email)
+    .first<{ avatar_url: string; updated_at: string }>();
   const source = profile?.avatar_url?.trim() ?? "";
   if (!source) return new Response("Not found", { status: 404 });
   const etag = profile?.updated_at ? `\"${profile.updated_at}\"` : undefined;
@@ -474,7 +479,8 @@ async function getMemberAvatar(request: Request, env: Env): Promise<Response> {
     try {
       const binary = atob(dataUrl[2]);
       const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+      for (let index = 0; index < binary.length; index++)
+        bytes[index] = binary.charCodeAt(index);
       const headers = new Headers({
         "Cache-Control": "private, no-store, max-age=0",
         "Content-Type": dataUrl[1].toLowerCase(),
@@ -486,15 +492,20 @@ async function getMemberAvatar(request: Request, env: Env): Promise<Response> {
       return new Response("Invalid avatar", { status: 422 });
     }
   }
-  if (!/^https:\/\//i.test(source)) return new Response("Not found", { status: 404 });
+  if (!/^https:\/\//i.test(source))
+    return new Response("Not found", { status: 404 });
   try {
     const upstream = await fetch(source);
-    if (!upstream.ok || !upstream.body) return new Response("Not found", { status: 404 });
+    if (!upstream.ok || !upstream.body)
+      return new Response("Not found", { status: 404 });
     const headers = new Headers({
       "Cache-Control": "private, no-store, max-age=0",
       "X-Content-Type-Options": "nosniff",
     });
-    headers.set("Content-Type", upstream.headers.get("content-type")?.split(";")[0] || "image/*");
+    headers.set(
+      "Content-Type",
+      upstream.headers.get("content-type")?.split(";")[0] || "image/*",
+    );
     if (etag) headers.set("ETag", etag);
     return new Response(upstream.body, { status: 200, headers });
   } catch {
@@ -711,12 +722,14 @@ async function listArticleReports(
     reports: result.results.map((report) => {
       // 旧レコードの updated_at が空でも、受信日時を最終対応日時として返す。
       // これによりクライアントが Invalid time value を生成しない。
-      const createdAt = typeof report.created_at === "string" && report.created_at.trim()
-        ? report.created_at
-        : null;
-      const updatedAt = typeof report.updated_at === "string" && report.updated_at.trim()
-        ? report.updated_at
-        : createdAt;
+      const createdAt =
+        typeof report.created_at === "string" && report.created_at.trim()
+          ? report.created_at
+          : null;
+      const updatedAt =
+        typeof report.updated_at === "string" && report.updated_at.trim()
+          ? report.updated_at
+          : createdAt;
       return {
         ...report,
         created_at: createdAt,
@@ -849,7 +862,11 @@ async function listReportAdminPermissions(
         display_name_auto: !rawDisplayName || rawDisplayName === "表示名未設定",
       };
     })
-    .sort((a, b) => a.display_name.localeCompare(b.display_name, "ja") || a.email.localeCompare(b.email));
+    .sort(
+      (a, b) =>
+        a.display_name.localeCompare(b.display_name, "ja") ||
+        a.email.localeCompare(b.email),
+    );
   return json({ permissions });
 }
 
@@ -2691,7 +2708,11 @@ async function projectOperations(
         ...member,
         display_name: memberDisplayName(member.display_name, member.email),
       }))
-      .sort((a, b) => a.display_name.localeCompare(b.display_name, "ja") || a.email.localeCompare(b.email));
+      .sort(
+        (a, b) =>
+          a.display_name.localeCompare(b.display_name, "ja") ||
+          a.email.localeCompare(b.email),
+      );
     const byEvent = new Map<string, typeof normalizedParticipants>();
     for (const row of normalizedParticipants) {
       const list = byEvent.get(row.event_id) ?? [];
@@ -3253,7 +3274,8 @@ async function operationsOverview(
   for (const row of taskFeedbackRows.results ?? []) {
     const rows = taskFeedbackById.get(row.task_id) ?? [];
     rows.push({
-      displayName: taskDisplayNames.get(row.email) ?? memberDisplayName("", row.email),
+      displayName:
+        taskDisplayNames.get(row.email) ?? memberDisplayName("", row.email),
       status: row.status,
       updatedAt: row.updated_at,
     });
@@ -3268,7 +3290,11 @@ async function operationsOverview(
       ...member,
       display_name: memberDisplayName(member.display_name, member.email),
     }))
-    .sort((a, b) => a.display_name.localeCompare(b.display_name, "ja") || a.email.localeCompare(b.email));
+    .sort(
+      (a, b) =>
+        a.display_name.localeCompare(b.display_name, "ja") ||
+        a.email.localeCompare(b.email),
+    );
   const participantsByEvent = new Map<string, typeof participantRows>();
   for (const item of participantRows) {
     const rows = participantsByEvent.get(item.event_id) ?? [];
@@ -3931,7 +3957,12 @@ async function getEditorialDocument(
         `SELECT email, display_name, avatar_url, updated_at FROM editorial_member_profiles WHERE lower(email) IN (${authorEmails.map(() => "?").join(",")})`,
       )
         .bind(...authorEmails)
-        .all<{ email: string; display_name: string; avatar_url: string; updated_at: string }>()
+        .all<{
+          email: string;
+          display_name: string;
+          avatar_url: string;
+          updated_at: string;
+        }>()
     : {
         results: [] as {
           email: string;
@@ -3941,7 +3972,10 @@ async function getEditorialDocument(
         }[],
       };
   const authorProfileByEmail = new Map(
-    (authorProfiles.results ?? []).map((profile) => [profile.email.toLowerCase(), profile]),
+    (authorProfiles.results ?? []).map((profile) => [
+      profile.email.toLowerCase(),
+      profile,
+    ]),
   );
   const commentIds = commentRows.map((comment) => comment.id);
   const feedbackRows = commentIds.length
@@ -3964,7 +3998,9 @@ async function getEditorialDocument(
         }[],
       };
   const feedbackEmails = [
-    ...new Set((feedbackRows.results ?? []).map((row) => row.email.trim().toLowerCase())),
+    ...new Set(
+      (feedbackRows.results ?? []).map((row) => row.email.trim().toLowerCase()),
+    ),
   ].filter((email) => !authorProfileByEmail.has(email.toLowerCase()));
   const feedbackProfiles = feedbackEmails.length
     ? await env.REPORTS.prepare(
@@ -3974,7 +4010,10 @@ async function getEditorialDocument(
         .all<{ email: string; display_name: string }>()
     : { results: [] as { email: string; display_name: string }[] };
   const feedbackProfileByEmail = new Map(
-    (feedbackProfiles.results ?? []).map((profile) => [profile.email.toLowerCase(), profile]),
+    (feedbackProfiles.results ?? []).map((profile) => [
+      profile.email.toLowerCase(),
+      profile,
+    ]),
   );
   const feedbackByComment = new Map<string, EditorialFeedback[]>();
   for (const row of feedbackRows.results ?? []) {
@@ -4009,15 +4048,18 @@ async function getEditorialDocument(
       authorProfileByEmail.get(comment.created_by.toLowerCase())?.display_name,
       comment.created_by,
     ),
-    author_avatar_url:
-      authorProfileByEmail.get(comment.created_by.toLowerCase())?.avatar_url
-        ? memberAvatarEndpoint(
-            comment.created_by,
-            authorProfileByEmail.get(comment.created_by.toLowerCase())?.updated_at,
-          )
-        : "",
+    author_avatar_url: authorProfileByEmail.get(
+      comment.created_by.toLowerCase(),
+    )?.avatar_url
+      ? memberAvatarEndpoint(
+          comment.created_by,
+          authorProfileByEmail.get(comment.created_by.toLowerCase())
+            ?.updated_at,
+        )
+      : "",
     author_avatar_updated_at:
-      authorProfileByEmail.get(comment.created_by.toLowerCase())?.updated_at ?? "",
+      authorProfileByEmail.get(comment.created_by.toLowerCase())?.updated_at ??
+      "",
     // 旧コメントの一件だけの引用も、同じUIで読めるようにする。
     selections:
       selectionsByComment.get(comment.id) ??
@@ -5318,7 +5360,10 @@ async function adminNotifications(
   )
     .bind(scope.email)
     .first<{ display_name: string | null }>();
-  const mentionName = memberDisplayName(viewerProfile?.display_name, scope.email);
+  const mentionName = memberDisplayName(
+    viewerProfile?.display_name,
+    scope.email,
+  );
   const mentionPattern = mentionName.replace(/[\\%_]/g, "\\$&");
   const [commentRows, approvedRows, publishedRows, reviewRows, reminderRows] =
     await Promise.all([

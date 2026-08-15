@@ -188,9 +188,13 @@ for (const { file, fm } of articleMeta) {
     continue;
   }
   // frontmatter と置き場所がずれていると、URL と中身が食い違う
-  const localeDirectory = { ja: "jpn", jpn: "jpn", en: "eng", eng: "eng" }[String(fm.locale)];
+  const localeDirectory = { ja: "jpn", jpn: "jpn", en: "eng", eng: "eng" }[
+    String(fm.locale)
+  ];
   if (!localeDirectory) {
-    errors.push(`${file}: 未対応の言語コード ${String(fm.locale)}（ja/jpn または en/eng）`);
+    errors.push(
+      `${file}: 未対応の言語コード ${String(fm.locale)}（ja/jpn または en/eng）`,
+    );
     continue;
   }
   const expected = join(

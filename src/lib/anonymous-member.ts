@@ -12,7 +12,7 @@ export function anonymousMemberLabel(email: string): string {
     hash ^= character.codePointAt(0) ?? 0;
     hash = Math.imul(hash, 16777619);
   }
-  const number = (hash >>> 0) % 9000 + 1000;
+  const number = ((hash >>> 0) % 9000) + 1000;
   return String(number);
 }
 

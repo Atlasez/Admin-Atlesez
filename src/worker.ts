@@ -249,10 +249,14 @@ async function notifyDiscord(env: Env, report: DiscordReport): Promise<void> {
               REPORT_TYPE_LABEL[report.reportType] ?? report.reportType,
           }),
         });
-        if (!response.ok) console.error("Discord report relay failed", response.status);
+        if (!response.ok)
+          console.error("Discord report relay failed", response.status);
       }
     } catch (error) {
-      console.error("Discord report relay error", error instanceof Error ? error.name : "unknown");
+      console.error(
+        "Discord report relay error",
+        error instanceof Error ? error.name : "unknown",
+      );
       // 管理Workerへの中継失敗も記事報告の保存結果には影響させない。
     }
   }
