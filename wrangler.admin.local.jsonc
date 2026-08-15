@@ -21,6 +21,12 @@
       "preview_database_id": "atlasez-reports-local",
     },
   ],
+  "r2_buckets": [
+    {
+      "binding": "MATERIALS",
+      "bucket_name": "atlasez-materials-local",
+    },
+  ],
   "triggers": {
     "crons": ["0 3 * * *"],
   },

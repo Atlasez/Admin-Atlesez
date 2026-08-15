@@ -20,6 +20,12 @@
       "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
     },
   ],
+  "r2_buckets": [
+    {
+      "binding": "MATERIALS",
+      "bucket_name": "atlasez-materials",
+    },
+  ],
   "triggers": {
     "crons": ["0 3 * * *"],
   },

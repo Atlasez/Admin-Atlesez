@@ -13,6 +13,11 @@ interface R2Object {
 
 interface R2Bucket {
   get(key: string): Promise<R2Object | null>;
+  put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | string,
+    options?: { httpMetadata?: { contentType?: string } },
+  ): Promise<unknown>;
 }
 
 interface D1PreparedStatement {
@@ -449,6 +454,7 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 };
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
+const GOOGLE_DRIVE_IMPORT_STATE_COOKIE = "atlasez_google_drive_import_state";
 const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1_000;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
@@ -5306,6 +5312,8 @@ const adminReturnPath = (value: string | null) =>
   value === "/admin/review/" ||
   value === "/admin/reports" ||
   value === "/admin/reports/" ||
+  value === "/admin/materials" ||
+  value === "/admin/materials/" ||
   value === "/admin/editor" ||
   value === "/admin/editor/" ||
   value === "/admin/guide" ||
@@ -5336,6 +5344,285 @@ function adminPublicOrigin(request: Request, env: Env) {
 
 function googleCallbackUrl(request: Request, env: Env) {
   return `${adminPublicOrigin(request, env)}/auth/google/callback`;
+}
+
+type GoogleDriveFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime?: string;
+  webViewLink?: string;
+  capabilities?: { canDownload?: boolean };
+};
+
+type GoogleDriveImportFile = GoogleDriveFile & { path: string };
+
+const GOOGLE_DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+const MATERIAL_AUTO_IMPORT_MAX_BYTES = 9 * 1024 * 1024 * 1024;
+
+const materialObjectName = (name: string) =>
+  name
+    .normalize("NFKC")
+    .replace(/[\\\\\u0000-\u001f]/g, "_")
+    .slice(0, 180) || "untitled";
+
+const googleWorkspaceExport = (mimeType: string) => {
+  if (mimeType === "application/vnd.google-apps.document")
+    return { mimeType: "application/pdf", suffix: ".pdf" };
+  if (mimeType === "application/vnd.google-apps.spreadsheet")
+    return { mimeType: "application/pdf", suffix: ".pdf" };
+  if (mimeType === "application/vnd.google-apps.presentation")
+    return { mimeType: "application/pdf", suffix: ".pdf" };
+  if (mimeType === "application/vnd.google-apps.drawing")
+    return { mimeType: "application/pdf", suffix: ".pdf" };
+  return null;
+};
+
+async function listGoogleDriveFolder(
+  accessToken: string,
+  folderId: string,
+  path = "",
+  files: GoogleDriveImportFile[] = [],
+  errors: string[] = [],
+): Promise<{ files: GoogleDriveImportFile[]; errors: string[] }> {
+  let pageToken = "";
+  do {
+    const endpoint = new URL("https://www.googleapis.com/drive/v3/files");
+    endpoint.search = new URLSearchParams({
+      q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`,
+      fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,capabilities(canDownload))",
+      pageSize: "1000",
+      orderBy: "folder,name_natural",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+      ...(pageToken ? { pageToken } : {}),
+    }).toString();
+    const response = await fetch(endpoint, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      errors.push(`フォルダ ${path || "共有資料"} を読み込めませんでした（${response.status}）。`);
+      return { files, errors };
+    }
+    const payload = (await response.json()) as {
+      files?: GoogleDriveFile[];
+      nextPageToken?: string;
+    };
+    for (const file of payload.files ?? []) {
+      const itemPath = path ? `${path}/${file.name}` : file.name;
+      if (file.mimeType === GOOGLE_DRIVE_FOLDER_MIME) {
+        await listGoogleDriveFolder(accessToken, file.id, itemPath, files, errors);
+      } else {
+        files.push({ ...file, path: itemPath });
+      }
+    }
+    pageToken = payload.nextPageToken ?? "";
+  } while (pageToken);
+  return { files, errors };
+}
+
+async function recordMaterialItem(
+  env: Env,
+  values: {
+    collectionId: string;
+    sourceDriveId: string;
+    path: string;
+    title: string;
+    mimeType: string;
+    size: number;
+    storageKey: string;
+    sourceUrl: string;
+    createdBy: string;
+    now: string;
+  },
+) {
+  const existing = await env.REPORTS.prepare(
+    "SELECT id FROM material_items WHERE collection_id = ? AND source_drive_id = ?",
+  )
+    .bind(values.collectionId, values.sourceDriveId)
+    .first<{ id: string }>();
+  if (existing) {
+    await env.REPORTS.prepare(
+      "UPDATE material_items SET parent_path = ?, title = ?, mime_type = ?, size_bytes = ?, storage_key = ?, source_url = ?, status = 'ready', updated_at = ? WHERE id = ?",
+    )
+      .bind(values.path, values.title, values.mimeType, values.size, values.storageKey, values.sourceUrl, values.now, existing.id)
+      .run();
+    return;
+  }
+  await env.REPORTS.prepare(
+    "INSERT INTO material_items (id, collection_id, parent_path, title, mime_type, size_bytes, storage_key, source_drive_id, source_url, status, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), values.collectionId, values.path, values.title, values.mimeType, values.size, values.storageKey, values.sourceDriveId, values.sourceUrl, values.createdBy, values.now, values.now)
+    .run();
+}
+
+async function startGoogleDriveMaterialImport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!env.MATERIALS)
+    return json({ error: "R2資料ストレージが有効化されていません。" }, 503);
+  if (!googleOAuthConfigured(env))
+    return json({ error: "Google Drive移行の認証設定が見つかりません。" }, 503);
+  const collection = await env.REPORTS.prepare(
+    "SELECT id FROM material_collections WHERE id = 'drive-shared-materials' AND source_folder_id IS NOT NULL",
+  ).first<{ id: string }>();
+  if (!collection) return json({ error: "試験移行コレクションが見つかりません。" }, 404);
+  const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authorization.search = new URLSearchParams({
+    client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+    redirect_uri: googleCallbackUrl(request, env),
+    response_type: "code",
+    scope: "openid email profile https://www.googleapis.com/auth/drive.readonly",
+    state,
+    prompt: "consent select_account",
+    access_type: "online",
+    include_granted_scopes: "true",
+  }).toString();
+  const headers = new Headers({ location: authorization.toString() });
+  headers.append(
+    "set-cookie",
+    cookie(
+      GOOGLE_DRIVE_IMPORT_STATE_COOKIE,
+      JSON.stringify({ state, collectionId: collection.id, email: scope.email }),
+      10 * 60,
+      "/auth",
+    ),
+  );
+  return new Response(null, { status: 302, headers });
+}
+
+async function completeGoogleDriveMaterialImport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (!env.MATERIALS || !googleOAuthConfigured(env))
+    return json({ error: "資料移行の設定を確認してください。" }, 503);
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code") ?? "";
+  const state = requestUrl.searchParams.get("state") ?? "";
+  let saved: { state?: string; collectionId?: string; email?: string } = {};
+  try {
+    saved = JSON.parse(cookieValue(request, GOOGLE_DRIVE_IMPORT_STATE_COOKIE)) as typeof saved;
+  } catch {
+    // 期限切れ・不正Cookieは拒否する。
+  }
+  if (!code || !state || state !== saved.state || !saved.collectionId || !saved.email)
+    return json({ error: "Google Drive移行の確認期限が切れました。もう一度開始してください。" }, 400);
+  const permission = await env.REPORTS.prepare(
+    "SELECT 1 AS allowed FROM report_admin_permissions WHERE email = ? AND subject = '*'",
+  )
+    .bind(saved.email)
+    .first<{ allowed: number }>();
+  if (!permission) return json({ error: "資料移行は全分野管理者のみ実行できます。" }, 403);
+  let accessToken = "";
+  try {
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+        client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
+        redirect_uri: googleCallbackUrl(request, env),
+        grant_type: "authorization_code",
+      }),
+    });
+    if (!response.ok) throw new Error("token exchange failed");
+    accessToken = ((await response.json()) as { access_token?: string }).access_token ?? "";
+  } catch {
+    return json({ error: "Google Driveの認証を完了できませんでした。" }, 502);
+  }
+  if (!accessToken) return json({ error: "Google Driveの認証を完了できませんでした。" }, 502);
+  const collection = await env.REPORTS.prepare(
+    "SELECT id, source_folder_id FROM material_collections WHERE id = ?",
+  )
+    .bind(saved.collectionId)
+    .first<{ id: string; source_folder_id: string | null }>();
+  if (!collection?.source_folder_id)
+    return json({ error: "移行元フォルダが見つかりません。" }, 404);
+  const now = new Date().toISOString();
+  const runId = crypto.randomUUID();
+  const inventory = await listGoogleDriveFolder(accessToken, collection.source_folder_id);
+  const estimatedBytes = inventory.files.reduce(
+    (total, file) => total + Math.max(0, Number(file.size ?? 0) || 0),
+    0,
+  );
+  await env.REPORTS.prepare(
+    "INSERT INTO material_import_runs (id, collection_id, source_folder_id, status, file_count, total_bytes, error_summary, requested_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  )
+    .bind(runId, collection.id, collection.source_folder_id, estimatedBytes > MATERIAL_AUTO_IMPORT_MAX_BYTES ? "needs-review" : "planning", inventory.files.length, estimatedBytes, inventory.errors.join("\n").slice(0, 4000), saved.email, now)
+    .run();
+  if (estimatedBytes > MATERIAL_AUTO_IMPORT_MAX_BYTES) {
+    const headers = new Headers({ location: `/admin/materials/?import=${encodeURIComponent(runId)}&status=needs-review` });
+    headers.append("set-cookie", cookie(GOOGLE_DRIVE_IMPORT_STATE_COOKIE, "", 0, "/auth"));
+    return new Response(null, { status: 302, headers });
+  }
+  await env.REPORTS.prepare(
+    "UPDATE material_import_runs SET status = 'importing' WHERE id = ?",
+  ).bind(runId).run();
+  let importedCount = 0;
+  let importedBytes = 0;
+  const failures = [...inventory.errors];
+  for (const file of inventory.files) {
+    if (file.capabilities?.canDownload === false) {
+      failures.push(`${file.path} はダウンロードが許可されていません。`);
+      continue;
+    }
+    const exported = googleWorkspaceExport(file.mimeType);
+    if (file.mimeType.startsWith("application/vnd.google-apps.") && !exported) {
+      failures.push(`${file.path} はこの形式では自動移行できません。`);
+      continue;
+    }
+    const sourceUrl = exported
+      ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/export?mimeType=${encodeURIComponent(exported.mimeType)}`
+      : `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`;
+    try {
+      const source = await fetch(sourceUrl, { headers: { authorization: `Bearer ${accessToken}` } });
+      if (!source.ok || !source.body) throw new Error(`取得エラー ${source.status}`);
+      const displayName = exported && !file.name.toLowerCase().endsWith(exported.suffix)
+        ? `${file.name}${exported.suffix}`
+        : file.name;
+      const storageKey = `materials/${collection.id}/${file.id}/${materialObjectName(displayName)}`;
+      const contentType = exported?.mimeType || source.headers.get("content-type")?.split(";")[0] || file.mimeType;
+      const size = Math.max(0, Number(source.headers.get("content-length") ?? file.size ?? 0) || 0);
+      await env.MATERIALS.put(storageKey, source.body, { httpMetadata: { contentType } });
+      await recordMaterialItem(env, {
+        collectionId: collection.id,
+        sourceDriveId: file.id,
+        path: file.path,
+        title: displayName,
+        mimeType: contentType,
+        size,
+        storageKey,
+        sourceUrl: file.webViewLink ?? `https://drive.google.com/open?id=${encodeURIComponent(file.id)}`,
+        createdBy: saved.email,
+        now,
+      });
+      importedCount += 1;
+      importedBytes += size;
+    } catch (error) {
+      failures.push(`${file.path}: ${error instanceof Error ? error.message : "取得に失敗しました。"}`);
+    }
+  }
+  const finalStatus = failures.length ? "needs-review" : "completed";
+  await env.REPORTS.prepare(
+    "UPDATE material_import_runs SET status = ?, imported_count = ?, imported_bytes = ?, error_summary = ?, completed_at = ? WHERE id = ?",
+  )
+    .bind(finalStatus, importedCount, importedBytes, failures.join("\n").slice(0, 4000), new Date().toISOString(), runId)
+    .run();
+  await env.REPORTS.prepare(
+    "UPDATE material_collections SET imported_at = ?, updated_at = ? WHERE id = ?",
+  )
+    .bind(new Date().toISOString(), new Date().toISOString(), collection.id)
+    .run();
+  const headers = new Headers({ location: `/admin/materials/?import=${encodeURIComponent(runId)}&status=${encodeURIComponent(finalStatus)}` });
+  headers.append("set-cookie", cookie(GOOGLE_DRIVE_IMPORT_STATE_COOKIE, "", 0, "/auth"));
+  return new Response(null, { status: 302, headers });
 }
 
 async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
@@ -5735,8 +6022,14 @@ export default {
       return Response.redirect(`${url.origin}/admin/portal/`, 302);
     if (url.pathname === "/auth/google/login" && request.method === "GET")
       return startGoogleLogin(request, env);
-    if (url.pathname === "/auth/google/callback" && request.method === "GET")
-      return completeGoogleLogin(request, env);
+    if (url.pathname === "/auth/google-drive/import" && request.method === "GET")
+      return startGoogleDriveMaterialImport(request, env);
+    if (url.pathname === "/auth/google/callback" && request.method === "GET") {
+      const driveState = cookieValue(request, GOOGLE_DRIVE_IMPORT_STATE_COOKIE);
+      return driveState
+        ? completeGoogleDriveMaterialImport(request, env)
+        : completeGoogleLogin(request, env);
+    }
     // ナビゲーションからの直接アクセス（GET）でもログアウトできるようにする。
     if (
       url.pathname === "/auth/logout" &&

@@ -41,20 +41,21 @@ import AdminErrorActions from "../../components/AdminErrorActions.astro";
     const target=root.querySelector<HTMLElement>('[data-material-collections]')!;
     const esc=(value:string)=>value.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
     const formatBytes=(value:number)=>value<1024?`${value} B`:value<1024*1024?`${Math.round(value/1024)} KB`:`${(value/(1024*1024)).toFixed(1)} MB`;
-    const render=(collections:MaterialCollection[])=>{
+    const render=(collections:MaterialCollection[],storageReady:boolean,isManager:boolean)=>{
       target.innerHTML=collections.length?collections.map(collection=>{
         const migrated=Boolean(collection.imported_at);
         const items=collection.items.length?`<div class="item-list">${collection.items.map(item=>`<div class="item-row">${item.download_url?`<a href="${esc(item.download_url)}">${esc(item.title)}</a>`:`<span>${esc(item.title)}</span>`}<small>${esc(item.mime_type)}${item.size_bytes?`・${formatBytes(item.size_bytes)}`:''}</small></div>`).join('')}</div>`:'<p class="empty">まだ移行済みの資料はありません。</p>';
-        return `<article class="collection-card"><div><h3>${esc(collection.title)}</h3><p>${esc(collection.description)}</p></div><div class="collection-meta"><span class="status ${migrated?'status-ready':'status-preparing'}">${migrated?'移行済み':'移行準備中'}</span>${collection.source_type==='google-drive'?'<span class="status">Google Drive由来</span>':''}</div><div class="collection-actions">${collection.source_url?`<a href="${esc(collection.source_url)}" target="_blank" rel="noreferrer">元の資料を開く</a>`:''}</div>${items}</article>`;
+        const importAction=collection.id==='drive-shared-materials'&&isManager?(storageReady?'<a href="/auth/google-drive/import">Driveから試験移行を開始</a>':'<button type="button" disabled title="R2を有効化すると利用できます">移行ストレージを準備中</button>'):'';
+        return `<article class="collection-card"><div><h3>${esc(collection.title)}</h3><p>${esc(collection.description)}</p></div><div class="collection-meta"><span class="status ${migrated?'status-ready':'status-preparing'}">${migrated?'移行済み':'移行準備中'}</span>${collection.source_type==='google-drive'?'<span class="status">Google Drive由来</span>':''}</div><div class="collection-actions">${collection.source_url?`<a href="${esc(collection.source_url)}" target="_blank" rel="noreferrer">元の資料を開く</a>`:''}${importAction}</div>${items}</article>`;
       }).join(''):'<p class="empty">表示できる資料はありません。</p>';
     };
     const load=async()=>{
       try{
         const response=await fetch('/api/admin/materials',{credentials:'same-origin',cache:'no-store'});
         const contentType=response.headers.get('content-type')??'';
-        const data=contentType.includes('application/json')?await response.json() as {collections?:MaterialCollection[];error?:string}:null;
+        const data=contentType.includes('application/json')?await response.json() as {collections?:MaterialCollection[];storageReady?:boolean;scope?:{isManager?:boolean};error?:string}:null;
         if(!response.ok||!data)throw new Error(data?.error??'資料を読み込めませんでした。');
-        render(data.collections??[]);
+        render(data.collections??[],Boolean(data.storageReady),Boolean(data.scope?.isManager));
       }catch(error){target.textContent=error instanceof Error?error.message:'資料を読み込めませんでした。';}
     };
     void load();
