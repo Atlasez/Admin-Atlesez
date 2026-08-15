@@ -4407,8 +4407,11 @@ async function listEditorialReviewRequests(
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const result = await env.REPORTS.prepare(
-    `SELECT d.id, d.subject, d.category, d.title, d.updated_at
+    `SELECT d.id, d.subject, d.category, d.title, d.updated_by AS requester_email,
+            COALESCE(NULLIF(TRIM(m.display_name), ''), d.updated_by) AS requester_display_name,
+            d.updated_at
      FROM editorial_documents d
+     LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(d.updated_by)
      WHERE d.status = 'in-review'
      ORDER BY d.updated_at ASC LIMIT 100`,
   ).all<{
@@ -4416,6 +4419,8 @@ async function listEditorialReviewRequests(
     subject: string;
     category: string;
     title: string;
+    requester_email: string;
+    requester_display_name: string;
     updated_at: string;
   }>();
   return json({
@@ -5395,12 +5400,13 @@ async function adminNotifications(
         .all<{ id: string; title: string; published_at: string }>(),
       scope.isManager
         ? env.REPORTS.prepare(
-            "SELECT id, subject, title, updated_by, updated_at FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 30",
+            "SELECT d.id, d.subject, d.title, d.updated_by, COALESCE(NULLIF(TRIM(p.display_name), ''), d.updated_by) AS requester_display_name, d.updated_at FROM editorial_documents d LEFT JOIN editorial_member_profiles p ON lower(p.email) = lower(d.updated_by) WHERE d.status = 'in-review' ORDER BY d.updated_at ASC LIMIT 30",
           ).all<{
             id: string;
             subject: string;
             title: string;
             updated_by: string;
+            requester_display_name: string;
             updated_at: string;
           }>()
         : Promise.resolve({
@@ -5409,6 +5415,7 @@ async function adminNotifications(
               subject: string;
               title: string;
               updated_by: string;
+              requester_display_name: string;
               updated_at: string;
             }[],
           }),
@@ -5496,7 +5503,7 @@ async function adminNotifications(
           id: `review-${item.id}`,
           kind: "review",
           title: `査読依頼：${item.title}`,
-          detail: `担当分野：${item.subject} ／ 依頼者：${item.updated_by}`,
+          detail: `担当分野：${item.subject} ／ 依頼者：${item.requester_display_name}`,
           href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
           updatedAt: item.updated_at,
         }))

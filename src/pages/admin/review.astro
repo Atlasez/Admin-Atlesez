@@ -23,7 +23,7 @@ const categoryLabels = Object.fromEntries(subjectEntries.flatMap((subject) =>
       <div><p class="eyebrow">ATLASEZ / 運営内運営</p><h1>査読スペース</h1><p>査読中の原稿を確認し、コメント・保留・査読完了を行います。全分野管理者だけが利用できます。</p></div>
       <button type="button" class="quiet-action" data-review-refresh>一覧を更新</button>
     </header>
-    <details class="review-intro"><summary>匿名査読の流れ</summary><ol><li>原稿を開き、本文とプレビューを確認する。</li><li>コメント欄へ修正依頼または確認結果を残す。</li><li>修正が必要なら「査読中」または「保留」、完了なら「査読済み」として保存する。</li><li>公開判断は「記事編集」の公開ボタンで行う。</li></ol></details>
+    <details class="review-intro"><summary>査読の流れ</summary><ol><li>原稿を開き、本文とプレビューを確認する。</li><li>コメント欄へ修正依頼または確認結果を残す。</li><li>修正が必要なら「査読中」または「保留」、完了なら「査読済み」として保存する。</li><li>公開判断は「記事編集」の公開ボタンで行う。</li></ol></details>
     <div hidden data-review-labels data-subject-labels={JSON.stringify(subjectLabels)} data-category-labels={JSON.stringify(categoryLabels)}></div>
     <output class="review-feedback" data-review-feedback aria-live="polite">読み込み中…</output>
     <section class="review-list" data-review-list aria-label="査読依頼一覧"></section>
@@ -41,7 +41,7 @@ const categoryLabels = Object.fromEntries(subjectEntries.flatMap((subject) =>
 </style>
 
 <script>
-  type ReviewRequest = { id: string; subject: string; category: string; title: string; updated_at: string };
+  type ReviewRequest = { id: string; subject: string; category: string; title: string; requester_email: string; requester_display_name: string; updated_at: string };
   const initializeReviewSpace = () => {
     const root = document.querySelector<HTMLElement>("[data-review-space]");
     if (!root || root.dataset.reviewSpaceInitialized === "true") return;
@@ -58,7 +58,7 @@ const categoryLabels = Object.fromEntries(subjectEntries.flatMap((subject) =>
     const categoryName = (subject: string, slug: string) => categoryLabels[`${subject}/${slug}`] ?? slug;
     const read = async <T,>(response: Response) => { if (!(response.headers.get("content-type") ?? "").includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。"); return await response.json() as T; };
     let lastRequests: ReviewRequest[] = [];
-    const render = (requests: ReviewRequest[]) => { list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p class="review-card-meta"><span>${escapeHtml(subjectName(item.subject))}</span><span>${escapeHtml(categoryName(item.subject, item.category))}</span><time>${formatDate(item.updated_at)}</time></p></div><div class="review-card-tools"><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">査読する →</a></div></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; };
+    const render = (requests: ReviewRequest[]) => { list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p class="review-card-meta"><span>${escapeHtml(subjectName(item.subject))}</span><span>${escapeHtml(categoryName(item.subject, item.category))}</span><span>依頼者：${escapeHtml(item.requester_display_name || item.requester_email)}</span><time>${formatDate(item.updated_at)}</time></p></div><div class="review-card-tools"><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">査読する →</a></div></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; };
     const load = async () => { feedback.value = "読み込み中…"; refresh.disabled = true; try { const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" }); const data = await read<{ requests?: ReviewRequest[]; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。"); lastRequests = data.requests ?? []; render(lastRequests); feedback.value = `${lastRequests.length}件の査読依頼`; } catch (error) { const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。"; list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`; feedback.value = ""; } finally { refresh.disabled = false; } };
     refresh.addEventListener("click", () => void load());
     void load();
