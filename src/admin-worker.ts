@@ -4927,6 +4927,10 @@ const editorialMarkdown = (
   document: EditorialDocument,
   publicationStatus: "published" | "draft" = "published",
 ) => {
+  // 編集者が入力したタイトル・要約にはコロン、改行、記号が含まれ得る。
+  // YAMLのプレーン値として連結すると、公開時のCIでfrontmatterの解析に失敗するため、
+  // JSON文字列（YAMLでも有効なquoted scalar）として常にエスケープする。
+  const yamlString = (value: string) => JSON.stringify(value);
   const date = new Date().toISOString().slice(0, 10);
   const managementLocale =
     editorialLanguageCode(document.locale) ?? document.locale;
@@ -4936,20 +4940,20 @@ const editorialMarkdown = (
     throw new Error("原稿の言語コードを確認できませんでした。");
   return [
     "---",
-    `articleId: ${managementLocale}-${document.subject}-${document.slug}`,
-    `locale: ${publicLocale}`,
-    `title: ${document.title}`,
-    `slug: ${document.slug}`,
-    `subject: ${document.subject}`,
-    `category: ${document.category}`,
+    `articleId: ${yamlString(`${managementLocale}-${document.subject}-${document.slug}`)}`,
+    `locale: ${yamlString(publicLocale)}`,
+    `title: ${yamlString(document.title)}`,
+    `slug: ${yamlString(document.slug)}`,
+    `subject: ${yamlString(document.subject)}`,
+    `category: ${yamlString(document.category)}`,
     "concepts:",
-    `  - id: ${document.concept_id}`,
-    "authors: [editorial-workspace]",
-    `reviewers: [${document.updated_by}]`,
-    `status: ${publicationStatus}`,
-    `createdAt: ${date}`,
-    `updatedAt: ${date}`,
-    `summary: ${document.summary}`,
+    `  - id: ${yamlString(document.concept_id)}`,
+    `authors: [${yamlString("editorial-workspace")}]`,
+    `reviewers: [${yamlString(document.updated_by)}]`,
+    `status: ${yamlString(publicationStatus)}`,
+    `createdAt: ${yamlString(date)}`,
+    `updatedAt: ${yamlString(date)}`,
+    `summary: ${yamlString(document.summary)}`,
     "difficulty: basic",
     "estimatedMinutes: 10",
     "tags: []",
