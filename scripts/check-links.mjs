@@ -41,6 +41,16 @@ for (const file of files) {
     if (basePath && url.startsWith(basePath)) url = url.slice(basePath.length);
     if (!url.startsWith("/")) continue; // 相対リンクは対象外（記事内では使わない方針）
     const clean = url.split("?")[0];
+    // Admin Worker が実行時に提供する認証・API ルートは静的ビルドに
+    // ファイルを持たないため、静的なリンク検査の対象外とする。
+    if (
+      clean === "/auth" ||
+      clean.startsWith("/auth/") ||
+      clean === "/api" ||
+      clean.startsWith("/api/")
+    ) {
+      continue;
+    }
     const candidates = [
       join(dist, clean),
       join(dist, clean, "index.html"),
