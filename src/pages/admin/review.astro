@@ -1,6 +1,19 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
+import { getCollection } from "astro:content";
+
+const subjectEntries = await getCollection("subjects");
+const subjectLabels = Object.fromEntries(subjectEntries.map((subject) => [
+  subject.data.slug,
+  subject.data.name.ja,
+]));
+const categoryLabels = Object.fromEntries(subjectEntries.flatMap((subject) =>
+  subject.data.categories.map((category) => [
+    `${subject.data.slug}/${category.slug}`,
+    category.name.ja,
+  ]),
+));
 ---
 
 <AdminLayout title="査読スペース" description="運営内運営が査読依頼を確認する画面">
@@ -10,20 +23,21 @@ import AdminNav from "../../components/AdminNav.astro";
       <div><p class="eyebrow">ATLASEZ / 運営内運営</p><h1>査読スペース</h1><p>査読中の原稿を確認し、コメント・保留・査読完了を行います。全分野管理者だけが利用できます。</p></div>
       <button type="button" class="quiet-action" data-review-refresh>一覧を更新</button>
     </header>
-    <section class="review-intro"><strong>匿名査読の流れ</strong><ol><li>原稿を開き、本文とプレビューを確認する。</li><li>コメント欄へ修正依頼または確認結果を残す。</li><li>修正が必要なら「査読中」または「保留」、完了なら「査読済み」として保存する。</li><li>公開判断は「記事編集」の公開ボタンで行う。</li></ol></section>
+    <details class="review-intro"><summary>匿名査読の流れ</summary><ol><li>原稿を開き、本文とプレビューを確認する。</li><li>コメント欄へ修正依頼または確認結果を残す。</li><li>修正が必要なら「査読中」または「保留」、完了なら「査読済み」として保存する。</li><li>公開判断は「記事編集」の公開ボタンで行う。</li></ol></details>
+    <div hidden data-review-labels data-subject-labels={JSON.stringify(subjectLabels)} data-category-labels={JSON.stringify(categoryLabels)}></div>
     <output class="review-feedback" data-review-feedback aria-live="polite">読み込み中…</output>
     <section class="review-list" data-review-list aria-label="査読依頼一覧"></section>
   </main>
 </AdminLayout>
 
-<style>
+<style is:global>
   .review-space { --surface:var(--background-primary); --alt:var(--background-secondary); --border:var(--border-default); --text:var(--text-primary); --muted:var(--text-secondary); --accent:var(--accent-primary); box-sizing:border-box; color:var(--text); margin:0 auto; max-width:1050px; padding:0 1.25rem 4rem; }
   .review-heading { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:2rem 0 1.25rem; }
   .eyebrow { color:var(--accent); font-size:.76rem; font-weight:800; letter-spacing:.08em; margin:0 0 .35rem; }.review-heading h1 { font-size:clamp(1.8rem,4vw,2.35rem); margin:0; }.review-heading p { color:var(--muted); line-height:1.6; margin:.45rem 0 0; }
   .quiet-action { background:var(--surface); border:1px solid var(--border); color:var(--text); cursor:pointer; font:inherit; font-size:.82rem; font-weight:800; min-height:2.35rem; padding:.45rem .7rem; }.quiet-action:hover { border-color:var(--accent); color:var(--accent); }
-  .review-intro { background:var(--alt); border:1px solid var(--border); border-left:3px solid var(--accent); margin:1.25rem 0; padding:.8rem .95rem; }.review-intro ol { color:var(--muted); line-height:1.7; margin:.45rem 0 0; padding-left:1.25rem; }.review-feedback { color:var(--muted); display:block; font-size:.85rem; min-height:1.3rem; }.review-list { border:1px solid var(--border); display:grid; margin-top:.3rem; }
-  .review-card { background:var(--surface); border-bottom:1px solid var(--border); display:grid; gap:.75rem; padding:.85rem .9rem; }.review-card:last-child { border-bottom:0; }.review-card:hover { background:var(--alt); }.review-card h2 { font-size:1rem; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.review-card p { color:var(--muted); font-size:.76rem; margin:.26rem 0 0; }.review-card a { background:var(--accent); color:#fff; font-size:.8rem; font-weight:800; padding:.5rem .65rem; text-decoration:none; white-space:nowrap; }.review-card-tools { align-items:center; display:flex; justify-content:flex-end; }.review-empty { color:var(--muted); padding:3rem 1rem; text-align:center; }
-  @media(max-width:650px){.review-space{padding:0 .9rem 3rem}.review-heading,.review-card{display:grid;grid-template-columns:1fr}.review-card a{justify-self:start}}
+  .review-intro { background:var(--alt); border:1px solid var(--border); border-left:3px solid var(--accent); margin:1rem 0 .8rem; padding:.55rem .75rem; }.review-intro summary { color:var(--accent); cursor:pointer; font-size:.78rem; font-weight:800; list-style:none; }.review-intro summary::-webkit-details-marker { display:none; }.review-intro summary::before { content:"▸"; display:inline-block; margin-right:.35rem; transition:transform .15s ease; }.review-intro[open] summary::before { transform:rotate(90deg); }.review-intro ol { color:var(--muted); font-size:.75rem; line-height:1.55; margin:.45rem 0 .05rem; padding-left:1.15rem; }.review-feedback { color:var(--muted); display:block; font-size:.78rem; min-height:1.1rem; }.review-list { border:1px solid var(--border); display:grid; margin-top:.2rem; }
+  .review-card { align-items:center; background:var(--surface); border-bottom:1px solid var(--border); display:grid; gap:.6rem; grid-template-columns:minmax(0,1fr) auto; padding:.55rem .7rem; }.review-card:last-child { border-bottom:0; }.review-card:hover { background:var(--alt); }.review-card h2 { font-size:.9rem; line-height:1.35; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.review-card p { align-items:center; color:var(--muted); display:flex; flex-wrap:wrap; font-size:.7rem; gap:.3rem .45rem; margin:.22rem 0 0; }.review-card-meta span { background:var(--alt); border:1px solid var(--border); border-radius:999px; padding:.12rem .35rem; }.review-card-meta time { white-space:nowrap; }.review-card a { background:var(--accent); border-radius:.35rem; color:#fff; font-size:.73rem; font-weight:800; padding:.42rem .55rem; text-decoration:none; white-space:nowrap; }.review-card a:hover { filter:brightness(.94); }.review-card-tools { align-items:center; display:flex; justify-content:flex-end; }.review-empty { color:var(--muted); padding:2rem 1rem; text-align:center; }
+  @media(max-width:650px){.review-space{padding:0 .9rem 3rem}.review-heading{display:grid;grid-template-columns:1fr}.review-heading .quiet-action{justify-self:start}.review-card{align-items:start;grid-template-columns:minmax(0,1fr) auto;padding:.55rem .6rem}.review-card h2{white-space:normal}.review-card a{font-size:.7rem;padding:.4rem .45rem}}
 </style>
 
 <script>
@@ -35,11 +49,16 @@ import AdminNav from "../../components/AdminNav.astro";
     const list = root.querySelector<HTMLElement>("[data-review-list]")!;
     const feedback = root.querySelector<HTMLOutputElement>("[data-review-feedback]")!;
     const refresh = root.querySelector<HTMLButtonElement>("[data-review-refresh]")!;
+    const labels = root.querySelector<HTMLElement>("[data-review-labels]");
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
     const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const subjectLabels = JSON.parse(labels?.dataset.subjectLabels ?? "{}") as Record<string, string>;
+    const categoryLabels = JSON.parse(labels?.dataset.categoryLabels ?? "{}") as Record<string, string>;
+    const subjectName = (slug: string) => subjectLabels[slug] ?? slug;
+    const categoryName = (subject: string, slug: string) => categoryLabels[`${subject}/${slug}`] ?? slug;
     const read = async <T,>(response: Response) => { if (!(response.headers.get("content-type") ?? "").includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。"); return await response.json() as T; };
     let lastRequests: ReviewRequest[] = [];
-    const render = (requests: ReviewRequest[]) => { list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.subject)} / ${escapeHtml(item.category)} ・ ${formatDate(item.updated_at)}</p></div><div class="review-card-tools"><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">原稿を開いて査読</a></div></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; };
+    const render = (requests: ReviewRequest[]) => { list.innerHTML = requests.length ? requests.map((item) => `<article class="review-card"><div><h2>${escapeHtml(item.title)}</h2><p class="review-card-meta"><span>${escapeHtml(subjectName(item.subject))}</span><span>${escapeHtml(categoryName(item.subject, item.category))}</span><time>${formatDate(item.updated_at)}</time></p></div><div class="review-card-tools"><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">査読する →</a></div></article>`).join("") : '<p class="review-empty">現在、査読依頼はありません。</p>'; };
     const load = async () => { feedback.value = "読み込み中…"; refresh.disabled = true; try { const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" }); const data = await read<{ requests?: ReviewRequest[]; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。"); lastRequests = data.requests ?? []; render(lastRequests); feedback.value = `${lastRequests.length}件の査読依頼`; } catch (error) { const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。"; list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`; feedback.value = ""; } finally { refresh.disabled = false; } };
     refresh.addEventListener("click", () => void load());
     void load();
