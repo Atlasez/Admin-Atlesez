@@ -9,7 +9,7 @@ const { current: requestedCurrent, site: requestedSite } = Astro.props;
 const normalizedPath = Astro.url.pathname.replace(/\/$/, "") || "/";
 const requestedProject = Astro.url.searchParams.get("project");
 const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
-const querySite = requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "semi-platform" : "atlas";
+const querySite = requestedProject === "portal" ? "portal" : requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "semi-platform" : "atlas";
 const routeSite = normalizedPath === "/admin/portal"
   ? "portal"
   : normalizedPath === "/admin/secretariat"
@@ -87,13 +87,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   </div>
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
-      <a href="/admin/introductions/" data-admin-site="portal" data-admin-page="portal-introductions" data-admin-i18n data-admin-ja="運営紹介" data-admin-en="Operator introductions" aria-current={site === "portal" && current === "portal" ? "page" : undefined}>運営紹介</a>
+      <a href="/admin/introductions/?project=portal" data-admin-site="portal" data-admin-page="introductions" data-admin-i18n data-admin-ja="運営紹介" data-admin-en="Operator introductions" aria-current={site === "portal" && current === "introductions" ? "page" : undefined}>運営紹介</a>
       <a href="/admin/workspace/" data-admin-site="portal" data-admin-page="portal-workspace" data-admin-i18n data-admin-ja="マイページ" data-admin-en="My page">マイページ</a>
       <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・査読</a>
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>進捗・ToDo・日程</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局ToDo・日程</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ運営・ToDo</a>
-    <details class="admin-management-menu" hidden={site === "portal"} open={(["reports", "permissions", "guide", "applications", "introductions", "co-working"] as string[]).includes(current)}>
+    <details class="admin-management-menu" hidden={site === "portal"} open={(["reports", "permissions", "guide", "applications", "co-working"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
         <a href={`/admin/co-working/?project=atlas`} data-admin-site="atlas" data-admin-page="co-working" hidden={site !== "atlas"} aria-current={current === "co-working" && site === "atlas" ? "page" : undefined}>同時作業会</a>
@@ -102,7 +102,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         <a href={`/admin/permissions/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="permissions" aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
         <a href={`/admin/reports/?project=${projectSlug}`} data-admin-site={site} data-admin-page="reports" aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
         <a href={`/admin/guide/?project=${projectSlug}`} data-admin-site={site} data-admin-page="guide" aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
-        <a href={`/admin/introductions/?project=${projectSlug}`} data-admin-site={site} data-admin-page="introductions" aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
         <a href={`/admin/applications/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="applications" aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
       </div>
     </details>
@@ -156,7 +155,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
-      const site = path === '/admin/portal' ? 'portal' : project === 'secretariat' || path === '/admin/secretariat' ? 'secretariat' : project === 'seminar-platform' || path === '/admin/semi-platform' ? 'semi-platform' : 'atlas';
+      const site = path === '/admin/portal' || project === 'portal' ? 'portal' : project === 'secretariat' || path === '/admin/secretariat' ? 'secretariat' : project === 'seminar-platform' || path === '/admin/semi-platform' ? 'semi-platform' : 'atlas';
       const slug = site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : 'atlas';
       const labels: Record<RouteState['site'], string> = { portal: 'Atlasezメンバー用サイト', atlas: '学習サイト「アトラス」運営用サイト', 'semi-platform': 'ゼミプラットフォーム', secretariat: 'Atlasez運営事務局' };
       const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path.slice('/admin/'.length) || 'atlas';
@@ -179,7 +178,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       primaryNav?.classList.remove('is-open');
       document.querySelectorAll<HTMLElement>('[data-admin-site]').forEach((link) => { link.hidden = link.dataset.adminSite !== state.site; });
       document.querySelectorAll<HTMLElement>('[data-admin-page]').forEach((link) => { link.setAttribute('aria-current', link.dataset.adminPage === state.current && link.closest('[data-admin-site]')?.getAttribute('data-admin-site') === state.site ? 'page' : 'false'); });
-      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['reports', 'permissions', 'guide', 'applications', 'introductions', 'co-working'].includes(state.current); });
+      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['reports', 'permissions', 'guide', 'applications', 'co-working'].includes(state.current); });
       if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : 'Atlas learning site operations'; }
       const logo = document.querySelector<HTMLAnchorElement>('.admin-nav-brand-logo');
       if (logo) logo.href = state.home;
