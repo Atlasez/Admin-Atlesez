@@ -1,11 +1,7 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminNav from "../../components/AdminNav.astro";
 import { getCollection } from "astro:content";
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
-const requestedProject = Astro.url.searchParams.get("project");
-const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
-const operationSite = operationProject === "seminar-platform" ? "semi-platform" : operationProject;
 const timezones = [
   ["Asia/Tokyo", "日本（東京）"], ["Asia/Seoul", "韓国（ソウル）"], ["Asia/Shanghai", "中国（上海）"], ["Asia/Taipei", "台湾（台北）"], ["Asia/Hong_Kong", "香港"], ["Asia/Singapore", "シンガポール"], ["Asia/Bangkok", "タイ（バンコク）"], ["Asia/Kolkata", "インド（コルカタ）"], ["Asia/Dubai", "アラブ首長国連邦（ドバイ）"], ["Australia/Sydney", "オーストラリア（シドニー）"], ["Pacific/Auckland", "ニュージーランド（オークランド）"], ["Europe/London", "英国（ロンドン）"], ["Europe/Paris", "フランス・中央ヨーロッパ"], ["Europe/Berlin", "ドイツ（ベルリン）"], ["Europe/Rome", "イタリア（ローマ）"], ["Europe/Madrid", "スペイン（マドリード）"], ["Europe/Moscow", "ロシア（モスクワ）"], ["Africa/Cairo", "エジプト（カイロ）"], ["Africa/Johannesburg", "南アフリカ（ヨハネスブルク）"], ["America/Sao_Paulo", "ブラジル（サンパウロ）"], ["America/New_York", "米国東部（ニューヨーク）"], ["America/Chicago", "米国中部（シカゴ）"], ["America/Denver", "米国山岳部（デンバー）"], ["America/Los_Angeles", "米国太平洋（ロサンゼルス）"], ["America/Anchorage", "米国アラスカ"], ["Pacific/Honolulu", "米国ハワイ"], ["America/Toronto", "カナダ（トロント）"], ["America/Vancouver", "カナダ（バンクーバー）"], ["America/Mexico_City", "メキシコ（メキシコシティ）"], ["UTC", "協定世界時（UTC）"],
 ] as const;
@@ -15,8 +11,8 @@ const holidayCountries = [
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
 ---
 <AdminLayout title="進捗・ToDo・日程" description="運営作業を共有する場所">
-<main class="operations" data-operations><AdminNav current="operations" site={operationSite} />
-<header><h1 data-project-title>進捗・ToDo・日程</h1><span>作業を終えたら進捗を残し、次の作業と参加可能な日程を共有します。</span><nav class="project-switcher" aria-label="プロジェクト切替"><a href="/admin/operations/?project=atlas">アトラス</a><a href="/admin/operations/?project=seminar-platform">ゼミプラットフォーム</a><a href="/admin/operations/?project=secretariat">運営事務局</a></nav></header>
+<main class="operations" data-operations>
+<header><h1 data-project-title>進捗・ToDo・日程</h1><span>作業を終えたら進捗を残し、次の作業と参加可能な日程を共有します。</span></header>
 <div class="grid">
 <section><h2>進捗を報告</h2><p>編集・査読の完了後に、ここへ短く記録できます。</p><p class="discord-notice">記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。</p><label class="field-label">進捗内容<textarea data-progress placeholder="例：群の定義を修正し、査読コメント3件に対応しました。"></textarea></label><button data-send-progress>進捗を記録してDiscordへ送る</button><output data-progress-feedback aria-live="polite"></output><h3 class="subheading">自分が投げた進捗報告</h3><div data-progress-list></div></section>
 <section><h2>ToDo</h2><p>「自分がこなす」「自分が依頼」「すべて」を切り替えると、この直下の一覧が変わります。</p><div class="task-filters" role="group" aria-label="ToDoの表示対象"><button type="button" class="is-selected" data-task-filter="assigned" aria-pressed="true">自分がこなす</button><button type="button" data-task-filter="created" aria-pressed="false">自分が依頼</button><button type="button" data-task-filter="all" aria-pressed="false">すべて</button></div><input data-task-title placeholder="タスク名"/><label class="field-label">対象分野<select data-task-subject><option value="">全体</option>{subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}</select></label><label class="field-label">担当者<select data-task-assignee><option value="">担当者を指定しない</option></select></label><div class="task-deadline"><label class="field-label">期限日時<input data-task-due type="datetime-local" /></label><label class="field-label">期限のタイムゾーン<select data-task-due-timezone>{timezones.map(([value, label]) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}</select></label></div><div class="task-reminder-settings"><h3>自分用リマインダー</h3><p>期限基準の「N日前」「N時間前」「当日毎時」、または指定日時を複数登録できます。メール欄が空欄なら通知ベルに表示します。</p><div data-task-reminder-list><div class="task-reminder-row" data-task-reminder-row><label class="field-label">種類<select data-reminder-kind><option value="before_days">N日前</option><option value="before_hours">N時間前</option><option value="due_day_hourly">当日毎時</option><option value="absolute">指定日時</option></select></label><label class="field-label" data-reminder-amount-label>数量<input data-reminder-amount type="number" min="1" max="8760" placeholder="N" /></label><label class="field-label" data-reminder-start-label hidden>開始時刻<input data-reminder-start type="time" value="09:00" /></label><label class="field-label" data-reminder-at-label hidden>日時<input data-reminder-at type="datetime-local" /></label><button type="button" class="task-reminder-remove" data-remove-reminder hidden>削除</button></div></div><button type="button" class="secondary-button" data-add-task-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し（1つのリマインダーにのみ適用）<select data-task-reminder-repeat><option value="none">1回</option><option value="daily">毎日</option><option value="weekly">毎週</option><option value="monthly">毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input data-task-reminder-email type="email" maxlength="254" placeholder="自分のメールアドレス" /></label></div><textarea data-task-details placeholder="補足・依頼内容（任意）"></textarea><button data-create-task>タスクを追加</button><output class="operation-feedback" data-task-feedback aria-live="polite"></output><div data-task-list aria-live="polite"></div></section>
@@ -63,9 +59,6 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
   @media(max-width:700px){.task-reminder-row{grid-template-columns:1fr}.task-reminder-row button{width:auto}}
 </style>
 <style is:global>
-  .project-switcher { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.8rem; }
-  .project-switcher a { border:1px solid var(--border-default); border-radius:999px; color:var(--text-primary); font-size:.74rem; font-weight:800; padding:.35rem .6rem; text-decoration:none; }
-  .project-switcher a:hover { border-color:var(--accent-primary); color:var(--accent-primary); }
   .task-filters { display:flex; flex-wrap:wrap; gap:.4rem; margin:.7rem 0; }
   .task-filters button { background:var(--background-primary); border-color:var(--border-default); border-radius:999px; color:var(--text-primary); margin:0; }
   .task-filters button.is-selected { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }

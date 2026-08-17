@@ -1,6 +1,5 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminNav from "../../components/AdminNav.astro";
 import { OPERATOR_INTRODUCTIONS } from "../../data/operator-introductions";
 
 const introductions = OPERATOR_INTRODUCTIONS.map((entry) => {
@@ -16,7 +15,6 @@ const introductions = OPERATOR_INTRODUCTIONS.map((entry) => {
 
 <AdminLayout title="運営内自己紹介" description="運営メンバーの自己紹介">
   <main class="introductions-page">
-    <AdminNav current="introductions" />
     <header class="page-heading">
       <h1>運営内自己紹介</h1>
       <span>運営メンバーの所属・担当・自己紹介を確認できます。</span>

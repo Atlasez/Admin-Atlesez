@@ -1,10 +1,57 @@
 ---
+import SettingsMenu from "./SettingsMenu.astro";
+
 interface Props {
-  current: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working";
+  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working";
   site?: "portal" | "atlas" | "semi-platform" | "secretariat";
 }
-const { current, site: requestedSite } = Astro.props;
-const site = requestedSite ?? (current === "portal" ? "portal" : "atlas");
+const { current: requestedCurrent, site: requestedSite } = Astro.props;
+const normalizedPath = Astro.url.pathname.replace(/\/$/, "") || "/";
+const requestedProject = Astro.url.searchParams.get("project");
+const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
+const querySite = requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "semi-platform" : "atlas";
+const routeSite = normalizedPath === "/admin/portal"
+  ? "portal"
+  : normalizedPath === "/admin/secretariat"
+    ? "secretariat"
+    : normalizedPath === "/admin/semi-platform"
+      ? "semi-platform"
+      : normalizedPath === "/admin/operations" || normalizedPath === "/admin/co-working"
+        ? operationProject === "seminar-platform" ? "semi-platform" : operationProject
+        : normalizedPath === "/admin/secretariat" ? "secretariat" : normalizedPath === "/admin/semi-platform" ? "semi-platform" : querySite;
+const routeCurrent = normalizedPath === "/admin/portal"
+  ? "portal"
+  : normalizedPath === "/admin/atlas"
+    ? "atlas"
+    : normalizedPath === "/admin/secretariat"
+      ? "secretariat"
+      : normalizedPath === "/admin/semi-platform"
+        ? "semi-platform"
+        : normalizedPath === "/admin/articles"
+          ? "articles"
+          : normalizedPath === "/admin/editor"
+            ? "editor"
+            : normalizedPath === "/admin/workspace"
+              ? "workspace"
+              : normalizedPath === "/admin/operations"
+                ? "operations"
+                : normalizedPath === "/admin/co-working"
+                  ? "co-working"
+                  : normalizedPath === "/admin/review"
+                    ? "review"
+                    : normalizedPath === "/admin/reports"
+                      ? "reports"
+                      : normalizedPath === "/admin/permissions"
+                        ? "permissions"
+                        : normalizedPath === "/admin/guide"
+                          ? "guide"
+                          : normalizedPath === "/admin/applications"
+                            ? "applications"
+                            : normalizedPath === "/admin/introductions"
+                              ? "introductions"
+                              : "atlas";
+const current = requestedCurrent ?? routeCurrent;
+const site = requestedSite ?? routeSite;
 // UIでは短いサイトキーを保ちつつ、D1では参加者が存在する正規slugを使う。
 const projectSlug = site === "secretariat" ? "secretariat" : site === "semi-platform" ? "seminar-platform" : "atlas";
 const homePath = site === "portal" ? "/admin/portal/" : site === "secretariat" ? "/admin/secretariat/" : site === "semi-platform" ? "/admin/semi-platform/" : "/admin/atlas/";
@@ -25,52 +72,44 @@ const pageLabel = ({
   applications: "運営参加応募",
   introductions: "運営内自己紹介",
   "co-working": "同時作業会",
-} as Record<Props["current"], string>)[current];
-const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secretariat"]);
+} as Record<NonNullable<Props["current"]>, string>)[current];
+const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "secretariat"]);
 ---
-<header class="admin-nav">
-  <a class="admin-nav-brand-logo" href={homePath} data-astro-reload aria-label={`${brandLabel}のトップへ戻る`}><img src="/images/atlasez-logo.png" alt="" width="34" height="34" /></a>
+<header class="admin-nav" data-admin-nav data-current-site={site} data-current-slug={projectSlug} transition:persist="admin-nav">
+  <a class="admin-nav-brand-logo" href={homePath} aria-label={`${brandLabel}のトップへ戻る`}><img src="/images/atlasez-logo.png" alt="" width="34" height="34" /></a>
   <div class="admin-project-switcher" data-project-switcher data-current-site={site} data-current-slug={projectSlug}>
     <button type="button" class="admin-project-switcher-button" data-project-previous aria-label="前のプロジェクト">‹</button>
     <div class="admin-project-switcher-content">
-      <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-astro-reload data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : "Atlas learning site operations"}>{brandLabel}</a>
+      <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : "Atlas learning site operations"}>{brandLabel}</a>
       <span class="admin-project-switcher-dots" data-project-dots></span>
     </div>
     <button type="button" class="admin-project-switcher-button" data-project-next aria-label="次のプロジェクト">›</button>
   </div>
-  {site !== "portal" && <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>}
-  {site !== "portal" && <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
-    <>
-      {site === "atlas" && <a href="/admin/articles" data-astro-reload aria-current={current === "articles" ? "page" : undefined}>編集・査読</a>}
-      <a href={`/admin/operations/?project=${projectSlug}`} data-astro-reload aria-current={current === "operations" ? "page" : undefined}>進捗・ToDo・日程</a>
-      {site === "atlas" && <>
-        <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>同時作業会</a>
-      </>}
-      {(site === "secretariat" || site === "semi-platform") && <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>日程・同時作業会</a>}
-    </>
+  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav" hidden={site === "portal"}><span aria-hidden="true">☰</span><span>メニュー</span></button>
+  <nav id="admin-primary-nav" aria-label="運営用サイトメニュー" hidden={site === "portal"}>
+      <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・査読</a>
+      <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>進捗・ToDo・日程</a>
+      <a href="/admin/co-working/?project=atlas" data-admin-site="atlas" data-admin-page="co-working" aria-current={current === "co-working" && site === "atlas" ? "page" : undefined}>同時作業会</a>
+      <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局ToDo・日程</a>
+      <a href="/admin/co-working/?project=secretariat" data-admin-site="secretariat" data-admin-page="co-working" aria-current={current === "co-working" && site === "secretariat" ? "page" : undefined}>事務局の日程・交流</a>
+      <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ運営・ToDo</a>
+      <a href="/admin/co-working/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="co-working" aria-current={current === "co-working" && site === "semi-platform" ? "page" : undefined}>ゼミ日程・交流</a>
     <details class="admin-management-menu" open={(["reports", "permissions", "guide", "applications", "introductions"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
-        <a href="/admin/permissions" data-manager-only hidden data-astro-reload aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
-        <a href="/admin/reports" data-astro-reload aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
-        <a href="/admin/guide" data-astro-reload aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
-        <a href="/admin/introductions" data-astro-reload aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
-        <a href="/admin/applications" data-manager-only hidden data-astro-reload aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
+        <a href={`/admin/permissions/?project=${projectSlug}`} data-manager-only hidden data-admin-page="permissions" aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
+        <a href={`/admin/reports/?project=${projectSlug}`} data-admin-page="reports" aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
+        <a href={`/admin/guide/?project=${projectSlug}`} data-admin-page="guide" aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
+        <a href={`/admin/introductions/?project=${projectSlug}`} data-admin-page="introductions" aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
+        <a href={`/admin/applications/?project=${projectSlug}`} data-manager-only hidden data-admin-page="applications" aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
       </div>
     </details>
-  </nav>}
+  </nav>
   <div class="admin-account" data-admin-account hidden>
-    {site === "portal" && <details class="admin-display-settings" data-admin-display-settings>
-      <summary data-admin-i18n data-admin-ja="表示設定" data-admin-en="Display settings">表示設定</summary>
-      <div class="admin-display-settings-panel">
-        <label><span data-admin-i18n data-admin-ja="表示言語" data-admin-en="Language">表示言語</span><select data-admin-language aria-label="表示言語"><option value="ja">日本語</option><option value="en">English</option></select></label>
-        <button type="button" class="admin-theme-toggle" data-theme-toggle aria-pressed="false"><span data-admin-theme-label>ダーク表示</span></button>
-        <small data-admin-i18n data-admin-ja="この設定はこのブラウザに保存されます。" data-admin-en="These settings are saved in this browser.">この設定はこのブラウザに保存されます。</small>
-      </div>
-    </details>}
+    <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
     <div class="admin-notification-panel" data-admin-notification-panel hidden><div class="notification-panel-heading"><strong>通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list><span class="admin-notification-loading">通知を確認しています…</span></div></div>
-    <a class="admin-account-profile" href="/admin/workspace" data-astro-reload aria-label="マイページを開く">
+    <a class="admin-account-profile" href="/admin/workspace/" aria-label="マイページを開く">
       <span class="admin-account-avatar" data-admin-account-avatar aria-hidden="true"><img data-admin-account-image alt="" hidden /><span data-admin-account-fallback>A</span></span>
       <span class="admin-account-email" data-admin-account-email>アカウント</span>
     </a>
@@ -79,8 +118,10 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
     </form>
   </div>
 </header>
-{site !== "portal" && <nav class="admin-breadcrumbs" aria-label="パンくず"><a href="/admin/portal/" data-astro-reload>Atlasezメンバー用サイト</a><span aria-hidden="true">›</span>{projectHome.has(current) ? <span aria-current="page">{brandLabel}</span> : <><a href={homePath} data-astro-reload>{brandLabel}</a><span aria-hidden="true">›</span><span aria-current="page">{pageLabel}</span></>}</nav>}
+<nav class="admin-breadcrumbs" data-admin-breadcrumbs aria-label="パンくず" hidden={site === "portal"} transition:persist="admin-breadcrumbs"><a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span>{projectHome.has(current) ? <span aria-current="page">{brandLabel}</span> : <><a href={homePath}>{brandLabel}</a><span aria-hidden="true">›</span><span aria-current="page">{pageLabel}</span></>}</nav>
 <script>
+  import { navigate } from "astro:transitions/client";
+
   (() => {
     const preferencesKey = 'atlasez-prefs';
     const languageKey = 'atlasez-admin-language';
@@ -88,45 +129,66 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
     const readPreferences = (): Record<string, string> => {
       try { return JSON.parse(localStorage.getItem(preferencesKey) ?? '{}') as Record<string, string>; } catch { return {}; }
     };
-    const currentLanguage = (): AdminLanguage => localStorage.getItem(languageKey) === 'en' ? 'en' : 'ja';
+    const currentLanguage = (): AdminLanguage => {
+      const preferences = readPreferences();
+      return preferences.lang === 'eng' || preferences.lang === 'en' || localStorage.getItem(languageKey) === 'en' ? 'en' : 'ja';
+    };
     const languageText = (element: HTMLElement, language: AdminLanguage) => element.dataset[language === 'ja' ? 'adminJa' : 'adminEn'] ?? element.textContent ?? '';
     const applyLanguage = (language: AdminLanguage) => {
       document.documentElement.lang = language;
       document.querySelectorAll<HTMLElement>('[data-admin-i18n]').forEach((element) => { element.textContent = languageText(element, language); });
       document.querySelectorAll<HTMLSelectElement>('[data-admin-language]').forEach((select) => { select.value = language; });
-      document.querySelectorAll<HTMLElement>('[data-admin-theme-label]').forEach((label) => {
-        label.textContent = language === 'ja' ? (document.documentElement.dataset.prefBg === 'dark' ? 'ライト表示' : 'ダーク表示') : (document.documentElement.dataset.prefBg === 'dark' ? 'Light mode' : 'Dark mode');
-      });
-      document.querySelectorAll<HTMLSelectElement>('[data-admin-language]').forEach((select) => { select.setAttribute('aria-label', language === 'ja' ? '表示言語' : 'Language'); });
       document.querySelectorAll<HTMLButtonElement>('[data-project-previous]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '前のプロジェクト' : 'Previous project'));
       document.querySelectorAll<HTMLButtonElement>('[data-project-next]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '次のプロジェクト' : 'Next project'));
-      document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '表示テーマを切り替える' : 'Toggle display theme'));
     };
     const applyTheme = (dark: boolean, persist = false) => {
       document.documentElement.dataset.prefBg = dark ? 'dark' : '';
       const preferences = readPreferences();
-      document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
-        button.setAttribute('aria-pressed', String(dark));
-        const label = button.querySelector<HTMLElement>('[data-admin-theme-label]');
-        if (label) label.textContent = currentLanguage() === 'ja' ? (dark ? 'ライト表示' : 'ダーク表示') : (dark ? 'Light mode' : 'Dark mode');
-        else button.textContent = dark ? '☀ ライトモード' : '☾ ダークモード';
-      });
       if (persist) { if (dark) preferences.bg = 'dark'; else delete preferences.bg; localStorage.setItem(preferencesKey, JSON.stringify(preferences)); }
     };
     applyTheme(readPreferences().bg === 'dark');
     applyLanguage(currentLanguage());
-    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-      button.addEventListener('click', () => applyTheme(document.documentElement.dataset.prefBg !== 'dark', true));
-    });
-    document.querySelectorAll<HTMLSelectElement>('[data-admin-language]').forEach((select) => {
-      select.addEventListener('change', () => {
-        const language = select.value === 'en' ? 'en' : 'ja';
-        localStorage.setItem(languageKey, language);
-        applyLanguage(language);
-        document.dispatchEvent(new CustomEvent('atlasez-admin-language-change', { detail: language }));
-      });
-    });
-    document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg === 'dark'); applyLanguage(currentLanguage()); });
+
+    type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'secretariat'; slug: string; current: string; home: string; label: string };
+    const pageLabels: Record<string, string> = { articles: '編集・査読', editor: '記事編集', workspace: 'マイページ', operations: '進捗・ToDo・日程', 'co-working': '同時作業会', reports: '問題報告・統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: '査読スペース' };
+    const readRouteState = (): RouteState => {
+      const path = window.location.pathname.replace(/\/$/, '') || '/';
+      const project = new URLSearchParams(window.location.search).get('project');
+      const site = path === '/admin/portal' ? 'portal' : project === 'secretariat' || path === '/admin/secretariat' ? 'secretariat' : project === 'seminar-platform' || path === '/admin/semi-platform' ? 'semi-platform' : 'atlas';
+      const slug = site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : 'atlas';
+      const labels: Record<RouteState['site'], string> = { portal: 'Atlasezメンバー用サイト', atlas: '学習サイト「アトラス」運営用サイト', 'semi-platform': 'ゼミプラットフォーム', secretariat: 'Atlasez運営事務局' };
+      const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path.slice('/admin/'.length) || 'atlas';
+      return { site, slug, current, home: site === 'portal' ? '/admin/portal/' : site === 'secretariat' ? '/admin/secretariat/' : site === 'semi-platform' ? '/admin/semi-platform/' : '/admin/atlas/', label: labels[site] };
+    };
+    const syncRouteChrome = () => {
+      const state = readRouteState();
+      const nav = document.querySelector<HTMLElement>('[data-admin-nav]');
+      const primaryNav = document.querySelector<HTMLElement>('#admin-primary-nav');
+      const menuToggle = document.querySelector<HTMLButtonElement>('[data-admin-menu-toggle]');
+      const breadcrumbs = document.querySelector<HTMLElement>('[data-admin-breadcrumbs]');
+      const title = document.querySelector<HTMLAnchorElement>('[data-project-current-link]');
+      const switcher = document.querySelector<HTMLElement>('[data-project-switcher]');
+      nav?.setAttribute('data-current-site', state.site);
+      nav?.setAttribute('data-current-slug', state.slug);
+      switcher?.setAttribute('data-current-site', state.site);
+      switcher?.setAttribute('data-current-slug', state.slug);
+      if (primaryNav) primaryNav.hidden = state.site === 'portal';
+      if (menuToggle) { menuToggle.hidden = state.site === 'portal'; menuToggle.setAttribute('aria-expanded', 'false'); }
+      primaryNav?.classList.remove('is-open');
+      document.querySelectorAll<HTMLElement>('[data-admin-site]').forEach((link) => { link.hidden = link.dataset.adminSite !== state.site; });
+      document.querySelectorAll<HTMLElement>('[data-admin-page]').forEach((link) => { link.setAttribute('aria-current', link.dataset.adminPage === state.current && link.closest('[data-admin-site]')?.getAttribute('data-admin-site') === state.site ? 'page' : 'false'); });
+      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.open = ['reports', 'permissions', 'guide', 'applications', 'introductions'].includes(state.current); });
+      if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : 'Atlas learning site operations'; }
+      const logo = document.querySelector<HTMLAnchorElement>('.admin-nav-brand-logo');
+      if (logo) logo.href = state.home;
+      if (breadcrumbs) {
+        breadcrumbs.hidden = state.site === 'portal';
+        breadcrumbs.innerHTML = state.site === 'portal' ? '' : `<a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span><a href="${state.home}">${state.label}</a>${['atlas', 'semi-platform', 'secretariat'].includes(state.current) ? '' : `<span aria-hidden="true">›</span><span aria-current="page">${pageLabels[state.current] ?? state.current}</span>`}`;
+      }
+    };
+    syncRouteChrome();
+    window.addEventListener('atlasez-lang-change', () => { applyLanguage(currentLanguage()); syncRouteChrome(); });
+    document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg === 'dark'); applyLanguage(currentLanguage()); syncRouteChrome(); });
 
     const switcher = document.querySelector<HTMLElement>('[data-project-switcher]');
     if (switcher) {
@@ -165,10 +227,17 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
         title.setAttribute('aria-label', language === 'ja' ? `${title.textContent}へ移動` : `Open ${title.textContent}`);
         dots.innerHTML = slides.map((item, itemIndex) => `<a class="admin-project-dot${itemIndex === index ? ' is-active' : ''}" href="${escapeHtml(item.href)}" data-project-index="${itemIndex}" aria-label="${escapeHtml(language === 'ja' ? `${item.label}へ移動` : `Open ${item.label}`)}" aria-current="${itemIndex === index ? 'true' : 'false'}"></a>`).join('');
       };
-      const navigateSlide = (nextIndex: number) => { index = (nextIndex + slides.length) % slides.length; const slide = slides[index]; if (slide) window.location.assign(slide.href); };
+      const navigateSlide = (nextIndex: number) => { index = (nextIndex + slides.length) % slides.length; const slide = slides[index]; if (slide) void navigate(slide.href); };
       switcher.querySelector<HTMLButtonElement>('[data-project-previous]')?.addEventListener('click', () => navigateSlide(index - 1));
       switcher.querySelector<HTMLButtonElement>('[data-project-next]')?.addEventListener('click', () => navigateSlide(index + 1));
       document.addEventListener('atlasez-admin-language-change', () => renderSwitcher());
+      document.addEventListener('astro:after-swap', () => {
+        const state = readRouteState();
+        const key = state.site === 'portal' ? 'portal' : state.slug;
+        const nextIndex = slides.findIndex((slide) => slide.key === key);
+        if (nextIndex >= 0) index = nextIndex;
+        renderSwitcher();
+      });
       renderSwitcher();
       void appendMemberProjects().then(() => renderSwitcher());
     }
@@ -202,7 +271,11 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
         const image = profile.avatar_url?.trim() ?? '';
         if (avatar) { avatar.style.backgroundImage = ''; avatar.classList.toggle('has-image', Boolean(image)); }
         if (avatarFallback) { avatarFallback.hidden = Boolean(image); avatarFallback.textContent = (fallbackEmail[0] ?? 'A').toUpperCase(); }
-        if (avatarImage) { avatarImage.hidden = !image; if (image) avatarImage.src = image; else avatarImage.removeAttribute('src'); }
+        if (avatarImage) {
+          avatarImage.hidden = !image;
+          avatarImage.onerror = () => { avatarImage.hidden = true; avatarImage.removeAttribute('src'); if (avatarFallback) avatarFallback.hidden = false; };
+          if (image) avatarImage.src = image; else avatarImage.removeAttribute('src');
+        }
         if (email) email.textContent = profile.display_name?.trim() || 'アカウント';
       };
       const cachedProfile = readCachedProfile();
@@ -249,7 +322,7 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
           const kindLabel = (kind: string) => ({ comment: 'コメント', review: '査読依頼', approved: '査読完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
           const unreadNotifications = notifications.filter((item) => !item.read);
-          notificationList.innerHTML = unreadNotifications.length ? unreadNotifications.map((item) => `<div class="admin-notification-item"><a href="${item.href}" data-astro-reload data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a><button type="button" data-read-notification="${escape(item.id)}">既読にする</button></div>`).join('') : '<span class="admin-notification-empty">あなたの記事に関する新しい通知はありません。</span>';
+          notificationList.innerHTML = unreadNotifications.length ? unreadNotifications.map((item) => `<div class="admin-notification-item"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a><button type="button" data-read-notification="${escape(item.id)}">既読にする</button></div>`).join('') : '<span class="admin-notification-empty">あなたの記事に関する新しい通知はありません。</span>';
         } catch { notificationList.textContent = '通知を取得できませんでした'; }
       };
       notificationButton?.addEventListener('click', () => { const open = !notificationPanel?.hidden; if (notificationPanel) notificationPanel.hidden = open; notificationButton.setAttribute('aria-expanded', String(!open)); });
@@ -268,7 +341,7 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
         if (link && !link.dataset.opened) {
           event.preventDefault();
           link.dataset.opened = 'true';
-          void markRead([link.dataset.openNotification ?? '']).catch(() => undefined).finally(() => { window.location.assign(link.href); });
+          void markRead([link.dataset.openNotification ?? '']).catch(() => undefined).finally(() => { void navigate(link.href); });
         }
       });
       markAllRead?.addEventListener('click', () => { void markRead(notifications.filter((item) => !item.read).map((item) => item.id)).catch(() => { if (notificationList) notificationList.textContent = '通知を既読にできませんでした'; }); });
@@ -283,12 +356,13 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
   .admin-nav{align-items:center;border-bottom:1px solid var(--border-default);box-sizing:border-box;display:flex;gap:.65rem;left:50%;min-height:4.15rem;padding:0 max(1rem,calc((100vw - 1500px)/2));position:relative;transform:translateX(-50%);width:100vw}.admin-nav-brand{align-items:center;color:var(--accent-primary);display:flex;flex:0 0 auto;font-size:1.15rem;font-weight:700;gap:.45rem;text-decoration:none}.admin-nav-brand span{border-left:1px solid var(--border-default);color:var(--text-primary);font-size:.8rem;margin-left:.1rem;padding-left:.55rem}.admin-menu-toggle{display:none}.admin-nav nav{align-items:stretch;display:flex;flex:1 1 auto;min-height:4.15rem;min-width:0}.admin-nav nav>a{align-items:center;border-bottom:3px solid transparent;color:var(--text-primary);display:flex;flex:0 0 auto;font:inherit;font-size:.84rem;padding:0 .62rem;text-decoration:none}.admin-nav nav>a[aria-current="page"],.admin-nav nav>a:hover{border-bottom-color:var(--accent-primary);color:var(--accent-primary)}.admin-management-menu{align-items:center;display:flex;position:relative}.admin-management-menu summary{align-items:center;color:var(--text-secondary);cursor:pointer;display:flex;font-size:.84rem;gap:.28rem;height:100%;list-style:none;padding:0 .6rem;white-space:nowrap}.admin-management-menu summary::-webkit-details-marker{display:none}.admin-management-menu[open] summary,.admin-management-menu summary:hover{color:var(--accent-primary)}.admin-management-menu>div{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 .8rem 2rem #001a2c1c;display:grid;min-width:11rem;padding:.35rem;position:absolute;top:3.3rem;z-index:30}.admin-management-menu>div a{border:0!important;color:var(--text-primary);font-size:.78rem;padding:.55rem .6rem;text-decoration:none}.admin-management-menu>div a:hover,.admin-management-menu>div a[aria-current="page"]{background:var(--background-secondary);color:var(--accent-primary)}.admin-account{align-items:center;display:flex;flex:0 0 auto;gap:.4rem;margin-left:auto;position:relative}.admin-account-profile{align-items:center;color:var(--text-primary);display:flex;gap:.4rem;max-width:17rem;min-width:0;text-decoration:none}.admin-account-profile:hover .admin-account-email{color:var(--accent-primary)}.admin-account-avatar{align-items:center;background:linear-gradient(145deg,#2d6ea8,#153c66);border:1px solid var(--border-default);border-radius:50%;color:#fff;display:flex;flex:0 0 2.4rem;font-size:.9rem;font-weight:800;height:2.4rem;justify-content:center;overflow:hidden;width:2.4rem}.admin-account-email{font-size:.73rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-account form{margin:0}.admin-logout{background:transparent;border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-secondary);cursor:pointer;font:inherit;font-size:.72rem;padding:.4rem .5rem;white-space:nowrap}.admin-logout:hover,.admin-logout:focus-visible{border-color:var(--accent-primary);color:var(--accent-primary)}.admin-notifications{align-items:center;background:transparent;border:0;color:var(--text-primary);cursor:pointer;display:inline-flex;height:2.55rem;justify-content:center;padding:.3rem;position:relative;width:2.55rem}.admin-notifications svg{fill:none;height:1.72rem;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8;width:1.72rem}.admin-notifications:hover{background:var(--background-secondary);border-radius:50%;color:var(--accent-primary)}.admin-notifications [data-admin-notification-count]{background:#e10000;border:2px solid var(--background-primary);border-radius:999px;color:#fff;font-size:.62rem;font-weight:800;line-height:1;min-width:1.05rem;padding:.2rem .25rem;position:absolute;right:-.1rem;text-align:center;top:-.08rem}.admin-notification-panel{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.65rem;box-shadow:0 .8rem 2rem #001a2c26;min-width:22rem;overflow:hidden;padding:.55rem;position:absolute;right:0;top:3.2rem;z-index:40}.admin-notification-panel[hidden]{display:none!important}.notification-panel-heading{align-items:center;border-bottom:1px solid var(--border-default);display:flex;gap:.35rem;padding:.15rem .2rem .55rem}.notification-panel-heading strong{margin-right:auto}.notification-panel-heading button{background:transparent;border:0;color:var(--text-secondary);cursor:pointer;font-size:1.2rem}.notification-panel-heading .mark-all-read{border-radius:999px;font-size:.68rem;font-weight:800;padding:.3rem .45rem}.notification-panel-heading .mark-all-read:hover{background:var(--background-secondary);color:var(--accent-primary)}.admin-notification-item{align-items:center;display:flex;gap:.2rem}.admin-notification-item a{color:var(--text-primary);display:grid;flex:1;gap:.15rem;padding:.6rem;text-decoration:none}.admin-notification-item a:hover{background:var(--background-secondary);border-radius:.35rem}.admin-notification-item.is-read{opacity:.58}.admin-notification-item button{background:transparent;border:0;border-radius:.3rem;color:var(--accent-primary);cursor:pointer;font-size:.68rem;font-weight:800;padding:.35rem}.admin-notification-item button:hover{background:var(--background-secondary)}.admin-notification-panel small,.admin-notification-empty,.admin-notification-loading{color:var(--text-secondary);font-size:.7rem}@media(max-width:980px){.admin-nav{display:grid;grid-template-columns:minmax(0,1fr) auto auto;padding-block:.45rem}.admin-menu-toggle{align-items:center;background:transparent;border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);cursor:pointer;display:inline-flex;font:inherit;font-size:.75rem;gap:.28rem;padding:.45rem .55rem}.admin-nav nav{display:none;grid-column:1/-1;grid-row:2;min-height:0;padding:.35rem 0 .1rem}.admin-nav nav.is-open{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.admin-nav nav>a{border:1px solid var(--border-default);border-width:0 0 1px;font-size:.8rem;min-height:2.6rem;padding:.2rem .45rem}.admin-management-menu{align-items:center;display:block}.admin-management-menu summary{height:2.6rem;padding:.2rem .45rem}.admin-management-menu>div{box-shadow:none;position:static}.admin-management-menu>div a{display:block}.admin-account{grid-column:3;grid-row:1;margin-left:0}.admin-account-email{max-width:10rem}}@media(max-width:620px){.admin-nav{gap:.4rem;padding-left:.75rem;padding-right:.75rem}.admin-nav-brand{font-size:1rem}.admin-nav-brand span{display:none}.admin-account-email{display:none}.admin-account-avatar{flex-basis:2.15rem;height:2.15rem;width:2.15rem}.admin-logout{font-size:.68rem;padding:.34rem .4rem}.admin-notification-panel{min-width:calc(100vw - 1.5rem);right:-.3rem}.admin-nav nav.is-open{grid-template-columns:1fr}.admin-menu-toggle span:last-child{display:none}}
 </style>
 <style>
+  .admin-account[hidden] { display:none !important; }
   .admin-nav-brand-logo { align-items:center; color:var(--accent-primary); display:flex; flex:0 0 auto; height:2.5rem; justify-content:center; width:2.5rem; }
   .admin-nav-brand-logo img { display:block; height:2.15rem; width:2.15rem; }
-  .admin-project-switcher { align-items:center; display:flex; flex:0 1 23rem; gap:.1rem; min-width:0; }
+  .admin-project-switcher { align-items:center; display:flex; flex:0 0 23rem; gap:.1rem; min-width:0; }
   .admin-project-switcher-button { align-items:center; background:transparent; border:1px solid transparent; border-radius:50%; color:var(--text-secondary); cursor:pointer; display:inline-flex; flex:0 0 1.85rem; font-size:1.45rem; height:1.85rem; justify-content:center; line-height:1; padding:0; width:1.85rem; }
   .admin-project-switcher-button:hover,.admin-project-switcher-button:focus-visible { background:var(--background-secondary); border-color:var(--border-default); color:var(--accent-primary); }
-  .admin-project-switcher-content { min-width:0; overflow:hidden; padding:.15rem .2rem; }
+  .admin-project-switcher-content { flex:1 1 auto; min-width:0; overflow:hidden; padding:.15rem .2rem; }
   .admin-project-switcher-title { color:var(--text-primary); display:block; font-size:.86rem; font-weight:800; line-height:1.25; overflow:hidden; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
   .admin-project-switcher-title:hover { color:var(--accent-primary); }
   .admin-project-switcher-dots { align-items:center; display:flex; gap:.18rem; min-height:.45rem; }
@@ -296,21 +370,10 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
   .admin-project-dot.is-active { background:var(--accent-primary); transform:scale(1.25); }
   .admin-project-switcher.is-changing .admin-project-switcher-content { animation:admin-project-slide .22s ease both; }
   @keyframes admin-project-slide { from { opacity:.15; transform:translateX(.7rem); } to { opacity:1; transform:translateX(0); } }
-  .admin-display-settings { position:relative; }
-  .admin-display-settings > summary { align-items:center; background:transparent; border:1px solid var(--border-default); border-radius:.35rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; font-size:.72rem; font-weight:800; list-style:none; min-height:2.25rem; padding:.35rem .55rem; white-space:nowrap; }
-  .admin-display-settings > summary::-webkit-details-marker { display:none; }
-  .admin-display-settings > summary::before { color:var(--accent-primary); content:'Aa'; font-size:.85rem; margin-right:.28rem; }
-  .admin-display-settings > summary:hover,.admin-display-settings[open] > summary { border-color:var(--accent-primary); color:var(--accent-primary); }
-  .admin-display-settings-panel { background:var(--background-primary); border:1px solid var(--border-default); border-radius:.55rem; box-shadow:0 .8rem 2rem #001a2c26; display:grid; gap:.65rem; min-width:13rem; padding:.75rem; position:absolute; right:0; top:2.9rem; z-index:45; }
-  .admin-display-settings-panel label { color:var(--text-secondary); display:grid; font-size:.7rem; font-weight:800; gap:.3rem; }
-  .admin-display-settings-panel select { background:var(--background-primary); border:1px solid var(--border-default); color:var(--text-primary); font:inherit; min-height:2.2rem; padding:.35rem; }
-  .admin-theme-toggle { background:var(--background-secondary); border:1px solid var(--border-default); border-radius:.35rem; color:var(--text-primary); cursor:pointer; font:inherit; font-size:.72rem; font-weight:800; min-height:2.25rem; padding:.35rem .55rem; text-align:left; }
-  .admin-theme-toggle:hover { border-color:var(--accent-primary); color:var(--accent-primary); }
-  .admin-display-settings-panel small { color:var(--text-secondary); font-size:.66rem; line-height:1.45; }
   @media (max-width:980px) {
     .admin-nav { grid-template-columns:auto minmax(0,1fr) auto; }
     .admin-nav-brand-logo { grid-column:1; grid-row:1; }
-    .admin-project-switcher { grid-column:2; grid-row:1; max-width:none; }
+    .admin-project-switcher { grid-column:2; grid-row:1; max-width:none; min-width:0; width:100%; }
     .admin-menu-toggle { grid-column:3; grid-row:1; }
     .admin-account { grid-column:1/-1; grid-row:2; justify-content:flex-end; }
     .admin-nav nav { grid-column:1/-1; grid-row:3; }
@@ -319,9 +382,6 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
     .admin-nav-brand-logo { height:2.2rem; width:2.2rem; }
     .admin-nav-brand-logo img { height:1.9rem; width:1.9rem; }
     .admin-project-switcher-title { font-size:.76rem; }
-    .admin-display-settings > summary { font-size:0; padding-inline:.45rem; width:2.15rem; }
-    .admin-display-settings > summary::before { font-size:.82rem; margin:0; }
-    .admin-display-settings-panel { position:fixed; inset:auto .75rem .75rem; }
   }
 </style>
 <style>

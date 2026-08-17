@@ -1,12 +1,10 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminNav from "../../components/AdminNav.astro";
 import { getCollection } from "astro:content";
 const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.data.order);
 ---
 <AdminLayout title="運営者・担当分野管理" description="運営内運営専用の参加者管理">
   <main class="member-admin" data-member-admin>
-    <AdminNav current="permissions" />
     <header class="member-admin__header">
       <h1>運営者・担当分野管理</h1>
       <span>参加者の権限・所属・学年・分野を管理します。メールアドレスは全分野管理者のみに表示されます。</span>
@@ -41,7 +39,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   @media(max-width:720px){.member-admin{padding:0 .85rem 3rem}.member-admin__header{padding-top:1.25rem}.member-admin__add{display:block;padding:.85rem}.member-admin__add form{display:grid;grid-template-columns:1fr;margin-top:.8rem}.member-admin__add output{display:block;margin-top:.55rem}.member-grid{grid-template-columns:1fr}.member-card{padding:.75rem}.member-card__top{align-items:flex-start}.member-card__role{margin-left:0}.member-card__top{flex-wrap:wrap}.member-card__actions{display:grid;grid-template-columns:1fr 1fr}.member-edit-form{grid-template-columns:1fr}.member-edit-form .member-edit-form__subjects,.member-edit-form__save{grid-column:auto}.member-admin__section-heading{align-items:start;display:block}.member-admin__section-heading span{display:block;margin-top:.25rem}}
 </style>
 
-<style is="global">
+<style is:global>
   /* 保存操作はカード上部のDiscord同期ボタンに統合。編集欄は閉じるだけにする。 */
   .member-edit-form__close {
     background: transparent !important;

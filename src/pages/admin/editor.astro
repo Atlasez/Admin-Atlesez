@@ -1,7 +1,6 @@
 ---
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminNav from "../../components/AdminNav.astro";
 import {
   getPlannedArticles,
   plannedArticleTitle,
@@ -66,7 +65,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
 
 <AdminLayout title="記事編集ワークスペース" description="アトラス運営者用の記事執筆・査読画面">
   <main class="editor-workspace" data-editor-workspace>
-    <AdminNav current="editor" />
     <header class="workspace-header">
       <div>
         <h1>記事編集ワークスペース</h1>
@@ -168,6 +166,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
             <textarea data-personal-note maxlength="20000" placeholder="確認したいこと、次回やること、調査メモなどを自由に書けます。"></textarea>
             <div class="personal-notebook-actions"><button type="button" class="quiet-action" data-save-personal-note>メモを保存</button><output data-personal-note-message aria-live="polite"></output><small data-personal-note-updated>読み込み中…</small></div>
           </details>
+          <div class="pane-layout-controls" role="group" aria-label="表示する枠数"><span>表示枠</span><button type="button" data-pane-layout="1" aria-pressed="false">1画面</button><button type="button" data-pane-layout="2" aria-pressed="false">2画面</button><button type="button" data-pane-layout="3" aria-pressed="true">3画面</button></div>
           <div class="editor-tabs" role="tablist" aria-label="本文とプレビューの表示切り替え"><button type="button" data-pane-tab="writing" aria-selected="true">本文</button><button type="button" data-pane-tab="preview" aria-selected="false">プレビュー</button></div>
           <details class="heading-outline"><summary>見出し一覧</summary><nav data-heading-outline>本文の見出しがここに表示されます。</nav></details>
           <div class="editor-split" aria-label="原稿とプレビュー">
@@ -285,6 +284,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .editor-panel { background: var(--surface); min-width: 0; padding: clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 5rem auto; max-width: 38rem; text-align: center; }.empty-state h2 { color: var(--text); }.editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
   .document-form { display: grid; gap: 1rem; }.document-form[hidden]{display:none!important}
+  .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls span{color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);border-radius:.35rem;color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2rem;padding:.25rem .55rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary { cursor: pointer; font-size: .88rem; font-weight: 800; }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
@@ -310,8 +310,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .pane-controls { align-items:center; display:flex; flex:0 0 auto; gap:.2rem; }
   .pane-controls button { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--muted); cursor:pointer; font:inherit; font-size:.68rem; font-weight:800; padding:.25rem .35rem; }
   .pane-controls button:hover { border-color:var(--accent); color:var(--accent); }
+  .pane-controls button:disabled { cursor:not-allowed; opacity:.35; }
   .pane-only { max-width:none; padding:0 clamp(1rem, 3vw, 2.5rem) 3rem; }
-  .pane-only .document-sidebar,.pane-only .editor-quick-actions { display:none!important; }
+  .pane-only .document-sidebar,.pane-only .editor-quick-actions,.pane-only .pane-layout-controls { display:none!important; }
   .pane-only .workspace-grid { border:0; display:block; min-height:0; }
   .pane-only .editor-panel { padding:0; }
   .pane-only .editor-split { display:block; }
@@ -545,9 +546,21 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const savePersonalNoteButton = root.querySelector<HTMLButtonElement>("[data-save-personal-note]")!;
     const editorSplit = root.querySelector<HTMLElement>(".editor-split")!;
     const paneElements = { writing: root.querySelector<HTMLElement>(".writing-area")!, preview: root.querySelector<HTMLElement>(".preview-area")!, review: root.querySelector<HTMLElement>(".review-panel")! } as const;
+    const getVisiblePanes = () => Array.from(editorSplit.children).filter((pane): pane is HTMLElement => pane instanceof HTMLElement && !pane.hidden);
     const updatePaneLayout = () => {
-      const visibleCount = Object.values(paneElements).filter((pane) => !pane.hidden).length;
+      const visibleCount = getVisiblePanes().length;
       editorSplit.dataset.visiblePanes = String(Math.max(1, visibleCount));
+      root.querySelectorAll<HTMLButtonElement>("[data-pane-layout]").forEach((button) => {
+        const selected = Number(button.dataset.paneLayout) === visibleCount;
+        button.setAttribute("aria-pressed", String(selected));
+        button.classList.toggle("is-selected", selected);
+      });
+      const visible = getVisiblePanes();
+      root.querySelectorAll<HTMLButtonElement>("[data-pane-move]").forEach((button) => {
+        const pane = paneElements[button.dataset.paneMove as keyof typeof paneElements];
+        const index = visible.indexOf(pane);
+        button.disabled = index < 0 || (button.dataset.paneDirection === "left" ? index === 0 : index === visible.length - 1);
+      });
     };
     const activePopouts = new Map<keyof typeof paneElements, Window>();
     const setupPanes = () => {
@@ -558,18 +571,30 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         root.classList.add("pane-only");
         Object.entries(paneElements).forEach(([key, pane]) => { pane.hidden = key !== paneQuery; });
       }
+      let requestedPaneCount = Math.min(3, Math.max(1, Number.parseInt(localStorage.getItem("atlasez-editor-pane-count") ?? "3", 10) || 3));
+      const setPaneCount = (count: number, persist = true) => {
+        requestedPaneCount = Math.min(3, Math.max(1, count));
+        if (!root.classList.contains("pane-only")) {
+          const ordered = Array.from(editorSplit.children).filter((pane): pane is HTMLElement => pane instanceof HTMLElement && (pane === paneElements.writing || pane === paneElements.preview || pane === paneElements.review));
+          ordered.forEach((pane, index) => { pane.hidden = index >= requestedPaneCount; });
+        }
+        if (persist) localStorage.setItem("atlasez-editor-pane-count", String(requestedPaneCount));
+        updatePaneLayout();
+      };
       updatePaneLayout();
+      root.querySelectorAll<HTMLButtonElement>("[data-pane-layout]").forEach((button) => button.addEventListener("click", () => setPaneCount(Number(button.dataset.paneLayout))));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-move]").forEach((button) => button.addEventListener("click", () => {
         const id = button.dataset.paneMove as keyof typeof paneElements;
         const current = paneElements[id];
-        const ordered = Object.values(paneElements).filter((pane) => !pane.hidden);
+        const ordered = getVisiblePanes();
         const index = ordered.indexOf(current);
         if (index < 0) return;
         const direction = button.dataset.paneDirection === "left" ? -1 : 1;
         const targetIndex = index + direction;
         if (targetIndex < 0 || targetIndex >= ordered.length) return;
-        [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
-        ordered.forEach((pane) => editorSplit.append(pane));
+        const target = ordered[targetIndex];
+        if (direction < 0) editorSplit.insertBefore(current, target);
+        else editorSplit.insertBefore(target, current);
         updatePaneLayout();
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-popout]").forEach((button) => button.addEventListener("click", () => {
@@ -586,8 +611,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         popup.focus();
         paneElements[id].hidden = true;
         updatePaneLayout();
-        const restore = window.setInterval(() => { if (!popup.closed) return; window.clearInterval(restore); activePopouts.delete(id); button.disabled = false; button.textContent = "別窓"; paneElements[id].hidden = false; updatePaneLayout(); }, 500);
+        const restore = window.setInterval(() => { if (!popup.closed) return; window.clearInterval(restore); activePopouts.delete(id); button.disabled = false; button.textContent = "別窓"; paneElements[id].hidden = false; setPaneCount(requestedPaneCount, false); }, 500);
       }));
+      if (!paneQuery) setPaneCount(requestedPaneCount, false);
     };
     setupPanes();
     let documents: Omit<Document, "body">[] = [];
@@ -1080,7 +1106,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   initializeEditorWorkspace();
 </script>
 
-<style is="global">
+<style is:global>
   .review-panel .comment-avatar {
     overflow: hidden;
     position: relative;

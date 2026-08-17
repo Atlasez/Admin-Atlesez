@@ -1,10 +1,8 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminNav from "../../components/AdminNav.astro";
 ---
 <AdminLayout title="編集・査読" description="原稿の編集・査読と状態管理">
   <main class="admin-page" data-article-index>
-    <AdminNav current="articles" />
     <header><div><h1>編集・査読</h1><span data-mode-description>分野・状態・公開状況で絞り込み、開きたい原稿だけを編集画面へ移動できます。</span></div><a href="/admin/editor/?new=1">新規記事作成</a></header>
     <section class="filters"><input data-query placeholder="タイトル・分野・カテゴリで検索" /><select data-status><option value="all">すべての状態</option><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select><select data-public><option value="all">公開状況：すべて</option><option value="published">公開済み</option><option value="unpublished">未公開</option></select><select data-test><option value="exclude">テスト原稿を除く</option><option value="all">テスト原稿を含む</option><option value="only">テスト原稿のみ</option></select><output data-count></output></section>
     <section class="list" data-list>原稿一覧を取得しています…</section>

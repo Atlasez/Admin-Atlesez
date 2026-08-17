@@ -1,13 +1,10 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-import AdminNav from "../../components/AdminNav.astro";
 const requestedProject = Astro.url.searchParams.get("project");
 const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
-const operationSite = operationProject === "seminar-platform" ? "semi-platform" : operationProject;
 ---
 <AdminLayout title="同時作業会" description="同時作業会の日時と参加状況">
   <main class="co-working" data-co-working>
-    <AdminNav current="co-working" site={operationSite} />
     <header class="page-heading">
       <div>
         <h1>同時作業会</h1>

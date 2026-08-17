@@ -1,5 +1,6 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
+import AdminNav from "../components/AdminNav.astro";
 import { ClientRouter } from "astro:transitions";
 
 interface Props {
@@ -16,6 +17,7 @@ const { title, description } = Astro.props;
   </head>
   <body>
     <ClientRouter />
-    <main><slot /></main>
+    <AdminNav />
+    <div class="admin-layout-main"><slot /></div>
   </body>
 </html>
