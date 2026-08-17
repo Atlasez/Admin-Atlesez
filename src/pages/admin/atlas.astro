@@ -2,23 +2,80 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
 ---
-<AdminLayout title="アトラス学習サイト運営" description="アトラス学習サイトの運営ワークスペース">
+<AdminLayout title="学習サイト「アトラス」運営用サイト" description="アトラス学習サイトの運営ワークスペース">
   <main class="project-home">
-    <AdminNav current="atlas" />
+    <AdminNav current="atlas" site="atlas" />
     <header class="project-heading">
-      <div><p>ATLASEZ / PROJECT</p><h1>アトラス学習サイト</h1><span>原稿・査読・問題報告・進捗を、このプロジェクト内で管理します。</span></div>
-      <a href="/admin/portal/">運営ポータルへ戻る</a>
+      <div>
+        <p>ATLASEZ / LEARNING SITE OPERATIONS</p>
+        <h1>アトラス学習サイト</h1>
+        <span>原稿・査読・問題報告・進捗を、このプロジェクト内で管理します。</span>
+      </div>
+      <a href="/admin/portal/">メンバー用サイトへ</a>
     </header>
+
+    <section class="entry-section" aria-labelledby="editing-entry-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">EDITING &amp; REVIEW</p>
+          <h2 id="editing-entry-heading">編集・査読</h2>
+        </div>
+        <a class="list-link" href="/admin/articles/">一覧を開く →</a>
+      </div>
+      <div class="featured-links">
+        <a href="/admin/editor/?new=1">
+          <strong>新規記事作成</strong>
+          <small>新しい記事の本文・数式・メタデータを編集する</small>
+          <span>作成を始める →</span>
+        </a>
+        <a href="/admin/articles/?mode=revise">
+          <strong>加筆・修正</strong>
+          <small>自分が関わった記事を優先して確認する</small>
+          <span>記事を探す →</span>
+        </a>
+        <a href="/admin/articles/?mode=review">
+          <strong>査読</strong>
+          <small>未査読の記事と自分への依頼を優先して確認する</small>
+          <span>査読を始める →</span>
+        </a>
+      </div>
+    </section>
+
     <section class="project-links" aria-label="学習サイト運営メニュー">
-      <a href="/admin/articles/"><strong>原稿一覧</strong><small>分野・状態・公開状況から原稿を探す</small><span>開く →</span></a>
-      <a href="/admin/editor/"><strong>記事編集</strong><small>LaTeX・本文・査読コメントを編集</small><span>開く →</span></a>
-      <a href="/admin/review/"><strong>査読待ち</strong><small>査読依頼を確認してフィードバック</small><span>確認する →</span></a>
-      <a href="/admin/reports/"><strong>問題報告・統計</strong><small>読者からの報告と閲覧状況</small><span>確認する →</span></a>
-      <a href="/admin/operations/"><strong>進捗・ToDo・日程</strong><small>作業報告、担当タスク、同時作業会</small><span>管理する →</span></a>
-      <a href="/admin/guide/"><strong>作業の進め方</strong><small>このプロジェクトの執筆・査読手順</small><span>読む →</span></a>
+      <a href="/admin/co-working/?project=atlas"><strong>同時作業会</strong><small>開催場所・日時・参加可否を確認する</small><span>日程を見る →</span></a>
+      <a href="/admin/introductions/"><strong>運営内自己紹介</strong><small>運営メンバーのプロフィールと担当を確認する</small><span>紹介を見る →</span></a>
+      <a href="/admin/operations/?project=atlas"><strong>進捗・ToDo・日程</strong><small>作業報告、担当タスク、予定をまとめて管理する</small><span>管理する →</span></a>
+      <a href="/admin/reports/"><strong>問題報告・統計</strong><small>読者からの報告と閲覧状況を確認する</small><span>確認する →</span></a>
+      <a href="/admin/guide/"><strong>作業の進め方</strong><small>執筆・加筆・査読の手順を確認する</small><span>読む →</span></a>
     </section>
   </main>
 </AdminLayout>
 <style>
-  .project-home{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.project-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2.2rem 0 1.4rem}.project-heading p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.1em;margin:0}.project-heading h1{font-size:clamp(1.8rem,4vw,2.6rem);margin:.25rem 0}.project-heading span{color:var(--text-secondary);line-height:1.6}.project-heading>a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.project-links{display:grid;gap:.8rem;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1.5rem}.project-links a{background:var(--background-secondary);border:1px solid var(--border-default);border-top:3px solid var(--accent-primary);color:var(--text-primary);display:grid;gap:.35rem;padding:1rem;text-decoration:none}.project-links a:hover{border-color:var(--accent-primary);transform:translateY(-1px)}.project-links strong{font-size:1rem}.project-links small{color:var(--text-secondary);font-size:.76rem;line-height:1.5}.project-links span{color:var(--accent-primary);font-size:.76rem;font-weight:800;margin-top:.2rem}@media(max-width:800px){.project-home{padding:0 .8rem 3rem}.project-heading{align-items:start;display:grid}.project-links{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.project-links{grid-template-columns:1fr}}
+  .project-home { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
+  .project-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.2rem 0 1.4rem; }
+  .project-heading p, .section-kicker { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; margin: 0; }
+  .project-heading h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: .25rem 0; }
+  .project-heading span { color: var(--text-secondary); line-height: 1.6; }
+  .project-heading > a, .list-link { color: var(--accent-primary); font-size: .8rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+  .entry-section { margin-top: 1.5rem; }
+  .section-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; margin-bottom: .8rem; padding-bottom: .65rem; }
+  .section-heading h2 { font-size: 1.3rem; margin: .2rem 0 0; }
+  .featured-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .featured-links a, .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; padding: 1.25rem; text-decoration: none; }
+  .featured-links a { border-top: 4px solid var(--accent-primary); min-height: 8.2rem; }
+  .featured-links a:hover, .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
+  .featured-links strong { font-size: 1.12rem; }
+  .featured-links small, .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .featured-links span, .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
+  .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1.5rem; }
+  .project-links a { min-height: 6.5rem; }
+  .project-links strong { font-size: .98rem; }
+  @media (max-width: 800px) {
+    .project-home { padding: 0 .8rem 3rem; }
+    .project-heading { align-items: start; display: grid; }
+    .featured-links, .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 520px) {
+    .featured-links, .project-links { grid-template-columns: 1fr; }
+  }
 </style>
