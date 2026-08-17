@@ -2,26 +2,16 @@
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
-import {
-  getPlannedArticles,
-  plannedArticleTitle,
-  plannedProgress,
-} from "../../lib/planned";
 
 const subjects = (await getCollection("subjects"))
   .sort((a, b) => a.data.order - b.data.order)
   .map((subject) => ({
     slug: subject.data.slug,
     name: subject.data.name.ja,
-    status: subject.data.status,
-    categories: subject.data.categories
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((category) => ({
-        slug: category.slug,
-        name: category.name.ja,
-        order: category.order,
-      })),
+    categories: subject.data.categories.map((category) => ({
+      slug: category.slug,
+      name: category.name.ja,
+    })),
   }));
 const articles = (await getCollection("articles"))
   .filter((article) => article.data.locale === "ja")
@@ -34,34 +24,8 @@ const articles = (await getCollection("articles"))
     summary: article.data.summary,
     conceptId: article.data.concepts[0]?.id ?? "",
     body: article.body,
-    status: article.data.status,
   }));
-const concepts = await getCollection("concepts");
-const plannedArticles = subjects.flatMap((subject) =>
-  getPlannedArticles(subject.slug).map((item) => {
-    const concept = concepts.find(
-      (entry) =>
-        entry.data.subject === item.subject &&
-        entry.data.category === item.category &&
-        entry.data.name.ja === item.title.ja,
-    );
-    return {
-      key: `${item.subject}/${item.category}/${item.order}`,
-      subject: item.subject,
-      category: item.category,
-      title: plannedArticleTitle(item, "ja"),
-      order: item.order,
-      progress: plannedProgress(item),
-      slug: `planned-${item.category}-${item.order}`,
-      conceptId:
-        concept?.id ?? `${item.subject}.${item.category}.planned-${item.order}`,
-    };
-  }),
-);
-const editorData = JSON.stringify({ subjects, articles, plannedArticles }).replace(
-  /</g,
-  "\\u003c",
-);
+const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c");
 ---
 
 <AdminLayout title="記事編集ワークスペース" description="アトラス運営者用の記事執筆・査読画面">
@@ -95,21 +59,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
           <div><p class="eyebrow">自分の担当分野</p><strong data-editor-scope>読み込み中…</strong></div>
         </div>
         <div class="document-list" data-document-list aria-live="polite"></div>
-        <section class="atlas-outline-panel" aria-labelledby="atlas-outline-heading">
-          <div class="atlas-outline-heading">
-            <div>
-              <p class="eyebrow">学習サイトと同期</p>
-              <h2 id="atlas-outline-heading">学習サイトの目次</h2>
-            </div>
-            <span data-outline-summary aria-live="polite"></span>
-          </div>
-          <p class="atlas-outline-description">公開済みの記事だけでなく、今後作成予定の「未着手」「執筆中」の項目も含めて分野全体を確認できます。</p>
-          <div class="atlas-outline-filters">
-            <label>分野<select data-outline-subject></select></label>
-            <label>カテゴリ<select data-outline-category></select></label>
-          </div>
-          <div class="atlas-outline-list" data-atlas-outline aria-live="polite"></div>
-        </section>
       </aside>
 
       <section class="editor-panel" aria-label="原稿編集">
@@ -251,8 +200,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .workspace-header nav a:hover, .workspace-header nav button:hover { background: var(--surface-alt); }
   .workspace-header nav form { margin: 0; }
   .workflow-guide { color: var(--muted); display: grid; font-size: .8rem; gap: .55rem; padding: 1rem 0; }.workflow-guide p { margin: 0; }.workflow-guide p strong { color: var(--text); }.workflow-guide p small { color: var(--muted); display: block; margin-top: .2rem; }.workflow-guide ol { display: flex; list-style: none; margin: 0; max-width: 48rem; padding: 0; width: 100%; }.workflow-guide li { align-items: center; color: var(--muted); display: flex; flex: 1; font-weight: 700; gap: .38rem; min-width: 0; position: relative; }.workflow-guide li:not(:last-child)::after { background: var(--border); content: ""; height: 2px; margin: 0 .65rem; min-width: .65rem; order: 3; flex: 1; }.workflow-guide b { align-items: center; background: color-mix(in srgb, var(--accent), transparent 88%); border-radius: 999px; color: var(--accent); display: inline-flex; flex: 0 0 auto; font-size: .72rem; height: 1.3rem; justify-content: center; width: 1.3rem; }.workflow-guide li.is-complete { color: var(--accent); }.workflow-guide li.is-complete b, .workflow-guide li.is-current b { background: var(--accent); color: white; }.workflow-guide li.is-complete:not(:last-child)::after { background: var(--accent); }.workflow-guide li.is-current { color: var(--text); }.workflow-guide li.is-current span { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: .25rem; }.workflow-guide.is-on-hold [data-workflow-step] { opacity: .45; }
-  .workspace-grid { border-bottom: 1px solid var(--border); border-top: 2px solid var(--accent); display: grid; grid-template-columns: minmax(16rem, 21rem) minmax(0, 1fr); min-height: 46rem; overflow: hidden; }.document-sidebar { align-content:start; background:var(--surface-alt); border-right:1px solid var(--border); display:grid!important; gap:.75rem; min-width:0; padding:.9rem; }.sidebar-collapse-toggle { align-self:start; background:transparent; border:1px solid var(--border); color:var(--muted); cursor:pointer; font:inherit; font-size:.72rem; font-weight:800; padding:.35rem .45rem; text-align:left; }.sidebar-collapse-toggle:hover { border-color:var(--accent); color:var(--accent); }
-  .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 3.2rem minmax(0, 1fr); }.editor-workspace.sidebar-collapsed .document-sidebar > :not(.sidebar-collapse-toggle) { display:none; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { overflow:hidden; white-space:nowrap; width:2.35rem; }
+  .workspace-grid { border-bottom: 1px solid var(--border); border-top: 2px solid var(--accent); display: grid; grid-template-columns: minmax(0, 1fr); min-height: 46rem; overflow: hidden; }.document-sidebar { display:none!important; }.sidebar-collapse-toggle { align-self:start; background:transparent; border:1px solid var(--border); color:var(--muted); cursor:pointer; font:inherit; font-size:.72rem; font-weight:800; padding:.35rem .45rem; text-align:left; }.sidebar-collapse-toggle:hover { border-color:var(--accent); color:var(--accent); }
   .sidebar-heading { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
   .sidebar-heading strong { display: block; font-size: .9rem; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   button { font: inherit; }
@@ -266,8 +214,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .source-picker { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .5rem; margin-top: .3rem; }.source-picker > label { display: grid; gap: .25rem; }.source-picker select { width: 100%; }.source-picker select:disabled { background: #eef2f5; color: #7f8c98; cursor: not-allowed; }
   select, input, textarea { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); font: inherit; }
   select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
-  .document-list { display: grid; gap: .45rem; margin-top: .35rem; max-height: 15rem; overflow: auto; padding-right: .1rem; }
-  .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
+  .document-list { display: grid; gap: .45rem; margin-top: .35rem; overflow: auto; padding-right: .1rem; }
   .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: .5rem; justify-content: space-between; padding: .6rem .7rem; text-align: left; width: 100%; }
   .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
   .document-card small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -292,26 +239,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .revision-panel { margin:1rem .85rem 0; }.revision-panel div { color:var(--muted); font-size:.8rem; padding:.7rem; }.revision-item { border-top:1px solid var(--border); padding:.45rem 0; }
   @media (max-width: 1080px) { .editor-split { grid-template-columns: 1fr; }.article-preview { height: auto; min-height: 28rem; }.workspace-grid, .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 1fr; }.document-sidebar { border-bottom: 1px solid var(--border); border-right: 0; }.editor-workspace.sidebar-collapsed .document-sidebar { align-items:start; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { font-size:.72rem; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle::before { content:none; }.document-list { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); max-height: 16rem; }.workspace-header { display: grid; }.workspace-header nav { justify-content: start; }.document-toolbar { display: grid; }.toolbar-actions { justify-content: start; }.metadata-grid { grid-template-columns: 1fr; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: auto; } }
   @media (max-width: 700px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .7rem; }.workflow-guide ol { gap: .2rem; }.workflow-guide li { flex-direction: column; gap: .2rem; text-align: center; }.workflow-guide li:not(:last-child)::after { margin: 0 .2rem; position: absolute; right: -.45rem; top: .62rem; width: .5rem; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions, .document-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; }.editor-tabs{display:flex;border-bottom:1px solid var(--border);gap:.3rem;margin:.5rem 0}.editor-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;padding:.5rem .75rem}.editor-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}.editor-split .preview-area{display:none}.editor-workspace.show-preview .editor-split .writing-area{display:none}.editor-workspace.show-preview .editor-split .preview-area{display:block}.heading-outline{display:block;background:var(--surface-alt);border:1px solid var(--border);font-size:.78rem;margin:.5rem 0;padding:.4rem .6rem}.editor-quick-actions{position:sticky;bottom:.5rem;background:color-mix(in srgb,var(--surface),transparent 5%);border:1px solid var(--border);border-radius:.5rem;padding:.35rem;z-index:10}.editor-quick-actions button{flex:1}.document-statuses{font-size:.68rem} }
-</style>
-
-<style is:global>
-  /* JSで生成する目次項目にも、記事編集画面のデザイントークンを適用する。 */
-  .atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }
-  .outline-category { border-top:1px solid var(--border-default); padding:.55rem 0 .2rem; }
-  .outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }
-  .outline-category h3 { color:var(--text-primary); font-size:.78rem; margin:0 0 .25rem; }
-  .outline-category-count { color:var(--text-secondary); font-size:.64rem; font-weight:700; }
-  .outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border-default), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }
-  .outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }
-  .outline-article-title { color:var(--text-primary); font-size:.74rem; line-height:1.4; min-width:0; overflow-wrap:anywhere; }
-  .outline-status { border:1px solid var(--border-default); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }
-  .outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }
-  .outline-status-planned { background:#f1f3f5; color:#596773; }
-  .outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }
-  .outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }
-  .outline-article-meta { color:var(--text-secondary); font-size:.64rem; line-height:1.4; }
-  .atlas-outline-list .quiet-action { align-self:start; font-size:.68rem; justify-self:start; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
-  @media (max-width:700px) { .atlas-outline-list { max-height:34rem; } .atlas-outline-list .quiet-action { width:auto; } }
 </style>
 
 <style is:global>
@@ -445,9 +372,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   import renderMathInElement from "katex/contrib/auto-render";
   import "katex/dist/katex.min.css";
 
-  type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
-  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published" };
-  type PlannedArticle = { key: string; subject: string; category: string; title: string; order: number; progress: "not-started" | "in-progress"; slug: string; conceptId: string };
+  type Subject = { slug: string; name: string; categories: { slug: string; name: string }[] };
+  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string };
   type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; createdAt: string; marker: string };
   type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
@@ -458,15 +384,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
     if (!root || !payloadElement || root.dataset.editorInitialized === "true") return;
     root.dataset.editorInitialized = "true";
-    const { subjects, articles, plannedArticles } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[] };
+    const { subjects, articles } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[] };
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
     const scopeLabel = root.querySelector<HTMLElement>("[data-editor-scope]")!;
-    const outlineSubject = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
-    const outlineCategory = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
-    const outlineList = root.querySelector<HTMLElement>("[data-atlas-outline]")!;
-    const outlineSummary = root.querySelector<HTMLElement>("[data-outline-summary]")!;
     const sourcePicker = root.querySelector<HTMLSelectElement>("[data-source-article]")!;
     const sourceSubject = root.querySelector<HTMLSelectElement>("[data-source-subject]")!;
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
@@ -730,79 +652,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       const selected = source ? subjects.find((item) => item.slug === source.subject) ?? subjects[0] : subjects[0];
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue, locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
-      (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
+      setDocument({ id: "", source_article_id: source?.articleId ?? null, subject: source?.subject ?? selected.slug, category: categoryValue, locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId ?? "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
-    const openOutlineDocument = (document: Omit<Document, "body">) => { void openDocument(document.id).then(() => loadRevisions(document.id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); };
     const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || `${item.subject}/${item.category}/${item.slug}`, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
-    const allowedOutlineSubjects = () => subjects.filter((item) => isManager || assignedSubjects.includes(item.slug));
-    const documentForSourceArticle = (article: SourceArticle) => documents.find((item) => item.source_article_id === article.articleId) ?? documents.find((item) => item.subject === article.subject && item.category === article.category && item.slug === article.slug);
-    const documentForPlannedArticle = (item: PlannedArticle) => documents.find((document) => document.subject === item.subject && document.category === item.category && document.title === item.title);
-    const fillOutlineCategories = (selected = outlineCategory.value) => {
-      const selectedSubject = subjects.find((item) => item.slug === outlineSubject.value);
-      if (!selectedSubject) { outlineCategory.innerHTML = '<option value="">カテゴリはありません</option>'; outlineCategory.disabled = true; return; }
-      const categories = new Map(selectedSubject.categories.map((item) => [item.slug, item]));
-      plannedArticles.filter((item) => item.subject === selectedSubject.slug).forEach((item) => { if (!categories.has(item.category)) categories.set(item.category, { slug: item.category, name: item.category, order: 999 }); });
-      const options = [...categories.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja"));
-      outlineCategory.disabled = options.length === 0;
-      outlineCategory.innerHTML = [`<option value="">すべてのカテゴリ</option>`, ...options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`)].join("");
-      outlineCategory.value = options.some((item) => item.slug === selected) ? selected : "";
-    };
-    const fillOutlineSubjects = (selected = outlineSubject.value) => {
-      const available = allowedOutlineSubjects();
-      outlineSubject.innerHTML = available.length ? available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}${item.status === "preparing" ? "（準備中）" : ""}</option>`).join("") : '<option value="">担当分野がありません</option>';
-      outlineSubject.disabled = available.length === 0;
-      outlineSubject.value = available.some((item) => item.slug === selected) ? selected : available[0]?.slug ?? "";
-      fillOutlineCategories();
-    };
-    const renderAtlasOutline = () => {
-      const selectedSubject = subjects.find((item) => item.slug === outlineSubject.value);
-      if (!selectedSubject) { outlineSummary.textContent = ""; outlineList.innerHTML = '<p class="comment-empty">担当分野の目次を読み込めません。</p>'; return; }
-      const selectedCategory = outlineCategory.value;
-      const categoryMap = new Map(selectedSubject.categories.map((item) => [item.slug, item]));
-      plannedArticles.filter((item) => item.subject === selectedSubject.slug).forEach((item) => { if (!categoryMap.has(item.category)) categoryMap.set(item.category, { slug: item.category, name: item.category, order: 999 }); });
-      const categories = [...categoryMap.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja")).filter((item) => !selectedCategory || item.slug === selectedCategory);
-      const publishedArticles = articles.filter((item) => item.status === "published" && item.subject === selectedSubject.slug);
-      const planned = plannedArticles.filter((item) => item.subject === selectedSubject.slug);
-      outlineSummary.textContent = `${publishedArticles.length}記事・${planned.length}件の予定`;
-      outlineList.innerHTML = categories.length ? categories.map((categoryItem) => {
-        const categoryArticles = publishedArticles.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.title.localeCompare(b.title, "ja"));
-        const categoryPlanned = planned.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.order - b.order);
-        const entries = [
-          ...categoryArticles.map((item) => { const document = documentForSourceArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : "公開済み", statusClass: document ? "outline-status-editorial" : "outline-status-published", action: document ? "運営原稿を開く" : "公開記事を取り込む", articleId: item.articleId, plannedKey: "", meta: item.slug }; }),
-          ...categoryPlanned.map((item) => { const document = documentForPlannedArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : item.progress === "in-progress" ? "執筆中" : "未着手", statusClass: document ? "outline-status-editorial" : item.progress === "in-progress" ? "outline-status-progress" : "outline-status-planned", action: document ? "運営原稿を開く" : "執筆を開始", articleId: "", plannedKey: item.key, meta: item.progress === "in-progress" ? "学習サイトで執筆中" : "今後作成予定" }; }),
-        ];
-        return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><button type="button" class="quiet-action" ${entry.articleId ? `data-outline-article="${esc(entry.articleId)}"` : `data-outline-planned="${esc(entry.plannedKey)}"`}>${entry.action}</button></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
-      }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
-    };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : " / 全分野"}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : " / 全分野"}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
     const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
     subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
-    outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
-    outlineCategory.addEventListener("change", renderAtlasOutline);
-    outlineList.addEventListener("click", (event) => {
-      const articleButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-outline-article]");
-      if (articleButton) {
-        const article = articles.find((item) => item.articleId === articleButton.dataset.outlineArticle);
-        if (!article) return;
-        const existing = documentForSourceArticle(article);
-        if (existing) { openOutlineDocument(existing); return; }
-        emptyDocument(article);
-        saveMessage.value = "公開記事を編集用の下書きとして取り込みました。保存して執筆を始めてください。";
-        return;
-      }
-      const plannedButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-outline-planned]");
-      if (!plannedButton) return;
-      const item = plannedArticles.find((planned) => planned.key === plannedButton.dataset.outlinePlanned);
-      if (!item) return;
-      const existing = documentForPlannedArticle(item);
-      if (existing) { openOutlineDocument(existing); return; }
-      emptyDocument({ articleId: "", title: item.title, subject: item.subject, category: item.category, slug: item.slug, summary: "学習サイトの目次から作成する記事です。本文と要約を入力してください。", conceptId: item.conceptId, body: "", status: "published" });
-      heading.textContent = `${item.title}（新規原稿）`;
-      saveMessage.value = "未着手の目次から新規原稿を始めます。保存すると運営側の原稿一覧に追加されます。";
-    });
     sidebarCollapseButton.addEventListener("click", () => setSidebarCollapsed(!root.classList.contains("sidebar-collapsed"), true));
     status.addEventListener("change", () => {
       state.textContent = statusLabel[status.value as keyof typeof statusLabel];
