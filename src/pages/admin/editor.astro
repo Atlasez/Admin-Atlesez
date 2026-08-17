@@ -117,18 +117,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
           <div class="editor-split" aria-label="原稿とプレビュー">
             <section class="writing-area">
               <div class="pane-heading"><div><h3>本文（Markdown）</h3><p><code>$...$</code> は行内数式、<code>$$...$$</code> は別行数式です。</p></div><span data-word-count>0文字</span></div>
-              <section class="media-studio" aria-labelledby="media-studio-heading">
-                <div class="media-studio-heading"><div><h4 id="media-studio-heading">図・画像</h4><p>Overleafの素材パネルに近い形で、画像をアップロードして本文へ挿入できます。</p></div><span data-media-status aria-live="polite">原稿を保存すると利用できます</span></div>
-                <div class="media-studio-actions">
-                  <label class="media-alt-label">画像の説明（alt）<input type="text" data-media-alt maxlength="180" placeholder="例：正多角形の対称軸" /></label>
-                  <input type="file" data-media-input accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-                  <button type="button" class="quiet-action" data-open-media>画像をアップロード</button>
-                  <button type="button" class="quiet-action" data-insert-tikz>TikZテンプレートを挿入</button>
-                </div>
-                <div class="media-hint">PNG・JPEG・WebP・GIF、1.5MB以下。TikZは専用ブロックとして保存でき、組版サービス接続後に図のプレビューへ拡張できます。</div>
-                <div class="media-list" data-media-list aria-live="polite"></div>
-              </section>
-              <textarea name="body" data-body spellcheck="true" placeholder={"## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"}></textarea>
+              <textarea name="body" data-body spellcheck="true" placeholder="## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"></textarea>
             </section>
 
             <section class="preview-area" aria-labelledby="preview-heading">
@@ -228,9 +217,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary { cursor: pointer; font-size: .88rem; font-weight: 800; }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
   .editor-split { align-items: stretch; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }.writing-area, .preview-area, .review-panel { border: 1px solid var(--border); border-radius: 0; overflow: hidden; }.pane-heading { background: var(--surface-alt); border-bottom: 1px solid var(--border); padding: .75rem .9rem; }.pane-heading h3 { font-size: .95rem; margin: 0; }.pane-heading p { color: var(--muted); font-size: .77rem; margin: .22rem 0 0; }.pane-heading code { background: var(--surface); border: 1px solid var(--border); border-radius: 0; padding: .03rem .2rem; }.pane-heading > span { color: var(--muted); flex: 0 0 auto; font-size: .76rem; }.live-badge { color: var(--success) !important; font-weight: 800; }
-  .media-studio { background: color-mix(in srgb, var(--accent), transparent 94%); border-bottom: 1px solid var(--border); padding: .75rem .9rem; }.media-studio-heading { align-items: start; display: flex; gap: .7rem; justify-content: space-between; }.media-studio h4 { color: var(--text); font-size: .84rem; margin: 0; }.media-studio p, .media-hint, .media-studio small { color: var(--muted); font-size: .72rem; margin: .2rem 0 0; }.media-studio-heading > span { color: var(--accent); flex: 0 0 auto; font-size: .7rem; font-weight: 800; }.media-studio-actions { align-items: end; display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .6rem; }.media-alt-label { color: var(--muted); display: grid; flex: 1 1 13rem; font-size: .72rem; gap: .2rem; }.media-alt-label input { min-height: 2.1rem; }.media-studio-actions .quiet-action { min-height: 2.1rem; }.media-hint { margin-top: .45rem; }.media-list { display: grid; gap: .35rem; margin-top: .55rem; }.media-item { align-items: center; background: var(--surface); border: 1px solid var(--border); display: flex; gap: .6rem; justify-content: space-between; padding: .38rem .5rem; }.media-item-name { display: grid; min-width: 0; }.media-item-name b { font-size: .73rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item .quiet-action { min-height: 1.9rem; padding: .25rem .5rem; width: auto; }
   [data-body] { background: #fcfdfe; border: 0; border-radius: 0; box-sizing: border-box; display: block; font-family: var(--font-mono); font-size: .9rem; line-height: 1.7; min-height: clamp(32rem, 66vh, 52rem); padding: 1rem; resize: vertical; width: 100%; }.article-preview { background: var(--surface); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); line-height: 1.8; overflow: auto; overflow-wrap: anywhere; padding: 1rem 1.15rem; }.article-preview :global(h2) { border-bottom: 1px solid var(--border); font-size: 1.25rem; margin: 1.3rem 0 .65rem; padding-bottom: .3rem; }.article-preview :global(h3) { font-size: 1.05rem; margin: 1rem 0 .5rem; }.article-preview :global(p) { margin: .65rem 0; }.article-preview :global(pre) { background: #18212b; border-radius: 0; color: #eef6ff; overflow-x: auto; padding: .7rem; }.article-preview :global(.math-display) { overflow-x: auto; padding: .4rem 0; }.article-preview :global(.katex-error) { color: var(--danger); }.article-preview :global(ul), .article-preview :global(ol) { padding-left: 1.5rem; }
-  .article-preview :global(.editorial-image) { margin: 1rem auto; max-width: 100%; text-align: center; }.article-preview :global(.editorial-image img) { display: block; height: auto; margin: 0 auto; max-height: 24rem; max-width: 100%; object-fit: contain; }.article-preview :global(.editorial-image figcaption), .article-preview :global(.tikz-compile-note) { color: var(--muted); font-size: .72rem; margin-top: .35rem; }.article-preview :global(.tikz-source-preview) { background: #18212b; border-radius: .35rem; color: #eef6ff; margin: .8rem 0; overflow: hidden; padding: .6rem .7rem; }.article-preview :global(.tikz-source-preview strong) { display: block; font-size: .75rem; margin-bottom: .35rem; }.article-preview :global(.tikz-source-preview pre) { margin: 0; padding: 0; }.article-preview :global(.tikz-compile-note) { color: #d7e6f2; margin-bottom: 0; }
   .review-panel { padding-bottom: .85rem; }.review-guide { background:var(--surface-alt); border-bottom:1px solid var(--border); display:grid; font-size:.74rem; gap:.2rem .65rem; grid-template-columns:max-content 1fr; line-height:1.5; padding:.7rem .9rem; }.review-guide b { color:var(--accent); }.comment-list-heading { color:var(--muted); font-size:.78rem; letter-spacing:.04em; margin:.85rem .85rem 0; }.comment-list { display: grid; gap: .75rem; max-height: 28rem; overflow: auto; padding: .6rem .85rem .85rem; }.comment-thread { border:1px solid var(--border); }.comment { background: var(--surface-alt); border-left: 3px solid var(--accent); border-radius: .35rem; padding: .65rem .7rem; }.comment.is-resolved { border-left-color: var(--border); opacity:.72; }.comment-replies { border-left:2px solid var(--border); display:grid; gap:.5rem; margin:.65rem .7rem .7rem 1.2rem; padding-left:.65rem; }.comment-reply { background:var(--surface); border-left-color:var(--border-strong); }.comment p { line-height: 1.55; margin: .35rem 0; white-space: pre-wrap; }.comment small { color: var(--muted); font-size: .72rem; }.comment-empty { color: var(--muted); font-size: .85rem; margin: 0; }.comment-quote { background:var(--surface); border-left:2px solid var(--border); color:var(--muted); font-size:.82rem; line-height:1.55; margin:.5rem 0; overflow-wrap:anywhere; padding:.35rem .5rem; white-space:pre-wrap; }.comment-meta,.comment-actions { align-items:center; display:flex; flex-wrap:wrap; gap:.4rem; }.comment-status { border:1px solid var(--border); color:var(--muted); font-size:.7rem; font-weight:800; padding:.12rem .35rem; }.comment-status.is-acknowledged { background:#e5f4ea; border-color:#74a888; color:#21623b; }.comment-status.is-resolved { background:var(--surface); color:var(--muted); }.comment-actions button,.reply-entry button { font-size:.73rem; padding:.25rem .45rem; width:auto; }.reply-entry { background:var(--surface); border-top:1px solid var(--border); display:grid; font-size:.73rem; font-weight:700; gap:.35rem; padding:.6rem .7rem; }.reply-entry span { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.reply-entry textarea { box-sizing:border-box; line-height:1.5; min-height:4.75rem; padding:.45rem; resize:vertical; width:100%; }.selection-action { align-items:center; background:#e8f3fb; border:1px solid #9ac5e2; display:flex; flex-wrap:wrap; font-size:.78rem; gap:.55rem; justify-content:space-between; margin:0 .85rem .65rem; padding:.55rem .65rem; }.selection-action span { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.selection-action button { width:auto; }.comment-entry { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; padding: 0 .85rem .6rem; }.comment-entry textarea { box-sizing: border-box; line-height: 1.5; min-height: 5rem; padding: .55rem; resize: vertical; width: 100%; }.selection-hint { background:var(--surface-alt); border-left:2px solid var(--accent); color:var(--muted); font-size:.72rem; font-weight:500; line-height:1.45; padding:.35rem .45rem; }.selection-hint.has-selection { background:#e8f3fb; color:var(--text); }.review-submit { margin-left:.85rem; width:auto; }
   .thread-summary { align-items:center; background:var(--surface); border-bottom:1px solid var(--border); display:flex; font-size:.72rem; gap:.5rem; justify-content:space-between; padding:.38rem .65rem; }.thread-summary small { color:var(--muted); }.thread-status { border:1px solid; font-weight:800; padding:.14rem .4rem; }.thread-status.is-pending { background:#fff2cc; border-color:#d9a429; color:#714f00; }.thread-status.is-acknowledged { background:#e8f3fb; border-color:#72add3; color:#185c86; }.thread-status.is-resolved { background:#e5f4ea; border-color:#74a888; color:#21623b; }.comment.is-resolved { border-left-color:#74a888; }.reply-open { margin:.55rem .7rem; width:auto; }.reply-entry[hidden] { display:none; }.reply-target { background:#f5f7f8; border-left:2px solid var(--accent); color:var(--text); line-height:1.5; max-height:4.5rem; overflow:auto; padding:.35rem .45rem; white-space:pre-wrap; }.reply-entry textarea { min-height:5.5rem; padding:.55rem; }
   /* YouTubeのコメント欄のように、発言者・本文・操作が読み取りやすい会話の単位になるよう整える。 */
@@ -374,7 +361,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
 
   type Subject = { slug: string; name: string; categories: { slug: string; name: string }[] };
   type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string };
-  type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; createdAt: string; marker: string };
   type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
@@ -396,10 +382,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const status = form.elements.namedItem("status") as HTMLSelectElement;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
     const preview = root.querySelector<HTMLElement>("[data-preview]")!;
-    const mediaInput = root.querySelector<HTMLInputElement>("[data-media-input]")!;
-    const mediaAlt = root.querySelector<HTMLInputElement>("[data-media-alt]")!;
-    const mediaList = root.querySelector<HTMLElement>("[data-media-list]")!;
-    const mediaStatus = root.querySelector<HTMLElement>("[data-media-status]")!;
     const comments = root.querySelector<HTMLElement>("[data-comment-list]")!;
     const commentBody = root.querySelector<HTMLTextAreaElement>("[data-comment-body]")!;
     const commentSelection = root.querySelector<HTMLOutputElement>("[data-comment-selection]")!;
@@ -476,46 +458,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     };
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-    let editorialAssets: EditorialAsset[] = [];
-    const formatBytes = (bytes: number) => bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1_000))}KB`;
-    const insertAtCursor = (value: string) => {
-      const start = body.selectionStart ?? body.value.length;
-      const end = body.selectionEnd ?? start;
-      body.setRangeText(value, start, end, "end");
-      body.dispatchEvent(new Event("input", { bubbles: true }));
-      body.focus();
-    };
-    const renderMediaList = () => {
-      mediaList.innerHTML = editorialAssets.length
-        ? editorialAssets.map((asset) => `<div class="media-item"><span class="media-item-name"><b>${esc(asset.filename)}</b><small>${formatBytes(asset.bytes)}${asset.alt ? ` ・ ${esc(asset.alt)}` : ""}</small></span><button type="button" class="quiet-action" data-insert-asset="${esc(asset.id)}">本文へ挿入</button></div>`).join("")
-        : "<small>アップロードした画像はここに表示されます。</small>";
-    };
-    const loadMediaAssets = async (documentId: string) => {
-      if (!documentId) { editorialAssets = []; renderMediaList(); mediaStatus.textContent = "原稿を保存すると利用できます"; return; }
-      try {
-        const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { credentials: "same-origin" });
-        const data = await read<{ assets?: EditorialAsset[]; error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "素材を読み込めませんでした。");
-        editorialAssets = data.assets ?? [];
-        mediaStatus.textContent = editorialAssets.length ? `${editorialAssets.length}件の素材` : "素材はまだありません";
-        renderMediaList();
-      } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。"; }
-    };
-    const uploadMediaFile = async (file: File) => {
-      const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
-      if (!documentId) { mediaStatus.textContent = "先に原稿を保存してください。"; mediaInput.value = ""; return; }
-      mediaStatus.textContent = "画像をアップロード中…";
-      const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim());
-      try {
-        const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { method: "POST", body: formData, credentials: "same-origin" });
-        const data = await read<{ asset?: EditorialAsset; error?: string }>(response);
-        if (!response.ok || !data.asset) throw new Error(data.error ?? "画像をアップロードできませんでした。");
-        const asset = data.asset;
-        insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`);
-        mediaAlt.value = ""; mediaInput.value = ""; mediaStatus.textContent = "画像を挿入しました。";
-        await loadMediaAssets(documentId);
-      } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "画像をアップロードできませんでした。"; mediaInput.value = ""; }
-    };
     const read = async <T,>(response: Response) => {
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。");
@@ -556,23 +498,12 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const previewMarkdown = (value: string) => {
       const lines = value.replace(/\r\n/g, "\n").split("\n");
       const result: string[] = [];
-      let inCode = false; let codeLanguage = ""; let inMath = false; let math: string[] = [];
+      let inCode = false; let inMath = false; let math: string[] = [];
       for (const raw of lines) {
         if (raw.trim() === "$$") { if (inMath) { result.push(`<div class="math-display">$$${esc(math.join("\n"))}$$</div>`); math = []; } inMath = !inMath; continue; }
         if (inMath) { math.push(raw); continue; }
-        if (raw.trim().startsWith("```")) {
-          if (inCode) {
-            result.push(codeLanguage === "tikz" ? "</code></pre><p class=\"tikz-compile-note\">TikZソースを保存しました。図の自動組版には管理者がLaTeX組版サービスを接続してください。</p></div>" : "</code></pre>");
-            inCode = false; codeLanguage = "";
-          } else {
-            codeLanguage = raw.trim().slice(3).trim().toLowerCase(); inCode = true;
-            result.push(codeLanguage === "tikz" ? "<div class=\"tikz-source-preview\"><strong>TikZ図（ソース）</strong><pre><code>" : "<pre><code>");
-          }
-          continue;
-        }
+        if (raw.startsWith("```")) { inCode = !inCode; result.push(inCode ? "<pre><code>" : "</code></pre>"); continue; }
         if (inCode) { result.push(`${esc(raw)}\n`); continue; }
-        const asset = /^!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})\)\s*$/i.exec(raw.trim());
-        if (asset) { result.push(`<figure class="editorial-image"><img src="/api/admin/editor/assets/${asset[2]}" alt="${esc(asset[1])}" loading="lazy"><figcaption>${esc(asset[1])}</figcaption></figure>`); continue; }
         if (/^###\s+/.test(raw)) { result.push(`<h3>${inline(raw.replace(/^###\s+/, ""))}</h3>`); continue; }
         if (/^##\s+/.test(raw)) { result.push(`<h2>${inline(raw.replace(/^##\s+/, ""))}</h2>`); continue; }
         if (/^[-*]\s+/.test(raw)) { result.push(`<ul><li>${inline(raw.replace(/^[-*]\s+/, ""))}</li></ul>`); continue; }
@@ -580,7 +511,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
         if (raw.trim()) result.push(`<p>${inline(raw)}</p>`);
       }
       if (inMath) result.push(`<p class="katex-error">数式の閉じる $$ がありません。</p>`);
-      if (inCode) result.push(codeLanguage === "tikz" ? "</code></pre><p class=\"tikz-compile-note\">TikZソースを保存しました。図の自動組版には管理者がLaTeX組版サービスを接続してください。</p></div>" : "</code></pre>");
+      if (inCode) result.push("</code></pre>");
       return result.join("").replace(/<\/ul><ul>/g, "").replace(/<\/ol><ol>/g, "");
     };
     const loadMathJax = () => mathJaxLoading ??= new Promise((resolve, reject) => {
@@ -646,7 +577,7 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       status.value = item.status; body.value = item.body;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
-      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; publicationState.textContent = item.published_at ? "公開済み" : "未公開"; updateWorkflow(item.status, Boolean(item.published_at)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at); unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at)); reviewButton.hidden = !(Boolean(item.id) && item.status === "draft"); saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false);
+      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; publicationState.textContent = item.published_at ? "公開済み" : "未公開"; updateWorkflow(item.status, Boolean(item.published_at)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at); unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at)); reviewButton.hidden = !(Boolean(item.id) && item.status === "draft"); saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false);
     };
     const emptyDocument = (source?: SourceArticle) => {
       const selected = source ? subjects.find((item) => item.slug === source.subject) ?? subjects[0] : subjects[0];
@@ -688,10 +619,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
     const captureCommentSelection = () => { const start = body.selectionStart; const end = body.selectionEnd; const selected = body.value.slice(start, end).trim(); setCommentSelection(selected ? { start, end, text: selected.slice(0, 2_000), source: "本文" } : null); };
     const capturePreviewSelection = () => { const selection = window.getSelection(); const selected = selection?.toString().trim() ?? ""; if (!selected || !selection?.anchorNode || !preview.contains(selection.anchorNode)) return; setCommentSelection({ start: null, end: null, text: selected.slice(0, 2_000), source: "プレビュー" }); };
     body.addEventListener("input", () => { setCommentSelection(null); renderHeadingOutline(); void renderPreview(); }); body.addEventListener("select", captureCommentSelection); body.addEventListener("keyup", captureCommentSelection); preview.addEventListener("mouseup", capturePreviewSelection); preview.addEventListener("keyup", capturePreviewSelection); root.querySelector<HTMLButtonElement>("[data-use-selection]")!.addEventListener("click", () => { if (!selectedCommentRange) return; const alreadyAdded = selectedCommentRanges.some((range) => range.source === selectedCommentRange!.source && range.start === selectedCommentRange!.start && range.end === selectedCommentRange!.end && range.text === selectedCommentRange!.text); if (!alreadyAdded && selectedCommentRanges.length < 8) selectedCommentRanges.push(selectedCommentRange); renderSelectedRanges(); setCommentSelection(null); const replyBody = activeReplyId ? comments.querySelector<HTMLTextAreaElement>(`[data-reply-body="${activeReplyId}"]`) : null; const target = replyBody ?? commentBody; target.focus(); target.scrollIntoView({ behavior: "smooth", block: "center" }); }); selectedRanges.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-selection]"); if (!button) return; const index = Number(button.dataset.removeSelection); if (Number.isInteger(index)) { selectedCommentRanges.splice(index, 1); renderSelectedRanges(); } }); headingOutline.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-heading-offset]"); if (!button) return; const offset = Number(button.dataset.headingOffset); body.focus(); body.setSelectionRange(offset, offset); body.scrollTop = Math.max(0, offset / Math.max(1, body.value.length) * body.scrollHeight - body.clientHeight / 2); }); previewEngine.addEventListener("change", () => void renderPreview());
-    root.querySelector<HTMLButtonElement>("[data-open-media]")!.addEventListener("click", () => mediaInput.click());
-    mediaInput.addEventListener("change", () => { const file = mediaInput.files?.[0]; if (file) void uploadMediaFile(file); });
-    mediaList.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-insert-asset]"); if (!button) return; const asset = editorialAssets.find((item) => item.id === button.dataset.insertAsset); if (asset) insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`); });
-    root.querySelector<HTMLButtonElement>("[data-insert-tikz]")!.addEventListener("click", () => insertAtCursor("\n```tikz\n\\begin{tikzpicture}\n  \\draw[->] (0,0) -- (2,0) node[right] {$x$};\n\\end{tikzpicture}\n```\n"));
     root.querySelector<HTMLButtonElement>("[data-jump-writing]")!.addEventListener("click", () => body.scrollIntoView({ behavior:"smooth", block:"center" })); root.querySelector<HTMLButtonElement>("[data-jump-preview]")!.addEventListener("click", () => preview.scrollIntoView({ behavior:"smooth", block:"center" })); root.querySelector<HTMLButtonElement>("[data-jump-comments]")!.addEventListener("click", () => comments.scrollIntoView({ behavior:"smooth", block:"center" }));
     root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => button.addEventListener("click", () => { const showPreview = button.dataset.paneTab === "preview"; root.classList.toggle("show-preview", showPreview); root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((tab) => tab.setAttribute("aria-selected", String(tab === button))); }));
     form.addEventListener("input", () => { heading.textContent = formValue("title") || "新規原稿"; setUnsavedChanges(true); scheduleAutosave(); });
@@ -706,7 +633,6 @@ const editorData = JSON.stringify({ subjects, articles }).replace(/</g, "\\u003c
       if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
       const savedId = id || data.id || "";
       if (!id && data.id) (form.elements.namedItem("documentId") as HTMLInputElement).value = data.id;
-      await loadMediaAssets(savedId);
       publishButton.hidden = !(isManager && Boolean(savedId) && status.value === "approved");
       setUnsavedChanges(false);
       saveMessage.value = status.value === "approved" ? "査読済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";

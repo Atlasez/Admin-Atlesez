@@ -1,6 +1,6 @@
 # 公開チェックリスト（Cloudflare Pages）
 
-配信は Cloudflare Pages が GitHub リポジトリ `Atlasez/Atlasez01` を
+配信は Cloudflare Pages が GitHub リポジトリ `mitukx/Atlasez01` を
 直接ビルドして行う。詳しい背景は `docs/DEPLOYMENT.md`。
 
 ---

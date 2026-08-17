@@ -29,7 +29,7 @@ export const ORG = {
   philosophy:
     "「学び」を共に楽しみ、共に創ることを通じ、一人一人が自分の持つ世界観を拡大・更新し続けることによって、全ての人がより一層日々を楽しめるような未来へと、改善・向上し続ける社会を実現する。",
   email: "atlasez.contact@gmail.com",
-  githubRepo: "https://github.com/Atlasez/Atlasez01",
+  githubRepo: "https://github.com/mitukx/Atlasez01",
   sns: {
     x: "https://twitter.com/atlasez_info",
     instagram: "https://www.instagram.com/atlasez_info",

@@ -7,33 +7,32 @@ Google OAuthでログインし、既存の `report_admin_permissions` に設定�
 
 - 新規記事の下書き、または公開済みMarkdownを下書きとして取り込む
 - Markdown本文を編集し、`$...$` / `$$...$$` の数式をKaTeXで即時プレビューする
-- 原稿を保存した後、画像をアップロードして本文へ挿入する
-- TikZ/LaTeXのソースブロックを挿入し、査読プレビューで確認する
 - 原稿単位でコメントを残し、`下書き → 査読中 → 承認済み` を共有する
-- 承認後、管理者が「公開する」を押して本文と画像を公開先へ反映する
+- 承認後、公開サイトの形式に合うMarkdown原稿をクリップボードへ出力する
 
-原稿とコメントはD1の `editorial_documents` / `editorial_comments` に保存されます。画像素材はD1の `editorial_assets` に原稿単位で保存され、公開時にGitHubへ同期されます。詳細は [記事素材・LaTeX/TikZ運用](EDITORIAL_MEDIA_AND_LATEX.md) を参照してください。
+原稿とコメントはD1の `editorial_documents` / `editorial_comments` に保存されます。
 公開済み記事のMarkdownや公開サイトの表示は、この操作だけでは変更されません。
 
 ## 現在の公開手順
 
 1. ワークスペースで原稿を`承認済み`にする
-2. 運営管理者が**公開する**を押す
-3. Workerが `Atlasez/Atlasez01` の `src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` と画像素材を更新する
-4. GitHub Actions / Cloudflare Pagesのビルドが完了すると公開サイトへ反映される
+2. **公開用Markdownをコピー**を押す
+3. GitHub上で `src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` を作成・更新し、Pull Requestを出す
+4. CIが通り、査読者がマージすると本番サイトへ自動デプロイされる
 
-この方式により、執筆・数式確認・査読は内部サイトに集約しつつ、公開本文と画像はGitHubの履歴に残せます。公開前の最終承認は、既存の査読状態と管理者権限で制限します。
+この方式により、執筆・数式確認・査読は内部サイトに集約しつつ、公開履歴と最終レビューはGitHubのPRに残せます。
 
-## GitHub連携の設定
+## 将来のワンクリック公開
 
-公開には管理Workerへ**GitHub Fine-grained token**をSecretとして登録します。個人アクセストークンを画面へ入力する設計にはしません。
+「承認済み」から自動でPRを作るには、管理Workerへ**GitHub App**を接続します。個人アクセストークンを画面へ入力する設計にはしません。
 
-必要になるものは次の2点です。
+必要になるものは次の3点です。
 
-1. `Atlasez/Atlasez01` のContents read/writeだけを許可したFine-grained token
-2. Cloudflare WorkersのSecret `GITHUB_PUBLISH_TOKEN` と、必要に応じて変数 `GITHUB_REPOSITORY=Atlasez/Atlasez01`
+1. `mitukx/Atlasez01` のContents read/write とPull requests read/writeだけを許可したGitHub App
+2. Cloudflare WorkersのSecretへ入れるApp ID・Installation ID・Private Key
+3. Workerで短命のInstallation Tokenを作り、専用ブランチとPRを作成する処理
 
-Secretが未設定の場合、保存・査読までは利用できますが、公開操作はエラーになります。
+この追加後も、原稿・コメント・分野権限のデータモデルはそのまま使えます。
 
 ## ローカル確認
 
