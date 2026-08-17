@@ -1,21 +1,21 @@
 ---
 interface Props {
-  current: "portal" | "atlas" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working";
-  site?: "portal" | "atlas" | "secretariat";
+  current: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working";
+  site?: "portal" | "atlas" | "semi-platform" | "secretariat";
 }
 const { current, site: requestedSite } = Astro.props;
 const site = requestedSite ?? (current === "portal" ? "portal" : "atlas");
-const projectSlug = site === "secretariat" ? "secretariat" : "atlas";
-const homePath = site === "portal" ? "/admin/portal/" : site === "secretariat" ? "/admin/secretariat/" : "/admin/atlas/";
-const brandLabel = site === "portal" ? "メンバー用サイト" : site === "secretariat" ? "Atlasez運営事務局" : "学習サイト「アトラス」運営用サイト";
+const projectSlug = site === "secretariat" ? "secretariat" : site === "semi-platform" ? "semi-platform" : "atlas";
+const homePath = site === "portal" ? "/admin/portal/" : site === "secretariat" ? "/admin/secretariat/" : site === "semi-platform" ? "/admin/semi-platform/" : "/admin/atlas/";
+const brandLabel = site === "portal" ? "AtlasezプロジェクトHome" : site === "secretariat" ? "Atlasez運営事務局" : site === "semi-platform" ? "ゼミプラットフォーム" : "学習サイト「アトラス」運営用サイト";
 ---
 <header class="admin-nav">
   <a class="admin-nav-brand-logo" href={homePath} data-astro-reload aria-label={`${brandLabel}のトップへ戻る`}><img src="/images/atlasez-logo.png" alt="" width="34" height="34" /></a>
   <div class="admin-project-switcher" data-project-switcher data-current-site={site} data-current-slug={projectSlug}>
     <button type="button" class="admin-project-switcher-button" data-project-previous aria-label="前のプロジェクト">‹</button>
     <div class="admin-project-switcher-content">
-      <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-astro-reload data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Member site" : site === "secretariat" ? "Atlasez Secretariat" : "Atlas learning site operations"}>{brandLabel}</a>
-      <span class="admin-project-switcher-context" data-project-current-context>{site === "portal" ? "プロジェクト横断ポータル" : "プロジェクトワークスペース"}</span>
+      <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-astro-reload data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez project home" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : "Atlas learning site operations"}>{brandLabel}</a>
+      <span class="admin-project-switcher-context" data-project-current-context>{site === "portal" ? "全プロジェクトへの入口" : "プロジェクトワークスペース"}</span>
       <span class="admin-project-switcher-dots" data-project-dots></span>
     </div>
     <button type="button" class="admin-project-switcher-button" data-project-next aria-label="次のプロジェクト">›</button>
@@ -29,7 +29,7 @@ const brandLabel = site === "portal" ? "メンバー用サイト" : site === "se
         <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>同時作業会</a>
         <a href="/admin/introductions" data-astro-reload aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
       </>}
-      {site === "secretariat" && <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>日程・同時作業会</a>}
+      {(site === "secretariat" || site === "semi-platform") && <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>日程・同時作業会</a>}
     </>
     <details class="admin-management-menu" open={(["reports", "permissions", "guide", "applications", "introductions"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
@@ -116,8 +116,9 @@ const brandLabel = site === "portal" ? "メンバー用サイト" : site === "se
       const initialSite = switcher.dataset.currentSite ?? 'portal';
       const initialSlug = switcher.dataset.currentSlug ?? 'atlas';
       const slides: ProjectSlide[] = [
-        { key: 'portal', label: 'メンバー用サイト', href: '/admin/portal/', context: 'プロジェクト横断ポータル' },
+        { key: 'portal', label: 'AtlasezプロジェクトHome', href: '/admin/portal/', context: '全プロジェクトへの入口' },
         { key: 'atlas', label: '学習サイト「アトラス」運営用サイト', href: '/admin/atlas/', context: '学習サイト運営' },
+        { key: 'semi-platform', label: 'ゼミプラットフォーム', href: '/admin/semi-platform/', context: 'ゼミ運営' },
         { key: 'secretariat', label: 'Atlasez運営事務局', href: '/admin/secretariat/', context: 'Atlasez全体の運営' },
       ];
       const appendMemberProjects = async () => {
@@ -141,9 +142,9 @@ const brandLabel = site === "portal" ? "メンバー用サイト" : site === "se
         if (animate) { switcher.classList.remove('is-changing'); requestAnimationFrame(() => switcher.classList.add('is-changing')); }
         const language = currentLanguage();
         title.href = slide.href;
-        title.textContent = slide.key === 'portal' ? (language === 'ja' ? slide.label : 'Member site') : slide.key === 'atlas' ? (language === 'ja' ? slide.label : 'Atlas learning site operations') : slide.key === 'secretariat' ? (language === 'ja' ? slide.label : 'Atlasez Secretariat') : slide.label;
+        title.textContent = slide.key === 'portal' ? (language === 'ja' ? slide.label : 'Atlasez project home') : slide.key === 'atlas' ? (language === 'ja' ? slide.label : 'Atlas learning site operations') : slide.key === 'semi-platform' ? (language === 'ja' ? slide.label : 'Seminar platform') : slide.key === 'secretariat' ? (language === 'ja' ? slide.label : 'Atlasez Secretariat') : slide.label;
         title.setAttribute('aria-label', language === 'ja' ? `${title.textContent}へ移動` : `Open ${title.textContent}`);
-        context.textContent = language === 'ja' ? slide.context : slide.key === 'portal' ? 'Cross-project portal' : slide.key === 'atlas' ? 'Learning site operations' : slide.key === 'secretariat' ? 'Atlasez-wide operations' : 'Participating project';
+        context.textContent = language === 'ja' ? slide.context : slide.key === 'portal' ? 'All project home' : slide.key === 'atlas' ? 'Learning site operations' : slide.key === 'semi-platform' ? 'Seminar operations' : slide.key === 'secretariat' ? 'Atlasez-wide operations' : 'Participating project';
         dots.innerHTML = slides.map((item, itemIndex) => `<button type="button" class="admin-project-dot${itemIndex === index ? ' is-active' : ''}" data-project-index="${itemIndex}" aria-label="${language === 'ja' ? `${item.label}を表示` : `Show ${item.label}`}" aria-current="${itemIndex === index ? 'true' : 'false'}"></button>`).join('');
       };
       switcher.querySelector<HTMLButtonElement>('[data-project-previous]')?.addEventListener('click', () => { index = (index - 1 + slides.length) % slides.length; renderSwitcher(true); });

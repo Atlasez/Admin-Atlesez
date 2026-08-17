@@ -2,22 +2,22 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
 ---
-<AdminLayout title="メンバー用サイト" description="Atlasezのプロジェクト横断ポータル">
+<AdminLayout title="AtlasezプロジェクトHome" description="Atlasezの全プロジェクトへの入口">
   <main class="portal" data-portal>
     <AdminNav current="portal" site="portal" />
     <header>
       <div>
-        <p>ATLASEZ / MEMBER PORTAL</p>
-        <h1 data-admin-i18n data-admin-ja="メンバー用サイト" data-admin-en="Member site">メンバー用サイト</h1>
-        <span data-admin-i18n data-admin-ja="参加しているプロジェクトを選び、それぞれの運営ワークスペースへ移動します。" data-admin-en="Choose a project to open its workspace.">参加しているプロジェクトを選び、それぞれの運営ワークスペースへ移動します。</span>
+        <p>ATLASEZ / PROJECT HOME</p>
+        <h1 data-admin-i18n data-admin-ja="AtlasezプロジェクトHome" data-admin-en="Atlasez project home">AtlasezプロジェクトHome</h1>
+        <span data-admin-i18n data-admin-ja="Atlasezの全プロジェクトを集約した入口です。各プロジェクトHomeから、それぞれの運営ワークスペースへ移動できます。" data-admin-en="One entry point for every Atlasez project. Open each project home to enter its workspace.">Atlasezの全プロジェクトを集約した入口です。各プロジェクトHomeから、それぞれの運営ワークスペースへ移動できます。</span>
       </div>
     </header>
 
     <section class="project-entry" aria-labelledby="projects-entry-heading">
       <div>
         <p class="section-kicker">PROJECTS</p>
-        <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="プロジェクトを選択" data-admin-en="Choose a project">プロジェクトを選択</h2>
-        <span data-admin-i18n data-admin-ja="学習サイトとAtlasez運営事務局は、入口と作業内容を分けて管理します。" data-admin-en="The learning site and Atlasez Secretariat have separate workspaces.">学習サイトとAtlasez運営事務局は、入口と作業内容を分けて管理します。</span>
+        <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="主要プロジェクト" data-admin-en="Core projects">主要プロジェクト</h2>
+        <span data-admin-i18n data-admin-ja="学習サイト、ゼミプラットフォーム、運営事務局をここから開けます。" data-admin-en="Open the learning site, seminar platform, or Secretariat from here.">学習サイト、ゼミプラットフォーム、運営事務局をここから開けます。</span>
       </div>
       <div class="project-entry-cards">
         <a class="project-entry-card" href="/admin/atlas/">
@@ -29,6 +29,11 @@ import AdminNav from "../../components/AdminNav.astro";
           <strong data-admin-i18n data-admin-ja="Atlasez運営事務局" data-admin-en="Atlasez Secretariat">Atlasez運営事務局</strong>
           <small data-admin-i18n data-admin-ja="事務局のToDo、依頼、日程調整、同時作業会" data-admin-en="Secretariat tasks, requests, scheduling and co-working">事務局のToDo、依頼、日程調整、同時作業会</small>
           <span data-admin-i18n data-admin-ja="事務局サイトへ →" data-admin-en="Open Secretariat →">事務局サイトへ →</span>
+        </a>
+        <a class="project-entry-card" href="/admin/semi-platform/">
+          <strong data-admin-i18n data-admin-ja="ゼミプラットフォーム" data-admin-en="Seminar platform">ゼミプラットフォーム</strong>
+          <small data-admin-i18n data-admin-ja="ゼミの運営、依頼、日程調整、現行サイトへの導線" data-admin-en="Seminar operations, tasks, scheduling and the current site">ゼミの運営、依頼、日程調整、現行サイトへの導線</small>
+          <span data-admin-i18n data-admin-ja="ゼミサイトへ →" data-admin-en="Open seminar platform →">ゼミサイトへ →</span>
         </a>
       </div>
     </section>
@@ -60,7 +65,7 @@ import AdminNav from "../../components/AdminNav.astro";
   .project-entry { align-items: center; border: 1px solid var(--border-default); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(24rem, 1.4fr); margin: 1.5rem 0; padding: 1.25rem; }
   .project-entry h2 { font-size: 1.2rem; margin: .25rem 0; }
   .project-entry > div > span { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; }
-  .project-entry-cards { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-entry-cards { display: grid; gap: .65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .project-entry-card { align-content: start; background: var(--background-secondary); border: 1px solid var(--border-default); border-top: 3px solid var(--accent-primary); box-sizing: border-box; color: var(--text-primary); display: grid; gap: .35rem; min-height: 8.4rem; min-width: 0; overflow-wrap: anywhere; padding: 1rem; text-decoration: none; }
   .project-entry-card:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
   .project-entry-card strong { font-size: .95rem; }

@@ -4333,6 +4333,8 @@ const adminReturnPath = (value: string | null) => {
     "/admin/portal/",
     "/admin/atlas",
     "/admin/atlas/",
+    "/admin/semi-platform",
+    "/admin/semi-platform/",
     "/admin/applications",
     "/admin/applications/",
     "/admin/articles",
@@ -4361,7 +4363,7 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/operations/" ||
       parsed.pathname === "/admin/co-working" ||
       parsed.pathname === "/admin/co-working/") &&
-    (project === "atlas" || project === "secretariat");
+    (project === "atlas" || project === "semi-platform" || project === "secretariat");
   return keepProject
     ? `${parsed.pathname}?project=${encodeURIComponent(project)}`
     : parsed.pathname;
@@ -5040,6 +5042,8 @@ export default {
       url.pathname === "/admin/portal/" ||
       url.pathname === "/admin/atlas" ||
       url.pathname === "/admin/atlas/" ||
+      url.pathname === "/admin/semi-platform" ||
+      url.pathname === "/admin/semi-platform/" ||
       url.pathname === "/admin/applications" ||
       url.pathname === "/admin/applications/" ||
       url.pathname === "/admin/articles" ||

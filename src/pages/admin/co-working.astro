@@ -1,7 +1,8 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
-const operationSite = Astro.url.searchParams.get("project") === "secretariat" ? "secretariat" : "atlas";
+const requestedProject = Astro.url.searchParams.get("project");
+const operationSite = requestedProject === "secretariat" || requestedProject === "semi-platform" ? requestedProject : "atlas";
 ---
 <AdminLayout title="同時作業会" description="同時作業会の日時と参加状況">
   <main class="co-working" data-co-working>
