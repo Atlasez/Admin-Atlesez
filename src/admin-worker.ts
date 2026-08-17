@@ -2150,10 +2150,101 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
       .bind(scope.email)
       .all(),
   ]);
+  const projectRows = projects.results as Array<{ id: string; slug: string; name: string }>;
+  const projectIds = projectRows.map((project) => project.id).filter(Boolean);
+  const rangeStart = new Date();
+  rangeStart.setMonth(rangeStart.getMonth() - 2, 1);
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date();
+  rangeEnd.setMonth(rangeEnd.getMonth() + 13, 0);
+  rangeEnd.setHours(23, 59, 59, 999);
+  const calendarDateKey = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const rangeStartKey = calendarDateKey(rangeStart);
+  const rangeEndKey = calendarDateKey(rangeEnd);
+  const calendarRows = projectIds.length
+    ? await Promise.all([
+        env.REPORTS.prepare(
+          `SELECT e.id, e.project_id, e.title, e.details, e.starts_at, e.ends_at, e.timezone,
+             p.name AS project_name
+           FROM editorial_events e
+           JOIN atlasez_projects p ON p.id = e.project_id
+           WHERE e.project_id IN (${projectIds.map(() => "?").join(",")})
+             AND substr(e.starts_at, 1, 10) >= ? AND substr(e.starts_at, 1, 10) <= ?
+           ORDER BY e.starts_at ASC LIMIT 300`,
+        )
+          .bind(...projectIds, rangeStartKey, rangeEndKey)
+          .all<{
+            id: string;
+            project_id: string;
+            title: string;
+            details: string;
+            starts_at: string;
+            ends_at: string | null;
+            timezone: string;
+            project_name: string;
+          }>(),
+        env.REPORTS.prepare(
+          `SELECT t.id, t.project_id, t.title, t.details, t.due_at AS starts_at,
+             t.due_timezone AS timezone, p.name AS project_name
+           FROM editorial_tasks t
+           JOIN atlasez_projects p ON p.id = t.project_id
+           WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
+             AND t.assignee_email = ? AND t.status != 'done'
+             AND t.due_at IS NOT NULL
+             AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
+           ORDER BY t.due_at ASC LIMIT 300`,
+        )
+          .bind(...projectIds, scope.email, rangeStartKey, rangeEndKey)
+          .all<{
+            id: string;
+            project_id: string;
+            title: string;
+            details: string;
+            starts_at: string;
+            timezone: string;
+            project_name: string;
+          }>(),
+      ])
+    : [{ results: [] }, { results: [] }];
+  const organizationEvents = calendarRows[0].results ?? [];
+  const personalDeadlines = calendarRows[1].results ?? [];
   return json({
     email: scope.email,
     projects: projects.results,
     todos: todos.results,
+    calendar: {
+      rangeStart: rangeStart.toISOString(),
+      rangeEnd: rangeEnd.toISOString(),
+      events: [
+        ...organizationEvents.map((event) => ({
+          id: `event:${event.id}`,
+          kind: "organization" as const,
+          title: event.title,
+          details: event.details,
+          startsAt: event.starts_at,
+          endsAt: event.ends_at,
+          timezone: event.timezone,
+          projectId: event.project_id,
+          projectName: event.project_name,
+        })),
+        ...personalDeadlines.map((task) => ({
+          id: `task:${task.id}`,
+          kind: "personal" as const,
+          title: task.title,
+          details: task.details,
+          startsAt: task.starts_at,
+          endsAt: null,
+          timezone: task.timezone,
+          projectId: task.project_id,
+          projectName: task.project_name,
+        })),
+      ],
+    },
   });
 }
 
