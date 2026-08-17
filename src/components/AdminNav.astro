@@ -46,7 +46,6 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
       <a href={`/admin/operations/?project=${projectSlug}`} data-astro-reload aria-current={current === "operations" ? "page" : undefined}>進捗・ToDo・日程</a>
       {site === "atlas" && <>
         <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>同時作業会</a>
-        <a href="/admin/introductions" data-astro-reload aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
       </>}
       {(site === "secretariat" || site === "semi-platform") && <a href={`/admin/co-working/?project=${projectSlug}`} data-astro-reload aria-current={current === "co-working" ? "page" : undefined}>日程・同時作業会</a>}
     </>
