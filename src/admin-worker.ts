@@ -46,6 +46,9 @@ interface Env {
   DISCORD_GUILD_ID?: string;
   /** 分野別通知を集約する、全体進捗チャンネルのID。 */
   DISCORD_PROGRESS_CHANNEL_ID?: string;
+  /** 任意。設定された自分用メールリマインダーの配信に使う。 */
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
@@ -394,6 +397,139 @@ const validTimeZone = (value: string) => {
   } catch {
     return false;
   }
+};
+
+// datetime-localは選択したタイムゾーンの壁時計時刻として保存する。
+// Workerの実行環境のタイムゾーンに依存しないよう、ここでepochへ変換する。
+const wallTimeToEpoch = (value: string, timeZone: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match || !validTimeZone(timeZone)) return Number.NaN;
+  const [year, month, day, hour, minute] = match.slice(1).map(Number);
+  const wall = Date.UTC(year, month - 1, day, hour, minute);
+  let guess = wall;
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(guess))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value]),
+    );
+    const represented = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+    );
+    guess = wall - (represented - guess);
+  }
+  return guess;
+};
+
+type TaskReminderRowInput = {
+  remindAt: string;
+  timezone: string;
+  label: string;
+  repeat: string;
+  relativeKind: "absolute" | "before" | "due_day_hourly";
+  relativeAmount: number | null;
+  relativeUnit: "days" | "hours" | null;
+  relativeStart: string | null;
+};
+
+const shiftReminderWallTime = (value: string, minutes: number) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return "";
+  return new Date(
+    Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+    ) + minutes * 60_000,
+  )
+    .toISOString()
+    .slice(0, 16);
+};
+
+const hourlyReminderWallTimes = (dueAt: string, start: string) => {
+  const dueMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(dueAt);
+  const startMatch = /^(\d{2}):(\d{2})$/.exec(start);
+  if (!dueMatch || !startMatch) return [] as string[];
+  const dueMinutes = Number(dueMatch[2]) * 60 + Number(dueMatch[3]);
+  const startMinutes = Number(startMatch[1]) * 60 + Number(startMatch[2]);
+  if (startMinutes > dueMinutes) return [] as string[];
+  const times: string[] = [];
+  for (let minutes = startMinutes; minutes <= dueMinutes; minutes += 60) {
+    times.push(
+      `${dueMatch[1]}T${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`,
+    );
+  }
+  return times;
+};
+
+const reminderInputRows = (
+  payload: unknown[],
+  dueAt: string,
+  dueTimezone: string,
+): { rows?: TaskReminderRowInput[]; error?: string } => {
+  const rows: TaskReminderRowInput[] = [];
+  for (const value of payload.slice(0, 100)) {
+    const item = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+    const kind = text(item.kind ?? item.relativeKind, 30) || "absolute";
+    if (kind === "before") {
+      const amount = Number(item.amount);
+      const unit = text(item.unit, 12);
+      if (!dueAt || !validTimeZone(dueTimezone) || !Number.isInteger(amount) || amount < 1 || (unit !== "days" && unit !== "hours") || amount > (unit === "days" ? 365 : 8_760))
+        return { error: "期限基準のリマインダーには、期限・正しい数量・単位が必要です。" };
+      const remindAt = shiftReminderWallTime(dueAt, -amount * (unit === "days" ? 24 * 60 : 60));
+      if (wallTimeToEpoch(remindAt, dueTimezone) > Date.now())
+        rows.push({ remindAt, timezone: dueTimezone, label: `${amount}${unit === "days" ? "日前" : "時間前"}`, repeat: "none", relativeKind: "before", relativeAmount: amount, relativeUnit: unit, relativeStart: null });
+      continue;
+    }
+    if (kind === "due_day_hourly") {
+      if (!dueAt || !validTimeZone(dueTimezone)) return { error: "当日毎時のリマインダーには期限が必要です。" };
+      const start = text(item.start, 5) || "09:00";
+      if (!/^\d{2}:\d{2}$/.test(start) || Number(start.slice(0, 2)) > 23 || Number(start.slice(3, 5)) > 59)
+        return { error: "当日毎時の開始時刻を確認してください。" };
+      const times = hourlyReminderWallTimes(dueAt, start);
+      if (!times.length) return { error: "当日毎時の開始時刻は期限時刻より前にしてください。" };
+      rows.push(...times.filter((remindAt) => wallTimeToEpoch(remindAt, dueTimezone) > Date.now()).map((remindAt) => ({ remindAt, timezone: dueTimezone, label: `期限当日の毎時（${start}から）`, repeat: "none", relativeKind: "due_day_hourly" as const, relativeAmount: null, relativeUnit: null, relativeStart: start })));
+      continue;
+    }
+    const remindAt = text(item.remindAt, 32);
+    if (!remindAt) continue;
+    rows.push({ remindAt, timezone: text(item.timezone, 80) || dueTimezone, label: text(item.label, 120), repeat: text(item.repeat, 12) || "none", relativeKind: "absolute", relativeAmount: null, relativeUnit: null, relativeStart: null });
+  }
+  return { rows };
+};
+
+const nextReminderWallTime = (value: string, repeat: string, timeZone: string): string | null => {
+  if (!["daily", "weekly", "monthly"].includes(repeat) || !validTimeZone(timeZone)) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const next = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5])));
+  if (repeat === "daily") next.setUTCDate(next.getUTCDate() + 1);
+  if (repeat === "weekly") next.setUTCDate(next.getUTCDate() + 7);
+  if (repeat === "monthly") {
+    const day = next.getUTCDate();
+    next.setUTCDate(1);
+    next.setUTCMonth(next.getUTCMonth() + 1);
+    const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+    next.setUTCDate(Math.min(day, lastDay));
+  }
+  const wall = next.toISOString().slice(0, 16);
+  return wallTimeToEpoch(wall, timeZone) > Date.now() ? wall : nextReminderWallTime(wall, repeat, timeZone);
 };
 
 type AdminScope = {
@@ -2152,7 +2288,7 @@ async function updateApplication(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { status?: unknown };
+  let payload: { status?: unknown; reminderAction?: unknown; reminders?: unknown; reminderEmail?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -2345,7 +2481,7 @@ async function operationsOverview(
   const memberValues: unknown[] = scope.allSubjects ? [] : scope.subjects;
   const [tasks, events, progress, members, availability, availabilityBlocks] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+      `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
     )
       .bind(...values)
       .all(),
@@ -2385,6 +2521,20 @@ async function operationsOverview(
       "SELECT id, starts_at, ends_at, timezone, label, kind FROM editorial_member_availability_blocks WHERE email = ? ORDER BY starts_at ASC LIMIT 100",
     ).bind(scope.email).all(),
   ]);
+  const taskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
+  const reminderRows = taskRows.length
+    ? await env.REPORTS.prepare(
+        `SELECT id,task_id,remind_at,timezone,label,notified_at,relative_kind,relative_amount,relative_unit,relative_start
+         FROM editorial_task_reminders
+         WHERE task_id IN (${taskRows.map(() => "?").join(",")})
+         ORDER BY remind_at ASC`,
+      ).bind(...taskRows.map((task) => task.id)).all<Record<string, unknown>>()
+    : { results: [] as Record<string, unknown>[] };
+  const remindersByTask = new Map<string, Record<string, unknown>[]>();
+  for (const reminder of reminderRows.results ?? []) {
+    const taskId = String(reminder.task_id ?? "");
+    remindersByTask.set(taskId, [...(remindersByTask.get(taskId) ?? []), reminder]);
+  }
   const participantRows = availability.results ?? [];
   const participantsByEvent = new Map<string, typeof participantRows>();
   for (const item of participantRows) {
@@ -2399,7 +2549,10 @@ async function operationsOverview(
       isManager: scope.isManager,
     },
     project,
-    tasks: tasks.results,
+    tasks: taskRows.map((task) => ({
+      ...task,
+      reminders: remindersByTask.get(String(task.id)) ?? [],
+    })),
     availabilityBlocks: availabilityBlocks.results ?? [],
     events: (events.results ?? []).map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
@@ -2497,15 +2650,40 @@ async function createOperation(
       );
     const dueAt = text(payload.dueAt, 32);
     const dueTimezone = text(payload.dueTimezone, 80) || "Asia/Tokyo";
+    const legacyReminderAt = text(payload.reminderAt, 32);
+    const reminderRepeat = text(payload.reminderRepeat, 12) || "none";
+    const reminderEmail = text(payload.reminderEmail, 254).toLowerCase();
+    const reminderPayload = Array.isArray(payload.reminders) ? payload.reminders : [];
+    const reminderRowsResult = reminderInputRows(reminderPayload, dueAt, dueTimezone);
+    if (reminderRowsResult.error) return json({ error: reminderRowsResult.error }, 400);
+    const reminderRows = reminderRowsResult.rows ?? [];
+    for (const reminder of reminderRows) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) || !validTimeZone(reminder.timezone) || !new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminder.repeat))
+        return json({ error: "リマインダー日時またはタイムゾーンを確認してください。" }, 400);
+    }
+    if (!reminderRows.length && legacyReminderAt)
+      reminderRows.push({ remindAt: legacyReminderAt, timezone: dueTimezone, label: reminderRepeat === "none" ? "リマインダー" : reminderRepeat, repeat: reminderRepeat, relativeKind: "absolute", relativeAmount: null, relativeUnit: null, relativeStart: null });
     if (dueAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAt))
       return json({ error: "期限はカレンダーから指定してください。" }, 400);
     if (dueAt && !validTimeZone(dueTimezone))
       return json({ error: "期限のタイムゾーンを確認してください。" }, 400);
+    if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
+      return json({ error: "通知先メールアドレスを確認してください。" }, 400);
+    if (!new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminderRepeat))
+      return json({ error: "リマインダーの繰り返しを確認してください。" }, 400);
+    for (const reminder of reminderRows) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) || !validTimeZone(reminder.timezone) || !new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminder.repeat))
+        return json({ error: "リマインダー日時またはタイムゾーンを確認してください。" }, 400);
+    }
+    if (reminderRows.length > 1 && reminderRepeat !== "none")
+      return json({ error: "複数のリマインダーを設定する場合、繰り返しは「1回」にしてください。" }, 400);
+    const taskId = crypto.randomUUID();
+    const singleRepeatingReminder = reminderRows.length === 1 && reminderRepeat !== "none";
     await env.REPORTS.prepare(
-      "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'open',?,?,?,?,?)",
+      "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?,?,?)",
     )
       .bind(
-        crypto.randomUUID(),
+        taskId,
         project.id,
         subject,
         assignee,
@@ -2513,11 +2691,18 @@ async function createOperation(
         text(payload.details, MAX_OPERATION_TEXT_LENGTH),
         dueAt || null,
         dueTimezone,
+        reminderRows.length ? null : legacyReminderAt || null,
+        singleRepeatingReminder ? reminderRepeat : reminderRows.length ? "none" : reminderRepeat,
+        reminderEmail || null,
         scope.email,
         now,
         now,
       )
       .run();
+    if (reminderRows.length)
+      await env.REPORTS.batch(reminderRows.map((reminder) => env.REPORTS.prepare(
+        "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), taskId, reminder.remindAt, reminder.timezone, reminder.label, reminder.relativeKind, reminder.relativeAmount, reminder.relativeUnit, reminder.relativeStart, now)));
     return json({ ok: true });
   }
   const title = text(payload.title, 200);
@@ -2555,17 +2740,22 @@ async function updateTask(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { status?: unknown };
+  let payload: { status?: unknown; reminderAction?: unknown; reminders?: unknown; reminderEmail?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const status = text(payload.status, 20);
-  if (!taskStatus.has(status))
+  const requestedStatus = payload.status === undefined ? null : text(payload.status, 20);
+  const reminderAction = text(payload.reminderAction, 30);
+  if (requestedStatus !== null && !taskStatus.has(requestedStatus))
     return json({ error: "状態を確認してください。" }, 400);
+  if (reminderAction && reminderAction !== "replace")
+    return json({ error: "リマインダーの更新方法を確認してください。" }, 400);
+  if (requestedStatus === null && !reminderAction)
+    return json({ error: "更新内容を指定してください。" }, 400);
   const task = await env.REPORTS.prepare(
-    "SELECT project_id,subject,assignee_email,created_by FROM editorial_tasks WHERE id=?",
+    "SELECT project_id,subject,assignee_email,created_by,due_at,due_timezone FROM editorial_tasks WHERE id=?",
   )
     .bind(taskId)
     .first<{
@@ -2573,6 +2763,8 @@ async function updateTask(
       subject: string | null;
       assignee_email: string | null;
       created_by: string;
+      due_at: string | null;
+      due_timezone: string;
     }>();
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
   const project = await resolveOperationProject(env, scope, task.project_id);
@@ -2583,11 +2775,35 @@ async function updateTask(
     task.created_by !== scope.email
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
-  await env.REPORTS.prepare(
-    "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
-  )
-    .bind(status, new Date().toISOString(), taskId)
-    .run();
+  const now = new Date().toISOString();
+  if (reminderAction === "replace") {
+    const reminderEmail = text(payload.reminderEmail, 254).toLowerCase();
+    if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
+      return json({ error: "通知先メールアドレスを確認してください。" }, 400);
+    const reminderRowsResult = reminderInputRows(
+      Array.isArray(payload.reminders) ? payload.reminders : [],
+      task.due_at ?? "",
+      task.due_timezone || "Asia/Tokyo",
+    );
+    if (reminderRowsResult.error) return json({ error: reminderRowsResult.error }, 400);
+    const reminderRows = reminderRowsResult.rows ?? [];
+    for (const reminder of reminderRows) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) || !validTimeZone(reminder.timezone) || !new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminder.repeat))
+        return json({ error: "リマインダー日時またはタイムゾーンを確認してください。" }, 400);
+    }
+    const statements = [
+      env.REPORTS.prepare("DELETE FROM editorial_task_reminders WHERE task_id=?").bind(taskId),
+      env.REPORTS.prepare("UPDATE editorial_tasks SET reminder_at=?,reminder_repeat=?,reminder_email=?,updated_at=? WHERE id=?").bind(null, reminderRows.length === 1 ? reminderRows[0].repeat : "none", reminderEmail || null, now, taskId),
+    ];
+    if (requestedStatus !== null)
+      statements.push(env.REPORTS.prepare("UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?").bind(requestedStatus, now, taskId));
+    statements.push(...reminderRows.map((reminder) => env.REPORTS.prepare(
+      "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+    ).bind(crypto.randomUUID(), taskId, reminder.remindAt, reminder.timezone, reminder.label, reminder.relativeKind, reminder.relativeAmount, reminder.relativeUnit, reminder.relativeStart, now)));
+    await env.REPORTS.batch(statements);
+  } else if (requestedStatus !== null) {
+    await env.REPORTS.prepare("UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?").bind(requestedStatus, now, taskId).run();
+  }
   return json({ ok: true });
 }
 
@@ -4299,9 +4515,7 @@ async function adminNotifications(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!scope.isManager && !scope.subjects.length)
-    return json({ notifications: [] });
-  const [commentRows, approvedRows, publishedRows, reviewRows] =
+  const [commentRows, approvedRows, publishedRows, reviewRows, taskReminderRows] =
     await Promise.all([
       env.REPORTS.prepare(
         "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
@@ -4344,6 +4558,16 @@ async function adminNotifications(
               updated_at: string;
             }[],
           }),
+      env.REPORTS.prepare(
+        `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
+         FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
+         JOIN atlasez_projects p ON p.id=t.project_id
+         WHERE t.status != 'done' AND (t.assignee_email=? OR t.created_by=?)
+           AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
+         ORDER BY r.remind_at ASC LIMIT 50`,
+      ).bind(scope.email, scope.email, scope.email).all<{
+        reminder_id: string; remind_at: string; timezone: string; label: string; id: string; title: string; project_id: string; project_slug: string;
+      }>(),
     ]);
   const notifications = [
     ...(commentRows.results ?? []).map((item) => ({
@@ -4380,6 +4604,14 @@ async function adminNotifications(
           updatedAt: item.updated_at,
         }))
       : []),
+    ...(taskReminderRows.results ?? []).filter((item) => wallTimeToEpoch(item.remind_at, item.timezone) <= Date.now()).map((item) => ({
+      id: `task-reminder-rule-${item.reminder_id}-${item.remind_at}`,
+      kind: "task-reminder",
+      title: `ToDoリマインダー：${item.title}`,
+      detail: item.label || "設定した日時",
+      href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+      updatedAt: item.remind_at,
+    })),
   ]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 20);
@@ -4419,7 +4651,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|approved|published|review)-[a-zA-Z0-9-]{8,}$/.test(
+                /^(comment|approved|published|review|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
@@ -4438,6 +4670,45 @@ async function markAdminNotificationsRead(
     ),
   );
   return json({ ok: true });
+}
+
+const emailSafe = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+
+async function dispatchDueTaskReminders(env: Env) {
+  if (!env.RESEND_API_KEY) return;
+  const rows = await env.REPORTS.prepare(
+    `SELECT r.id AS reminder_id,t.title,t.details,t.due_at,t.due_timezone,
+            r.remind_at,r.timezone,r.label,r.relative_kind,
+            CASE WHEN (SELECT COUNT(*) FROM editorial_task_reminders rr WHERE rr.task_id=r.task_id)=1 THEN COALESCE(t.reminder_repeat,'none') ELSE 'none' END AS repeat,
+            NULLIF(TRIM(t.reminder_email),'') AS recipient_email
+     FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
+     WHERE t.status != 'done' AND NULLIF(TRIM(t.reminder_email),'') IS NOT NULL
+     ORDER BY r.remind_at ASC LIMIT 2000`,
+  ).all<{
+    reminder_id: string; title: string; details: string | null; due_at: string | null; due_timezone: string;
+    remind_at: string; timezone: string; label: string; relative_kind: string; repeat: string; recipient_email: string | null;
+  }>();
+  for (const row of rows.results ?? []) {
+    const reminderEpoch = wallTimeToEpoch(row.remind_at, row.timezone || row.due_timezone);
+    if (!EMAIL_PATTERN.test(row.recipient_email ?? "") || !Number.isFinite(reminderEpoch) || reminderEpoch > Date.now()) continue;
+    const sent = await env.REPORTS.prepare("SELECT sent_at FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?").bind(row.reminder_id, row.recipient_email).first<{ sent_at: string }>();
+    if (sent) continue;
+    const claimed = await env.REPORTS.prepare("INSERT OR IGNORE INTO editorial_task_reminder_deliveries (reminder_id,recipient_email,sent_at) VALUES (?,?,?)").bind(row.reminder_id, row.recipient_email, `__pending__:${Date.now()}`).run() as { meta?: { changes?: number } };
+    if (!claimed.meta?.changes) continue;
+    const dueLabel = row.due_at ? `${row.due_at.replace("T", " ")} (${row.due_timezone})` : "期限未設定";
+    try {
+      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.EMAIL_FROM ?? "Atlasez運営 <onboarding@resend.dev>", to: [row.recipient_email], subject: `ToDoリマインダー：${row.title}`, text: `AtlasezのToDoリマインダーです。\n\n${row.title}\nリマインダー：${row.label || "設定した日時"}\n期限：${dueLabel}${row.details ? `\n\n${row.details}` : ""}`, html: `<h2>ToDoリマインダー</h2><p><b>${emailSafe(row.title)}</b></p><p>リマインダー：${emailSafe(row.label || "設定した日時")}<br>期限：${emailSafe(dueLabel)}</p>${row.details ? `<pre>${emailSafe(row.details)}</pre>` : ""}` }) });
+      if (!response.ok) throw new Error("メール送信に失敗しました。");
+      const next = nextReminderWallTime(row.remind_at, row.repeat, row.timezone || row.due_timezone);
+      if (next) await env.REPORTS.batch([
+        env.REPORTS.prepare("UPDATE editorial_task_reminders SET remind_at=?,notified_at=NULL WHERE id=?").bind(next, row.reminder_id),
+        env.REPORTS.prepare("DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?").bind(row.reminder_id, row.recipient_email),
+      ]);
+      else await env.REPORTS.prepare("UPDATE editorial_task_reminder_deliveries SET sent_at=? WHERE reminder_id=? AND recipient_email=?").bind(new Date().toISOString(), row.reminder_id, row.recipient_email).run();
+    } catch {
+      await env.REPORTS.prepare("DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?").bind(row.reminder_id, row.recipient_email).run();
+    }
+  }
 }
 
 export default {
@@ -4789,6 +5060,7 @@ export default {
         syncPublishedArticleBackups(env),
         syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
+        dispatchDueTaskReminders(env),
       ]),
     );
   },
