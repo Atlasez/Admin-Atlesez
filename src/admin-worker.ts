@@ -1,3 +1,13 @@
+import {
+  EDITORIAL_ASSET_ID_PATTERN,
+  EDITORIAL_IMAGE_TYPES,
+  MAX_EDITORIAL_ASSET_BYTES,
+  editorialAssetIdsIn,
+  replaceEditorialAssetMarkers,
+  sanitizeEditorialFilename,
+  type EditorialImageType,
+} from "./lib/editorial-media";
+
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
@@ -66,6 +76,17 @@ type EditorialDocument = {
   updated_at: string;
   reviewed_at: string | null;
   published_at: string | null;
+};
+type EditorialAsset = {
+  id: string;
+  document_id: string;
+  filename: string;
+  media_type: EditorialImageType;
+  bytes: number;
+  data: ArrayBuffer | Uint8Array;
+  alt_text: string;
+  created_by: string;
+  created_at: string;
 };
 type EditorialComment = {
   id: string;
@@ -1141,6 +1162,187 @@ const canReviewDocument = (
   status: EditorialDocumentStatus,
 ) =>
   canEditSubject(scope, subject) || (scope.isManager && status === "in-review");
+
+const editorialAssetResponse = (
+  asset: Pick<
+    EditorialAsset,
+    "id" | "filename" | "media_type" | "bytes" | "alt_text" | "created_at"
+  >,
+) => ({
+  id: asset.id,
+  filename: asset.filename,
+  mediaType: asset.media_type,
+  bytes: asset.bytes,
+  alt: asset.alt_text,
+  createdAt: asset.created_at,
+  marker: `asset://${asset.id}`,
+});
+
+const imageSignatureMatches = (
+  bytes: Uint8Array,
+  mediaType: EditorialImageType,
+) => {
+  const startsWith = (...values: number[]) =>
+    values.every((value, index) => bytes[index] === value);
+  if (mediaType === "image/png")
+    return startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+  if (mediaType === "image/jpeg") return startsWith(0xff, 0xd8, 0xff);
+  if (mediaType === "image/gif")
+    return (
+      new TextDecoder().decode(bytes.slice(0, 6)) === "GIF87a" ||
+      new TextDecoder().decode(bytes.slice(0, 6)) === "GIF89a"
+    );
+  return (
+    new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" &&
+    new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP"
+  );
+};
+
+const editorialAssetDocument = async (
+  request: Request,
+  env: Env,
+  documentId: string,
+) => {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const document = await env.REPORTS.prepare(
+    "SELECT id, subject, status, created_by FROM editorial_documents WHERE id = ?",
+  )
+    .bind(documentId)
+    .first<
+      Pick<EditorialDocument, "id" | "subject" | "status" | "created_by">
+    >();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (!canReviewDocument(scope, document.subject, document.status))
+    return json({ error: "この原稿の素材を扱う権限がありません。" }, 403);
+  return { scope, document };
+};
+
+async function listEditorialAssets(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const access = await editorialAssetDocument(request, env, documentId);
+  if (access instanceof Response) return access;
+  const result = await env.REPORTS.prepare(
+    `SELECT id, filename, media_type, bytes, alt_text, created_at
+     FROM editorial_assets WHERE document_id = ? ORDER BY created_at ASC`,
+  )
+    .bind(documentId)
+    .all<
+      Pick<
+        EditorialAsset,
+        "id" | "filename" | "media_type" | "bytes" | "alt_text" | "created_at"
+      >
+    >();
+  return json({ assets: result.results.map(editorialAssetResponse) });
+}
+
+async function uploadEditorialAsset(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const access = await editorialAssetDocument(request, env, documentId);
+  if (access instanceof Response) return access;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (
+    !access.scope.isManager &&
+    access.document.created_by !== access.scope.email
+  )
+    return json({ error: "素材を追加できるのは原稿の作成者本人です。" }, 403);
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_EDITORIAL_ASSET_BYTES + 32_000)
+    return json({ error: "画像は1.5MB以下にしてください。" }, 413);
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ error: "画像データを読み取れませんでした。" }, 400);
+  }
+  const file = form.get("file");
+  if (!(file instanceof File))
+    return json({ error: "画像ファイルを選択してください。" }, 400);
+  const mediaType = file.type as EditorialImageType;
+  if (!(mediaType in EDITORIAL_IMAGE_TYPES))
+    return json({ error: "PNG、JPEG、WebP、GIFのみ対応しています。" }, 415);
+  const data = new Uint8Array(await file.arrayBuffer());
+  if (!data.byteLength || data.byteLength > MAX_EDITORIAL_ASSET_BYTES)
+    return json({ error: "画像は1.5MB以下にしてください。" }, 413);
+  if (!imageSignatureMatches(data, mediaType))
+    return json({ error: "画像の形式を確認できませんでした。" }, 415);
+  const id = crypto.randomUUID();
+  const filename = sanitizeEditorialFilename(file.name, mediaType);
+  const alt = text(form.get("alt"), 180);
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT INTO editorial_assets
+      (id, document_id, filename, media_type, bytes, data, alt_text, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      documentId,
+      filename,
+      mediaType,
+      data.byteLength,
+      data,
+      alt,
+      access.scope.email,
+      now,
+    )
+    .run();
+  return json(
+    {
+      asset: editorialAssetResponse({
+        id,
+        filename,
+        media_type: mediaType,
+        bytes: data.byteLength,
+        alt_text: alt,
+        created_at: now,
+      }),
+    },
+    201,
+  );
+}
+
+async function serveEditorialAsset(
+  request: Request,
+  env: Env,
+  assetId: string,
+): Promise<Response> {
+  if (!EDITORIAL_ASSET_ID_PATTERN.test(assetId))
+    return new Response("Not found", { status: 404 });
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const asset = await env.REPORTS.prepare(
+    `SELECT a.id, a.document_id, a.filename, a.media_type, a.bytes, a.data,
+            d.subject, d.status
+     FROM editorial_assets a
+     JOIN editorial_documents d ON d.id = a.document_id
+     WHERE a.id = ?`,
+  )
+    .bind(assetId)
+    .first<
+      EditorialAsset & { subject: string; status: EditorialDocumentStatus }
+    >();
+  if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
+    return new Response("Not found", { status: 404 });
+  const responseBody =
+    asset.data instanceof Uint8Array ? asset.data.slice().buffer : asset.data;
+  return new Response(responseBody as ArrayBuffer, {
+    headers: {
+      "cache-control": "private, max-age=60",
+      "content-length": String(asset.bytes),
+      "content-type": asset.media_type,
+      "content-disposition": `inline; filename="${asset.filename}"`,
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
 
 async function readEditorialPayload(
   request: Request,
@@ -3271,6 +3473,17 @@ const githubBase64 = (value: string) => {
   return btoa(binary);
 };
 
+const githubBinaryBase64 = (value: ArrayBuffer | Uint8Array) => {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize)
+    binary += String.fromCharCode(
+      ...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)),
+    );
+  return btoa(binary);
+};
+
 const githubText = (base64: string) => {
   const binary = atob(base64.replace(/\s/g, ""));
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
@@ -3306,7 +3519,7 @@ async function storeArticleBackup(
 async function syncPublishedArticleBackups(env: Env) {
   const token = env.GITHUB_PUBLISH_TOKEN;
   if (!token) return { synced: 0, skipped: true };
-  const repository = env.GITHUB_REPOSITORY ?? "mitukx/Atlasez01";
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const headers = {
     accept: "application/vnd.github+json",
     authorization: `Bearer ${token}`,
@@ -3367,7 +3580,7 @@ async function syncEditorialPublicationStatus(env: Env) {
   const token = env.GITHUB_PUBLISH_TOKEN;
   if (!token)
     throw new Error("GitHub公開連携が未設定のため、公開状態を同期できません。");
-  const repository = env.GITHUB_REPOSITORY ?? "mitukx/Atlasez01";
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const headers = {
     accept: "application/vnd.github+json",
     authorization: `Bearer ${token}`,
@@ -3476,13 +3689,49 @@ const editorialMarkdown = (
   ].join("\n");
 };
 
+const listEditorialAssetsForDocument = async (env: Env, documentId: string) =>
+  (
+    await env.REPORTS.prepare(
+      `SELECT id, document_id, filename, media_type, bytes, data, alt_text, created_by, created_at
+       FROM editorial_assets WHERE document_id = ? ORDER BY created_at ASC`,
+    )
+      .bind(documentId)
+      .all<EditorialAsset>()
+  ).results;
+
+async function uploadEditorialAssetToGitHub(
+  asset: EditorialAsset,
+  repository: string,
+  headers: Record<string, string>,
+  documentId: string,
+) {
+  const path = `public/images/editorial/${documentId}/${asset.filename}`;
+  const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
+  const existing = await fetch(endpoint, { headers });
+  let sha: string | undefined;
+  if (existing.ok) sha = ((await existing.json()) as { sha?: string }).sha;
+  else if (existing.status !== 404)
+    throw new Error("GitHub上の画像公開先を確認できませんでした。");
+  const response = await fetch(endpoint, {
+    method: "PUT",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: `Publish article asset: ${asset.filename}`,
+      content: githubBinaryBase64(asset.data),
+      branch: "main",
+      ...(sha ? { sha } : {}),
+    }),
+  });
+  if (!response.ok) throw new Error("GitHubへ画像を反映できませんでした。");
+}
+
 async function writeEditorialDocumentToGitHub(
   document: EditorialDocument,
   env: Env,
   publicationStatus: "published" | "draft",
   message: string,
 ): Promise<{ commitUrl: string | null; body: string } | Response> {
-  const repository = env.GITHUB_REPOSITORY ?? "mitukx/Atlasez01";
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const token = env.GITHUB_PUBLISH_TOKEN;
   if (!token)
     return json(
@@ -3505,7 +3754,36 @@ async function writeEditorialDocumentToGitHub(
   if (existing.ok) sha = ((await existing.json()) as { sha?: string }).sha;
   else if (existing.status !== 404)
     return json({ error: "GitHub上の公開先を確認できませんでした。" }, 502);
-  const body = editorialMarkdown(document, publicationStatus);
+  const assets = await listEditorialAssetsForDocument(env, document.id);
+  const assetsById = new Map(
+    assets.map((asset) => [asset.id.toLowerCase(), asset]),
+  );
+  const referencedAssetIds = editorialAssetIdsIn(document.body);
+  const missingAsset = referencedAssetIds.find(
+    (id) => !assetsById.has(id.toLowerCase()),
+  );
+  if (missingAsset)
+    return json(
+      {
+        error:
+          "本文が参照している画像素材が見つかりません。再挿入してください。",
+      },
+      409,
+    );
+  for (const assetId of referencedAssetIds)
+    await uploadEditorialAssetToGitHub(
+      assetsById.get(assetId.toLowerCase())!,
+      repository,
+      headers,
+      document.id,
+    );
+  const body = editorialMarkdown(
+    {
+      ...document,
+      body: replaceEditorialAssetMarkers(document.body, assetsById),
+    },
+    publicationStatus,
+  );
   const publish = await fetch(endpoint, {
     method: "PUT",
     headers: { ...headers, "content-type": "application/json" },
@@ -4146,6 +4424,29 @@ export default {
     }
     if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
       return editorialBoard(request, env);
+    const editorialAssetCollectionMatch = url.pathname.match(
+      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/assets$/i,
+    );
+    if (editorialAssetCollectionMatch) {
+      if (request.method === "GET")
+        return listEditorialAssets(
+          request,
+          env,
+          editorialAssetCollectionMatch[1],
+        );
+      if (request.method === "POST")
+        return uploadEditorialAsset(
+          request,
+          env,
+          editorialAssetCollectionMatch[1],
+        );
+      return json({ error: "GET、POSTのみ利用できます。" }, 405);
+    }
+    const editorialAssetMatch = url.pathname.match(
+      /^\/api\/admin\/editor\/assets\/([0-9a-f-]{36})$/i,
+    );
+    if (editorialAssetMatch && request.method === "GET")
+      return serveEditorialAsset(request, env, editorialAssetMatch[1]);
     if (
       url.pathname === "/api/admin/editor/review-requests" &&
       request.method === "GET"
