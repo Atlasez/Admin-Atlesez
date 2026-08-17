@@ -34,7 +34,6 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
     <button type="button" class="admin-project-switcher-button" data-project-previous aria-label="前のプロジェクト">‹</button>
     <div class="admin-project-switcher-content">
       <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-astro-reload data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : "Atlas learning site operations"}>{brandLabel}</a>
-      <span class="admin-project-switcher-context" data-project-current-context>{site === "portal" ? "全プロジェクトへの入口" : "プロジェクトワークスペース"}</span>
       <span class="admin-project-switcher-dots" data-project-dots></span>
     </div>
     <button type="button" class="admin-project-switcher-button" data-project-next aria-label="次のプロジェクト">›</button>
@@ -131,14 +130,14 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
 
     const switcher = document.querySelector<HTMLElement>('[data-project-switcher]');
     if (switcher) {
-      type ProjectSlide = { key: string; label: string; href: string; context: string };
+      type ProjectSlide = { key: string; label: string; href: string };
       const initialSite = switcher.dataset.currentSite ?? 'portal';
       const initialSlug = switcher.dataset.currentSlug ?? 'atlas';
       const slides: ProjectSlide[] = [
-        { key: 'portal', label: 'Atlasezメンバー用サイト', href: '/admin/portal/', context: '全プロジェクトへの入口' },
-        { key: 'atlas', label: '学習サイト「アトラス」運営用サイト', href: '/admin/atlas/', context: '学習サイト運営' },
-        { key: 'semi-platform', label: 'ゼミプラットフォーム', href: '/admin/semi-platform/', context: 'ゼミ運営' },
-        { key: 'secretariat', label: 'Atlasez運営事務局', href: '/admin/secretariat/', context: 'Atlasez全体の運営' },
+        { key: 'portal', label: 'Atlasezメンバー用サイト', href: '/admin/portal/' },
+        { key: 'atlas', label: '学習サイト「アトラス」運営用サイト', href: '/admin/atlas/' },
+        { key: 'semi-platform', label: 'ゼミプラットフォーム', href: '/admin/semi-platform/' },
+        { key: 'secretariat', label: 'Atlasez運営事務局', href: '/admin/secretariat/' },
       ];
       const appendMemberProjects = async () => {
         try {
@@ -147,30 +146,28 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
           const data = await response.json() as { projects?: Array<{ slug: string; name: string; description?: string }> };
           for (const project of data.projects ?? []) {
             if (!project.slug || project.slug === 'seminar-platform' || slides.some((slide) => slide.key === project.slug)) continue;
-            slides.push({ key: project.slug, label: project.name, href: `/admin/portal/?project=${encodeURIComponent(project.slug)}`, context: project.description ?? '参加プロジェクト' });
+            slides.push({ key: project.slug, label: project.name, href: `/admin/portal/?project=${encodeURIComponent(project.slug)}` });
           }
         } catch { /* 未ログイン時は既定の3つだけ表示します。 */ }
       };
       const title = switcher.querySelector<HTMLAnchorElement>('[data-project-current-link]');
-      const context = switcher.querySelector<HTMLElement>('[data-project-current-context]');
       const dots = switcher.querySelector<HTMLElement>('[data-project-dots]');
       const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
       const initialKey = initialSite === 'portal' ? 'portal' : initialSite === 'semi-platform' ? 'semi-platform' : initialSlug;
       let index = Math.max(0, slides.findIndex((slide) => slide.key === initialKey));
       const renderSwitcher = (animate = false) => {
         const slide = slides[index];
-        if (!slide || !title || !context || !dots) return;
+        if (!slide || !title || !dots) return;
         if (animate) { switcher.classList.remove('is-changing'); requestAnimationFrame(() => switcher.classList.add('is-changing')); }
         const language = currentLanguage();
         title.href = slide.href;
         title.textContent = slide.key === 'portal' ? (language === 'ja' ? slide.label : 'Atlasez member site') : slide.key === 'atlas' ? (language === 'ja' ? slide.label : 'Atlas learning site operations') : slide.key === 'semi-platform' ? (language === 'ja' ? slide.label : 'Seminar platform') : slide.key === 'secretariat' ? (language === 'ja' ? slide.label : 'Atlasez Secretariat') : slide.label;
         title.setAttribute('aria-label', language === 'ja' ? `${title.textContent}へ移動` : `Open ${title.textContent}`);
-        context.textContent = language === 'ja' ? slide.context : slide.key === 'portal' ? 'All project home' : slide.key === 'atlas' ? 'Learning site operations' : slide.key === 'semi-platform' ? 'Seminar operations' : slide.key === 'secretariat' ? 'Atlasez-wide operations' : 'Participating project';
         dots.innerHTML = slides.map((item, itemIndex) => `<a class="admin-project-dot${itemIndex === index ? ' is-active' : ''}" href="${escapeHtml(item.href)}" data-project-index="${itemIndex}" aria-label="${escapeHtml(language === 'ja' ? `${item.label}へ移動` : `Open ${item.label}`)}" aria-current="${itemIndex === index ? 'true' : 'false'}"></a>`).join('');
       };
-      switcher.querySelector<HTMLButtonElement>('[data-project-previous]')?.addEventListener('click', () => { index = (index - 1 + slides.length) % slides.length; renderSwitcher(true); });
-      switcher.querySelector<HTMLButtonElement>('[data-project-next]')?.addEventListener('click', () => { index = (index + 1) % slides.length; renderSwitcher(true); });
-      dots?.addEventListener('click', (event) => { const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('[data-project-index]'); if (!link) return; index = Number(link.dataset.projectIndex ?? index); renderSwitcher(true); });
+      const navigateSlide = (nextIndex: number) => { index = (nextIndex + slides.length) % slides.length; const slide = slides[index]; if (slide) window.location.assign(slide.href); };
+      switcher.querySelector<HTMLButtonElement>('[data-project-previous]')?.addEventListener('click', () => navigateSlide(index - 1));
+      switcher.querySelector<HTMLButtonElement>('[data-project-next]')?.addEventListener('click', () => navigateSlide(index + 1));
       document.addEventListener('atlasez-admin-language-change', () => renderSwitcher());
       renderSwitcher();
       void appendMemberProjects().then(() => renderSwitcher());
@@ -294,7 +291,6 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
   .admin-project-switcher-content { min-width:0; overflow:hidden; padding:.15rem .2rem; }
   .admin-project-switcher-title { color:var(--text-primary); display:block; font-size:.86rem; font-weight:800; line-height:1.25; overflow:hidden; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
   .admin-project-switcher-title:hover { color:var(--accent-primary); }
-  .admin-project-switcher-context { color:var(--text-secondary); display:block; font-size:.66rem; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .admin-project-switcher-dots { align-items:center; display:flex; gap:.18rem; min-height:.45rem; }
   .admin-project-dot { background:var(--border-default); border:0; border-radius:50%; cursor:pointer; display:block; height:.35rem; padding:0; width:.35rem; }
   .admin-project-dot.is-active { background:var(--accent-primary); transform:scale(1.25); }
@@ -323,7 +319,6 @@ const projectHome = new Set<Props["current"]>(["atlas", "semi-platform", "secret
     .admin-nav-brand-logo { height:2.2rem; width:2.2rem; }
     .admin-nav-brand-logo img { height:1.9rem; width:1.9rem; }
     .admin-project-switcher-title { font-size:.76rem; }
-    .admin-project-switcher-context { font-size:.6rem; }
     .admin-display-settings > summary { font-size:0; padding-inline:.45rem; width:2.15rem; }
     .admin-display-settings > summary::before { font-size:.82rem; margin:0; }
     .admin-display-settings-panel { position:fixed; inset:auto .75rem .75rem; }
