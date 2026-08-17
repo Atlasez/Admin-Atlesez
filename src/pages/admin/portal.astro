@@ -8,27 +8,27 @@ import AdminNav from "../../components/AdminNav.astro";
     <header>
       <div>
         <p>ATLASEZ / MEMBER PORTAL</p>
-        <h1>メンバー用サイト</h1>
-        <span>参加しているプロジェクトを選び、それぞれの運営ワークスペースへ移動します。</span>
+        <h1 data-admin-i18n data-admin-ja="メンバー用サイト" data-admin-en="Member site">メンバー用サイト</h1>
+        <span data-admin-i18n data-admin-ja="参加しているプロジェクトを選び、それぞれの運営ワークスペースへ移動します。" data-admin-en="Choose a project to open its workspace.">参加しているプロジェクトを選び、それぞれの運営ワークスペースへ移動します。</span>
       </div>
     </header>
 
     <section class="project-entry" aria-labelledby="projects-entry-heading">
       <div>
         <p class="section-kicker">PROJECTS</p>
-        <h2 id="projects-entry-heading">プロジェクトを選択</h2>
-        <span>学習サイトとAtlasez運営事務局は、入口と作業内容を分けて管理します。</span>
+        <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="プロジェクトを選択" data-admin-en="Choose a project">プロジェクトを選択</h2>
+        <span data-admin-i18n data-admin-ja="学習サイトとAtlasez運営事務局は、入口と作業内容を分けて管理します。" data-admin-en="The learning site and Atlasez Secretariat have separate workspaces.">学習サイトとAtlasez運営事務局は、入口と作業内容を分けて管理します。</span>
       </div>
       <div class="project-entry-cards">
         <a class="project-entry-card" href="/admin/atlas/">
-          <strong>学習サイト「アトラス」運営</strong>
-          <small>原稿、編集・査読、問題報告、進捗・ToDo・日程</small>
-          <span>学習サイト運営へ →</span>
+          <strong data-admin-i18n data-admin-ja="学習サイト「アトラス」運営" data-admin-en="Atlas learning site operations">学習サイト「アトラス」運営</strong>
+          <small data-admin-i18n data-admin-ja="原稿、編集・査読、問題報告、進捗・ToDo・日程" data-admin-en="Articles, review, reports, progress, tasks and events">原稿、編集・査読、問題報告、進捗・ToDo・日程</small>
+          <span data-admin-i18n data-admin-ja="学習サイト運営へ →" data-admin-en="Open learning site operations →">学習サイト運営へ →</span>
         </a>
         <a class="project-entry-card" href="/admin/secretariat/">
-          <strong>Atlasez運営事務局</strong>
-          <small>事務局のToDo、依頼、日程調整、同時作業会</small>
-          <span>事務局サイトへ →</span>
+          <strong data-admin-i18n data-admin-ja="Atlasez運営事務局" data-admin-en="Atlasez Secretariat">Atlasez運営事務局</strong>
+          <small data-admin-i18n data-admin-ja="事務局のToDo、依頼、日程調整、同時作業会" data-admin-en="Secretariat tasks, requests, scheduling and co-working">事務局のToDo、依頼、日程調整、同時作業会</small>
+          <span data-admin-i18n data-admin-ja="事務局サイトへ →" data-admin-en="Open Secretariat →">事務局サイトへ →</span>
         </a>
       </div>
     </section>
@@ -36,15 +36,15 @@ import AdminNav from "../../components/AdminNav.astro";
     <div class="home-grid">
       <section class="home-section">
         <div class="section-heading">
-          <div><p class="section-kicker">PROJECTS</p><h2>参加中のプロジェクト</h2></div>
-          <a href="/admin/operations/">進捗を見る</a>
+          <div><p class="section-kicker">PROJECTS</p><h2 data-admin-i18n data-admin-ja="参加中のプロジェクト" data-admin-en="My projects">参加中のプロジェクト</h2></div>
+          <a href="/admin/operations/" data-admin-i18n data-admin-ja="進捗を見る" data-admin-en="View progress">進捗を見る</a>
         </div>
         <div data-projects>読み込み中…</div>
       </section>
       <section class="home-section">
         <div class="section-heading">
-          <div><p class="section-kicker">MY TASKS</p><h2>自分の未完了ToDo</h2></div>
-          <a href="/admin/operations/">ToDoを開く</a>
+          <div><p class="section-kicker">MY TASKS</p><h2 data-admin-i18n data-admin-ja="自分の未完了ToDo" data-admin-en="My open tasks">自分の未完了ToDo</h2></div>
+          <a href="/admin/operations/" data-admin-i18n data-admin-ja="ToDoを開く" data-admin-en="Open tasks">ToDoを開く</a>
         </div>
         <div data-todos>読み込み中…</div>
       </section>
@@ -61,7 +61,7 @@ import AdminNav from "../../components/AdminNav.astro";
   .project-entry h2 { font-size: 1.2rem; margin: .25rem 0; }
   .project-entry > div > span { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; }
   .project-entry-cards { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .project-entry-card { background: var(--background-secondary); border: 1px solid var(--border-default); border-top: 3px solid var(--accent-primary); color: var(--text-primary); display: grid; gap: .35rem; padding: 1rem; text-decoration: none; }
+  .project-entry-card { align-content: start; background: var(--background-secondary); border: 1px solid var(--border-default); border-top: 3px solid var(--accent-primary); box-sizing: border-box; color: var(--text-primary); display: grid; gap: .35rem; min-height: 8.4rem; min-width: 0; overflow-wrap: anywhere; padding: 1rem; text-decoration: none; }
   .project-entry-card:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
   .project-entry-card strong { font-size: .95rem; }
   .project-entry-card small { font-size: .76rem; }
@@ -71,15 +71,19 @@ import AdminNav from "../../components/AdminNav.astro";
   .section-heading { align-items: start; border-bottom: 1px solid var(--border-default); display: flex; gap: .7rem; justify-content: space-between; margin-bottom: .7rem; padding-bottom: .65rem; }
   .section-heading h2 { font-size: 1.1rem; margin: .2rem 0 0; }
   .section-heading a { color: var(--accent-primary); font-size: .75rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
-  .cards { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
-  .card, .todo { border: 1px solid var(--border-default); display: grid; gap: .35rem; padding: .8rem; }
-  .card a { color: var(--accent-primary); font-size: .82rem; font-weight: 800; text-decoration: none; }
+  .cards { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+  .card, .todo { box-sizing: border-box; min-width: 0; overflow-wrap: anywhere; }
+  .card { align-content: start; background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; gap: .42rem; min-height: 8.5rem; padding: .85rem; }
+  .card b, .card small, .card a { min-width: 0; overflow-wrap: anywhere; }
+  .card b { line-height: 1.4; }
+  .card small { color: var(--text-secondary); line-height: 1.5; }
+  .card a { align-self: end; color: var(--accent-primary); font-size: .82rem; font-weight: 800; margin-top: .2rem; text-decoration: none; }
   .todo { border-left: 3px solid var(--accent-primary); margin: .45rem 0; }
   .empty { color: var(--text-secondary); font-size: .82rem; }
   @media (max-width: 800px) {
     .portal { padding: 0 .8rem 3rem; }
     .project-entry { align-items: start; grid-template-columns: 1fr; padding: .9rem; }
-    .project-entry-cards { grid-template-columns: 1fr 1fr; }
+    .project-entry-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 700px) {
     .home-grid { grid-template-columns: 1fr; }
@@ -99,16 +103,30 @@ import AdminNav from "../../components/AdminNav.astro";
     const todosView = root.querySelector<HTMLElement>('[data-todos]')!;
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
     const selectedProject = new URLSearchParams(location.search).get('project');
-    void fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-      const contentType = response.headers.get('content-type') ?? '';
-      const data = contentType.includes('application/json') ? await response.json() as { projects?: PortalProject[]; todos?: PortalTodo[]; error?: string } : null;
-      if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。ページを再読み込みしてください。');
+    type PortalLanguage = 'ja' | 'en';
+    type PortalData = { projects?: PortalProject[]; todos?: PortalTodo[]; error?: string };
+    const getLanguage = (): PortalLanguage => localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
+    const copy = {
+      ja: { open: 'このプロジェクトを開く →', active: 'このプロジェクトを表示中', noProjects: '参加プロジェクトはありません。', noTodos: 'このプロジェクトに未完了のToDoはありません。', status: '状態' },
+      en: { open: 'Open this project →', active: 'Currently viewing', noProjects: 'No participating projects.', noTodos: 'No open tasks in this project.', status: 'Status' },
+    } as const;
+    let portalData: PortalData | null = null;
+    const renderPortal = (data: PortalData) => {
+      const language = getLanguage();
       const projects = data.projects ?? [];
       const active = projects.find((project) => project.slug === selectedProject);
       const projectPath = (project: PortalProject) => project.slug === 'atlas' ? '/admin/atlas/' : project.slug === 'secretariat' ? '/admin/secretariat/' : `/admin/portal/?project=${encodeURIComponent(project.slug)}`;
-      projectsView.innerHTML = projects.length ? `<div class="cards">${projects.map((project) => `<article class="card${project.slug === selectedProject ? ' is-active' : ''}"><b>${escapeHtml(project.name)}</b><small>${escapeHtml(project.description ?? '')}</small><a href="${projectPath(project)}">${project.slug === selectedProject ? 'このプロジェクトを表示中' : 'このプロジェクトを開く →'}</a></article>`).join('')}</div>` : '<p class="empty">参加プロジェクトはありません。</p>';
+      projectsView.innerHTML = projects.length ? `<div class="cards">${projects.map((project) => `<article class="card${project.slug === selectedProject ? ' is-active' : ''}"><b>${escapeHtml(project.name)}</b><small>${escapeHtml(project.description ?? '')}</small><a href="${projectPath(project)}">${project.slug === selectedProject ? copy[language].active : copy[language].open}</a></article>`).join('')}</div>` : `<p class="empty">${copy[language].noProjects}</p>`;
       const todos = (data.todos ?? []).filter((todo) => !selectedProject || todo.project_id === active?.id || todo.project_id === active?.slug);
-      todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : '<p class="empty">このプロジェクトに未完了のToDoはありません。</p>';
+      todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`;
+    };
+    document.addEventListener('atlasez-admin-language-change', () => { if (portalData) renderPortal(portalData); });
+    void fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+      const contentType = response.headers.get('content-type') ?? '';
+      const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
+      if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。ページを再読み込みしてください。');
+      portalData = data;
+      renderPortal(data);
     }).catch((error) => {
       const message = error instanceof Error ? error.message : 'Homeを読み込めませんでした。';
       projectsView.textContent = message;
