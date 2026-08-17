@@ -85,13 +85,15 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     </div>
     <button type="button" class="admin-project-switcher-button" data-project-next aria-label="次のプロジェクト">›</button>
   </div>
-  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav" hidden={site === "portal"}><span aria-hidden="true">☰</span><span>メニュー</span></button>
-  <nav id="admin-primary-nav" aria-label="運営用サイトメニュー" hidden={site === "portal"}>
+  <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
+  <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
+      <a href="/admin/introductions/" data-admin-site="portal" data-admin-page="portal-introductions" data-admin-i18n data-admin-ja="運営紹介" data-admin-en="Operator introductions" aria-current={site === "portal" && current === "portal" ? "page" : undefined}>運営紹介</a>
+      <a href="/admin/workspace/" data-admin-site="portal" data-admin-page="portal-workspace" data-admin-i18n data-admin-ja="マイページ" data-admin-en="My page">マイページ</a>
       <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・査読</a>
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>進捗・ToDo・日程</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局ToDo・日程</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ運営・ToDo</a>
-    <details class="admin-management-menu" open={(["reports", "permissions", "guide", "applications", "introductions", "co-working"] as string[]).includes(current)}>
+    <details class="admin-management-menu" hidden={site === "portal"} open={(["reports", "permissions", "guide", "applications", "introductions", "co-working"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
         <a href={`/admin/co-working/?project=atlas`} data-admin-site="atlas" data-admin-page="co-working" hidden={site !== "atlas"} aria-current={current === "co-working" && site === "atlas" ? "page" : undefined}>同時作業会</a>
@@ -172,12 +174,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       nav?.setAttribute('data-current-slug', state.slug);
       switcher?.setAttribute('data-current-site', state.site);
       switcher?.setAttribute('data-current-slug', state.slug);
-      if (primaryNav) primaryNav.hidden = state.site === 'portal';
-      if (menuToggle) { menuToggle.hidden = state.site === 'portal'; menuToggle.setAttribute('aria-expanded', 'false'); }
+      if (primaryNav) primaryNav.hidden = false;
+      if (menuToggle) { menuToggle.hidden = false; menuToggle.setAttribute('aria-expanded', 'false'); }
       primaryNav?.classList.remove('is-open');
       document.querySelectorAll<HTMLElement>('[data-admin-site]').forEach((link) => { link.hidden = link.dataset.adminSite !== state.site; });
       document.querySelectorAll<HTMLElement>('[data-admin-page]').forEach((link) => { link.setAttribute('aria-current', link.dataset.adminPage === state.current && link.closest('[data-admin-site]')?.getAttribute('data-admin-site') === state.site ? 'page' : 'false'); });
-      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.open = ['reports', 'permissions', 'guide', 'applications', 'introductions', 'co-working'].includes(state.current); });
+      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['reports', 'permissions', 'guide', 'applications', 'introductions', 'co-working'].includes(state.current); });
       if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : 'Atlas learning site operations'; }
       const logo = document.querySelector<HTMLAnchorElement>('.admin-nav-brand-logo');
       if (logo) logo.href = state.home;
