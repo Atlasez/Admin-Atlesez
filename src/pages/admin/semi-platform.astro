@@ -7,41 +7,79 @@ import AdminNav from "../../components/AdminNav.astro";
     <AdminNav current="semi-platform" site="semi-platform" />
     <header class="project-heading">
       <div>
-        <p>ATLASEZ / SEMI PLATFORM</p>
         <h1>ゼミプラットフォーム</h1>
         <span>ゼミプラットフォームの運営タスク、日程、関連サイトをまとめて管理します。</span>
       </div>
-      <a href="/admin/portal/">AtlasezプロジェクトHomeへ</a>
+      <a href="/admin/portal/">Atlasezメンバー用サイトへ</a>
     </header>
 
     <section class="project-links" aria-label="ゼミプラットフォーム運営メニュー">
-      <a class="featured" href="/admin/operations/?project=semi-platform">
+      <a class="featured" href="/admin/operations/?project=seminar-platform">
         <strong>進捗・ToDo・日程</strong>
         <small>作業報告、担当タスク、予定をまとめて管理します。</small>
         <span>管理する →</span>
       </a>
-      <a class="featured" href="/admin/co-working/?project=semi-platform">
+      <a class="featured" href="/admin/co-working/?project=seminar-platform">
         <strong>日程・同時作業会</strong>
         <small>開催候補や参加可否を確認し、作業予定を共有します。</small>
         <span>日程を見る →</span>
       </a>
       <a href="https://sites.google.com/view/atlasez-semi" target="_blank" rel="noreferrer">
-        <strong>現行サイト</strong>
-        <small>ゼミプラットフォームの外部サイトを確認します。</small>
-        <span>サイトを開く →</span>
+        <strong>旧サイトを開く</strong>
+        <small>旧サイトの表示や、まだ移植していない情報を確認します。</small>
+        <span>Google Sitesへ →</span>
       </a>
-      <a href="/admin/portal/">
-        <strong>AtlasezプロジェクトHome</strong>
-        <small>運営メンバー向けの共通ポータルを開きます。</small>
-        <span>Homeを開く →</span>
-      </a>
+    </section>
+
+    <section class="intro-section" aria-labelledby="semi-intro-heading">
+      <h2 id="semi-intro-heading">ゼミプラットフォームについて</h2>
+      <p>自主的な勉強会の企画・参加・蓄積に関するプラットフォームがあったらいいなと思い、このサイトを作りました。</p>
+      <p>作りかけでの公開ですが、皆さんの意見や知恵をもらいながら良いものにしていきたいと思っています。一緒に運営してくれる仲間を募集しています。</p>
+      <a class="inline-link" href="https://forms.gle/hGkeihJtJPFUxW5E9" target="_blank" rel="noreferrer">運営応募フォーム →</a>
+    </section>
+
+    <section class="seminar-section" aria-labelledby="open-seminars-heading">
+      <div class="section-heading"><h2 id="open-seminars-heading">募集中</h2><span>旧サイト掲載内容</span></div>
+      <div class="seminar-grid">
+        {[
+          ["0000032", "リーマン面ゼミ"], ["0000031", "歴史・政治学関連読書ゼミ"], ["0000016", "場の量子論のゼミ"],
+          ["0000013", "化学ゼミ（1年生）"], ["0000012", "化学ゼミ（2年生）"], ["0000010", "多様体の基礎ゼミ"],
+          ["0000009", "有機化学ゼミ"], ["0000008", "解析力学とその数理ゼミ"], ["0000007", "公理的集合論ゼミ"],
+          ["0000006", "偏微分方程式ゼミ"], ["0000005", "位相ベクトル空間・超関数・核ゼミ"], ["0000004", "物理化学ゼミ"], ["0000001", "漢検勉強会"],
+        ].map(([id, title]) => <article class="seminar-card"><span>{id}</span><strong>{title}</strong><em>募集中</em></article>)}
+      </div>
+    </section>
+
+    <section class="seminar-status-grid" aria-label="募集停止・募集終了のゼミ">
+      <div class="status-section"><h2>募集停止</h2><ul>{[["0000029", "有機化学ゼミ"], ["0000028", "分子軌道法ゼミ"], ["0000023", "心理学ゼミ"], ["0000021", "ゲージ理論ゼミ"], ["0000020", "流体力学ゼミ"], ["0000018", "量子化学ゼミ"], ["0000015", "量子力学ゼミ"]].map(([id, title]) => <li><span>{id}</span>{title}</li>)}</ul></div>
+      <div class="status-section"><h2>募集終了</h2><ul>{[["0000030", "物性と場の量子論ゼミ"], ["0000027", "マッカーリサイモンゼミ"], ["0000026", "理学部1セメの数学ゼミ"], ["0000025", "物理数学（金）ゼミ"], ["0000024", "物理数学（水）ゼミ"], ["0000022", "粘性解ゼミ"], ["0000019", "作用素環論ゼミ"], ["0000017", "フォック空間と量子場ゼミ"], ["0000014", "田崎統計力学I, II"], ["0000011", "集合と位相ゼミ"], ["0000003", "一般確率論ゼミ"], ["0000002", "リー代数ゼミ"]].map(([id, title]) => <li><span>{id}</span>{title}</li>)}</ul></div>
+    </section>
+
+    <section class="forms-section" aria-labelledby="semi-forms-heading">
+      <h2 id="semi-forms-heading">参加・企画フォーム</h2>
+      <div class="form-links">
+        <a href="https://forms.gle/oj7rW9JHY5z3CUb67" target="_blank" rel="noreferrer"><strong>ゼミプラットフォーム参加登録</strong><span>Discordへの参加登録 →</span></a>
+        <a href="https://forms.gle/ZfRcqzDJkfHxHMzU8" target="_blank" rel="noreferrer"><strong>ゼミ参加フォーム</strong><span>参加希望を送る →</span></a>
+        <a href="https://forms.gle/ZX2c9nd2nTwvttXU8" target="_blank" rel="noreferrer"><strong>ゼミ企画フォーム</strong><span>ゼミを企画する →</span></a>
+      </div>
+      <p class="note">「参加登録フォーム」はDiscordへの参加用です。参加登録はゼミへの参加・企画の必須条件ではありません。「ゼミ企画フォーム」は、過去に実施済みのゼミを含めたゼミ情報の登録に使います。</p>
+    </section>
+
+    <section class="purpose-section" aria-labelledby="semi-purpose-heading">
+      <h2 id="semi-purpose-heading">このサイトの目的</h2>
+      <p>複数人で行う自主的な勉強会には、人とやることで継続しやすい、自分の興味からはみ出せる、1人では難しいことに取り組める、うまくやれば効率的に学べる、といったメリットがあります。</p>
+      <p>一方で、やりたいが人を集める機会がない、やり方が分からない、何が開催されているか分からない、学んだことを蓄積できない、といった機会損失もあります。これらの課題を克服し、自主的な学びの利益を最大化することがこのプラットフォームの目的です。</p>
+    </section>
+
+    <section class="howto-section" aria-labelledby="semi-howto-heading">
+      <h2 id="semi-howto-heading">使い方</h2>
+      <ol><li><strong>Discordで交流</strong><span>参加登録をするとDiscordサーバーで交流できます。</span></li><li><strong>参加</strong><span>参加したいゼミを見つけたら、ゼミ参加フォームから参加希望を送ります。</span></li><li><strong>企画</strong><span>ゼミをやりたいと思ったら企画フォームを送ってください。運営が募集ページ作成からその後の運営までサポートします。</span></li></ol>
     </section>
   </main>
 </AdminLayout>
 <style>
   .semi-platform-home { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
   .project-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.2rem 0 1.4rem; }
-  .project-heading p { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; margin: 0; }
   .project-heading h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: .25rem 0; }
   .project-heading span { color: var(--text-secondary); line-height: 1.6; }
   .project-heading > a { color: var(--accent-primary); font-size: .8rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
@@ -52,9 +90,33 @@ import AdminNav from "../../components/AdminNav.astro";
   .project-links strong { font-size: 1.05rem; }
   .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
   .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
+  .intro-section, .seminar-section, .forms-section, .purpose-section, .howto-section { border-top: 1px solid var(--border-default); margin-top: 1.75rem; padding-top: 1.25rem; }
+  .intro-section h2, .seminar-section h2, .forms-section h2, .purpose-section h2, .howto-section h2 { font-size: 1.2rem; margin: 0 0 .65rem; }
+  .intro-section p, .purpose-section p, .note { color: var(--text-secondary); line-height: 1.75; margin: .35rem 0; }
+  .inline-link, .form-links a span { color: var(--accent-primary); font-size: .78rem; font-weight: 800; }
+  .section-heading { align-items: baseline; display: flex; gap: .6rem; justify-content: space-between; margin-bottom: .7rem; }
+  .section-heading span { color: var(--text-secondary); font-size: .72rem; }
+  .seminar-grid { display: grid; gap: .55rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .seminar-card { background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; gap: .25rem; padding: .75rem; }
+  .seminar-card > span, .status-section li span { color: var(--text-secondary); font-size: .68rem; letter-spacing: .04em; }
+  .seminar-card strong { line-height: 1.45; }
+  .seminar-card em { color: #267345; font-size: .7rem; font-style: normal; font-weight: 800; }
+  .seminar-status-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1rem; }
+  .status-section { border: 1px solid var(--border-default); padding: .9rem 1rem; }
+  .status-section h2 { font-size: 1rem; margin: 0 0 .55rem; }
+  .status-section ul { display: grid; gap: .35rem; list-style: none; margin: 0; padding: 0; }
+  .status-section li { align-items: baseline; display: flex; gap: .55rem; line-height: 1.45; }
+  .form-links { display: grid; gap: .7rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .form-links a { border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .5rem; padding: .9rem; text-decoration: none; }
+  .form-links a:hover { border-color: var(--accent-primary); }
+  .form-links a span { margin-top: auto; }
+  .howto-section ol { display: grid; gap: .7rem; margin: 0; padding-left: 1.4rem; }
+  .howto-section li { padding-left: .25rem; }
+  .howto-section li span { color: var(--text-secondary); display: block; line-height: 1.6; margin-top: .15rem; }
   @media (max-width: 700px) {
     .semi-platform-home { padding: 0 .8rem 3rem; }
     .project-heading { align-items: start; display: grid; }
-    .project-links { grid-template-columns: 1fr; }
+    .project-links, .seminar-grid, .form-links { grid-template-columns: 1fr; }
+    .seminar-status-grid { grid-template-columns: 1fr; }
   }
 </style>

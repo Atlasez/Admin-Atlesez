@@ -69,7 +69,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     <AdminNav current="editor" />
     <header class="workspace-header">
       <div>
-        <p class="eyebrow">ATLASEZ / 運営用</p>
         <h1>記事編集ワークスペース</h1>
         <p>原稿を書く、数式を確かめる、コメントで査読する。公開まで、この画面で完結します。</p>
       </div>
@@ -304,13 +303,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .pane-controls { align-items:center; display:flex; flex:0 0 auto; gap:.2rem; }
   .pane-controls button { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--muted); cursor:pointer; font:inherit; font-size:.68rem; font-weight:800; padding:.25rem .35rem; }
   .pane-controls button:hover { border-color:var(--accent); color:var(--accent); }
-  .pane-only { max-width:none; padding:0; }
-  .pane-only .admin-nav,.pane-only .workspace-header,.pane-only .workflow-guide,.pane-only .document-sidebar,.pane-only .editor-quick-actions,.pane-only .metadata,.pane-only .document-toolbar { display:none!important; }
+  .pane-only { max-width:none; padding:0 clamp(1rem, 3vw, 2.5rem) 3rem; }
+  .pane-only .document-sidebar,.pane-only .editor-quick-actions { display:none!important; }
   .pane-only .workspace-grid { border:0; display:block; min-height:0; }
   .pane-only .editor-panel { padding:0; }
   .pane-only .editor-split { display:block; }
-  .pane-only .editor-split > section { min-height:100vh; }
+  .pane-only .editor-split > section:not([hidden]) { min-height:32rem; }
   .pane-only .pane-controls [data-pane-popout] { display:none; }
+  .editor-split[data-visible-panes="2"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .editor-split[data-visible-panes="1"] { grid-template-columns:1fr !important; }
   .comment-thread[data-comment-context] { cursor:context-menu; }
   @media(max-width:1080px) { .editor-split { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media(max-width:700px) { .editor-split { grid-template-columns:1fr; } .pane-controls { flex-wrap:wrap; } }
@@ -533,6 +534,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     const editorSplit = root.querySelector<HTMLElement>(".editor-split")!;
     const paneElements = { writing: root.querySelector<HTMLElement>(".writing-area")!, preview: root.querySelector<HTMLElement>(".preview-area")!, review: root.querySelector<HTMLElement>(".review-panel")! } as const;
+    const updatePaneLayout = () => {
+      const visibleCount = Object.values(paneElements).filter((pane) => !pane.hidden).length;
+      editorSplit.dataset.visiblePanes = String(Math.max(1, visibleCount));
+    };
     const setupPanes = () => {
       // 3枠を同じグリッドに置くため、査読枠も本文・プレビュー枠と同じ親へ移す。
       if (paneElements.review.parentElement !== editorSplit) editorSplit.append(paneElements.review);
@@ -541,6 +546,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         root.classList.add("pane-only");
         Object.entries(paneElements).forEach(([key, pane]) => { pane.hidden = key !== paneQuery; });
       }
+      updatePaneLayout();
       root.querySelectorAll<HTMLButtonElement>("[data-pane-move]").forEach((button) => button.addEventListener("click", () => {
         const id = button.dataset.paneMove as keyof typeof paneElements;
         const current = paneElements[id];
@@ -552,6 +558,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         if (targetIndex < 0 || targetIndex >= ordered.length) return;
         [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
         ordered.forEach((pane) => editorSplit.append(pane));
+        updatePaneLayout();
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-popout]").forEach((button) => button.addEventListener("click", () => {
         const id = button.dataset.panePopout as keyof typeof paneElements;
@@ -560,7 +567,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         const popup = window.open(`/admin/editor/?document=${encodeURIComponent(documentId)}&pane=${encodeURIComponent(id)}`, `atlasez-editor-${id}`, "popup,width=1280,height=900,resizable=yes,scrollbars=yes");
         if (!popup) { saveMessage.value = "別窓を開けませんでした。ブラウザのポップアップ設定を確認してください。"; return; }
         paneElements[id].hidden = true;
-        const restore = window.setInterval(() => { if (!popup.closed) return; window.clearInterval(restore); paneElements[id].hidden = false; }, 500);
+        updatePaneLayout();
+        const restore = window.setInterval(() => { if (!popup.closed) return; window.clearInterval(restore); paneElements[id].hidden = false; updatePaneLayout(); }, 500);
       }));
     };
     setupPanes();

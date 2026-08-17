@@ -2,23 +2,23 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
 const requestedProject = Astro.url.searchParams.get("project");
-const operationSite = requestedProject === "secretariat" || requestedProject === "semi-platform" ? requestedProject : "atlas";
+const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
+const operationSite = operationProject === "seminar-platform" ? "semi-platform" : operationProject;
 ---
 <AdminLayout title="同時作業会" description="同時作業会の日時と参加状況">
   <main class="co-working" data-co-working>
     <AdminNav current="co-working" site={operationSite} />
     <header class="page-heading">
       <div>
-        <p>ATLASEZ / CO-WORKING</p>
         <h1>同時作業会</h1>
         <span>開催場所・日時・参加可否を一覧で確認できます。</span>
       </div>
-      <a href={`/admin/operations/?project=${operationSite}`}>日程を追加・管理する →</a>
+      <a href={`/admin/operations/?project=${operationProject}`}>日程を追加・管理する →</a>
     </header>
     <section class="event-section">
       <div class="section-heading">
         <div><p class="section-kicker">UPCOMING SCHEDULE</p><h2>開催予定</h2></div>
-        <a href={`/admin/operations/?project=${operationSite}`}>進捗・ToDo・日程へ</a>
+        <a href={`/admin/operations/?project=${operationProject}`}>進捗・ToDo・日程へ</a>
       </div>
       <div class="event-list" data-event-list aria-live="polite">読み込み中…</div>
       <p class="empty" data-event-empty hidden>登録された同時作業会はありません。</p>

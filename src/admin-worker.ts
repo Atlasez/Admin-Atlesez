@@ -4363,7 +4363,7 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/operations/" ||
       parsed.pathname === "/admin/co-working" ||
       parsed.pathname === "/admin/co-working/") &&
-    (project === "atlas" || project === "semi-platform" || project === "secretariat");
+    (project === "atlas" || project === "seminar-platform" || project === "secretariat");
   return keepProject
     ? `${parsed.pathname}?project=${encodeURIComponent(project)}`
     : parsed.pathname;

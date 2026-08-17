@@ -2,13 +2,12 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminNav from "../../components/AdminNav.astro";
 ---
-<AdminLayout title="AtlasezプロジェクトHome" description="Atlasezの全プロジェクトへの入口">
+<AdminLayout title="Atlasezメンバー用サイト" description="Atlasezの全プロジェクトへの入口">
   <main class="portal" data-portal>
     <AdminNav current="portal" site="portal" />
     <header>
       <div>
-        <p>ATLASEZ / PROJECT HOME</p>
-        <h1 data-admin-i18n data-admin-ja="AtlasezプロジェクトHome" data-admin-en="Atlasez project home">AtlasezプロジェクトHome</h1>
+        <h1 data-admin-i18n data-admin-ja="Atlasezメンバー用サイト" data-admin-en="Atlasez member site">Atlasezメンバー用サイト</h1>
         <span data-admin-i18n data-admin-ja="Atlasezの全プロジェクトを集約した入口です。各プロジェクトHomeから、それぞれの運営ワークスペースへ移動できます。" data-admin-en="One entry point for every Atlasez project. Open each project home to enter its workspace.">Atlasezの全プロジェクトを集約した入口です。各プロジェクトHomeから、それぞれの運営ワークスペースへ移動できます。</span>
       </div>
     </header>
@@ -120,7 +119,7 @@ import AdminNav from "../../components/AdminNav.astro";
       const language = getLanguage();
       const projects = data.projects ?? [];
       const active = projects.find((project) => project.slug === selectedProject);
-      const projectPath = (project: PortalProject) => project.slug === 'atlas' ? '/admin/atlas/' : project.slug === 'secretariat' ? '/admin/secretariat/' : `/admin/portal/?project=${encodeURIComponent(project.slug)}`;
+      const projectPath = (project: PortalProject) => project.slug === 'atlas' ? '/admin/atlas/' : project.slug === 'secretariat' ? '/admin/secretariat/' : project.slug === 'seminar-platform' ? '/admin/semi-platform/' : `/admin/portal/?project=${encodeURIComponent(project.slug)}`;
       projectsView.innerHTML = projects.length ? `<div class="cards">${projects.map((project) => `<article class="card${project.slug === selectedProject ? ' is-active' : ''}"><b>${escapeHtml(project.name)}</b><small>${escapeHtml(project.description ?? '')}</small><a href="${projectPath(project)}">${project.slug === selectedProject ? copy[language].active : copy[language].open}</a></article>`).join('')}</div>` : `<p class="empty">${copy[language].noProjects}</p>`;
       const todos = (data.todos ?? []).filter((todo) => !selectedProject || todo.project_id === active?.id || todo.project_id === active?.slug);
       todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`;
