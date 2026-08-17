@@ -3188,21 +3188,43 @@ async function getEditorialDocument(
   const commentIds = commentRows.map((comment) => comment.id);
   const actionRows = commentIds.length
     ? await env.REPORTS.prepare(
-        `SELECT comment_id, actor_email, action FROM editorial_comment_actions WHERE comment_id IN (${commentIds.map(() => "?").join(",")}) ORDER BY created_at ASC`,
+        `SELECT comment_id, actor_email, action, created_at FROM editorial_comment_actions WHERE comment_id IN (${commentIds.map(() => "?").join(",")}) ORDER BY created_at ASC`,
       )
         .bind(...commentIds)
-        .all<{ comment_id: string; actor_email: string; action: string }>()
-    : { results: [] as { comment_id: string; actor_email: string; action: string }[] };
-  const actionsByComment = new Map<string, { acknowledged: Set<string>; unacknowledged: Set<string> }>();
+        .all<{ comment_id: string; actor_email: string; action: string; created_at: string }>()
+    : { results: [] as { comment_id: string; actor_email: string; action: string; created_at: string }[] };
+  type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
+  type CommentActionCounts = Record<CommentAction, number>;
+  type CommentActionActors = Record<CommentAction, Map<string, number>>;
+  const emptyActionCounts = (): CommentActionCounts => ({ acknowledge: 0, unacknowledge: 0, resolve: 0, reopen: 0 });
+  const emptyActionActors = (): CommentActionActors => ({ acknowledge: new Map(), unacknowledge: new Map(), resolve: new Map(), reopen: new Map() });
+  const actionsByComment = new Map<string, { actors: Record<"acknowledged" | "unacknowledged" | "resolved" | "reopened", Set<string>>; counts: CommentActionCounts; actorCounts: CommentActionActors }>();
+  const documentActionCounts = emptyActionCounts();
+  const documentActionActors = emptyActionActors();
+  const addAction = (commentId: string, action: CommentAction, actorEmail: string, count = 1) => {
+    const entry = actionsByComment.get(commentId) ?? {
+      actors: { acknowledged: new Set<string>(), unacknowledged: new Set<string>(), resolved: new Set<string>(), reopened: new Set<string>() },
+      counts: emptyActionCounts(),
+      actorCounts: emptyActionActors(),
+    };
+    const actorSet = action === "acknowledge" ? entry.actors.acknowledged : action === "unacknowledge" ? entry.actors.unacknowledged : action === "resolve" ? entry.actors.resolved : entry.actors.reopened;
+    actorSet.add(actorEmail);
+    entry.counts[action] += count;
+    entry.actorCounts[action].set(actorEmail, (entry.actorCounts[action].get(actorEmail) ?? 0) + count);
+    documentActionCounts[action] += count;
+    documentActionActors[action].set(actorEmail, (documentActionActors[action].get(actorEmail) ?? 0) + count);
+    actionsByComment.set(commentId, entry);
+  };
   for (const action of actionRows.results ?? []) {
-    const entry = actionsByComment.get(action.comment_id) ?? { acknowledged: new Set<string>(), unacknowledged: new Set<string>() };
-    if (action.action === "acknowledge") entry.acknowledged.add(action.actor_email);
-    if (action.action === "unacknowledge") entry.unacknowledged.add(action.actor_email);
-    actionsByComment.set(action.comment_id, entry);
+    if (action.action === "acknowledge" || action.action === "unacknowledge" || action.action === "resolve" || action.action === "reopen")
+      addAction(action.comment_id, action.action, action.actor_email);
   }
   const authorEmails = [
     ...new Set(
-      commentRows.map((comment) => comment.created_by).filter(Boolean),
+      [
+        ...commentRows.map((comment) => comment.created_by),
+        ...(actionRows.results ?? []).map((action) => action.actor_email),
+      ].filter(Boolean),
     ),
   ];
   const authorProfiles = authorEmails.length
@@ -3236,32 +3258,52 @@ async function getEditorialDocument(
       ...(selectionsByComment.get(selection.comment_id) ?? []),
       selection,
     ]);
-  const commentsWithSelections = commentRows.map((comment) => ({
-    ...comment,
-    author_display_name:
-      authorProfileByEmail.get(comment.created_by)?.display_name?.trim() ||
-      "運営メンバー",
-    author_avatar_url:
-      authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
-    acknowledged_by_emails: [...(actionsByComment.get(comment.id)?.acknowledged ?? new Set<string>())],
-    unacknowledged_by_emails: [...(actionsByComment.get(comment.id)?.unacknowledged ?? new Set<string>())],
-    // 旧コメントの一件だけの引用も、同じUIで読めるようにする。
-    selections:
-      selectionsByComment.get(comment.id) ??
-      (comment.selection_text
-        ? [
-            {
-              id: `legacy-${comment.id}`,
-              comment_id: comment.id,
-              position: 0,
-              selection_start: comment.selection_start,
-              selection_end: comment.selection_end,
-              selection_text: comment.selection_text,
-            },
-          ]
-        : []),
-  }));
-  return json({ document, comments: commentsWithSelections });
+  const actorCountList = (counts: Map<string, number>) =>
+    [...counts.entries()].map(([actor_email, count]) => ({
+      actor_email,
+      actor_display_name:
+        authorProfileByEmail.get(actor_email)?.display_name?.trim() ||
+        actor_email,
+      count,
+    }));
+  const commentsWithSelections = commentRows.map((comment) => {
+    const entry = actionsByComment.get(comment.id) ?? { actors: { acknowledged: new Set<string>(), unacknowledged: new Set<string>(), resolved: new Set<string>(), reopened: new Set<string>() }, counts: emptyActionCounts(), actorCounts: emptyActionActors() };
+    // 0049以前のコメントには状態の最終操作者だけが残っているため、旧列を1件の履歴として補う。
+    if (comment.acknowledged_by && !entry.actorCounts.acknowledge.has(comment.acknowledged_by)) addAction(comment.id, "acknowledge", comment.acknowledged_by);
+    if (comment.resolved_by && !entry.actorCounts.resolve.has(comment.resolved_by)) addAction(comment.id, "resolve", comment.resolved_by);
+    const current = actionsByComment.get(comment.id) ?? entry;
+    return {
+      ...comment,
+      author_display_name: authorProfileByEmail.get(comment.created_by)?.display_name?.trim() || "運営メンバー",
+      author_avatar_url: authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
+      acknowledged_by_emails: [...current.actors.acknowledged],
+      unacknowledged_by_emails: [...current.actors.unacknowledged],
+      resolved_by_emails: [...current.actors.resolved],
+      reopened_by_emails: [...current.actors.reopened],
+      action_counts: current.counts,
+      action_actor_counts: {
+        acknowledge: actorCountList(current.actorCounts.acknowledge),
+        unacknowledge: actorCountList(current.actorCounts.unacknowledge),
+        resolve: actorCountList(current.actorCounts.resolve),
+        reopen: actorCountList(current.actorCounts.reopen),
+      },
+      selections: selectionsByComment.get(comment.id) ?? (comment.selection_text ? [{ id: `legacy-${comment.id}`, comment_id: comment.id, position: 0, selection_start: comment.selection_start, selection_end: comment.selection_end, selection_text: comment.selection_text }] : []),
+    };
+  });
+  const summaryActorList = (counts: Map<string, number>) => actorCountList(counts).sort((a, b) => b.count - a.count || a.actor_email.localeCompare(b.actor_email));
+  return json({
+    document,
+    comments: commentsWithSelections,
+    comment_action_summary: {
+      counts: documentActionCounts,
+      actors: {
+        acknowledge: summaryActorList(documentActionActors.acknowledge),
+        unacknowledge: summaryActorList(documentActionActors.unacknowledge),
+        resolve: summaryActorList(documentActionActors.resolve),
+        reopen: summaryActorList(documentActionActors.reopen),
+      },
+    },
+  });
 }
 
 type CommentSelectionInput = {
@@ -3693,34 +3735,37 @@ async function updateEditorialCommentStatus(
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
   const now = new Date().toISOString();
-  if (action === "acknowledge")
-    await env.REPORTS.prepare(
+  const stateUpdate = action === "acknowledge"
+    ? env.REPORTS.prepare(
       "UPDATE editorial_comments SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?",
     )
       .bind(now, scope.email, commentId)
-      .run();
-  else if (action === "unacknowledge")
-    await env.REPORTS.prepare(
+    : action === "unacknowledge"
+    ? env.REPORTS.prepare(
       "UPDATE editorial_comments SET acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ?",
     )
       .bind(commentId)
-      .run();
-  else if (action === "resolve")
-    await env.REPORTS.prepare(
+    : action === "resolve"
+    ? env.REPORTS.prepare(
       "UPDATE editorial_comments SET resolved_at = ?, resolved_by = ? WHERE id = ?",
     )
       .bind(now, scope.email, commentId)
-      .run();
-  else
-    await env.REPORTS.prepare(
+    : env.REPORTS.prepare(
       "UPDATE editorial_comments SET resolved_at = NULL, resolved_by = NULL WHERE id = ?",
     )
       .bind(commentId)
-      .run();
-  await env.REPORTS.prepare(
-    "INSERT INTO editorial_comment_actions (id, comment_id, actor_email, action, created_at) VALUES (?,?,?,?,?)",
-  ).bind(crypto.randomUUID(), commentId, scope.email, action, now).run();
-  return json({ ok: true });
+  try {
+    // 状態と監査履歴を同一D1 batchに入れ、片方だけ成功する状態を防ぐ。
+    await env.REPORTS.batch([
+      stateUpdate,
+      env.REPORTS.prepare(
+        "INSERT INTO editorial_comment_actions (id, comment_id, actor_email, action, created_at) VALUES (?,?,?,?,?)",
+      ).bind(crypto.randomUUID(), commentId, scope.email, action, now),
+    ]);
+  } catch {
+    return json({ error: "コメントの状態と操作履歴を保存できませんでした。状態は変更されていません。" }, 500);
+  }
+  return json({ ok: true, action, actorEmail: scope.email, recordedAt: now });
 }
 
 async function editEditorialComment(

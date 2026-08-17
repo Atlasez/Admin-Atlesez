@@ -193,6 +193,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
             <div class="pane-heading"><div><h3 id="review-heading">査読コメント</h3><p>選択した文章または記事全体について、コメントと返信を記録できます。</p></div><div class="pane-controls" aria-label="査読枠の配置"><button type="button" data-pane-move="review" data-pane-direction="left" title="左の枠と入れ替える">←</button><button type="button" data-pane-move="review" data-pane-direction="right" title="右の枠と入れ替える">→</button><button type="button" data-pane-popout="review">別窓</button></div></div>
             <details class="review-help"><summary>コメントの使い方</summary><p>本文またはプレビューで文章を選択してコメントすると、その文章に紐づきます。対応したら「解決」にしてください。</p></details>
             <h4 class="comment-list-heading">コメント</h4>
+            <div class="comment-action-summary" data-comment-action-summary aria-live="polite" hidden></div>
             <div class="comment-list" data-comment-list></div>
             <div class="selection-action" data-selection-action hidden><span data-selection-action-text></span><button type="button" class="quiet-action" data-use-selection>選択範囲を追加</button></div>
             <div class="selected-ranges" data-selected-ranges hidden></div>
@@ -473,7 +474,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
-  type Comment = { id: string; parent_comment_id: string | null; body: string; created_by: string; author_display_name?: string; author_avatar_url?: string; created_at: string; selection_start: number | null; selection_end: number | null; selection_text: string | null; selections?: CommentSelection[]; acknowledged_at: string | null; acknowledged_by: string | null; acknowledged_by_emails?: string[]; unacknowledged_by_emails?: string[]; resolved_at: string | null; resolved_by: string | null };
+  type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
+  type ActionActorCount = { actor_email: string; actor_display_name?: string; count: number };
+  type Comment = { id: string; parent_comment_id: string | null; body: string; created_by: string; author_display_name?: string; author_avatar_url?: string; created_at: string; selection_start: number | null; selection_end: number | null; selection_text: string | null; selections?: CommentSelection[]; acknowledged_at: string | null; acknowledged_by: string | null; acknowledged_by_emails?: string[]; unacknowledged_by_emails?: string[]; resolved_at: string | null; resolved_by: string | null; action_counts?: Partial<Record<CommentAction, number>>; action_actor_counts?: Partial<Record<CommentAction, ActionActorCount[]>> };
   const initializeEditorWorkspace = () => {
     const payloadElement = document.querySelector<HTMLScriptElement>("#editor-source-data");
     const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
@@ -501,6 +504,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const mediaList = root.querySelector<HTMLElement>("[data-media-list]")!;
     const mediaStatus = root.querySelector<HTMLElement>("[data-media-status]")!;
     const comments = root.querySelector<HTMLElement>("[data-comment-list]")!;
+    const commentActionSummary = root.querySelector<HTMLElement>("[data-comment-action-summary]")!;
     const commentBody = root.querySelector<HTMLTextAreaElement>("[data-comment-body]")!;
     const commentSelection = root.querySelector<HTMLOutputElement>("[data-comment-selection]")!;
     const selectionAction = root.querySelector<HTMLElement>("[data-selection-action]")!;
@@ -735,17 +739,91 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       wordCount.textContent = `${body.value.length.toLocaleString()}文字`;
     };
     const commentSelections = (item: Comment) => item.selections?.length ? item.selections : item.selection_text ? [{ selection_start: item.selection_start, selection_end: item.selection_end, selection_text: item.selection_text }] : [];
+    const actionActors = (item: Comment, action: "acknowledge" | "unacknowledge") => {
+      const actors = action === "acknowledge"
+        ? [...(item.acknowledged_by_emails ?? []), ...(item.acknowledged_by ? [item.acknowledged_by] : [])]
+        : (item.unacknowledged_by_emails ?? []);
+      return [...new Set(actors.map((actor) => actor.trim()).filter(Boolean))];
+    };
+    const actionActorCounts = (item: Comment, action: "acknowledge" | "unacknowledge") => {
+      const apiCounts = item.action_actor_counts?.[action];
+      if (apiCounts?.length) return apiCounts.filter((entry) => entry.actor_email?.trim()).map((entry) => ({ actor_email: entry.actor_email.trim(), count: Math.max(0, entry.count || 0) }));
+      return actionActors(item, action).map((actor_email) => ({ actor_email, count: 1 }));
+    };
+    const actionCount = (item: Comment, action: "acknowledge" | "unacknowledge") => item.action_counts?.[action] ?? actionActorCounts(item, action).reduce((total, entry) => total + entry.count, 0);
+    const actorLabel = (email: string, displayName = "") => {
+      const label = displayName.trim() && displayName.trim().toLowerCase() !== email.toLowerCase()
+        ? `${displayName.trim()}（${email}）`
+        : email;
+      return `${esc(label)}${email.toLowerCase() === currentUserEmail.toLowerCase() ? "（あなた）" : ""}`;
+    };
+    const actorDetails = (actors: ActionActorCount[]) => actors.length ? actors.map((entry) => `${actorLabel(entry.actor_email, entry.actor_display_name)} ${entry.count}件`).join("、") : "なし";
+    const renderActionSummary = () => {
+      const totals = new Map<string, { acknowledge: number; unacknowledge: number }>();
+      let acknowledgeComments = 0;
+      let unacknowledgeComments = 0;
+      for (const item of currentComments) {
+        const acknowledged = actionActorCounts(item, "acknowledge");
+        const unacknowledged = actionActorCounts(item, "unacknowledge");
+        acknowledgeComments += actionCount(item, "acknowledge");
+        unacknowledgeComments += actionCount(item, "unacknowledge");
+        for (const { actor_email: email, count } of acknowledged) {
+          const total = totals.get(email) ?? { acknowledge: 0, unacknowledge: 0 };
+          total.acknowledge += count;
+          totals.set(email, total);
+        }
+        for (const { actor_email: email, count } of unacknowledged) {
+          const total = totals.get(email) ?? { acknowledge: 0, unacknowledge: 0 };
+          total.unacknowledge += count;
+          totals.set(email, total);
+        }
+      }
+      if (!totals.size) {
+        commentActionSummary.hidden = true;
+        commentActionSummary.innerHTML = "";
+        return;
+      }
+      const actorRows = [...totals.entries()]
+        .sort(([, a], [, b]) => (b.acknowledge + b.unacknowledge) - (a.acknowledge + a.unacknowledge))
+        .map(([email, total]) => {
+          const profile = currentComments.flatMap((item) => [...(item.action_actor_counts?.acknowledge ?? []), ...(item.action_actor_counts?.unacknowledge ?? [])]).find((entry) => entry.actor_email.toLowerCase() === email.toLowerCase());
+          return `<li><b>${actorLabel(email, profile?.actor_display_name)}</b><span>確認済み ${total.acknowledge}件</span><span>未反映 ${total.unacknowledge}件</span></li>`;
+        })
+        .join("");
+      commentActionSummary.hidden = false;
+      commentActionSummary.innerHTML = `<div class="comment-action-summary-heading"><b>コメント操作の集計</b><small>確認済み ${acknowledgeComments}件・未反映 ${unacknowledgeComments}件 / 操作者 ${totals.size}人</small></div><ul>${actorRows}</ul><small class="comment-action-summary-note">各人の操作件数と、本人には「あなた」を表示しています。</small>`;
+    };
     const renderCommentCard = (item: Comment, isReply = false) => {
       const displayName = item.author_display_name?.trim() || "運営メンバー";
-      const avatar = displayName.charAt(0).toUpperCase() || "運";
-      const avatarImage = item.author_avatar_url ? `<img class="comment-avatar-image" src="${esc(item.author_avatar_url)}" alt="" loading="lazy">` : "";
+      const avatar = displayName.trim().charAt(0).toUpperCase() || "運";
+      const avatarImage = item.author_avatar_url?.trim() ? `<img class="comment-avatar-image" data-comment-avatar alt="${esc(displayName)}のプロフィール画像" src="${esc(item.author_avatar_url.trim())}" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer">` : "";
       const ranges = commentSelections(item);
       const canChange = isManager || item.created_by === currentUserEmail;
+      const acknowledgedActors = actionActorCounts(item, "acknowledge");
+      const unacknowledgedActors = actionActorCounts(item, "unacknowledge");
+      const actedOnByMe = (actors: ActionActorCount[]) => actors.some((entry) => entry.actor_email.toLowerCase() === currentUserEmail.toLowerCase());
       const quotes = ranges.map((range, index) => `<blockquote class="comment-quote"><b>対象の文章${ranges.length > 1 ? ` ${index + 1}` : ""}</b><br>${esc(range.selection_text)}</blockquote>`).join("");
       const edit = canChange ? `<button type="button" data-edit-comment="${item.id}">編集</button><button type="button" class="comment-delete" data-delete-comment="${item.id}">削除</button>` : "";
-      return `<article class="comment${isReply ? " comment-reply" : ""}"><div class="comment-row"><span class="comment-avatar" aria-hidden="true">${avatarImage || esc(avatar)}</span><div class="comment-main"><header class="comment-header"><b>${esc(displayName)}</b><time>${isReply ? "返信・" : ""}${date(item.created_at)}</time></header><div class="comment-content">${quotes}<p>${esc(item.body)}</p></div><div class="comment-actions"><button type="button" data-comment-action="${item.acknowledged_at ? "unacknowledge" : "acknowledge"}" data-comment-id="${item.id}">${item.acknowledged_at ? "✓ 確認済み" : "確認"}</button>${edit}</div></div></div>${canChange ? `<label class="comment-edit-entry" data-comment-edit-entry="${item.id}" hidden><span>コメントを編集</span><textarea data-edit-comment-body="${item.id}" maxlength="8000">${esc(item.body)}</textarea><div><button type="button" class="quiet-action" data-cancel-edit="${item.id}">キャンセル</button><button type="button" class="primary-action" data-save-edit="${item.id}">保存</button></div></label>` : ""}</article>`;
+      return `<article class="comment${isReply ? " comment-reply" : ""}"><div class="comment-row"><span class="comment-avatar" role="img" aria-label="${esc(displayName)}のアイコン"><span class="comment-avatar-fallback">${esc(avatar)}</span>${avatarImage}</span><div class="comment-main"><header class="comment-header"><b>${esc(displayName)}</b><time>${isReply ? "返信・" : ""}${date(item.created_at)}</time></header><div class="comment-content">${quotes}<p>${esc(item.body)}</p></div><div class="comment-actions"><button type="button" class="comment-action-acknowledge${actedOnByMe(acknowledgedActors) ? " is-acted-by-me" : ""}" data-comment-action="acknowledge" data-comment-id="${item.id}" title="このコメントを確認済みにする">✓ 確認済み <small>${acknowledgedActors.length}人・${actionCount(item, "acknowledge")}件${actedOnByMe(acknowledgedActors) ? "・自分" : ""}</small></button><button type="button" class="comment-action-unacknowledge${actedOnByMe(unacknowledgedActors) ? " is-acted-by-me" : ""}" data-comment-action="unacknowledge" data-comment-id="${item.id}" title="このコメントを未反映に戻す">↩ 未反映 <small>${unacknowledgedActors.length}人・${actionCount(item, "unacknowledge")}件${actedOnByMe(unacknowledgedActors) ? "・自分" : ""}</small></button>${edit}</div><div class="comment-action-actor-list"><span>確認済み：${actorDetails(acknowledgedActors)}</span><span>未反映：${actorDetails(unacknowledgedActors)}</span></div></div></div>${canChange ? `<label class="comment-edit-entry" data-comment-edit-entry="${item.id}" hidden><span>コメントを編集</span><textarea data-edit-comment-body="${item.id}" maxlength="8000">${esc(item.body)}</textarea><div><button type="button" class="quiet-action" data-cancel-edit="${item.id}">キャンセル</button><button type="button" class="primary-action" data-save-edit="${item.id}">保存</button></div></label>` : ""}</article>`;
     };
-    const renderComments = () => { const roots = currentComments.filter((item) => !item.parent_comment_id); const replies = new Map<string, Comment[]>(); currentComments.filter((item) => item.parent_comment_id).forEach((item) => { const key = item.parent_comment_id!; replies.set(key, [...(replies.get(key) ?? []), item]); }); comments.innerHTML = roots.length ? roots.map((item) => { const threadReplies = replies.get(item.id) ?? []; const status = item.acknowledged_at ? ["is-acknowledged", "確認済み"] : ["is-pending", "対応待ち"]; const target = commentSelections(item)[0]?.selection_text ?? item.body; return `<section class="comment-thread" data-comment-context="${item.id}"><div class="thread-summary"><span class="thread-status ${status[0]}">${status[1]}</span></div>${renderCommentCard(item)}${threadReplies.length ? `<button type="button" class="reply-toggle" data-toggle-replies="${item.id}">返信 ${threadReplies.length}件を表示</button><div class="comment-replies" data-replies="${item.id}" hidden>${threadReplies.map((reply) => renderCommentCard(reply, true)).join("")}</div>` : ""}<button type="button" class="reply-open" data-open-reply="${item.id}">返信</button><label class="reply-entry" data-reply-entry="${item.id}" hidden><span class="reply-target"><b>返信先</b><br>${esc(target)}</span><button type="button" class="reply-quote-button" data-quote-reply="${item.id}">記事の引用を添付</button><textarea data-reply-body="${item.id}" maxlength="8000" placeholder="返信を書く"></textarea><div class="reply-actions"><button type="button" class="quiet-action" data-cancel-reply="${item.id}">キャンセル</button><button type="button" class="primary-action" data-send-reply="${item.id}">返信する</button></div></label></section>`; }).join("") : '<p class="comment-empty">コメントはまだありません。本文の範囲を選択すると、その箇所に紐づけてコメントできます。</p>'; };
+    const renderComments = () => {
+      const roots = currentComments.filter((item) => !item.parent_comment_id);
+      const replies = new Map<string, Comment[]>();
+      currentComments.filter((item) => item.parent_comment_id).forEach((item) => { const key = item.parent_comment_id!; replies.set(key, [...(replies.get(key) ?? []), item]); });
+      renderActionSummary();
+      comments.innerHTML = roots.length ? roots.map((item) => {
+        const threadReplies = replies.get(item.id) ?? [];
+        const status = item.acknowledged_at ? ["is-acknowledged", "確認済み"] : ["is-pending", "対応待ち"];
+        const target = commentSelections(item)[0]?.selection_text ?? item.body;
+        return `<section class="comment-thread" data-comment-context="${item.id}"><div class="thread-summary"><span class="thread-status ${status[0]}">${status[1]}</span></div>${renderCommentCard(item)}${threadReplies.length ? `<button type="button" class="reply-toggle" data-toggle-replies="${item.id}">返信 ${threadReplies.length}件を表示</button><div class="comment-replies" data-replies="${item.id}" hidden>${threadReplies.map((reply) => renderCommentCard(reply, true)).join("")}</div>` : ""}<button type="button" class="reply-open" data-open-reply="${item.id}">返信</button><label class="reply-entry" data-reply-entry="${item.id}" hidden><span class="reply-target"><b>返信先</b><br>${esc(target)}</span><button type="button" class="reply-quote-button" data-quote-reply="${item.id}">記事の引用を添付</button><textarea data-reply-body="${item.id}" maxlength="8000" placeholder="返信を書く"></textarea><div class="reply-actions"><button type="button" class="quiet-action" data-cancel-reply="${item.id}">キャンセル</button><button type="button" class="primary-action" data-send-reply="${item.id}">返信する</button></div></label></section>`;
+      }).join("") : '<p class="comment-empty">コメントはまだありません。本文の範囲を選択すると、その箇所に紐づけてコメントできます。</p>';
+      comments.querySelectorAll<HTMLImageElement>("[data-comment-avatar]").forEach((image) => {
+        image.addEventListener("error", () => {
+          image.closest<HTMLElement>(".comment-avatar")?.classList.add("is-fallback");
+          image.removeAttribute("src");
+        }, { once: true });
+      });
+    };
     const formValue = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
     const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, writingMemo: writingMemo.value, latexEngine: formValue("latexEngine"), status: status.value });
     let autosaveTimer: number | undefined;
@@ -925,7 +1003,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-toggle-replies]"); if (!button) return; const id = button.dataset.toggleReplies; const replies = id ? comments.querySelector<HTMLElement>(`[data-replies="${id}"]`) : null; if (!replies) return; replies.hidden = !replies.hidden; button.textContent = replies.hidden ? `返信 ${replies.childElementCount}件を表示` : "返信を隠す"; });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-cancel-reply]"); if (!button) return; const id = button.dataset.cancelReply; const entry = id ? comments.querySelector<HTMLElement>(`[data-reply-entry="${id}"]`) : null; const open = id ? comments.querySelector<HTMLButtonElement>(`[data-open-reply="${id}"]`) : null; const textarea = id ? comments.querySelector<HTMLTextAreaElement>(`[data-reply-body="${id}"]`) : null; if (!entry || !open) return; if (textarea) textarea.value = ""; if (activeReplyId === id) { activeReplyId = null; selectedCommentRanges = []; renderSelectedRanges(); } entry.hidden = true; open.hidden = false; });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-edit-comment], [data-cancel-edit], [data-save-edit], [data-delete-comment]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.editComment ?? button.dataset.cancelEdit ?? button.dataset.saveEdit ?? button.dataset.deleteComment; if (!documentId || !commentId) return; const entry = comments.querySelector<HTMLElement>(`[data-comment-edit-entry="${commentId}"]`); if (button.dataset.editComment) { if (entry) entry.hidden = false; return; } if (button.dataset.cancelEdit) { if (entry) entry.hidden = true; return; } if (button.dataset.deleteComment) { const suffix = currentComments.some((item) => item.parent_comment_id === commentId) ? "と返信" : ""; if (!window.confirm(`このコメント${suffix}を削除しますか？`)) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method: "DELETE", credentials: "same-origin" }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを削除できませんでした。"); await openDocument(documentId); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを削除できませんでした。"; button.disabled = false; }); return; } const textarea = comments.querySelector<HTMLTextAreaElement>(`[data-edit-comment-body="${commentId}"]`); const original = currentComments.find((item) => item.id === commentId); if (!textarea || !original) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ action: "edit", body: textarea.value, selections: commentSelections(original).map((range) => ({ start: range.selection_start, end: range.selection_end, text: range.selection_text })) }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを編集できませんでした。"); await openDocument(documentId); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを編集できませんでした。"; button.disabled = false; }); });
-    comments.addEventListener("contextmenu", (event) => { const target = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-context]"); if (!target) return; event.preventDefault(); document.querySelector<HTMLElement>("[data-comment-context-menu]")?.remove(); const item = currentComments.find((comment) => comment.id === target.dataset.commentContext); if (!item) return; const acknowledged = item.acknowledged_by_emails ?? (item.acknowledged_by ? [item.acknowledged_by] : []); const unacknowledged = item.unacknowledged_by_emails ?? []; const menu = document.createElement("div"); menu.dataset.commentContextMenu = "true"; menu.className = "comment-context-menu"; menu.innerHTML = `<b>コメントの操作履歴</b><span>確認済み：${acknowledged.length ? acknowledged.map(esc).join("、") : "まだありません"}</span><span>未反映にした人：${unacknowledged.length ? unacknowledged.map(esc).join("、") : "まだありません"}</span>`; document.body.append(menu); menu.style.left = `${Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 12)}px`; menu.style.top = `${Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 12)}px`; const close = () => { menu.remove(); document.removeEventListener("click", close); }; window.setTimeout(() => document.addEventListener("click", close), 0); });
+    comments.addEventListener("contextmenu", (event) => { const target = (event.target as HTMLElement).closest<HTMLElement>("[data-comment-context]"); if (!target) return; event.preventDefault(); document.querySelector<HTMLElement>("[data-comment-context-menu]")?.remove(); const item = currentComments.find((comment) => comment.id === target.dataset.commentContext); if (!item) return; const acknowledged = actionActorCounts(item, "acknowledge"); const unacknowledged = actionActorCounts(item, "unacknowledge"); const menu = document.createElement("div"); menu.dataset.commentContextMenu = "true"; menu.className = "comment-context-menu"; menu.innerHTML = `<b>コメントの操作履歴</b><span>確認済み：${actorDetails(acknowledged)}</span><span>未反映：${actorDetails(unacknowledged)}</span>`; document.body.append(menu); menu.style.left = `${Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 12)}px`; menu.style.top = `${Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 12)}px`; const close = () => { menu.remove(); document.removeEventListener("click", close); }; window.setTimeout(() => document.addEventListener("click", close), 0); });
     const publishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開できませんでした。"); await openDocument(id); saveMessage.value = data.commitUrl ? "公開しました。Cloudflareの自動ビルド完了後に学習サイトへ反映されます。" : "公開しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開できませんでした。"; } };
     const unpublishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { const response = await fetch(`/api/admin/editor/documents/${id}/unpublish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開を取り消せませんでした。"); await openDocument(id); await loadDocuments(); saveMessage.value = data.commitUrl ? "公開を取り消し、下書きへ戻しました。学習サイトへの反映には数十秒から数分かかります。" : "公開を取り消し、下書きへ戻しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開を取り消せませんでした。"; } };
     publishButton.addEventListener("click", () => approvalDialog.showModal());
@@ -940,7 +1018,58 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
 </script>
 
 <style is="global">
-  .review-panel .comment-avatar-image { border-radius: 50%; display: block; height: 100%; object-fit: cover; width: 100%; }
+  .review-panel .comment-avatar {
+    overflow: hidden;
+    position: relative;
+  }
+  .review-panel .comment-avatar-fallback {
+    align-items: center;
+    display: inline-flex;
+    height: 100%;
+    justify-content: center;
+    width: 100%;
+  }
+  .review-panel .comment-avatar-image {
+    border-radius: 50%;
+    display: block;
+    height: 100%;
+    inset: 0;
+    object-fit: cover;
+    position: absolute;
+    width: 100%;
+  }
+  .review-panel .comment-avatar.is-fallback .comment-avatar-image { display: none; }
+  .review-panel .comment-action-summary {
+    background: var(--surface-alt, #f5f7f8);
+    border: 1px solid var(--border, #d5dde2);
+    border-radius: .55rem;
+    margin: .55rem .85rem .1rem;
+    padding: .6rem .7rem;
+  }
+  .review-panel .comment-action-summary-heading {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .55rem;
+    justify-content: space-between;
+  }
+  .review-panel .comment-action-summary-heading small,
+  .review-panel .comment-action-summary-note { color: var(--muted, #56616a); font-size: .7rem; }
+  .review-panel .comment-action-summary ul { display: grid; gap: .3rem; list-style: none; margin: .5rem 0 .35rem; padding: 0; }
+  .review-panel .comment-action-summary li { align-items: center; display: flex; flex-wrap: wrap; gap: .25rem .55rem; }
+  .review-panel .comment-action-summary li b { margin-right: auto; overflow-wrap: anywhere; }
+  .review-panel .comment-action-summary li span { color: var(--muted, #56616a); font-size: .7rem; }
+  .review-panel .comment-actions .comment-action-acknowledge,
+  .review-panel .comment-actions .comment-action-unacknowledge {
+    align-items: baseline;
+    display: inline-flex;
+    gap: .25rem;
+  }
+  .review-panel .comment-actions .comment-action-acknowledge { color: #21623b; }
+  .review-panel .comment-actions .comment-action-unacknowledge { color: #8a5b14; }
+  .review-panel .comment-actions button.is-acted-by-me { background: var(--accent-subtle, #e8f3fb); box-shadow: inset 0 0 0 1px var(--accent, #176ea6); }
+  .review-panel .comment-actions button small { font-size: .68rem; font-weight: 700; opacity: .82; }
+  .review-panel .comment-action-actor-list { color: var(--muted, #56616a); display: grid; font-size: .68rem; gap: .12rem; line-height: 1.45; margin: .05rem 0 0; overflow-wrap: anywhere; }
   .review-panel .reply-quote-button { align-self: start; background: var(--surface, #fff); border: 1px solid var(--border, #d5dde2); border-radius: 999px; color: var(--accent, #2f6fa5); font-size: .74rem; font-weight: 800; padding: .32rem .58rem; width: auto; }
   .review-panel .reply-quote-button:hover { border-color: var(--accent, #2f6fa5); background: var(--accent-subtle, #e8f3fb); }
   .review-panel .comment-replies { display:flex; gap:.65rem; margin:.55rem .7rem .7rem 2.25rem; max-width:calc(100% - 2.95rem); overflow-x:auto; padding:0 0 .35rem; }
