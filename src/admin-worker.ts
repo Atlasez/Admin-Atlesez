@@ -4056,33 +4056,55 @@ async function unpublishEditorialDocument(
 const googleOAuthConfigured = (env: Env) =>
   Boolean(env.GOOGLE_OAUTH_CLIENT_ID && env.GOOGLE_OAUTH_CLIENT_SECRET);
 
-const adminReturnPath = (value: string | null) =>
-  value === "/admin/workspace" ||
-  value === "/admin/workspace/" ||
-  value === "/admin/portal" ||
-  value === "/admin/portal/" ||
-  value === "/admin/applications" ||
-  value === "/admin/applications/" ||
-  value === "/admin/articles" ||
-  value === "/admin/articles/" ||
-  value === "/admin/operations" ||
-  value === "/admin/operations/" ||
-  value === "/admin/review" ||
-  value === "/admin/review/" ||
-  value === "/admin/reports" ||
-  value === "/admin/reports/" ||
-  value === "/admin/editor" ||
-  value === "/admin/editor/" ||
-  value === "/admin/guide" ||
-  value === "/admin/guide/" ||
-  value === "/admin/introductions" ||
-  value === "/admin/introductions/" ||
-  value === "/admin/secretariat" ||
-  value === "/admin/secretariat/" ||
-  value === "/admin/co-working" ||
-  value === "/admin/co-working/"
-    ? value
-    : "/admin/reports";
+const adminReturnPath = (value: string | null) => {
+  const fallback = "/admin/reports";
+  if (!value) return fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(value, "https://admin.local");
+  } catch {
+    return fallback;
+  }
+  const allowedPaths = new Set([
+    "/admin/workspace",
+    "/admin/workspace/",
+    "/admin/portal",
+    "/admin/portal/",
+    "/admin/atlas",
+    "/admin/atlas/",
+    "/admin/applications",
+    "/admin/applications/",
+    "/admin/articles",
+    "/admin/articles/",
+    "/admin/operations",
+    "/admin/operations/",
+    "/admin/review",
+    "/admin/review/",
+    "/admin/reports",
+    "/admin/reports/",
+    "/admin/editor",
+    "/admin/editor/",
+    "/admin/guide",
+    "/admin/guide/",
+    "/admin/introductions",
+    "/admin/introductions/",
+    "/admin/secretariat",
+    "/admin/secretariat/",
+    "/admin/co-working",
+    "/admin/co-working/",
+  ]);
+  if (!allowedPaths.has(parsed.pathname)) return fallback;
+  const project = parsed.searchParams.get("project");
+  const keepProject =
+    (parsed.pathname === "/admin/operations" ||
+      parsed.pathname === "/admin/operations/" ||
+      parsed.pathname === "/admin/co-working" ||
+      parsed.pathname === "/admin/co-working/") &&
+    (project === "atlas" || project === "secretariat");
+  return keepProject
+    ? `${parsed.pathname}?project=${encodeURIComponent(project)}`
+    : parsed.pathname;
+};
 
 function adminPublicOrigin(request: Request, env: Env) {
   return (env.ADMIN_PUBLIC_ORIGIN ?? new URL(request.url).origin).replace(
@@ -4727,7 +4749,7 @@ export default {
           return new Response(null, {
             status: 302,
             headers: {
-              location: `/auth/google/login?returnTo=${encodeURIComponent(url.pathname)}`,
+                location: `/auth/google/login?returnTo=${encodeURIComponent(adminReturnPath(`${url.pathname}${url.search}`))}`,
             },
           });
       }
