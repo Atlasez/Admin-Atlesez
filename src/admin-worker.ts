@@ -3614,23 +3614,121 @@ async function listEditorialReviewRequests(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const result = await env.REPORTS.prepare(
-    `SELECT d.id, d.subject, d.category, d.title, d.updated_at,
-       COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS requester_display_name
-     FROM editorial_documents d
-     LEFT JOIN editorial_member_profiles p ON p.email = d.updated_by
-     WHERE d.status = 'in-review' ORDER BY d.updated_at ASC LIMIT 100`,
-  ).all<{
-    id: string;
-    subject: string;
-    category: string;
-    title: string;
-    updated_at: string;
-    requester_display_name: string;
-  }>();
-  return json({ requests: result.results });
+  if (!scope.allSubjects && !scope.subjects.length)
+    return json({ requests: [], reviewers: [] });
+  const subjectFilter = scope.allSubjects
+    ? ""
+    : ` AND d.subject IN (${scope.subjects.map(() => "?").join(",")})`;
+  const reviewerFilter = scope.allSubjects
+    ? ""
+    : ` WHERE p.subject = '*' OR p.subject IN (${scope.subjects.map(() => "?").join(",")})`;
+  const [result, reviewerResult] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
+         r.reviewer_email,
+         COALESCE(NULLIF(TRIM(requester.display_name), ''), '表示名未設定') AS requester_display_name,
+         COALESCE(NULLIF(TRIM(reviewer.display_name), ''), '') AS reviewer_display_name
+       FROM editorial_documents d
+       LEFT JOIN editorial_review_assignments r ON r.document_id = d.id
+       LEFT JOIN editorial_member_profiles requester ON requester.email = d.updated_by
+       LEFT JOIN editorial_member_profiles reviewer ON reviewer.email = r.reviewer_email
+       WHERE d.status = 'in-review'${subjectFilter}
+       ORDER BY CASE WHEN lower(r.reviewer_email) = lower(?) THEN 0 WHEN r.reviewer_email IS NULL THEN 2 ELSE 1 END,
+                d.updated_at ASC LIMIT 100`,
+    )
+      .bind(scope.email, ...scope.subjects)
+      .all<{
+        id: string;
+        subject: string;
+        category: string;
+        title: string;
+        updated_by: string;
+        updated_at: string;
+        reviewer_email: string | null;
+        requester_display_name: string;
+        reviewer_display_name: string;
+      }>(),
+    env.REPORTS.prepare(
+      `SELECT p.email,
+         COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name,
+         GROUP_CONCAT(DISTINCT p.subject) AS subjects
+       FROM report_admin_permissions p
+       LEFT JOIN editorial_member_profiles m ON m.email = p.email${reviewerFilter}
+       GROUP BY p.email, m.display_name
+       ORDER BY display_name, p.email`,
+    )
+      .bind(...scope.subjects)
+      .all<{ email: string; display_name: string; subjects: string | null }>(),
+  ]);
+  return json({
+    requests: (result.results ?? []).map((item) => ({
+      ...item,
+      reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
+      assignedToMe: item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
+    })),
+    reviewers: (reviewerResult.results ?? []).map((item) => ({
+      email: item.email,
+      displayName: item.display_name,
+      subjects: item.subjects?.split(",").filter(Boolean) ?? [],
+    })),
+  });
+}
+
+async function updateEditorialReviewAssignment(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  let payload: { reviewerEmail?: unknown };
+  try {
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const document = await env.REPORTS.prepare(
+    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+  )
+    .bind(documentId)
+    .first<{ subject: string; status: EditorialDocumentStatus }>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (document.status !== "in-review")
+    return json({ error: "査読中の原稿だけ担当者を設定できます。" }, 400);
+  if (!canReviewDocument(scope, document.subject, document.status))
+    return json({ error: "この分野の査読権限がありません。" }, 403);
+  const reviewerEmail = text(payload.reviewerEmail, 320).toLowerCase();
+  if (!reviewerEmail) {
+    await env.REPORTS.prepare(
+      "DELETE FROM editorial_review_assignments WHERE document_id = ?",
+    )
+      .bind(documentId)
+      .run();
+    return json({ ok: true, reviewerEmail: null });
+  }
+  if (!EMAIL_PATTERN.test(reviewerEmail))
+    return json({ error: "査読担当者のメールアドレスを確認してください。" }, 400);
+  const reviewer = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
+  )
+    .bind(reviewerEmail, document.subject)
+    .first<{ found: number }>();
+  if (!reviewer)
+    return json({ error: "この原稿の分野を担当できる運営者を選択してください。" }, 400);
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
+       requested_by = excluded.requested_by, updated_at = excluded.updated_at`,
+  )
+    .bind(documentId, reviewerEmail, scope.email, now, now)
+    .run();
+  return json({ ok: true, reviewerEmail });
 }
 
 async function createEditorialComment(
@@ -4954,6 +5052,15 @@ export default {
       request.method === "GET"
     )
       return listEditorialReviewRequests(request, env);
+    const editorialReviewAssignmentMatch = url.pathname.match(
+      /^\/api\/admin\/editor\/review-requests\/([0-9a-f-]{36})$/i,
+    );
+    if (editorialReviewAssignmentMatch && request.method === "PATCH")
+      return updateEditorialReviewAssignment(
+        request,
+        env,
+        editorialReviewAssignmentMatch[1],
+      );
     const editorialRevisionMatch = url.pathname.match(
       /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/revisions$/i,
     );
