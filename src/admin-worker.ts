@@ -37,6 +37,8 @@ interface Env {
   };
   /** 既定は cloudflare-access。Google移行時のみ google-oauth を設定する。 */
   ADMIN_AUTH_MODE?: string;
+  /** 非本番Previewの閲覧確認だけを一時的に公開するフラグ。 */
+  ADMIN_PREVIEW_PUBLIC?: string;
   /** 本番OAuth callbackへ集約する固定URL。Workers Previewからの戻り先は安全に検証して保持する。 */
   ADMIN_PUBLIC_ORIGIN?: string;
   GOOGLE_OAUTH_CLIENT_ID?: string;
@@ -677,6 +679,8 @@ const hash = async (value: string) => {
 };
 
 const authMode = (env: Env) => env.ADMIN_AUTH_MODE ?? "cloudflare-access";
+const previewPublicConfigured = (env: Env) =>
+  env.ADMIN_PREVIEW_PUBLIC === "true";
 const googleOAuthEnabled = (env: Env) =>
   authMode(env) === "google-oauth" || authMode(env) === "hybrid-preview";
 const cloudflareAccessEnabled = (env: Env) =>
@@ -689,6 +693,27 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
   );
 };
 
+const previewPublicPath = (pathname: string) =>
+  pathname === "/admin/reports" ||
+  pathname === "/admin/reports/" ||
+  pathname === "/api/admin/auth-status" ||
+  pathname === "/api/admin/article-analytics" ||
+  pathname === "/api/admin/site-country-analytics" ||
+  pathname === "/api/admin/search-console-query-analytics";
+
+const previewPublicAsset = (pathname: string) =>
+  pathname.startsWith("/_astro/") ||
+  pathname.startsWith("/images/") ||
+  pathname.startsWith("/data/") ||
+  pathname === "/favicon.svg";
+
+/**
+ * Previewだけをログインなしで確認する一時モード。本番Originでは成立せず、
+ * 閲覧統計画面とそのGET APIだけを読み取り専用で公開する。
+ */
+const publicPreviewAccessEnabled = (request: Request, env: Env) =>
+  previewPublicConfigured(env) && requestPreviewOrigin(request, env) !== null;
+
 /**
  * 認証方式の境界。現在はCloudflare Access、将来は同じ権限表のまま
  * Google OAuthのセッションへ切り替えられる。
@@ -698,6 +723,8 @@ async function getAuthenticatedEmail(
   env: Env,
 ): Promise<string | Response> {
   const mode = authMode(env);
+  if (publicPreviewAccessEnabled(request, env))
+    return env.ADMIN_LOCAL_EMAIL ?? "preview-viewer@atlasez.test";
   if (localDevelopmentEnabled(request, env))
     return env.ADMIN_LOCAL_EMAIL ?? "local-editor@atlasez.test";
   if (!cloudflareAccessEnabled(env) && !googleOAuthEnabled(env))
@@ -745,6 +772,8 @@ async function getAdminScope(
   const identity = await getAuthenticatedEmail(request, env);
   if (identity instanceof Response) return identity;
   const email = identity;
+  if (publicPreviewAccessEnabled(request, env))
+    return { email, subjects: ["*"], allSubjects: true, isManager: true };
   // ローカル開発では本番D1の権限表をコピーしなくても動作確認できる。
   if (localDevelopmentEnabled(request, env))
     return { email, subjects: ["*"], allSubjects: true, isManager: true };
@@ -862,7 +891,7 @@ async function listSiteCountryAnalytics(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!scope.isManager)
+  if (!scope.isManager && !publicPreviewAccessEnabled(request, env))
     return json(
       { error: "訪問者の国別統計は運営管理者だけが閲覧できます。" },
       403,
@@ -6046,6 +6075,18 @@ async function dispatchDueTaskReminders(env: Env) {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const publicPreview = publicPreviewAccessEnabled(request, env);
+    if (
+      publicPreview &&
+      !previewPublicPath(url.pathname) &&
+      !previewPublicAsset(url.pathname)
+    )
+      return new Response("This public preview only exposes analytics.", {
+        status: 404,
+        headers: { "x-robots-tag": "noindex" },
+      });
+    if (publicPreview && !["GET", "HEAD", "OPTIONS"].includes(request.method))
+      return json({ error: "公開Previewは読み取り専用です。" }, 403);
     // 運営サイトの入口は常に編集室へ案内する。静的サイトのルートを
     // 公開してしまわないため、ここで明示的にリダイレクトする。
     if (url.pathname === "/")
@@ -6384,7 +6425,7 @@ export default {
     ) {
       if (url.pathname === "/apply" || url.pathname === "/apply/")
         return fetchAdminAsset(request, env);
-      if (authMode(env) === "google-oauth") {
+      if (authMode(env) === "google-oauth" && !publicPreview) {
         const identity = await getAuthenticatedEmail(request, env);
         if (identity instanceof Response)
           return new Response(null, {

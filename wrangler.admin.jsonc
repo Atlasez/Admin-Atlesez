@@ -9,6 +9,7 @@
   },
   "vars": {
     "ADMIN_AUTH_MODE": "google-oauth",
+    "ADMIN_PREVIEW_PUBLIC": "true",
     "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin.ukyoukay0.workers.dev",
   },
   "assets": {
