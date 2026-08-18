@@ -35,6 +35,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </div>
     </section>
 
+    <section class="management-entry" data-manager-only hidden aria-labelledby="management-entry-heading">
+      <div>
+        <p class="section-kicker">SECRETARIAT</p>
+        <h2 id="management-entry-heading" data-admin-i18n data-admin-ja="運営内運営の管理" data-admin-en="Operator administration">運営内運営の管理</h2>
+        <span data-admin-i18n data-admin-ja="運営者のログイン権限、担当分野、プロフィールを管理します。" data-admin-en="Manage operator access, subjects and profiles.">運営者のログイン権限、担当分野、プロフィールを管理します。</span>
+      </div>
+      <a href="/admin/permissions/" data-admin-i18n data-admin-ja="管理ページを開く →" data-admin-en="Open administration →">管理ページを開く →</a>
+    </section>
+
     <div class="home-grid">
       <section class="home-section calendar-section">
         <div class="section-heading">
@@ -72,6 +81,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .project-entry-card strong { font-size: .95rem; }
   .project-entry-card small { font-size: .76rem; }
   .project-entry-card span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: .25rem; }
+  .management-entry { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; margin: 1rem 0; padding: .95rem 1.1rem; }
+  .management-entry h2 { font-size: 1rem; margin: .2rem 0; }
+  .management-entry > div > span { color: var(--text-secondary); font-size: .78rem; line-height: 1.5; }
+  .management-entry > a { color: var(--accent-primary); font-size: .78rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
   .home-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-section { border: 1px solid var(--border-default); border-radius: .7rem; min-width: 0; padding: 1rem; }
   .calendar-section { min-width: 0; }
@@ -144,6 +157,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .project-entry { align-items: start; grid-template-columns: 1fr; padding: .9rem; }
     .project-entry-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .home-grid { grid-template-columns: 1fr; }
+    .management-entry { align-items: start; grid-template-columns: 1fr; }
   }
   @media (max-width: 520px) {
     .project-entry-cards { grid-template-columns: 1fr; }
