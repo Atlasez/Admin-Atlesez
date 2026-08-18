@@ -40,6 +40,15 @@ const worldCountryPaths = worldMap.locations
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
 
       <div class="analytics-geo-grid">
+        <section class="analytics-geo-card" aria-labelledby="login-country-heading">
+          <div class="analytics-geo-heading">
+            <div><p class="eyebrow">OPERATIONS LOGIN</p><h3 id="login-country-heading">運営サイトへのログイン元</h3></div>
+            <span class="analytics-privacy-note">国別の日次集計のみ</span>
+          </div>
+          <p class="analytics-geo-description">Cloudflareが判定した国コードを、成功したGoogleログイン時だけ集計します。IPアドレスやメールアドレスは保存しません。</p>
+          <output class="analytics-gsc-status" data-login-country-status>ログイン元の統計を読み込み中です…</output>
+          <div class="geo-layout"><div class="world-map" data-login-country-map role="img" aria-label="運営サイトへのログイン元国の地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g><g class="map-bubbles" data-map-bubbles></g></svg></div><ol class="geo-list" data-login-country-list></ol></div>
+        </section>
         <section class="analytics-geo-card" aria-labelledby="search-country-heading">
           <div class="analytics-geo-heading">
             <div><p class="eyebrow">LEARNING SITE TRAFFIC</p><h3 id="search-country-heading">学習サイトへの検索流入（国別）</h3></div>
@@ -60,7 +69,7 @@ const worldCountryPaths = worldMap.locations
       </section>
     </section>
 
-    <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告">
+    <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告" hidden>
     <div class="report-controls">
       <label>
         表示する状態
@@ -213,6 +222,7 @@ const worldCountryPaths = worldMap.locations
   };
   type SearchCountry = { country: string; clicks: number; impressions: number; ctr: number; position: number };
   type SearchQuery = { query: string; clicks: number; impressions: number; ctr: number; position: number };
+  type LoginCountry = { country: string; logins: number };
 
   const initializeReportsAdmin = () => {
     const root = document.querySelector<HTMLElement>("[data-reports-admin]");
@@ -230,6 +240,9 @@ const worldCountryPaths = worldMap.locations
     const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
     const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
+    const loginCountryMap = root.querySelector<HTMLElement>("[data-login-country-map]");
+    const loginCountryList = root.querySelector<HTMLOListElement>("[data-login-country-list]");
+    const loginCountryStatus = root.querySelector<HTMLOutputElement>("[data-login-country-status]");
     const searchCountryMap = root.querySelector<HTMLElement>("[data-search-country-map]");
     const searchCountryList = root.querySelector<HTMLOListElement>("[data-search-country-list]");
     const searchConsoleStatus = root.querySelector<HTMLOutputElement>("[data-search-console-status]");
@@ -328,6 +341,21 @@ const worldCountryPaths = worldMap.locations
     const renderCountryList = (target: HTMLOListElement | null, countries: Array<{ country: string; value: number }>, formatter: (value: number) => string) => {
       if (!target) return;
       target.innerHTML = countries.length ? countries.map((item) => `<li><span class="geo-country">${escapeHtml(countryLabel(item.country))}</span><span class="geo-value">${escapeHtml(formatter(item.value))}</span></li>`).join("") : '<li><span class="geo-country">データはまだありません</span></li>';
+    };
+    const loadLoginCountryAnalytics = async () => {
+      if (!loginCountryStatus) return;
+      try {
+        const days = analyticsDays?.value ?? "30";
+        const response = await fetch(`/api/admin/login-country-analytics?days=${encodeURIComponent(days)}`, { credentials: "same-origin", cache: "no-store" });
+        const data = await readApiResponse<{ days?: number; since?: string; countries?: LoginCountry[]; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "ログイン元の統計を読み込めませんでした。");
+        const countries = (data.countries ?? []).map((item) => ({ country: item.country, value: Number(item.logins ?? 0) }));
+        loginCountryStatus.value = countries.length ? `直近${data.days ?? Number(days)}日・ログイン ${countries.reduce((sum, item) => sum + item.value, 0).toLocaleString()}件` : `直近${data.days ?? Number(days)}日・ログインデータはまだありません。`;
+        renderWorldMap(loginCountryMap, countries, "ログイン");
+        renderCountryList(loginCountryList, countries, (value) => `${value.toLocaleString()}件`);
+      } catch (error) {
+        loginCountryStatus.value = error instanceof Error ? error.message : "ログイン元の統計を読み込めませんでした。";
+      }
     };
     const loadSearchConsoleAnalytics = async () => {
       if (!searchConsoleStatus) return;
@@ -484,7 +512,7 @@ const worldCountryPaths = worldMap.locations
       } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
       finally { button.disabled = false; button.textContent = "保存"; }
     });
-    const loadAllAnalytics = () => { void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); };
+    const loadAllAnalytics = () => { void loadAnalytics(); void loadLoginCountryAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); };
     const syncSearchConsoleLink = () => { if (searchConsoleImport) searchConsoleImport.href = `/auth/google/search-console?days=${encodeURIComponent(analyticsDays?.value ?? "30")}`; };
     analyticsDays?.addEventListener("change", syncSearchConsoleLink);
     syncSearchConsoleLink();

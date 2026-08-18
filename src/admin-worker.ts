@@ -804,6 +804,35 @@ async function listSearchConsoleQueryStats(
   return json({ snapshot, queries: result.results });
 }
 
+async function listAdminLoginCountryStats(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
+  const days = Number.isInteger(daysParam)
+    ? Math.min(90, Math.max(1, daysParam))
+    : 30;
+  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
+    .toISOString()
+    .slice(0, 10);
+  const result = await env.REPORTS.prepare(
+    `SELECT country, SUM(logins) AS logins
+     FROM admin_login_country_daily
+     WHERE day >= ?
+     GROUP BY country
+     ORDER BY logins DESC, country ASC`,
+  )
+    .bind(since)
+    .all<{ country: string; logins: number }>();
+  return json({
+    days,
+    since,
+    countries: result.results,
+  });
+}
+
 async function updateArticleReport(
   request: Request,
   env: Env,
@@ -4963,6 +4992,24 @@ async function completeGoogleLogin(
       now.toISOString(),
     )
     .run();
+  const loginCountry = (request.headers.get("CF-IPCountry") ?? "")
+    .trim()
+    .toUpperCase();
+  if (/^[A-Z]{2}$/.test(loginCountry)) {
+    try {
+      await env.REPORTS.prepare(
+        `INSERT INTO admin_login_country_daily (day, country, logins, updated_at)
+         VALUES (?, ?, 1, ?)
+         ON CONFLICT(day, country) DO UPDATE SET
+           logins = admin_login_country_daily.logins + 1,
+           updated_at = excluded.updated_at`,
+      )
+        .bind(now.toISOString().slice(0, 10), loginCountry, now.toISOString())
+        .run();
+    } catch {
+      // 集計テーブルの一時的な不具合でGoogleログイン自体を失敗させない。
+    }
+  }
   const headers = new Headers({
     location: adminReturnPath(savedState.returnTo ?? null),
   });
@@ -5328,6 +5375,11 @@ export default {
       request.method === "GET"
     )
       return listSearchConsoleQueryStats(request, env);
+    if (
+      url.pathname === "/api/admin/login-country-analytics" &&
+      request.method === "GET"
+    )
+      return listAdminLoginCountryStats(request, env);
     if (url.pathname === "/api/admin/personal-workspace") {
       if (request.method === "GET") return getPersonalWorkspace(request, env);
       if (request.method === "PUT") return savePersonalWorkspace(request, env);
