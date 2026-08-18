@@ -87,11 +87,11 @@ Workers Buildsでは、`main` 以外のブランチをpushすると **Preview UR
 
 ### Preview URLの形式
 
-| pushしたもの       | 生成されるURL                                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `main`             | 本番 `https://atlasez-admin.ukyoukay0.workers.dev`                                                         |
-| 非本番ブランチ     | `https://<ブランチ名>.atlasez-admin.ukyoukay0.workers.dev`                                                 |
-| 同ブランチの再push | ブランチURLが最新に差し替わる。過去分も `https://<commit-hash>.atlasez-admin.ukyoukay0.workers.dev` で残る |
+| pushしたもの       | 生成されるURL                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `main`             | 本番 `https://atlasez-admin.ukyoukay0.workers.dev`                                                            |
+| 非本番ブランチ     | `https://<DNS用に変換されたブランチ名>.atlasez-admin.ukyoukay0.workers.dev`                                   |
+| 同ブランチの再push | ブランチURLが最新に差し替わる。過去分も `https://<version-prefix>.atlasez-admin.ukyoukay0.workers.dev` で残る |
 
 ### GitHub PRへの自動コメント
 
@@ -100,9 +100,9 @@ Pull RequestにPreview URLが自動でコメントされます。
 
 ### noindex / robots.txt
 
-Workers BuildsのPreview URLには **自動でnoindexが付与されません**。
-必要に応じて、Worker内で環境変数 `CLOUDFLARE_DEPLOYMENT_ID` や
-`CF_PAGES_BRANCH` 相当の値を参照して制御する必要があります。
+Preview URLは公開URLであり、アクセス制御の代わりにはなりません。今回のPreviewでは
+レスポンスに `x-robots-tag: noindex` が付くことを確認しましたが、検索エンジン対策の
+挙動に依存せず、必要ならCloudflare AccessでPreview URLを保護してください。
 
 現在の `src/admin-worker.ts` では、Google OAuth callback URLを
 `ADMIN_PUBLIC_ORIGIN` に固定しているため、Preview URLでOAuth認証を完結させる
