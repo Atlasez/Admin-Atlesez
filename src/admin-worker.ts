@@ -169,9 +169,15 @@ type ArticleAnalytics = {
   engaged_reads: number;
   completed_reads: number;
 };
-type LoginCountryStat = { country: string; logins: number };
 type SearchConsoleCountryStat = {
   country: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+type SearchConsoleQueryStat = {
+  query: string;
   clicks: number;
   impressions: number;
   ctr: number;
@@ -755,43 +761,6 @@ async function listArticleAnalytics(
   return json({ days, articles: result.results });
 }
 
-const requestCountry = (request: Request) => {
-  const cloudflareCountry = (request as Request & { cf?: { country?: string } }).cf?.country;
-  const headerCountry = request.headers.get("CF-IPCountry") ?? "";
-  const country = (cloudflareCountry ?? headerCountry).trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(country) ? country : "ZZ";
-};
-
-async function recordAdminLoginCountry(request: Request, env: Env, now: Date) {
-  const day = now.toISOString().slice(0, 10);
-  await env.REPORTS.prepare(
-    `INSERT INTO admin_login_country_daily (day, country, logins, updated_at)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(day, country) DO UPDATE SET logins = logins + 1, updated_at = excluded.updated_at`,
-  )
-    .bind(day, requestCountry(request), now.toISOString())
-    .run();
-}
-
-async function listLoginCountryAnalytics(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  const scope = await getAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
-  const days = Number.isInteger(daysParam) ? Math.min(90, Math.max(1, daysParam)) : 30;
-  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
-  const result = await env.REPORTS.prepare(
-    `SELECT country, SUM(logins) AS logins
-     FROM admin_login_country_daily
-     WHERE day >= ?
-     GROUP BY country
-     ORDER BY logins DESC, country ASC`,
-  ).bind(since).all<LoginCountryStat>();
-  return json({ days, countries: result.results });
-}
-
 async function listSearchConsoleCountryStats(
   request: Request,
   env: Env,
@@ -811,6 +780,28 @@ async function listSearchConsoleCountryStats(
      WHERE snapshot_id = ? ORDER BY clicks DESC, impressions DESC, country ASC`,
   ).bind(snapshot.snapshot_id).all<SearchConsoleCountryStat>();
   return json({ snapshot, countries: result.results });
+}
+
+async function listSearchConsoleQueryStats(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const snapshot = await env.REPORTS.prepare(
+    `SELECT snapshot_id, start_date, end_date, MAX(fetched_at) AS fetched_at
+     FROM search_console_query_snapshots
+     GROUP BY snapshot_id, start_date, end_date
+     ORDER BY fetched_at DESC LIMIT 1`,
+  ).first<{ snapshot_id: string; start_date: string; end_date: string; fetched_at: string }>();
+  if (!snapshot) return json({ snapshot: null, queries: [] });
+  const result = await env.REPORTS.prepare(
+    `SELECT query, clicks, impressions, ctr, position
+     FROM search_console_query_snapshots
+     WHERE snapshot_id = ? ORDER BY clicks DESC, impressions DESC, query ASC
+     LIMIT 100`,
+  ).bind(snapshot.snapshot_id).all<SearchConsoleQueryStat>();
+  return json({ snapshot, queries: result.results });
 }
 
 async function updateArticleReport(
@@ -4799,26 +4790,34 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
   startDate.setUTCDate(startDate.getUTCDate() - days + 1);
   const start = startDate.toISOString().slice(0, 10);
   const end = endDate.toISOString().slice(0, 10);
-  let rows: Array<{ keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }> = [];
-  try {
+  type SearchConsoleRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
+  const querySearchConsole = async (dimensions: string[], rowLimit: number): Promise<SearchConsoleRow[]> => {
     const response = await fetch(
       `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(searchConsoleProperty)}/searchAnalytics/query`,
       {
         method: "POST",
         headers: { authorization: `Bearer ${token.access_token}`, "content-type": "application/json" },
-        body: JSON.stringify({ startDate: start, endDate: end, dimensions: ["country"], rowLimit: 25_000 }),
+        body: JSON.stringify({ startDate: start, endDate: end, dimensions, rowLimit }),
       },
     );
     if (!response.ok) throw new Error("Search Console query failed");
-    const data = (await response.json()) as { rows?: typeof rows };
-    rows = data.rows ?? [];
+    const data = (await response.json()) as { rows?: SearchConsoleRow[] };
+    return data.rows ?? [];
+  };
+  let countryRows: SearchConsoleRow[] = [];
+  let queryRows: SearchConsoleRow[] = [];
+  try {
+    [countryRows, queryRows] = await Promise.all([
+      querySearchConsole(["country"], 25_000),
+      querySearchConsole(["query"], 100),
+    ]);
   } catch {
     return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
   }
 
   const snapshotId = crypto.randomUUID();
   const fetchedAt = new Date().toISOString();
-  const statements = rows
+  const countryStatements = countryRows
     .map((row) => {
       const country = text(row.keys?.[0], 8).toLowerCase();
       if (!/^[a-z]{2,3}$/.test(country)) return null;
@@ -4829,6 +4828,18 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
       ).bind(snapshotId, start, end, country, Number(row.clicks ?? 0), Number(row.impressions ?? 0), Number(row.ctr ?? 0), Number(row.position ?? 0), fetchedAt);
     })
     .filter((statement): statement is D1PreparedStatement => statement !== null);
+  const queryStatements = queryRows
+    .map((row) => {
+      const query = normalizedText(row.keys?.[0], 320);
+      if (!query) return null;
+      return env.REPORTS.prepare(
+        `INSERT INTO search_console_query_snapshots
+         (snapshot_id, start_date, end_date, query, clicks, impressions, ctr, position, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(snapshotId, start, end, query, Number(row.clicks ?? 0), Number(row.impressions ?? 0), Number(row.ctr ?? 0), Number(row.position ?? 0), fetchedAt);
+    })
+    .filter((statement): statement is D1PreparedStatement => statement !== null);
+  const statements = [...countryStatements, ...queryStatements];
   if (statements.length) await env.REPORTS.batch(statements);
   return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`, 302);
 }
@@ -4952,11 +4963,6 @@ async function completeGoogleLogin(
       now.toISOString(),
     )
     .run();
-  try {
-    await recordAdminLoginCountry(request, env, now);
-  } catch {
-    // 統計テーブルの移行や一時的なD1障害で、ログイン自体を止めない。
-  }
   const headers = new Headers({
     location: adminReturnPath(savedState.returnTo ?? null),
   });
@@ -5313,15 +5319,15 @@ export default {
     )
       return listArticleAnalytics(request, env);
     if (
-      url.pathname === "/api/admin/login-country-analytics" &&
-      request.method === "GET"
-    )
-      return listLoginCountryAnalytics(request, env);
-    if (
       url.pathname === "/api/admin/search-console-country-analytics" &&
       request.method === "GET"
     )
       return listSearchConsoleCountryStats(request, env);
+    if (
+      url.pathname === "/api/admin/search-console-query-analytics" &&
+      request.method === "GET"
+    )
+      return listSearchConsoleQueryStats(request, env);
     if (url.pathname === "/api/admin/personal-workspace") {
       if (request.method === "GET") return getPersonalWorkspace(request, env);
       if (request.method === "PUT") return savePersonalWorkspace(request, env);
