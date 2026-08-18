@@ -863,7 +863,10 @@ async function listSiteCountryAnalytics(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!scope.isManager)
-    return json({ error: "訪問者の国別統計は運営管理者だけが閲覧できます。" }, 403);
+    return json(
+      { error: "訪問者の国別統計は運営管理者だけが閲覧できます。" },
+      403,
+    );
   const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
   const days = Number.isInteger(daysParam)
     ? Math.min(90, Math.max(1, daysParam))
@@ -4909,12 +4912,15 @@ async function writeEditorialDocumentToGitHub(
   env: Env,
   publicationStatus: "published" | "draft",
   message: string,
-): Promise<{
-  commitUrl: string | null;
-  pullRequestUrl: string | null;
-  branch: string;
-  body: string;
-} | Response> {
+): Promise<
+  | {
+      commitUrl: string | null;
+      pullRequestUrl: string | null;
+      branch: string;
+      body: string;
+    }
+  | Response
+> {
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const token = env.GITHUB_PUBLISH_TOKEN;
   if (!token)
@@ -4938,10 +4944,7 @@ async function writeEditorialDocumentToGitHub(
     { headers },
   );
   if (!mainRefResponse.ok)
-    return json(
-      { error: "GitHubのmainブランチを確認できませんでした。" },
-      502,
-    );
+    return json({ error: "GitHubのmainブランチを確認できませんでした。" }, 502);
   const mainRef = (await mainRefResponse.json()) as {
     object?: { sha?: string };
   };
