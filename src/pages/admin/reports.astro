@@ -37,7 +37,7 @@ const worldCountryPaths = worldMap.locations
       <div class="analytics-geo-grid">
         <section class="analytics-geo-card" aria-labelledby="visitor-country-heading">
           <div class="analytics-geo-heading">
-            <div><p class="eyebrow">SITE VISITORS</p><h3 id="visitor-country-heading">サイト訪問者の国別分布</h3></div>
+            <div><p class="eyebrow">訪問者統計</p><h3 id="visitor-country-heading">サイト訪問者の国別分布</h3></div>
           </div>
           <p class="analytics-geo-description">Cloudflareが付与する国コードだけを使い、個人を識別せずページビューを日別集計します。</p>
           <output class="analytics-gsc-status" data-site-country-status>訪問者統計を読み込み中です…</output>
@@ -46,7 +46,7 @@ const worldCountryPaths = worldMap.locations
       </div>
 
       <section class="analytics-query-card" aria-labelledby="search-query-heading">
-        <div class="analytics-geo-heading"><div><p class="eyebrow">SEARCH QUERIES</p><h3 id="search-query-heading">検索された単語</h3></div><div class="analytics-query-actions"><span class="analytics-privacy-note">全分野管理者のみ</span><a class="button button-outline analytics-gsc-button" href="/auth/google/search-console?days=30" data-gsc-import>Search Consoleから更新</a></div></div>
+        <div class="analytics-geo-heading"><div><p class="eyebrow">検索流入</p><h3 id="search-query-heading">検索された単語</h3></div><div class="analytics-query-actions"><span class="analytics-privacy-note">全分野管理者のみ</span><a class="button button-outline analytics-gsc-button" href="/auth/google/search-console?days=30" data-gsc-import>Search Consoleから更新</a></div></div>
         <p class="analytics-geo-description">Google検索で学習サイトに流入した検索語の上位100件です。Search Consoleの仕様により、匿名化された検索語などは表示されない場合があります。</p>
         <output class="analytics-gsc-status" data-search-query-status>Search Consoleの検索語を読み込み中です…</output>
         <div class="analytics-table-wrap"><table class="analytics-table analytics-query-table"><thead><tr><th>検索語</th><th>クリック</th><th>表示</th><th>CTR</th><th>平均掲載順位</th></tr></thead><tbody data-search-query-list></tbody></table></div>

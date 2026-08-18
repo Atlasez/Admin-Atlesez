@@ -390,7 +390,9 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
-const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1_000;
+// 運営作業の途中で8時間ごとに編集内容を中断しないよう、Google OAuthの
+// 管理セッションは30日間とする。失効後は従来どおり再ログインが必要。
+const ADMIN_SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1_000;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 const text = (value: unknown, maximum: number) =>
