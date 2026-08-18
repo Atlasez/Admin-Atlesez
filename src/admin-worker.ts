@@ -1449,6 +1449,37 @@ async function uploadEditorialAsset(
   );
 }
 
+async function deleteEditorialAsset(
+  request: Request,
+  env: Env,
+  assetId: string,
+): Promise<Response> {
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const asset = await env.REPORTS.prepare(
+    `SELECT a.id, a.document_id, d.subject, d.status, d.created_by, d.body
+     FROM editorial_assets a
+     JOIN editorial_documents d ON d.id = a.document_id
+     WHERE a.id = ?`,
+  )
+    .bind(assetId)
+    .first<Pick<EditorialAsset, "id" | "document_id"> & { subject: string; status: EditorialDocumentStatus; created_by: string; body: string }>();
+  if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
+    return json({ error: "この素材を扱う権限がありません。" }, 403);
+  if (!scope.isManager && asset.created_by !== scope.email)
+    return json({ error: "素材を削除できるのは原稿の作成者本人です。" }, 403);
+  if (asset.body.includes(`asset://${asset.id}`))
+    return json({ error: "本文で使用中の素材は削除できません。先に本文から参照を外してください。" }, 409);
+  await env.REPORTS.prepare(
+    "DELETE FROM editorial_assets WHERE id = ?",
+  )
+    .bind(assetId)
+    .run();
+  return json({ ok: true });
+}
+
 async function serveEditorialAsset(
   request: Request,
   env: Env,
@@ -5140,6 +5171,8 @@ export default {
     );
     if (editorialAssetMatch && request.method === "GET")
       return serveEditorialAsset(request, env, editorialAssetMatch[1]);
+    if (editorialAssetMatch && request.method === "DELETE")
+      return deleteEditorialAsset(request, env, editorialAssetMatch[1]);
     if (
       url.pathname === "/api/admin/editor/review-requests" &&
       request.method === "GET"
