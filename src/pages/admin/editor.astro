@@ -242,9 +242,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     </dialog>
     <dialog class="reference-dialog" data-reference-dialog aria-labelledby="reference-dialog-title">
       <div class="reference-dialog-header"><div><p class="eyebrow">公開記事の参考</p><h2 id="reference-dialog-title" data-reference-title>記事を選択してください</h2><p data-reference-meta></p></div><button type="button" class="quiet-action" data-reference-close>閉じる</button></div>
-      <div class="reference-dialog-tabs" role="tablist" aria-label="公開記事の表示方法"><button type="button" class="is-selected" data-reference-tab="preview" aria-selected="true">プレビュー</button><button type="button" data-reference-tab="source" aria-selected="false">Markdown</button></div>
-      <article class="article-preview reference-preview" data-reference-preview></article>
-      <pre class="reference-source" data-reference-source hidden></pre>
+      <div class="reference-dialog-tabs" role="tablist" aria-label="公開記事の表示方法"><button type="button" role="tab" class="is-selected" data-reference-tab="preview" aria-selected="true" aria-controls="reference-preview-panel">プレビュー</button><button type="button" role="tab" data-reference-tab="source" aria-selected="false" aria-controls="reference-source-panel">Markdown</button></div>
+      <article id="reference-preview-panel" class="article-preview reference-preview" data-reference-preview role="tabpanel" aria-label="公開記事のプレビュー"></article>
+      <pre id="reference-source-panel" class="reference-source" data-reference-source role="tabpanel" aria-label="公開記事のMarkdown原文" hidden></pre>
     </dialog>
   </main>
 
@@ -852,9 +852,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       const script = document.createElement("script"); script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"; script.async = true;
       script.onload = () => resolve(); script.onerror = () => reject(new Error("MathJaxを読み込めませんでした。ネットワーク接続を確認してください。")); document.head.append(script);
     });
-    const renderPreview = async () => {
-      preview.innerHTML = previewMarkdown(body.value);
-      await Promise.all([...preview.querySelectorAll<HTMLImageElement>("[data-editorial-asset]")].map(async (image) => {
+    const renderPreviewInto = async (target: HTMLElement, value: string) => {
+      target.innerHTML = previewMarkdown(value);
+      await Promise.all([...target.querySelectorAll<HTMLImageElement>("[data-editorial-asset]")].map(async (image) => {
         const assetId = image.dataset.editorialAsset;
         if (!assetId) return;
         try { image.src = await loadAssetPreview(assetId); }
@@ -864,9 +864,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         if (previewEngine.value === "mathjax") {
           await loadMathJax();
           const mathJax = (window as typeof window & { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax;
-          await mathJax?.typesetPromise([preview]);
-        } else renderMathInElement(preview, { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" });
-      } catch (error) { preview.insertAdjacentHTML("afterbegin", `<p class="katex-error">${esc(error instanceof Error ? error.message : "数式を組版できませんでした。")}</p>`); }
+          await mathJax?.typesetPromise([target]);
+        } else renderMathInElement(target, { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" });
+      } catch (error) { target.insertAdjacentHTML("afterbegin", `<p class="katex-error">${esc(error instanceof Error ? error.message : "数式を組版できませんでした。")}</p>`); }
+    };
+    const renderPreview = async () => {
+      await renderPreviewInto(preview, body.value);
       wordCount.textContent = `${body.value.length.toLocaleString()}文字`;
     };
     const commentSelections = (item: Comment) => item.selections?.length ? item.selections : item.selection_text ? [{ selection_start: item.selection_start, selection_end: item.selection_end, selection_text: item.selection_text }] : [];
@@ -1020,7 +1023,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         referenceTitle.textContent = article.title;
         referenceMeta.textContent = `${article.subject} / ${article.category} / ${article.slug} ・ 公開済み記事の構成を参考表示`;
         referenceSource.textContent = article.body;
-        referencePreview.innerHTML = previewMarkdown(article.body);
+        void renderPreviewInto(referencePreview, article.body);
         referencePreview.hidden = false;
         referenceSource.hidden = true;
         root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((tab) => {

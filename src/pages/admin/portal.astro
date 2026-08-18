@@ -41,10 +41,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
           <div><p class="section-kicker">CALENDAR</p><h2 data-admin-i18n data-admin-ja="カレンダー" data-admin-en="Calendar">カレンダー</h2><small data-admin-i18n data-admin-ja="自分の期限と参加プロジェクトの組織イベント" data-admin-en="Your deadlines and organization events">自分の期限と参加プロジェクトの組織イベント</small><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
           <a href="/admin/operations/" data-admin-i18n data-admin-ja="日程を管理" data-admin-en="Manage schedule">日程を管理</a>
         </div>
-        <div class="calendar-toolbar" role="group" aria-label="カレンダー操作"><div class="calendar-nav"><button type="button" data-calendar-prev aria-label="前の月">‹</button><button type="button" class="calendar-today" data-calendar-today data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div><div class="calendar-view-switch" role="group" aria-label="カレンダー表示"><button type="button" data-calendar-view="agenda" class="is-selected" aria-pressed="true" data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-view="month" aria-pressed="false" data-admin-i18n data-admin-ja="月" data-admin-en="Month">月</button></div></div>
+        <div class="calendar-toolbar" role="group" aria-label="カレンダー操作"><div class="calendar-nav"><button type="button" data-calendar-prev aria-label="前の月">‹</button><button type="button" class="calendar-today" data-calendar-today data-admin-i18n data-admin-ja="今月" data-admin-en="This month">今月</button><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div><div class="calendar-view-switch" role="group" aria-label="カレンダー表示"><button type="button" data-calendar-view="agenda" class="is-selected" aria-pressed="true" data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-view="month" aria-pressed="false" data-admin-i18n data-admin-ja="月" data-admin-en="Month">月</button></div></div>
         <div class="calendar-filters" role="group" aria-label="カレンダー表示対象"><span class="calendar-filter-label" data-admin-i18n data-admin-ja="表示する予定" data-admin-en="Show">表示する予定</span><label><input type="checkbox" data-calendar-source="personal" checked /> <span data-admin-i18n data-admin-ja="自分の期限" data-admin-en="My deadlines">自分の期限</span></label><label><input type="checkbox" data-calendar-source="organization" checked /> <span data-admin-i18n data-admin-ja="組織イベント" data-admin-en="Organization events">組織イベント</span></label></div>
         <div class="calendar-agenda" data-calendar-agenda aria-live="polite"></div>
-        <div class="portal-calendar-wrap"><div class="portal-calendar" data-portal-calendar role="grid" aria-label="カレンダー"></div></div>
+        <div class="portal-calendar-wrap" hidden><div class="portal-calendar" data-portal-calendar role="grid" aria-label="カレンダー"></div></div>
         <div class="calendar-upcoming" data-calendar-upcoming aria-live="polite"></div>
       </section>
       <section class="home-section">
@@ -258,19 +258,22 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     };
     const renderTodos = (data: PortalData) => { const language = getLanguage(); const todos = data.todos ?? []; todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`; };
     const renderPortal = (data: PortalData) => { renderCalendar(); renderTodos(data); };
-    sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar));
-    root.querySelectorAll<HTMLButtonElement>('[data-calendar-view]').forEach((button) => button.addEventListener('click', () => {
-      calendarView = button.dataset.calendarView === 'month' ? 'month' : 'agenda';
+    const setCalendarView = (view: 'agenda' | 'month') => {
+      calendarView = view;
       root.querySelectorAll<HTMLButtonElement>('[data-calendar-view]').forEach((item) => {
-        const selected = item === button;
+        const selected = item.dataset.calendarView === view;
         item.classList.toggle('is-selected', selected);
         item.setAttribute('aria-pressed', String(selected));
       });
+    };
+    sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar));
+    root.querySelectorAll<HTMLButtonElement>('[data-calendar-view]').forEach((button) => button.addEventListener('click', () => {
+      setCalendarView(button.dataset.calendarView === 'month' ? 'month' : 'agenda');
       renderCalendar();
     }));
-    root.querySelector<HTMLButtonElement>('[data-calendar-prev]')!.addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
-    root.querySelector<HTMLButtonElement>('[data-calendar-today]')!.addEventListener('click', () => { const now = new Date(); month = new Date(now.getFullYear(), now.getMonth(), 1); renderCalendar(); });
-    root.querySelector<HTMLButtonElement>('[data-calendar-next]')!.addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() + 1, 1); renderCalendar(); });
+    root.querySelector<HTMLButtonElement>('[data-calendar-prev]')!.addEventListener('click', () => { setCalendarView('month'); month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
+    root.querySelector<HTMLButtonElement>('[data-calendar-today]')!.addEventListener('click', () => { setCalendarView('month'); const now = new Date(); month = new Date(now.getFullYear(), now.getMonth(), 1); renderCalendar(); });
+    root.querySelector<HTMLButtonElement>('[data-calendar-next]')!.addEventListener('click', () => { setCalendarView('month'); month = new Date(month.getFullYear(), month.getMonth() + 1, 1); renderCalendar(); });
     document.addEventListener('atlasez-admin-language-change', () => { if (portalData) renderPortal(portalData); });
     void fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
       const contentType = response.headers.get('content-type') ?? '';

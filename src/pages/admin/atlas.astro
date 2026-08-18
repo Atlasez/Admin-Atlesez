@@ -30,7 +30,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
           <small>自分が関わった記事を優先して確認する</small>
           <span>記事を探す →</span>
         </a>
-        <a href="/admin/review/">
+        <a href="/admin/review/" data-manager-only hidden>
           <strong>査読</strong>
           <small>未査読の記事と自分への依頼を優先して確認する</small>
           <span>査読を始める →</span>
@@ -66,6 +66,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .featured-links span, .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
   .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1.5rem; }
   .project-links a { min-height: 6.5rem; }
+  .project-links [data-manager-only][hidden] { display: none !important; }
   .project-links strong { font-size: .98rem; }
   @media (max-width: 800px) {
     .project-home { padding: 0 .8rem 3rem; }
