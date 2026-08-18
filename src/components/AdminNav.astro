@@ -66,7 +66,7 @@ const pageLabel = ({
   workspace: "マイページ",
   operations: "進捗・ToDo・日程",
   review: "査読スペース",
-  reports: "問題報告・統計",
+  reports: "閲覧統計",
   permissions: "運営者・担当管理",
   guide: "作業の進め方",
   applications: "運営参加応募",
@@ -97,7 +97,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         <a href={`/admin/co-working/?project=seminar-platform`} data-admin-site="semi-platform" data-admin-page="co-working" hidden={site !== "semi-platform"} aria-current={current === "co-working" && site === "semi-platform" ? "page" : undefined}>ゼミ日程・交流</a>
         <a href={`/admin/permissions/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="permissions" aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
         <a href="/admin/review/" data-manager-only hidden data-admin-site="atlas" data-admin-page="review" aria-current={current === "review" && site === "atlas" ? "page" : undefined}>査読スペース</a>
-        <a href={`/admin/reports/?project=${projectSlug}`} data-admin-site={site} data-admin-page="reports" aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
+        <a href={`/admin/reports/?project=${projectSlug}`} data-admin-site={site} data-admin-page="reports" aria-current={current === "reports" ? "page" : undefined}>閲覧統計</a>
         <a href={`/admin/guide/?project=${projectSlug}`} data-admin-site={site} data-admin-page="guide" aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
         <a href={`/admin/applications/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="applications" aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
       </div>
@@ -148,7 +148,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     applyLanguage(currentLanguage());
 
     type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'secretariat'; slug: string; current: string; home: string; label: string };
-    const pageLabels: Record<string, string> = { articles: '編集・査読', editor: '記事編集', workspace: 'マイページ', operations: '進捗・ToDo・日程', 'co-working': '同時作業会', reports: '問題報告・統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: '査読スペース' };
+    const pageLabels: Record<string, string> = { articles: '編集・査読', editor: '記事編集', workspace: 'マイページ', operations: '進捗・ToDo・日程', 'co-working': '同時作業会', reports: '閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: '査読スペース' };
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
