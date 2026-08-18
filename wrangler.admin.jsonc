@@ -23,4 +23,5 @@
   "triggers": {
     "crons": ["0 * * * *"],
   },
+  "preview_urls": true,
 }

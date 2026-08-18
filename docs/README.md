@@ -21,11 +21,12 @@
 
 ## サイトを運用する
 
-| ドキュメント                         | 内容                                                    |
-| ------------------------------------ | ------------------------------------------------------- |
-| [PUBLISH.md](PUBLISH.md)             | 公開チェックリスト（Cloudflare Pages の設定・確認項目） |
-| [DEPLOYMENT.md](DEPLOYMENT.md)       | 環境変数・独自ドメイン移行・ロールバック                |
-| [ACCESSIBILITY.md](ACCESSIBILITY.md) | WCAG 2.2 AA への対応方針と検査方法                      |
+| ドキュメント                                                 | 内容                                                             |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| [PUBLISH.md](PUBLISH.md)                                     | 公開チェックリスト（学習サイト: Cloudflare Pages）               |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                               | 学習サイトの環境変数・独自ドメイン移行・ロールバック             |
+| **[DEPLOYMENT_ADMIN_WORKER.md](DEPLOYMENT_ADMIN_WORKER.md)** | **運営Worker（atlasez-admin）のWorkers Builds設定とPreview URL** |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md)                         | WCAG 2.2 AA への対応方針と検査方法                               |
 
 ## 設計を知る
 

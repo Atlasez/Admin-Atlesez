@@ -20,12 +20,19 @@
 どちらもAstroで静的HTMLとして生成されます。記事や設定はGitHubで管理し、
 `main`ブランチへマージするとCloudflareが自動的に本番サイトをビルドします。
 
+**補足**: このリポジトリは学習サイト（Cloudflare Pages）と運営Worker
+（`atlasez-admin`、Cloudflare Workers Builds）のモノレポです。
+運営Workerのデプロイ手順は [DEPLOYMENT_ADMIN_WORKER.md](DEPLOYMENT_ADMIN_WORKER.md)
+を参照してください。
+
 ```text
 編集者がファイルを変更
   → GitHubへPull Request
   → GitHub Actionsが自動検査
   → レビュー・マージ
   → Cloudflareが本番を自動ビルド・公開
+    - 学習サイト: Cloudflare Pages
+    - 運営Worker: Workers Builds
 ```
 
 本番サイトを直接編集する管理画面やデータベースはありません。
@@ -37,12 +44,14 @@
 
 最低限、次の権限を引き継いでください。
 
-| 対象                       | 必要な権限                 | 用途                                         |
-| -------------------------- | -------------------------- | -------------------------------------------- |
-| GitHub `Atlasez/Atlasez01` | Write以上                  | ブランチ、PR、Issue、マージ                  |
-| GitHubリポジトリ設定       | Admin                      | ブランチ保護、Actions、共同管理者の追加      |
-| Cloudflare                 | 対象プロジェクトの編集権限 | ビルド状況、環境変数、ドメイン、ロールバック |
-| 独自ドメイン管理サービス   | DNS編集権限                | ドメイン更新、DNS変更                        |
+| 対象                              | 必要な権限                 | 用途                                         |
+| --------------------------------- | -------------------------- | -------------------------------------------- |
+| GitHub `Atlasez/Atlasez01`        | Write以上                  | ブランチ、PR、Issue、マージ（学習サイト）    |
+| GitHub `mitukx/atlasez-admin`     | Write以上                  | ブランチ、PR、マージ（運営Worker）           |
+| GitHubリポジトリ設定              | Admin                      | ブランチ保護、Actions、共同管理者の追加      |
+| Cloudflare Pages                  | 対象プロジェクトの編集権限 | 学習サイトのビルド状況、環境変数             |
+| Cloudflare Worker (atlasez-admin) | 編集権限                   | 運営Workerのビルド、Secret、D1、ロールバック |
+| 独自ドメイン管理サービス          | DNS編集権限                | ドメイン更新、DNS変更                        |
 
 個人のパスワードやAPIトークンをMarkdownへ書かないでください。権限は各サービスの
 メンバー招待機能で渡します。退任者の個人アカウントだけに本番権限を残さないでください。

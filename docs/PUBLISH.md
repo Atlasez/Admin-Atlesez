@@ -1,11 +1,16 @@
-# 公開チェックリスト（Cloudflare Pages）
+# 公開チェックリスト
 
-配信は Cloudflare Pages が GitHub リポジトリ `Atlasez/Atlasez01` を
-直接ビルドして行う。詳しい背景は `docs/DEPLOYMENT.md`。
+このリポジトリには **2つの配信システム** があります:
+
+1. **学習サイト（Cloudflare Pages）**: `Atlasez/Atlasez01` → 公開リポジトリの学習コンテンツ
+2. **運営Worker（Workers Builds）**: `mitukx/atlasez-admin` → 非公開の運営ツール
+
+このファイルは **学習サイト（Cloudflare Pages）** の公開手順です。
+**運営Worker** のデプロイは `docs/DEPLOYMENT_ADMIN_WORKER.md` を参照してください。
 
 ---
 
-## 1. push する
+## 1. push する（学習サイト）
 
 ```bash
 cd <このリポジトリをcloneした場所>
@@ -81,5 +86,18 @@ Settings → Pages → Source を「None」に戻しておくと、古い内容�
 
 ```bash
 npm ci
-npm run dev        # http://localhost:4321/
+npm run dev        # http://localhost:4321/ （学習サイト）
+npm run dev:admin  # http://localhost:8787/ （運営Worker）
 ```
+
+---
+
+## 運営Worker（atlasez-admin）のデプロイ
+
+運営Worker `atlasez-admin` のデプロイ手順は **別ドキュメント** です:
+
+→ **[docs/DEPLOYMENT_ADMIN_WORKER.md](DEPLOYMENT_ADMIN_WORKER.md)**
+
+Workers Buildsを使用し、D1、Cron、Google OAuth、Discord通知などの機能を
+持つWorkerを自動デプロイします。Preview URLの形式やSecret管理が
+Cloudflare Pagesとは異なるため、専用ドキュメントを参照してください。
