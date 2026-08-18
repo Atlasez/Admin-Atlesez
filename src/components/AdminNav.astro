@@ -85,7 +85,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
       <a href="/admin/introductions/?project=portal" data-admin-site="portal" data-admin-page="introductions" data-admin-i18n data-admin-ja="運営紹介" data-admin-en="Operator introductions" aria-current={site === "portal" && current === "introductions" ? "page" : undefined}>運営紹介</a>
-      <a href="/admin/permissions/" data-manager-only hidden data-admin-site="portal" data-admin-page="permissions" aria-current={current === "permissions" ? "page" : undefined}>運営内運営の管理</a>
       <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・査読</a>
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>進捗・ToDo・日程</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局ToDo・日程</a>
