@@ -4,6 +4,9 @@
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
   "preview_urls": true,
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA",
+  },
   "vars": {
     "ADMIN_AUTH_MODE": "google-oauth",
     "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin.ukyoukay0.workers.dev",

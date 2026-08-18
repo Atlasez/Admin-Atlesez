@@ -30,6 +30,11 @@ interface D1Database {
 interface Env {
   ASSETS: Fetcher;
   REPORTS: D1Database;
+  CF_VERSION_METADATA?: {
+    id?: string;
+    tag?: string;
+    timestamp?: string;
+  };
   /** 既定は cloudflare-access。Google移行時のみ google-oauth を設定する。 */
   ADMIN_AUTH_MODE?: string;
   /** 本番OAuth callbackへ集約する固定URL。Workers Previewからの戻り先は安全に検証して保持する。 */
@@ -5154,6 +5159,31 @@ function requestPreviewOrigin(request: Request, env: Env): string | null {
   return trustedPreviewOrigin(new URL(request.url).origin, request, env);
 }
 
+/**
+ * ブランチPreviewから認証を始めた場合も、ログイン後は実行中バージョンの
+ * Commit Preview URLへ戻す。ブランチURLは最新コミットを指す固定Aliasなので、
+ * ここでVersion metadataから8文字のPreview prefixを組み立てる。
+ */
+function requestVersionPreviewOrigin(
+  request: Request,
+  env: Env,
+): string | null {
+  if (!requestPreviewOrigin(request, env)) return null;
+  const versionPrefix = env.CF_VERSION_METADATA?.id
+    ?.toLowerCase()
+    .match(/^[a-f0-9]{8}/)?.[0];
+  if (!versionPrefix) return null;
+  const publicUrl = new URL(adminPublicOrigin(request, env));
+  return `https://${versionPrefix}-${publicUrl.hostname}`;
+}
+
+function requestAuthReturnOrigin(request: Request, env: Env): string | null {
+  return (
+    requestVersionPreviewOrigin(request, env) ??
+    requestPreviewOrigin(request, env)
+  );
+}
+
 /** Previewと本番callbackの両方へ認証Cookieを届ける共通親ドメイン。 */
 function authCookieDomain(request: Request, env: Env): string | undefined {
   const publicUrl = new URL(adminPublicOrigin(request, env));
@@ -5196,7 +5226,7 @@ async function startSearchConsoleImport(
     ? Math.min(90, Math.max(1, requestedDays))
     : 30;
   const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
-  const returnOrigin = requestPreviewOrigin(request, env);
+  const returnOrigin = requestAuthReturnOrigin(request, env);
   const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorization.search = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
@@ -5376,7 +5406,7 @@ async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
     return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
   const requestUrl = new URL(request.url);
   const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
-  const returnOrigin = requestPreviewOrigin(request, env);
+  const returnOrigin = requestAuthReturnOrigin(request, env);
   const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorization.search = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
@@ -5539,7 +5569,7 @@ async function logoutAdmin(request: Request, env: Env): Promise<Response> {
   }
   // 保護ページを経由せず認証入口へ戻す。ログアウト直後に404へ落ちないようにする。
   const logoutOrigin =
-    requestPreviewOrigin(request, env) ?? adminPublicOrigin(request, env);
+    requestAuthReturnOrigin(request, env) ?? adminPublicOrigin(request, env);
   const headers = new Headers({
     location: `${logoutOrigin}/auth/google/login?returnTo=%2Fadmin%2Feditor%2F`,
   });
