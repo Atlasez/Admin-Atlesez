@@ -4526,6 +4526,8 @@ const adminReturnPath = (value: string | null) => {
     "/admin/semi-platform/",
     "/admin/applications",
     "/admin/applications/",
+    "/admin/permissions",
+    "/admin/permissions/",
     "/admin/articles",
     "/admin/articles/",
     "/admin/operations",
