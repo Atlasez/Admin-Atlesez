@@ -36,13 +36,13 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     </section>
 
     <div class="home-grid">
-      <section class="home-section">
+      <section class="home-section calendar-section">
         <div class="section-heading">
-          <div><p class="section-kicker">CALENDAR</p><h2 data-admin-i18n data-admin-ja="カレンダー" data-admin-en="Calendar">カレンダー</h2><small data-admin-i18n data-admin-ja="自分の期限と参加プロジェクトの組織イベント" data-admin-en="Your deadlines and organization events">自分の期限と参加プロジェクトの組織イベント</small><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
-          <a href="/admin/operations/" data-admin-i18n data-admin-ja="日程を管理" data-admin-en="Manage schedule">日程を管理</a>
+          <div><p class="section-kicker">EVENTS</p><h2 data-admin-i18n data-admin-ja="同時作業会・交流会の日程" data-admin-en="Co-working & social events">同時作業会・交流会の日程</h2><small data-admin-i18n data-admin-ja="参加中のプロジェクトの日程" data-admin-en="Events from your projects">参加中のプロジェクトの日程</small><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
+          <a href="/admin/co-working/" data-admin-i18n data-admin-ja="日程を見る" data-admin-en="View events">日程を見る</a>
         </div>
         <div class="calendar-toolbar" role="group" aria-label="カレンダー操作"><div class="calendar-nav"><button type="button" data-calendar-prev aria-label="前の月">‹</button><button type="button" class="calendar-today" data-calendar-today data-admin-i18n data-admin-ja="今月" data-admin-en="This month">今月</button><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div><div class="calendar-view-switch" role="group" aria-label="カレンダー表示"><button type="button" data-calendar-view="agenda" class="is-selected" aria-pressed="true" data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-view="month" aria-pressed="false" data-admin-i18n data-admin-ja="月" data-admin-en="Month">月</button></div></div>
-        <div class="calendar-filters" role="group" aria-label="カレンダー表示対象"><span class="calendar-filter-label" data-admin-i18n data-admin-ja="表示する予定" data-admin-en="Show">表示する予定</span><label><input type="checkbox" data-calendar-source="personal" checked /> <span data-admin-i18n data-admin-ja="自分の期限" data-admin-en="My deadlines">自分の期限</span></label><label><input type="checkbox" data-calendar-source="organization" checked /> <span data-admin-i18n data-admin-ja="組織イベント" data-admin-en="Organization events">組織イベント</span></label></div>
+        <div class="calendar-filters" role="group" aria-label="カレンダー表示対象"><span class="calendar-filter-label" data-admin-i18n data-admin-ja="表示対象" data-admin-en="Showing">表示対象</span><label><input type="checkbox" data-calendar-source="organization" checked /> <span data-admin-i18n data-admin-ja="同時作業会・交流会" data-admin-en="Co-working & socials">同時作業会・交流会</span></label></div>
         <div class="calendar-agenda" data-calendar-agenda aria-live="polite"></div>
         <div class="portal-calendar-wrap" hidden><div class="portal-calendar" data-portal-calendar role="grid" aria-label="カレンダー"></div></div>
         <div class="calendar-upcoming" data-calendar-upcoming aria-live="polite"></div>
@@ -72,8 +72,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .project-entry-card strong { font-size: .95rem; }
   .project-entry-card small { font-size: .76rem; }
   .project-entry-card span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: .25rem; }
-  .home-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  .home-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-section { border: 1px solid var(--border-default); border-radius: .7rem; min-width: 0; padding: 1rem; }
+  .calendar-section { min-width: 0; }
   .section-heading { align-items: start; border-bottom: 1px solid var(--border-default); display: flex; gap: .7rem; justify-content: space-between; margin-bottom: .7rem; padding-bottom: .65rem; }
   .section-heading h2 { font-size: 1.1rem; margin: .2rem 0 0; }
   .section-heading a { color: var(--accent-primary); font-size: .75rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
@@ -102,6 +103,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .calendar-filters label { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .72rem; gap: .25rem; padding: .3rem .55rem; }
   .calendar-filters input { accent-color: var(--accent-primary); margin: 0; }
   .calendar-agenda { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: .75rem; }
+  .calendar-section .calendar-agenda { grid-template-columns: 1fr; }
   .calendar-agenda[hidden], .portal-calendar-wrap[hidden], .calendar-upcoming[hidden] { display: none; }
   .calendar-agenda-section { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .55rem; min-width: 0; padding: .8rem; }
   .calendar-agenda-section h3 { color: var(--text-primary); font-size: .78rem; margin: 0 0 .55rem; }
@@ -141,6 +143,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .portal { padding: 0 .8rem 3rem; }
     .project-entry { align-items: start; grid-template-columns: 1fr; padding: .9rem; }
     .project-entry-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .home-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 520px) {
     .project-entry-cards { grid-template-columns: 1fr; }
@@ -173,8 +176,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     type PortalLanguage = 'ja' | 'en';
     const getLanguage = (): PortalLanguage => localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
     const copy = {
-      ja: { noTodos: '未完了のToDoはありません。', status: '状態', today: '今日の予定', noEvents: 'この月の予定はありません。', noTodayEvents: '今日の予定はありません。', upcoming: '近日の予定', next: '次の予定', personal: '自分の期限', organization: '組織イベント', timezone: '表示タイムゾーン', continued: '継続中' },
-      en: { noTodos: 'There are no open tasks.', status: 'Status', today: "Today's schedule", noEvents: 'There are no events this month.', noTodayEvents: 'There are no events today.', upcoming: 'Upcoming', next: 'Next', personal: 'My deadline', organization: 'Organization event', timezone: 'Time zone', continued: 'Ongoing' },
+      ja: { noTodos: '未完了のToDoはありません。', status: '状態', today: '今日の予定', noEvents: 'この月の予定はありません。', noTodayEvents: '今日の予定はありません。', upcoming: '近日の予定', next: '次の予定', personal: '自分の期限', organization: '同時作業会・交流会', timezone: '表示タイムゾーン', continued: '継続中' },
+      en: { noTodos: 'There are no open tasks.', status: 'Status', today: "Today's schedule", noEvents: 'There are no events this month.', noTodayEvents: 'There are no events today.', upcoming: 'Upcoming', next: 'Next', personal: 'My deadline', organization: 'Co-working & social event', timezone: 'Time zone', continued: 'Ongoing' },
     } as const;
     let portalData: PortalData | null = null;
     let month = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -212,7 +215,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       const parts = dateParts(event.startsAt);
       const time = parts.hour && parts.minute ? `${parts.hour}:${parts.minute}` : '—';
       const kind = event.kind === 'personal' ? copy[language].personal : copy[language].organization;
-      return `<a class="calendar-agenda-item${event.kind === 'personal' ? ' is-personal' : ''}" href="/admin/operations/"><span class="calendar-agenda-time">${escapeHtml(time)}</span><span class="calendar-agenda-copy"><b>${escapeHtml(event.title)}</b><small>${escapeHtml(kind)} / ${escapeHtml(event.projectName)} ・ ${escapeHtml(formatDate(event.startsAt))}</small></span></a>`;
+      const href = event.kind === 'organization' ? '/admin/co-working/' : '/admin/operations/';
+      return `<a class="calendar-agenda-item${event.kind === 'personal' ? ' is-personal' : ''}" href="${href}"><span class="calendar-agenda-time">${escapeHtml(time)}</span><span class="calendar-agenda-copy"><b>${escapeHtml(event.title)}</b><small>${escapeHtml(kind)} / ${escapeHtml(event.projectName)} ・ ${escapeHtml(formatDate(event.startsAt))}</small></span></a>`;
     };
     const renderAgenda = (events: PortalCalendarEvent[], language: PortalLanguage) => {
       const today = dateKey(new Date().toISOString());
