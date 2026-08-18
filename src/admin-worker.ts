@@ -88,6 +88,10 @@ type EditorialDocument = {
   updated_at: string;
   reviewed_at: string | null;
   published_at: string | null;
+  publication_pr_url: string | null;
+  publication_branch: string | null;
+  publication_requested_at: string | null;
+  publication_action: "publish" | "unpublish" | null;
 };
 type EditorialAsset = {
   id: string;
@@ -1453,7 +1457,8 @@ async function deleteReportAdminPermission(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
+  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at,
+  publication_pr_url, publication_branch, publication_requested_at, publication_action
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -1813,7 +1818,8 @@ async function listEditorialDocuments(
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
+      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at,
+      publication_pr_url, publication_branch, publication_requested_at, publication_action
      FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
   )
     .bind(...values)
@@ -4151,7 +4157,9 @@ async function updateEditorialDocument(
   await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
       slug = ?, title = ?, summary = ?, concept_id = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?,
-      updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END
+      updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END,
+      publication_pr_url = NULL, publication_branch = NULL,
+      publication_requested_at = NULL, publication_action = NULL
      WHERE id = ?`,
   )
     .bind(
@@ -4710,11 +4718,20 @@ async function syncEditorialPublicationStatus(env: Env) {
     "x-github-api-version": "2022-11-28",
   };
   const documents = await env.REPORTS.prepare(
-    "SELECT id, locale, subject, category, slug, published_at FROM editorial_documents",
+    "SELECT id, locale, subject, category, slug, published_at, publication_pr_url, publication_branch, publication_requested_at, publication_action FROM editorial_documents",
   ).all<
     Pick<
       EditorialDocument,
-      "id" | "locale" | "subject" | "category" | "slug" | "published_at"
+      | "id"
+      | "locale"
+      | "subject"
+      | "category"
+      | "slug"
+      | "published_at"
+      | "publication_pr_url"
+      | "publication_branch"
+      | "publication_requested_at"
+      | "publication_action"
     >
   >();
   let published = 0;
@@ -4739,14 +4756,14 @@ async function syncEditorialPublicationStatus(env: Env) {
     if (isPublished) {
       published += 1;
       await env.REPORTS.prepare(
-        "UPDATE editorial_documents SET published_at = COALESCE(published_at, ?) WHERE id = ?",
+        "UPDATE editorial_documents SET published_at = COALESCE(published_at, ?), publication_pr_url = CASE WHEN publication_action = 'publish' THEN NULL ELSE publication_pr_url END, publication_branch = CASE WHEN publication_action = 'publish' THEN NULL ELSE publication_branch END, publication_requested_at = CASE WHEN publication_action = 'publish' THEN NULL ELSE publication_requested_at END, publication_action = CASE WHEN publication_action = 'publish' THEN NULL ELSE publication_action END WHERE id = ?",
       )
         .bind(now, document.id)
         .run();
     } else {
       pending += 1;
       await env.REPORTS.prepare(
-        "UPDATE editorial_documents SET published_at = NULL WHERE id = ?",
+        "UPDATE editorial_documents SET published_at = CASE WHEN publication_action = 'publish' THEN published_at ELSE NULL END, publication_pr_url = CASE WHEN publication_action = 'unpublish' THEN NULL ELSE publication_pr_url END, publication_branch = CASE WHEN publication_action = 'unpublish' THEN NULL ELSE publication_branch END, publication_requested_at = CASE WHEN publication_action = 'unpublish' THEN NULL ELSE publication_requested_at END, publication_action = CASE WHEN publication_action = 'unpublish' THEN NULL ELSE publication_action END WHERE id = ?",
       )
         .bind(document.id)
         .run();
@@ -4826,10 +4843,14 @@ async function uploadEditorialAssetToGitHub(
   repository: string,
   headers: Record<string, string>,
   documentId: string,
+  branch: string,
 ) {
   const path = `public/images/editorial/${documentId}/${asset.filename}`;
   const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
-  const existing = await fetch(endpoint, { headers });
+  const existing = await fetch(
+    `${endpoint}?ref=${encodeURIComponent(branch)}`,
+    { headers },
+  );
   let sha: string | undefined;
   if (existing.ok) sha = ((await existing.json()) as { sha?: string }).sha;
   else if (existing.status !== 404)
@@ -4840,7 +4861,7 @@ async function uploadEditorialAssetToGitHub(
     body: JSON.stringify({
       message: `Publish article asset: ${asset.filename}`,
       content: githubBinaryBase64(asset.data),
-      branch: "main",
+      branch,
       ...(sha ? { sha } : {}),
     }),
   });
@@ -4852,7 +4873,12 @@ async function writeEditorialDocumentToGitHub(
   env: Env,
   publicationStatus: "published" | "draft",
   message: string,
-): Promise<{ commitUrl: string | null; body: string } | Response> {
+): Promise<{
+  commitUrl: string | null;
+  pullRequestUrl: string | null;
+  branch: string;
+  body: string;
+} | Response> {
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const token = env.GITHUB_PUBLISH_TOKEN;
   if (!token)
@@ -4871,8 +4897,43 @@ async function writeEditorialDocumentToGitHub(
     "user-agent": "atlasez-editorial-workspace",
     "x-github-api-version": "2022-11-28",
   };
+  const mainRefResponse = await fetch(
+    `https://api.github.com/repos/${repository}/git/ref/heads/main`,
+    { headers },
+  );
+  if (!mainRefResponse.ok)
+    return json(
+      { error: "GitHubのmainブランチを確認できませんでした。" },
+      502,
+    );
+  const mainRef = (await mainRefResponse.json()) as {
+    object?: { sha?: string };
+  };
+  const mainSha = mainRef.object?.sha;
+  if (!mainSha)
+    return json(
+      { error: "GitHubのmainブランチの基準版を取得できませんでした。" },
+      502,
+    );
+  const branch = `atlasez-admin-publish-${document.id.slice(0, 8)}-${crypto.randomUUID().slice(0, 8)}`;
+  const branchResponse = await fetch(
+    `https://api.github.com/repos/${repository}/git/refs`,
+    {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: mainSha }),
+    },
+  );
+  if (!branchResponse.ok)
+    return json(
+      { error: "公開用のGitHubブランチを作成できませんでした。" },
+      502,
+    );
   let sha: string | undefined;
-  const existing = await fetch(endpoint, { headers });
+  const existing = await fetch(
+    `${endpoint}?ref=${encodeURIComponent(branch)}`,
+    { headers },
+  );
   if (existing.ok) sha = ((await existing.json()) as { sha?: string }).sha;
   else if (existing.status !== 404)
     return json({ error: "GitHub上の公開先を確認できませんでした。" }, 502);
@@ -4931,6 +4992,7 @@ async function writeEditorialDocumentToGitHub(
       repository,
       headers,
       document.id,
+      branch,
     );
   const body = editorialMarkdown(
     {
@@ -4948,7 +5010,7 @@ async function writeEditorialDocumentToGitHub(
     body: JSON.stringify({
       message,
       content: githubBase64(body),
-      branch: "main",
+      branch,
       ...(sha ? { sha } : {}),
     }),
   });
@@ -4961,18 +5023,53 @@ async function writeEditorialDocumentToGitHub(
       502,
     );
   const result = (await publish.json()) as {
-    commit?: { html_url?: string };
+    commit?: { html_url?: string; sha?: string };
     content?: { sha?: string };
+  };
+  const pullRequest = await fetch(
+    `https://api.github.com/repos/${repository}/pulls`,
+    {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        title: message,
+        head: branch,
+        base: "main",
+        body: [
+          "このPRはAtlasez管理画面から作成された公開候補です。",
+          "",
+          "- mainはこのPRがMergeされるまで変更されません。",
+          "- Merge前はCloudflareが発行したこのPRのPreview URLで確認してください。",
+          "- 内容確認後も自動Mergeは行いません。",
+        ].join("\n"),
+      }),
+    },
+  );
+  if (!pullRequest.ok)
+    return json(
+      {
+        error:
+          "ファイルは公開用ブランチへ反映されましたが、PRの作成に失敗しました。GitHubトークンにPull requests: write権限を追加してください。",
+      },
+      502,
+    );
+  const pullRequestResult = (await pullRequest.json()) as {
+    html_url?: string;
   };
   await storeArticleBackup(
     env,
     repository,
     path,
-    result.content?.sha ?? crypto.randomUUID(),
+    result.commit?.sha ?? result.content?.sha ?? crypto.randomUUID(),
     body,
     "publish",
   );
-  return { commitUrl: result.commit?.html_url ?? null, body };
+  return {
+    commitUrl: result.commit?.html_url ?? null,
+    pullRequestUrl: pullRequestResult.html_url ?? null,
+    branch,
+    body,
+  };
 }
 
 async function publishEditorialDocument(
@@ -5001,17 +5098,25 @@ async function publishEditorialDocument(
     `Publish article: ${document.title}`,
   );
   if (result instanceof Response) return result;
+  const requestedAt = new Date().toISOString();
   await env.REPORTS.prepare(
-    "UPDATE editorial_documents SET published_at = ?, updated_at = ?, updated_by = ? WHERE id = ?",
+    "UPDATE editorial_documents SET publication_pr_url = ?, publication_branch = ?, publication_requested_at = ?, publication_action = 'publish', updated_at = ?, updated_by = ? WHERE id = ?",
   )
     .bind(
-      new Date().toISOString(),
-      new Date().toISOString(),
+      result.pullRequestUrl,
+      result.branch,
+      requestedAt,
+      requestedAt,
       scope.email,
       documentId,
     )
     .run();
-  return json({ ok: true, commitUrl: result.commitUrl });
+  return json({
+    ok: true,
+    commitUrl: result.commitUrl,
+    pullRequestUrl: result.pullRequestUrl,
+    branch: result.branch,
+  });
 }
 
 async function unpublishEditorialDocument(
@@ -5055,12 +5160,25 @@ async function unpublishEditorialDocument(
       now,
     )
     .run();
+  const requestedAt = new Date().toISOString();
   await env.REPORTS.prepare(
-    "UPDATE editorial_documents SET status = 'draft', published_at = NULL, updated_at = ?, updated_by = ? WHERE id = ?",
+    "UPDATE editorial_documents SET status = 'draft', publication_pr_url = ?, publication_branch = ?, publication_requested_at = ?, publication_action = 'unpublish', updated_at = ?, updated_by = ? WHERE id = ?",
   )
-    .bind(now, scope.email, documentId)
+    .bind(
+      result.pullRequestUrl,
+      result.branch,
+      requestedAt,
+      requestedAt,
+      scope.email,
+      documentId,
+    )
     .run();
-  return json({ ok: true, commitUrl: result.commitUrl });
+  return json({
+    ok: true,
+    commitUrl: result.commitUrl,
+    pullRequestUrl: result.pullRequestUrl,
+    branch: result.branch,
+  });
 }
 
 const googleOAuthConfigured = (env: Env) =>
