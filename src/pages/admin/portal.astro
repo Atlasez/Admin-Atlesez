@@ -41,9 +41,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
           <div><p class="section-kicker">CALENDAR</p><h2 data-admin-i18n data-admin-ja="カレンダー" data-admin-en="Calendar">カレンダー</h2><small data-admin-i18n data-admin-ja="自分の期限と参加プロジェクトの組織イベント" data-admin-en="Your deadlines and organization events">自分の期限と参加プロジェクトの組織イベント</small><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
           <a href="/admin/operations/" data-admin-i18n data-admin-ja="日程を管理" data-admin-en="Manage schedule">日程を管理</a>
         </div>
-        <div class="calendar-toolbar" role="group" aria-label="カレンダー操作"><div class="calendar-nav"><button type="button" data-calendar-prev aria-label="前の月">‹</button><button type="button" class="calendar-today" data-calendar-today data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div></div>
+        <div class="calendar-toolbar" role="group" aria-label="カレンダー操作"><div class="calendar-nav"><button type="button" data-calendar-prev aria-label="前の月">‹</button><button type="button" class="calendar-today" data-calendar-today data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div><div class="calendar-view-switch" role="group" aria-label="カレンダー表示"><button type="button" data-calendar-view="agenda" class="is-selected" aria-pressed="true" data-admin-i18n data-admin-ja="今日" data-admin-en="Today">今日</button><button type="button" data-calendar-view="month" aria-pressed="false" data-admin-i18n data-admin-ja="月" data-admin-en="Month">月</button></div></div>
         <div class="calendar-filters" role="group" aria-label="カレンダー表示対象"><span class="calendar-filter-label" data-admin-i18n data-admin-ja="表示する予定" data-admin-en="Show">表示する予定</span><label><input type="checkbox" data-calendar-source="personal" checked /> <span data-admin-i18n data-admin-ja="自分の期限" data-admin-en="My deadlines">自分の期限</span></label><label><input type="checkbox" data-calendar-source="organization" checked /> <span data-admin-i18n data-admin-ja="組織イベント" data-admin-en="Organization events">組織イベント</span></label></div>
-        <div class="portal-calendar" data-portal-calendar role="grid" aria-label="カレンダー"></div>
+        <div class="calendar-agenda" data-calendar-agenda aria-live="polite"></div>
+        <div class="portal-calendar-wrap"><div class="portal-calendar" data-portal-calendar role="grid" aria-label="カレンダー"></div></div>
         <div class="calendar-upcoming" data-calendar-upcoming aria-live="polite"></div>
       </section>
       <section class="home-section">
@@ -71,7 +72,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .project-entry-card strong { font-size: .95rem; }
   .project-entry-card small { font-size: .76rem; }
   .project-entry-card span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: .25rem; }
-  .home-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.65fr) minmax(19rem, .85fr); }
+  .home-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: 1fr; }
   .home-section { border: 1px solid var(--border-default); border-radius: .7rem; min-width: 0; padding: 1rem; }
   .section-heading { align-items: start; border-bottom: 1px solid var(--border-default); display: flex; gap: .7rem; justify-content: space-between; margin-bottom: .7rem; padding-bottom: .65rem; }
   .section-heading h2 { font-size: 1.1rem; margin: .2rem 0 0; }
@@ -93,10 +94,28 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .calendar-heading { display: grid; gap: .1rem; min-width: 0; text-align: right; }
   .calendar-heading strong { font-size: 1rem; }
   .calendar-heading small { color: var(--text-secondary); font-size: .68rem; }
+  .calendar-view-switch { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .5rem; display: inline-flex; gap: .15rem; padding: .15rem; }
+  .calendar-view-switch button { border: 0; font-size: .72rem; height: 1.95rem; min-width: 2.8rem; padding: .25rem .5rem; }
+  .calendar-view-switch button.is-selected { background: var(--background-primary); box-shadow: 0 1px 3px rgb(24 32 39 / .12); color: var(--accent-primary); }
   .calendar-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .7rem; }
   .calendar-filter-label { color: var(--text-secondary); font-size: .7rem; font-weight: 800; margin-right: .1rem; }
   .calendar-filters label { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .72rem; gap: .25rem; padding: .3rem .55rem; }
   .calendar-filters input { accent-color: var(--accent-primary); margin: 0; }
+  .calendar-agenda { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: .75rem; }
+  .calendar-agenda[hidden], .portal-calendar-wrap[hidden], .calendar-upcoming[hidden] { display: none; }
+  .calendar-agenda-section { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .55rem; min-width: 0; padding: .8rem; }
+  .calendar-agenda-section h3 { color: var(--text-primary); font-size: .78rem; margin: 0 0 .55rem; }
+  .calendar-agenda-list { display: grid; gap: .4rem; }
+  .calendar-agenda-item { align-items: start; background: var(--background-primary); border-left: 3px solid var(--accent-primary); border-radius: .35rem; color: var(--text-primary); display: grid; gap: .6rem; grid-template-columns: 3.8rem minmax(0, 1fr); padding: .55rem .6rem; text-decoration: none; }
+  .calendar-agenda-item.is-personal { border-left-color: #a66a00; }
+  .calendar-agenda-item:hover { box-shadow: 0 2px 8px rgb(24 32 39 / .1); transform: translateY(-1px); }
+  .calendar-agenda-time { color: var(--accent-primary); font-size: .72rem; font-variant-numeric: tabular-nums; font-weight: 800; }
+  .calendar-agenda-item.is-personal .calendar-agenda-time { color: #a66a00; }
+  .calendar-agenda-copy { display: grid; gap: .12rem; min-width: 0; }
+  .calendar-agenda-copy b { font-size: .78rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .calendar-agenda-copy small { color: var(--text-secondary); font-size: .67rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .calendar-agenda-empty { color: var(--text-secondary); font-size: .75rem; margin: 0; }
+  .portal-calendar-wrap { overflow-x: auto; }
   .portal-calendar { background: var(--border-default); border: 1px solid var(--border-default); border-radius: .45rem; display: grid; gap: 1px; grid-template-columns: repeat(7, minmax(5.6rem, 1fr)); overflow: hidden; }
   .portal-calendar-cell { background: var(--background-primary); min-height: 7.2rem; min-width: 0; padding: .45rem; }
   .portal-calendar-cell.is-blank { background: var(--background-secondary); }
@@ -123,12 +142,11 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .project-entry { align-items: start; grid-template-columns: 1fr; padding: .9rem; }
     .project-entry-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  @media (max-width: 700px) {
-    .home-grid { grid-template-columns: 1fr; }
-  }
   @media (max-width: 520px) {
     .project-entry-cards { grid-template-columns: 1fr; }
-    .calendar-toolbar { align-items: flex-start; }
+    .calendar-toolbar { align-items: flex-start; flex-wrap: wrap; }
+    .calendar-heading { order: -1; text-align: left; width: calc(100% - 1rem); }
+    .calendar-agenda { grid-template-columns: 1fr; }
     .calendar-filter-label { flex-basis: 100%; }
     .portal-calendar { grid-template-columns: repeat(7, minmax(3.6rem, 1fr)); }
     .portal-calendar-cell { min-height: 5.3rem; padding: .25rem; }
@@ -144,6 +162,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     if (!root || root.dataset.initialized === 'true') return;
     root.dataset.initialized = 'true';
     const calendar = root.querySelector<HTMLElement>('[data-portal-calendar]')!;
+    const calendarAgenda = root.querySelector<HTMLElement>('[data-calendar-agenda]')!;
     const calendarTitle = root.querySelector<HTMLElement>('[data-calendar-title]')!;
     const calendarRange = root.querySelector<HTMLElement>('[data-calendar-range]')!;
     const calendarUpcoming = root.querySelector<HTMLElement>('[data-calendar-upcoming]')!;
@@ -154,11 +173,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     type PortalLanguage = 'ja' | 'en';
     const getLanguage = (): PortalLanguage => localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
     const copy = {
-      ja: { noTodos: '未完了のToDoはありません。', status: '状態', noEvents: 'この月の予定はありません。', upcoming: '近日の予定', personal: '自分の期限', organization: '組織イベント', timezone: '表示タイムゾーン', continued: '継続中' },
-      en: { noTodos: 'There are no open tasks.', status: 'Status', noEvents: 'There are no events this month.', upcoming: 'Upcoming', personal: 'My deadline', organization: 'Organization event', timezone: 'Time zone', continued: 'Ongoing' },
+      ja: { noTodos: '未完了のToDoはありません。', status: '状態', today: '今日の予定', noEvents: 'この月の予定はありません。', noTodayEvents: '今日の予定はありません。', upcoming: '近日の予定', next: '次の予定', personal: '自分の期限', organization: '組織イベント', timezone: '表示タイムゾーン', continued: '継続中' },
+      en: { noTodos: 'There are no open tasks.', status: 'Status', today: "Today's schedule", noEvents: 'There are no events this month.', noTodayEvents: 'There are no events today.', upcoming: 'Upcoming', next: 'Next', personal: 'My deadline', organization: 'Organization event', timezone: 'Time zone', continued: 'Ongoing' },
     } as const;
     let portalData: PortalData | null = null;
     let month = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    let calendarView: 'agenda' | 'month' = 'agenda';
     const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
     const dateParts = (value: Date | string, options: Intl.DateTimeFormatOptions = {}) => {
       try {
@@ -172,27 +192,54 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       const start = new Date(event.startsAt);
       const end = new Date(event.endsAt || event.startsAt);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [dateKey(event.startsAt)];
-      const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-      const finish = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      const startKey = dateKey(start.toISOString());
+      const endKey = dateKey(end.toISOString());
+      const [startYear, startMonth, startDay] = startKey.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endKey.split('-').map(Number);
+      const cursor = new Date(Date.UTC(startYear, startMonth - 1, startDay));
+      const finish = new Date(Date.UTC(endYear, endMonth - 1, endDay));
       const keys: string[] = [];
       for (let index = 0; cursor <= finish && index < 62; index += 1) {
-        keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
-        cursor.setDate(cursor.getDate() + 1);
+        keys.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
       return keys;
     };
     const enabledKinds = () => new Set(sourceInputs.filter((input) => input.checked).map((input) => input.dataset.calendarSource));
     const visibleEvents = () => (portalData?.calendar?.events ?? []).filter((event) => enabledKinds().has(event.kind));
+    const eventSort = (left: PortalCalendarEvent, right: PortalCalendarEvent) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
+    const eventCard = (event: PortalCalendarEvent, language: PortalLanguage) => {
+      const parts = dateParts(event.startsAt);
+      const time = parts.hour && parts.minute ? `${parts.hour}:${parts.minute}` : '—';
+      const kind = event.kind === 'personal' ? copy[language].personal : copy[language].organization;
+      return `<a class="calendar-agenda-item${event.kind === 'personal' ? ' is-personal' : ''}" href="/admin/operations/"><span class="calendar-agenda-time">${escapeHtml(time)}</span><span class="calendar-agenda-copy"><b>${escapeHtml(event.title)}</b><small>${escapeHtml(kind)} / ${escapeHtml(event.projectName)} ・ ${escapeHtml(formatDate(event.startsAt))}</small></span></a>`;
+    };
+    const renderAgenda = (events: PortalCalendarEvent[], language: PortalLanguage) => {
+      const today = dateKey(new Date().toISOString());
+      const todayEvents = events.filter((event) => eventDateKeys(event).includes(today)).sort(eventSort);
+      const todayIds = new Set(todayEvents.map((event) => event.id));
+      const nextEvents = events.filter((event) => !todayIds.has(event.id) && new Date(event.startsAt).getTime() >= Date.now()).sort(eventSort).slice(0, 5);
+      calendarTitle.textContent = new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'full', timeZone: timezone() }).format(new Date());
+      calendarRange.textContent = `${todayEvents.length}${language === 'ja' ? '件' : ' events'}`;
+      calendarAgenda.innerHTML = `<section class="calendar-agenda-section"><h3>${copy[language].today}</h3><div class="calendar-agenda-list">${todayEvents.length ? todayEvents.map((event) => eventCard(event, language)).join('') : `<p class="calendar-agenda-empty">${copy[language].noTodayEvents}</p>`}</div></section><section class="calendar-agenda-section"><h3>${copy[language].next}</h3><div class="calendar-agenda-list">${nextEvents.length ? nextEvents.map((event) => eventCard(event, language)).join('') : `<p class="calendar-agenda-empty">${copy[language].noEvents}</p>`}</div></section>`;
+      calendarAgenda.hidden = false;
+      calendar.parentElement?.toggleAttribute('hidden', true);
+      calendarUpcoming.hidden = true;
+    };
     const renderCalendar = () => {
       const language = getLanguage();
+      const events = visibleEvents();
+      timezoneNote.textContent = `${copy[language].timezone}: ${timezone()}`;
+      if (calendarView === 'agenda') { renderAgenda(events, language); return; }
+      calendarAgenda.hidden = true;
+      calendar.parentElement?.toggleAttribute('hidden', false);
+      calendarUpcoming.hidden = false;
       const formatter = new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', { year: 'numeric', month: 'long' });
       calendarTitle.textContent = formatter.format(month);
-      timezoneNote.textContent = `${copy[language].timezone}: ${timezone()}`;
       const headings = (language === 'ja' ? ['日', '月', '火', '水', '木', '金', '土'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']).map((day, index) => `<div class="portal-calendar-cell portal-calendar-weekday${index === 0 || index === 6 ? ' is-weekend' : ''}" role="columnheader">${day}</div>`);
       const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
       const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
       const today = dateKey(new Date().toISOString());
-      const events = visibleEvents();
       calendarRange.textContent = `${events.length}${language === 'ja' ? '件' : ' events'}`;
       const cells = [...headings];
       for (let index = 0; index < firstDay; index += 1) cells.push('<div class="portal-calendar-cell is-blank"></div>');
@@ -212,6 +259,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const renderTodos = (data: PortalData) => { const language = getLanguage(); const todos = data.todos ?? []; todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`; };
     const renderPortal = (data: PortalData) => { renderCalendar(); renderTodos(data); };
     sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar));
+    root.querySelectorAll<HTMLButtonElement>('[data-calendar-view]').forEach((button) => button.addEventListener('click', () => {
+      calendarView = button.dataset.calendarView === 'month' ? 'month' : 'agenda';
+      root.querySelectorAll<HTMLButtonElement>('[data-calendar-view]').forEach((item) => {
+        const selected = item === button;
+        item.classList.toggle('is-selected', selected);
+        item.setAttribute('aria-pressed', String(selected));
+      });
+      renderCalendar();
+    }));
     root.querySelector<HTMLButtonElement>('[data-calendar-prev]')!.addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
     root.querySelector<HTMLButtonElement>('[data-calendar-today]')!.addEventListener('click', () => { const now = new Date(); month = new Date(now.getFullYear(), now.getMonth(), 1); renderCalendar(); });
     root.querySelector<HTMLButtonElement>('[data-calendar-next]')!.addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() + 1, 1); renderCalendar(); });

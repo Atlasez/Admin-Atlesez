@@ -240,6 +240,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         </div>
       </form>
     </dialog>
+    <dialog class="reference-dialog" data-reference-dialog aria-labelledby="reference-dialog-title">
+      <div class="reference-dialog-header"><div><p class="eyebrow">公開記事の参考</p><h2 id="reference-dialog-title" data-reference-title>記事を選択してください</h2><p data-reference-meta></p></div><button type="button" class="quiet-action" data-reference-close>閉じる</button></div>
+      <div class="reference-dialog-tabs" role="tablist" aria-label="公開記事の表示方法"><button type="button" class="is-selected" data-reference-tab="preview" aria-selected="true">プレビュー</button><button type="button" data-reference-tab="source" aria-selected="false">Markdown</button></div>
+      <article class="article-preview reference-preview" data-reference-preview></article>
+      <pre class="reference-source" data-reference-source hidden></pre>
+    </dialog>
   </main>
 
   <script is:inline id="editor-source-data" type="application/json" set:html={editorData}></script>
@@ -272,13 +278,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   select, input, textarea { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); font: inherit; }
   select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
   .document-list { display: grid; gap: .45rem; margin-top: .35rem; max-height: 15rem; overflow: auto; padding-right: .1rem; }
-  .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
+  .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
   .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: .5rem; justify-content: space-between; padding: .6rem .7rem; text-align: left; width: 100%; }
   .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
   .document-card small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .state { border-radius: 999px; font-size: .7rem; font-weight: 800; padding: .14rem .4rem; width: fit-content; }
   .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-on-hold { background: #f4e5e7; color: #8a3b49; }.state-approved { background: #def4e6; color: #267143; }
   .approval-dialog { width: min(92vw, 31rem); border: 1px solid #d9e3eb; border-radius: 1rem; padding: 1.5rem; color: #183047; box-shadow: 0 1.5rem 5rem #162c4030; }.approval-dialog::backdrop { background: #10203388; }.approval-dialog h2 { margin: .2rem 0 .65rem; }.approval-dialog p { line-height: 1.7; }.approval-actions { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1.25rem; flex-wrap: wrap; }
+  .reference-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.8rem; box-shadow:0 1.5rem 5rem #162c4030; color:var(--text); max-height:88vh; padding:1rem; width:min(94vw,68rem); }.reference-dialog::backdrop { background:#10203388; }.reference-dialog-header { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:.2rem 0 .8rem; }.reference-dialog-header h2 { font-size:1.35rem; margin:.15rem 0 .25rem; }.reference-dialog-header p:last-child { color:var(--muted); font-size:.76rem; margin:0; }.reference-dialog-tabs { border-bottom:1px solid var(--border); display:flex; gap:.2rem; margin:.7rem 0; }.reference-dialog-tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:.76rem; font-weight:800; padding:.45rem .6rem; }.reference-dialog-tabs button.is-selected,.reference-dialog-tabs button:hover { border-bottom-color:var(--accent); color:var(--accent); }.reference-preview { background:var(--surface); border:1px solid var(--border); border-radius:.4rem; box-sizing:border-box; height:calc(88vh - 10rem); min-height:18rem; overflow:auto; }.reference-source { background:#18212b; border-radius:.4rem; box-sizing:border-box; color:#eef6ff; font-family:var(--font-mono); font-size:.82rem; line-height:1.65; margin:0; max-height:calc(88vh - 10rem); min-height:18rem; overflow:auto; padding:.9rem; white-space:pre-wrap; }.reference-source[hidden],.reference-preview[hidden] { display:none; }
   .editor-panel { background: var(--surface); min-width: 0; padding: clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 5rem auto; max-width: 38rem; text-align: center; }.empty-state h2 { color: var(--text); }.editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
   .document-form { display: grid; gap: 1rem; }.document-form[hidden]{display:none!important}
@@ -534,6 +541,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const progressDialog = root.querySelector<HTMLDialogElement>("[data-progress-dialog]")!;
     const progressBody = root.querySelector<HTMLTextAreaElement>("[data-progress-body]")!;
     const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
+    const referenceDialog = root.querySelector<HTMLDialogElement>("[data-reference-dialog]")!;
+    const referenceTitle = root.querySelector<HTMLElement>("[data-reference-title]")!;
+    const referenceMeta = root.querySelector<HTMLElement>("[data-reference-meta]")!;
+    const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]")!;
+    const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]")!;
     const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     const personalNote = root.querySelector<HTMLTextAreaElement>("[data-personal-note]")!;
@@ -988,10 +1000,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         const categoryArticles = publishedArticles.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.title.localeCompare(b.title, "ja"));
         const categoryPlanned = planned.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.order - b.order);
         const entries = [
-          ...categoryArticles.map((item) => { const document = documentForSourceArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : "公開済み", statusClass: document ? "outline-status-editorial" : "outline-status-published", action: document ? "運営原稿を開く" : "公開記事を取り込む", articleId: item.articleId, plannedKey: "", meta: item.slug }; }),
-          ...categoryPlanned.map((item) => { const document = documentForPlannedArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : item.progress === "in-progress" ? "執筆中" : "未着手", statusClass: document ? "outline-status-editorial" : item.progress === "in-progress" ? "outline-status-progress" : "outline-status-planned", action: document ? "運営原稿を開く" : "執筆を開始", articleId: "", plannedKey: item.key, meta: item.progress === "in-progress" ? "学習サイトで執筆中" : "今後作成予定" }; }),
+          ...categoryArticles.map((item) => { const document = documentForSourceArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : "公開済み", statusClass: document ? "outline-status-editorial" : "outline-status-published", actionMarkup: document ? `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">運営原稿を開く</button>` : `<button type="button" class="quiet-action" data-reference-article="${esc(item.articleId)}">本文を見る</button><button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">この形式で作成</button>`, articleId: item.articleId, plannedKey: "", meta: item.slug }; }),
+          ...categoryPlanned.map((item) => { const document = documentForPlannedArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : item.progress === "in-progress" ? "執筆中" : "未着手", statusClass: document ? "outline-status-editorial" : item.progress === "in-progress" ? "outline-status-progress" : "outline-status-planned", actionMarkup: document ? `<button type="button" class="quiet-action" data-outline-planned="${esc(item.key)}">運営原稿を開く</button>` : `<button type="button" class="quiet-action" data-outline-planned="${esc(item.key)}">執筆を開始</button>`, articleId: "", plannedKey: item.key, meta: item.progress === "in-progress" ? "学習サイトで執筆中" : "今後作成予定" }; }),
         ];
-        return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><button type="button" class="quiet-action" ${entry.articleId ? `data-outline-article="${esc(entry.articleId)}"` : `data-outline-planned="${esc(entry.plannedKey)}"`}>${entry.action}</button></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
+        return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
     const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
@@ -1001,6 +1013,24 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
     outlineCategory.addEventListener("change", renderAtlasOutline);
     outlineList.addEventListener("click", (event) => {
+      const referenceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-reference-article]");
+      if (referenceButton) {
+        const article = articles.find((item) => item.articleId === referenceButton.dataset.referenceArticle);
+        if (!article) return;
+        referenceTitle.textContent = article.title;
+        referenceMeta.textContent = `${article.subject} / ${article.category} / ${article.slug} ・ 公開済み記事の構成を参考表示`;
+        referenceSource.textContent = article.body;
+        referencePreview.innerHTML = previewMarkdown(article.body);
+        referencePreview.hidden = false;
+        referenceSource.hidden = true;
+        root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((tab) => {
+          const selected = tab.dataset.referenceTab === "preview";
+          tab.classList.toggle("is-selected", selected);
+          tab.setAttribute("aria-selected", String(selected));
+        });
+        referenceDialog.showModal();
+        return;
+      }
       const articleButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-outline-article]");
       if (articleButton) {
         const article = articles.find((item) => item.articleId === articleButton.dataset.outlineArticle);
@@ -1021,6 +1051,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       heading.textContent = `${item.title}（新規原稿）`;
       saveMessage.value = "未着手の目次から新規原稿を始めます。保存すると運営側の原稿一覧に追加されます。";
     });
+    root.querySelector<HTMLButtonElement>("[data-reference-close]")!.addEventListener("click", () => referenceDialog.close());
+    root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((tab) => tab.addEventListener("click", () => {
+      const selected = tab.dataset.referenceTab === "preview";
+      referencePreview.hidden = !selected;
+      referenceSource.hidden = selected;
+      root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((item) => {
+        const active = item === tab;
+        item.classList.toggle("is-selected", active);
+        item.setAttribute("aria-selected", String(active));
+      });
+    }));
     sidebarCollapseButton.addEventListener("click", () => setSidebarCollapsed(!root.classList.contains("sidebar-collapsed"), true));
     status.addEventListener("change", () => {
       state.textContent = statusLabel[status.value as keyof typeof statusLabel];

@@ -175,7 +175,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       primaryNav?.classList.remove('is-open');
       document.querySelectorAll<HTMLElement>('[data-admin-site]').forEach((link) => { link.hidden = link.dataset.adminSite !== state.site; });
       document.querySelectorAll<HTMLElement>('[data-admin-page]').forEach((link) => { link.setAttribute('aria-current', link.dataset.adminPage === state.current && link.closest('[data-admin-site]')?.getAttribute('data-admin-site') === state.site ? 'page' : 'false'); });
-      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['reports', 'permissions', 'guide', 'applications', 'co-working'].includes(state.current); });
+      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['reports', 'permissions', 'guide', 'applications', 'co-working', 'review'].includes(state.current); });
       if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : 'Atlas learning site operations'; }
       const logo = document.querySelector<HTMLAnchorElement>('.admin-nav-brand-logo');
       if (logo) logo.href = state.home;
