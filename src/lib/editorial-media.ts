@@ -16,6 +16,11 @@ export type EditorialAssetReference = {
   filename: string;
 };
 
+export type EditorialLatexAssetReference = EditorialAssetReference & {
+  latexName: string;
+  alt?: string;
+};
+
 export const editorialAssetMarker = (id: string) => `asset://${id}`;
 
 export const publicEditorialAssetPath = (asset: EditorialAssetReference) =>
@@ -35,6 +40,20 @@ export const sanitizeEditorialFilename = (
   return `${basename || "image"}.${extension}`;
 };
 
+export const sanitizeEditorialLatexName = (
+  value: string,
+  filename: string,
+) => {
+  const fallback = filename.replace(/\.[a-z0-9]+$/i, "");
+  const normalized = (value.trim() || fallback)
+    .normalize("NFKC")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  const safe = normalized || "figure";
+  return /^[A-Za-z]/.test(safe) ? safe : `asset-${safe}`;
+};
+
 export const editorialAssetIdsIn = (body: string) => [
   ...new Set(
     [...body.matchAll(/asset:\/\/([0-9a-f-]{36})/gi)]
@@ -42,6 +61,29 @@ export const editorialAssetIdsIn = (body: string) => [
       .filter((id): id is string => EDITORIAL_ASSET_ID_PATTERN.test(id)),
   ),
 ];
+
+export const editorialLatexNamesIn = (body: string) => [
+  ...new Set(
+    [...body.matchAll(/^\\includegraphics(?:\[[^\]\r\n]{0,240}\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/gm)].map(
+      (match) => match[1].toLowerCase(),
+    ),
+  ),
+];
+
+export const replaceEditorialLatexReferences = (
+  body: string,
+  assets: Map<string, EditorialLatexAssetReference>,
+) =>
+  body.replace(
+    /^\\includegraphics(?:\[[^\]\r\n]{0,240}\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/gm,
+    (whole, name: string) => {
+      const asset = assets.get(name.toLowerCase());
+      if (!asset) return whole;
+      const safeAlt =
+        (asset.alt ?? "").replace(/[\r\n\]]/g, " ").trim() || asset.filename;
+      return `![${safeAlt}](${publicEditorialAssetPath(asset)})`;
+    },
+  );
 
 export const replaceEditorialAssetMarkers = (
   body: string,

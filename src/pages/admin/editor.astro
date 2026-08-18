@@ -156,7 +156,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
             </div>
           </details>
 
-          <div class="editor-quick-actions" aria-label="編集画面内ショートカット"><button type="button" class="quiet-action" data-jump-writing>本文へ</button><button type="button" class="quiet-action" data-jump-preview>プレビューへ</button><button type="button" class="quiet-action" data-jump-comments>コメントへ</button><button type="button" class="quiet-action" data-jump-memo>メモへ</button><button type="button" class="quiet-action" data-jump-media>図・画像へ</button></div>
           <details class="personal-notebook" data-personal-notebook>
             <summary>自分用メモ帳</summary>
             <p>記事の執筆メモとは別の、自分だけが見るメモです。保存した内容は他のメンバーには表示されません。</p>
@@ -181,9 +180,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
             <div class="media-studio">
               <div class="media-studio-actions">
                 <label class="media-alt-label">画像の説明（alt）<input type="text" data-media-alt maxlength="180" placeholder="例：正多角形の対称軸" /></label>
+                <label class="media-latex-label">LaTeX名<input type="text" data-media-latex-name maxlength="120" pattern="[A-Za-z][A-Za-z0-9_-]*" placeholder="例：group-diagram" /><small>本文では <code>\includegraphics&#123;group-diagram&#125;</code> と引用します。</small></label>
                 <input type="file" data-media-input accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-                <button type="button" class="quiet-action" data-open-media>画像をアップロード</button>
-                <button type="button" class="quiet-action" data-insert-tikz>TikZテンプレートを本文へ</button>
+                <button type="button" class="quiet-action" data-open-media>画像を選択</button>
+                <button type="button" class="quiet-action" data-insert-tikz>TikZを挿入</button>
               </div>
               <div class="media-hint">PNG・JPEG・WebP・GIF、1.5MB以下。アップロードした画像はこの原稿に紐づき、Previewにも反映されます。TikZは専用ブロックとして編集できます。</div>
               <div class="media-list" data-media-list aria-live="polite"></div>
@@ -296,7 +296,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary { cursor: pointer; font-size: .88rem; font-weight: 800; }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
   .editor-split { align-items: stretch; display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }.writing-area, .preview-area, .media-area, .review-panel { border: 1px solid var(--border); border-radius: 0; min-width: 0; overflow: hidden; }.pane-heading { background: var(--surface-alt); border-bottom: 1px solid var(--border); padding: .75rem .9rem; }.pane-heading h3 { font-size: .95rem; margin: 0; }.pane-heading p { color: var(--muted); font-size: .77rem; margin: .22rem 0 0; }.pane-heading code { background: var(--surface); border: 1px solid var(--border); border-radius: 0; padding: .03rem .2rem; }.pane-heading > span { color: var(--muted); flex: 0 0 auto; font-size: .76rem; }.live-badge { color: var(--success) !important; font-weight: 800; }
-  .media-studio { background: color-mix(in srgb, var(--accent), transparent 94%); min-height: clamp(32rem, 66vh, 52rem); padding: .9rem; }.media-studio h4 { color: var(--text); font-size: .84rem; margin: 0; }.media-studio p, .media-hint, .media-studio small { color: var(--muted); font-size: .72rem; margin: .2rem 0 0; }.media-studio-actions { align-items: end; display: flex; flex-wrap: wrap; gap: .45rem; }.media-alt-label { color: var(--muted); display: grid; flex: 1 1 13rem; font-size: .72rem; gap: .2rem; }.media-alt-label input { min-height: 2.1rem; }.media-studio-actions .quiet-action { min-height: 2.1rem; }.media-hint { border-left: 2px solid var(--accent); margin-top: .75rem; padding-left: .5rem; }.media-list { display: grid; gap: .55rem; margin-top: .8rem; }.media-item { align-items: center; background: var(--surface); border: 1px solid var(--border); display: grid; gap: .65rem; grid-template-columns: 4.5rem minmax(0, 1fr); padding: .5rem; }.media-item-preview { background: var(--surface-alt); border: 1px solid var(--border); height: 3.7rem; object-fit: contain; width: 4.5rem; }.media-item-copy { display: grid; gap: .2rem; min-width: 0; }.media-item-name { display: grid; min-width: 0; }.media-item-name b { font-size: .73rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-name small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-actions { display: flex; flex-wrap: wrap; gap: .35rem; grid-column: 2; }.media-item .quiet-action { min-height: 1.9rem; padding: .25rem .5rem; width: auto; }.media-item .quiet-action:disabled { cursor: not-allowed; opacity: .55; }
+  .media-studio { background: color-mix(in srgb, var(--accent), transparent 94%); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); overflow: auto; padding: .9rem; }.media-studio h4 { color: var(--text); font-size: .84rem; margin: 0; }.media-studio p, .media-hint, .media-studio small { color: var(--muted); font-size: .72rem; margin: .2rem 0 0; }.media-studio-actions { align-items: end; display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }.media-alt-label, .media-latex-label { color: var(--muted); display: grid; font-size: .72rem; gap: .2rem; min-width: 0; }.media-alt-label input, .media-latex-label input { min-height: 2.1rem; min-width: 0; }.media-latex-label small { line-height: 1.4; }.media-latex-label code { background: var(--surface); border: 1px solid var(--border); padding: .03rem .2rem; }.media-studio-actions .quiet-action { min-height: 2.1rem; width: 100%; }.media-hint { border-left: 2px solid var(--accent); margin-top: .75rem; padding-left: .5rem; }.media-list { display: grid; gap: .55rem; margin-top: .8rem; }.media-item { align-items: center; background: var(--surface); border: 1px solid var(--border); display: grid; gap: .65rem; grid-template-columns: 4.5rem minmax(0, 1fr); padding: .5rem; }.media-item-preview { background: var(--surface-alt); border: 1px solid var(--border); height: 3.7rem; object-fit: contain; width: 4.5rem; }.media-item-copy { display: grid; gap: .2rem; min-width: 0; }.media-item-name { display: grid; min-width: 0; }.media-item-name b { font-size: .73rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-name small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-actions { display: flex; flex-wrap: wrap; gap: .35rem; grid-column: 2; }.media-item .quiet-action { min-height: 1.9rem; padding: .25rem .5rem; width: auto; }.media-item .quiet-action:disabled { cursor: not-allowed; opacity: .55; }
   .personal-notebook { background: color-mix(in srgb, var(--accent), transparent 95%); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: .45rem; padding: .65rem .75rem .75rem; }.personal-notebook summary { color: var(--text); cursor: pointer; font-size: .82rem; font-weight: 800; }.personal-notebook p { color: var(--muted); font-size: .72rem; line-height: 1.5; margin: .45rem 0 .55rem; }.personal-notebook textarea { box-sizing: border-box; display: block; line-height: 1.6; min-height: 8rem; padding: .6rem; resize: vertical; width: 100%; }.personal-notebook-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .55rem; }.personal-notebook-actions output { color: var(--accent); font-size: .72rem; font-weight: 700; }.personal-notebook-actions small { color: var(--muted); font-size: .68rem; margin-left: auto; }
   [data-body] { background: #fcfdfe; border: 0; border-radius: 0; box-sizing: border-box; display: block; font-family: var(--font-mono); font-size: .9rem; line-height: 1.7; min-height: clamp(32rem, 66vh, 52rem); padding: 1rem; resize: vertical; width: 100%; }.article-preview { background: var(--surface); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); line-height: 1.8; overflow: auto; overflow-wrap: anywhere; padding: 1rem 1.15rem; }.article-preview :global(h2) { border-bottom: 1px solid var(--border); font-size: 1.25rem; margin: 1.3rem 0 .65rem; padding-bottom: .3rem; }.article-preview :global(h3) { font-size: 1.05rem; margin: 1rem 0 .5rem; }.article-preview :global(p) { margin: .65rem 0; }.article-preview :global(pre) { background: #18212b; border-radius: 0; color: #eef6ff; overflow-x: auto; padding: .7rem; }.article-preview :global(.math-display) { overflow-x: auto; padding: .4rem 0; }.article-preview :global(.katex-error) { color: var(--danger); }.article-preview :global(ul), .article-preview :global(ol) { padding-left: 1.5rem; }
   .article-preview :global(.editorial-image) { margin: 1rem auto; max-width: 100%; text-align: center; }.article-preview :global(.editorial-image img) { display: block; height: auto; margin: 0 auto; max-height: 24rem; max-width: 100%; object-fit: contain; }.article-preview :global(.editorial-image figcaption), .article-preview :global(.tikz-compile-note) { color: var(--muted); font-size: .72rem; margin-top: .35rem; }.article-preview :global(.tikz-source-preview) { background: #18212b; border-radius: .35rem; color: #eef6ff; margin: .8rem 0; overflow: hidden; padding: .6rem .7rem; }.article-preview :global(.tikz-source-preview strong) { display: block; font-size: .75rem; margin-bottom: .35rem; }.article-preview :global(.tikz-source-preview pre) { margin: 0; padding: 0; }.article-preview :global(.tikz-compile-note) { color: #d7e6f2; margin-bottom: 0; }
@@ -309,15 +309,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .revision-panel { margin:1rem .85rem 0; }.revision-panel div { color:var(--muted); font-size:.8rem; padding:.7rem; }.revision-item { border-top:1px solid var(--border); padding:.45rem 0; }
   .memo-area { border:1px solid var(--border); display:grid; gap:.35rem; min-width:0; overflow:hidden; }.memo-area > .pane-heading { border-bottom:1px solid var(--border); }.memo-area > textarea { background:var(--surface); border:0; box-sizing:border-box; display:block; font:inherit; line-height:1.7; min-height:clamp(18rem,38vh,30rem); padding:1rem; resize:vertical; width:100%; }.progress-detail-label { color:var(--muted); display:grid; font-size:.78rem; font-weight:800; gap:.35rem; margin-top:.8rem; }.progress-detail-label textarea { box-sizing:border-box; font:inherit; line-height:1.6; min-height:8rem; padding:.65rem; resize:vertical; width:100%; }
   @media (max-width: 1080px) { .editor-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }.article-preview { height: auto; min-height: 28rem; }.workspace-grid, .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 1fr; }.document-sidebar { border-bottom: 1px solid var(--border); border-right: 0; }.editor-workspace.sidebar-collapsed .document-sidebar { align-items:start; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { font-size:1.05rem; }.document-list { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); max-height: 16rem; }.workspace-header { display: grid; }.workspace-header nav { justify-content: start; }.document-toolbar { display: grid; }.toolbar-actions { justify-content: start; }.metadata-grid { grid-template-columns: 1fr; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: auto; } }
-  @media (max-width: 700px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .7rem; }.workflow-guide ol { gap: .2rem; }.workflow-guide li { flex-direction: column; gap: .2rem; text-align: center; }.workflow-guide li:not(:last-child)::after { margin: 0 .2rem; position: absolute; right: -.45rem; top: .62rem; width: .5rem; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions, .document-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; }.editor-tabs{display:flex;border-bottom:1px solid var(--border);gap:.3rem;margin:.5rem 0}.editor-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;padding:.5rem .75rem}.editor-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}.editor-split{grid-template-columns:1fr!important}.heading-outline{display:block;background:var(--surface-alt);border:1px solid var(--border);font-size:.78rem;margin:.5rem 0;padding:.4rem .6rem}.editor-quick-actions{position:sticky;bottom:.5rem;background:color-mix(in srgb,var(--surface),transparent 5%);border:1px solid var(--border);border-radius:.5rem;padding:.35rem;z-index:10}.editor-quick-actions button{flex:1 1 calc(50% - .4rem);width:auto}.document-statuses{font-size:.68rem}.personal-notebook-actions{align-items:stretch;display:grid}.personal-notebook-actions small{margin-left:0}.personal-notebook-actions .quiet-action{width:100%} }
+  @media (max-width: 700px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .7rem; }.workflow-guide ol { gap: .2rem; }.workflow-guide li { flex-direction: column; gap: .2rem; text-align: center; }.workflow-guide li:not(:last-child)::after { margin: 0 .2rem; position: absolute; right: -.45rem; top: .62rem; width: .5rem; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions, .document-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; }.editor-tabs{display:flex;border-bottom:1px solid var(--border);gap:.3rem;margin:.5rem 0}.editor-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;padding:.5rem .75rem}.editor-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}.editor-split{grid-template-columns:1fr!important}.media-studio-actions{grid-template-columns:1fr}.heading-outline{display:block;background:var(--surface-alt);border:1px solid var(--border);font-size:.78rem;margin:.5rem 0;padding:.4rem .6rem}.document-statuses{font-size:.68rem}.personal-notebook-actions{align-items:stretch;display:grid}.personal-notebook-actions small{margin-left:0}.personal-notebook-actions .quiet-action{width:100%} }
 </style>
 
 <style is:global>
   .editor-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pane-controls { align-items:center; display:flex; flex:0 0 auto; gap:.2rem; }
+  .media-area > .pane-heading { display:grid; gap:.35rem; grid-template-columns:minmax(0,1fr); }
+  .media-area > .pane-heading > .pane-controls { justify-content:flex-end; }
   .pane-controls button { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--muted); cursor:pointer; font:inherit; font-size:.68rem; font-weight:800; padding:.25rem .35rem; }
   .pane-controls button:hover { border-color:var(--accent); color:var(--accent); }
   .pane-controls button:disabled { cursor:not-allowed; opacity:.35; }
+  .editor-split > section[hidden] { display:none !important; }
   .pane-only { max-width:none; padding:0 clamp(1rem, 3vw, 2.5rem) 3rem; }
   .pane-only .document-sidebar,.pane-only .editor-quick-actions,.pane-only .pane-layout-controls { display:none!important; }
   .pane-only .workspace-grid { border:0; display:block; min-height:0; }
@@ -329,7 +332,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .editor-split[data-visible-panes="1"] { grid-template-columns:1fr !important; }
   .comment-thread[data-comment-context] { cursor:context-menu; }
   @media(max-width:1080px) { .editor-split { grid-template-columns:repeat(2,minmax(0,1fr)); }.editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns:3.2rem minmax(0,1fr) !important; }.editor-workspace.sidebar-collapsed .document-sidebar { border-bottom:0; border-right:1px solid var(--border-default); } }
-  @media(max-width:700px) { .editor-split { grid-template-columns:1fr; } .pane-controls { flex-wrap:wrap; } }
+  @media(max-width:700px) { .editor-split, .editor-split[data-visible-panes="2"] { grid-template-columns:1fr !important; } .pane-controls { flex-wrap:wrap; } }
 </style>
 
 <style is:global>
@@ -486,7 +489,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
   type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published" };
   type PlannedArticle = { key: string; subject: string; category: string; title: string; order: number; progress: "not-started" | "in-progress"; slug: string; conceptId: string };
-  type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; createdAt: string; marker: string };
+  type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; latexName: string; createdAt: string; marker: string };
   type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
@@ -516,6 +519,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const preview = root.querySelector<HTMLElement>("[data-preview]")!;
     const mediaInput = root.querySelector<HTMLInputElement>("[data-media-input]")!;
     const mediaAlt = root.querySelector<HTMLInputElement>("[data-media-alt]")!;
+    const mediaLatexName = root.querySelector<HTMLInputElement>("[data-media-latex-name]")!;
     const mediaList = root.querySelector<HTMLElement>("[data-media-list]")!;
     const mediaStatus = root.querySelector<HTMLElement>("[data-media-status]")!;
     const comments = root.querySelector<HTMLElement>("[data-comment-list]")!;
@@ -704,11 +708,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       body.dispatchEvent(new Event("input", { bubbles: true }));
       body.focus();
     };
+    const latexNameInBody = (source: string, name: string) => source.split(/\r?\n/).some((line) => {
+      const match = /^\\includegraphics(?:\[[^\]]*\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(line.trim());
+      return match?.[1].toLowerCase() === name.toLowerCase();
+    });
     const renderMediaList = () => {
       mediaList.innerHTML = editorialAssets.length
         ? editorialAssets.map((asset) => {
-          const inBody = body.value.includes(asset.marker);
-          return `<div class="media-item"><img class="media-item-preview" src="/api/admin/editor/assets/${encodeURIComponent(asset.id)}" alt="" loading="lazy" decoding="async" /><div class="media-item-copy"><span class="media-item-name"><b>${esc(asset.filename)}</b><small>${formatBytes(asset.bytes)}${asset.alt ? ` ・ ${esc(asset.alt)}` : ""}</small></span><div class="media-item-actions"><button type="button" class="quiet-action" data-insert-asset="${esc(asset.id)}">本文へ挿入</button><button type="button" class="quiet-action" data-delete-asset="${esc(asset.id)}" ${inBody ? "disabled title=\"本文で使用中のため削除できません\"" : ""}>削除</button></div></div></div>`;
+          const inBody = body.value.includes(asset.marker) || latexNameInBody(body.value, asset.latexName);
+          return `<div class="media-item"><img class="media-item-preview" src="/api/admin/editor/assets/${encodeURIComponent(asset.id)}" alt="" loading="lazy" decoding="async" /><div class="media-item-copy"><span class="media-item-name"><b>${esc(asset.filename)}</b><small>${formatBytes(asset.bytes)} ・ LaTeX名: <code>${esc(asset.latexName)}</code>${asset.alt ? ` ・ ${esc(asset.alt)}` : ""}</small></span><div class="media-item-actions"><button type="button" class="quiet-action" data-insert-asset="${esc(asset.id)}">本文へ挿入</button><button type="button" class="quiet-action" data-insert-latex-asset="${esc(asset.id)}">LaTeXコードを挿入</button><button type="button" class="quiet-action" data-delete-asset="${esc(asset.id)}" ${inBody ? "disabled title=\"本文で使用中のため削除できません\"" : ""}>削除</button></div></div></div>`;
         }).join("")
         : "<small>アップロードした画像はここに表示されます。画像を追加すると、ここから何度でも本文へ挿入できます。</small>";
     };
@@ -721,20 +729,21 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         editorialAssets = data.assets ?? [];
         mediaStatus.textContent = editorialAssets.length ? `${editorialAssets.length}件の素材` : "素材はまだありません";
         renderMediaList();
+        void renderPreview();
       } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。"; }
     };
     const uploadMediaFile = async (file: File) => {
       const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
       if (!documentId) { mediaStatus.textContent = "先に原稿を保存してください。"; mediaInput.value = ""; return; }
       mediaStatus.textContent = "画像をアップロード中…";
-      const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim());
+      const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim()); formData.set("latexName", mediaLatexName.value.trim());
       try {
         const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { method: "POST", body: formData, credentials: "same-origin" });
         const data = await read<{ asset?: EditorialAsset; error?: string }>(response);
         if (!response.ok || !data.asset) throw new Error(data.error ?? "画像をアップロードできませんでした。");
         const asset = data.asset;
         insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`);
-        mediaAlt.value = ""; mediaInput.value = ""; mediaStatus.textContent = "画像を挿入しました。";
+        mediaAlt.value = ""; mediaLatexName.value = ""; mediaInput.value = ""; mediaStatus.textContent = "画像を本文へ挿入しました。";
         await loadMediaAssets(documentId);
       } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "画像をアップロードできませんでした。"; mediaInput.value = ""; }
     };
@@ -824,6 +833,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         if (inCode) { result.push(`${esc(raw)}\n`); continue; }
         const asset = /^!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})\)\s*$/i.exec(raw.trim());
         if (asset) { result.push(`<figure class="editorial-image"><img src="/api/admin/editor/assets/${asset[2]}" data-editorial-asset="${asset[2]}" alt="${esc(asset[1])}" loading="lazy" decoding="async"></figure>`); continue; }
+        const latexGraphic = /^\\includegraphics(?:\[([^\]]*)\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(raw.trim());
+        if (latexGraphic) {
+          const latexName = latexGraphic[2].toLowerCase();
+          const namedAsset = editorialAssets.find((item) => item.latexName.toLowerCase() === latexName);
+          if (namedAsset) result.push(`<figure class="editorial-image"><img src="/api/admin/editor/assets/${namedAsset.id}" data-editorial-asset="${namedAsset.id}" alt="${esc(namedAsset.alt || namedAsset.latexName)}" loading="lazy" decoding="async"></figure>`);
+          else result.push(`<p class="katex-error">LaTeX素材「${esc(latexGraphic[2])}」がこの原稿に見つかりません。</p>`);
+          continue;
+        }
         if (/^###\s+/.test(raw)) { result.push(`<h3>${inline(raw.replace(/^###\s+/, ""))}</h3>`); continue; }
         if (/^##\s+/.test(raw)) { result.push(`<h2>${inline(raw.replace(/^##\s+/, ""))}</h2>`); continue; }
         if (/^[-*]\s+/.test(raw)) { result.push(`<ul><li>${inline(raw.replace(/^[-*]\s+/, ""))}</li></ul>`); continue; }
@@ -1112,6 +1129,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         if (asset) { insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`); renderMediaList(); }
         return;
       }
+      const latexButton = target.closest<HTMLButtonElement>("[data-insert-latex-asset]");
+      if (latexButton) {
+        const asset = editorialAssets.find((item) => item.id === latexButton.dataset.insertLatexAsset);
+        if (asset) insertAtCursor(`\\includegraphics[width=0.8\\linewidth]{${asset.latexName}}\n`);
+        return;
+      }
       const deleteButton = target.closest<HTMLButtonElement>("[data-delete-asset]");
       if (!deleteButton || deleteButton.disabled) return;
       const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
@@ -1127,7 +1150,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       })().catch((error: unknown) => { mediaStatus.textContent = error instanceof Error ? error.message : "素材を削除できませんでした。"; deleteButton.disabled = false; });
     });
     root.querySelector<HTMLButtonElement>("[data-insert-tikz]")!.addEventListener("click", () => insertAtCursor("\n```tikz\n\\begin{tikzpicture}\n  \\draw[->] (0,0) -- (2,0) node[right] {$x$};\n\\end{tikzpicture}\n```\n"));
-    root.querySelector<HTMLButtonElement>("[data-jump-writing]")!.addEventListener("click", () => body.scrollIntoView({ behavior:"smooth", block:"center" })); root.querySelector<HTMLButtonElement>("[data-jump-preview]")!.addEventListener("click", () => preview.scrollIntoView({ behavior:"smooth", block:"center" })); root.querySelector<HTMLButtonElement>("[data-jump-comments]")!.addEventListener("click", () => comments.scrollIntoView({ behavior:"smooth", block:"center" })); root.querySelector<HTMLButtonElement>("[data-jump-memo]")!.addEventListener("click", () => writingMemo.scrollIntoView({ behavior:"smooth", block:"center" })); root.querySelector<HTMLButtonElement>("[data-jump-media]")!.addEventListener("click", () => paneElements.media.scrollIntoView({ behavior:"smooth", block:"center" }));
     savePersonalNoteButton.addEventListener("click", () => void savePersonalNote());
     personalNote.addEventListener("input", () => { personalNoteMessage.value = "未保存の変更があります。"; });
     void loadPersonalNote();

@@ -3,8 +3,11 @@ import {
   EDITORIAL_IMAGE_TYPES,
   MAX_EDITORIAL_ASSET_BYTES,
   editorialAssetIdsIn,
+  editorialLatexNamesIn,
   replaceEditorialAssetMarkers,
+  replaceEditorialLatexReferences,
   sanitizeEditorialFilename,
+  sanitizeEditorialLatexName,
   type EditorialImageType,
 } from "./lib/editorial-media";
 
@@ -89,6 +92,7 @@ type EditorialAsset = {
   bytes: number;
   data: ArrayBuffer | Uint8Array;
   alt_text: string;
+  latex_name: string;
   created_by: string;
   created_at: string;
 };
@@ -1306,7 +1310,7 @@ const canReviewDocument = (
 const editorialAssetResponse = (
   asset: Pick<
     EditorialAsset,
-    "id" | "filename" | "media_type" | "bytes" | "alt_text" | "created_at"
+    "id" | "filename" | "media_type" | "bytes" | "alt_text" | "latex_name" | "created_at"
   >,
 ) => ({
   id: asset.id,
@@ -1314,6 +1318,7 @@ const editorialAssetResponse = (
   mediaType: asset.media_type,
   bytes: asset.bytes,
   alt: asset.alt_text,
+  latexName: asset.latex_name || sanitizeEditorialLatexName("", asset.filename),
   createdAt: asset.created_at,
   marker: `asset://${asset.id}`,
 });
@@ -1366,14 +1371,14 @@ async function listEditorialAssets(
   const access = await editorialAssetDocument(request, env, documentId);
   if (access instanceof Response) return access;
   const result = await env.REPORTS.prepare(
-    `SELECT id, filename, media_type, bytes, alt_text, created_at
+    `SELECT id, filename, media_type, bytes, alt_text, latex_name, created_at
      FROM editorial_assets WHERE document_id = ? ORDER BY created_at ASC`,
   )
     .bind(documentId)
     .all<
       Pick<
         EditorialAsset,
-        "id" | "filename" | "media_type" | "bytes" | "alt_text" | "created_at"
+        "id" | "filename" | "media_type" | "bytes" | "alt_text" | "latex_name" | "created_at"
       >
     >();
   return json({ assets: result.results.map(editorialAssetResponse) });
@@ -1416,11 +1421,24 @@ async function uploadEditorialAsset(
   const id = crypto.randomUUID();
   const filename = sanitizeEditorialFilename(file.name, mediaType);
   const alt = text(form.get("alt"), 180);
+  const latexName = sanitizeEditorialLatexName(text(form.get("latexName"), 120), filename);
+  const existingNames = await env.REPORTS.prepare(
+    "SELECT id, filename, latex_name FROM editorial_assets WHERE document_id = ?",
+  )
+    .bind(documentId)
+    .all<{ id: string; filename: string; latex_name: string }>();
+  const duplicateName = existingNames.results.some(
+    (asset) =>
+      (asset.latex_name || sanitizeEditorialLatexName("", asset.filename)).toLowerCase() ===
+      latexName.toLowerCase(),
+  );
+  if (duplicateName)
+    return json({ error: "この原稿では同じLaTeX名がすでに使われています。別の名前を指定してください。" }, 409);
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_assets
-      (id, document_id, filename, media_type, bytes, data, alt_text, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, document_id, filename, media_type, bytes, data, alt_text, latex_name, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -1430,6 +1448,7 @@ async function uploadEditorialAsset(
       data.byteLength,
       data,
       alt,
+      latexName,
       access.scope.email,
       now,
     )
@@ -1442,6 +1461,7 @@ async function uploadEditorialAsset(
         media_type: mediaType,
         bytes: data.byteLength,
         alt_text: alt,
+        latex_name: latexName,
         created_at: now,
       }),
     },
@@ -1459,18 +1479,22 @@ async function deleteEditorialAsset(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const asset = await env.REPORTS.prepare(
-    `SELECT a.id, a.document_id, d.subject, d.status, d.created_by, d.body
+    `SELECT a.id, a.document_id, a.filename, a.latex_name, d.subject, d.status, d.created_by, d.body
      FROM editorial_assets a
      JOIN editorial_documents d ON d.id = a.document_id
      WHERE a.id = ?`,
   )
     .bind(assetId)
-    .first<Pick<EditorialAsset, "id" | "document_id"> & { subject: string; status: EditorialDocumentStatus; created_by: string; body: string }>();
+    .first<Pick<EditorialAsset, "id" | "document_id" | "filename" | "latex_name"> & { subject: string; status: EditorialDocumentStatus; created_by: string; body: string }>();
   if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
     return json({ error: "この素材を扱う権限がありません。" }, 403);
   if (!scope.isManager && asset.created_by !== scope.email)
     return json({ error: "素材を削除できるのは原稿の作成者本人です。" }, 403);
-  if (asset.body.includes(`asset://${asset.id}`))
+  const latexName = asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
+  if (
+    asset.body.includes(`asset://${asset.id}`) ||
+    editorialLatexNamesIn(asset.body).includes(latexName.toLowerCase())
+  )
     return json({ error: "本文で使用中の素材は削除できません。先に本文から参照を外してください。" }, 409);
   await env.REPORTS.prepare(
     "DELETE FROM editorial_assets WHERE id = ?",
@@ -4321,7 +4345,7 @@ const editorialMarkdown = (
 const listEditorialAssetsForDocument = async (env: Env, documentId: string) =>
   (
     await env.REPORTS.prepare(
-      `SELECT id, document_id, filename, media_type, bytes, data, alt_text, created_by, created_at
+      `SELECT id, document_id, filename, media_type, bytes, data, alt_text, latex_name, created_by, created_at
        FROM editorial_assets WHERE document_id = ? ORDER BY created_at ASC`,
     )
       .bind(documentId)
@@ -4399,7 +4423,34 @@ async function writeEditorialDocumentToGitHub(
       },
       409,
     );
-  for (const assetId of referencedAssetIds)
+  const assetsByLatexName = new Map(
+    assets.map((asset) => {
+      const latexName = asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
+      return [latexName.toLowerCase(), {
+        id: asset.id,
+        filename: asset.filename,
+        latexName,
+        alt: asset.alt_text,
+      }];
+    }),
+  );
+  const missingLatexName = editorialLatexNamesIn(document.body).find(
+    (name) => !assetsByLatexName.has(name),
+  );
+  if (missingLatexName)
+    return json(
+      {
+        error: `本文が参照しているLaTeX画像「${missingLatexName}」が見つかりません。素材を再挿入してください。`,
+      },
+      409,
+    );
+  const referencedAssetIdsForPublish = [
+    ...new Set([
+      ...referencedAssetIds,
+      ...editorialLatexNamesIn(document.body).map((name) => assetsByLatexName.get(name)!.id),
+    ]),
+  ];
+  for (const assetId of referencedAssetIdsForPublish)
     await uploadEditorialAssetToGitHub(
       assetsById.get(assetId.toLowerCase())!,
       repository,
@@ -4409,7 +4460,10 @@ async function writeEditorialDocumentToGitHub(
   const body = editorialMarkdown(
     {
       ...document,
-      body: replaceEditorialAssetMarkers(document.body, assetsById),
+      body: replaceEditorialLatexReferences(
+        replaceEditorialAssetMarkers(document.body, assetsById),
+        assetsByLatexName,
+      ),
     },
     publicationStatus,
   );
