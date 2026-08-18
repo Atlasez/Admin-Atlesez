@@ -907,13 +907,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       return actionActors(item, action).map((actor_email) => ({ actor_email, count: 1 }));
     };
     const actionCount = (item: Comment, action: "acknowledge" | "unacknowledge") => item.action_counts?.[action] ?? actionActorCounts(item, action).reduce((total, entry) => total + entry.count, 0);
-    const actorLabel = (email: string, displayName = "") => {
-      const label = displayName.trim() && displayName.trim().toLowerCase() !== email.toLowerCase()
-        ? `${displayName.trim()}（${email}）`
-        : email;
-      return `${esc(label)}${email.toLowerCase() === currentUserEmail.toLowerCase() ? "（あなた）" : ""}`;
-    };
-    const actorDetails = (actors: ActionActorCount[]) => actors.length ? actors.map((entry) => `${actorLabel(entry.actor_email, entry.actor_display_name)} ${entry.count}件`).join("、") : "なし";
+    const actorDetails = (actors: ActionActorCount[]) => `${actors.length}人`;
     const renderCommentCard = (item: Comment, isReply = false) => {
       const displayName = item.author_display_name?.trim() || "運営メンバー";
       const avatar = displayName.trim().charAt(0).toUpperCase() || "運";
