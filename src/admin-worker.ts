@@ -192,6 +192,10 @@ type SearchConsoleQueryStat = {
   ctr: number;
   position: number;
 };
+type SiteCountryStat = {
+  country: string;
+  pageviews: number;
+};
 
 const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
 const EDITORIAL_DOCUMENT_STATUSES = new Set<EditorialDocumentStatus>([
@@ -850,6 +854,38 @@ async function listArticleAnalytics(
     .bind(...values)
     .all<ArticleAnalytics>();
   return json({ days, articles: result.results });
+}
+
+async function listSiteCountryAnalytics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!scope.isManager)
+    return json({ error: "訪問者の国別統計は運営管理者だけが閲覧できます。" }, 403);
+  const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
+  const days = Number.isInteger(daysParam)
+    ? Math.min(90, Math.max(1, daysParam))
+    : 30;
+  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
+    .toISOString()
+    .slice(0, 10);
+  const result = await env.REPORTS.prepare(
+    `SELECT country, SUM(pageviews) AS pageviews
+     FROM site_analytics_country_daily
+     WHERE day >= ?
+     GROUP BY country
+     ORDER BY pageviews DESC, country ASC
+     LIMIT 250`,
+  )
+    .bind(since)
+    .all<SiteCountryStat>();
+  const pageviews = result.results.reduce(
+    (total, item) => total + Number(item.pageviews ?? 0),
+    0,
+  );
+  return json({ days, since, pageviews, countries: result.results });
 }
 
 async function listSearchConsoleCountryStats(
@@ -6106,6 +6142,11 @@ export default {
       request.method === "GET"
     )
       return listArticleAnalytics(request, env);
+    if (
+      url.pathname === "/api/admin/site-country-analytics" &&
+      request.method === "GET"
+    )
+      return listSiteCountryAnalytics(request, env);
     if (
       url.pathname === "/api/admin/search-console-country-analytics" &&
       request.method === "GET"

@@ -8,23 +8,18 @@ const worldCountryPaths = worldMap.locations
 ---
 
 <AdminLayout
-  title="問題報告・閲覧統計"
-  description="運営用の記事問題報告と閲覧統計の管理画面"
+  title="閲覧統計"
+  description="学習サイトの訪問者・記事閲覧・検索流入を確認する管理画面"
 >
   <section class="admin-reports" data-reports-admin>
     <header class="admin-reports-heading">
       <div>
-        <h1>問題報告・閲覧統計</h1>
-        <p>問題報告の対応と、個人情報を保存しない閲覧統計を分けて確認できます。</p>
+        <h1>閲覧統計</h1>
+        <p>個人を識別せず、訪問者の国別分布・記事閲覧・検索流入を確認できます。</p>
       </div>
     </header>
 
-    <div class="admin-section-tabs" role="tablist" aria-label="問題報告・閲覧統計の表示切り替え">
-      <button type="button" role="tab" aria-selected="true" aria-controls="reports-panel" data-admin-view="reports">問題報告</button>
-      <button type="button" role="tab" aria-selected="false" aria-controls="analytics-panel" data-admin-view="analytics">閲覧統計</button>
-    </div>
-
-    <section class="analytics-panel" id="analytics-panel" data-admin-view-panel="analytics" data-analytics-admin aria-labelledby="analytics-heading" hidden>
+    <section class="analytics-panel" id="analytics-panel" data-admin-view-panel="analytics" data-analytics-admin aria-labelledby="analytics-heading">
       <div class="analytics-heading">
         <div>
           <p class="eyebrow">匿名集計</p>
@@ -40,19 +35,18 @@ const worldCountryPaths = worldMap.locations
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
 
       <div class="analytics-geo-grid">
-        <section class="analytics-geo-card" aria-labelledby="search-country-heading">
+        <section class="analytics-geo-card" aria-labelledby="visitor-country-heading">
           <div class="analytics-geo-heading">
-            <div><p class="eyebrow">LEARNING SITE TRAFFIC</p><h3 id="search-country-heading">学習サイトへの検索流入（国別）</h3></div>
-            <a class="button button-outline analytics-gsc-button" href="/auth/google/search-console?days=30" data-gsc-import>Search Consoleから更新</a>
+            <div><p class="eyebrow">SITE VISITORS</p><h3 id="visitor-country-heading">サイト訪問者の国別分布</h3></div>
           </div>
-          <p class="analytics-geo-description">Google検索から学習サイトへ流入したクリック・表示回数を国別に表示します。運営サイトへのログイン情報は集計しません。</p>
-          <output class="analytics-gsc-status" data-search-console-status>Search Consoleのデータを読み込み中です…</output>
-          <div class="geo-layout"><div class="world-map" data-search-country-map role="img" aria-label="学習サイトへの検索流入国別地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g><g class="map-bubbles" data-map-bubbles></g></svg></div><ol class="geo-list" data-search-country-list></ol></div>
+          <p class="analytics-geo-description">Cloudflareが付与する国コードだけを使い、個人を識別せずページビューを日別集計します。</p>
+          <output class="analytics-gsc-status" data-site-country-status>訪問者統計を読み込み中です…</output>
+          <div class="geo-layout"><div class="world-map" data-site-country-map role="img" aria-label="サイト訪問者の国別分布地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g><g class="map-bubbles" data-map-bubbles></g></svg></div><ol class="geo-list" data-site-country-list></ol></div>
         </section>
       </div>
 
       <section class="analytics-query-card" aria-labelledby="search-query-heading">
-        <div class="analytics-geo-heading"><div><p class="eyebrow">SEARCH QUERIES</p><h3 id="search-query-heading">検索された単語</h3></div><span class="analytics-privacy-note">全分野管理者のみ</span></div>
+        <div class="analytics-geo-heading"><div><p class="eyebrow">SEARCH QUERIES</p><h3 id="search-query-heading">検索された単語</h3></div><div class="analytics-query-actions"><span class="analytics-privacy-note">全分野管理者のみ</span><a class="button button-outline analytics-gsc-button" href="/auth/google/search-console?days=30" data-gsc-import>Search Consoleから更新</a></div></div>
         <p class="analytics-geo-description">Google検索で学習サイトに流入した検索語の上位100件です。Search Consoleの仕様により、匿名化された検索語などは表示されない場合があります。</p>
         <output class="analytics-gsc-status" data-search-query-status>Search Consoleの検索語を読み込み中です…</output>
         <div class="analytics-table-wrap"><table class="analytics-table analytics-query-table"><thead><tr><th>検索語</th><th>クリック</th><th>表示</th><th>CTR</th><th>平均掲載順位</th></tr></thead><tbody data-search-query-list></tbody></table></div>
@@ -60,23 +54,6 @@ const worldCountryPaths = worldMap.locations
       </section>
     </section>
 
-    <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告">
-    <div class="report-controls">
-      <label>
-        表示する状態
-        <select data-report-filter>
-          <option value="all">すべて</option>
-          <option value="new">未確認</option>
-          <option value="reviewing">確認中</option>
-          <option value="resolved">対応済み</option>
-        </select>
-      </label>
-      <button class="button button-outline" type="button" data-reports-refresh>一覧を更新</button>
-      <output class="report-count" data-report-count></output>
-    </div>
-    <p class="report-feedback" data-report-feedback aria-live="polite">読み込み中です…</p>
-    <div class="report-list" data-report-list></div>
-    </section>
   </section>
 </AdminLayout>
 
@@ -104,6 +81,7 @@ const worldCountryPaths = worldMap.locations
   .analytics-geo-grid { display: grid; gap: .9rem; grid-template-columns: 1fr; margin-top: .9rem; }
   .analytics-geo-card { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem; min-width: 0; padding: .85rem; }
   .analytics-geo-heading { align-items: start; display: flex; gap: .7rem; justify-content: space-between; }
+  .analytics-query-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; justify-content: end; }
   .analytics-geo-heading h3 { font-size: .96rem; margin: 0; }
   .analytics-geo-heading .eyebrow { font-size: .62rem; margin-bottom: .25rem; }
   .analytics-privacy-note { border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .65rem; padding: .22rem .45rem; white-space: nowrap; }
@@ -200,28 +178,18 @@ const worldCountryPaths = worldMap.locations
 </style>
 
 <script>
-  type ReportStatus = "new" | "reviewing" | "resolved";
-  type Report = {
-    id: string; article_title: string; article_url: string; report_type: string;
-    details: string; contact: string | null; locale: string; subject: string; category: string; status: ReportStatus;
-    admin_note: string; created_at: string; updated_at: string;
-  };
   type Permission = { email: string; subject: string };
   type Analytics = {
     article_id: string; article_title: string; subject: string; category: string;
     views: number; engaged_reads: number; completed_reads: number;
   };
-  type SearchCountry = { country: string; clicks: number; impressions: number; ctr: number; position: number };
+  type SiteCountry = { country: string; pageviews: number };
   type SearchQuery = { query: string; clicks: number; impressions: number; ctr: number; position: number };
 
   const initializeReportsAdmin = () => {
     const root = document.querySelector<HTMLElement>("[data-reports-admin]");
     if (!root || root.dataset.reportsInitialized === "true") return;
     root.dataset.reportsInitialized = "true";
-    const filter = root.querySelector<HTMLSelectElement>("[data-report-filter]")!;
-    const list = root.querySelector<HTMLElement>("[data-report-list]")!;
-    const feedback = root.querySelector<HTMLElement>("[data-report-feedback]")!;
-    const count = root.querySelector<HTMLOutputElement>("[data-report-count]")!;
     const permissionPanel = root.querySelector<HTMLElement>("[data-permission-admin]");
     const permissionForm = root.querySelector<HTMLFormElement>("[data-permission-form]");
     const permissionList = root.querySelector<HTMLElement>("[data-permission-list]");
@@ -230,21 +198,15 @@ const worldCountryPaths = worldMap.locations
     const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
     const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
-    const searchCountryMap = root.querySelector<HTMLElement>("[data-search-country-map]");
-    const searchCountryList = root.querySelector<HTMLOListElement>("[data-search-country-list]");
-    const searchConsoleStatus = root.querySelector<HTMLOutputElement>("[data-search-console-status]");
+    const siteCountryMap = root.querySelector<HTMLElement>("[data-site-country-map]");
+    const siteCountryList = root.querySelector<HTMLOListElement>("[data-site-country-list]");
+    const siteCountryStatus = root.querySelector<HTMLOutputElement>("[data-site-country-status]");
     const searchQueryList = root.querySelector<HTMLTableSectionElement>("[data-search-query-list]");
     const searchQueryStatus = root.querySelector<HTMLOutputElement>("[data-search-query-status]");
     const searchConsoleImport = root.querySelector<HTMLAnchorElement>("[data-gsc-import]");
     const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-admin-view]");
     const viewPanels = root.querySelectorAll<HTMLElement>("[data-admin-view-panel]");
-    const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
-    const types: Record<string, string> = { error: "誤り・不具合", suggestion: "改善提案", reference: "参考文献", other: "その他" };
     const escapeHtml = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
-    const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-    const safeUrl = (value: string) => {
-      try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; }
-    };
     const readApiResponse = async <T,>(response: Response): Promise<T> => {
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("application/json")) return await response.json() as T;
@@ -329,17 +291,16 @@ const worldCountryPaths = worldMap.locations
       if (!target) return;
       target.innerHTML = countries.length ? countries.map((item) => `<li><span class="geo-country">${escapeHtml(countryLabel(item.country))}</span><span class="geo-value">${escapeHtml(formatter(item.value))}</span></li>`).join("") : '<li><span class="geo-country">データはまだありません</span></li>';
     };
-    const loadSearchConsoleAnalytics = async () => {
-      if (!searchConsoleStatus) return;
+    const loadSiteCountryAnalytics = async () => {
+      if (!siteCountryStatus || !analyticsDays) return;
       try {
-        const response = await fetch("/api/admin/search-console-country-analytics", { credentials: "same-origin", cache: "no-store" });
-        const data = await readApiResponse<{ snapshot?: { start_date: string; end_date: string; fetched_at: string } | null; countries?: SearchCountry[] }>(response);
-        if (!response.ok) throw new Error("Search Console統計を読み込めませんでした。");
-        const countries = (data.countries ?? []).map((item) => ({ country: item.country, value: Number(item.clicks ?? 0) }));
-        const snapshot = data.snapshot;
-        searchConsoleStatus.value = snapshot ? `${snapshot.start_date}〜${snapshot.end_date}を取得（クリック ${countries.reduce((sum, item) => sum + item.value, 0).toLocaleString()}）` : "まだSearch Consoleデータを取得していません。上のボタンから更新してください。";
-        renderWorldMap(searchCountryMap, countries, "クリック"); renderCountryList(searchCountryList, countries, (value) => `${value.toLocaleString()}クリック`);
-      } catch (error) { searchConsoleStatus.value = error instanceof Error ? error.message : "Search Console統計を読み込めませんでした。"; }
+        const response = await fetch(`/api/admin/site-country-analytics?days=${encodeURIComponent(analyticsDays.value)}`, { credentials: "same-origin", cache: "no-store" });
+        const data = await readApiResponse<{ days?: number; pageviews?: number; countries?: SiteCountry[]; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "訪問者統計を読み込めませんでした。");
+        const countries = (data.countries ?? []).map((item) => ({ country: item.country, value: Number(item.pageviews ?? 0) }));
+        siteCountryStatus.value = `直近${data.days ?? Number(analyticsDays.value)}日・ページビュー ${Number(data.pageviews ?? 0).toLocaleString()}`;
+        renderWorldMap(siteCountryMap, countries, "ページビュー"); renderCountryList(siteCountryList, countries, (value) => `${value.toLocaleString()} PV`);
+      } catch (error) { siteCountryStatus.value = error instanceof Error ? error.message : "訪問者統計を読み込めませんでした。"; }
     };
     const loadSearchQueryAnalytics = async () => {
       if (!searchQueryStatus || !searchQueryList) return;
@@ -403,38 +364,7 @@ const worldCountryPaths = worldMap.locations
       }
     };
 
-    const render = (reports: Report[]) => {
-      count.value = `${reports.length} 件`;
-      if (!reports.length) { list.innerHTML = '<p class="report-empty">該当する報告はありません。</p>'; return; }
-      list.innerHTML = reports.map((report) => {
-        const url = safeUrl(report.article_url);
-        return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
-          <summary class="report-summary">
-            <div class="report-main"><p class="report-label">記事</p><p class="report-article">${escapeHtml(report.article_title)}</p><p class="report-meta"><span class="report-subject">${escapeHtml(report.subject || "未分類")}</span>${report.category ? `${escapeHtml(report.category)} ・ ` : ""}${date(report.created_at)} ・ ${escapeHtml(report.locale)}</p></div>
-            <span class="report-type"><small>種別</small>${escapeHtml(types[report.report_type] ?? report.report_type)}</span><span class="report-status"><small>状態</small><b class="status-badge">${labels[report.status]}</b></span>
-          </summary>
-          <div class="report-content">
-          ${url ? `<a class="report-link" href="${escapeHtml(url)}" target="_blank" rel="noreferrer">記事を開く</a>` : ""}
-          <p class="report-details">${escapeHtml(report.details)}</p>
-          <div class="report-actions"><label>対応状況<select data-report-status>${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${report.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label><label>運営メモ<textarea data-report-note maxlength="4000" placeholder="対応内容や確認事項を記録できます。">${escapeHtml(report.admin_note)}</textarea></label><button class="button" type="button" data-report-save>保存</button></div>
-          ${report.contact ? `<p class="report-meta">連絡先: ${escapeHtml(report.contact)}</p>` : ""}
-          </div>
-        </details>`;
-      }).join("");
-    };
-
-    const load = async () => {
-      feedback.textContent = "読み込み中です…";
-      try {
-        const response = await fetch(`/api/admin/article-reports?status=${encodeURIComponent(filter.value)}`, { credentials: "same-origin" });
-        const data = await readApiResponse<{ reports?: Report[]; error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "読み込めませんでした。");
-        render(data.reports ?? []); feedback.textContent = "";
-      } catch (error) { list.innerHTML = ""; count.value = ""; feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
-    };
-    filter.addEventListener("change", load);
-    viewButtons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.adminView === "analytics" ? "analytics" : "reports")));
-    root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
+    analyticsDays?.addEventListener("change", () => loadAllAnalytics());
     analyticsDays?.addEventListener("change", () => loadAllAnalytics());
     root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", () => loadAllAnalytics());
     permissionForm?.addEventListener("submit", async (event) => {
@@ -468,31 +398,11 @@ const worldCountryPaths = worldMap.locations
       } catch (error) { setPermissionFeedback(error instanceof Error ? error.message : "担当を削除できませんでした。"); }
       finally { button.disabled = false; }
     });
-    list.addEventListener("click", async (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-report-save]");
-      if (!button) return;
-      const card = button.closest<HTMLElement>("[data-report-id]");
-      if (!card) return;
-      const status = card.querySelector<HTMLSelectElement>("[data-report-status]")!;
-      const note = card.querySelector<HTMLTextAreaElement>("[data-report-note]")!;
-      button.disabled = true; button.textContent = "保存中…";
-      try {
-        const response = await fetch(`/api/admin/article-reports/${card.dataset.reportId}`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: status.value, adminNote: note.value }) });
-        const data = await readApiResponse<{ error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
-        feedback.textContent = "保存しました。"; await load();
-      } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
-      finally { button.disabled = false; button.textContent = "保存"; }
-    });
-    const loadAllAnalytics = () => { void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); };
+    const loadAllAnalytics = () => { void loadAnalytics(); void loadSiteCountryAnalytics(); void loadSearchQueryAnalytics(); };
     const syncSearchConsoleLink = () => { if (searchConsoleImport) searchConsoleImport.href = `/auth/google/search-console?days=${encodeURIComponent(analyticsDays?.value ?? "30")}`; };
     analyticsDays?.addEventListener("change", syncSearchConsoleLink);
     syncSearchConsoleLink();
-    const gscResult = new URLSearchParams(window.location.search).get("gsc");
-    if (searchConsoleStatus && gscResult === "imported") searchConsoleStatus.value = "Search Consoleのデータを更新しました。";
-    if (searchConsoleStatus && gscResult === "error") searchConsoleStatus.value = "Search Consoleの取得に失敗しました。権限・プロパティ・期間を確認してください。";
-    selectView("reports");
-    void load();
+    selectView("analytics");
     loadAllAnalytics();
     void loadPermissions();
     void loadAuthStatus();
