@@ -89,13 +89,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>進捗・ToDo・日程</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局ToDo・日程</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ運営・ToDo</a>
-    <details class="admin-management-menu" hidden={site === "portal"} open={(["reports", "permissions", "guide", "applications", "co-working"] as string[]).includes(current)}>
+    <details class="admin-management-menu" hidden={site === "portal"} open={(["reports", "permissions", "guide", "applications", "co-working", "review"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
         <a href={`/admin/co-working/?project=atlas`} data-admin-site="atlas" data-admin-page="co-working" hidden={site !== "atlas"} aria-current={current === "co-working" && site === "atlas" ? "page" : undefined}>同時作業会</a>
         <a href={`/admin/co-working/?project=secretariat`} data-admin-site="secretariat" data-admin-page="co-working" hidden={site !== "secretariat"} aria-current={current === "co-working" && site === "secretariat" ? "page" : undefined}>事務局の日程・交流</a>
         <a href={`/admin/co-working/?project=seminar-platform`} data-admin-site="semi-platform" data-admin-page="co-working" hidden={site !== "semi-platform"} aria-current={current === "co-working" && site === "semi-platform" ? "page" : undefined}>ゼミ日程・交流</a>
         <a href={`/admin/permissions/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="permissions" aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
+        <a href="/admin/review/" data-admin-site="atlas" data-admin-page="review" hidden={site !== "atlas"} aria-current={current === "review" && site === "atlas" ? "page" : undefined}>査読スペース</a>
         <a href={`/admin/reports/?project=${projectSlug}`} data-admin-site={site} data-admin-page="reports" aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
         <a href={`/admin/guide/?project=${projectSlug}`} data-admin-site={site} data-admin-page="guide" aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
         <a href={`/admin/applications/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="applications" aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
