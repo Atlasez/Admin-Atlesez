@@ -695,9 +695,40 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
   );
 };
 
+const previewPublicAdminPage = (pathname: string) =>
+  [
+    "/admin/portal",
+    "/admin/portal/",
+    "/admin/atlas",
+    "/admin/atlas/",
+    "/admin/applications",
+    "/admin/applications/",
+    "/admin/articles",
+    "/admin/articles/",
+    "/admin/operations",
+    "/admin/operations/",
+    "/admin/co-working",
+    "/admin/co-working/",
+    "/admin/review",
+    "/admin/review/",
+    "/admin/reports",
+    "/admin/reports/",
+    "/admin/permissions",
+    "/admin/permissions/",
+    "/admin/guide",
+    "/admin/guide/",
+    "/admin/introductions",
+    "/admin/introductions/",
+    "/admin/workspace",
+    "/admin/workspace/",
+    "/admin/secretariat",
+    "/admin/secretariat/",
+    "/admin/semi-platform",
+    "/admin/semi-platform/",
+  ].includes(pathname);
+
 const previewPublicPath = (pathname: string) =>
-  pathname === "/admin/reports" ||
-  pathname === "/admin/reports/" ||
+  previewPublicAdminPage(pathname) ||
   pathname === "/api/admin/auth-status" ||
   pathname === "/api/admin/article-analytics" ||
   pathname === "/api/admin/site-country-analytics" ||
