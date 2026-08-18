@@ -38,15 +38,18 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .review-filter { flex: 0 0 10rem; }
   .review-reset { align-self: end; white-space: nowrap; }
   .review-feedback { color: var(--muted); display: block; font-size: .78rem; min-height: 1.3rem; }
-  .review-list { border: 1px solid var(--border); border-radius: .55rem; display: grid; overflow: hidden; }
-  .review-card { background: var(--surface); border-bottom: 1px solid var(--border); display: grid; gap: .8rem; padding: 1rem; }
-  .review-card:last-child { border-bottom: 0; }
-  .review-card:hover { background: var(--alt); }
+  .review-list { display: grid; gap: .8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-card { background: var(--surface); border: 1px solid var(--border); border-radius: .65rem; border-top: 4px solid var(--accent); box-shadow: 0 2px 8px rgb(24 32 39 / .06); display: grid; gap: .8rem; min-width: 0; padding: 1rem; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+  .review-card.is-mine { border-top-color: #3d84ad; }
+  .review-card.is-unassigned { border-top-color: #c28a20; }
+  .review-card:hover { box-shadow: 0 5px 16px rgb(24 32 39 / .11); transform: translateY(-1px); }
   .review-card-header { align-items: start; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; }
   .review-card-eyebrow { align-items: center; display: flex; flex-wrap: wrap; gap: .32rem; margin-bottom: .35rem; }
   .review-chip, .review-priority { border: 1px solid var(--border); border-radius: 999px; display: inline-flex; font-size: .67rem; font-weight: 800; line-height: 1.2; padding: .2rem .45rem; }
   .review-chip { background: var(--alt); color: var(--muted); }
   .review-priority { background: #e7f1fb; border-color: #a8c8e0; color: #185c86; }
+  .review-status { background: #edf6ee; border: 1px solid #afd0b3; border-radius: 999px; color: #397340; display: inline-flex; font-size: .67rem; font-weight: 800; line-height: 1.2; padding: .2rem .45rem; }
+  .review-status.is-unassigned { background: #fff7e7; border-color: #e4c982; color: #8a6512; }
   .review-card h2 { font-size: 1.04rem; line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
   .review-card-meta { color: var(--muted); font-size: .76rem; line-height: 1.55; margin: .3rem 0 0; }
   .review-open { align-items: center; background: var(--accent); border-radius: .4rem; color: #fff; display: inline-flex; font-size: .8rem; font-weight: 800; justify-content: center; min-height: 2.35rem; padding: .45rem .7rem; text-decoration: none; white-space: nowrap; }
@@ -61,7 +64,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .review-card-state { color: var(--muted); font-size: .73rem; }
   .review-card-state strong { color: var(--text); }
   .review-empty { color: var(--muted); padding: 3rem 1rem; text-align: center; }
-  @media (max-width: 760px) { .review-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .review-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .review-list { grid-template-columns: 1fr; } }
   @media (max-width: 650px) { .review-space { padding: 0 .9rem 3rem; } .review-heading { align-items: start; display: grid; grid-template-columns: 1fr; } .review-heading-actions { justify-content: start; } .review-toolbar { align-items: stretch; display: grid; grid-template-columns: 1fr; } .review-search, .review-filter { min-width: 0; width: 100%; } .review-reset { justify-self: start; } .review-card-header { grid-template-columns: 1fr; } .review-open { justify-self: start; } .review-card-footer { align-items: stretch; display: grid; } .review-assignment { align-items: stretch; display: grid; grid-template-columns: 1fr; } .review-assignment select { min-width: 0; width: 100%; } .review-assignment button { justify-self: start; } }
 </style>
 
@@ -96,7 +99,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       mine.textContent = String(allRequests.filter((item) => item.assignedToMe).length);
       unassigned.textContent = String(allRequests.filter((item) => !item.reviewer_email).length);
       updated.textContent = latest ? formatDate(latest.updated_at) : "—";
-      list.innerHTML = visible.length ? visible.map((item) => `<article class="review-card"><div class="review-card-header"><div><div class="review-card-eyebrow"><span class="review-chip">${escapeHtml(item.subject)}</span><span class="review-chip">${escapeHtml(item.category || "カテゴリ未設定")}</span>${item.assignedToMe ? '<span class="review-priority">自分への依頼</span>' : ""}</div><h2>${escapeHtml(item.title)}</h2><p class="review-card-meta">依頼者: ${escapeHtml(item.requester_display_name)} ・ 最終更新: ${escapeHtml(formatDate(item.updated_at))}</p></div><a class="review-open" href="/admin/editor/?document=${encodeURIComponent(item.id)}">査読を開始 →</a></div><div class="review-card-footer"><div class="review-assignment"><label for="reviewer-${escapeHtml(item.id)}">担当者</label><select id="reviewer-${escapeHtml(item.id)}" data-reviewer-for="${escapeHtml(item.id)}">${reviewerOptions(item)}</select><button type="button" data-save-reviewer="${escapeHtml(item.id)}">保存</button><output data-reviewer-message="${escapeHtml(item.id)}"></output></div><div class="review-card-state">現在の担当: <strong>${escapeHtml(item.reviewer_email ? item.reviewerDisplayName : "未割り当て")}</strong></div></div></article>`).join("") : '<p class="review-empty">条件に一致する査読依頼はありません。検索条件や表示設定を変更してください。</p>';
+      list.innerHTML = visible.length ? visible.map((item) => `<article class="review-card ${item.assignedToMe ? "is-mine" : item.reviewer_email ? "is-assigned" : "is-unassigned"}"><div class="review-card-header"><div><div class="review-card-eyebrow"><span class="review-chip">${escapeHtml(item.subject)}</span><span class="review-chip">${escapeHtml(item.category || "カテゴリ未設定")}</span>${item.assignedToMe ? '<span class="review-priority">自分への依頼</span>' : item.reviewer_email ? '<span class="review-status">担当あり</span>' : '<span class="review-status is-unassigned">未割り当て</span>'}</div><h2>${escapeHtml(item.title)}</h2><p class="review-card-meta">依頼者: ${escapeHtml(item.requester_display_name)} ・ 最終更新: ${escapeHtml(formatDate(item.updated_at))}</p></div><a class="review-open" href="/admin/editor/?document=${encodeURIComponent(item.id)}">査読を開始 →</a></div><div class="review-card-footer"><div class="review-assignment"><label for="reviewer-${escapeHtml(item.id)}">担当者</label><select id="reviewer-${escapeHtml(item.id)}" data-reviewer-for="${escapeHtml(item.id)}">${reviewerOptions(item)}</select><button type="button" data-save-reviewer="${escapeHtml(item.id)}">保存</button><output data-reviewer-message="${escapeHtml(item.id)}"></output></div><div class="review-card-state">現在の担当: <strong>${escapeHtml(item.reviewer_email ? item.reviewerDisplayName : "未割り当て")}</strong></div></div></article>`).join("") : '<p class="review-empty">条件に一致する査読依頼はありません。検索条件や表示設定を変更してください。</p>';
       feedback.value = `${visible.length}件表示 / 全${allRequests.length}件${filter.value === "mine" ? " ・ 自分への依頼を表示中" : ""}`;
     };
     const load = async () => { feedback.value = "読み込み中…"; refresh.disabled = true; try { const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin" }); const data = await read<{ requests?: ReviewRequest[]; reviewers?: Reviewer[]; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。"); reviewers = data.reviewers ?? []; allRequests = data.requests ?? []; render(); } catch (error) { const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。"; list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`; feedback.value = ""; } finally { refresh.disabled = false; } };
