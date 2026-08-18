@@ -88,9 +88,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     <div class="workspace-grid">
       <aside class="document-sidebar" aria-label="原稿一覧">
         <button type="button" class="sidebar-collapse-toggle" data-sidebar-collapse aria-expanded="true" aria-label="原稿一覧を閉じる" title="原稿一覧を閉じる">‹ 原稿一覧を閉じる</button>
-        <div class="sidebar-heading">
-          <div><p class="eyebrow">自分の担当分野</p><strong data-editor-scope>読み込み中…</strong></div>
-        </div>
         <div class="document-list" data-document-list aria-live="polite"></div>
         <section class="atlas-outline-panel" aria-labelledby="atlas-outline-heading">
           <div class="atlas-outline-heading">
@@ -285,7 +282,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .editor-panel { background: var(--surface); min-width: 0; padding: clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 5rem auto; max-width: 38rem; text-align: center; }.empty-state h2 { color: var(--text); }.editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
   .document-form { display: grid; gap: 1rem; }.document-form[hidden]{display:none!important}
-  .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span{color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);border-radius:.35rem;color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2rem;padding:.25rem .55rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-controls label{align-items:center;background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;color:var(--muted);cursor:pointer;display:inline-flex;font-size:.7rem;font-weight:700;gap:.25rem;padding:.3rem .5rem}.pane-layout-controls label:has(input:checked){background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-controls input{accent-color:var(--accent);margin:0}.pane-layout-divider{border-left:1px solid var(--border);height:1.35rem;margin:0 .1rem}
+  .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span{color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);border-radius:.35rem;color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-controls label{align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:.35rem;box-sizing:border-box;color:var(--muted);cursor:pointer;display:inline-flex;font-size:.7rem;font-weight:700;gap:.3rem;height:1.9rem;padding:.2rem .45rem;white-space:nowrap}.pane-layout-controls label:has(input:checked){background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-controls input{accent-color:var(--accent);height:.85rem;margin:0;min-height:0;padding:0;width:.85rem}.pane-layout-divider{border-left:1px solid var(--border);height:1.2rem;margin:0 .1rem}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary { cursor: pointer; font-size: .88rem; font-weight: 800; }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
@@ -496,7 +493,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
-    const scopeLabel = root.querySelector<HTMLElement>("[data-editor-scope]")!;
     const outlineSubject = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
     const outlineCategory = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
     const outlineList = root.querySelector<HTMLElement>("[data-atlas-outline]")!;
@@ -810,7 +806,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         }
         if (inCode) { result.push(`${esc(raw)}\n`); continue; }
         const asset = /^!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})\)\s*$/i.exec(raw.trim());
-        if (asset) { result.push(`<figure class="editorial-image"><img src="/api/admin/editor/assets/${asset[2]}" alt="${esc(asset[1])}" loading="lazy"><figcaption>${esc(asset[1])}</figcaption></figure>`); continue; }
+        if (asset) { result.push(`<figure class="editorial-image"><img src="/api/admin/editor/assets/${asset[2]}" data-editorial-asset="${asset[2]}" alt="${esc(asset[1])}" loading="lazy" decoding="async"></figure>`); continue; }
         if (/^###\s+/.test(raw)) { result.push(`<h3>${inline(raw.replace(/^###\s+/, ""))}</h3>`); continue; }
         if (/^##\s+/.test(raw)) { result.push(`<h2>${inline(raw.replace(/^##\s+/, ""))}</h2>`); continue; }
         if (/^[-*]\s+/.test(raw)) { result.push(`<ul><li>${inline(raw.replace(/^[-*]\s+/, ""))}</li></ul>`); continue; }
@@ -821,6 +817,24 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       if (inCode) result.push(codeLanguage === "tikz" ? "</code></pre><p class=\"tikz-compile-note\">TikZソースを保存しました。図の自動組版には管理者がLaTeX組版サービスを接続してください。</p></div>" : "</code></pre>");
       return result.join("").replace(/<\/ul><ul>/g, "").replace(/<\/ol><ol>/g, "");
     };
+    const assetPreviewUrls = new Map<string, string>();
+    const assetPreviewLoads = new Map<string, Promise<string>>();
+    const loadAssetPreview = (assetId: string) => {
+      const cached = assetPreviewUrls.get(assetId);
+      if (cached) return Promise.resolve(cached);
+      const pending = assetPreviewLoads.get(assetId);
+      if (pending) return pending;
+      const load = fetch(`/api/admin/editor/assets/${encodeURIComponent(assetId)}`, { credentials: "same-origin", cache: "no-store" })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("画像を読み込めませんでした。");
+          const url = URL.createObjectURL(await response.blob());
+          assetPreviewUrls.set(assetId, url);
+          return url;
+        })
+        .finally(() => assetPreviewLoads.delete(assetId));
+      assetPreviewLoads.set(assetId, load);
+      return load;
+    };
     const loadMathJax = () => mathJaxLoading ??= new Promise((resolve, reject) => {
       (window as typeof window & { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax = { typesetPromise: async () => {} };
       const script = document.createElement("script"); script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"; script.async = true;
@@ -828,6 +842,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     });
     const renderPreview = async () => {
       preview.innerHTML = previewMarkdown(body.value);
+      await Promise.all([...preview.querySelectorAll<HTMLImageElement>("[data-editorial-asset]")].map(async (image) => {
+        const assetId = image.dataset.editorialAsset;
+        if (!assetId) return;
+        try { image.src = await loadAssetPreview(assetId); }
+        catch { image.classList.add("is-unavailable"); }
+      }));
       try {
         if (previewEngine.value === "mathjax") {
           await loadMathJax();
@@ -974,7 +994,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><button type="button" class="quiet-action" ${entry.articleId ? `data-outline-article="${esc(entry.articleId)}"` : `data-outline-planned="${esc(entry.plannedKey)}"`}>${entry.action}</button></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); scopeLabel.textContent = isManager ? `運営内運営${assignedSubjects.length ? ` / 担当: ${assignedSubjects.join("・")}` : " / 全分野"}` : (assignedSubjects.join("・") || "担当なし"); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
     const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
     subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
@@ -1080,7 +1100,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     unpublishButton.addEventListener("click", () => unpublishDialog.showModal());
     setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
     const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const isNewDocument = query.get("new") === "1";
-    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); }).catch((error: unknown) => { scopeLabel.textContent = "読み込めませんでした"; list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); }).catch((error: unknown) => { list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);
