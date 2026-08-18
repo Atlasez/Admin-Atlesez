@@ -19,22 +19,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         </div>
         <a class="list-link" href="/admin/articles/">一覧を開く →</a>
       </div>
-      <div class="featured-links">
-        <a href="/admin/editor/?new=1">
-          <strong>新規記事作成</strong>
-          <small>新しい記事の本文・数式・メタデータを編集する</small>
-          <span>作成を始める →</span>
-        </a>
-        <a href="/admin/articles/?mode=revise">
-          <strong>加筆・修正</strong>
-          <small>自分が関わった記事を優先して確認する</small>
-          <span>記事を探す →</span>
-        </a>
-        <a href="/admin/review/" data-manager-only hidden>
-          <strong>査読</strong>
-          <small>未査読の記事と自分への依頼を優先して確認する</small>
-          <span>査読を始める →</span>
-        </a>
+      <div class="article-index-entry">
+        <strong>原稿一覧</strong>
+        <span>原稿の状態・公開状況・査読の進み具合を確認し、必要な記事を編集画面で開きます。</span>
+        <a href="/admin/articles/">原稿一覧を開く →</a>
       </div>
     </section>
 
@@ -57,13 +45,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .entry-section { margin-top: 1.5rem; }
   .section-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; margin-bottom: .8rem; padding-bottom: .65rem; }
   .section-heading h2 { font-size: 1.3rem; margin: .2rem 0 0; }
-  .featured-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .featured-links a, .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; padding: 1.25rem; text-decoration: none; }
-  .featured-links a { border-top: 4px solid var(--accent-primary); min-height: 8.2rem; }
-  .featured-links a:hover, .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
-  .featured-links strong { font-size: 1.12rem; }
-  .featured-links small, .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
-  .featured-links span, .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
+  .article-index-entry { background: var(--background-secondary); border: 1px solid var(--border-default); border-left: 4px solid var(--accent-primary); display: grid; gap: .4rem; padding: 1.1rem 1.25rem; }
+  .article-index-entry strong { font-size: 1.12rem; }
+  .article-index-entry span { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .article-index-entry a { color: var(--accent-primary); font-size: .76rem; font-weight: 800; justify-self: start; text-decoration: none; }
+  .article-index-entry a:hover, .project-links a:hover { text-decoration: underline; }
+  .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; padding: 1.25rem; text-decoration: none; }
+  .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
+  .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
   .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1.5rem; }
   .project-links a { min-height: 6.5rem; }
   .project-links [data-manager-only][hidden] { display: none !important; }
@@ -71,9 +61,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   @media (max-width: 800px) {
     .project-home { padding: 0 .8rem 3rem; }
     .project-heading { align-items: start; display: grid; }
-    .featured-links, .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 520px) {
-    .featured-links, .project-links { grid-template-columns: 1fr; }
+    .project-links { grid-template-columns: 1fr; }
   }
 </style>

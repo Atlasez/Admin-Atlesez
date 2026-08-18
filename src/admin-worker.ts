@@ -32,7 +32,7 @@ interface Env {
   REPORTS: D1Database;
   /** 既定は cloudflare-access。Google移行時のみ google-oauth を設定する。 */
   ADMIN_AUTH_MODE?: string;
-  /** Google OAuth後に必ず戻す運営サイトの固定URL。Preview URLでは認証を完結させない。 */
+  /** 本番OAuth callbackへ集約する固定URL。Workers Previewからの戻り先は安全に検証して保持する。 */
   ADMIN_PUBLIC_ORIGIN?: string;
   GOOGLE_OAUTH_CLIENT_ID?: string;
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
@@ -568,8 +568,8 @@ const cookieValue = (request: Request, name: string) => {
   return "";
 };
 
-const cookie = (name: string, value: string, maxAge: number, path = "/") =>
-  `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=${path}; HttpOnly; Secure; SameSite=Lax`;
+const cookie = (name: string, value: string, maxAge: number, path = "/", domain?: string) =>
+  `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=${path}; HttpOnly; Secure; SameSite=Lax${domain ? `; Domain=${domain}` : ""}`;
 
 const hash = async (value: string) => {
   const digest = await crypto.subtle.digest(
@@ -4710,6 +4710,41 @@ function adminPublicOrigin(request: Request, env: Env) {
   );
 }
 
+/**
+ * WorkersのPreview URLは `<version>-atlasez-admin.<account>.workers.dev` 形式で、
+ * Google OAuthのredirect URIには本番の固定URLを使う。Previewで開始した認証だけは、
+ * 同一アカウントのWorkerサブドメインに限定して元のOriginへ戻せるようにする。
+ */
+function trustedPreviewOrigin(value: unknown, request: Request, env: Env): string | null {
+  if (typeof value !== "string" || !value) return null;
+  let candidate: URL;
+  try {
+    candidate = new URL(value);
+  } catch {
+    return null;
+  }
+  const publicUrl = new URL(adminPublicOrigin(request, env));
+  const publicHost = publicUrl.hostname.toLowerCase();
+  const candidateHost = candidate.hostname.toLowerCase();
+  if (candidate.protocol !== "https:" || candidateHost === publicHost) return null;
+  if (!candidateHost.endsWith(`-${publicHost}`)) return null;
+  return candidate.origin;
+}
+
+function requestPreviewOrigin(request: Request, env: Env): string | null {
+  return trustedPreviewOrigin(new URL(request.url).origin, request, env);
+}
+
+/** Previewと本番callbackの両方へ認証Cookieを届ける共通親ドメイン。 */
+function authCookieDomain(request: Request, env: Env): string | undefined {
+  const publicUrl = new URL(adminPublicOrigin(request, env));
+  const requestHost = new URL(request.url).hostname.toLowerCase();
+  const publicHost = publicUrl.hostname.toLowerCase();
+  const suffix = publicHost.split(".").slice(1).join(".");
+  if (!suffix || requestHost === publicHost || requestHost.endsWith(`.${suffix}`)) return suffix || undefined;
+  return undefined;
+}
+
 function googleCallbackUrl(request: Request, env: Env) {
   return `${adminPublicOrigin(request, env)}/auth/google/callback`;
 }
@@ -4724,6 +4759,7 @@ async function startSearchConsoleImport(request: Request, env: Env): Promise<Res
   const requestedDays = Number(new URL(request.url).searchParams.get("days") ?? 30);
   const days = Number.isInteger(requestedDays) ? Math.min(90, Math.max(1, requestedDays)) : 30;
   const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const returnOrigin = requestPreviewOrigin(request, env);
   const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorization.search = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
@@ -4739,9 +4775,10 @@ async function startSearchConsoleImport(request: Request, env: Env): Promise<Res
     "set-cookie",
     cookie(
       SEARCH_CONSOLE_STATE_COOKIE,
-      JSON.stringify({ state, days }),
+      JSON.stringify({ state, days, returnOrigin }),
       10 * 60,
       "/auth/google/search-console",
+      authCookieDomain(request, env),
     ),
   );
   return new Response(null, { status: 302, headers });
@@ -4753,14 +4790,15 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code") ?? "";
   const state = requestUrl.searchParams.get("state") ?? "";
-  let savedState: { state?: string; days?: number } = {};
+  let savedState: { state?: string; days?: number; returnOrigin?: string } = {};
   try {
     savedState = JSON.parse(cookieValue(request, SEARCH_CONSOLE_STATE_COOKIE)) as typeof savedState;
   } catch {
     // 不正なCookieは失敗として扱う。
   }
-  if (!code || !state || state !== savedState.state)
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+  const returnOrigin = trustedPreviewOrigin(savedState.returnOrigin, request, env) ?? adminPublicOrigin(request, env);
+  const reportsRedirect = (result: string) => Response.redirect(`${returnOrigin}/admin/reports/?gsc=${result}`, 302);
+  if (!code || !state || state !== savedState.state) return reportsRedirect("error");
 
   let token: { access_token?: string };
   try {
@@ -4778,10 +4816,10 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
     if (!tokenResponse.ok) throw new Error("token exchange failed");
     token = (await tokenResponse.json()) as { access_token?: string };
   } catch {
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return reportsRedirect("error");
   }
   if (!token.access_token)
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return reportsRedirect("error");
 
   const days = Number.isInteger(savedState.days) ? Math.min(90, Math.max(1, savedState.days ?? 30)) : 30;
   const endDate = new Date();
@@ -4812,7 +4850,7 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
       querySearchConsole(["query"], 100),
     ]);
   } catch {
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return reportsRedirect("error");
   }
 
   const snapshotId = crypto.randomUUID();
@@ -4841,7 +4879,7 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
     .filter((statement): statement is D1PreparedStatement => statement !== null);
   const statements = [...countryStatements, ...queryStatements];
   if (statements.length) await env.REPORTS.batch(statements);
-  return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`, 302);
+  return reportsRedirect("imported");
 }
 
 async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
@@ -4849,6 +4887,7 @@ async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
     return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
   const requestUrl = new URL(request.url);
   const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const returnOrigin = requestPreviewOrigin(request, env);
   const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorization.search = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
@@ -4867,9 +4906,11 @@ async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
       JSON.stringify({
         state,
         returnTo: adminReturnPath(requestUrl.searchParams.get("returnTo")),
+        returnOrigin,
       }),
       10 * 60,
       "/auth/google",
+      authCookieDomain(request, env),
     ),
   );
   return new Response(null, { status: 302, headers });
@@ -4884,11 +4925,12 @@ async function completeGoogleLogin(
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code") ?? "";
   const state = requestUrl.searchParams.get("state") ?? "";
-  let savedState: { state?: string; returnTo?: string } = {};
+  let savedState: { state?: string; returnTo?: string; returnOrigin?: string | null } = {};
   try {
     savedState = JSON.parse(cookieValue(request, GOOGLE_STATE_COOKIE)) as {
       state?: string;
       returnTo?: string;
+      returnOrigin?: string | null;
     };
   } catch {
     // 不正なCookieはログイン失敗として扱う。
@@ -4963,8 +5005,9 @@ async function completeGoogleLogin(
       now.toISOString(),
     )
     .run();
+  const returnOrigin = trustedPreviewOrigin(savedState.returnOrigin, request, env) ?? adminPublicOrigin(request, env);
   const headers = new Headers({
-    location: adminReturnPath(savedState.returnTo ?? null),
+    location: `${returnOrigin}${adminReturnPath(savedState.returnTo ?? null)}`,
   });
   headers.append(
     "set-cookie",
@@ -4972,11 +5015,13 @@ async function completeGoogleLogin(
       ADMIN_SESSION_COOKIE,
       sessionToken,
       ADMIN_SESSION_DURATION_MS / 1_000,
+      "/",
+      authCookieDomain(request, env),
     ),
   );
   headers.append(
     "set-cookie",
-    cookie(GOOGLE_STATE_COOKIE, "", 0, "/auth/google"),
+    cookie(GOOGLE_STATE_COOKIE, "", 0, "/auth/google", authCookieDomain(request, env)),
   );
   return new Response(null, { status: 302, headers });
 }
@@ -4992,10 +5037,11 @@ async function logoutAdmin(request: Request, env: Env): Promise<Response> {
         .run();
   }
   // 保護ページを経由せず認証入口へ戻す。ログアウト直後に404へ落ちないようにする。
+  const logoutOrigin = requestPreviewOrigin(request, env) ?? adminPublicOrigin(request, env);
   const headers = new Headers({
-    location: `${adminPublicOrigin(request, env)}/auth/google/login?returnTo=%2Fadmin%2Feditor%2F`,
+    location: `${logoutOrigin}/auth/google/login?returnTo=%2Fadmin%2Feditor%2F`,
   });
-  headers.append("set-cookie", cookie(ADMIN_SESSION_COOKIE, "", 0));
+  headers.append("set-cookie", cookie(ADMIN_SESSION_COOKIE, "", 0, "/", authCookieDomain(request, env)));
   return new Response(null, { status: 302, headers });
 }
 
