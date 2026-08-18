@@ -169,6 +169,14 @@ type ArticleAnalytics = {
   engaged_reads: number;
   completed_reads: number;
 };
+type LoginCountryStat = { country: string; logins: number };
+type SearchConsoleCountryStat = {
+  country: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
 
 const REPORT_STATUSES = new Set<ReportStatus>(["new", "reviewing", "resolved"]);
 const EDITORIAL_DOCUMENT_STATUSES = new Set<EditorialDocumentStatus>([
@@ -360,6 +368,7 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 };
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
+const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
 const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1_000;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
@@ -744,6 +753,64 @@ async function listArticleAnalytics(
     .bind(...values)
     .all<ArticleAnalytics>();
   return json({ days, articles: result.results });
+}
+
+const requestCountry = (request: Request) => {
+  const cloudflareCountry = (request as Request & { cf?: { country?: string } }).cf?.country;
+  const headerCountry = request.headers.get("CF-IPCountry") ?? "";
+  const country = (cloudflareCountry ?? headerCountry).trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(country) ? country : "ZZ";
+};
+
+async function recordAdminLoginCountry(request: Request, env: Env, now: Date) {
+  const day = now.toISOString().slice(0, 10);
+  await env.REPORTS.prepare(
+    `INSERT INTO admin_login_country_daily (day, country, logins, updated_at)
+     VALUES (?, ?, 1, ?)
+     ON CONFLICT(day, country) DO UPDATE SET logins = logins + 1, updated_at = excluded.updated_at`,
+  )
+    .bind(day, requestCountry(request), now.toISOString())
+    .run();
+}
+
+async function listLoginCountryAnalytics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
+  const days = Number.isInteger(daysParam) ? Math.min(90, Math.max(1, daysParam)) : 30;
+  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+  const result = await env.REPORTS.prepare(
+    `SELECT country, SUM(logins) AS logins
+     FROM admin_login_country_daily
+     WHERE day >= ?
+     GROUP BY country
+     ORDER BY logins DESC, country ASC`,
+  ).bind(since).all<LoginCountryStat>();
+  return json({ days, countries: result.results });
+}
+
+async function listSearchConsoleCountryStats(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const snapshot = await env.REPORTS.prepare(
+    `SELECT snapshot_id, start_date, end_date, MAX(fetched_at) AS fetched_at
+     FROM search_console_country_snapshots
+     GROUP BY snapshot_id, start_date, end_date
+     ORDER BY fetched_at DESC LIMIT 1`,
+  ).first<{ snapshot_id: string; start_date: string; end_date: string; fetched_at: string }>();
+  if (!snapshot) return json({ snapshot: null, countries: [] });
+  const result = await env.REPORTS.prepare(
+    `SELECT country, clicks, impressions, ctr, position
+     FROM search_console_country_snapshots
+     WHERE snapshot_id = ? ORDER BY clicks DESC, impressions DESC, country ASC`,
+  ).bind(snapshot.snapshot_id).all<SearchConsoleCountryStat>();
+  return json({ snapshot, countries: result.results });
 }
 
 async function updateArticleReport(
@@ -4656,6 +4723,116 @@ function googleCallbackUrl(request: Request, env: Env) {
   return `${adminPublicOrigin(request, env)}/auth/google/callback`;
 }
 
+const searchConsoleProperty = "sc-domain:atlasez.org";
+
+async function startSearchConsoleImport(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
+    return json({ error: "Googleログインが設定されていないため、Search Consoleを取得できません。" }, 404);
+  const requestedDays = Number(new URL(request.url).searchParams.get("days") ?? 30);
+  const days = Number.isInteger(requestedDays) ? Math.min(90, Math.max(1, requestedDays)) : 30;
+  const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authorization.search = new URLSearchParams({
+    client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+    redirect_uri: `${adminPublicOrigin(request, env)}/auth/google/search-console/callback`,
+    response_type: "code",
+    scope: "openid email profile https://www.googleapis.com/auth/webmasters.readonly",
+    state,
+    prompt: "consent",
+    access_type: "online",
+  }).toString();
+  const headers = new Headers({ location: authorization.toString() });
+  headers.append(
+    "set-cookie",
+    cookie(
+      SEARCH_CONSOLE_STATE_COOKIE,
+      JSON.stringify({ state, days }),
+      10 * 60,
+      "/auth/google/search-console",
+    ),
+  );
+  return new Response(null, { status: 302, headers });
+}
+
+async function completeSearchConsoleImport(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code") ?? "";
+  const state = requestUrl.searchParams.get("state") ?? "";
+  let savedState: { state?: string; days?: number } = {};
+  try {
+    savedState = JSON.parse(cookieValue(request, SEARCH_CONSOLE_STATE_COOKIE)) as typeof savedState;
+  } catch {
+    // 不正なCookieは失敗として扱う。
+  }
+  if (!code || !state || state !== savedState.state)
+    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+
+  let token: { access_token?: string };
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+        client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
+        redirect_uri: `${adminPublicOrigin(request, env)}/auth/google/search-console/callback`,
+        grant_type: "authorization_code",
+      }),
+    });
+    if (!tokenResponse.ok) throw new Error("token exchange failed");
+    token = (await tokenResponse.json()) as { access_token?: string };
+  } catch {
+    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+  }
+  if (!token.access_token)
+    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+
+  const days = Number.isInteger(savedState.days) ? Math.min(90, Math.max(1, savedState.days ?? 30)) : 30;
+  const endDate = new Date();
+  endDate.setUTCDate(endDate.getUTCDate() - 2);
+  const startDate = new Date(endDate);
+  startDate.setUTCDate(startDate.getUTCDate() - days + 1);
+  const start = startDate.toISOString().slice(0, 10);
+  const end = endDate.toISOString().slice(0, 10);
+  let rows: Array<{ keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }> = [];
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(searchConsoleProperty)}/searchAnalytics/query`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token.access_token}`, "content-type": "application/json" },
+        body: JSON.stringify({ startDate: start, endDate: end, dimensions: ["country"], rowLimit: 25_000 }),
+      },
+    );
+    if (!response.ok) throw new Error("Search Console query failed");
+    const data = (await response.json()) as { rows?: typeof rows };
+    rows = data.rows ?? [];
+  } catch {
+    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+  }
+
+  const snapshotId = crypto.randomUUID();
+  const fetchedAt = new Date().toISOString();
+  const statements = rows
+    .map((row) => {
+      const country = text(row.keys?.[0], 8).toLowerCase();
+      if (!/^[a-z]{2,3}$/.test(country)) return null;
+      return env.REPORTS.prepare(
+        `INSERT INTO search_console_country_snapshots
+         (snapshot_id, start_date, end_date, country, clicks, impressions, ctr, position, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(snapshotId, start, end, country, Number(row.clicks ?? 0), Number(row.impressions ?? 0), Number(row.ctr ?? 0), Number(row.position ?? 0), fetchedAt);
+    })
+    .filter((statement): statement is D1PreparedStatement => statement !== null);
+  if (statements.length) await env.REPORTS.batch(statements);
+  return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`, 302);
+}
+
 async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
   if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
     return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
@@ -4775,6 +4952,11 @@ async function completeGoogleLogin(
       now.toISOString(),
     )
     .run();
+  try {
+    await recordAdminLoginCountry(request, env, now);
+  } catch {
+    // 統計テーブルの移行や一時的なD1障害で、ログイン自体を止めない。
+  }
   const headers = new Headers({
     location: adminReturnPath(savedState.returnTo ?? null),
   });
@@ -5045,6 +5227,10 @@ export default {
       return startGoogleLogin(request, env);
     if (url.pathname === "/auth/google/callback" && request.method === "GET")
       return completeGoogleLogin(request, env);
+    if (url.pathname === "/auth/google/search-console" && request.method === "GET")
+      return startSearchConsoleImport(request, env);
+    if (url.pathname === "/auth/google/search-console/callback" && request.method === "GET")
+      return completeSearchConsoleImport(request, env);
     // ナビゲーションからの直接アクセス（GET）でもログアウトできるようにする。
     if (
       url.pathname === "/auth/logout" &&
@@ -5126,6 +5312,16 @@ export default {
       request.method === "GET"
     )
       return listArticleAnalytics(request, env);
+    if (
+      url.pathname === "/api/admin/login-country-analytics" &&
+      request.method === "GET"
+    )
+      return listLoginCountryAnalytics(request, env);
+    if (
+      url.pathname === "/api/admin/search-console-country-analytics" &&
+      request.method === "GET"
+    )
+      return listSearchConsoleCountryStats(request, env);
     if (url.pathname === "/api/admin/personal-workspace") {
       if (request.method === "GET") return getPersonalWorkspace(request, env);
       if (request.method === "PUT") return savePersonalWorkspace(request, env);

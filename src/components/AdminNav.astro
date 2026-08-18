@@ -185,8 +185,30 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       }
     };
     syncRouteChrome();
-    window.addEventListener('atlasez-lang-change', () => { applyLanguage(currentLanguage()); syncRouteChrome(); });
-    document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg === 'dark'); applyLanguage(currentLanguage()); syncRouteChrome(); });
+    const applyManagerVisibility = (isManager: boolean) => {
+      document.querySelectorAll<HTMLElement>('[data-manager-only]').forEach((item) => { item.hidden = !isManager; });
+    };
+    let managerVisibilityRequest = 0;
+    const refreshManagerVisibility = async () => {
+      // 遷移後も保持されるナビの権限表示を、毎回サーバーの最新状態へ戻す。
+      // 取得に失敗したときは安全側（非表示）にし、次の再試行で復元する。
+      const requestId = ++managerVisibilityRequest;
+      applyManagerVisibility(false);
+      try {
+        const response = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
+        const contentType = response.headers.get('content-type') ?? '';
+        if (requestId !== managerVisibilityRequest || !contentType.includes('application/json') || !response.ok) return;
+        const status = await response.json() as { isManager?: boolean };
+        if (requestId !== managerVisibilityRequest) return;
+        applyManagerVisibility(status.isManager === true);
+      } catch {
+        // 権限UIの更新失敗だけでページ全体を止めない。次のpage-loadで再試行する。
+      }
+    };
+    window.addEventListener('atlasez-lang-change', () => { applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
+    document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg === 'dark'); applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
+    document.addEventListener('astro:page-load', () => { syncRouteChrome(); void refreshManagerVisibility(); });
+    void refreshManagerVisibility();
 
     const account = document.querySelector<HTMLElement>('[data-admin-account]');
     if (account && account.dataset.loaded !== 'true') {
@@ -234,7 +256,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           if (!statusType.includes('application/json')) throw new Error('認証状態を確認できません。ページを再読み込みしてください。');
           const status = await statusResponse.json() as { email?: string; isManager?: boolean; error?: string };
           if (!statusResponse.ok || !status.email) throw new Error(status.error ?? 'ログイン情報を取得できませんでした');
-          document.querySelectorAll<HTMLElement>('[data-manager-only]').forEach((item) => { item.hidden = !status.isManager; });
           if (email) { email.title = status.email; }
           const cachedForAccount = cachedProfile?.email === status.email ? cachedProfile : null;
           if (cachedProfile && !cachedForAccount) {

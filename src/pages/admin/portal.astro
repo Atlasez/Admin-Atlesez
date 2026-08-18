@@ -91,8 +91,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .calendar-heading small { color: var(--text-secondary); font-size: .68rem; }
   .calendar-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .7rem; }
   .calendar-filter-label { color: var(--text-secondary); font-size: .7rem; font-weight: 800; margin-right: .1rem; }
-  .calendar-filters label { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .72rem; gap: .25rem; padding: .3rem .55rem; }
-  .calendar-filters input { accent-color: var(--accent-primary); margin: 0; }
+  .calendar-filters label { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; box-sizing: border-box; color: var(--text-secondary); cursor: pointer; display: inline-flex; font-size: .72rem; gap: .3rem; line-height: 1.25; max-width: 100%; min-height: 1.9rem; padding: .28rem .55rem; }
+  .calendar-filters label span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .calendar-filters input { accent-color: var(--accent-primary); flex: 0 0 auto; margin: 0; }
   .calendar-agenda { display: grid; gap: .75rem; grid-template-columns: 1fr; margin-bottom: .75rem; }
   .calendar-agenda[hidden] { display: none; }
   .calendar-agenda-section { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .55rem; min-width: 0; padding: .8rem; }

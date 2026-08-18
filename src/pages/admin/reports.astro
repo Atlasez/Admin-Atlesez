@@ -33,6 +33,26 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </div>
       <output class="analytics-summary" data-analytics-summary>読み込み中です…</output>
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
+
+      <div class="analytics-geo-grid">
+        <section class="analytics-geo-card" aria-labelledby="login-country-heading">
+          <div class="analytics-geo-heading">
+            <div><p class="eyebrow">OPERATIONS LOGIN</p><h3 id="login-country-heading">運営サイトへのログイン元</h3></div>
+            <span class="analytics-privacy-note">国別の日次集計のみ</span>
+          </div>
+          <p class="analytics-geo-description">Cloudflareが判定した国コードを、成功したGoogleログイン時だけ集計します。IPアドレスやメールアドレスは保存しません。</p>
+          <div class="geo-layout"><div class="world-map" data-login-country-map role="img" aria-label="運営サイトへのログイン元国の地図"></div><ol class="geo-list" data-login-country-list></ol></div>
+        </section>
+        <section class="analytics-geo-card" aria-labelledby="search-country-heading">
+          <div class="analytics-geo-heading">
+            <div><p class="eyebrow">GOOGLE SEARCH CONSOLE</p><h3 id="search-country-heading">検索流入の国別統計</h3></div>
+            <a class="button button-outline analytics-gsc-button" href="/auth/google/search-console?days=30" data-gsc-import>Search Consoleから更新</a>
+          </div>
+          <p class="analytics-geo-description">Search Consoleの検索結果におけるクリック・表示回数です。ログイン元やサイト内閲覧者の国を表すものではありません。</p>
+          <output class="analytics-gsc-status" data-search-console-status>Search Consoleのデータを読み込み中です…</output>
+          <div class="geo-layout"><div class="world-map" data-search-country-map role="img" aria-label="Search Consoleの検索流入国別地図"></div><ol class="geo-list" data-search-country-list></ol></div>
+        </section>
+      </div>
     </section>
 
     <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告">
@@ -76,6 +96,29 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .analytics-table th:first-child, .analytics-table td:first-child { max-width: 32rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
   .analytics-table tr:last-child td { border-bottom: 0; }
   .analytics-table .analytics-meta { color: var(--muted); display: block; font-size: .72rem; margin-top: .15rem; }
+  .analytics-geo-grid { display: grid; gap: .9rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .9rem; }
+  .analytics-geo-card { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem; min-width: 0; padding: .85rem; }
+  .analytics-geo-heading { align-items: start; display: flex; gap: .7rem; justify-content: space-between; }
+  .analytics-geo-heading h3 { font-size: .96rem; margin: 0; }
+  .analytics-geo-heading .eyebrow { font-size: .62rem; margin-bottom: .25rem; }
+  .analytics-privacy-note { border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .65rem; padding: .22rem .45rem; white-space: nowrap; }
+  .analytics-geo-description { color: var(--muted); font-size: .73rem; line-height: 1.5; margin: .45rem 0 .65rem; }
+  .analytics-gsc-button { font-size: .68rem; min-height: 2rem; padding: .25rem .45rem; white-space: nowrap; }
+  .analytics-gsc-status { color: var(--muted); display: block; font-size: .72rem; min-height: 1.1rem; margin-bottom: .45rem; }
+  .geo-layout { align-items: start; display: grid; gap: .7rem; grid-template-columns: minmax(0, 1fr) minmax(7.5rem, .55fr); }
+  .world-map { background: color-mix(in srgb, var(--surface-alt), transparent 12%); border: 1px solid var(--border); border-radius: .45rem; min-height: 12rem; overflow: hidden; position: relative; }
+  .world-map svg { display: block; height: 100%; min-height: 12rem; width: 100%; }
+  .world-map .continent { fill: color-mix(in srgb, var(--accent), transparent 82%); stroke: color-mix(in srgb, var(--accent), transparent 35%); stroke-width: .8; }
+  .world-map .map-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 1.25; }
+  .world-map .map-dot-label { fill: var(--text); font-size: 3px; font-weight: 800; paint-order: stroke; stroke: var(--surface); stroke-width: .8px; }
+  .geo-list { display: grid; gap: .28rem; list-style: none; margin: 0; max-height: 13rem; overflow: auto; padding: 0; }
+  .geo-list li { align-items: baseline; border-bottom: 1px solid var(--border); display: flex; font-size: .7rem; gap: .35rem; justify-content: space-between; padding: .25rem 0; }
+  .geo-list li:last-child { border-bottom: 0; }
+  .geo-list .geo-country { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .geo-list .geo-value { color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+  [data-admin-view-panel][hidden] { display: none !important; }
+  .admin-reports[data-admin-active-view="analytics"] #reports-panel,
+  .admin-reports[data-admin-active-view="reports"] #analytics-panel { display: none !important; }
   .permission-panel { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 0; display: grid; gap: .8rem; margin: 0 0 1.25rem; padding: 1rem; }
   .permission-panel h2 { font-size: 1.05rem; margin: 0; }
   .permission-panel p { color: var(--muted); font-size: .86rem; margin: .3rem 0 0; }
@@ -131,6 +174,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .admin-reports-heading { display: grid; gap: 1rem; }
     .analytics-heading { align-items: stretch; display: grid; }
     .analytics-controls { align-items: end; }
+    .analytics-geo-grid { grid-template-columns: 1fr; }
+    .analytics-geo-heading { align-items: stretch; flex-direction: column; }
+    .analytics-gsc-button { align-self: start; }
     .report-controls { align-items: stretch; display: grid; }
     .permission-form { grid-template-columns: 1fr; }
     .report-controls label, .report-controls select { width: 100%; }
@@ -154,6 +200,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     article_id: string; article_title: string; subject: string; category: string;
     views: number; engaged_reads: number; completed_reads: number;
   };
+  type LoginCountry = { country: string; logins: number };
+  type SearchCountry = { country: string; clicks: number; impressions: number; ctr: number; position: number };
 
   const initializeReportsAdmin = () => {
     const root = document.querySelector<HTMLElement>("[data-reports-admin]");
@@ -171,6 +219,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
     const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
+    const loginCountryMap = root.querySelector<HTMLElement>("[data-login-country-map]");
+    const loginCountryList = root.querySelector<HTMLOListElement>("[data-login-country-list]");
+    const searchCountryMap = root.querySelector<HTMLElement>("[data-search-country-map]");
+    const searchCountryList = root.querySelector<HTMLOListElement>("[data-search-country-list]");
+    const searchConsoleStatus = root.querySelector<HTMLOutputElement>("[data-search-console-status]");
+    const searchConsoleImport = root.querySelector<HTMLAnchorElement>("[data-gsc-import]");
     const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-admin-view]");
     const viewPanels = root.querySelectorAll<HTMLElement>("[data-admin-view-panel]");
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
@@ -199,6 +253,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       if (permissionFeedback) permissionFeedback.textContent = message;
     };
     const selectView = (view: "reports" | "analytics") => {
+      root.dataset.adminActiveView = view;
       viewButtons.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.adminView === view)));
       viewPanels.forEach((panel) => { panel.hidden = panel.dataset.adminViewPanel !== view; });
     };
@@ -216,6 +271,66 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       analyticsList.innerHTML = articles.length
         ? articles.map((article) => `<tr><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td>${article.views.toLocaleString()}</td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td></tr>`).join("")
         : '<tr><td colspan="4" class="report-empty">この期間の統計はまだありません。</td></tr>';
+    };
+    const countryNames: Record<string, string> = {
+      AD: "アンドラ", AE: "アラブ首長国連邦", AR: "アルゼンチン", AU: "オーストラリア", AT: "オーストリア", BE: "ベルギー", BR: "ブラジル", CA: "カナダ", CH: "スイス", CL: "チリ", CN: "中国", CO: "コロンビア", CZ: "チェコ", DE: "ドイツ", DK: "デンマーク", ES: "スペイン", FI: "フィンランド", FR: "フランス", GB: "イギリス", GR: "ギリシャ", HK: "香港", HU: "ハンガリー", ID: "インドネシア", IE: "アイルランド", IL: "イスラエル", IN: "インド", IT: "イタリア", JP: "日本", KR: "韓国", LU: "ルクセンブルク", MX: "メキシコ", MY: "マレーシア", NL: "オランダ", NO: "ノルウェー", NZ: "ニュージーランド", PH: "フィリピン", PL: "ポーランド", PT: "ポルトガル", RU: "ロシア", SE: "スウェーデン", SG: "シンガポール", TH: "タイ", TR: "トルコ", TW: "台湾", UA: "ウクライナ", US: "アメリカ合衆国", VN: "ベトナム", ZA: "南アフリカ", ZZ: "判定不能",
+      jpn: "日本", usa: "アメリカ合衆国", gbr: "イギリス", kor: "韓国", chn: "中国", twn: "台湾", deu: "ドイツ", fra: "フランス", can: "カナダ", aus: "オーストラリア", sgp: "シンガポール", ind: "インド", idn: "インドネシア", bra: "ブラジル", vnm: "ベトナム", tha: "タイ", mys: "マレーシア", phl: "フィリピン", nld: "オランダ", ita: "イタリア", esp: "スペイン", swe: "スウェーデン", che: "スイス", pol: "ポーランド", rus: "ロシア",
+    };
+    const mapCoordinates: Record<string, [number, number]> = {
+      JP: [82, 31], US: [22, 29], CA: [20, 20], MX: [24, 38], BR: [35, 67], AR: [31, 84], CL: [27, 78], GB: [47, 22], FR: [48, 26], DE: [51, 25], ES: [46, 29], IT: [51, 31], RU: [69, 23], CN: [72, 34], KR: [78, 37], TW: [76, 42], IN: [66, 50], ID: [78, 65], AU: [83, 79], NZ: [91, 91], ZA: [53, 68], EG: [56, 44], NG: [51, 47], TR: [56, 34], SG: [77, 59], TH: [75, 54], VN: [77, 58], MY: [78, 61], PH: [82, 59],
+      jpn: [82, 31], usa: [22, 29], gbr: [47, 22], kor: [78, 37], chn: [72, 34], twn: [76, 42], deu: [51, 25], fra: [48, 26], can: [20, 20], aus: [83, 79], sgp: [77, 59], ind: [66, 50], idn: [78, 65], bra: [35, 67], vnm: [77, 58], tha: [75, 54], mys: [78, 61], phl: [82, 59], nld: [49, 24], ita: [51, 31], esp: [46, 29], swe: [53, 20], che: [50, 27], pol: [53, 27], rus: [69, 23],
+    };
+    const countryLabel = (code: string) => countryNames[code] ?? code.toUpperCase();
+    const renderWorldMap = (target: HTMLElement | null, countries: Array<{ country: string; value: number }>, metric: string) => {
+      if (!target) return;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 100 100"); svg.setAttribute("aria-hidden", "true");
+      const continents = [
+        "M5 17 16 9 29 12 35 26 28 37 17 34 12 27 5 25Z",
+        "M27 42 38 47 42 62 37 82 29 72 31 58 24 50Z",
+        "M45 18 52 13 58 18 55 28 48 31 44 25Z",
+        "M47 34 58 32 66 38 72 35 86 40 95 51 87 60 75 56 69 63 60 56 53 64 47 57 43 45Z",
+        "M58 58 67 57 73 67 69 78 60 76 55 67Z",
+        "M77 75 88 76 94 85 89 91 77 88 73 82Z",
+      ];
+      continents.forEach((path) => { const node = document.createElementNS("http://www.w3.org/2000/svg", "path"); node.setAttribute("class", "continent"); node.setAttribute("d", path); svg.append(node); });
+      const max = Math.max(...countries.map((item) => item.value), 1);
+      countries.forEach((item) => {
+        const coordinate = mapCoordinates[item.country] ?? mapCoordinates[item.country.toLowerCase()];
+        if (!coordinate) return;
+        const [x, y] = coordinate;
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("class", "map-dot"); circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y)); circle.setAttribute("r", String(1.4 + (item.value / max) * 2.6));
+        circle.setAttribute("aria-label", `${countryLabel(item.country)} ${item.value.toLocaleString()} ${metric}`);
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title"); title.textContent = `${countryLabel(item.country)}: ${item.value.toLocaleString()} ${metric}`; circle.append(title); svg.append(circle);
+      });
+      target.replaceChildren(svg);
+    };
+    const renderCountryList = (target: HTMLOListElement | null, countries: Array<{ country: string; value: number }>, formatter: (value: number) => string) => {
+      if (!target) return;
+      target.innerHTML = countries.length ? countries.map((item) => `<li><span class="geo-country">${escapeHtml(countryLabel(item.country))}</span><span class="geo-value">${escapeHtml(formatter(item.value))}</span></li>`).join("") : '<li><span class="geo-country">データはまだありません</span></li>';
+    };
+    const loadCountryAnalytics = async () => {
+      const days = analyticsDays?.value ?? "30";
+      try {
+        const response = await fetch(`/api/admin/login-country-analytics?days=${encodeURIComponent(days)}`, { credentials: "same-origin", cache: "no-store" });
+        const data = await readApiResponse<{ countries?: LoginCountry[] }>(response);
+        if (!response.ok) throw new Error("ログイン元統計を読み込めませんでした。");
+        const countries = (data.countries ?? []).map((item) => ({ country: item.country, value: Number(item.logins ?? 0) }));
+        renderWorldMap(loginCountryMap, countries, "回"); renderCountryList(loginCountryList, countries, (value) => `${value.toLocaleString()}回`);
+      } catch { renderCountryList(loginCountryList, [], (value) => `${value}`); }
+    };
+    const loadSearchConsoleAnalytics = async () => {
+      if (!searchConsoleStatus) return;
+      try {
+        const response = await fetch("/api/admin/search-console-country-analytics", { credentials: "same-origin", cache: "no-store" });
+        const data = await readApiResponse<{ snapshot?: { start_date: string; end_date: string; fetched_at: string } | null; countries?: SearchCountry[] }>(response);
+        if (!response.ok) throw new Error("Search Console統計を読み込めませんでした。");
+        const countries = (data.countries ?? []).map((item) => ({ country: item.country, value: Number(item.clicks ?? 0) }));
+        const snapshot = data.snapshot;
+        searchConsoleStatus.value = snapshot ? `${snapshot.start_date}〜${snapshot.end_date}を取得（クリック ${countries.reduce((sum, item) => sum + item.value, 0).toLocaleString()}）` : "まだSearch Consoleデータを取得していません。上のボタンから更新してください。";
+        renderWorldMap(searchCountryMap, countries, "クリック"); renderCountryList(searchCountryList, countries, (value) => `${value.toLocaleString()}クリック`);
+      } catch (error) { searchConsoleStatus.value = error instanceof Error ? error.message : "Search Console統計を読み込めませんでした。"; }
     };
     const loadAnalytics = async () => {
       if (!analyticsDays || !analyticsSummary) return;
@@ -297,8 +412,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     filter.addEventListener("change", load);
     viewButtons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.adminView === "analytics" ? "analytics" : "reports")));
     root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
-    analyticsDays?.addEventListener("change", loadAnalytics);
-    root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", loadAnalytics);
+    analyticsDays?.addEventListener("change", () => loadAllAnalytics());
+    root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", () => loadAllAnalytics());
     permissionForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
       if (!permissionForm.reportValidity()) return;
@@ -346,8 +461,16 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
       finally { button.disabled = false; button.textContent = "保存"; }
     });
+    const loadAllAnalytics = () => { void loadAnalytics(); void loadCountryAnalytics(); void loadSearchConsoleAnalytics(); };
+    const syncSearchConsoleLink = () => { if (searchConsoleImport) searchConsoleImport.href = `/auth/google/search-console?days=${encodeURIComponent(analyticsDays?.value ?? "30")}`; };
+    analyticsDays?.addEventListener("change", syncSearchConsoleLink);
+    syncSearchConsoleLink();
+    const gscResult = new URLSearchParams(window.location.search).get("gsc");
+    if (searchConsoleStatus && gscResult === "imported") searchConsoleStatus.value = "Search Consoleのデータを更新しました。";
+    if (searchConsoleStatus && gscResult === "error") searchConsoleStatus.value = "Search Consoleの取得に失敗しました。権限・プロパティ・期間を確認してください。";
+    selectView("reports");
     void load();
-    void loadAnalytics();
+    loadAllAnalytics();
     void loadPermissions();
     void loadAuthStatus();
   };
