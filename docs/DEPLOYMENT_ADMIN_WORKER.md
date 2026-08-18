@@ -24,9 +24,77 @@ Secretバインディングなど既存Workerのすべての機能を保った�
 このリポジトリでは、学習サイト（`/atlas/`）はCloudflare Pagesで配信し、
 運営Worker（`/admin/`）はWorkers Buildsで配信します。
 
+## 2. PR必須ワークフローとmainブランチ保護
+
+**すべての変更は Pull Request 経由で main ブランチに反映すること。**
+
+### main への直接反映禁止
+
+以下の操作は **禁止** です:
+
+- `main` ブランチへの直接 `git push`
+- ローカルで `main` に `git merge` してから `git push`
+- エージェントによる自動マージ（`gh pr merge` 等）
+
+**理由**:
+
+- Cloudflare Workers Builds は `main` への push をトリガーに本番デプロイを実行する
+- 人間によるレビューと GitHub 上での明示的なマージ操作を必須とすることで、本番環境への意図しない変更を防ぐ
+- CI/CD、Preview URL、コードレビューのワークフローを確実に通すため
+
+### 標準作業フロー
+
+1. **トピックブランチの作成**
+
+   ```bash
+   git switch main
+   git pull --ff-only
+   git switch -c feature/機能名  # または fix/バグ名
+   ```
+
+2. **変更のコミットとプッシュ**
+
+   ```bash
+   # ファイル編集
+   git add <変更したファイル>
+   git commit -m "変更内容"
+   git push -u origin feature/機能名
+   ```
+
+   この時点で Workers Builds が Preview URL を自動生成します。
+
+3. **Pull Request の作成**
+
+   ```bash
+   gh pr create --web
+   ```
+
+   PR 作成時は `.github/pull_request_template.md` のチェックリストに従います。
+
+4. **CI / Preview URL の確認**
+   - GitHub Actions の CI が成功していることを確認
+   - Cloudflare Workers Builds が生成した Preview URL で動作確認
+
+5. **コードレビュー**
+   - レビュアーによる確認
+   - 必要に応じて追加コミットで対応
+
+6. **GitHub UI でのマージ**
+   - レビュー完了後、**必ず GitHub の UI で "Merge pull request" を実行**
+   - マージ後、Workers Builds が自動的に本番デプロイを実行
+
+7. **ローカルブランチのクリーンアップ**
+   ```bash
+   git switch main
+   git pull --ff-only
+   git branch -d feature/機能名
+   ```
+
+詳細とエージェント向けの絶対ルールは、リポジトリ直下の `AGENTS.md` を参照してください。
+
 ---
 
-## 2. Workers Buildsの設定
+## 3. Workers Buildsの設定
 
 Workers & Pages → atlasez-admin → Settings → Builds
 
@@ -46,6 +114,17 @@ Workers & Pages → atlasez-admin → Settings → Builds
 | Preview deploy command | `npx wrangler versions upload --config wrangler.admin.jsonc` |
 | Root directory         | `/` （リポジトリ直下）                                       |
 | Node version           | `.nvmrc` (22)                                                |
+
+### Preview URLの動作
+
+Preview URLは以下の仕様で動作します:
+
+- **ブランチ名ベースのURL**: `https://<ブランチ名>.atlasez-admin.ukyoukay0.workers.dev`
+  - 同じブランチへの再push時は、このURLが最新バージョンに自動的に差し替わります
+- **バージョン固定URL**: `https://<version-prefix>.atlasez-admin.ukyoukay0.workers.dev`
+  - 過去のバージョンも version prefix 付きURLで永続的にアクセス可能です
+
+PR に Cloudflare Workers GitHub App が自動的に Preview URL をコメントします。
 
 ### 環境変数とSecret
 
@@ -74,82 +153,41 @@ npx wrangler secret put DISCORD_BOT_TOKEN --config wrangler.admin.jsonc
 
 ---
 
-## 3. Preview URL（非本番ブランチの自動デプロイ）
-
-Workers Buildsでは、`main` 以外のブランチをpushすると **Preview URL** が自動生成されます。
-この機能を有効にするには、`wrangler.admin.jsonc` に次を追加します（既に追加済み）:
-
-```jsonc
-{
-  "preview_urls": true,
-}
-```
-
-### Preview URLの形式
-
-| pushしたもの       | 生成されるURL                                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `main`             | 本番 `https://atlasez-admin.ukyoukay0.workers.dev`                                                            |
-| 非本番ブランチ     | `https://<DNS用に変換されたブランチ名>.atlasez-admin.ukyoukay0.workers.dev`                                   |
-| 同ブランチの再push | ブランチURLが最新に差し替わる。過去分も `https://<version-prefix>.atlasez-admin.ukyoukay0.workers.dev` で残る |
-
-### GitHub PRへの自動コメント
-
-GitHub App `Cloudflare Workers` がリポジトリに接続されている場合、
-Pull RequestにPreview URLが自動でコメントされます。
-
-### noindex / robots.txt
-
-Preview URLは公開URLであり、アクセス制御の代わりにはなりません。今回のPreviewでは
-レスポンスに `x-robots-tag: noindex` が付くことを確認しましたが、検索エンジン対策の
-挙動に依存せず、必要ならCloudflare AccessでPreview URLを保護してください。
-
-現在の `src/admin-worker.ts` では、Google OAuth callback URLを
-`ADMIN_PUBLIC_ORIGIN` に固定しているため、Preview URLでOAuth認証を完結させる
-設計にはなっていません。Preview URLでは認証が必要な操作を実行せず、
-UIのレイアウトやアセット配信のみを確認する用途に留めます。
-
----
-
 ## 4. デプロイフロー
 
-### 本番デプロイ（mainブランチへのマージ）
+### 重要: 通常の変更では wrangler deploy を直接実行しない
 
-```bash
-git switch main
-git pull --ff-only
-git merge feature/何か
-git push
-```
+本番デプロイは **Cloudflare Workers Builds** が `main` への push 時に自動実行します。
+開発者が手動で `wrangler deploy` を実行する必要はありません。
 
-Workers Buildsが自動的に次を実行します:
+### 本番デプロイ（main ブランチへの PR マージ）
+
+PR を GitHub UI でマージすると、Workers Builds が自動的に次を実行します:
 
 1. `npm install`
-2. `npm run build` （Astroが `dist/` を生成）
+2. `npm run build` （Astro が `dist/` を生成）
 3. `npx wrangler deploy --config wrangler.admin.jsonc`
-4. 本番Worker `atlasez-admin` が更新される
+4. 本番 Worker `atlasez-admin` が更新される
 
-### 非本番ブランチのPreview URL生成
+**注意**: ローカルで `git merge` → `git push` は禁止です。必ず GitHub UI でマージしてください。
 
-```bash
-git switch -c feature/新機能
-# ファイル編集・コミット
-git push -u origin feature/新機能
-```
+### Preview URL の生成（非 main ブランチの push）
 
-Workers Buildsが自動的に次を実行します:
+トピックブランチを push すると、Workers Builds が自動的に次を実行します:
 
 1. `npm install`
 2. `npm run build`
 3. `npx wrangler versions upload --config wrangler.admin.jsonc`
-4. Preview URL `https://feature-新機能.atlasez-admin.ukyoukay0.workers.dev` が生成される
-5. Pull RequestがあればURLがコメントされる
+4. Preview URL が生成される
+   - ブランチ名ベース: `https://<ブランチ名>.atlasez-admin.ukyoukay0.workers.dev`
+   - バージョン固定: `https://<version-prefix>.atlasez-admin.ukyoukay0.workers.dev`
+5. Pull Request があれば URL が自動コメントされる
 
 ### ローカルでの確認
 
 ```bash
 npm ci
-npm run dev:admin  # http://localhost:8787/ でWorkerをローカル実行
+npm run dev:admin  # http://localhost:8787/ で Worker をローカル実行
 ```
 
 本番と同じビルド結果を確認したい場合:
@@ -158,6 +196,13 @@ npm run dev:admin  # http://localhost:8787/ でWorkerをローカル実行
 npm run build
 npx wrangler deploy --config wrangler.admin.jsonc --dry-run
 ```
+
+### Preview URL の制約
+
+現在の `src/admin-worker.ts` では、Google OAuth callback URL を
+`ADMIN_PUBLIC_ORIGIN` に固定しているため、Preview URL で OAuth 認証を完結させる
+設計にはなっていません。Preview URL では認証が必要な操作を実行せず、
+UI のレイアウトやアセット配信のみを確認する用途に留めます。
 
 ---
 
@@ -260,10 +305,12 @@ OAuth認証フローをテストする場合は、ローカル開発環境
 
 ## 10. まとめ
 
-- **本番デプロイ**: `main` へマージすると Workers Buildsが自動で `wrangler deploy`
-- **Preview URL**: 非本番ブランチを push すると `wrangler versions upload` で自動生成
+- **PR必須**: すべての変更は Pull Request 経由で main に反映（`AGENTS.md` 参照）
+- **本番デプロイ**: PR マージ時に Workers Builds が自動で `wrangler deploy`
+- **Preview URL**: 非本番ブランチ push 時に `wrangler versions upload` で自動生成（ブランチ名ベース + バージョン固定）
+- **手動 deploy 不要**: 通常の変更では `wrangler deploy` を直接実行しない
 - **Secret管理**: `wrangler secret put` でのみ設定
-- **D1マイグレーション**: 手動で `wrangler d1 migrations apply` を実行
+- **D1マイグレーション**: 手動で `wrangler d1 migrations apply --remote` を実行
 - **ロールバック**: Cloudflare ダッシュボードから過去デプロイへ戻す
 
 学習サイト（Cloudflare Pages）と運営Worker（Workers Builds）は別々の
