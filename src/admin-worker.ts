@@ -52,6 +52,12 @@ interface Env {
   /** 任意。設定された自分用メールリマインダーの配信に使う。 */
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
+  /** 公開サイトのアクセス元を集計している外部サービスの取得先URL。 */
+  VISITOR_GEO_SOURCE_URL?: string;
+  /** 上記の取得先が認証を要求する場合のトークン。値はSecretにのみ保存する。 */
+  VISITOR_GEO_SOURCE_TOKEN?: string;
+  /** 画面に出す取得元の名前。未設定なら取得先URLのホスト名を使う。 */
+  VISITOR_GEO_SOURCE_NAME?: string;
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
@@ -803,6 +809,238 @@ async function listArticleAnalytics(
     .bind(...values)
     .all<ArticleAnalytics>();
   return json({ days, articles: result.results });
+}
+
+const VISITOR_GEO_POINT_LIMIT = 1_000;
+/** 定期取り込みの最短間隔。cronは毎時動くので、1日1回だけ取りに行く。 */
+const VISITOR_GEO_MIN_INTERVAL_MS = 20 * 60 * 60 * 1000;
+/** 保持するスナップショットの世代数。 */
+const VISITOR_GEO_KEEP_SNAPSHOTS = 3;
+
+type VisitorGeoPoint = {
+  country: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  views: number;
+};
+
+type VisitorGeoSnapshot = {
+  source: string;
+  startDate: string;
+  endDate: string;
+  totalViews: number;
+  points: VisitorGeoPoint[];
+};
+
+const finiteNumber = (value: unknown) => {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isoDateOr = (value: unknown, fallback: string) => {
+  const candidate = text(value, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : fallback;
+};
+
+/**
+ * 取得元によってキー名が違うため、よくある綴りを広めに受け入れる。
+ * 緯度経度が読めない行は地図に置けないので捨てる。
+ */
+const parseVisitorGeoPayload = (
+  raw: unknown,
+  source: string,
+): VisitorGeoSnapshot | null => {
+  const root = (raw ?? {}) as Record<string, unknown>;
+  const rows = [
+    root.points,
+    root.locations,
+    root.cities,
+    root.results,
+    root.data,
+    raw,
+  ].find((candidate): candidate is unknown[] => Array.isArray(candidate));
+  if (!rows) return null;
+  const points: VisitorGeoPoint[] = [];
+  for (const row of rows.slice(0, VISITOR_GEO_POINT_LIMIT)) {
+    const item = (row ?? {}) as Record<string, unknown>;
+    const latitude = finiteNumber(item.latitude ?? item.lat);
+    const longitude = finiteNumber(item.longitude ?? item.lng ?? item.lon);
+    if (latitude === null || longitude === null) continue;
+    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
+    const views =
+      finiteNumber(item.views ?? item.pageviews ?? item.count ?? item.hits) ??
+      0;
+    points.push({
+      country: text(item.country ?? item.country_code ?? item.countryCode, 60),
+      city: text(item.city ?? item.name ?? item.label, 120),
+      latitude,
+      longitude,
+      views: Math.max(0, Math.round(views)),
+    });
+  }
+  if (!points.length) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const period = (root.period ?? {}) as Record<string, unknown>;
+  const declaredTotal = finiteNumber(
+    root.total_views ?? root.totalViews ?? root.pageviews,
+  );
+  return {
+    source,
+    startDate: isoDateOr(
+      period.start ?? root.start_date ?? root.startDate,
+      today,
+    ),
+    endDate: isoDateOr(period.end ?? root.end_date ?? root.endDate, today),
+    totalViews: Math.max(
+      0,
+      Math.round(
+        declaredTotal ?? points.reduce((sum, point) => sum + point.views, 0),
+      ),
+    ),
+    points,
+  };
+};
+
+async function saveVisitorGeoSnapshot(env: Env, snapshot: VisitorGeoSnapshot) {
+  const snapshotId = crypto.randomUUID();
+  const fetchedAt = new Date().toISOString();
+  const statements = snapshot.points.map((point) =>
+    env.REPORTS.prepare(
+      `INSERT OR REPLACE INTO visitor_geo_snapshots
+         (snapshot_id, source, start_date, end_date, total_views,
+          country, city, latitude, longitude, views, fetched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      snapshotId,
+      snapshot.source,
+      snapshot.startDate,
+      snapshot.endDate,
+      snapshot.totalViews,
+      point.country,
+      point.city,
+      point.latitude,
+      point.longitude,
+      point.views,
+      fetchedAt,
+    ),
+  );
+  for (let index = 0; index < statements.length; index += 50) {
+    await env.REPORTS.batch(statements.slice(index, index + 50));
+  }
+  await env.REPORTS.prepare(
+    `DELETE FROM visitor_geo_snapshots WHERE snapshot_id NOT IN (
+       SELECT snapshot_id FROM (
+         SELECT snapshot_id, MAX(fetched_at) AS latest
+         FROM visitor_geo_snapshots
+         GROUP BY snapshot_id
+         ORDER BY latest DESC
+         LIMIT ?))`,
+  )
+    .bind(VISITOR_GEO_KEEP_SNAPSHOTS)
+    .run();
+  return { snapshotId, fetchedAt };
+}
+
+async function importVisitorGeoSnapshot(
+  env: Env,
+): Promise<{ ok: boolean; message: string }> {
+  const endpoint = env.VISITOR_GEO_SOURCE_URL?.trim();
+  if (!endpoint)
+    return {
+      ok: false,
+      message:
+        "アクセス元の取得先が未設定です。VISITOR_GEO_SOURCE_URL を設定してください。",
+    };
+  let payload: unknown;
+  try {
+    const headers = new Headers({ accept: "application/json" });
+    const token = env.VISITOR_GEO_SOURCE_TOKEN?.trim();
+    if (token) headers.set("authorization", `Bearer ${token}`);
+    const response = await fetch(endpoint, { headers });
+    if (!response.ok)
+      return { ok: false, message: `取得先が ${response.status} を返しました。` };
+    payload = await response.json();
+  } catch {
+    return { ok: false, message: "取得先に接続できませんでした。" };
+  }
+  let host = "";
+  try {
+    host = new URL(endpoint).host;
+  } catch {
+    host = "";
+  }
+  const snapshot = parseVisitorGeoPayload(
+    payload,
+    env.VISITOR_GEO_SOURCE_NAME?.trim() || host || "external",
+  );
+  if (!snapshot)
+    return {
+      ok: false,
+      message:
+        "受け取ったデータから、緯度経度付きの件数を読み取れませんでした。取得先の形式を確認してください。",
+    };
+  const saved = await saveVisitorGeoSnapshot(env, snapshot);
+  return {
+    ok: true,
+    message: `${snapshot.points.length.toLocaleString()}地点を取り込みました（${saved.fetchedAt}）。`,
+  };
+}
+
+/** cronから呼ぶ。取得先が未設定なら何もしない。 */
+async function importVisitorGeoSnapshotIfDue(env: Env) {
+  if (!env.VISITOR_GEO_SOURCE_URL?.trim()) return;
+  const latest = await env.REPORTS.prepare(
+    "SELECT MAX(fetched_at) AS fetched_at FROM visitor_geo_snapshots",
+  ).first<{ fetched_at: string | null }>();
+  const last = latest?.fetched_at ? Date.parse(latest.fetched_at) : Number.NaN;
+  if (Number.isFinite(last) && Date.now() - last < VISITOR_GEO_MIN_INTERVAL_MS)
+    return;
+  await importVisitorGeoSnapshot(env);
+}
+
+async function listVisitorGeoStats(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const configured = Boolean(env.VISITOR_GEO_SOURCE_URL?.trim());
+  const snapshot = await env.REPORTS.prepare(
+    `SELECT snapshot_id, source, start_date, end_date, total_views,
+            MAX(fetched_at) AS fetched_at
+     FROM visitor_geo_snapshots
+     GROUP BY snapshot_id, source, start_date, end_date, total_views
+     ORDER BY fetched_at DESC LIMIT 1`,
+  ).first<{
+    snapshot_id: string;
+    source: string;
+    start_date: string;
+    end_date: string;
+    total_views: number;
+    fetched_at: string;
+  }>();
+  if (!snapshot) return json({ configured, snapshot: null, points: [] });
+  const result = await env.REPORTS.prepare(
+    `SELECT country, city, latitude, longitude, views
+     FROM visitor_geo_snapshots
+     WHERE snapshot_id = ?
+     ORDER BY views DESC, city ASC
+     LIMIT ?`,
+  )
+    .bind(snapshot.snapshot_id, VISITOR_GEO_POINT_LIMIT)
+    .all<VisitorGeoPoint>();
+  return json({ configured, snapshot, points: result.results });
+}
+
+async function refreshVisitorGeoStats(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const outcome = await importVisitorGeoSnapshot(env);
+  return json(outcome, outcome.ok ? 200 : 502);
 }
 
 async function listSearchConsoleCountryStats(
@@ -5362,6 +5600,12 @@ export default {
       request.method === "GET"
     )
       return listArticleAnalytics(request, env);
+    if (url.pathname === "/api/admin/visitor-geo-analytics") {
+      if (request.method === "GET") return listVisitorGeoStats(request, env);
+      if (request.method === "POST")
+        return refreshVisitorGeoStats(request, env);
+      return json({ error: "GET、POSTのみ利用できます。" }, 405);
+    }
     if (
       url.pathname === "/api/admin/search-console-country-analytics" &&
       request.method === "GET"
@@ -5643,6 +5887,7 @@ export default {
         syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
         dispatchDueTaskReminders(env),
+        importVisitorGeoSnapshotIfDue(env),
       ]),
     );
   },

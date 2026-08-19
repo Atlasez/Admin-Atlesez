@@ -39,6 +39,16 @@ const worldCountryPaths = worldMap.locations
       <output class="analytics-summary" data-analytics-summary>読み込み中です…</output>
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
 
+      <section class="analytics-geo-card analytics-visitor-card" aria-labelledby="visitor-geo-heading">
+        <div class="analytics-geo-heading">
+          <div><p class="eyebrow">VISITOR LOCATIONS</p><h3 id="visitor-geo-heading">アクセス元（都市別）</h3></div>
+          <button class="button button-outline analytics-gsc-button" type="button" data-visitor-geo-refresh>取得先から更新</button>
+        </div>
+        <p class="analytics-geo-description">公式サイトと学習サイトを見に来た人の接続元を、外部の統計サービスから受け取った集計値で表示します。個々のアクセス記録・IPアドレス・端末情報は保存しません。</p>
+        <output class="analytics-gsc-status" data-visitor-geo-status>アクセス元のデータを読み込み中です…</output>
+        <div class="geo-layout"><div class="world-map" data-visitor-geo-map role="img" aria-label="閲覧者のアクセス元地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g><g class="map-bubbles map-city-bubbles" data-map-bubbles></g></svg></div><ol class="geo-list" data-visitor-geo-list></ol></div>
+      </section>
+
       <div class="analytics-geo-grid">
         <section class="analytics-geo-card" aria-labelledby="search-country-heading">
           <div class="analytics-geo-heading">
@@ -123,6 +133,9 @@ const worldCountryPaths = worldMap.locations
   .geo-list li:last-child { border-bottom: 0; }
   .geo-list .geo-country { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .geo-list .geo-value { color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; }
+  .analytics-visitor-card { margin-bottom: .9rem; }
+  :global(.world-map .map-city-bubbles circle) { fill: #ef6c67; fill-opacity: .88; stroke: #ffffff; stroke-width: 1.1; }
+  :global(.world-map .map-city-bubbles circle:hover) { fill: #f4a62a; fill-opacity: 1; }
   .analytics-query-card { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem; margin-top: .9rem; padding: .85rem; }
   .analytics-query-table { min-width: 40rem; }
   .analytics-query-table th:first-child, .analytics-query-table td:first-child { max-width: 34rem; }
@@ -213,6 +226,8 @@ const worldCountryPaths = worldMap.locations
   };
   type SearchCountry = { country: string; clicks: number; impressions: number; ctr: number; position: number };
   type SearchQuery = { query: string; clicks: number; impressions: number; ctr: number; position: number };
+  type VisitorGeoPoint = { country: string; city: string; latitude: number; longitude: number; views: number };
+  type VisitorGeoSnapshot = { source: string; start_date: string; end_date: string; total_views: number; fetched_at: string };
 
   const initializeReportsAdmin = () => {
     const root = document.querySelector<HTMLElement>("[data-reports-admin]");
@@ -236,6 +251,10 @@ const worldCountryPaths = worldMap.locations
     const searchQueryList = root.querySelector<HTMLTableSectionElement>("[data-search-query-list]");
     const searchQueryStatus = root.querySelector<HTMLOutputElement>("[data-search-query-status]");
     const searchConsoleImport = root.querySelector<HTMLAnchorElement>("[data-gsc-import]");
+    const visitorGeoMap = root.querySelector<HTMLElement>("[data-visitor-geo-map]");
+    const visitorGeoList = root.querySelector<HTMLOListElement>("[data-visitor-geo-list]");
+    const visitorGeoStatus = root.querySelector<HTMLOutputElement>("[data-visitor-geo-status]");
+    const visitorGeoRefresh = root.querySelector<HTMLButtonElement>("[data-visitor-geo-refresh]");
     const viewButtons = root.querySelectorAll<HTMLButtonElement>("[data-admin-view]");
     const viewPanels = root.querySelectorAll<HTMLElement>("[data-admin-view-panel]");
     const labels: Record<ReportStatus, string> = { new: "未確認", reviewing: "確認中", resolved: "対応済み" };
@@ -329,6 +348,65 @@ const worldCountryPaths = worldMap.locations
       if (!target) return;
       target.innerHTML = countries.length ? countries.map((item) => `<li><span class="geo-country">${escapeHtml(countryLabel(item.country))}</span><span class="geo-value">${escapeHtml(formatter(item.value))}</span></li>`).join("") : '<li><span class="geo-country">データはまだありません</span></li>';
     };
+    // @svg-maps/world の描画に合わせた近似式。経度は線形、緯度はメルカトル。
+    // 20か国の輪郭で当てはめた残差は数ピクセルに収まる。
+    const projectPoint = (latitude: number, longitude: number) => {
+      const clamped = Math.max(-82, Math.min(82, latitude));
+      return { x: 2.8146 * longitude + 476.18, y: 471.1 - 169.546 * Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360)) };
+    };
+    const visitorPointLabel = (point: VisitorGeoPoint) => [point.city, point.country ? countryLabel(mapCountryCode(point.country)) : ""].filter(Boolean).join("・") || "地域不明";
+    const renderVisitorGeoMap = (points: VisitorGeoPoint[]) => {
+      const bubbles = visitorGeoMap?.querySelector<SVGGElement>("[data-map-bubbles]");
+      if (!bubbles) return;
+      bubbles.replaceChildren();
+      const max = Math.max(...points.map((point) => point.views), 1);
+      points.forEach((point) => {
+        const { x, y } = projectPoint(Number(point.latitude), Number(point.longitude));
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        const ratio = Math.max(0, Math.min(1, point.views / max));
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x.toFixed(1)); circle.setAttribute("cy", y.toFixed(1)); circle.setAttribute("r", (2.2 + Math.sqrt(ratio) * 6).toFixed(2));
+        const label = `${visitorPointLabel(point)}: ${point.views.toLocaleString()}閲覧`;
+        circle.setAttribute("aria-label", label);
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title"); title.textContent = label; circle.append(title);
+        bubbles.append(circle);
+      });
+    };
+    const renderVisitorGeoList = (points: VisitorGeoPoint[]) => {
+      if (!visitorGeoList) return;
+      visitorGeoList.innerHTML = points.length
+        ? points.slice(0, 40).map((point) => `<li><span class="geo-country">${escapeHtml(visitorPointLabel(point))}</span><span class="geo-value">${point.views.toLocaleString()}</span></li>`).join("")
+        : '<li><span class="geo-country">データはまだありません</span></li>';
+    };
+    const loadVisitorGeoStats = async () => {
+      if (!visitorGeoStatus) return;
+      try {
+        const response = await fetch("/api/admin/visitor-geo-analytics", { credentials: "same-origin", cache: "no-store" });
+        const data = await readApiResponse<{ configured?: boolean; snapshot?: VisitorGeoSnapshot | null; points?: VisitorGeoPoint[]; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "アクセス元の統計を読み込めませんでした。");
+        const points = (data.points ?? []).map((point) => ({ ...point, views: Number(point.views ?? 0) }));
+        const snapshot = data.snapshot;
+        visitorGeoStatus.value = snapshot
+          ? `${snapshot.start_date}〜${snapshot.end_date} ／ ${Number(snapshot.total_views ?? 0).toLocaleString()}閲覧・${points.length.toLocaleString()}地点（取得元: ${snapshot.source}）`
+          : data.configured === false
+            ? "アクセス元の取得先が未設定です。VISITOR_GEO_SOURCE_URL を設定すると、毎日自動で取り込みます。"
+            : "まだアクセス元のデータを取得していません。右上のボタンから更新してください。";
+        renderVisitorGeoMap(points); renderVisitorGeoList(points);
+      } catch (error) { visitorGeoStatus.value = error instanceof Error ? error.message : "アクセス元の統計を読み込めませんでした。"; }
+    };
+    visitorGeoRefresh?.addEventListener("click", async () => {
+      if (!visitorGeoStatus) return;
+      visitorGeoRefresh.setAttribute("disabled", "");
+      visitorGeoStatus.value = "取得先から更新しています…";
+      try {
+        const response = await fetch("/api/admin/visitor-geo-analytics", { method: "POST", credentials: "same-origin" });
+        const data = await readApiResponse<{ ok?: boolean; message?: string; error?: string }>(response);
+        if (!response.ok) throw new Error(response.status === 403 ? "アクセス元の更新は全分野管理者のみ実行できます。" : (data.message ?? data.error ?? "更新できませんでした。"));
+        visitorGeoStatus.value = data.message ?? "更新しました。";
+        await loadVisitorGeoStats();
+      } catch (error) { visitorGeoStatus.value = error instanceof Error ? error.message : "更新できませんでした。"; }
+      finally { visitorGeoRefresh.removeAttribute("disabled"); }
+    });
     const loadSearchConsoleAnalytics = async () => {
       if (!searchConsoleStatus) return;
       try {
@@ -484,7 +562,7 @@ const worldCountryPaths = worldMap.locations
       } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
       finally { button.disabled = false; button.textContent = "保存"; }
     });
-    const loadAllAnalytics = () => { void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); };
+    const loadAllAnalytics = () => { void loadAnalytics(); void loadVisitorGeoStats(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); };
     const syncSearchConsoleLink = () => { if (searchConsoleImport) searchConsoleImport.href = `/auth/google/search-console?days=${encodeURIComponent(analyticsDays?.value ?? "30")}`; };
     analyticsDays?.addEventListener("change", syncSearchConsoleLink);
     syncSearchConsoleLink();
