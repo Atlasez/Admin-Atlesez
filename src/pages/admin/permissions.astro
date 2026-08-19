@@ -22,7 +22,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     </section>
 
     <section class="member-admin__members" aria-labelledby="member-list-title">
-      <div class="member-admin__section-heading"><div><p>MEMBERS</p><h2 id="member-list-title">参加者一覧</h2></div><span data-member-count></span></div>
+      <div class="member-admin__section-heading"><div><h2 id="member-list-title">参加者一覧</h2></div><span data-member-count></span></div>
       <div class="member-grid" data-member-list>読み込み中…</div>
     </section>
   </main>
@@ -56,8 +56,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <script>
-  const root = document.querySelector<HTMLElement>("[data-member-admin]");
-  if (root) {
+  const initializeMemberAdmin = () => {
+    const root = document.querySelector<HTMLElement>("[data-member-admin]");
+    if (!root || root.dataset.memberAdminReady === "true") return;
+    root.dataset.memberAdminReady = "true";
     const form = root.querySelector<HTMLFormElement>("[data-add-form]")!;
     const list = root.querySelector<HTMLElement>("[data-member-list]")!;
     const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
@@ -119,11 +121,13 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); message.value = response.ok ? "権限を削除しました。" : "削除できませんでした。"; if (response.ok) await load(); }
     });
     void load().catch(error => { list.textContent = error instanceof Error ? error.message : "参加者一覧を読み込めませんでした。"; });
-  }
+  };
+  document.addEventListener("astro:page-load", initializeMemberAdmin);
+  initializeMemberAdmin();
 </script>
 
 <script>
-  const memberListForDiscord = document.querySelector<HTMLElement>("[data-member-list]");
+  let memberListForDiscord: HTMLElement | null = null;
   const decorateDiscordIds = async () => {
     if (!memberListForDiscord) return;
     const ids = new Map<string, string>();
@@ -142,13 +146,26 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       });
     });
   };
-  if (memberListForDiscord) { const observer = new MutationObserver(() => void decorateDiscordIds()); observer.observe(memberListForDiscord, { childList: true }); void decorateDiscordIds(); setTimeout(() => void decorateDiscordIds(), 1500); }
+  const initializeDiscordIds = () => {
+    memberListForDiscord = document.querySelector<HTMLElement>("[data-member-list]");
+    if (!memberListForDiscord || memberListForDiscord.dataset.discordIdsReady === "true") return;
+    memberListForDiscord.dataset.discordIdsReady = "true";
+    const observer = new MutationObserver(() => void decorateDiscordIds());
+    observer.observe(memberListForDiscord, { childList: true });
+    void decorateDiscordIds();
+    setTimeout(() => void decorateDiscordIds(), 1500);
+  };
+  document.addEventListener("astro:page-load", initializeDiscordIds);
+  initializeDiscordIds();
 </script>
 
 <script>
+  const initializeProvisionRoles = () => {
   const provisionButton = document.querySelector<HTMLButtonElement>("[data-provision-roles]");
   const provisionMessage = document.querySelector<HTMLOutputElement>("[data-message]");
-  provisionButton?.addEventListener("click", async () => {
+  if (!provisionButton || provisionButton.dataset.provisionReady === "true") return;
+  provisionButton.dataset.provisionReady = "true";
+  provisionButton.addEventListener("click", async () => {
     if (!confirm("Bot test serverに大学・学年・関心分野のロールを追加しますか？")) return;
     provisionButton.disabled = true;
     const response = await fetch("/api/admin/discord-provision-roles", { method: "POST", credentials: "same-origin" });
@@ -156,10 +173,13 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     if (provisionMessage) provisionMessage.value = response.ok ? `Discord「${data.guildName}」にロールを準備しました（新規${data.created ?? 0}件、既存${data.reused ?? 0}件）。` : `HTTP ${response.status}: ${data.error ?? "ロールを準備できませんでした。"}`;
     provisionButton.disabled = false;
   });
+  };
+  document.addEventListener("astro:page-load", initializeProvisionRoles);
+  initializeProvisionRoles();
 </script>
 
 <script>
-  const interestList = document.querySelector<HTMLElement>("[data-member-list]");
+  let interestList: HTMLElement | null = null;
   const enhanceInterestSelectors = () => interestList?.querySelectorAll<HTMLSelectElement>("select[data-interests]").forEach(select => {
     if (select.dataset.enhanced === "true") return;
     select.dataset.enhanced = "true";
@@ -167,5 +187,13 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     Array.from(select.options).forEach((option) => { const label = document.createElement("label"); const input = document.createElement("input"); input.type = "checkbox"; input.value = option.value; input.checked = option.selected; input.addEventListener("change", () => { option.selected = input.checked; }); label.append(input, document.createTextNode(option.textContent ?? option.value)); picker.append(label); });
     select.parentElement?.insertBefore(picker, select);
   });
-  if (interestList) { new MutationObserver(() => enhanceInterestSelectors()).observe(interestList, { childList: true }); setTimeout(enhanceInterestSelectors, 1500); }
+  const initializeInterestSelectors = () => {
+    interestList = document.querySelector<HTMLElement>("[data-member-list]");
+    if (!interestList || interestList.dataset.interestPickerReady === "true") return;
+    interestList.dataset.interestPickerReady = "true";
+    new MutationObserver(() => enhanceInterestSelectors()).observe(interestList, { childList: true });
+    setTimeout(enhanceInterestSelectors, 1500);
+  };
+  document.addEventListener("astro:page-load", initializeInterestSelectors);
+  initializeInterestSelectors();
 </script>

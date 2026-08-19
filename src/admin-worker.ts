@@ -4675,8 +4675,6 @@ const adminReturnPath = (value: string | null) => {
     "/admin/articles/",
     "/admin/operations",
     "/admin/operations/",
-    "/admin/review",
-    "/admin/review/",
     "/admin/reports",
     "/admin/reports/",
     "/admin/editor",
@@ -5516,6 +5514,12 @@ export default {
       return request.method === "PATCH"
         ? updateArticleReport(request, env, match[1])
         : json({ error: "PATCHのみ利用できます。" }, 405);
+    // 査読スペースは「編集・査読」の査読ビューへ統合したため、旧URLは恒久的に転送する。
+    if (url.pathname === "/admin/review" || url.pathname === "/admin/review/")
+      return new Response(null, {
+        status: 301,
+        headers: { location: "/admin/articles/?view=review&mode=review" },
+      });
     if (
       url.pathname === "/apply" ||
       url.pathname === "/apply/" ||
@@ -5539,8 +5543,6 @@ export default {
       url.pathname === "/admin/articles/" ||
       url.pathname === "/admin/operations" ||
       url.pathname === "/admin/operations/" ||
-      url.pathname === "/admin/review" ||
-      url.pathname === "/admin/review/" ||
       url.pathname === "/admin/guide" ||
       url.pathname === "/admin/guide/" ||
       url.pathname === "/admin/introductions" ||
@@ -5567,8 +5569,6 @@ export default {
         "/admin/permissions/",
         "/admin/applications",
         "/admin/applications/",
-        "/admin/review",
-        "/admin/review/",
       ]);
       if (managerPages.has(url.pathname)) {
         const managerScope = await getGlobalAdminScope(request, env);
