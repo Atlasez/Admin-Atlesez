@@ -205,6 +205,7 @@ const MAX_EDITORIAL_COMMENT_LENGTH = 8_000;
 const MAX_PERSONAL_WORKSPACE_NOTE_LENGTH = 12_000;
 const MAX_OPERATION_TEXT_LENGTH = 8_000;
 const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
+const ACCESS_JWT_HEADER = "Cf-Access-Jwt-Assertion";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SUBJECT_SLUG = /^[a-z0-9-]+$/;
 const MEMBER_UNIVERSITIES = [
@@ -594,6 +595,49 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
   );
 };
 
+const productionAdminHost = (env: Env) => {
+  const origin = env.ADMIN_PUBLIC_ORIGIN?.trim();
+  if (!origin) return null;
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Cloudflare Accessが前段にあるプレビューURLかどうか。
+ * Accessは *-<worker>.<subdomain>.workers.dev のプレビューURLだけに適用しており、
+ * 本番URL（ADMIN_PUBLIC_ORIGIN）は公開のままなので、本番ホストではこの経路を
+ * 絶対に有効にしない。有効にすると、Accessヘッダーを自分で付けるだけで
+ * 管理画面に入れてしまう。
+ */
+const accessProtectedPreview = (request: Request, env: Env) => {
+  const host = new URL(request.url).host;
+  const production = productionAdminHost(env);
+  return (
+    production !== null && host !== production && host.endsWith(".workers.dev")
+  );
+};
+
+/**
+ * Accessが発行したJWTからメールアドレスを読む。署名は検証していないため、
+ * accessProtectedPreview が真のホスト（＝Accessを必ず通るURL）でしか使わない。
+ */
+const accessEmailFromJwt = (request: Request) => {
+  const assertion = request.headers.get(ACCESS_JWT_HEADER);
+  const payload = assertion?.split(".")[1];
+  if (!payload) return "";
+  try {
+    const decoded = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { email?: string };
+    return decoded.email?.trim().toLowerCase() ?? "";
+  } catch {
+    return "";
+  }
+};
+
 /**
  * 認証方式の境界。現在はCloudflare Access、将来は同じ権限表のまま
  * Google OAuthのセッションへ切り替えられる。
@@ -625,11 +669,11 @@ async function getAuthenticatedEmail(
     }
   }
 
-  if (cloudflareAccessEnabled(env)) {
-    const email = request.headers
-      .get(ACCESS_EMAIL_HEADER)
-      ?.trim()
-      .toLowerCase();
+  const previewBehindAccess = accessProtectedPreview(request, env);
+  if (cloudflareAccessEnabled(env) || previewBehindAccess) {
+    const email =
+      request.headers.get(ACCESS_EMAIL_HEADER)?.trim().toLowerCase() ||
+      (previewBehindAccess ? accessEmailFromJwt(request) : "");
     if (email) return email;
   }
   return json(
