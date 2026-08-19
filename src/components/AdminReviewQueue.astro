@@ -1,0 +1,200 @@
+<section class="review-queue" data-admin-review-queue hidden aria-labelledby="review-queue-heading">
+  <header class="review-queue-heading">
+    <div>
+      <h2 id="review-queue-heading">査読依頼</h2>
+      <p>自分への依頼を優先し、担当状況を確認してから原稿を開きます。</p>
+    </div>
+    <button type="button" class="quiet-action" data-review-refresh>更新</button>
+  </header>
+
+  <section class="review-summary" aria-label="査読依頼の概要">
+    <article><span>査読中</span><strong data-review-total>—</strong><small>担当分野の全件</small></article>
+    <article class="is-priority"><span>自分への依頼</span><strong data-review-mine>—</strong><small>優先して確認</small></article>
+    <article><span>未割り当て</span><strong data-review-unassigned>—</strong><small>担当者の設定待ち</small></article>
+    <article><span>最長待ち</span><strong data-review-oldest>—</strong><small>最終更新からの日数</small></article>
+  </section>
+
+  <section class="review-toolbar" aria-label="査読依頼の絞り込み">
+    <label class="review-search"><span>検索</span><input type="search" data-review-search placeholder="タイトル・分野・カテゴリ・依頼者" /></label>
+    <label class="review-filter"><span>表示</span><select data-review-filter><option value="all">すべて</option><option value="mine">自分への依頼</option><option value="unassigned">未割り当て</option></select></label>
+    <button type="button" class="quiet-action review-reset" data-review-reset>条件をクリア</button>
+  </section>
+
+  <output class="review-feedback" data-review-feedback aria-live="polite">読み込み中…</output>
+  <div class="review-list" data-review-list aria-label="査読依頼一覧"></div>
+</section>
+
+<style is:global>
+  .review-queue { --surface: var(--background-primary); --alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); margin: 0 auto 1.25rem; max-width: 60rem; }
+  .review-queue[hidden] { display: none !important; }
+  .review-queue-heading { align-items: end; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; justify-content: space-between; margin-bottom: .85rem; padding-bottom: .75rem; }
+  .review-queue-heading h2 { font-size: 1.25rem; margin: 0; }
+  .review-queue-heading p { color: var(--muted); font-size: .82rem; line-height: 1.55; margin: .3rem 0 0; }
+  .quiet-action { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: .4rem; color: var(--text); cursor: pointer; display: inline-flex; font: inherit; font-size: .78rem; font-weight: 800; justify-content: center; min-height: 2.35rem; padding: .45rem .7rem; }
+  .quiet-action:hover { border-color: var(--accent); color: var(--accent); }
+  .review-summary { display: grid; gap: .65rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: .8rem; }
+  .review-summary article { background: var(--alt); border: 1px solid var(--border); border-radius: .55rem; display: grid; gap: .12rem; min-width: 0; padding: .75rem .8rem; }
+  .review-summary article.is-priority { border-color: #a8c8e0; box-shadow: inset 3px 0 #3d84ad; }
+  .review-summary span, .review-summary small { color: var(--muted); font-size: .7rem; }
+  .review-summary strong { font-size: 1.4rem; line-height: 1.1; }
+  .review-summary small { font-size: .66rem; }
+  .review-toolbar { align-items: end; background: var(--alt); border: 1px solid var(--border); border-radius: .55rem; display: flex; gap: .6rem; margin-bottom: .65rem; padding: .7rem .8rem; }
+  .review-toolbar label { color: var(--muted); display: grid; font-size: .7rem; font-weight: 800; gap: .25rem; }
+  .review-search { flex: 1 1 20rem; }
+  .review-filter { flex: 0 0 10rem; }
+  .review-toolbar input, .review-toolbar select { background: var(--surface); border: 1px solid var(--border); border-radius: .4rem; box-sizing: border-box; color: var(--text); font: inherit; font-size: .8rem; min-height: 2.25rem; padding: .35rem .55rem; width: 100%; }
+  .review-reset { white-space: nowrap; }
+  .review-feedback { color: var(--muted); display: block; font-size: .78rem; min-height: 1.3rem; }
+  .review-list { display: grid; gap: .7rem; }
+  .review-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: .55rem; box-shadow: 0 2px 8px rgb(24 32 39 / .06); display: grid; gap: .8rem; min-width: 0; padding: 1rem; }
+  .review-card.is-mine { border-left-color: #3d84ad; }
+  .review-card.is-unassigned { border-left-color: #c28a20; }
+  .review-card-header { align-items: start; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; }
+  .review-card-eyebrow { align-items: center; display: flex; flex-wrap: wrap; gap: .32rem; margin-bottom: .35rem; }
+  .review-chip, .review-priority, .review-status { border: 1px solid var(--border); border-radius: 999px; display: inline-flex; font-size: .67rem; font-weight: 800; line-height: 1.2; padding: .2rem .45rem; }
+  .review-chip { background: var(--alt); color: var(--muted); }
+  .review-priority { background: #e7f1fb; border-color: #a8c8e0; color: #185c86; }
+  .review-status { background: #edf6ee; border-color: #afd0b3; color: #397340; }
+  .review-status.is-unassigned { background: #fff7e7; border-color: #e4c982; color: #8a6512; }
+  .review-card h3 { font-size: 1.04rem; line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
+  .review-card-meta { color: var(--muted); font-size: .76rem; line-height: 1.55; margin: .3rem 0 0; }
+  .review-open { align-items: center; background: var(--accent); border-radius: .4rem; color: #fff; display: inline-flex; font-size: .8rem; font-weight: 800; justify-content: center; min-height: 2.35rem; padding: .45rem .7rem; text-decoration: none; white-space: nowrap; }
+  .review-card-footer { align-items: center; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: .8rem; justify-content: space-between; padding-top: .75rem; }
+  .review-assignment { align-items: center; display: flex; flex: 1 1 28rem; flex-wrap: wrap; gap: .4rem; }
+  .review-assignment label { color: var(--muted); font-size: .76rem; font-weight: 800; }
+  .review-assignment select { background: var(--surface); border: 1px solid var(--border); border-radius: .35rem; color: var(--text); font: inherit; font-size: .78rem; min-height: 2.2rem; min-width: 14rem; padding: .35rem .5rem; }
+  .review-assignment button { background: var(--surface); border: 1px solid var(--border); border-radius: .35rem; color: var(--text); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 800; min-height: 2.2rem; padding: .35rem .55rem; }
+  .review-assignment output, .review-card-state { color: var(--muted); font-size: .72rem; }
+  .review-empty { color: var(--muted); padding: 2.5rem 1rem; text-align: center; }
+  @media (max-width: 760px) { .review-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 650px) { .review-queue-heading, .review-toolbar, .review-card-header, .review-card-footer, .review-assignment { align-items: stretch; display: grid; grid-template-columns: 1fr; } .review-filter { width: 100%; } .review-reset, .review-open, .review-assignment button { justify-self: start; } .review-assignment select { min-width: 0; width: 100%; } }
+</style>
+
+<script>
+  type Reviewer = { email: string; displayName: string; subjects: string[] };
+  type ReviewRequest = {
+    id: string;
+    subject: string;
+    category: string;
+    title: string;
+    requester_display_name: string;
+    requested_at: string | null;
+    updated_at: string;
+    reviewer_email: string | null;
+    hasReviewer: boolean;
+    reviewerDisplayName: string;
+    assignedToMe: boolean;
+  };
+
+  const reviewModeActive = () => {
+    const params = new URLSearchParams(location.search);
+    return params.get("view") === "review" || params.get("mode") === "review";
+  };
+
+  const initializeAdminReviewQueue = () => {
+    const root = document.querySelector<HTMLElement>("[data-admin-review-queue]");
+    if (!root) return;
+    root.hidden = !reviewModeActive();
+    if (root.hidden || root.dataset.initialized === "true") return;
+    root.dataset.initialized = "true";
+
+    const list = root.querySelector<HTMLElement>("[data-review-list]")!;
+    const feedback = root.querySelector<HTMLOutputElement>("[data-review-feedback]")!;
+    const refresh = root.querySelector<HTMLButtonElement>("[data-review-refresh]")!;
+    const search = root.querySelector<HTMLInputElement>("[data-review-search]")!;
+    const filter = root.querySelector<HTMLSelectElement>("[data-review-filter]")!;
+    const reset = root.querySelector<HTMLButtonElement>("[data-review-reset]")!;
+    const total = root.querySelector<HTMLElement>("[data-review-total]")!;
+    const mine = root.querySelector<HTMLElement>("[data-review-mine]")!;
+    const unassigned = root.querySelector<HTMLElement>("[data-review-unassigned]")!;
+    const oldest = root.querySelector<HTMLElement>("[data-review-oldest]")!;
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+    const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const waitingDays = (value: string) => Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000));
+    const read = async <T,>(response: Response) => {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) throw new Error("ログイン状態を確認できません。ページを再読み込みしてログインし直してください。");
+      return await response.json() as T;
+    };
+
+    let reviewers: Reviewer[] = [];
+    let requests: ReviewRequest[] = [];
+    let canManageAssignments = false;
+    const reviewerOptions = (item: ReviewRequest) => [
+      '<option value="">未割り当て</option>',
+      ...reviewers
+        .filter((reviewer) => reviewer.subjects.includes("*") || reviewer.subjects.includes(item.subject))
+        .map((reviewer) => `<option value="${escapeHtml(reviewer.email)}"${reviewer.email.toLowerCase() === (item.reviewer_email ?? "").toLowerCase() ? " selected" : ""}>${escapeHtml(reviewer.displayName)}</option>`),
+    ].join("");
+
+    const render = () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      const sorted = [...requests].sort((left, right) => Number(right.assignedToMe) - Number(left.assignedToMe) || Number(!right.hasReviewer) - Number(!left.hasReviewer) || new Date(left.updated_at).getTime() - new Date(right.updated_at).getTime());
+      const visible = sorted.filter((item) =>
+        (filter.value === "all" || (filter.value === "mine" && item.assignedToMe) || (filter.value === "unassigned" && !item.hasReviewer)) &&
+        (!query || `${item.title} ${item.subject} ${item.category} ${item.requester_display_name}`.toLocaleLowerCase().includes(query)),
+      );
+      const oldestRequest = [...requests].sort((left, right) => new Date(left.updated_at).getTime() - new Date(right.updated_at).getTime())[0];
+      total.textContent = String(requests.length);
+      mine.textContent = String(requests.filter((item) => item.assignedToMe).length);
+      unassigned.textContent = String(requests.filter((item) => !item.hasReviewer).length);
+      oldest.textContent = oldestRequest ? `${waitingDays(oldestRequest.updated_at)}日` : "—";
+      list.innerHTML = visible.length ? visible.map((item) => {
+        const assignment = canManageAssignments
+          ? `<div class="review-assignment"><label for="reviewer-${escapeHtml(item.id)}">担当者</label><select id="reviewer-${escapeHtml(item.id)}" data-reviewer-for="${escapeHtml(item.id)}">${reviewerOptions(item)}</select><button type="button" data-save-reviewer="${escapeHtml(item.id)}">保存</button><output data-reviewer-message="${escapeHtml(item.id)}"></output></div>`
+          : "";
+        const requestedAt = item.requested_at ? ` ・ 依頼: ${escapeHtml(formatDate(item.requested_at))}` : "";
+        return `<article class="review-card ${item.assignedToMe ? "is-mine" : item.hasReviewer ? "is-assigned" : "is-unassigned"}"><div class="review-card-header"><div><div class="review-card-eyebrow"><span class="review-chip">${escapeHtml(item.subject)}</span><span class="review-chip">${escapeHtml(item.category || "カテゴリ未設定")}</span>${item.assignedToMe ? '<span class="review-priority">自分への依頼</span>' : item.hasReviewer ? '<span class="review-status">担当あり</span>' : '<span class="review-status is-unassigned">未割り当て</span>'}</div><h3>${escapeHtml(item.title || "無題の原稿")}</h3><p class="review-card-meta">依頼者: ${escapeHtml(item.requester_display_name)}${requestedAt} ・ 最終更新: ${escapeHtml(formatDate(item.updated_at))}（${waitingDays(item.updated_at)}日）</p></div><a class="review-open" href="/admin/editor/?document=${encodeURIComponent(item.id)}&from=review">査読を開始 →</a></div><div class="review-card-footer">${assignment}<div class="review-card-state">現在の担当: <strong>${escapeHtml(item.hasReviewer ? item.reviewerDisplayName : "未割り当て")}</strong></div></div></article>`;
+      }).join("") : '<p class="review-empty">条件に一致する査読依頼はありません。</p>';
+      feedback.value = `${visible.length}件表示 / 全${requests.length}件${canManageAssignments ? " ・ 担当者を変更できます" : ""}`;
+    };
+
+    const load = async () => {
+      feedback.value = "読み込み中…";
+      refresh.disabled = true;
+      try {
+        const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin", cache: "no-store" });
+        const data = await read<{ requests?: ReviewRequest[]; reviewers?: Reviewer[]; canManageAssignments?: boolean; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。");
+        requests = data.requests ?? [];
+        reviewers = data.reviewers ?? [];
+        canManageAssignments = data.canManageAssignments === true;
+        render();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "査読依頼を読み込めませんでした。";
+        list.innerHTML = `<p class="review-empty">${escapeHtml(message)}</p>`;
+        feedback.value = "";
+      } finally {
+        refresh.disabled = false;
+      }
+    };
+
+    refresh.addEventListener("click", () => void load());
+    search.addEventListener("input", render);
+    filter.addEventListener("change", render);
+    reset.addEventListener("click", () => { search.value = ""; filter.value = "all"; render(); search.focus(); });
+    list.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-save-reviewer]");
+      if (!button || !canManageAssignments) return;
+      const id = button.dataset.saveReviewer;
+      const select = id ? list.querySelector<HTMLSelectElement>(`[data-reviewer-for="${id}"]`) : null;
+      const message = id ? list.querySelector<HTMLOutputElement>(`[data-reviewer-message="${id}"]`) : null;
+      if (!id || !select) return;
+      button.disabled = true;
+      if (message) message.value = "保存中…";
+      void (async () => {
+        const response = await fetch(`/api/admin/editor/review-requests/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ reviewerEmail: select.value }) });
+        const data = await read<{ error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "査読担当を保存できませんでした。");
+        await load();
+      })().catch((error: unknown) => {
+        if (message) message.value = error instanceof Error ? error.message : "査読担当を保存できませんでした。";
+        button.disabled = false;
+      });
+    });
+    void load();
+  };
+
+  document.addEventListener("astro:page-load", initializeAdminReviewQueue);
+  initializeAdminReviewQueue();
+</script>

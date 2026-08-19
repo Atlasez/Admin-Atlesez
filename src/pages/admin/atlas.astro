@@ -20,17 +20,17 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         <a class="list-link" href="/admin/articles/">一覧を開く →</a>
       </div>
       <div class="featured-links">
-        <a href="/admin/editor/?new=1">
+        <a href="/admin/editor/?new=1&from=atlas">
           <strong>新規記事作成</strong>
           <small>新しい記事の本文・数式・メタデータを編集する</small>
           <span>作成を始める →</span>
         </a>
-        <a href="/admin/articles/?mode=revise">
+        <a href="/admin/articles/?view=drafts&mode=revise">
           <strong>加筆・修正</strong>
           <small>原稿一覧から重複や既存記事を確認して編集する</small>
           <span>原稿を探す →</span>
         </a>
-        <a href="/admin/review/" data-manager-only hidden>
+        <a href="/admin/articles/?view=review&mode=review">
           <strong>査読</strong>
           <small>査読中の原稿と自分への依頼を優先して確認する</small>
           <span>査読を始める →</span>

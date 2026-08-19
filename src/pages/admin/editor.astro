@@ -71,7 +71,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         <p>原稿を書く、数式を確かめる、コメントで査読する。公開まで、この画面で完結します。</p>
       </div>
       <nav aria-label="運営メニュー">
-        <a href="/admin/articles/">原稿一覧へ戻る</a>
+        <a href="/admin/articles/?view=drafts&mode=revise" data-editor-back>加筆・修正へ戻る</a>
       </nav>
     </header>
 
@@ -1187,7 +1187,23 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     publishButton.addEventListener("click", () => approvalDialog.showModal());
     unpublishButton.addEventListener("click", () => unpublishDialog.showModal());
     setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
-    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const isNewDocument = query.get("new") === "1";
+    const query = new URLSearchParams(window.location.search);
+    const reviewDocumentId = query.get("document");
+    const isNewDocument = query.get("new") === "1";
+    const returnContext = query.get("from");
+    const backLink = root.querySelector<HTMLAnchorElement>("[data-editor-back]");
+    if (backLink) {
+      if (returnContext === "review") {
+        backLink.href = "/admin/articles/?view=review&mode=review";
+        backLink.textContent = "査読一覧へ戻る";
+      } else if (returnContext === "published") {
+        backLink.href = "/admin/articles/?view=published&mode=published";
+        backLink.textContent = "公開済み一覧へ戻る";
+      } else if (returnContext === "atlas") {
+        backLink.href = "/admin/atlas/";
+        backLink.textContent = "学習サイト運営へ戻る";
+      }
+    }
     initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); }).catch((error: unknown) => { list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 

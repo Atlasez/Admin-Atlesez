@@ -705,6 +705,8 @@ const previewPublicAdminPage = (pathname: string) =>
     "/admin/applications/",
     "/admin/articles",
     "/admin/articles/",
+    "/admin/editor",
+    "/admin/editor/",
     "/admin/operations",
     "/admin/operations/",
     "/admin/co-working",
@@ -4283,6 +4285,12 @@ async function updateEditorialDocument(
       documentId,
     )
     .run();
+  if (values.status !== "in-review")
+    await env.REPORTS.prepare(
+      "DELETE FROM editorial_review_assignments WHERE document_id = ?",
+    )
+      .bind(documentId)
+      .run();
   return json({ ok: true });
 }
 
@@ -4331,63 +4339,70 @@ async function listEditorialReviewRequests(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!scope.allSubjects && !scope.subjects.length)
-    return json({ requests: [], reviewers: [] });
+    return json({ requests: [], reviewers: [], canManageAssignments: false });
   const subjectFilter = scope.allSubjects
     ? ""
     : ` AND d.subject IN (${scope.subjects.map(() => "?").join(",")})`;
-  const reviewerFilter = scope.allSubjects
-    ? ""
-    : ` WHERE p.subject = '*' OR p.subject IN (${scope.subjects.map(() => "?").join(",")})`;
-  const [result, reviewerResult] = await Promise.all([
-    env.REPORTS.prepare(
-      `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
-         r.reviewer_email,
+  const subjectValues = scope.allSubjects ? [] : scope.subjects;
+  const result = await env.REPORTS.prepare(
+    `SELECT d.id, d.subject, d.category, d.title, d.updated_at,
+         r.reviewer_email, r.requested_at,
          COALESCE(NULLIF(TRIM(requester.display_name), ''), '表示名未設定') AS requester_display_name,
          COALESCE(NULLIF(TRIM(reviewer.display_name), ''), '') AS reviewer_display_name
        FROM editorial_documents d
        LEFT JOIN editorial_review_assignments r ON r.document_id = d.id
-       LEFT JOIN editorial_member_profiles requester ON requester.email = d.updated_by
+       LEFT JOIN editorial_member_profiles requester ON requester.email = COALESCE(r.requested_by, d.updated_by)
        LEFT JOIN editorial_member_profiles reviewer ON reviewer.email = r.reviewer_email
        WHERE d.status = 'in-review'${subjectFilter}
-       ORDER BY CASE WHEN lower(r.reviewer_email) = lower(?) THEN 0 WHEN r.reviewer_email IS NULL THEN 2 ELSE 1 END,
+       ORDER BY CASE WHEN lower(r.reviewer_email) = lower(?) THEN 0 WHEN r.reviewer_email IS NULL THEN 1 ELSE 2 END,
                 d.updated_at ASC LIMIT 100`,
-    )
-      .bind(scope.email, ...scope.subjects)
-      .all<{
-        id: string;
-        subject: string;
-        category: string;
-        title: string;
-        updated_by: string;
-        updated_at: string;
-        reviewer_email: string | null;
-        requester_display_name: string;
-        reviewer_display_name: string;
-      }>(),
-    env.REPORTS.prepare(
-      `SELECT p.email,
+  )
+    .bind(scope.email, ...subjectValues)
+    .all<{
+      id: string;
+      subject: string;
+      category: string;
+      title: string;
+      updated_at: string;
+      reviewer_email: string | null;
+      requested_at: string | null;
+      requester_display_name: string;
+      reviewer_display_name: string;
+    }>();
+  const reviewerResult = scope.isManager
+    ? await env.REPORTS.prepare(
+        `SELECT p.email,
          COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name,
          GROUP_CONCAT(DISTINCT p.subject) AS subjects
        FROM report_admin_permissions p
-       LEFT JOIN editorial_member_profiles m ON m.email = p.email${reviewerFilter}
+       LEFT JOIN editorial_member_profiles m ON m.email = p.email
        GROUP BY p.email, m.display_name
        ORDER BY display_name, p.email`,
-    )
-      .bind(...scope.subjects)
-      .all<{ email: string; display_name: string; subjects: string | null }>(),
-  ]);
+      ).all<{ email: string; display_name: string; subjects: string | null }>()
+    : {
+        results: [] as {
+          email: string;
+          display_name: string;
+          subjects: string | null;
+        }[],
+      };
   return json({
-    requests: (result.results ?? []).map((item) => ({
-      ...item,
-      reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
-      assignedToMe:
-        item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
-    })),
+    requests: (result.results ?? []).map(
+      ({ reviewer_email, reviewer_display_name, ...item }) => ({
+        ...item,
+        reviewer_email: scope.isManager ? reviewer_email : null,
+        hasReviewer: Boolean(reviewer_email),
+        reviewerDisplayName: reviewer_display_name || "表示名未設定",
+        assignedToMe:
+          reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
+      }),
+    ),
     reviewers: (reviewerResult.results ?? []).map((item) => ({
       email: item.email,
       displayName: item.display_name,
       subjects: item.subjects?.split(",").filter(Boolean) ?? [],
     })),
+    canManageAssignments: scope.isManager,
   });
 }
 
@@ -4400,6 +4415,11 @@ async function updateEditorialReviewAssignment(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!scope.isManager)
+    return json(
+      { error: "査読担当者を変更できるのは運営管理者だけです。" },
+      403,
+    );
   let payload: { reviewerEmail?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
@@ -6473,8 +6493,6 @@ export default {
         "/admin/permissions/",
         "/admin/applications",
         "/admin/applications/",
-        "/admin/review",
-        "/admin/review/",
       ]);
       if (managerPages.has(url.pathname)) {
         const managerScope = await getGlobalAdminScope(request, env);
