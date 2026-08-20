@@ -555,6 +555,10 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
   button.calendar-cell--holiday {
     background: color-mix(in srgb, #d9485f 8%, var(--background-primary));
   }
+  button.calendar-cell--selected {
+    background: color-mix(in srgb, var(--accent-primary) 20%, var(--background-primary));
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
+  }
   .calendar-availability {
     border-radius: 0.25rem;
     display: block;
@@ -1035,6 +1039,8 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
     };
     let data: OperationData = { scope: { isManager: false } };
     let month = new Date(); month = new Date(month.getFullYear(), month.getMonth(), 1);
+    let calendarSelectionStart = '';
+    let calendarSelectionEnd = '';
     try { const local = Intl.DateTimeFormat().resolvedOptions().timeZone; if (local) timezone.value = local; } catch { /* 既定の日本時間を使う */ }
     const selectedTimezone = () => {
       const candidate = timezone.value.trim() || 'Asia/Tokyo';
@@ -1062,6 +1068,11 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
         cells.push(`<button type="button" class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span>${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" title="${escapeHtml(event.title)}">${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>`; }).join('')}${dayBlocks.map((block) => `<span class="calendar-availability calendar-availability--${block.kind}">${escapeHtml(block.isSelf ? '自分' : block.display_name || 'メンバー')}：${block.kind === 'available' ? '動ける' : '動けない'}</span>`).join('')}</button>`);
       }
       calendar.innerHTML = cells.join('');
+      const orderedSelection = calendarSelectionStart && calendarSelectionEnd ? [calendarSelectionStart, calendarSelectionEnd].sort() : [];
+      calendar.querySelectorAll<HTMLElement>('[data-calendar-date]').forEach((cell) => {
+        const key = cell.dataset.calendarDate ?? '';
+        cell.classList.toggle('calendar-cell--selected', orderedSelection.length === 2 && key >= orderedSelection[0] && key <= orderedSelection[1]);
+      });
     };
     const render = () => {
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
@@ -1100,19 +1111,27 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
     root.querySelector<HTMLElement>('[data-block-list]')!.addEventListener('click', (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-delete-block]'); if (!button) return; button.disabled = true; void api(`/api/admin/operations/availability-blocks/${encodeURIComponent(button.dataset.deleteBlock ?? '')}`, 'DELETE').then(load).catch((error) => { blockFeedback.value = error instanceof Error ? error.message : '可否期間を削除できませんでした。'; }).finally(() => { button.disabled = false; }); });
     get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
     get<HTMLButtonElement>('[data-calendar-next]').addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() + 1, 1); renderCalendar(); });
-    let calendarSelectionStart = '';
     const selectCalendarRange = (start: string, end: string) => {
       const ordered = [start, end].sort();
       const after = new Date(`${ordered[1]}T00:00:00Z`); after.setUTCDate(after.getUTCDate() + 1);
       get<HTMLInputElement>('[data-block-start]').value = `${ordered[0]}T00:00`;
       get<HTMLInputElement>('[data-block-end]').value = `${after.toISOString().slice(0, 10)}T00:00`;
       blockAllDay.checked = true;
-      blockEditor.open = true;
-      blockEditor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      renderCalendar();
     };
-    calendar.addEventListener('pointerdown', (event) => { const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-calendar-date]'); if (!cell) return; calendarSelectionStart = cell.dataset.calendarDate ?? ''; selectCalendarRange(calendarSelectionStart, calendarSelectionStart); });
-    calendar.addEventListener('pointerover', (event) => { if (!calendarSelectionStart || !(event.buttons & 1)) return; const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-calendar-date]'); if (cell?.dataset.calendarDate) selectCalendarRange(calendarSelectionStart, cell.dataset.calendarDate); });
-    window.addEventListener('pointerup', () => { calendarSelectionStart = ''; });
+    calendar.addEventListener('click', (event) => {
+      const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-calendar-date]');
+      const date = cell?.dataset.calendarDate ?? '';
+      if (!date) return;
+      if (!calendarSelectionStart || (calendarSelectionStart && calendarSelectionEnd && calendarSelectionStart !== calendarSelectionEnd)) {
+        calendarSelectionStart = date;
+        calendarSelectionEnd = date;
+      } else {
+        calendarSelectionEnd = date;
+        blockEditor.open = true;
+      }
+      selectCalendarRange(calendarSelectionStart, calendarSelectionEnd);
+    });
     blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
     timezone.addEventListener('input', () => { render(); });
     holidayCountry.addEventListener('change', () => { renderCalendar(); });
