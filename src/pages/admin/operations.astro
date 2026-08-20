@@ -1199,7 +1199,16 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     timezone.addEventListener('input', () => { render(); });
     holidayCountry.addEventListener('change', () => { renderHolidayTags(); renderCalendar(); });
     calendarSystem.addEventListener('change', () => { renderCalendar(); });
-    void load().catch((error) => { const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。'; tasks.textContent = message; events.textContent = message; reports.textContent = message; calendarTitle.textContent = '読み込めませんでした'; });
+    // API の応答を待たずに月表示を作る。認証切れや一時的な取得失敗が
+    // あっても、カレンダーそのものと月移動は利用できる状態を保つ。
+    renderCalendar();
+    void load().catch((error) => {
+      const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';
+      tasks.textContent = message;
+      events.textContent = message;
+      reports.textContent = message;
+      eventFeedback.value = `予定を読み込めませんでした。${message}`;
+    });
   };
   document.addEventListener('astro:page-load', initializeOperations);
   initializeOperations();

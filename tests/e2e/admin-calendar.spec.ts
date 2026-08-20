@@ -1,5 +1,31 @@
 import { expect, test } from "@playwright/test";
 
+test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
+  const now = new Date();
+  const expectedDays = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+  ).getDate();
+
+  await page.route("**/api/admin/operations**", async (route) => {
+    await route.fulfill({
+      status: 503,
+      json: { error: "予定を一時的に取得できません。" },
+    });
+  });
+
+  await page.goto("admin/calendar/?project=atlas");
+
+  await expect(page.locator("[data-calendar-date]")).toHaveCount(expectedDays);
+  await expect(page.locator("[data-calendar-title]")).not.toHaveText(
+    "読み込み中…",
+  );
+  await expect(page.locator("[data-event-feedback]")).toContainText(
+    "予定を読み込めませんでした。",
+  );
+});
+
 test("カレンダーで複数地域・タイムゾーン・可否期間を操作できる", async ({
   page,
 }) => {
