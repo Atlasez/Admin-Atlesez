@@ -185,6 +185,16 @@ test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", 
   await expect(toggle).not.toBeChecked();
 });
 
+test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const guide = page.getByRole("link", { name: "作業の進め方 ↗" });
+  await expect(guide).toHaveAttribute("href", "/admin/guide/?project=atlas");
+  await expect(guide).toHaveAttribute("target", "_blank");
+  await expect(guide).toBeVisible();
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
