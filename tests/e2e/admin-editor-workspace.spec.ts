@@ -144,6 +144,21 @@ test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示�
   }
 });
 
+test("E-6: ダークモードでMarkdown本文を読める配色にする", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  await page.evaluate(() =>
+    document.documentElement.setAttribute("data-pref-bg", "dark"),
+  );
+
+  const colors = await page.locator("[data-body]").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, text: style.color };
+  });
+  expect(colors.background).not.toBe("rgb(255, 255, 255)");
+  expect(colors.background).not.toBe(colors.text);
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
