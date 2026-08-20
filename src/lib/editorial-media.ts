@@ -40,10 +40,7 @@ export const sanitizeEditorialFilename = (
   return `${basename || "image"}.${extension}`;
 };
 
-export const sanitizeEditorialLatexName = (
-  value: string,
-  filename: string,
-) => {
+export const sanitizeEditorialLatexName = (value: string, filename: string) => {
   const fallback = filename.replace(/\.[a-z0-9]+$/i, "");
   const normalized = (value.trim() || fallback)
     .normalize("NFKC")
@@ -64,9 +61,11 @@ export const editorialAssetIdsIn = (body: string) => [
 
 export const editorialLatexNamesIn = (body: string) => [
   ...new Set(
-    [...body.matchAll(/^\\includegraphics(?:\[[^\]\r\n]{0,240}\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/gm)].map(
-      (match) => match[1].toLowerCase(),
-    ),
+    [
+      ...body.matchAll(
+        /^\\includegraphics(?:\[[^\]\r\n]{0,240}\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/gm,
+      ),
+    ].map((match) => match[1].toLowerCase()),
   ),
 ];
 

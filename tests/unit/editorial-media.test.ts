@@ -67,14 +67,22 @@ describe("editorial media markers", () => {
     expect(sanitizeEditorialLatexName("_diagram", "diagram.png")).toBe(
       "asset-_diagram",
     );
-    expect(editorialLatexNamesIn("\\includegraphics{group-diagram}\n")).toEqual([
-      "group-diagram",
-    ]);
+    expect(editorialLatexNamesIn("\\includegraphics{group-diagram}\n")).toEqual(
+      ["group-diagram"],
+    );
     expect(
       replaceEditorialLatexReferences(
         "\\includegraphics[width=0.8\\linewidth]{group-diagram}",
         new Map([
-          ["group-diagram", { id: firstId, filename: "diagram.png", latexName: "group-diagram", alt: "群の図" }],
+          [
+            "group-diagram",
+            {
+              id: firstId,
+              filename: "diagram.png",
+              latexName: "group-diagram",
+              alt: "群の図",
+            },
+          ],
         ]),
       ),
     ).toContain("![群の図](../../../../../images/editorial/");
