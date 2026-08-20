@@ -184,8 +184,11 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
               role="listbox"
               hidden
             ></div></label
-          ><label class="field-label"
-            >表示する祝日の国・地域（複数選択可）<select
+          ><label class="field-label holiday-picker"
+            >表示する祝日の国・地域（複数選択可）
+            <div class="holiday-tags" data-holiday-tags></div>
+            <button type="button" class="holiday-add" data-holiday-add aria-expanded="false">タグを追加</button>
+            <select
               data-calendar-holiday-country
               multiple
               size="4"
@@ -509,6 +512,13 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     gap: 0.65rem;
     grid-template-columns: 1.35fr 1fr 1fr;
   }
+  .holiday-picker { align-content:start; position:relative; }
+  .holiday-picker > select { display:none; }
+  .holiday-picker.is-open > select { display:block; max-height:11rem; position:absolute; top:100%; z-index:25; }
+  .holiday-tags { display:flex; flex-wrap:wrap; gap:.3rem; min-height:2rem; }
+  .holiday-tags button { background:var(--background-secondary); border-color:var(--border-default); border-radius:999px; color:var(--text-primary); font-size:.7rem; margin:0; padding:.25rem .45rem; }
+  .holiday-tags span { color:var(--text-secondary); font-size:.72rem; }
+  .holiday-add { background:var(--background-primary)!important; border-color:var(--accent-primary)!important; color:var(--accent-primary)!important; justify-self:start; margin:0!important; }
   .calendar-settings input,
   .calendar-settings select {
     margin: 0.25rem 0;
@@ -975,6 +985,8 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const calendarTitle = get<HTMLElement>('[data-calendar-title]');
     const timezone = get<HTMLInputElement>('[data-calendar-timezone]');
     const holidayCountry = get<HTMLSelectElement>('[data-calendar-holiday-country]');
+    const holidayTags = get<HTMLElement>('[data-holiday-tags]');
+    const holidayAdd = get<HTMLButtonElement>('[data-holiday-add]');
     const timezoneOptions = get<HTMLElement>('[data-timezone-options]');
     const timezoneToggle = get<HTMLButtonElement>('[data-timezone-toggle]');
     const blockEditor = get<HTMLDetailsElement>('[data-block-editor]');
@@ -993,6 +1005,22 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
     const calendarPage = location.pathname.replace(/\/$/, '') === '/admin/calendar';
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
+    const renderHolidayTags = () => {
+      holidayTags.innerHTML = [...holidayCountry.selectedOptions].map((option) => `<button type="button" data-remove-holiday="${escapeHtml(option.value)}" aria-label="${escapeHtml(option.textContent || option.value)}を外す">${escapeHtml(option.textContent || option.value)} ×</button>`).join('') || '<span>祝日を表示しない</span>';
+    };
+    holidayAdd.addEventListener('click', () => {
+      const opening = !holidayCountry.closest('.holiday-picker')?.classList.contains('is-open');
+      holidayCountry.closest('.holiday-picker')?.classList.toggle('is-open', opening);
+      holidayAdd.setAttribute('aria-expanded', String(opening));
+    });
+    holidayTags.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-holiday]');
+      if (!button) return;
+      const option = [...holidayCountry.options].find((item) => item.value === button.dataset.removeHoliday);
+      if (option) option.selected = false;
+      renderHolidayTags();
+      renderCalendar();
+    });
     const populateTimezones = () => {
       const values = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
       const fallbackValues = [...root.querySelectorAll<HTMLOptionElement>('#atlasez-timezone-datalist option')].map((option) => option.value);
@@ -1017,6 +1045,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       holidayCountry.innerHTML = supportedHolidayRegions().map((region) => `<option value="${escapeHtml(region.code)}" ${selectedRegions.has(region.code) ? 'selected' : ''}>${escapeHtml(region.name)}（${escapeHtml(region.code)}）</option>`).join('');
     };
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
+    renderHolidayTags();
     const selected = (actual: string, expected: string) => actual === expected ? 'selected' : '';
     const reminderKind = (rule: ReminderRule) => rule.relative_kind === 'before' ? (rule.relative_unit === 'hours' ? 'before_hours' : 'before_days') : rule.relative_kind === 'due_day_hourly' ? 'due_day_hourly' : 'absolute';
     const reminderRowHtml = (rule: ReminderRule = {}) => {
@@ -1161,7 +1190,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     });
     blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
     timezone.addEventListener('input', () => { render(); });
-    holidayCountry.addEventListener('change', () => { renderCalendar(); });
+    holidayCountry.addEventListener('change', () => { renderHolidayTags(); renderCalendar(); });
     calendarSystem.addEventListener('change', () => { renderCalendar(); });
     void load().catch((error) => { const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。'; tasks.textContent = message; events.textContent = message; reports.textContent = message; calendarTitle.textContent = '読み込めませんでした'; });
   };
