@@ -145,12 +145,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
           <details class="metadata" open>
             <summary>記事設定</summary>
             <div class="metadata-grid">
-              <label>タイトル<input name="title" required maxlength="180" placeholder="例：群の定義" /></label>
-              <label>要約<input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
-              <label>分野<select name="subject" required data-subject></select></label>
-              <label>カテゴリ<select name="category" required data-category></select></label>
-              <label>URL用の名前<input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-              <label>概念ID<input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
+              <label>タイトル <span class="required-mark" aria-hidden="true">*</span><input name="title" required maxlength="180" placeholder="例：群の定義" /></label>
+              <label>要約 <span class="required-mark" aria-hidden="true">*</span><input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
+              <label>分野 <span class="required-mark" aria-hidden="true">*</span><select name="subject" required data-subject></select></label>
+              <label>カテゴリ <span class="required-mark" aria-hidden="true">*</span><select name="category" required data-category></select></label>
+              <label>URL用の名前 <span class="required-mark" aria-hidden="true">*</span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
+              <label>概念ID <span class="required-mark" aria-hidden="true">*</span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
               <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
               <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select></label>
@@ -1348,6 +1348,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
 </script>
 
 <style is:global>
+  .editor-workspace .required-mark { color: var(--danger, #a03123); font-weight: 900; }
   .review-panel .comment-avatar {
     overflow: hidden;
     position: relative;
