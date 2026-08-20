@@ -513,6 +513,62 @@ test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する"
   ).not.toHaveClass(/is-acted-by-me/);
 });
 
+test("IM-1: 認証付き画像を取得してPreviewへBlob表示する", async ({ page }) => {
+  await mockAdminApi(page);
+  const assetId = "11111111-1111-4111-8111-111111111111";
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: {
+        document: {
+          ...documentItem,
+          body: `## 図\n\n![群の図](asset://${assetId})`,
+        },
+        comments,
+      },
+    });
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/assets",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          assets: [
+            {
+              id: assetId,
+              filename: "group.gif",
+              mediaType: "image/gif",
+              bytes: 34,
+              alt: "群の図",
+              latexName: "group-diagram",
+              createdAt: "2026-08-20T00:00:00.000Z",
+              marker: `asset://${assetId}`,
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.route(`**/api/admin/editor/assets/${assetId}`, async (route) => {
+    await route.fulfill({
+      contentType: "image/gif",
+      body: Buffer.from(
+        "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+        "base64",
+      ),
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const previewImage = page.locator(`[data-editorial-asset="${assetId}"]`);
+  await expect(previewImage).toHaveAttribute("src", /^blob:/);
+  await expect
+    .poll(() =>
+      previewImage.evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBe(1);
+  await expect(page.locator("[data-media-status]")).toHaveText("1件の素材");
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
