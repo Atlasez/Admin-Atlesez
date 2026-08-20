@@ -179,7 +179,9 @@ test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", 
   await expect(toggle).toBeChecked();
   await toggle.uncheck();
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("atlasez-editor-autosave")))
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("atlasez-editor-autosave")),
+    )
     .toBe("off");
   await page.reload();
   await expect(toggle).not.toBeChecked();
@@ -193,6 +195,64 @@ test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", 
   await expect(guide).toHaveAttribute("href", "/admin/guide/?project=atlas");
   await expect(guide).toHaveAttribute("target", "_blank");
   await expect(guide).toBeVisible();
+});
+
+test("V-2: 査読担当者と依頼内容を選んで保存できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/review-requests", async (route) => {
+    await route.fulfill({
+      json: {
+        reviewers: [
+          {
+            email: "bob@example.com",
+            displayName: "Bob",
+            subjects: ["mathematics"],
+          },
+          {
+            email: "carol@example.com",
+            displayName: "Carol",
+            subjects: ["physics"],
+          },
+        ],
+      },
+    });
+  });
+  let assignment: Record<string, unknown> | null = null;
+  await page.route(
+    "**/api/admin/editor/review-requests/doc-1",
+    async (route) => {
+      assignment = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await page.getByRole("button", { name: "査読を依頼する" }).click();
+  const dialog = page.locator("[data-review-request-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("option")).toContainText([
+    "担当者を選択",
+    "この分野の担当者全員",
+    "Bob",
+  ]);
+  await expect(dialog.locator("option", { hasText: "Carol" })).toHaveCount(0);
+  await dialog
+    .locator("[data-review-request-assignee]")
+    .selectOption("bob@example.com");
+  await dialog
+    .locator("[data-review-request-note]")
+    .fill("定義と例を重点確認してください");
+  await dialog.getByRole("button", { name: "査読を依頼する" }).click();
+
+  await expect
+    .poll(() => assignment)
+    .toEqual({
+      reviewerEmail: "bob@example.com",
+      note: "定義と例を重点確認してください",
+    });
+  await expect(page.locator("[data-save-message]")).toHaveText(
+    "査読を依頼しました。",
+  );
 });
 
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
