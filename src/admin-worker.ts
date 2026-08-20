@@ -4482,8 +4482,21 @@ async function updateEditorialCommentStatus(
   if (
     (action === "acknowledge" || action === "unacknowledge") &&
     latestAction?.action === action
-  )
-    return json({ ok: true, action, actorEmail: scope.email, unchanged: true });
+  ) {
+    const statements = [
+      env.REPORTS.prepare(
+        "DELETE FROM editorial_comment_actions WHERE comment_id = ? AND lower(actor_email) = lower(?) AND action IN ('acknowledge','unacknowledge')",
+      ).bind(commentId, scope.email),
+    ];
+    if (action === "acknowledge")
+      statements.push(
+        env.REPORTS.prepare(
+          "UPDATE editorial_comments SET acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ? AND lower(acknowledged_by) = lower(?)",
+        ).bind(commentId, scope.email),
+      );
+    await env.REPORTS.batch(statements);
+    return json({ ok: true, action, actorEmail: scope.email, toggledOff: true });
+  }
   const now = new Date().toISOString();
   const stateUpdate =
     action === "acknowledge"
