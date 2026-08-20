@@ -481,6 +481,38 @@ test("CK-1: 自分の確認済み反応を再クリックして取り消せる",
   await expect(action.locator(".comment-action-count")).toHaveText("0");
 });
 
+test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: {
+        document: documentItem,
+        comments: [
+          {
+            ...comments[0],
+            id: "new-comment",
+            acknowledged_at: null,
+            acknowledged_by: null,
+            acknowledged_by_emails: [],
+            unacknowledged_by_emails: [],
+            action_actor_counts: { acknowledge: [], unacknowledge: [] },
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const thread = page.locator('[data-comment-context="new-comment"]');
+  await expect(thread.locator(".thread-status")).toHaveText("対応待ち");
+  await expect(thread.locator(".comment-action-count")).toHaveText(["0", "0"]);
+  await expect(
+    thread.getByRole("button", { name: /確認済み/ }),
+  ).not.toHaveClass(/is-acted-by-me/);
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
