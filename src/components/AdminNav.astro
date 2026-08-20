@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working";
+  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working" | "management";
   site?: "portal" | "atlas" | "semi-platform" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -33,6 +33,8 @@ const routeCurrent = normalizedPath === "/admin/portal"
             ? "editor"
             : normalizedPath === "/admin/workspace"
               ? "workspace"
+              : normalizedPath === "/admin/manage"
+                ? "management"
               : normalizedPath === "/admin/operations"
                 ? "operations"
                 : normalizedPath === "/admin/co-working"
@@ -72,6 +74,7 @@ const pageLabel = ({
   applications: "運営参加応募",
   introductions: "運営内自己紹介",
   "co-working": "同時作業会",
+  management: "管理トップ",
 } as Record<NonNullable<Props["current"]>, string>)[current];
 const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "secretariat"]);
 ---
@@ -89,9 +92,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>進捗・ToDo・日程</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局ToDo・日程</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ運営・ToDo</a>
-    <details class="admin-management-menu" hidden={site === "portal"} open={(["reports", "permissions", "guide", "applications", "co-working", "review"] as string[]).includes(current)}>
+    <details class="admin-management-menu" hidden={site === "portal"} open={(["management", "reports", "permissions", "guide", "applications", "co-working", "review"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
+        <a href={`/admin/manage/?project=${projectSlug}`} data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理トップ</a>
         <a href={`/admin/co-working/?project=atlas`} data-admin-site="atlas" data-admin-page="co-working" hidden={site !== "atlas"} aria-current={current === "co-working" && site === "atlas" ? "page" : undefined}>同時作業会</a>
         <a href={`/admin/co-working/?project=secretariat`} data-admin-site="secretariat" data-admin-page="co-working" hidden={site !== "secretariat"} aria-current={current === "co-working" && site === "secretariat" ? "page" : undefined}>事務局の日程・交流</a>
         <a href={`/admin/co-working/?project=seminar-platform`} data-admin-site="semi-platform" data-admin-page="co-working" hidden={site !== "semi-platform"} aria-current={current === "co-working" && site === "semi-platform" ? "page" : undefined}>ゼミ日程・交流</a>
