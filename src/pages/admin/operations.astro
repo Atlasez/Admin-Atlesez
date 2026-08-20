@@ -155,7 +155,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
         <p>
           日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。
         </p>
-        <nav class="calendar-view-tabs" aria-label="カレンダー表示"><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}`} aria-current={!calendarSettings ? "page" : undefined}>予定</a><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}&tab=settings`} aria-current={calendarSettings ? "page" : undefined}>設定</a></nav>
+        <nav class="calendar-view-tabs" aria-label="カレンダー表示"><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}`} data-calendar-tab="agenda" aria-current={!calendarSettings ? "page" : undefined}>予定</a><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}&tab=settings`} data-calendar-tab="settings" aria-current={calendarSettings ? "page" : undefined}>設定</a></nav>
         <div class="calendar-settings" aria-label="カレンダー表示設定">
           <label class="field-label timezone-combobox"
             >表示するタイムゾーン
@@ -968,6 +968,13 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
     root.dataset.initialized = 'true';
+    root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((tab) => tab.addEventListener('click', (event) => {
+      event.preventDefault();
+      const view = tab.dataset.calendarTab === 'settings' ? 'settings' : 'agenda';
+      root.dataset.calendarView = view;
+      root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((item) => item.setAttribute('aria-current', item === tab ? 'page' : 'false'));
+      history.replaceState(null, '', tab.href);
+    }));
     const taskSection = Array.from(root.querySelectorAll<HTMLElement>('.grid > section')).find((section) => section.querySelector('h2')?.textContent?.trim() === 'ToDo');
     if (taskSection) {
       const heading = taskSection.querySelector('h2');
