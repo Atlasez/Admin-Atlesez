@@ -289,6 +289,23 @@ test("H-1: 保存版と現在の本文の差分を表示できる", async ({ pag
   );
 });
 
+test("H-2: 版履歴を査読コメント枠から独立して配置する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const revisionWorkspace = page.locator(".revision-workspace");
+  await expect(revisionWorkspace).toBeVisible();
+  await expect(revisionWorkspace).toContainText("版履歴・差分確認");
+  expect(
+    await revisionWorkspace.evaluate((element) =>
+      Boolean(element.closest(".review-panel")),
+    ),
+  ).toBe(false);
+  await expect(page.locator(".editor-split + .revision-workspace")).toHaveCount(
+    1,
+  );
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
