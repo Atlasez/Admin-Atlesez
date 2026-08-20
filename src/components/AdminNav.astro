@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working" | "management";
+  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "operations" | "calendar" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working" | "management";
   site?: "portal" | "atlas" | "semi-platform" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -16,7 +16,7 @@ const routeSite = normalizedPath === "/admin/portal"
     ? "secretariat"
     : normalizedPath === "/admin/semi-platform"
       ? "semi-platform"
-      : normalizedPath === "/admin/operations" || normalizedPath === "/admin/co-working"
+      : normalizedPath === "/admin/operations" || normalizedPath === "/admin/calendar" || normalizedPath === "/admin/co-working"
         ? operationProject === "seminar-platform" ? "semi-platform" : operationProject
         : normalizedPath === "/admin/secretariat" ? "secretariat" : normalizedPath === "/admin/semi-platform" ? "semi-platform" : querySite;
 const routeCurrent = normalizedPath === "/admin/portal"
@@ -35,6 +35,8 @@ const routeCurrent = normalizedPath === "/admin/portal"
               ? "workspace"
               : normalizedPath === "/admin/manage"
                 ? "management"
+              : normalizedPath === "/admin/calendar"
+                ? "calendar"
               : normalizedPath === "/admin/operations"
                 ? "operations"
                 : normalizedPath === "/admin/co-working"
@@ -67,6 +69,7 @@ const pageLabel = ({
   articles: "編集・査読",
   workspace: "マイページ",
   operations: "タスク管理",
+  calendar: "カレンダー",
   review: "査読スペース",
   reports: "問題報告・統計",
   permissions: "運営者・担当管理",
@@ -90,8 +93,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <a href="/admin/introductions/?project=portal" data-admin-site="portal" data-admin-page="introductions" data-admin-i18n data-admin-ja="運営紹介" data-admin-en="Operator introductions" aria-current={site === "portal" && current === "introductions" ? "page" : undefined}>運営紹介</a>
       <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・査読</a>
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>タスク管理</a>
+      <a href="/admin/calendar/?project=atlas" data-admin-site="atlas" data-admin-page="calendar" hidden={site !== "atlas"} aria-current={current === "calendar" && site === "atlas" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局タスク管理</a>
+      <a href="/admin/calendar/?project=secretariat" data-admin-site="secretariat" data-admin-page="calendar" hidden={site !== "secretariat"} aria-current={current === "calendar" && site === "secretariat" ? "page" : undefined}>事務局カレンダー</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ・タスク管理</a>
+      <a href="/admin/calendar/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="calendar" hidden={site !== "semi-platform"} aria-current={current === "calendar" && site === "semi-platform" ? "page" : undefined}>ゼミ・カレンダー</a>
     <details class="admin-management-menu" hidden={site === "portal"} open={(["management", "reports", "permissions", "guide", "applications", "co-working", "review"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
