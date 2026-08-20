@@ -871,6 +871,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       return await response.json() as T;
     };
     const selectedSubject = () => subjects.find((item) => item.slug === subject.value) ?? subjects[0];
+    const availableEditorSubjects = () => subjects.filter((item) => isManager || assignedSubjects.includes(item.slug));
+    const populateEditorSubjects = (selected = subject.value) => {
+      const available = availableEditorSubjects();
+      subject.innerHTML = available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
+      subject.disabled = !available.length;
+      subject.value = available.some((item) => item.slug === selected) ? selected : available[0]?.slug ?? "";
+    };
     const fillCategories = (selected = "") => {
       const subjectData = selectedSubject();
       const categories = subjectData.categories.length ? subjectData.categories : [{ slug: "general", name: "総合", order: 0 }];
@@ -878,7 +885,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       category.value = categories.some((item) => item.slug === selected) ? selected : categories[0]?.slug ?? "general";
     };
     const initializeSelects = () => {
-      subject.innerHTML = subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
+      populateEditorSubjects();
       fillCategories();
       populateSourceSubjects();
       fillSourceArticles();
@@ -1172,7 +1179,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; publicationState.textContent = item.published_at ? "公開済み" : "未公開"; updateWorkflow(item.status, Boolean(item.published_at)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at); unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at)); reviewButton.hidden = !(Boolean(item.id) && item.status === "draft"); saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false);
     };
     const emptyDocument = (source?: SourceArticle) => {
-      const selected = source ? subjects.find((item) => item.slug === source.subject) ?? subjects[0] : subjects[0];
+      const available = availableEditorSubjects();
+      const selected = source ? available.find((item) => item.slug === source.subject) ?? available[0] : available[0];
+      if (!selected) return;
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
       setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
@@ -1221,7 +1230,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
     type Revision = { id: string; title: string; summary: string; body: string; status: string; saved_by: string; saved_at: string };
     const revisionLineDiff = (before: string, after: string) => {

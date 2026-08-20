@@ -73,7 +73,14 @@ const comments = [
   },
 ];
 
-async function mockAdminApi(page: Page) {
+async function mockAdminApi(
+  page: Page,
+  scope = {
+    email: "alice@example.com",
+    subjects: ["mathematics"],
+    isManager: true,
+  },
+) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -82,11 +89,7 @@ async function mockAdminApi(page: Page) {
       payload = {
         documents: [documentItem],
         mentionNames: ["Alice", "Bob"],
-        scope: {
-          email: "alice@example.com",
-          subjects: ["mathematics"],
-          isManager: true,
-        },
+        scope,
       };
     } else if (url.pathname === "/api/admin/editor/documents/doc-1") {
       payload = { document: documentItem, comments };
@@ -104,6 +107,20 @@ async function mockAdminApi(page: Page) {
     });
   });
 }
+
+test("E-5: 記事設定には担当分野だけを表示する", async ({ page }) => {
+  await mockAdminApi(page, {
+    email: "alice@example.com",
+    subjects: ["mathematics"],
+    isManager: false,
+  });
+  await page.goto("./admin/editor/?new=1");
+
+  const subject = page.locator('select[name="subject"]');
+  await expect(subject).toHaveValue("mathematics");
+  await expect(subject.locator("option")).toHaveCount(1);
+  await expect(subject.locator("option")).toHaveText("数学");
+});
 
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
