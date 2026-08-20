@@ -61,9 +61,7 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
           class="field-label"
           >対象分野<select data-task-subject>
             <option value="">全体</option>
-            {subjects.map((subject) =>
-            <option value="{subject.slug}">{subject.name}</option>
-            )}
+            {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
           </select></label
         ><label class="field-label"
           >担当者<select data-task-assignee>
@@ -75,11 +73,7 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
             >期限日時<input data-task-due type="datetime-local" /></label
           ><label class="field-label"
             >期限のタイムゾーン<select data-task-due-timezone>
-              {timezones.map(([value, label]) =>
-              <option value="{value}" selected="{value" ="" ="" ="Asia/Tokyo" }>
-                {label}
-              </option>
-              )}
+              {timezones.map(([value, label]) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}
             </select></label
           >
         </div>
@@ -191,26 +185,16 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
               multiple
               size="4"
             >
-              {holidayCountries.map(([value, label]) =>
-              <option value="{value}" selected="{value" ="" ="" ="JP" }>
-                {label}
-              </option>
-              )}
+              {holidayCountries.map(([value, label]) => <option value={value} selected={value === "JP"}>{label}</option>)}
             </select></label
           ><label class="field-label"
             >暦の表示<select data-calendar-system>
-              {calendarSystems.map(([value, label]) =>
-              <option value="{value}" selected="{value" ="" ="" ="gregory" }>
-                {label}
-              </option>
-              )}
+              {calendarSystems.map(([value, label]) => <option value={value} selected={value === "gregory"}>{label}</option>)}
             </select></label
           >
         </div>
         <datalist id="atlasez-timezone-datalist">
-          {timezones.map(([value, label]) =>
-          <option value="{value}" label="{label}"></option>
-          )}
+          {timezones.map(([value, label]) => <option value={value} label={label}></option>)}
         </datalist>
         <div class="calendar-head">
           <button type="button" data-calendar-prev aria-label="前の月">‹</button
