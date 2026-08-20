@@ -290,7 +290,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           const unreadCount = notifications.filter((item) => !item.read).length;
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
-          const kindLabel = (kind: string) => ({ comment: 'コメント', review: '査読依頼', approved: '査読完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
+          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: '査読依頼', approved: '査読完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
           notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
         } catch { notificationList.textContent = '通知を取得できませんでした'; }
       };

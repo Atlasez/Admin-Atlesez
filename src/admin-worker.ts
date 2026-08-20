@@ -5575,8 +5575,17 @@ async function adminNotifications(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const profile = await env.REPORTS.prepare(
+    "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
+  )
+    .bind(scope.email)
+    .first<{ display_name: string }>();
+  const mentionNeedle = profile?.display_name?.trim()
+    ? `@${profile.display_name.trim()}`
+    : "";
   const [
     commentRows,
+    mentionRows,
     approvedRows,
     publishedRows,
     reviewRows,
@@ -5594,6 +5603,29 @@ async function adminNotifications(
         document_id: string;
         title: string;
       }>(),
+    mentionNeedle
+      ? env.REPORTS.prepare(
+          "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by != ? AND c.created_by != ? AND instr(c.body, ?) > 0 ORDER BY c.created_at DESC LIMIT 12",
+        )
+          .bind(scope.email, scope.email, mentionNeedle)
+          .all<{
+            id: string;
+            body: string;
+            parent_comment_id: string | null;
+            created_at: string;
+            document_id: string;
+            title: string;
+          }>()
+      : Promise.resolve({
+          results: [] as {
+            id: string;
+            body: string;
+            parent_comment_id: string | null;
+            created_at: string;
+            document_id: string;
+            title: string;
+          }[],
+        }),
     env.REPORTS.prepare(
       "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
     )
@@ -5648,6 +5680,14 @@ async function adminNotifications(
       id: `comment-${item.id}`,
       kind: "comment",
       title: `${item.parent_comment_id ? "コメントに返信" : "記事に新しいコメント"}：${item.title}`,
+      detail: item.body.slice(0, 90),
+      href: `/admin/editor/?document=${encodeURIComponent(item.document_id)}`,
+      updatedAt: item.created_at,
+    })),
+    ...(mentionRows.results ?? []).map((item) => ({
+      id: `mention-${item.id}`,
+      kind: "mention",
+      title: `メンションされました：${item.title}`,
       detail: item.body.slice(0, 90),
       href: `/admin/editor/?document=${encodeURIComponent(item.document_id)}`,
       updatedAt: item.created_at,
@@ -5729,7 +5769,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|approved|published|review|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
+                /^(comment|mention|approved|published|review|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
