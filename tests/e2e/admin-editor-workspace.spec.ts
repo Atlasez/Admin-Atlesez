@@ -434,6 +434,53 @@ test("CM-7: 親コメントの記事引用を返信へ添付して送信でき�
     });
 });
 
+test("CK-1: 自分の確認済み反応を再クリックして取り消せる", async ({ page }) => {
+  await mockAdminApi(page);
+  let toggled = false;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    const updatedComments = [
+      {
+        ...comments[0],
+        acknowledged_by: toggled ? null : "alice@example.com",
+        acknowledged_by_emails: toggled ? [] : ["alice@example.com"],
+        action_actor_counts: {
+          ...comments[0].action_actor_counts,
+          acknowledge: toggled
+            ? []
+            : [
+                {
+                  actor_email: "alice@example.com",
+                  actor_display_name: "Alice",
+                  count: 1,
+                },
+              ],
+        },
+      },
+      ...comments.slice(1),
+    ];
+    await route.fulfill({
+      json: { document: documentItem, comments: updatedComments },
+    });
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments/comment-1",
+    async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ action: "acknowledge" });
+      toggled = true;
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const action = page
+    .locator('[data-comment-context="comment-1"]')
+    .getByRole("button", { name: /確認済み/ });
+  await expect(action).toHaveClass(/is-acted-by-me/);
+  await action.click();
+  await expect(action).not.toHaveClass(/is-acted-by-me/);
+  await expect(action.locator(".comment-action-count")).toHaveText("0");
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
