@@ -1197,7 +1197,34 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     };
     const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); };
     const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); setDocument(data.document, data.comments ?? []); };
-    const loadRevisions = async (id:string) => { if(!id) return; const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"}); const data=await read<{revisions?:{title:string;status:string;saved_by:string;saved_at:string}[]}>(response); revisions.innerHTML=(data.revisions??[]).map(x=>`<div class="revision-item"><b>${esc(x.title)}</b> ・ ${esc(x.status)}<br>${esc(x.saved_by)} ・ ${date(x.saved_at)}</div>`).join("")||"まだ過去版はありません。次回の保存から記録されます。"; };
+    type Revision = { id: string; title: string; summary: string; body: string; status: string; saved_by: string; saved_at: string };
+    const revisionLineDiff = (before: string, after: string) => {
+      const left = before.split("\n"), right = after.split("\n"), output: string[] = [];
+      for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+        if (left[index] === right[index]) output.push(`  ${left[index] ?? ""}`);
+        else { if (left[index] !== undefined) output.push(`- ${left[index]}`); if (right[index] !== undefined) output.push(`+ ${right[index]}`); }
+      }
+      return output.join("\n");
+    };
+    const loadRevisions = async (id:string) => {
+      if(!id) return;
+      const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"});
+      const data=await read<{revisions?:Revision[];error?:string}>(response);
+      if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; return; }
+      const history = data.revisions ?? [];
+      if (!history.length) { revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。"; return; }
+      const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by)}・${esc(item.status)}</option>`).join("");
+      revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label></div><pre class="revision-diff" data-revision-diff></pre>`;
+      const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
+      const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;
+      const output = revisions.querySelector<HTMLElement>("[data-revision-diff]")!;
+      const renderDiff = () => {
+        const beforeBody = history[Number(before.value)]?.body ?? "";
+        const afterBody = after.value === "current" ? body.value : history[Number(after.value)]?.body ?? "";
+        output.textContent = revisionLineDiff(beforeBody, afterBody);
+      };
+      before.addEventListener("change", renderDiff); after.addEventListener("change", renderDiff); renderDiff();
+    };
     subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
     outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
     outlineCategory.addEventListener("change", renderAtlasOutline);
@@ -1335,6 +1362,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       setUnsavedChanges(false);
       saveMessage.value = status.value === "approved" ? "査読済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
       await loadDocuments();
+      await loadRevisions(savedId);
       progressDialog.showModal();
     })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; activeReplyId = null; selectedCommentRanges = []; renderSelectedRanges(); setCommentSelection(null); await openDocument(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
@@ -1365,6 +1393,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .revision-workspace { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--accent); margin: 1rem .8rem; padding: 1rem; }
   .revision-workspace h3 { margin: 0; }
   .revision-workspace > p { color: var(--muted); margin: .35rem 0 .75rem; }
+  .revision-compare-controls { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .revision-compare-controls label { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .25rem; }
+  .revision-diff { background: var(--background-inset); border: 1px solid var(--border); color: var(--text); line-height: 1.55; margin: .75rem 0 0; max-height: 28rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }
   .review-panel .comment-avatar {
     overflow: hidden;
     position: relative;
