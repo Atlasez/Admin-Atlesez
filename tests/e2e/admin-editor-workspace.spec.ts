@@ -345,6 +345,38 @@ test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", as
   );
 });
 
+test("CM-3: 本文から消えた元文章もコメントの引用として保持する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    const quotedComments = [
+      {
+        ...comments[0],
+        selections: [
+          {
+            selection_start: 10,
+            selection_end: 19,
+            selection_text: "削除済みの元文章",
+          },
+        ],
+      },
+      ...comments.slice(1),
+    ];
+    await route.fulfill({
+      json: { document: documentItem, comments: quotedComments },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const quote = page.locator(
+    '[data-comment-context="comment-1"] .comment-quote',
+  );
+  await expect(quote).toContainText("対象の文章");
+  await expect(quote).toContainText("削除済みの元文章");
+  await expect(page.locator("[data-body]")).not.toHaveValue(/削除済みの元文章/);
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
