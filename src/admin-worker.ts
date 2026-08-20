@@ -1794,6 +1794,7 @@ async function listEditorialDocuments(
     if (!scope.subjects.length)
       return json({
         documents: [],
+        mentionNames: [],
         scope: { email: scope.email, subjects: [], isManager: scope.isManager },
       });
     filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
@@ -1827,11 +1828,25 @@ async function listEditorialDocuments(
       assignment.reviewer_email,
     ]),
   );
+  const memberFilters = scope.allSubjects
+    ? ""
+    : ` WHERE p.subject IN (${scope.subjects.map(() => "?").join(", ")})`;
+  const memberRows = await env.REPORTS.prepare(
+    `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
+     FROM report_admin_permissions p
+     LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(p.email)${memberFilters}
+     ORDER BY display_name, p.email`,
+  )
+    .bind(...(scope.allSubjects ? [] : scope.subjects))
+    .all<{ email: string; display_name: string }>();
   return json({
     documents: documentRows.map((document) => ({
       ...document,
       reviewer_email: reviewerByDocument.get(document.id) ?? null,
     })),
+    mentionNames: (memberRows.results ?? []).map(
+      (member) => member.display_name.trim() || member.email.split("@")[0],
+    ),
     scope: {
       email: scope.email,
       subjects: scope.subjects,
@@ -3777,15 +3792,21 @@ async function getEditorialDocument(
     );
     actionsByComment.set(commentId, entry);
   };
+  const latestFeedback = new Map<
+    string,
+    Map<string, "acknowledge" | "unacknowledge">
+  >();
   for (const action of actionRows.results ?? []) {
-    if (
-      action.action === "acknowledge" ||
-      action.action === "unacknowledge" ||
-      action.action === "resolve" ||
-      action.action === "reopen"
-    )
+    if (action.action === "acknowledge" || action.action === "unacknowledge") {
+      const feedback = latestFeedback.get(action.comment_id) ?? new Map();
+      feedback.set(action.actor_email.toLowerCase(), action.action);
+      latestFeedback.set(action.comment_id, feedback);
+    } else if (action.action === "resolve" || action.action === "reopen")
       addAction(action.comment_id, action.action, action.actor_email);
   }
+  for (const [commentId, feedback] of latestFeedback)
+    for (const [actorEmail, action] of feedback)
+      addAction(commentId, action, actorEmail);
   const authorEmails = [
     ...new Set(
       [
@@ -3847,9 +3868,18 @@ async function getEditorialDocument(
     // 0049以前のコメントには状態の最終操作者だけが残っているため、旧列を1件の履歴として補う。
     if (
       comment.acknowledged_by &&
-      !entry.actorCounts.acknowledge.has(comment.acknowledged_by)
+      !entry.actorCounts.acknowledge.has(
+        comment.acknowledged_by.toLowerCase(),
+      ) &&
+      !entry.actorCounts.unacknowledge.has(
+        comment.acknowledged_by.toLowerCase(),
+      )
     )
-      addAction(comment.id, "acknowledge", comment.acknowledged_by);
+      addAction(
+        comment.id,
+        "acknowledge",
+        comment.acknowledged_by.toLowerCase(),
+      );
     if (
       comment.resolved_by &&
       !entry.actorCounts.resolve.has(comment.resolved_by)
@@ -4442,6 +4472,18 @@ async function updateEditorialCommentStatus(
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
+  const latestAction = await env.REPORTS.prepare(
+    `SELECT action FROM editorial_comment_actions
+     WHERE comment_id = ? AND lower(actor_email) = lower(?) AND action IN ('acknowledge','unacknowledge')
+     ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(commentId, scope.email)
+    .first<{ action: string }>();
+  if (
+    (action === "acknowledge" || action === "unacknowledge") &&
+    latestAction?.action === action
+  )
+    return json({ ok: true, action, actorEmail: scope.email, unchanged: true });
   const now = new Date().toISOString();
   const stateUpdate =
     action === "acknowledge"
