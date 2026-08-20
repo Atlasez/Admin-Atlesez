@@ -197,6 +197,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
             <div class="comment-list" data-comment-list></div>
             <div class="selection-action" data-selection-action hidden><span data-selection-action-text></span><button type="button" class="quiet-action" data-use-selection>選択範囲を追加</button></div>
             <div class="selected-ranges" data-selected-ranges hidden></div>
+            <div class="comment-tags" aria-label="コメントタグ"><span>タグ</span><button type="button" data-comment-tag="定義不足">定義不足</button><button type="button" data-comment-tag="根拠確認">根拠確認</button><button type="button" data-comment-tag="表記修正">表記修正</button><button type="button" data-comment-tag="要相談">要相談</button></div>
             <label class="comment-entry"><span>新しいコメント</span><output class="selection-hint" data-comment-selection>範囲未選択：記事全体へのコメントとして送信します。</output><textarea data-comment-body maxlength="8000" placeholder="例：@表示名 定義の前に具体例を一つ入れると読みやすくなりそうです。"></textarea></label>
             <datalist id="comment-mention-members" data-comment-mention-members></datalist>
             <button type="button" class="primary-action review-submit" data-send-comment>この内容でコメントを追加</button>
@@ -1003,7 +1004,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       comments.innerHTML = roots.length ? roots.map((item) => {
         const threadReplies = replies.get(item.id) ?? [];
         const status = item.acknowledged_at ? ["is-acknowledged", "確認済み"] : ["is-pending", "対応待ち"];
-        return `<section class="comment-thread" data-comment-context="${item.id}"><div class="thread-summary"><span class="thread-status ${status[0]}">${status[1]}</span></div>${renderCommentCard(item)}${threadReplies.length ? `<button type="button" class="reply-toggle" data-toggle-replies="${item.id}">返信 ${threadReplies.length}件を表示</button><div class="comment-replies" data-replies="${item.id}" hidden>${threadReplies.map((reply) => renderCommentCard(reply, true)).join("")}</div>` : ""}<button type="button" class="reply-open" data-open-reply="${item.id}">返信</button><label class="reply-entry" data-reply-entry="${item.id}" hidden><button type="button" class="reply-quote-button" data-quote-reply="${item.id}">記事の引用を添付</button><textarea data-reply-body="${item.id}" list="comment-mention-members" maxlength="8000" placeholder="返信を書く（@表示名でメンション）"></textarea><div class="reply-actions"><button type="button" class="quiet-action" data-cancel-reply="${item.id}">キャンセル</button><button type="button" class="primary-action" data-send-reply="${item.id}">返信する</button></div></label></section>`;
+        return `<section class="comment-thread" data-comment-context="${item.id}"><div class="thread-summary"><span class="thread-status ${status[0]}">${status[1]}</span></div>${renderCommentCard(item)}${threadReplies.length ? `<button type="button" class="reply-toggle" data-toggle-replies="${item.id}">返信 ${threadReplies.length}件を表示</button><div class="comment-replies" data-replies="${item.id}" hidden>${threadReplies.map((reply) => renderCommentCard(reply, true)).join("")}</div>` : ""}<button type="button" class="reply-open" data-open-reply="${item.id}">返信</button><label class="reply-entry" data-reply-entry="${item.id}" hidden><button type="button" class="reply-quote-button" data-quote-reply="${item.id}">記事の引用を添付</button><div class="comment-tags" aria-label="返信タグ"><button type="button" data-comment-tag="定義不足">定義不足</button><button type="button" data-comment-tag="根拠確認">根拠確認</button><button type="button" data-comment-tag="表記修正">表記修正</button><button type="button" data-comment-tag="要相談">要相談</button></div><textarea data-reply-body="${item.id}" list="comment-mention-members" maxlength="8000" placeholder="返信を書く（@表示名でメンション）"></textarea><div class="reply-actions"><button type="button" class="quiet-action" data-cancel-reply="${item.id}">キャンセル</button><button type="button" class="primary-action" data-send-reply="${item.id}">返信する</button></div></label></section>`;
       }).join("") : '<p class="comment-empty">コメントはまだありません。本文の範囲を選択すると、その箇所に紐づけてコメントできます。</p>';
       comments.querySelectorAll<HTMLImageElement>("[data-comment-avatar]").forEach((image) => {
         image.addEventListener("error", () => {
@@ -1100,6 +1101,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       else if (event.key === "Escape") { event.preventDefault(); hideMentionSuggestions(); }
     });
     paneElements.review.addEventListener("focusout", (event) => { if (isMentionTextarea(event.target)) mentionHideTimer = window.setTimeout(() => { if (!mentionSuggestions.matches(":hover")) hideMentionSuggestions(); }, 140); });
+    paneElements.review.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-tag]");
+      if (!button) return;
+      const textarea = button.closest<HTMLElement>("[data-reply-entry]")?.querySelector<HTMLTextAreaElement>("textarea") ?? commentBody;
+      const tag = `[${button.dataset.commentTag ?? ""}] `;
+      const start = textarea.selectionStart ?? textarea.value.length;
+      textarea.setRangeText(tag, start, start, "end");
+      textarea.focus();
+    });
     window.addEventListener("resize", positionMentionSuggestions, { passive: true });
     window.addEventListener("scroll", positionMentionSuggestions, { passive: true });
     const formValue = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
@@ -1396,6 +1406,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .revision-compare-controls { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .revision-compare-controls label { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .25rem; }
   .revision-diff { background: var(--background-inset); border: 1px solid var(--border); color: var(--text); line-height: 1.55; margin: .75rem 0 0; max-height: 28rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }
+  .comment-tags { align-items: center; display: flex; flex-wrap: wrap; gap: .3rem; padding: 0 .85rem .55rem; }
+  .comment-tags span { color: var(--muted); font-size: .7rem; font-weight: 800; }
+  .comment-tags button { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; color: var(--accent); cursor: pointer; font: inherit; font-size: .68rem; font-weight: 800; padding: .25rem .45rem; }
+  .reply-entry .comment-tags { padding: 0; }
   .review-panel .comment-avatar {
     overflow: hidden;
     position: relative;
