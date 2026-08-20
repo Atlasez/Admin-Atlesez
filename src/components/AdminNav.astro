@@ -291,8 +291,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
           const kindLabel = (kind: string) => ({ comment: 'コメント', review: '査読依頼', approved: '査読完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
-          const unreadNotifications = notifications.filter((item) => !item.read);
-          notificationList.innerHTML = unreadNotifications.length ? unreadNotifications.map((item) => `<div class="admin-notification-item"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a><button type="button" data-read-notification="${escape(item.id)}">既読にする</button></div>`).join('') : '<span class="admin-notification-empty">あなたの記事に関する新しい通知はありません。</span>';
+          notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
         } catch { notificationList.textContent = '通知を取得できませんでした'; }
       };
       notificationButton?.addEventListener('click', () => { const open = !notificationPanel?.hidden; if (notificationPanel) notificationPanel.hidden = open; notificationButton.setAttribute('aria-expanded', String(!open)); });
@@ -407,6 +406,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-nav .notification-kind { font-size: .68rem; letter-spacing: .08em; }
   .admin-nav .admin-notification-item > button { border: 1px solid var(--border-default); border-radius: 999px; flex: 0 0 auto; margin: 0 .35rem 0 0; padding: .4rem .55rem; }
   .admin-nav .admin-notification-item > button:hover { border-color: var(--accent-primary); }
+  .admin-nav .notification-read-label { align-self: center; color: var(--text-secondary); flex: 0 0 auto; font-size: .68rem; font-weight: 700; margin-right: .4rem; }
   .admin-nav .admin-notification-empty { display: block; padding: 1.25rem .8rem; text-align: center; }
   .admin-nav [data-manager-only][hidden] { display: none !important; }
 </style>
