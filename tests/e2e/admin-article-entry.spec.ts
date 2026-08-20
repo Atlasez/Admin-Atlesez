@@ -80,6 +80,16 @@ test.describe("A/D 原稿一覧の作業導線", () => {
               updated_at: "2026-08-20T03:00:00.000Z",
               published_at: null,
             },
+            {
+              id: "draft",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "draft",
+              title: "まだ下書きの原稿",
+              status: "draft",
+              updated_at: "2026-08-20T04:00:00.000Z",
+              published_at: null,
+            },
           ],
         },
       });
@@ -91,12 +101,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page).toHaveURL(
       /\/admin\/articles\/\?mode=review#article-list$/,
     );
-    await expect(page.locator("[data-status]")).toHaveValue("in-review");
-    await expect(page.locator("[data-list] .article")).toHaveCount(2);
+    await expect(page.locator("[data-status]")).toHaveValue("all");
+    await expect(page.locator("[data-list] .article")).toHaveCount(3);
     await expect(page.locator("[data-list] .article").first()).toContainText(
       "自分への査読依頼",
     );
     await expect(page.locator("[data-list]")).not.toContainText("査読済み原稿");
+    await expect(page.locator("[data-list]")).toContainText("まだ下書きの原稿");
 
     await page.goto("admin/review/");
     await expect(page).toHaveURL(
