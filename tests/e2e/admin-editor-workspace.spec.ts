@@ -149,9 +149,9 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   const thread = page.locator('[data-comment-context="comment-1"]');
   await expect(
     thread.getByRole("button", { name: "✓ 確認済み" }),
-  ).toBeDisabled();
-  await expect(thread).not.toContainText("人・");
-  await expect(thread).not.toContainText("・自分");
+  ).toBeEnabled();
+  await expect(thread.locator(".comment-action-count").first()).toHaveText("1");
+  await expect(thread.locator(".comment-action-count").nth(1)).toHaveText("1");
   await expect(thread.locator(".comment-action-actor-list")).toHaveCount(0);
 
   await thread.click({ button: "right" });

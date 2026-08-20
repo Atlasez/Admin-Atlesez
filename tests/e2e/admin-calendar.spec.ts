@@ -67,7 +67,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
     });
   });
 
-  await page.goto("admin/operations/?project=atlas");
+  await page.goto("admin/calendar/?project=atlas");
   await expect(page.locator("[data-calendar-date]")).toHaveCount(
     new Date(year, now.getMonth() + 1, 0).getDate(),
   );
@@ -76,6 +76,8 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   expect(await holidayRegions.locator("option").count()).toBeGreaterThanOrEqual(
     500,
   );
+  await page.locator('[data-calendar-tab="settings"]').click();
+  await page.locator("[data-holiday-add]").click();
   await holidayRegions.selectOption(["JP", "US/CA"]);
   await expect(holidayRegions.locator("option:checked")).toHaveCount(2);
 
@@ -86,6 +88,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   await expect(page.locator("[data-calendar-timezone]")).toHaveValue(
     "America/New_York",
   );
+  await page.locator('[data-calendar-tab="agenda"]').click();
 
   await expect(page.getByText("自分：動ける").first()).toBeVisible();
   await expect(page.getByText("Bob：動けない").first()).toBeVisible();
@@ -94,20 +97,10 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   const startCell = page.locator(`[data-calendar-date="${startDate}"]`);
   const endCell = page.locator(`[data-calendar-date="${endDate}"]`);
   await startCell.scrollIntoViewIfNeeded();
-  const startBox = await startCell.boundingBox();
-  const endBox = await endCell.boundingBox();
-  expect(startBox).not.toBeNull();
-  expect(endBox).not.toBeNull();
-  await page.mouse.move(
-    startBox!.x + startBox!.width / 2,
-    startBox!.y + startBox!.height / 2,
-  );
-  await page.mouse.down();
-  await page.mouse.move(
-    endBox!.x + endBox!.width / 2,
-    endBox!.y + endBox!.height / 2,
-  );
-  await page.mouse.up();
+  await startCell.click();
+  await endCell.click();
+  await expect(startCell).toHaveClass(/calendar-cell--selected/);
+  await expect(endCell).toHaveClass(/calendar-cell--selected/);
 
   await expect(page.locator("[data-block-editor]")).toHaveAttribute("open", "");
   await expect(page.locator("[data-block-all-day]")).toBeChecked();
