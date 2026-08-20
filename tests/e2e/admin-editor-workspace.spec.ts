@@ -306,6 +306,23 @@ test("H-2: 版履歴を査読コメント枠から独立して配置する", asy
   );
 });
 
+test("CM-1: コメントと返信の両方でレビュータグを挿入できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await page
+    .locator('.review-panel > .comment-tags [data-comment-tag="定義不足"]')
+    .click();
+  await expect(page.locator("[data-comment-body]")).toHaveValue("[定義不足] ");
+
+  const thread = page.locator('[data-comment-context="comment-1"]');
+  await thread.locator("[data-open-reply]").click();
+  await thread.locator('[data-comment-tag="根拠確認"]').click();
+  await expect(thread.locator("[data-reply-body]")).toHaveValue("[根拠確認] ");
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
