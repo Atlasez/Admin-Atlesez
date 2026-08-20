@@ -2722,8 +2722,15 @@ async function operationsOverview(
       display_name: string;
     }>(),
     env.REPORTS.prepare(
-      "SELECT id, starts_at, ends_at, timezone, label, kind FROM editorial_member_availability_blocks WHERE email = ? ORDER BY starts_at ASC LIMIT 100",
-    ).bind(scope.email).all(),
+      `SELECT b.id, b.email, b.starts_at, b.ends_at, b.timezone,
+        CASE WHEN lower(b.email) = lower(?) OR ? = 1 THEN b.label ELSE '' END AS label,
+        b.kind, COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name
+       FROM editorial_member_availability_blocks b
+       LEFT JOIN editorial_member_profiles p ON lower(p.email) = lower(b.email)
+       ORDER BY b.starts_at ASC LIMIT 500`,
+    )
+      .bind(scope.email, scope.isManager ? 1 : 0)
+      .all<Record<string, unknown>>(),
   ]);
   const taskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
   const reminderRows = taskRows.length
@@ -2757,7 +2764,11 @@ async function operationsOverview(
       ...task,
       reminders: remindersByTask.get(String(task.id)) ?? [],
     })),
-    availabilityBlocks: availabilityBlocks.results ?? [],
+    availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
+      ...block,
+      isSelf:
+        String(block.email ?? "").toLowerCase() === scope.email.toLowerCase(),
+    })),
     events: (events.results ?? []).map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
       return {
