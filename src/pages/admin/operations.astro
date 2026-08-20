@@ -559,6 +559,16 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
     background: color-mix(in srgb, var(--accent-primary) 20%, var(--background-primary));
     box-shadow: inset 0 0 0 2px var(--accent-primary);
   }
+  button.calendar-cell--today .calendar-day {
+    align-items: center;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    color: #fff;
+    display: inline-flex;
+    height: 1.55rem;
+    justify-content: center;
+    width: 1.55rem;
+  }
   .calendar-availability {
     border-radius: 0.25rem;
     display: block;
@@ -1068,9 +1078,12 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
         cells.push(`<button type="button" class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span>${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" title="${escapeHtml(event.title)}">${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>`; }).join('')}${dayBlocks.map((block) => `<span class="calendar-availability calendar-availability--${block.kind}">${escapeHtml(block.isSelf ? '自分' : block.display_name || 'メンバー')}：${block.kind === 'available' ? '動ける' : '動けない'}</span>`).join('')}</button>`);
       }
       calendar.innerHTML = cells.join('');
+      const today = dateParts(new Date().toISOString());
+      const todayKey = `${today.year}-${today.month}-${today.day}`;
       const orderedSelection = calendarSelectionStart && calendarSelectionEnd ? [calendarSelectionStart, calendarSelectionEnd].sort() : [];
       calendar.querySelectorAll<HTMLElement>('[data-calendar-date]').forEach((cell) => {
         const key = cell.dataset.calendarDate ?? '';
+        cell.classList.toggle('calendar-cell--today', key === todayKey);
         cell.classList.toggle('calendar-cell--selected', orderedSelection.length === 2 && key >= orderedSelection[0] && key <= orderedSelection[1]);
       });
     };
