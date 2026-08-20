@@ -159,6 +159,18 @@ test("E-6: ダークモードでMarkdown本文を読める配色にする", asyn
   expect(colors.background).not.toBe(colors.text);
 });
 
+test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  await page.locator('[name="title"]').fill("未保存のタイトル");
+
+  const prevented = await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    return !window.dispatchEvent(event);
+  });
+  expect(prevented).toBe(true);
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
