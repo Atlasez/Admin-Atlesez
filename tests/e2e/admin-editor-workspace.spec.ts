@@ -122,6 +122,28 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(subject.locator("option")).toHaveText("数学");
 });
 
+test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  await expect(page.locator(".required-mark")).toHaveCount(6);
+  for (const name of [
+    "title",
+    "summary",
+    "subject",
+    "category",
+    "slug",
+    "conceptId",
+  ]) {
+    await expect(page.locator(`[name="${name}"]`)).toHaveAttribute(
+      "required",
+      "",
+    );
+  }
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
