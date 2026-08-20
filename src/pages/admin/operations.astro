@@ -10,10 +10,12 @@ const holidayCountries = [
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
 const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
+const calendarSettings = Astro.url.searchParams.get("tab") === "settings";
+const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
 ---
 
 <AdminLayout title={calendarPage ? "カレンダー" : "タスク管理"} description="運営作業を共有する場所">
-  <main class="operations" data-operations>
+  <main class="operations" data-operations data-calendar-view={calendarSettings ? "settings" : "agenda"}>
     <header>
       <h1 data-project-title>{calendarPage ? "カレンダー" : "タスク管理"}</h1>
       <span>{calendarPage ? "日程、参加可否、祝日を確認します。" : "進捗報告と、次に行うタスクを共有します。"}</span>
@@ -153,6 +155,7 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
         <p>
           日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。
         </p>
+        <nav class="calendar-view-tabs" aria-label="カレンダー表示"><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}`} aria-current={!calendarSettings ? "page" : undefined}>予定</a><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}&tab=settings`} aria-current={calendarSettings ? "page" : undefined}>設定</a></nav>
         <div class="calendar-settings" aria-label="カレンダー表示設定">
           <label class="field-label timezone-combobox"
             >表示するタイムゾーン
@@ -309,6 +312,17 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
   .operations-tabs { display:flex; gap:.35rem; margin-top:.75rem; }
   .operations-tabs a { border:1px solid var(--border-default); color:var(--text-primary); font-size:.76rem; font-weight:800; padding:.4rem .65rem; text-decoration:none; }
   .operations-tabs a[aria-current="page"] { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
+  .calendar-view-tabs { border-bottom:1px solid var(--border-default); display:flex; gap:.2rem; margin:.75rem 0; }
+  .calendar-view-tabs a { border-bottom:3px solid transparent; color:var(--text-secondary); font-size:.78rem; font-weight:800; padding:.45rem .7rem; text-decoration:none; }
+  .calendar-view-tabs a[aria-current="page"] { border-bottom-color:var(--accent-primary); color:var(--accent-primary); }
+  .operations[data-calendar-view="agenda"] .calendar-settings { display:none; }
+  .operations[data-calendar-view="settings"] .calendar-head,
+  .operations[data-calendar-view="settings"] .calendar-week,
+  .operations[data-calendar-view="settings"] .calendar-note,
+  .operations[data-calendar-view="settings"] .event-create,
+  .operations[data-calendar-view="settings"] [data-event-feedback],
+  .operations[data-calendar-view="settings"] [data-event-list],
+  .operations[data-calendar-view="settings"] .availability-blocks { display:none!important; }
   .grid {
     display: grid;
     gap: 1rem;
