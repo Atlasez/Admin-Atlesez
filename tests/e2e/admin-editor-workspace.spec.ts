@@ -255,6 +255,40 @@ test("V-2: 査読担当者と依頼内容を選んで保存できる", async ({ 
   );
 });
 
+test("H-1: 保存版と現在の本文の差分を表示できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/revisions",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          revisions: [
+            {
+              id: "revision-1",
+              title: "群の定義",
+              summary: "旧要約",
+              body: "## 群\n\n古い本文です。",
+              status: "draft",
+              saved_by: "alice@example.com",
+              saved_at: "2026-08-19T00:00:00.000Z",
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-revision-before]")).toHaveCount(1);
+  await expect(page.locator("[data-revision-after]")).toHaveValue("current");
+  await expect(page.locator("[data-revision-diff]")).toContainText(
+    "- 古い本文です。",
+  );
+  await expect(page.locator("[data-revision-diff]")).toContainText(
+    "+ 群の本文です。",
+  );
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
