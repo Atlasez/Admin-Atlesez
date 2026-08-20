@@ -95,6 +95,13 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
     root.dataset.initialized = 'true';
+    const taskSection = Array.from(root.querySelectorAll<HTMLElement>('.grid > section')).find((section) => section.querySelector('h2')?.textContent?.trim() === 'ToDo');
+    if (taskSection) {
+      const heading = taskSection.querySelector('h2');
+      const description = taskSection.querySelector('p');
+      if (heading) heading.textContent = 'タスク作成・依頼';
+      if (description) description.textContent = '表示対象を切り替えると、このフォームの下にあるタスク一覧が変わります。';
+    }
     const get = <T extends Element>(selector: string) => root.querySelector<T>(selector)!;
     const progress = get<HTMLTextAreaElement>('[data-progress]');
     const tasks = get<HTMLElement>('[data-task-list]');
