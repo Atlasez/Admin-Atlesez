@@ -377,6 +377,63 @@ test("CM-3: 本文から消えた元文章もコメントの引用として保�
   await expect(page.locator("[data-body]")).not.toHaveValue(/削除済みの元文章/);
 });
 
+test("CM-7: 親コメントの記事引用を返信へ添付して送信できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const quotedComments = [
+    {
+      ...comments[0],
+      selections: [
+        {
+          selection_start: 5,
+          selection_end: 10,
+          selection_text: "群の本文です。",
+        },
+      ],
+    },
+    ...comments.slice(1),
+  ];
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: { document: documentItem, comments: quotedComments },
+    });
+  });
+  let replyPayload: Record<string, unknown> | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments",
+    async (route) => {
+      replyPayload = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const thread = page.locator('[data-comment-context="comment-1"]');
+  await thread.locator("[data-open-reply]").click();
+  await thread.locator("[data-quote-reply]").click();
+  await expect(page.locator("[data-selected-ranges]")).toContainText(
+    "群の本文です。",
+  );
+  await thread.locator("[data-reply-body]").fill("引用箇所を修正しました。");
+  await thread.locator("[data-send-reply]").click();
+
+  await expect
+    .poll(() => replyPayload)
+    .toMatchObject({
+      parentCommentId: "comment-1",
+      body: "引用箇所を修正しました。",
+      selections: [
+        {
+          start: 5,
+          end: 10,
+          text: "群の本文です。",
+          source: "記事",
+        },
+      ],
+    });
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
