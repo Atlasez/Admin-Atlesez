@@ -4347,7 +4347,7 @@ async function listEditorialReviewRequests(
   const [result, reviewerResult] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
-         r.reviewer_email,
+         r.reviewer_email, r.request_note,
          COALESCE(NULLIF(TRIM(requester.display_name), ''), '表示名未設定') AS requester_display_name,
          COALESCE(NULLIF(TRIM(reviewer.display_name), ''), '') AS reviewer_display_name
        FROM editorial_documents d
@@ -4369,6 +4369,7 @@ async function listEditorialReviewRequests(
         reviewer_email: string | null;
         requester_display_name: string;
         reviewer_display_name: string;
+        request_note: string;
       }>(),
     env.REPORTS.prepare(
       `SELECT p.email,
@@ -4385,7 +4386,7 @@ async function listEditorialReviewRequests(
   return json({
     requests: (result.results ?? []).map((item) => ({
       ...item,
-      reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
+      reviewerDisplayName: item.reviewer_email === "*" ? "分野担当者全員" : item.reviewer_display_name || "表示名未設定",
       assignedToMe:
         item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
     })),
@@ -4406,7 +4407,7 @@ async function updateEditorialReviewAssignment(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { reviewerEmail?: unknown };
+  let payload: { reviewerEmail?: unknown; note?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -4423,6 +4424,7 @@ async function updateEditorialReviewAssignment(
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の査読権限がありません。" }, 403);
   const reviewerEmail = text(payload.reviewerEmail, 320).toLowerCase();
+  const requestNote = text(payload.note, 2_000);
   if (!reviewerEmail) {
     await env.REPORTS.prepare(
       "DELETE FROM editorial_review_assignments WHERE document_id = ?",
@@ -4431,16 +4433,16 @@ async function updateEditorialReviewAssignment(
       .run();
     return json({ ok: true, reviewerEmail: null });
   }
-  if (!EMAIL_PATTERN.test(reviewerEmail))
+  if (reviewerEmail !== "*" && !EMAIL_PATTERN.test(reviewerEmail))
     return json(
       { error: "査読担当者のメールアドレスを確認してください。" },
       400,
     );
-  const reviewer = await env.REPORTS.prepare(
-    "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
-  )
-    .bind(reviewerEmail, document.subject)
-    .first<{ found: number }>();
+  const reviewer = reviewerEmail === "*" ? { found: 1 } : await env.REPORTS.prepare(
+      "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
+    )
+      .bind(reviewerEmail, document.subject)
+      .first<{ found: number }>();
   if (!reviewer)
     return json(
       { error: "この原稿の分野を担当できる運営者を選択してください。" },
@@ -4448,12 +4450,12 @@ async function updateEditorialReviewAssignment(
     );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
-    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
-       requested_by = excluded.requested_by, updated_at = excluded.updated_at`,
+       requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note`,
   )
-    .bind(documentId, reviewerEmail, scope.email, now, now)
+    .bind(documentId, reviewerEmail, scope.email, now, now, requestNote)
     .run();
   return json({ ok: true, reviewerEmail });
 }

@@ -250,6 +250,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
         </div>
       </form>
     </dialog>
+    <dialog class="approval-dialog review-request-dialog" data-review-request-dialog aria-labelledby="review-request-title">
+      <form method="dialog" data-review-request-form>
+        <p class="eyebrow">査読依頼</p>
+        <h2 id="review-request-title">査読を誰に依頼しますか？</h2>
+        <label>依頼先<select data-review-request-assignee required><option value="">担当者を選択</option><option value="*">この分野の担当者全員</option></select></label>
+        <label>依頼内容・備考<textarea data-review-request-note maxlength="2000" rows="5" placeholder="重点的に確認してほしい点や期限など"></textarea></label>
+        <output data-review-request-message aria-live="polite"></output>
+        <div class="approval-actions"><button type="submit" value="cancel" class="quiet-action">キャンセル</button><button type="submit" value="request" class="primary-action">査読を依頼する</button></div>
+      </form>
+    </dialog>
     <dialog class="reference-dialog" data-reference-dialog aria-labelledby="reference-dialog-title">
       <div class="reference-dialog-header"><div><p class="eyebrow">公開記事の参考</p><h2 id="reference-dialog-title" data-reference-title>記事を選択してください</h2><p data-reference-meta></p></div><button type="button" class="quiet-action" data-reference-close>閉じる</button></div>
       <div class="reference-dialog-tabs" role="tablist" aria-label="公開記事の表示方法"><button type="button" role="tab" class="is-selected" data-reference-tab="preview" aria-selected="true" aria-controls="reference-preview-panel">プレビュー</button><button type="button" role="tab" data-reference-tab="source" aria-selected="false" aria-controls="reference-source-panel">Markdown</button></div>
@@ -280,6 +290,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
   .primary-action, .quiet-action { border-radius: .45rem; cursor: pointer; font-size: .82rem; font-weight: 800; min-height: 2.35rem; padding: .42rem .68rem; }
   .primary-action { background: var(--accent); border: 1px solid var(--accent); color: white; }
   .primary-action:hover { filter: brightness(.93); }
+  .review-request-dialog label { display:grid; font-size:.78rem; font-weight:800; gap:.35rem; margin-top:.75rem; }.review-request-dialog select,.review-request-dialog textarea { background:var(--surface); border:1px solid var(--border); color:var(--text); font:inherit; padding:.55rem; }.review-request-dialog textarea { resize:vertical; }.review-request-dialog output { color:var(--muted); display:block; font-size:.75rem; min-height:1.2rem; margin-top:.5rem; }
   .withdraw-action { background: #fff7f6; border: 1px solid #c8675d; color: #9c3028; }
   .withdraw-action:hover { background: #fff0ee; }
   .quiet-action { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
@@ -552,6 +563,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
     const unpublishButton = root.querySelector<HTMLButtonElement>("[data-unpublish-document]")!;
     const reviewButton = root.querySelector<HTMLButtonElement>("[data-request-review]")!;
+    const reviewRequestDialog = root.querySelector<HTMLDialogElement>("[data-review-request-dialog]")!;
+    const reviewRequestForm = root.querySelector<HTMLFormElement>("[data-review-request-form]")!;
+    const reviewRequestAssignee = root.querySelector<HTMLSelectElement>("[data-review-request-assignee]")!;
+    const reviewRequestNote = root.querySelector<HTMLTextAreaElement>("[data-review-request-note]")!;
+    const reviewRequestMessage = root.querySelector<HTMLOutputElement>("[data-review-request-message]")!;
     const headingOutline = root.querySelector<HTMLElement>("[data-heading-outline]")!;
     const approvalDialog = root.querySelector<HTMLDialogElement>("[data-approval-dialog]")!;
     const unpublishDialog = root.querySelector<HTMLDialogElement>("[data-unpublish-dialog]")!;
@@ -1298,7 +1314,40 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       unpublishButton.hidden = true;
       reviewButton.hidden = !((form.elements.namedItem("documentId") as HTMLInputElement).value && status.value === "draft");
     });
-    reviewButton.addEventListener("click", () => { status.value = "in-review"; status.dispatchEvent(new Event("change")); form.requestSubmit(); });
+    reviewButton.addEventListener("click", () => { void (async () => {
+      reviewRequestMessage.value = "依頼先を読み込み中…";
+      const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin", cache: "no-store" });
+      const data = await read<{ reviewers?: Array<{ email:string; displayName:string; subjects:string[] }>; error?:string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "依頼先を読み込めませんでした。");
+      const currentSubject = subject.value;
+      const reviewers = (data.reviewers ?? []).filter((reviewer) => reviewer.subjects.includes("*") || reviewer.subjects.includes(currentSubject));
+      reviewRequestAssignee.innerHTML = '<option value="">担当者を選択</option><option value="*">この分野の担当者全員</option>' + reviewers.map((reviewer) => `<option value="${esc(reviewer.email)}">${esc(reviewer.displayName)}</option>`).join("");
+      reviewRequestMessage.value = "";
+      reviewRequestDialog.showModal();
+    })().catch((error:unknown) => { saveMessage.value = error instanceof Error ? error.message : "依頼先を読み込めませんでした。"; }); });
+    reviewRequestForm.addEventListener("submit", (event) => {
+      const submitter = event.submitter as HTMLButtonElement | null;
+      if (submitter?.value !== "request") return;
+      event.preventDefault();
+      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      if (!id || !reviewRequestAssignee.value) { reviewRequestMessage.value = "依頼先を選択してください。"; return; }
+      submitter.disabled = true;
+      reviewRequestMessage.value = "査読依頼を保存中…";
+      void (async () => {
+        status.value = "in-review";
+        const documentResponse = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify(documentPayload()) });
+        const documentData = await read<{error?:string}>(documentResponse);
+        if (!documentResponse.ok) throw new Error(documentData.error ?? "原稿を査読中へ変更できませんでした。");
+        const assignmentResponse = await fetch(`/api/admin/editor/review-requests/${encodeURIComponent(id)}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ reviewerEmail:reviewRequestAssignee.value, note:reviewRequestNote.value }) });
+        const assignmentData = await read<{error?:string}>(assignmentResponse);
+        if (!assignmentResponse.ok) throw new Error(assignmentData.error ?? "査読担当を保存できませんでした。");
+        reviewRequestDialog.close();
+        reviewRequestNote.value = "";
+        await openDocument(id);
+        await loadDocuments();
+        saveMessage.value = "査読を依頼しました。";
+      })().catch((error:unknown) => { reviewRequestMessage.value = error instanceof Error ? error.message : "査読を依頼できませんでした。"; }).finally(() => { submitter.disabled = false; });
+    });
     approvalDialog.addEventListener("close", () => {
       if (approvalDialog.returnValue === "yes") void publishCurrentDocument();
       else if (approvalDialog.returnValue === "no") saveMessage.value = "公開を取りやめました。";
