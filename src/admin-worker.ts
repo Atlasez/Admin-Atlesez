@@ -2352,7 +2352,7 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
   if (isResponse(scope)) return scope;
   const [profile, discord] = await Promise.all([
     env.REPORTS.prepare(
-      "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, updated_at FROM editorial_member_profiles WHERE email = ?",
+      "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, affiliation_type, country, timezone, updated_at FROM editorial_member_profiles WHERE email = ?",
     )
       .bind(scope.email)
       .first<{
@@ -2363,6 +2363,9 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
         university: string;
         year: string;
         interests: string;
+        affiliation_type: string;
+        country: string;
+        timezone: string;
         updated_at: string;
       }>(),
     env.REPORTS.prepare(
@@ -2576,15 +2579,50 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  // 表示名・所属・学年・担当分野は全分野管理者の管理画面で一元管理する。
-  // 個人ページから変更できるのは本人のプロフィール画像だけに限定する。
-  let payload: { avatarUrl?: unknown };
+  let payload: {
+    avatarUrl?: unknown;
+    displayName?: unknown;
+    university?: unknown;
+    year?: unknown;
+    affiliationType?: unknown;
+    country?: unknown;
+    timezone?: unknown;
+    bio?: unknown;
+  };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const avatarUrl = text(payload.avatarUrl, 3_000_000);
+  const current = await env.REPORTS.prepare(
+    "SELECT display_name,bio,avatar_url,university,year,affiliation_type,country,timezone FROM editorial_member_profiles WHERE email=?",
+  )
+    .bind(scope.email)
+    .first<Record<string, string>>();
+  const sent = (key: keyof typeof payload) =>
+    Object.prototype.hasOwnProperty.call(payload, key);
+  const avatarUrl = sent("avatarUrl")
+    ? text(payload.avatarUrl, 3_000_000)
+    : (current?.avatar_url ?? "");
+  const displayName = sent("displayName")
+    ? text(payload.displayName, 120)
+    : (current?.display_name ?? "");
+  const university = sent("university")
+    ? text(payload.university, 160)
+    : (current?.university ?? "");
+  const year = sent("year") ? text(payload.year, 80) : (current?.year ?? "");
+  const affiliationType = sent("affiliationType")
+    ? text(payload.affiliationType, 80)
+    : (current?.affiliation_type ?? "");
+  const country = sent("country")
+    ? text(payload.country, 100)
+    : (current?.country ?? "");
+  const timezone = sent("timezone")
+    ? text(payload.timezone, 80) || "Asia/Tokyo"
+    : (current?.timezone ?? "Asia/Tokyo");
+  const bio = sent("bio") ? text(payload.bio, 2_000) : (current?.bio ?? "");
+  if (!validTimeZone(timezone))
+    return json({ error: "タイムゾーンを正しく選択してください。" }, 400);
   if (
     avatarUrl &&
     ((!/^https:\/\//i.test(avatarUrl) &&
@@ -2603,10 +2641,26 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   const updatedAt = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
-      `INSERT INTO editorial_member_profiles (email, avatar_url, updated_at) VALUES (?, ?, ?)
-      ON CONFLICT(email) DO UPDATE SET avatar_url=excluded.avatar_url,updated_at=excluded.updated_at`,
+      `INSERT INTO editorial_member_profiles
+       (email, display_name, bio, avatar_url, university, year, affiliation_type, country, timezone, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email) DO UPDATE SET
+       display_name=excluded.display_name,bio=excluded.bio,avatar_url=excluded.avatar_url,
+       university=excluded.university,year=excluded.year,affiliation_type=excluded.affiliation_type,
+       country=excluded.country,timezone=excluded.timezone,updated_at=excluded.updated_at`,
     )
-      .bind(scope.email, avatarUrl, updatedAt)
+      .bind(
+        scope.email,
+        displayName,
+        bio,
+        avatarUrl,
+        university,
+        year,
+        affiliationType,
+        country,
+        timezone,
+        updatedAt,
+      )
       .run();
   } catch {
     return json(
@@ -4495,7 +4549,12 @@ async function updateEditorialCommentStatus(
         ).bind(commentId, scope.email),
       );
     await env.REPORTS.batch(statements);
-    return json({ ok: true, action, actorEmail: scope.email, toggledOff: true });
+    return json({
+      ok: true,
+      action,
+      actorEmail: scope.email,
+      toggledOff: true,
+    });
   }
   const now = new Date().toISOString();
   const stateUpdate =

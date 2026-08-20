@@ -107,7 +107,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
     <div class="admin-notification-panel" data-admin-notification-panel hidden><div class="notification-panel-heading"><strong>通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list><span class="admin-notification-loading">通知を確認しています…</span></div></div>
-    <a class="admin-account-profile" href="/admin/workspace/" aria-label="マイページを開く">
+    <a class="admin-account-profile" href={site === "portal" ? "/admin/workspace/?project=portal" : "/admin/workspace/"} aria-label="マイページを開く">
       <span class="admin-account-avatar" data-admin-account-avatar aria-hidden="true"><img data-admin-account-image alt="" hidden /><span data-admin-account-fallback>A</span></span>
       <span class="admin-account-email" data-admin-account-email>アカウント</span>
     </a>
