@@ -2679,6 +2679,7 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
     `SELECT a.id,a.name,a.email,a.family_name,a.given_name,a.middle_name,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
+      a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
       a.desired_subjects,a.article_ideas,a.availability_note,a.provisioning_status,a.provisioning_error,a.provisioned_at,a.accepted_by,
       COALESCE(d.discord_user_id, '') AS verified_discord_user_id
      FROM atlasez_member_applications a
@@ -3521,6 +3522,14 @@ async function submitMemberApplication(
     desiredSubjects?: unknown;
     articleIdeas?: unknown;
     availabilityNote?: unknown;
+    birthDate?: unknown;
+    residenceCity?: unknown;
+    currentOrganizations?: unknown;
+    referralSource?: unknown;
+    motivationReasons?: unknown;
+    desiredRoles?: unknown;
+    interviewAvailability?: unknown;
+    applicantQuestions?: unknown;
   };
   try {
     payload = (await request.json()) as typeof payload;
@@ -3555,7 +3564,15 @@ async function submitMemberApplication(
   const country = normalizedText(payload.country, 100),
     timezone = normalizedText(payload.timezone, 80),
     articleIdeas = text(payload.articleIdeas, 3_000),
-    availabilityNote = text(payload.availabilityNote, 1_000);
+    availabilityNote = text(payload.availabilityNote, 1_000),
+    birthDate = text(payload.birthDate, 10),
+    residenceCity = normalizedText(payload.residenceCity, 160),
+    currentOrganizations = text(payload.currentOrganizations, 1_000),
+    referralSource = text(payload.referralSource, 500),
+    motivationReasons = text(payload.motivationReasons, 3_000),
+    desiredRoles = text(payload.desiredRoles, 2_000),
+    interviewAvailability = text(payload.interviewAvailability, 2_000),
+    applicantQuestions = text(payload.applicantQuestions, 3_000);
   const desiredSubjectSlugs = [
     ...new Set(
       Array.isArray(payload.desiredSubjects)
@@ -3576,6 +3593,12 @@ async function submitMemberApplication(
     !country ||
     !timezone ||
     !articleIdeas ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
+    !residenceCity ||
+    !referralSource ||
+    !motivationReasons ||
+    !desiredRoles ||
+    !interviewAvailability ||
     !desiredSubjectSlugs.length
   )
     return json(
@@ -3663,7 +3686,9 @@ async function submitMemberApplication(
     );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
-    "INSERT INTO atlasez_member_applications (id,name,email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note) VALUES (?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,'',?)",
+    `INSERT INTO atlasez_member_applications
+     (id,name,email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -3687,6 +3712,14 @@ async function submitMemberApplication(
       desiredSubjectSlugs.join(","),
       articleIdeas,
       availabilityNote,
+      birthDate,
+      residenceCity,
+      currentOrganizations,
+      referralSource,
+      motivationReasons,
+      desiredRoles,
+      interviewAvailability,
+      applicantQuestions,
     )
     .run();
   // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
