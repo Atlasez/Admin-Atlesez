@@ -56,6 +56,9 @@ export function holidaysForRegions(
   year: number,
   locale = "ja",
 ): CalendarHoliday[] {
+  // date-holidays uses `jp` for Japanese holiday-name translations while the
+  // rest of the application uses the BCP 47 language code `ja`.
+  const holidayLocale = locale === "ja" ? "jp" : locale;
   const supportedRegions = supportedHolidayRegions(locale);
   const regionByCode = new Map(
     supportedRegions.map((region) => [region.code, region]),
@@ -70,11 +73,11 @@ export function holidaysForRegions(
         region: selectedRegion.region,
       },
       {
-        languages: [locale, "en"],
+        languages: [holidayLocale, "en"],
         types: ["public", "bank"],
       },
     );
-    return holidays.getHolidays(year, locale).map((holiday) => ({
+    return holidays.getHolidays(year, holidayLocale).map((holiday) => ({
       date: holiday.date.slice(0, 10),
       name: holiday.name,
       region,
