@@ -323,6 +323,28 @@ test("CM-1: コメントと返信の両方でレビュータグを挿入でき�
   await expect(thread.locator("[data-reply-body]")).toHaveValue("[根拠確認] ");
 });
 
+test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const body = page.locator("[data-body]");
+  await body.evaluate((element: HTMLTextAreaElement) => {
+    element.focus();
+    element.setSelectionRange(0, 4);
+    element.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await expect(page.locator("[data-selection-action]")).toBeVisible();
+
+  await body.evaluate((element: HTMLTextAreaElement) => {
+    element.setSelectionRange(0, 0);
+    element.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await expect(page.locator("[data-selection-action]")).toBeHidden();
+  await expect(page.locator("[data-comment-selection]")).toHaveText(
+    "範囲未選択：記事全体へのコメントとして送信します。",
+  );
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
