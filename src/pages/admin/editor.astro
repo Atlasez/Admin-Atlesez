@@ -131,6 +131,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
             </div>
             <div class="toolbar-actions">
               <a class="quiet-action toolbar-guide-link" href="/admin/guide/?project=atlas" target="_blank" rel="noreferrer">作業の進め方 ↗</a>
+              <label class="engine-control"><input type="checkbox" data-autosave-toggle />下書きを自動保存</label>
               <label class="engine-control">Webプレビュー組版<select data-preview-engine><option value="katex">KaTeX（高速）</option><option value="mathjax">MathJax（LaTeX互換）</option></select></label>
               <div class="document-actions">
                 <button type="button" class="quiet-action" data-request-review hidden>査読を依頼する</button>
@@ -541,6 +542,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const workflowHelp = root.querySelector<HTMLElement>("[data-workflow-help]")!;
     const wordCount = root.querySelector<HTMLElement>("[data-word-count]")!;
     const previewEngine = root.querySelector<HTMLSelectElement>("[data-preview-engine]")!;
+    const autosaveToggle = root.querySelector<HTMLInputElement>("[data-autosave-toggle]")!;
     const saveButton = root.querySelector<HTMLButtonElement>("[data-save-document]")!;
     const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
     const unpublishButton = root.querySelector<HTMLButtonElement>("[data-unpublish-document]")!;
@@ -1100,6 +1102,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, writingMemo: writingMemo.value, latexEngine: formValue("latexEngine"), status: status.value });
     let autosaveTimer: number | undefined;
     let autosaveInFlight = false;
+    autosaveToggle.checked = localStorage.getItem("atlasez-editor-autosave") !== "off";
+    autosaveToggle.addEventListener("change", () => {
+      localStorage.setItem("atlasez-editor-autosave", autosaveToggle.checked ? "on" : "off");
+      if (!autosaveToggle.checked) window.clearTimeout(autosaveTimer);
+      saveMessage.value = autosaveToggle.checked ? "自動保存を有効にしました。" : "自動保存を無効にしました。手動で保存してください。";
+    });
     const autosaveDraft = async () => {
       const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
       if (!id || status.value !== "draft" || autosaveInFlight) return;
@@ -1113,7 +1121,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
       finally { autosaveInFlight = false; }
     };
     const scheduleAutosave = () => {
-      if ((form.elements.namedItem("documentId") as HTMLInputElement).value === "" || status.value !== "draft") return;
+      if (!autosaveToggle.checked || (form.elements.namedItem("documentId") as HTMLInputElement).value === "" || status.value !== "draft") return;
       window.clearTimeout(autosaveTimer);
       autosaveTimer = window.setTimeout(() => { void autosaveDraft(); }, 2_000);
     };
@@ -1306,7 +1314,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles }).repla
     personalNote.addEventListener("input", () => { personalNoteMessage.value = "未保存の変更があります。"; });
     void loadPersonalNote();
     writingMemo.addEventListener("input", () => { writingMemoCount.textContent = `${writingMemo.value.length.toLocaleString()} / 12,000文字`; });
-    form.addEventListener("input", () => { heading.textContent = formValue("title") || "新規原稿"; setUnsavedChanges(true); scheduleAutosave(); });
+    form.addEventListener("input", (event) => { if (event.target === autosaveToggle) return; heading.textContent = formValue("title") || "新規原稿"; setUnsavedChanges(true); scheduleAutosave(); });
     root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "既存の原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
