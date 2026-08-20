@@ -475,7 +475,8 @@ const shiftReminderWallTime = (value: string, minutes: number) => {
       Number(match[3]),
       Number(match[4]),
       Number(match[5]),
-    ) + minutes * 60_000,
+    ) +
+      minutes * 60_000,
   )
     .toISOString()
     .slice(0, 16);
@@ -504,51 +505,126 @@ const reminderInputRows = (
 ): { rows?: TaskReminderRowInput[]; error?: string } => {
   const rows: TaskReminderRowInput[] = [];
   for (const value of payload.slice(0, 100)) {
-    const item = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+    const item =
+      typeof value === "object" && value !== null
+        ? (value as Record<string, unknown>)
+        : {};
     const kind = text(item.kind ?? item.relativeKind, 30) || "absolute";
     if (kind === "before") {
       const amount = Number(item.amount);
       const unit = text(item.unit, 12);
-      if (!dueAt || !validTimeZone(dueTimezone) || !Number.isInteger(amount) || amount < 1 || (unit !== "days" && unit !== "hours") || amount > (unit === "days" ? 365 : 8_760))
-        return { error: "期限基準のリマインダーには、期限・正しい数量・単位が必要です。" };
-      const remindAt = shiftReminderWallTime(dueAt, -amount * (unit === "days" ? 24 * 60 : 60));
+      if (
+        !dueAt ||
+        !validTimeZone(dueTimezone) ||
+        !Number.isInteger(amount) ||
+        amount < 1 ||
+        (unit !== "days" && unit !== "hours") ||
+        amount > (unit === "days" ? 365 : 8_760)
+      )
+        return {
+          error:
+            "期限基準のリマインダーには、期限・正しい数量・単位が必要です。",
+        };
+      const remindAt = shiftReminderWallTime(
+        dueAt,
+        -amount * (unit === "days" ? 24 * 60 : 60),
+      );
       if (wallTimeToEpoch(remindAt, dueTimezone) > Date.now())
-        rows.push({ remindAt, timezone: dueTimezone, label: `${amount}${unit === "days" ? "日前" : "時間前"}`, repeat: "none", relativeKind: "before", relativeAmount: amount, relativeUnit: unit, relativeStart: null });
+        rows.push({
+          remindAt,
+          timezone: dueTimezone,
+          label: `${amount}${unit === "days" ? "日前" : "時間前"}`,
+          repeat: "none",
+          relativeKind: "before",
+          relativeAmount: amount,
+          relativeUnit: unit,
+          relativeStart: null,
+        });
       continue;
     }
     if (kind === "due_day_hourly") {
-      if (!dueAt || !validTimeZone(dueTimezone)) return { error: "当日毎時のリマインダーには期限が必要です。" };
+      if (!dueAt || !validTimeZone(dueTimezone))
+        return { error: "当日毎時のリマインダーには期限が必要です。" };
       const start = text(item.start, 5) || "09:00";
-      if (!/^\d{2}:\d{2}$/.test(start) || Number(start.slice(0, 2)) > 23 || Number(start.slice(3, 5)) > 59)
+      if (
+        !/^\d{2}:\d{2}$/.test(start) ||
+        Number(start.slice(0, 2)) > 23 ||
+        Number(start.slice(3, 5)) > 59
+      )
         return { error: "当日毎時の開始時刻を確認してください。" };
       const times = hourlyReminderWallTimes(dueAt, start);
-      if (!times.length) return { error: "当日毎時の開始時刻は期限時刻より前にしてください。" };
-      rows.push(...times.filter((remindAt) => wallTimeToEpoch(remindAt, dueTimezone) > Date.now()).map((remindAt) => ({ remindAt, timezone: dueTimezone, label: `期限当日の毎時（${start}から）`, repeat: "none", relativeKind: "due_day_hourly" as const, relativeAmount: null, relativeUnit: null, relativeStart: start })));
+      if (!times.length)
+        return { error: "当日毎時の開始時刻は期限時刻より前にしてください。" };
+      rows.push(
+        ...times
+          .filter(
+            (remindAt) => wallTimeToEpoch(remindAt, dueTimezone) > Date.now(),
+          )
+          .map((remindAt) => ({
+            remindAt,
+            timezone: dueTimezone,
+            label: `期限当日の毎時（${start}から）`,
+            repeat: "none",
+            relativeKind: "due_day_hourly" as const,
+            relativeAmount: null,
+            relativeUnit: null,
+            relativeStart: start,
+          })),
+      );
       continue;
     }
     const remindAt = text(item.remindAt, 32);
     if (!remindAt) continue;
-    rows.push({ remindAt, timezone: text(item.timezone, 80) || dueTimezone, label: text(item.label, 120), repeat: text(item.repeat, 12) || "none", relativeKind: "absolute", relativeAmount: null, relativeUnit: null, relativeStart: null });
+    rows.push({
+      remindAt,
+      timezone: text(item.timezone, 80) || dueTimezone,
+      label: text(item.label, 120),
+      repeat: text(item.repeat, 12) || "none",
+      relativeKind: "absolute",
+      relativeAmount: null,
+      relativeUnit: null,
+      relativeStart: null,
+    });
   }
   return { rows };
 };
 
-const nextReminderWallTime = (value: string, repeat: string, timeZone: string): string | null => {
-  if (!["daily", "weekly", "monthly"].includes(repeat) || !validTimeZone(timeZone)) return null;
+const nextReminderWallTime = (
+  value: string,
+  repeat: string,
+  timeZone: string,
+): string | null => {
+  if (
+    !["daily", "weekly", "monthly"].includes(repeat) ||
+    !validTimeZone(timeZone)
+  )
+    return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
   if (!match) return null;
-  const next = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5])));
+  const next = new Date(
+    Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+    ),
+  );
   if (repeat === "daily") next.setUTCDate(next.getUTCDate() + 1);
   if (repeat === "weekly") next.setUTCDate(next.getUTCDate() + 7);
   if (repeat === "monthly") {
     const day = next.getUTCDate();
     next.setUTCDate(1);
     next.setUTCMonth(next.getUTCMonth() + 1);
-    const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+    const lastDay = new Date(
+      Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
+    ).getUTCDate();
     next.setUTCDate(Math.min(day, lastDay));
   }
   const wall = next.toISOString().slice(0, 16);
-  return wallTimeToEpoch(wall, timeZone) > Date.now() ? wall : nextReminderWallTime(wall, repeat, timeZone);
+  return wallTimeToEpoch(wall, timeZone) > Date.now()
+    ? wall
+    : nextReminderWallTime(wall, repeat, timeZone);
 };
 
 type AdminScope = {
@@ -772,13 +848,20 @@ async function listSearchConsoleCountryStats(
      FROM search_console_country_snapshots
      GROUP BY snapshot_id, start_date, end_date
      ORDER BY fetched_at DESC LIMIT 1`,
-  ).first<{ snapshot_id: string; start_date: string; end_date: string; fetched_at: string }>();
+  ).first<{
+    snapshot_id: string;
+    start_date: string;
+    end_date: string;
+    fetched_at: string;
+  }>();
   if (!snapshot) return json({ snapshot: null, countries: [] });
   const result = await env.REPORTS.prepare(
     `SELECT country, clicks, impressions, ctr, position
      FROM search_console_country_snapshots
      WHERE snapshot_id = ? ORDER BY clicks DESC, impressions DESC, country ASC`,
-  ).bind(snapshot.snapshot_id).all<SearchConsoleCountryStat>();
+  )
+    .bind(snapshot.snapshot_id)
+    .all<SearchConsoleCountryStat>();
   return json({ snapshot, countries: result.results });
 }
 
@@ -793,14 +876,21 @@ async function listSearchConsoleQueryStats(
      FROM search_console_query_snapshots
      GROUP BY snapshot_id, start_date, end_date
      ORDER BY fetched_at DESC LIMIT 1`,
-  ).first<{ snapshot_id: string; start_date: string; end_date: string; fetched_at: string }>();
+  ).first<{
+    snapshot_id: string;
+    start_date: string;
+    end_date: string;
+    fetched_at: string;
+  }>();
   if (!snapshot) return json({ snapshot: null, queries: [] });
   const result = await env.REPORTS.prepare(
     `SELECT query, clicks, impressions, ctr, position
      FROM search_console_query_snapshots
      WHERE snapshot_id = ? ORDER BY clicks DESC, impressions DESC, query ASC
      LIMIT 100`,
-  ).bind(snapshot.snapshot_id).all<SearchConsoleQueryStat>();
+  )
+    .bind(snapshot.snapshot_id)
+    .all<SearchConsoleQueryStat>();
   return json({ snapshot, queries: result.results });
 }
 
@@ -1368,7 +1458,13 @@ const canReviewDocument = (
 const editorialAssetResponse = (
   asset: Pick<
     EditorialAsset,
-    "id" | "filename" | "media_type" | "bytes" | "alt_text" | "latex_name" | "created_at"
+    | "id"
+    | "filename"
+    | "media_type"
+    | "bytes"
+    | "alt_text"
+    | "latex_name"
+    | "created_at"
   >,
 ) => ({
   id: asset.id,
@@ -1436,7 +1532,13 @@ async function listEditorialAssets(
     .all<
       Pick<
         EditorialAsset,
-        "id" | "filename" | "media_type" | "bytes" | "alt_text" | "latex_name" | "created_at"
+        | "id"
+        | "filename"
+        | "media_type"
+        | "bytes"
+        | "alt_text"
+        | "latex_name"
+        | "created_at"
       >
     >();
   return json({ assets: result.results.map(editorialAssetResponse) });
@@ -1479,7 +1581,10 @@ async function uploadEditorialAsset(
   const id = crypto.randomUUID();
   const filename = sanitizeEditorialFilename(file.name, mediaType);
   const alt = text(form.get("alt"), 180);
-  const latexName = sanitizeEditorialLatexName(text(form.get("latexName"), 120), filename);
+  const latexName = sanitizeEditorialLatexName(
+    text(form.get("latexName"), 120),
+    filename,
+  );
   const existingNames = await env.REPORTS.prepare(
     "SELECT id, filename, latex_name FROM editorial_assets WHERE document_id = ?",
   )
@@ -1487,11 +1592,18 @@ async function uploadEditorialAsset(
     .all<{ id: string; filename: string; latex_name: string }>();
   const duplicateName = existingNames.results.some(
     (asset) =>
-      (asset.latex_name || sanitizeEditorialLatexName("", asset.filename)).toLowerCase() ===
-      latexName.toLowerCase(),
+      (
+        asset.latex_name || sanitizeEditorialLatexName("", asset.filename)
+      ).toLowerCase() === latexName.toLowerCase(),
   );
   if (duplicateName)
-    return json({ error: "この原稿では同じLaTeX名がすでに使われています。別の名前を指定してください。" }, 409);
+    return json(
+      {
+        error:
+          "この原稿では同じLaTeX名がすでに使われています。別の名前を指定してください。",
+      },
+      409,
+    );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_assets
@@ -1543,20 +1655,32 @@ async function deleteEditorialAsset(
      WHERE a.id = ?`,
   )
     .bind(assetId)
-    .first<Pick<EditorialAsset, "id" | "document_id" | "filename" | "latex_name"> & { subject: string; status: EditorialDocumentStatus; created_by: string; body: string }>();
+    .first<
+      Pick<EditorialAsset, "id" | "document_id" | "filename" | "latex_name"> & {
+        subject: string;
+        status: EditorialDocumentStatus;
+        created_by: string;
+        body: string;
+      }
+    >();
   if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
     return json({ error: "この素材を扱う権限がありません。" }, 403);
   if (!scope.isManager && asset.created_by !== scope.email)
     return json({ error: "素材を削除できるのは原稿の作成者本人です。" }, 403);
-  const latexName = asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
+  const latexName =
+    asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
   if (
     asset.body.includes(`asset://${asset.id}`) ||
     editorialLatexNamesIn(asset.body).includes(latexName.toLowerCase())
   )
-    return json({ error: "本文で使用中の素材は削除できません。先に本文から参照を外してください。" }, 409);
-  await env.REPORTS.prepare(
-    "DELETE FROM editorial_assets WHERE id = ?",
-  )
+    return json(
+      {
+        error:
+          "本文で使用中の素材は削除できません。先に本文から参照を外してください。",
+      },
+      409,
+    );
+  await env.REPORTS.prepare("DELETE FROM editorial_assets WHERE id = ?")
     .bind(assetId)
     .run();
   return json({ ok: true });
@@ -1622,7 +1746,10 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
   const summary = text(payload.summary, 800);
   const conceptId = text(payload.conceptId, 180);
   const body = text(payload.body, MAX_EDITORIAL_BODY_LENGTH);
-  const writingMemo = text(payload.writingMemo, MAX_PERSONAL_WORKSPACE_NOTE_LENGTH);
+  const writingMemo = text(
+    payload.writingMemo,
+    MAX_PERSONAL_WORKSPACE_NOTE_LENGTH,
+  );
   const latexEngine =
     (text(payload.latexEngine, 24) as LatexEngine) || "mathjax";
   const status = text(payload.status, 20) as EditorialDocumentStatus;
@@ -1690,7 +1817,9 @@ async function listEditorialDocuments(
       )
         .bind(...documentRows.map((document) => document.id))
         .all<{ document_id: string; reviewer_email: string }>()
-        .catch(() => ({ results: [] as { document_id: string; reviewer_email: string }[] }))
+        .catch(() => ({
+          results: [] as { document_id: string; reviewer_email: string }[],
+        }))
     : { results: [] as { document_id: string; reviewer_email: string }[] };
   const reviewerByDocument = new Map(
     (assignmentRows.results ?? []).map((assignment) => [
@@ -1784,7 +1913,12 @@ async function savePersonalWorkspace(
 const taskStatus = new Set(["open", "doing", "done"]);
 const availabilityStatus = new Set(["available", "maybe", "unavailable"]);
 
-type OperationProject = { id: string; slug: string; name: string; description: string };
+type OperationProject = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+};
 
 async function ensureAtlasMembership(env: Env, scope: AdminScope) {
   await env.REPORTS.prepare(
@@ -1810,7 +1944,8 @@ async function resolveOperationProject(
   )
     .bind(key, key)
     .first<OperationProject>();
-  if (!project) return json({ error: "指定したプロジェクトが見つかりません。" }, 404);
+  if (!project)
+    return json({ error: "指定したプロジェクトが見つかりません。" }, 404);
   if (scope.isManager) return project;
   const membership = await env.REPORTS.prepare(
     "SELECT project_id FROM atlasez_project_memberships WHERE project_id = ? AND email = ?",
@@ -2263,7 +2398,11 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
       .bind(scope.email)
       .all(),
   ]);
-  const projectRows = projects.results as Array<{ id: string; slug: string; name: string }>;
+  const projectRows = projects.results as Array<{
+    id: string;
+    slug: string;
+    name: string;
+  }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
   const rangeStart = new Date();
   rangeStart.setMonth(rangeStart.getMonth() - 2, 1);
@@ -2492,7 +2631,12 @@ async function updateApplication(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { status?: unknown; reminderAction?: unknown; reminders?: unknown; reminderEmail?: unknown };
+  let payload: {
+    status?: unknown;
+    reminderAction?: unknown;
+    reminders?: unknown;
+    reminderEmail?: unknown;
+  };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -2663,7 +2807,8 @@ async function operationsOverview(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   await ensureAtlasMembership(env, scope);
-  const requestedProject = new URL(request.url).searchParams.get("project") ?? "atlas";
+  const requestedProject =
+    new URL(request.url).searchParams.get("project") ?? "atlas";
   const project = await resolveOperationProject(env, scope, requestedProject);
   if (isResponse(project)) return project;
   const filters = scope.allSubjects
@@ -2683,48 +2828,60 @@ async function operationsOverview(
     ? ""
     : ` WHERE subject = '*' OR subject IN (${scope.subjects.map(() => "?").join(",")})`;
   const memberValues: unknown[] = scope.allSubjects ? [] : scope.subjects;
-  const [tasks, events, progress, members, availability, availabilityBlocks] = await Promise.all([
-    env.REPORTS.prepare(
-      `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
-    )
-      .bind(...values)
-      .all(),
-    env.REPORTS.prepare(
-      `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ? ORDER BY starts_at ASC LIMIT 60`,
-    ).bind(project.id).all<{
-      id: string;
-      project_id: string;
-      subject: string | null;
-      title: string;
-      details: string;
-      starts_at: string;
-      ends_at: string | null;
-      timezone: string;
-      created_by: string;
-      created_at: string;
-    }>(),
-    env.REPORTS.prepare(
-      "SELECT id,email,subject,document_id,body,created_at FROM editorial_progress_reports WHERE project_id = ? AND email = ? ORDER BY created_at DESC LIMIT 30",
-    )
-      .bind(project.id, scope.email)
-      .all(),
-    env.REPORTS.prepare(
-      `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles profile ON profile.email = p.email${memberWhere.replaceAll("subject", "p.subject")} ORDER BY display_name, p.email`,
-    )
-      .bind(...memberValues)
-      .all<{ email: string; display_name: string }>(),
-    env.REPORTS.prepare(
-      "SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email",
-    ).bind(project.id).all<{
-      event_id: string;
-      email: string;
-      availability: string;
-      display_name: string;
-    }>(),
-    env.REPORTS.prepare(
-      "SELECT id, starts_at, ends_at, timezone, label, kind FROM editorial_member_availability_blocks WHERE email = ? ORDER BY starts_at ASC LIMIT 100",
-    ).bind(scope.email).all(),
-  ]);
+  const [tasks, events, progress, members, availability, availabilityBlocks] =
+    await Promise.all([
+      env.REPORTS.prepare(
+        `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+      )
+        .bind(...values)
+        .all(),
+      env.REPORTS.prepare(
+        `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ? ORDER BY starts_at ASC LIMIT 60`,
+      )
+        .bind(project.id)
+        .all<{
+          id: string;
+          project_id: string;
+          subject: string | null;
+          title: string;
+          details: string;
+          starts_at: string;
+          ends_at: string | null;
+          timezone: string;
+          created_by: string;
+          created_at: string;
+        }>(),
+      env.REPORTS.prepare(
+        "SELECT id,email,subject,document_id,body,created_at FROM editorial_progress_reports WHERE project_id = ? AND email = ? ORDER BY created_at DESC LIMIT 30",
+      )
+        .bind(project.id, scope.email)
+        .all(),
+      env.REPORTS.prepare(
+        `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles profile ON profile.email = p.email${memberWhere.replaceAll("subject", "p.subject")} ORDER BY display_name, p.email`,
+      )
+        .bind(...memberValues)
+        .all<{ email: string; display_name: string }>(),
+      env.REPORTS.prepare(
+        "SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email",
+      )
+        .bind(project.id)
+        .all<{
+          event_id: string;
+          email: string;
+          availability: string;
+          display_name: string;
+        }>(),
+      env.REPORTS.prepare(
+        `SELECT b.id, b.email, b.starts_at, b.ends_at, b.timezone,
+        CASE WHEN lower(b.email) = lower(?) OR ? = 1 THEN b.label ELSE '' END AS label,
+        b.kind, COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name
+       FROM editorial_member_availability_blocks b
+       LEFT JOIN editorial_member_profiles p ON lower(p.email) = lower(b.email)
+       ORDER BY b.starts_at ASC LIMIT 500`,
+      )
+        .bind(scope.email, scope.isManager ? 1 : 0)
+        .all<Record<string, unknown>>(),
+    ]);
   const taskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
   const reminderRows = taskRows.length
     ? await env.REPORTS.prepare(
@@ -2732,12 +2889,17 @@ async function operationsOverview(
          FROM editorial_task_reminders
          WHERE task_id IN (${taskRows.map(() => "?").join(",")})
          ORDER BY remind_at ASC`,
-      ).bind(...taskRows.map((task) => task.id)).all<Record<string, unknown>>()
+      )
+        .bind(...taskRows.map((task) => task.id))
+        .all<Record<string, unknown>>()
     : { results: [] as Record<string, unknown>[] };
   const remindersByTask = new Map<string, Record<string, unknown>[]>();
   for (const reminder of reminderRows.results ?? []) {
     const taskId = String(reminder.task_id ?? "");
-    remindersByTask.set(taskId, [...(remindersByTask.get(taskId) ?? []), reminder]);
+    remindersByTask.set(taskId, [
+      ...(remindersByTask.get(taskId) ?? []),
+      reminder,
+    ]);
   }
   const participantRows = availability.results ?? [];
   const participantsByEvent = new Map<string, typeof participantRows>();
@@ -2757,7 +2919,11 @@ async function operationsOverview(
       ...task,
       reminders: remindersByTask.get(String(task.id)) ?? [],
     })),
-    availabilityBlocks: availabilityBlocks.results ?? [],
+    availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
+      ...block,
+      isSelf:
+        String(block.email ?? "").toLowerCase() === scope.email.toLowerCase(),
+    })),
     events: (events.results ?? []).map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
       return {
@@ -2835,7 +3001,8 @@ async function createOperation(
         project.id,
       )
       .run();
-    if (project.slug === "atlas") await notifyProgressToDiscord(env, subject, body);
+    if (project.slug === "atlas")
+      await notifyProgressToDiscord(env, subject, body);
     return json({
       ok: true,
       discordNotified: Boolean(
@@ -2857,32 +3024,77 @@ async function createOperation(
     const legacyReminderAt = text(payload.reminderAt, 32);
     const reminderRepeat = text(payload.reminderRepeat, 12) || "none";
     const reminderEmail = text(payload.reminderEmail, 254).toLowerCase();
-    const reminderPayload = Array.isArray(payload.reminders) ? payload.reminders : [];
-    const reminderRowsResult = reminderInputRows(reminderPayload, dueAt, dueTimezone);
-    if (reminderRowsResult.error) return json({ error: reminderRowsResult.error }, 400);
+    const reminderPayload = Array.isArray(payload.reminders)
+      ? payload.reminders
+      : [];
+    const reminderRowsResult = reminderInputRows(
+      reminderPayload,
+      dueAt,
+      dueTimezone,
+    );
+    if (reminderRowsResult.error)
+      return json({ error: reminderRowsResult.error }, 400);
     const reminderRows = reminderRowsResult.rows ?? [];
     for (const reminder of reminderRows) {
-      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) || !validTimeZone(reminder.timezone) || !new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminder.repeat))
-        return json({ error: "リマインダー日時またはタイムゾーンを確認してください。" }, 400);
+      if (
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) ||
+        !validTimeZone(reminder.timezone) ||
+        !new Set(["none", "once", "daily", "weekly", "monthly"]).has(
+          reminder.repeat,
+        )
+      )
+        return json(
+          { error: "リマインダー日時またはタイムゾーンを確認してください。" },
+          400,
+        );
     }
     if (!reminderRows.length && legacyReminderAt)
-      reminderRows.push({ remindAt: legacyReminderAt, timezone: dueTimezone, label: reminderRepeat === "none" ? "リマインダー" : reminderRepeat, repeat: reminderRepeat, relativeKind: "absolute", relativeAmount: null, relativeUnit: null, relativeStart: null });
+      reminderRows.push({
+        remindAt: legacyReminderAt,
+        timezone: dueTimezone,
+        label: reminderRepeat === "none" ? "リマインダー" : reminderRepeat,
+        repeat: reminderRepeat,
+        relativeKind: "absolute",
+        relativeAmount: null,
+        relativeUnit: null,
+        relativeStart: null,
+      });
     if (dueAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueAt))
       return json({ error: "期限はカレンダーから指定してください。" }, 400);
     if (dueAt && !validTimeZone(dueTimezone))
       return json({ error: "期限のタイムゾーンを確認してください。" }, 400);
     if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
       return json({ error: "通知先メールアドレスを確認してください。" }, 400);
-    if (!new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminderRepeat))
+    if (
+      !new Set(["none", "once", "daily", "weekly", "monthly"]).has(
+        reminderRepeat,
+      )
+    )
       return json({ error: "リマインダーの繰り返しを確認してください。" }, 400);
     for (const reminder of reminderRows) {
-      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) || !validTimeZone(reminder.timezone) || !new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminder.repeat))
-        return json({ error: "リマインダー日時またはタイムゾーンを確認してください。" }, 400);
+      if (
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) ||
+        !validTimeZone(reminder.timezone) ||
+        !new Set(["none", "once", "daily", "weekly", "monthly"]).has(
+          reminder.repeat,
+        )
+      )
+        return json(
+          { error: "リマインダー日時またはタイムゾーンを確認してください。" },
+          400,
+        );
     }
     if (reminderRows.length > 1 && reminderRepeat !== "none")
-      return json({ error: "複数のリマインダーを設定する場合、繰り返しは「1回」にしてください。" }, 400);
+      return json(
+        {
+          error:
+            "複数のリマインダーを設定する場合、繰り返しは「1回」にしてください。",
+        },
+        400,
+      );
     const taskId = crypto.randomUUID();
-    const singleRepeatingReminder = reminderRows.length === 1 && reminderRepeat !== "none";
+    const singleRepeatingReminder =
+      reminderRows.length === 1 && reminderRepeat !== "none";
     await env.REPORTS.prepare(
       "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?,?,?)",
     )
@@ -2896,7 +3108,11 @@ async function createOperation(
         dueAt || null,
         dueTimezone,
         reminderRows.length ? null : legacyReminderAt || null,
-        singleRepeatingReminder ? reminderRepeat : reminderRows.length ? "none" : reminderRepeat,
+        singleRepeatingReminder
+          ? reminderRepeat
+          : reminderRows.length
+            ? "none"
+            : reminderRepeat,
         reminderEmail || null,
         scope.email,
         now,
@@ -2904,9 +3120,24 @@ async function createOperation(
       )
       .run();
     if (reminderRows.length)
-      await env.REPORTS.batch(reminderRows.map((reminder) => env.REPORTS.prepare(
-        "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      ).bind(crypto.randomUUID(), taskId, reminder.remindAt, reminder.timezone, reminder.label, reminder.relativeKind, reminder.relativeAmount, reminder.relativeUnit, reminder.relativeStart, now)));
+      await env.REPORTS.batch(
+        reminderRows.map((reminder) =>
+          env.REPORTS.prepare(
+            "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          ).bind(
+            crypto.randomUUID(),
+            taskId,
+            reminder.remindAt,
+            reminder.timezone,
+            reminder.label,
+            reminder.relativeKind,
+            reminder.relativeAmount,
+            reminder.relativeUnit,
+            reminder.relativeStart,
+            now,
+          ),
+        ),
+      );
     return json({ ok: true });
   }
   const title = text(payload.title, 200);
@@ -2944,13 +3175,19 @@ async function updateTask(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { status?: unknown; reminderAction?: unknown; reminders?: unknown; reminderEmail?: unknown };
+  let payload: {
+    status?: unknown;
+    reminderAction?: unknown;
+    reminders?: unknown;
+    reminderEmail?: unknown;
+  };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const requestedStatus = payload.status === undefined ? null : text(payload.status, 20);
+  const requestedStatus =
+    payload.status === undefined ? null : text(payload.status, 20);
   const reminderAction = text(payload.reminderAction, 30);
   if (requestedStatus !== null && !taskStatus.has(requestedStatus))
     return json({ error: "状態を確認してください。" }, 400);
@@ -2989,24 +3226,67 @@ async function updateTask(
       task.due_at ?? "",
       task.due_timezone || "Asia/Tokyo",
     );
-    if (reminderRowsResult.error) return json({ error: reminderRowsResult.error }, 400);
+    if (reminderRowsResult.error)
+      return json({ error: reminderRowsResult.error }, 400);
     const reminderRows = reminderRowsResult.rows ?? [];
     for (const reminder of reminderRows) {
-      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) || !validTimeZone(reminder.timezone) || !new Set(["none", "once", "daily", "weekly", "monthly"]).has(reminder.repeat))
-        return json({ error: "リマインダー日時またはタイムゾーンを確認してください。" }, 400);
+      if (
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(reminder.remindAt) ||
+        !validTimeZone(reminder.timezone) ||
+        !new Set(["none", "once", "daily", "weekly", "monthly"]).has(
+          reminder.repeat,
+        )
+      )
+        return json(
+          { error: "リマインダー日時またはタイムゾーンを確認してください。" },
+          400,
+        );
     }
     const statements = [
-      env.REPORTS.prepare("DELETE FROM editorial_task_reminders WHERE task_id=?").bind(taskId),
-      env.REPORTS.prepare("UPDATE editorial_tasks SET reminder_at=?,reminder_repeat=?,reminder_email=?,updated_at=? WHERE id=?").bind(null, reminderRows.length === 1 ? reminderRows[0].repeat : "none", reminderEmail || null, now, taskId),
+      env.REPORTS.prepare(
+        "DELETE FROM editorial_task_reminders WHERE task_id=?",
+      ).bind(taskId),
+      env.REPORTS.prepare(
+        "UPDATE editorial_tasks SET reminder_at=?,reminder_repeat=?,reminder_email=?,updated_at=? WHERE id=?",
+      ).bind(
+        null,
+        reminderRows.length === 1 ? reminderRows[0].repeat : "none",
+        reminderEmail || null,
+        now,
+        taskId,
+      ),
     ];
     if (requestedStatus !== null)
-      statements.push(env.REPORTS.prepare("UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?").bind(requestedStatus, now, taskId));
-    statements.push(...reminderRows.map((reminder) => env.REPORTS.prepare(
-      "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-    ).bind(crypto.randomUUID(), taskId, reminder.remindAt, reminder.timezone, reminder.label, reminder.relativeKind, reminder.relativeAmount, reminder.relativeUnit, reminder.relativeStart, now)));
+      statements.push(
+        env.REPORTS.prepare(
+          "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
+        ).bind(requestedStatus, now, taskId),
+      );
+    statements.push(
+      ...reminderRows.map((reminder) =>
+        env.REPORTS.prepare(
+          "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          taskId,
+          reminder.remindAt,
+          reminder.timezone,
+          reminder.label,
+          reminder.relativeKind,
+          reminder.relativeAmount,
+          reminder.relativeUnit,
+          reminder.relativeStart,
+          now,
+        ),
+      ),
+    );
     await env.REPORTS.batch(statements);
   } else if (requestedStatus !== null) {
-    await env.REPORTS.prepare("UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?").bind(requestedStatus, now, taskId).run();
+    await env.REPORTS.prepare(
+      "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
+    )
+      .bind(requestedStatus, now, taskId)
+      .run();
   }
   return json({ ok: true });
 }
@@ -3087,21 +3367,40 @@ async function createAvailabilityBlock(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
   let payload: Record<string, unknown>;
-  try { payload = (await request.json()) as Record<string, unknown>; }
-  catch { return json({ error: "入力内容を読み取れませんでした。" }, 400); }
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
   const startsAt = text(payload.startsAt, 40);
   const endsAt = text(payload.endsAt, 40);
   const timezone = text(payload.timezone, 80) || "Asia/Tokyo";
   const kind = text(payload.kind, 20) || "unavailable";
-  if (!startsAt || !endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime())
+  if (
+    !startsAt ||
+    !endsAt ||
+    new Date(endsAt).getTime() <= new Date(startsAt).getTime()
+  )
     return json({ error: "開始・終了日時を確認してください。" }, 400);
   if (!validTimeZone(timezone) || !["available", "unavailable"].includes(kind))
     return json({ error: "タイムゾーンまたは可否を確認してください。" }, 400);
   await env.REPORTS.prepare(
     "INSERT INTO editorial_member_availability_blocks (id,email,starts_at,ends_at,timezone,label,kind,created_at) VALUES (?,?,?,?,?,?,?,?)",
-  ).bind(crypto.randomUUID(), scope.email, startsAt, endsAt, timezone, text(payload.label, 160), kind, new Date().toISOString()).run();
+  )
+    .bind(
+      crypto.randomUUID(),
+      scope.email,
+      startsAt,
+      endsAt,
+      timezone,
+      text(payload.label, 160),
+      kind,
+      new Date().toISOString(),
+    )
+    .run();
   return json({ ok: true });
 }
 
@@ -3112,9 +3411,13 @@ async function deleteAvailabilityBlock(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
-  await env.REPORTS.prepare("DELETE FROM editorial_member_availability_blocks WHERE id = ? AND email = ?")
-    .bind(blockId, scope.email).run();
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  await env.REPORTS.prepare(
+    "DELETE FROM editorial_member_availability_blocks WHERE id = ? AND email = ?",
+  )
+    .bind(blockId, scope.email)
+    .run();
   return json({ ok: true });
 }
 
@@ -3395,32 +3698,92 @@ async function getEditorialDocument(
         `SELECT comment_id, actor_email, action, created_at FROM editorial_comment_actions WHERE comment_id IN (${commentIds.map(() => "?").join(",")}) ORDER BY created_at ASC`,
       )
         .bind(...commentIds)
-        .all<{ comment_id: string; actor_email: string; action: string; created_at: string }>()
-    : { results: [] as { comment_id: string; actor_email: string; action: string; created_at: string }[] };
+        .all<{
+          comment_id: string;
+          actor_email: string;
+          action: string;
+          created_at: string;
+        }>()
+    : {
+        results: [] as {
+          comment_id: string;
+          actor_email: string;
+          action: string;
+          created_at: string;
+        }[],
+      };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
   type CommentActionCounts = Record<CommentAction, number>;
   type CommentActionActors = Record<CommentAction, Map<string, number>>;
-  const emptyActionCounts = (): CommentActionCounts => ({ acknowledge: 0, unacknowledge: 0, resolve: 0, reopen: 0 });
-  const emptyActionActors = (): CommentActionActors => ({ acknowledge: new Map(), unacknowledge: new Map(), resolve: new Map(), reopen: new Map() });
-  const actionsByComment = new Map<string, { actors: Record<"acknowledged" | "unacknowledged" | "resolved" | "reopened", Set<string>>; counts: CommentActionCounts; actorCounts: CommentActionActors }>();
+  const emptyActionCounts = (): CommentActionCounts => ({
+    acknowledge: 0,
+    unacknowledge: 0,
+    resolve: 0,
+    reopen: 0,
+  });
+  const emptyActionActors = (): CommentActionActors => ({
+    acknowledge: new Map(),
+    unacknowledge: new Map(),
+    resolve: new Map(),
+    reopen: new Map(),
+  });
+  const actionsByComment = new Map<
+    string,
+    {
+      actors: Record<
+        "acknowledged" | "unacknowledged" | "resolved" | "reopened",
+        Set<string>
+      >;
+      counts: CommentActionCounts;
+      actorCounts: CommentActionActors;
+    }
+  >();
   const documentActionCounts = emptyActionCounts();
   const documentActionActors = emptyActionActors();
-  const addAction = (commentId: string, action: CommentAction, actorEmail: string, count = 1) => {
+  const addAction = (
+    commentId: string,
+    action: CommentAction,
+    actorEmail: string,
+    count = 1,
+  ) => {
     const entry = actionsByComment.get(commentId) ?? {
-      actors: { acknowledged: new Set<string>(), unacknowledged: new Set<string>(), resolved: new Set<string>(), reopened: new Set<string>() },
+      actors: {
+        acknowledged: new Set<string>(),
+        unacknowledged: new Set<string>(),
+        resolved: new Set<string>(),
+        reopened: new Set<string>(),
+      },
       counts: emptyActionCounts(),
       actorCounts: emptyActionActors(),
     };
-    const actorSet = action === "acknowledge" ? entry.actors.acknowledged : action === "unacknowledge" ? entry.actors.unacknowledged : action === "resolve" ? entry.actors.resolved : entry.actors.reopened;
+    const actorSet =
+      action === "acknowledge"
+        ? entry.actors.acknowledged
+        : action === "unacknowledge"
+          ? entry.actors.unacknowledged
+          : action === "resolve"
+            ? entry.actors.resolved
+            : entry.actors.reopened;
     actorSet.add(actorEmail);
     entry.counts[action] += count;
-    entry.actorCounts[action].set(actorEmail, (entry.actorCounts[action].get(actorEmail) ?? 0) + count);
+    entry.actorCounts[action].set(
+      actorEmail,
+      (entry.actorCounts[action].get(actorEmail) ?? 0) + count,
+    );
     documentActionCounts[action] += count;
-    documentActionActors[action].set(actorEmail, (documentActionActors[action].get(actorEmail) ?? 0) + count);
+    documentActionActors[action].set(
+      actorEmail,
+      (documentActionActors[action].get(actorEmail) ?? 0) + count,
+    );
     actionsByComment.set(commentId, entry);
   };
   for (const action of actionRows.results ?? []) {
-    if (action.action === "acknowledge" || action.action === "unacknowledge" || action.action === "resolve" || action.action === "reopen")
+    if (
+      action.action === "acknowledge" ||
+      action.action === "unacknowledge" ||
+      action.action === "resolve" ||
+      action.action === "reopen"
+    )
       addAction(action.comment_id, action.action, action.actor_email);
   }
   const authorEmails = [
@@ -3471,15 +3834,35 @@ async function getEditorialDocument(
       count,
     }));
   const commentsWithSelections = commentRows.map((comment) => {
-    const entry = actionsByComment.get(comment.id) ?? { actors: { acknowledged: new Set<string>(), unacknowledged: new Set<string>(), resolved: new Set<string>(), reopened: new Set<string>() }, counts: emptyActionCounts(), actorCounts: emptyActionActors() };
+    const entry = actionsByComment.get(comment.id) ?? {
+      actors: {
+        acknowledged: new Set<string>(),
+        unacknowledged: new Set<string>(),
+        resolved: new Set<string>(),
+        reopened: new Set<string>(),
+      },
+      counts: emptyActionCounts(),
+      actorCounts: emptyActionActors(),
+    };
     // 0049以前のコメントには状態の最終操作者だけが残っているため、旧列を1件の履歴として補う。
-    if (comment.acknowledged_by && !entry.actorCounts.acknowledge.has(comment.acknowledged_by)) addAction(comment.id, "acknowledge", comment.acknowledged_by);
-    if (comment.resolved_by && !entry.actorCounts.resolve.has(comment.resolved_by)) addAction(comment.id, "resolve", comment.resolved_by);
+    if (
+      comment.acknowledged_by &&
+      !entry.actorCounts.acknowledge.has(comment.acknowledged_by)
+    )
+      addAction(comment.id, "acknowledge", comment.acknowledged_by);
+    if (
+      comment.resolved_by &&
+      !entry.actorCounts.resolve.has(comment.resolved_by)
+    )
+      addAction(comment.id, "resolve", comment.resolved_by);
     const current = actionsByComment.get(comment.id) ?? entry;
     return {
       ...comment,
-      author_display_name: authorProfileByEmail.get(comment.created_by)?.display_name?.trim() || "運営メンバー",
-      author_avatar_url: authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
+      author_display_name:
+        authorProfileByEmail.get(comment.created_by)?.display_name?.trim() ||
+        "運営メンバー",
+      author_avatar_url:
+        authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
       acknowledged_by_emails: [...current.actors.acknowledged],
       unacknowledged_by_emails: [...current.actors.unacknowledged],
       resolved_by_emails: [...current.actors.resolved],
@@ -3491,10 +3874,26 @@ async function getEditorialDocument(
         resolve: actorCountList(current.actorCounts.resolve),
         reopen: actorCountList(current.actorCounts.reopen),
       },
-      selections: selectionsByComment.get(comment.id) ?? (comment.selection_text ? [{ id: `legacy-${comment.id}`, comment_id: comment.id, position: 0, selection_start: comment.selection_start, selection_end: comment.selection_end, selection_text: comment.selection_text }] : []),
+      selections:
+        selectionsByComment.get(comment.id) ??
+        (comment.selection_text
+          ? [
+              {
+                id: `legacy-${comment.id}`,
+                comment_id: comment.id,
+                position: 0,
+                selection_start: comment.selection_start,
+                selection_end: comment.selection_end,
+                selection_text: comment.selection_text,
+              },
+            ]
+          : []),
     };
   });
-  const summaryActorList = (counts: Map<string, number>) => actorCountList(counts).sort((a, b) => b.count - a.count || a.actor_email.localeCompare(b.actor_email));
+  const summaryActorList = (counts: Map<string, number>) =>
+    actorCountList(counts).sort(
+      (a, b) => b.count - a.count || a.actor_email.localeCompare(b.actor_email),
+    );
   return json({
     document,
     comments: commentsWithSelections,
@@ -3870,7 +4269,8 @@ async function listEditorialReviewRequests(
     requests: (result.results ?? []).map((item) => ({
       ...item,
       reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
-      assignedToMe: item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
+      assignedToMe:
+        item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
     })),
     reviewers: (reviewerResult.results ?? []).map((item) => ({
       email: item.email,
@@ -3915,14 +4315,20 @@ async function updateEditorialReviewAssignment(
     return json({ ok: true, reviewerEmail: null });
   }
   if (!EMAIL_PATTERN.test(reviewerEmail))
-    return json({ error: "査読担当者のメールアドレスを確認してください。" }, 400);
+    return json(
+      { error: "査読担当者のメールアドレスを確認してください。" },
+      400,
+    );
   const reviewer = await env.REPORTS.prepare(
     "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
   )
     .bind(reviewerEmail, document.subject)
     .first<{ found: number }>();
   if (!reviewer)
-    return json({ error: "この原稿の分野を担当できる運営者を選択してください。" }, 400);
+    return json(
+      { error: "この原稿の分野を担当できる運営者を選択してください。" },
+      400,
+    );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at)
@@ -4037,25 +4443,22 @@ async function updateEditorialCommentStatus(
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
   const now = new Date().toISOString();
-  const stateUpdate = action === "acknowledge"
-    ? env.REPORTS.prepare(
-      "UPDATE editorial_comments SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?",
-    )
-      .bind(now, scope.email, commentId)
-    : action === "unacknowledge"
-    ? env.REPORTS.prepare(
-      "UPDATE editorial_comments SET acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ?",
-    )
-      .bind(commentId)
-    : action === "resolve"
-    ? env.REPORTS.prepare(
-      "UPDATE editorial_comments SET resolved_at = ?, resolved_by = ? WHERE id = ?",
-    )
-      .bind(now, scope.email, commentId)
-    : env.REPORTS.prepare(
-      "UPDATE editorial_comments SET resolved_at = NULL, resolved_by = NULL WHERE id = ?",
-    )
-      .bind(commentId)
+  const stateUpdate =
+    action === "acknowledge"
+      ? env.REPORTS.prepare(
+          "UPDATE editorial_comments SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?",
+        ).bind(now, scope.email, commentId)
+      : action === "unacknowledge"
+        ? env.REPORTS.prepare(
+            "UPDATE editorial_comments SET acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ?",
+          ).bind(commentId)
+        : action === "resolve"
+          ? env.REPORTS.prepare(
+              "UPDATE editorial_comments SET resolved_at = ?, resolved_by = ? WHERE id = ?",
+            ).bind(now, scope.email, commentId)
+          : env.REPORTS.prepare(
+              "UPDATE editorial_comments SET resolved_at = NULL, resolved_by = NULL WHERE id = ?",
+            ).bind(commentId);
   try {
     // 状態と監査履歴を同一D1 batchに入れ、片方だけ成功する状態を防ぐ。
     await env.REPORTS.batch([
@@ -4065,7 +4468,13 @@ async function updateEditorialCommentStatus(
       ).bind(crypto.randomUUID(), commentId, scope.email, action, now),
     ]);
   } catch {
-    return json({ error: "コメントの状態と操作履歴を保存できませんでした。状態は変更されていません。" }, 500);
+    return json(
+      {
+        error:
+          "コメントの状態と操作履歴を保存できませんでした。状態は変更されていません。",
+      },
+      500,
+    );
   }
   return json({ ok: true, action, actorEmail: scope.email, recordedAt: now });
 }
@@ -4483,13 +4892,17 @@ async function writeEditorialDocumentToGitHub(
     );
   const assetsByLatexName = new Map(
     assets.map((asset) => {
-      const latexName = asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
-      return [latexName.toLowerCase(), {
-        id: asset.id,
-        filename: asset.filename,
-        latexName,
-        alt: asset.alt_text,
-      }];
+      const latexName =
+        asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
+      return [
+        latexName.toLowerCase(),
+        {
+          id: asset.id,
+          filename: asset.filename,
+          latexName,
+          alt: asset.alt_text,
+        },
+      ];
     }),
   );
   const missingLatexName = editorialLatexNamesIn(document.body).find(
@@ -4505,7 +4918,9 @@ async function writeEditorialDocumentToGitHub(
   const referencedAssetIdsForPublish = [
     ...new Set([
       ...referencedAssetIds,
-      ...editorialLatexNamesIn(document.body).map((name) => assetsByLatexName.get(name)!.id),
+      ...editorialLatexNamesIn(document.body).map(
+        (name) => assetsByLatexName.get(name)!.id,
+      ),
     ]),
   ];
   for (const assetId of referencedAssetIdsForPublish)
@@ -4695,7 +5110,9 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/operations/" ||
       parsed.pathname === "/admin/co-working" ||
       parsed.pathname === "/admin/co-working/") &&
-    (project === "atlas" || project === "seminar-platform" || project === "secretariat");
+    (project === "atlas" ||
+      project === "seminar-platform" ||
+      project === "secretariat");
   return keepProject
     ? `${parsed.pathname}?project=${encodeURIComponent(project)}`
     : parsed.pathname;
@@ -4714,20 +5131,34 @@ function googleCallbackUrl(request: Request, env: Env) {
 
 const searchConsoleProperty = "sc-domain:atlasez.org";
 
-async function startSearchConsoleImport(request: Request, env: Env): Promise<Response> {
+async function startSearchConsoleImport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
-    return json({ error: "Googleログインが設定されていないため、Search Consoleを取得できません。" }, 404);
-  const requestedDays = Number(new URL(request.url).searchParams.get("days") ?? 30);
-  const days = Number.isInteger(requestedDays) ? Math.min(90, Math.max(1, requestedDays)) : 30;
+    return json(
+      {
+        error:
+          "Googleログインが設定されていないため、Search Consoleを取得できません。",
+      },
+      404,
+    );
+  const requestedDays = Number(
+    new URL(request.url).searchParams.get("days") ?? 30,
+  );
+  const days = Number.isInteger(requestedDays)
+    ? Math.min(90, Math.max(1, requestedDays))
+    : 30;
   const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
   const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorization.search = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
     redirect_uri: `${adminPublicOrigin(request, env)}/auth/google/search-console/callback`,
     response_type: "code",
-    scope: "openid email profile https://www.googleapis.com/auth/webmasters.readonly",
+    scope:
+      "openid email profile https://www.googleapis.com/auth/webmasters.readonly",
     state,
     prompt: "consent",
     access_type: "online",
@@ -4745,7 +5176,10 @@ async function startSearchConsoleImport(request: Request, env: Env): Promise<Res
   return new Response(null, { status: 302, headers });
 }
 
-async function completeSearchConsoleImport(request: Request, env: Env): Promise<Response> {
+async function completeSearchConsoleImport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const requestUrl = new URL(request.url);
@@ -4753,12 +5187,17 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
   const state = requestUrl.searchParams.get("state") ?? "";
   let savedState: { state?: string; days?: number } = {};
   try {
-    savedState = JSON.parse(cookieValue(request, SEARCH_CONSOLE_STATE_COOKIE)) as typeof savedState;
+    savedState = JSON.parse(
+      cookieValue(request, SEARCH_CONSOLE_STATE_COOKIE),
+    ) as typeof savedState;
   } catch {
     // 不正なCookieは失敗として扱う。
   }
   if (!code || !state || state !== savedState.state)
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return Response.redirect(
+      `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
+      302,
+    );
 
   let token: { access_token?: string };
   try {
@@ -4776,26 +5215,51 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
     if (!tokenResponse.ok) throw new Error("token exchange failed");
     token = (await tokenResponse.json()) as { access_token?: string };
   } catch {
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return Response.redirect(
+      `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
+      302,
+    );
   }
   if (!token.access_token)
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return Response.redirect(
+      `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
+      302,
+    );
 
-  const days = Number.isInteger(savedState.days) ? Math.min(90, Math.max(1, savedState.days ?? 30)) : 30;
+  const days = Number.isInteger(savedState.days)
+    ? Math.min(90, Math.max(1, savedState.days ?? 30))
+    : 30;
   const endDate = new Date();
   endDate.setUTCDate(endDate.getUTCDate() - 2);
   const startDate = new Date(endDate);
   startDate.setUTCDate(startDate.getUTCDate() - days + 1);
   const start = startDate.toISOString().slice(0, 10);
   const end = endDate.toISOString().slice(0, 10);
-  type SearchConsoleRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
-  const querySearchConsole = async (dimensions: string[], rowLimit: number): Promise<SearchConsoleRow[]> => {
+  type SearchConsoleRow = {
+    keys?: string[];
+    clicks?: number;
+    impressions?: number;
+    ctr?: number;
+    position?: number;
+  };
+  const querySearchConsole = async (
+    dimensions: string[],
+    rowLimit: number,
+  ): Promise<SearchConsoleRow[]> => {
     const response = await fetch(
       `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(searchConsoleProperty)}/searchAnalytics/query`,
       {
         method: "POST",
-        headers: { authorization: `Bearer ${token.access_token}`, "content-type": "application/json" },
-        body: JSON.stringify({ startDate: start, endDate: end, dimensions, rowLimit }),
+        headers: {
+          authorization: `Bearer ${token.access_token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          startDate: start,
+          endDate: end,
+          dimensions,
+          rowLimit,
+        }),
       },
     );
     if (!response.ok) throw new Error("Search Console query failed");
@@ -4810,7 +5274,10 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
       querySearchConsole(["query"], 100),
     ]);
   } catch {
-    return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`, 302);
+    return Response.redirect(
+      `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
+      302,
+    );
   }
 
   const snapshotId = crypto.randomUUID();
@@ -4823,9 +5290,21 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
         `INSERT INTO search_console_country_snapshots
          (snapshot_id, start_date, end_date, country, clicks, impressions, ctr, position, fetched_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(snapshotId, start, end, country, Number(row.clicks ?? 0), Number(row.impressions ?? 0), Number(row.ctr ?? 0), Number(row.position ?? 0), fetchedAt);
+      ).bind(
+        snapshotId,
+        start,
+        end,
+        country,
+        Number(row.clicks ?? 0),
+        Number(row.impressions ?? 0),
+        Number(row.ctr ?? 0),
+        Number(row.position ?? 0),
+        fetchedAt,
+      );
     })
-    .filter((statement): statement is D1PreparedStatement => statement !== null);
+    .filter(
+      (statement): statement is D1PreparedStatement => statement !== null,
+    );
   const queryStatements = queryRows
     .map((row) => {
       const query = normalizedText(row.keys?.[0], 320);
@@ -4834,12 +5313,27 @@ async function completeSearchConsoleImport(request: Request, env: Env): Promise<
         `INSERT INTO search_console_query_snapshots
          (snapshot_id, start_date, end_date, query, clicks, impressions, ctr, position, fetched_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(snapshotId, start, end, query, Number(row.clicks ?? 0), Number(row.impressions ?? 0), Number(row.ctr ?? 0), Number(row.position ?? 0), fetchedAt);
+      ).bind(
+        snapshotId,
+        start,
+        end,
+        query,
+        Number(row.clicks ?? 0),
+        Number(row.impressions ?? 0),
+        Number(row.ctr ?? 0),
+        Number(row.position ?? 0),
+        fetchedAt,
+      );
     })
-    .filter((statement): statement is D1PreparedStatement => statement !== null);
+    .filter(
+      (statement): statement is D1PreparedStatement => statement !== null,
+    );
   const statements = [...countryStatements, ...queryStatements];
   if (statements.length) await env.REPORTS.batch(statements);
-  return Response.redirect(`${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`, 302);
+  return Response.redirect(
+    `${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`,
+    302,
+  );
 }
 
 async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
@@ -5024,60 +5518,74 @@ async function adminNotifications(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const [commentRows, approvedRows, publishedRows, reviewRows, taskReminderRows] =
-    await Promise.all([
-      env.REPORTS.prepare(
-        "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
-      )
-        .bind(scope.email, scope.email)
-        .all<{
+  const [
+    commentRows,
+    approvedRows,
+    publishedRows,
+    reviewRows,
+    taskReminderRows,
+  ] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
+    )
+      .bind(scope.email, scope.email)
+      .all<{
+        id: string;
+        body: string;
+        parent_comment_id: string | null;
+        created_at: string;
+        document_id: string;
+        title: string;
+      }>(),
+    env.REPORTS.prepare(
+      "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
+    )
+      .bind(scope.email)
+      .all<{ id: string; title: string; updated_at: string }>(),
+    env.REPORTS.prepare(
+      "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC LIMIT 12",
+    )
+      .bind(scope.email)
+      .all<{ id: string; title: string; published_at: string }>(),
+    scope.isManager
+      ? env.REPORTS.prepare(
+          "SELECT id, subject, title, updated_by, updated_at FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 30",
+        ).all<{
           id: string;
-          body: string;
-          parent_comment_id: string | null;
-          created_at: string;
-          document_id: string;
+          subject: string;
           title: string;
-        }>(),
-      env.REPORTS.prepare(
-        "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
-      )
-        .bind(scope.email)
-        .all<{ id: string; title: string; updated_at: string }>(),
-      env.REPORTS.prepare(
-        "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC LIMIT 12",
-      )
-        .bind(scope.email)
-        .all<{ id: string; title: string; published_at: string }>(),
-      scope.isManager
-        ? env.REPORTS.prepare(
-            "SELECT id, subject, title, updated_by, updated_at FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 30",
-          ).all<{
+          updated_by: string;
+          updated_at: string;
+        }>()
+      : Promise.resolve({
+          results: [] as {
             id: string;
             subject: string;
             title: string;
             updated_by: string;
             updated_at: string;
-          }>()
-        : Promise.resolve({
-            results: [] as {
-              id: string;
-              subject: string;
-              title: string;
-              updated_by: string;
-              updated_at: string;
-            }[],
-          }),
-      env.REPORTS.prepare(
-        `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
+          }[],
+        }),
+    env.REPORTS.prepare(
+      `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
          WHERE t.status != 'done' AND (t.assignee_email=? OR t.created_by=?)
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
          ORDER BY r.remind_at ASC LIMIT 50`,
-      ).bind(scope.email, scope.email, scope.email).all<{
-        reminder_id: string; remind_at: string; timezone: string; label: string; id: string; title: string; project_id: string; project_slug: string;
+    )
+      .bind(scope.email, scope.email, scope.email)
+      .all<{
+        reminder_id: string;
+        remind_at: string;
+        timezone: string;
+        label: string;
+        id: string;
+        title: string;
+        project_id: string;
+        project_slug: string;
       }>(),
-    ]);
+  ]);
   const notifications = [
     ...(commentRows.results ?? []).map((item) => ({
       id: `comment-${item.id}`,
@@ -5113,14 +5621,18 @@ async function adminNotifications(
           updatedAt: item.updated_at,
         }))
       : []),
-    ...(taskReminderRows.results ?? []).filter((item) => wallTimeToEpoch(item.remind_at, item.timezone) <= Date.now()).map((item) => ({
-      id: `task-reminder-rule-${item.reminder_id}-${item.remind_at}`,
-      kind: "task-reminder",
-      title: `ToDoリマインダー：${item.title}`,
-      detail: item.label || "設定した日時",
-      href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
-      updatedAt: item.remind_at,
-    })),
+    ...(taskReminderRows.results ?? [])
+      .filter(
+        (item) => wallTimeToEpoch(item.remind_at, item.timezone) <= Date.now(),
+      )
+      .map((item) => ({
+        id: `task-reminder-rule-${item.reminder_id}-${item.remind_at}`,
+        kind: "task-reminder",
+        title: `ToDoリマインダー：${item.title}`,
+        detail: item.label || "設定した日時",
+        href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+        updatedAt: item.remind_at,
+      })),
   ]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 20);
@@ -5181,7 +5693,14 @@ async function markAdminNotificationsRead(
   return json({ ok: true });
 }
 
-const emailSafe = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+const emailSafe = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ] ?? character,
+  );
 
 async function dispatchDueTaskReminders(env: Env) {
   if (!env.RESEND_API_KEY) return;
@@ -5194,28 +5713,86 @@ async function dispatchDueTaskReminders(env: Env) {
      WHERE t.status != 'done' AND NULLIF(TRIM(t.reminder_email),'') IS NOT NULL
      ORDER BY r.remind_at ASC LIMIT 2000`,
   ).all<{
-    reminder_id: string; title: string; details: string | null; due_at: string | null; due_timezone: string;
-    remind_at: string; timezone: string; label: string; relative_kind: string; repeat: string; recipient_email: string | null;
+    reminder_id: string;
+    title: string;
+    details: string | null;
+    due_at: string | null;
+    due_timezone: string;
+    remind_at: string;
+    timezone: string;
+    label: string;
+    relative_kind: string;
+    repeat: string;
+    recipient_email: string | null;
   }>();
   for (const row of rows.results ?? []) {
-    const reminderEpoch = wallTimeToEpoch(row.remind_at, row.timezone || row.due_timezone);
-    if (!EMAIL_PATTERN.test(row.recipient_email ?? "") || !Number.isFinite(reminderEpoch) || reminderEpoch > Date.now()) continue;
-    const sent = await env.REPORTS.prepare("SELECT sent_at FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?").bind(row.reminder_id, row.recipient_email).first<{ sent_at: string }>();
+    const reminderEpoch = wallTimeToEpoch(
+      row.remind_at,
+      row.timezone || row.due_timezone,
+    );
+    if (
+      !EMAIL_PATTERN.test(row.recipient_email ?? "") ||
+      !Number.isFinite(reminderEpoch) ||
+      reminderEpoch > Date.now()
+    )
+      continue;
+    const sent = await env.REPORTS.prepare(
+      "SELECT sent_at FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?",
+    )
+      .bind(row.reminder_id, row.recipient_email)
+      .first<{ sent_at: string }>();
     if (sent) continue;
-    const claimed = await env.REPORTS.prepare("INSERT OR IGNORE INTO editorial_task_reminder_deliveries (reminder_id,recipient_email,sent_at) VALUES (?,?,?)").bind(row.reminder_id, row.recipient_email, `__pending__:${Date.now()}`).run() as { meta?: { changes?: number } };
+    const claimed = (await env.REPORTS.prepare(
+      "INSERT OR IGNORE INTO editorial_task_reminder_deliveries (reminder_id,recipient_email,sent_at) VALUES (?,?,?)",
+    )
+      .bind(row.reminder_id, row.recipient_email, `__pending__:${Date.now()}`)
+      .run()) as { meta?: { changes?: number } };
     if (!claimed.meta?.changes) continue;
-    const dueLabel = row.due_at ? `${row.due_at.replace("T", " ")} (${row.due_timezone})` : "期限未設定";
+    const dueLabel = row.due_at
+      ? `${row.due_at.replace("T", " ")} (${row.due_timezone})`
+      : "期限未設定";
     try {
-      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.EMAIL_FROM ?? "Atlasez運営 <onboarding@resend.dev>", to: [row.recipient_email], subject: `ToDoリマインダー：${row.title}`, text: `AtlasezのToDoリマインダーです。\n\n${row.title}\nリマインダー：${row.label || "設定した日時"}\n期限：${dueLabel}${row.details ? `\n\n${row.details}` : ""}`, html: `<h2>ToDoリマインダー</h2><p><b>${emailSafe(row.title)}</b></p><p>リマインダー：${emailSafe(row.label || "設定した日時")}<br>期限：${emailSafe(dueLabel)}</p>${row.details ? `<pre>${emailSafe(row.details)}</pre>` : ""}` }) });
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          from: env.EMAIL_FROM ?? "Atlasez運営 <onboarding@resend.dev>",
+          to: [row.recipient_email],
+          subject: `ToDoリマインダー：${row.title}`,
+          text: `AtlasezのToDoリマインダーです。\n\n${row.title}\nリマインダー：${row.label || "設定した日時"}\n期限：${dueLabel}${row.details ? `\n\n${row.details}` : ""}`,
+          html: `<h2>ToDoリマインダー</h2><p><b>${emailSafe(row.title)}</b></p><p>リマインダー：${emailSafe(row.label || "設定した日時")}<br>期限：${emailSafe(dueLabel)}</p>${row.details ? `<pre>${emailSafe(row.details)}</pre>` : ""}`,
+        }),
+      });
       if (!response.ok) throw new Error("メール送信に失敗しました。");
-      const next = nextReminderWallTime(row.remind_at, row.repeat, row.timezone || row.due_timezone);
-      if (next) await env.REPORTS.batch([
-        env.REPORTS.prepare("UPDATE editorial_task_reminders SET remind_at=?,notified_at=NULL WHERE id=?").bind(next, row.reminder_id),
-        env.REPORTS.prepare("DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?").bind(row.reminder_id, row.recipient_email),
-      ]);
-      else await env.REPORTS.prepare("UPDATE editorial_task_reminder_deliveries SET sent_at=? WHERE reminder_id=? AND recipient_email=?").bind(new Date().toISOString(), row.reminder_id, row.recipient_email).run();
+      const next = nextReminderWallTime(
+        row.remind_at,
+        row.repeat,
+        row.timezone || row.due_timezone,
+      );
+      if (next)
+        await env.REPORTS.batch([
+          env.REPORTS.prepare(
+            "UPDATE editorial_task_reminders SET remind_at=?,notified_at=NULL WHERE id=?",
+          ).bind(next, row.reminder_id),
+          env.REPORTS.prepare(
+            "DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?",
+          ).bind(row.reminder_id, row.recipient_email),
+        ]);
+      else
+        await env.REPORTS.prepare(
+          "UPDATE editorial_task_reminder_deliveries SET sent_at=? WHERE reminder_id=? AND recipient_email=?",
+        )
+          .bind(new Date().toISOString(), row.reminder_id, row.recipient_email)
+          .run();
     } catch {
-      await env.REPORTS.prepare("DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?").bind(row.reminder_id, row.recipient_email).run();
+      await env.REPORTS.prepare(
+        "DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?",
+      )
+        .bind(row.reminder_id, row.recipient_email)
+        .run();
     }
   }
 }
@@ -5231,9 +5808,15 @@ export default {
       return startGoogleLogin(request, env);
     if (url.pathname === "/auth/google/callback" && request.method === "GET")
       return completeGoogleLogin(request, env);
-    if (url.pathname === "/auth/google/search-console" && request.method === "GET")
+    if (
+      url.pathname === "/auth/google/search-console" &&
+      request.method === "GET"
+    )
       return startSearchConsoleImport(request, env);
-    if (url.pathname === "/auth/google/search-console/callback" && request.method === "GET")
+    if (
+      url.pathname === "/auth/google/search-console/callback" &&
+      request.method === "GET"
+    )
       return completeSearchConsoleImport(request, env);
     // ナビゲーションからの直接アクセス（GET）でもログアウトできるようにする。
     if (
@@ -5560,7 +6143,7 @@ export default {
           return new Response(null, {
             status: 302,
             headers: {
-                location: `/auth/google/login?returnTo=${encodeURIComponent(adminReturnPath(`${url.pathname}${url.search}`))}`,
+              location: `/auth/google/login?returnTo=${encodeURIComponent(adminReturnPath(`${url.pathname}${url.search}`))}`,
             },
           });
       }
