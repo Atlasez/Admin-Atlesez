@@ -1,330 +1,76 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
-const requestedView =
-  Astro.url.searchParams.get("view") ??
-  (Astro.url.searchParams.get("mode") === "review" ? "review" : "drafts");
-const activeView = ["drafts", "review", "published"].includes(requestedView) ? requestedView : "drafts";
-const activeMode = Astro.url.searchParams.get("mode") ?? (activeView === "review" ? "review" : "revise");
-const activeEntry = activeView === "review" ? "review" : activeMode === "revise" ? "revise" : "";
 ---
-<AdminLayout title="編集・査読" description="原稿の一覧・編集・査読と状態管理">
-  <main class="admin-page" data-article-index data-active-view={activeView}>
-    <header>
-      <div>
-        <h1>編集・査読</h1>
-        <span data-mode-description>作成中の記事を一覧で確認してから、新規作成・加筆修正・査読に進めます。</span>
-      </div>
-    </header>
-
-    <section class="entry-links" aria-label="編集・査読の入口">
-      <a href="/admin/editor/?new=1" data-entry="new">
-        <strong>新規記事作成</strong>
-        <small>一覧で重複していないか確認してから、新しい記事の本文・数式・メタデータを作成します。</small>
-        <span>作成を始める →</span>
-      </a>
-      <a href="/admin/articles/?view=drafts&mode=revise" data-entry="revise" aria-current={activeEntry === "revise" ? "page" : undefined}>
-        <strong>加筆・修正</strong>
-        <small>執筆中の原稿を一覧し、自分が作成・更新したものを優先して表示します。</small>
-        <span>原稿を探す →</span>
-      </a>
-      <a href="/admin/articles/?view=review&mode=review" data-entry="review" aria-current={activeEntry === "review" ? "page" : undefined}>
-        <strong>査読</strong>
-        <small>査読中の原稿と自分への依頼を確認し、査読担当を割り当てます。</small>
-        <span>査読を始める →</span>
-      </a>
-    </section>
-
-    <nav class="article-view-tabs" aria-label="原稿の表示切り替え">
-      <a href="/admin/articles/?view=drafts&mode=revise" data-article-view="drafts" aria-current={activeView === "drafts" ? "page" : undefined}>原稿</a>
-      <a href="/admin/articles/?view=review&mode=review" data-article-view="review" aria-current={activeView === "review" ? "page" : undefined}>査読中</a>
-      <a href="/admin/articles/?view=published&mode=published" data-article-view="published" aria-current={activeView === "published" ? "page" : undefined}>公開済み</a>
+<AdminLayout title="編集・査読" description="原稿の編集・査読と状態管理">
+  <main class="admin-page" data-article-index>
+    <header><div><h1>編集・査読</h1><span data-mode-description>既存の原稿を一覧で確認してから、作成・加筆修正・査読へ進めます。</span></div></header>
+    <nav class="workflow-grid" aria-label="記事作業を選択">
+      <a class="workflow-card" href="/admin/editor/?new=1&from=articles"><strong>新規記事作成</strong><small>既存の原稿と題材が重複していないか確認してから、新しい記事を書き始める</small><span>作成する →</span></a>
+      <a class="workflow-card" href="/admin/articles/?mode=revise#article-list"><strong>加筆・修正</strong><small>原稿一覧から、加筆・修正する記事を選ぶ</small><span>記事を選ぶ →</span></a>
+      <a class="workflow-card" href="/admin/review/"><strong>査読</strong><small>査読中の原稿と自分への査読依頼を確認する</small><span>査読する →</span></a>
     </nav>
-
-    <section class="review-summary" data-review-summary aria-label="査読依頼の概要" hidden>
-      <article><span>査読中の原稿</span><strong data-review-total>—</strong><small>担当分野で表示できる全件</small></article>
-      <article class="is-priority"><span>自分への依頼</span><strong data-review-mine>—</strong><small>優先して確認します</small></article>
-      <article><span>未割り当て</span><strong data-review-unassigned>—</strong><small>担当者を設定できます</small></article>
-      <article><span>最終更新</span><strong data-review-updated>—</strong><small>一覧内の最新日時</small></article>
-    </section>
-
-    <section class="filters" data-filters>
-      <input data-query placeholder="タイトル・分野・カテゴリで検索" />
-      <select data-status aria-label="状態で絞り込む">
-        <option value="all">すべての状態</option>
-        <option value="draft">下書き</option>
-        <option value="in-review">査読中</option>
-        <option value="on-hold">保留</option>
-        <option value="approved">査読済み</option>
-      </select>
-      <select data-public aria-label="公開状況で絞り込む">
-        <option value="all">公開状況：すべて</option>
-        <option value="published">公開済み</option>
-        <option value="unpublished">未公開</option>
-      </select>
-      <select data-test aria-label="テスト原稿の扱い">
-        <option value="exclude">テスト原稿を除く</option>
-        <option value="all">テスト原稿を含む</option>
-        <option value="only">テスト原稿のみ</option>
-      </select>
-      <output data-count></output>
-    </section>
-
-    <section class="filters review-filters" data-review-toolbar hidden>
-      <input data-review-query placeholder="タイトル・分野・カテゴリ・依頼者で検索" />
-      <select data-review-filter aria-label="査読依頼の表示対象">
-        <option value="all">すべての依頼</option>
-        <option value="mine">自分への依頼</option>
-        <option value="unassigned">未割り当て</option>
-      </select>
-      <button type="button" class="quiet-button" data-review-reset>条件をクリア</button>
-      <button type="button" class="quiet-button" data-review-refresh>一覧を更新</button>
-      <output data-review-count></output>
-    </section>
-
+    <section class="filters" id="article-list"><input data-query placeholder="タイトル・分野・カテゴリで検索" /><select data-status><option value="all">すべての状態</option><option value="draft">下書き</option><option value="in-review">査読中</option><option value="on-hold">保留</option><option value="approved">査読済み</option></select><select data-public><option value="all">公開状況：すべて</option><option value="published">公開済み</option><option value="unpublished">未公開</option></select><select data-test><option value="exclude">テスト原稿を除く</option><option value="all">テスト原稿を含む</option><option value="only">テスト原稿のみ</option></select><output data-count></output></section>
     <section class="list" data-list>原稿一覧を取得しています…</section>
   </main>
 </AdminLayout>
 <style is:global>
-.admin-page [hidden]{display:none!important}
-.admin-page{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.admin-page > header:not(.admin-nav){align-items:flex-start;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;gap:1rem;padding:2rem 0 1.25rem}.admin-page h1{font-size:2rem;margin:.25rem 0}.admin-page > header:not(.admin-nav) span{color:var(--text-secondary);display:block;max-width:48rem}
-.entry-links{display:grid;gap:.8rem;grid-template-columns:repeat(3,minmax(0,1fr));margin:1.4rem 0 1.5rem}
-.entry-links a{background:var(--background-secondary);border:1px solid var(--border-default);border-top:4px solid var(--accent-primary);border-radius:.65rem;color:var(--text-primary);display:grid;gap:.4rem;min-height:8rem;padding:1.1rem 1.15rem;text-decoration:none}
-.entry-links a:hover{border-color:var(--accent-primary);box-shadow:0 .35rem 1rem #153c6612}
-.entry-links a[aria-current="page"]{background:var(--background-primary);box-shadow:inset 0 0 0 1px var(--accent-primary)}
-.entry-links strong{font-size:1.1rem}
-.entry-links small{color:var(--text-secondary);font-size:.78rem;line-height:1.55}
-.entry-links span{color:var(--accent-primary);font-size:.76rem;font-weight:800;margin-top:auto}
-.article-view-tabs{border-bottom:1px solid var(--border-default);display:flex;gap:.35rem;margin:0 0 1.1rem;overflow-x:auto}.article-view-tabs a{border-bottom:3px solid transparent;color:var(--text-secondary);font-size:.85rem;font-weight:800;padding:.65rem .9rem;text-decoration:none;white-space:nowrap}.article-view-tabs a:hover,.article-view-tabs a.is-active,.article-view-tabs a[aria-current="page"]{border-bottom-color:var(--accent-primary);color:var(--accent-primary)}
-.review-summary{display:grid;gap:.6rem;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 .9rem}
-.review-summary article{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;display:grid;gap:.1rem;min-width:0;padding:.7rem .8rem}
-.review-summary article.is-priority{border-color:#a8c8e0;box-shadow:inset 3px 0 #3d84ad}
-.review-summary span,.review-summary small{color:var(--text-secondary);font-size:.7rem}
-.review-summary strong{color:var(--text-primary);font-size:1.4rem;line-height:1.1}
-.filters{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.75rem;display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1.1rem;padding:.85rem}
-.filters input,.filters select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.45rem;font:inherit;min-height:2.6rem;padding:.55rem}
-.filters input{flex:1 1 18rem}
-.filters output{align-self:center;color:var(--text-secondary);font-size:.82rem}
-.quiet-button{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.45rem;color:var(--text-primary);cursor:pointer;font:inherit;font-size:.78rem;font-weight:800;min-height:2.6rem;padding:.45rem .7rem;white-space:nowrap}
-.quiet-button:hover{border-color:var(--accent-primary);color:var(--accent-primary)}
-.quiet-button:disabled{cursor:wait;opacity:.55}
-.list{display:grid;gap:.35rem}
-.article{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);border-radius:.55rem;cursor:pointer;display:grid;gap:.45rem;grid-template-columns:1fr auto;padding:.6rem .75rem}
-.article:hover{border-color:var(--accent-primary);box-shadow:0 .2rem .7rem #153c6615}
-.article h2{font-size:.95rem;margin:0}
-.article p{color:var(--text-secondary);font-size:.74rem;margin:.18rem 0 0}
-.article a{border:1px solid var(--border-default);border-radius:.45rem;color:var(--accent-primary);font-size:.76rem;font-weight:800;padding:.4rem .55rem;text-decoration:none}
-.article a:hover{background:var(--background-secondary);border-color:var(--accent-primary)}
-.badges{display:flex;gap:.25rem;justify-content:end}
-.badge{border:1px solid var(--border-default);border-radius:999px;font-size:.66rem;font-weight:800;padding:.14rem .34rem}
-.draft{background:#edf1f5}.in-review{background:#fff0c6}.on-hold{background:#f5e5e7}.approved{background:#def4e6}.published{background:#e7f1fb;color:#185c86}
-.review-item{display:grid;gap:.6rem;grid-template-columns:1fr;padding:.85rem .9rem}
-.review-item.is-mine{border-left:4px solid #3d84ad}
-.review-item.is-unassigned{border-left:4px solid #c28a20}
-.review-item-head{align-items:start;display:grid;gap:1rem;grid-template-columns:minmax(0,1fr) auto}
-.review-chips{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.3rem}
-.review-chip{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;font-weight:800;padding:.16rem .42rem}
-.review-chip.is-priority{background:#e7f1fb;border-color:#a8c8e0;color:#185c86}
-.review-chip.is-open{background:#fff7e7;border-color:#e4c982;color:#8a6512}
-.review-assign{align-items:center;border-top:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:.4rem;padding-top:.6rem}
-.review-assign label{color:var(--text-secondary);font-size:.74rem;font-weight:800}
-.review-assign select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.4rem;font:inherit;font-size:.78rem;min-height:2.2rem;min-width:13rem;padding:.35rem .5rem}
-.review-assign output{color:var(--text-secondary);font-size:.72rem}
-.list-empty{color:var(--text-secondary);padding:2.4rem 1rem;text-align:center}
-@media(max-width:900px){.entry-links{grid-template-columns:1fr}.review-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.admin-page{padding:0 .8rem 3rem}.admin-page > header:not(.admin-nav){align-items:start;display:grid;padding:1.6rem 0 1.1rem}.article,.review-item-head{align-items:start;display:grid;grid-template-columns:1fr}.badges{justify-content:start}.review-assign select{min-width:0;width:100%}}
+.admin-page{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.admin-page > header:not(.admin-nav){align-items:end;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;gap:1rem;padding:2rem 0 1.25rem}.admin-page > header:not(.admin-nav) p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.admin-page h1{font-size:2rem;margin:.25rem 0}.admin-page > header:not(.admin-nav) span{color:var(--text-secondary)}.admin-page > header:not(.admin-nav) a{background:var(--accent-primary);color:#fff;font-weight:800;padding:.65rem .85rem;text-decoration:none}.header-actions{align-items:center;display:flex;flex-wrap:wrap;gap:.45rem;justify-content:end}.admin-page > header:not(.admin-nav) .quiet-header-action{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary)}.admin-page > header:not(.admin-nav) .quiet-header-action:hover{border-color:var(--accent-primary);color:var(--accent-primary)}.filters{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}.filters input,.filters select{background:var(--background-primary);border:1px solid var(--border-default);font:inherit;padding:.65rem}.filters input{flex:1 1 18rem}.filters output{align-self:center;color:var(--text-secondary);font-size:.82rem}.list{display:grid;gap:.45rem}.article{align-items:center;border:1px solid var(--border-default);display:grid;gap:.6rem;grid-template-columns:1fr auto;padding:.8rem .9rem}.article:hover{border-color:var(--accent-primary)}.article h2{font-size:1rem;margin:0}.article p{color:var(--text-secondary);font-size:.78rem;margin:.3rem 0 0}.article a{color:var(--accent-primary);font-size:.82rem;font-weight:800;text-decoration:none}.badges{display:flex;gap:.35rem;justify-content:end}.badge{border:1px solid var(--border-default);border-radius:999px;font-size:.68rem;font-weight:800;padding:.18rem .4rem}.draft{background:#edf1f5}.in-review{background:#fff0c6}.on-hold{background:#f5e5e7}.approved{background:#def4e6}.published{background:#e7f1fb;color:#185c86}@media(max-width:600px){.admin-page{padding:0 .8rem 3rem}.admin-page > header:not(.admin-nav),.article{align-items:start;display:grid}.badges{justify-content:start}}
+.admin-page > header:not(.admin-nav){align-items:center;border-bottom:0;display:grid;justify-items:center;padding:3.4rem 0 1.8rem;text-align:center}.admin-page > header:not(.admin-nav) p{font-size:.72rem}.admin-page h1{font-size:clamp(1.9rem,4vw,2.5rem);margin:.35rem 0}.admin-page > header:not(.admin-nav) span{font-size:1rem;max-width:48rem}.admin-page > header:not(.admin-nav) a{border-radius:.65rem;margin-top:.8rem;padding:.75rem 1rem}.filters{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:1rem;gap:.7rem;margin:0 auto 1.25rem;max-width:60rem;padding:1rem}.filters input,.filters select{border-radius:.6rem;min-height:2.75rem}.list{margin:0 auto;max-width:60rem}.article{background:var(--background-primary);border-radius:.65rem;padding:.7rem .85rem}.article a{border:1px solid var(--border-default);border-radius:.45rem;padding:.4rem .55rem}.article a:hover{border-color:var(--accent-primary);background:var(--background-secondary)}@media(max-width:600px){.admin-page{padding:0 .8rem 3rem}.admin-page > header:not(.admin-nav){padding:2.5rem 0 1.35rem}.filters{border-radius:.75rem;padding:.8rem}.admin-page > header:not(.admin-nav),.article{align-items:start;display:grid}.badges{justify-content:start}}
+.workflow-grid{display:grid;gap:.8rem;grid-template-columns:repeat(3,minmax(0,1fr));margin:1.35rem auto 1.15rem;max-width:60rem}
+.workflow-card{background:var(--background-secondary);border:1px solid var(--border-default);border-top:3px solid var(--accent-primary);border-radius:.8rem;color:var(--text-primary);display:grid;gap:.35rem;min-height:9rem;padding:1.1rem;text-decoration:none;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.workflow-card:hover,.workflow-card:focus-visible{border-color:var(--accent-primary);box-shadow:0 .35rem 1rem #153c6620;transform:translateY(-2px)}
+.workflow-card strong{font-size:1.15rem}.workflow-card small{color:var(--text-secondary);font-size:.76rem;line-height:1.45}.workflow-card span{color:var(--accent-primary);font-size:.76rem;font-weight:900;margin-top:auto}
+@media(max-width:720px){.workflow-grid{grid-template-columns:1fr}.workflow-card{min-height:auto}.workflow-card strong{font-size:1.05rem}}
 </style>
+<style is:global>
+  .admin-page > header.admin-nav a.admin-nav-brand { background: transparent; color: var(--accent-primary); padding: 0; }
+  .admin-page > header.admin-nav nav > a { background: transparent; color: var(--text-primary); padding: 0 .62rem; }
+  .admin-page > header:not(.admin-nav) { width: min(100%, 60rem); margin-inline: auto; }
+  .admin-page > header:not(.admin-nav) > div { width: 100%; }
+  .list { gap: .28rem; }
+  .article { gap: .45rem; padding: .55rem .7rem; }
+  .article h2 { font-size: .93rem; }
+  .article p { font-size: .72rem; margin-top: .18rem; }
+  .badges { gap: .25rem; }
+  .badge { font-size: .64rem; padding: .14rem .32rem; }
+  .article { color: var(--text); cursor: pointer; text-decoration: none; }
+  .article a, .article-link-label { font-size: .76rem; }
+  .article:hover { border-color: var(--accent); box-shadow: 0 .2rem .7rem #153c6615; }
+  /* 他の管理ページと同じ左寄せの見出しに揃え、一覧の操作領域だけを中央幅にする。 */
+  .admin-page > header:not(.admin-nav) {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-inline: 0;
+    padding: 2rem 0 1.25rem;
+    text-align: left;
+    width: auto;
+  }
+  .admin-page > header:not(.admin-nav) > div { width: auto; }
+  .admin-page > header:not(.admin-nav) span { display: block; max-width: 48rem; }
+  @media(max-width:600px){
+    .admin-page > header:not(.admin-nav) { align-items: start; display: grid; padding: 1.6rem 0 1.1rem; }
+  }
+</style>
+<script>
+type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null};
+const initializeArticleIndex=()=>{const root=document.querySelector<HTMLElement>("[data-article-index]");if(!root||root.dataset.ready==='true')return;root.dataset.ready='true';const list=root.querySelector<HTMLElement>("[data-list]")!,query=root.querySelector<HTMLInputElement>("[data-query]")!,status=root.querySelector<HTMLSelectElement>("[data-status]")!,pub=root.querySelector<HTMLSelectElement>("[data-public]")!,test=root.querySelector<HTMLSelectElement>("[data-test]")!,count=root.querySelector<HTMLOutputElement>("[data-count]")!,description=root.querySelector<HTMLElement>("[data-mode-description]")!;let items:Article[]=[];let scopeEmail='';const mode=new URLSearchParams(location.search).get('mode')||'all';if(mode==='review'){status.value='in-review';description.textContent='査読済みでない原稿に絞り込み、自分への査読依頼を最優先で表示します。';}else if(mode==='revise'){description.textContent='自分が作成・更新した原稿を優先して表示します。';}const esc=(v:string)=>v.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]??c));const labels={draft:"下書き","in-review":"査読中","on-hold":"保留",approved:"査読済み"};const isTest=(x:Article)=>/(^|[\\s_-])test($|[\\s_-])|テスト/i.test(x.title);const render=()=>{const q=query.value.toLowerCase();const filtered=items.filter(x=>(status.value==="all"||x.status===status.value)&&(pub.value==="all"||(pub.value==="published"?!!x.published_at:!x.published_at))&&(test.value==="all"||(test.value==="only"?isTest(x):!isTest(x)))&&`${x.title} ${x.subject} ${x.category}`.toLowerCase().includes(q));const sorted=[...filtered].sort((a,b)=>{const aPriority=mode==='revise'&&[a.created_by,a.updated_by].includes(scopeEmail)?0:mode==='review'&&a.reviewer_email===scopeEmail?0:1;const bPriority=mode==='revise'&&[b.created_by,b.updated_by].includes(scopeEmail)?0:mode==='review'&&b.reviewer_email===scopeEmail?0:1;return aPriority-bPriority||new Date(b.updated_at).getTime()-new Date(a.updated_at).getTime();});const shown=[...new Map(sorted.map(x=>[x.source_article_id||`${x.subject}/${x.category}/${x.slug||x.title}`,x])).values()];count.textContent=`${shown.length}件`;list.innerHTML=shown.length?shown.map(x=>`<article class="article"><div><h2>${esc(x.title||"無題の原稿")}</h2><p>${esc(x.subject)} / ${esc(x.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP",{dateStyle:"medium"}).format(new Date(x.updated_at))}${mode==='review'&&x.reviewer_email===scopeEmail?' ・ 自分への査読依頼':''}</p></div><div><div class="badges"><span class="badge ${x.status}">${labels[x.status]}</span>${isTest(x)?'<span class="badge">テスト</span>':''}${x.published_at?'<span class="badge published">公開済み</span>':''}</div><a href="/admin/editor/?document=${encodeURIComponent(x.id)}">編集・査読を開く →</a></div></article>`).join(""):'<p>条件に一致する原稿はありません。</p>'};const load=async()=>{try{const r=await fetch('/api/admin/editor/documents',{credentials:'same-origin',cache:'no-store'});const type=r.headers.get('content-type')??'';const d=type.includes('application/json')?await r.json():{};if(!r.ok)throw Error(d.error??'認証情報を取得できませんでした。ページを再読み込みしてください。');items=d.documents??[];scopeEmail=d.scope?.email??'';render()}catch(e){list.textContent=e instanceof Error?e.message:'原稿一覧を取得できませんでした。'}};window.setTimeout(()=>{if(list.textContent?.includes('取得しています'))list.textContent='原稿一覧を取得できませんでした。ページを再読み込みしてください。'},6_000);[query,status,pub,test].forEach(x=>x.addEventListener('input',render));void load();};document.addEventListener('astro:page-load',initializeArticleIndex);initializeArticleIndex();
+</script>
 <script>
   import { navigate } from "astro:transitions/client";
 
-  type Article = { id: string; source_article_id?: string | null; subject: string; category: string; slug?: string; title: string; status: "draft" | "in-review" | "on-hold" | "approved"; updated_at: string; published_at: string | null; created_by?: string; updated_by?: string; reviewer_email?: string | null };
-  type Reviewer = { email: string; displayName: string; subjects: string[] };
-  type ReviewRequest = { id: string; subject: string; category: string; title: string; updated_by: string; requester_display_name: string; updated_at: string; reviewer_email: string | null; reviewerDisplayName: string; assignedToMe: boolean };
-
-  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
-  const formatDate = (value: string) => { const date = new Date(value); return Number.isNaN(date.valueOf()) ? "日時未設定" : new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(date); };
-  const formatDateTime = (value: string) => { const date = new Date(value); return Number.isNaN(date.valueOf()) ? "—" : new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(date); };
-  const readJson = async <T,>(response: Response): Promise<T> => {
-    if (!(response.headers.get("content-type") ?? "").includes("application/json")) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。");
-    return (await response.json()) as T;
-  };
-
-  const initializeArticleIndex = () => {
-    const root = document.querySelector<HTMLElement>("[data-article-index]");
-    if (!root || root.dataset.ready === "true") return;
-    root.dataset.ready = "true";
-
-    const params = new URLSearchParams(location.search);
-    const requested = params.get("view") ?? (params.get("mode") === "review" ? "review" : "drafts");
-    const view = (["drafts", "review", "published"].includes(requested) ? requested : "drafts") as "drafts" | "review" | "published";
-    const mode = params.get("mode") ?? (view === "review" ? "review" : "revise");
-
-    const list = root.querySelector<HTMLElement>("[data-list]")!;
-    const description = root.querySelector<HTMLElement>("[data-mode-description]")!;
-    const filters = root.querySelector<HTMLElement>("[data-filters]")!;
-    const reviewToolbar = root.querySelector<HTMLElement>("[data-review-toolbar]")!;
-    const reviewSummary = root.querySelector<HTMLElement>("[data-review-summary]")!;
-
-    root.querySelectorAll<HTMLAnchorElement>("[data-article-view]").forEach((tab) => {
-      const active = tab.dataset.articleView === view;
-      tab.classList.toggle("is-active", active);
-      if (active) tab.setAttribute("aria-current", "page");
-      else tab.removeAttribute("aria-current");
-    });
-
-    // 一覧カード全体をクリックできるようにする。査読ビューの操作部品は除外する。
-    list.addEventListener("click", (event) => {
+  document.addEventListener('astro:page-load', () => {
+    const list = document.querySelector<HTMLElement>('[data-article-index] [data-list]');
+    if (!list || list.dataset.tileLinksReady === 'true') return;
+    list.dataset.tileLinksReady = 'true';
+    list.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
-      if (target.closest("a, select, button, option, label")) return;
-      const link = target.closest<HTMLElement>(".article")?.querySelector<HTMLAnchorElement>("a");
+      if (target.closest('a')) return;
+      const card = target.closest<HTMLElement>('.article');
+      const link = card?.querySelector<HTMLAnchorElement>('a');
       if (link) void navigate(link.href);
     });
-
-    if (view === "review") {
-      filters.hidden = true;
-      reviewToolbar.hidden = false;
-      reviewSummary.hidden = false;
-      description.textContent = "査読中の原稿を確認し、査読担当を割り当てます。自分への依頼を優先して表示します。";
-      void initializeReviewView(root, list);
-      return;
-    }
-
-    reviewToolbar.hidden = true;
-    reviewSummary.hidden = true;
-    description.textContent = view === "published"
-      ? "公開済みの記事を確認できます。"
-      : "執筆中の原稿を確認できます。自分が作成・更新した原稿を優先して表示します。";
-
-    const query = root.querySelector<HTMLInputElement>("[data-query]")!;
-    const status = root.querySelector<HTMLSelectElement>("[data-status]")!;
-    const publication = root.querySelector<HTMLSelectElement>("[data-public]")!;
-    const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
-    const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
-
-    if (view === "published") { status.value = "all"; publication.value = "published"; }
-    else { status.value = "all"; publication.value = "unpublished"; }
-
-    const labels = { draft: "下書き", "in-review": "査読中", "on-hold": "保留", approved: "査読済み" } as const;
-    const isTest = (item: Article) => /(^|[\s_-])test($|[\s_-])|テスト/i.test(item.title);
-    let items: Article[] = [];
-    let scopeEmail = "";
-
-    const render = () => {
-      const needle = query.value.trim().toLowerCase();
-      const filtered = items.filter((item) =>
-        (status.value === "all" || item.status === status.value) &&
-        (publication.value === "all" || (publication.value === "published" ? Boolean(item.published_at) : !item.published_at)) &&
-        (test.value === "all" || (test.value === "only" ? isTest(item) : !isTest(item))) &&
-        `${item.title} ${item.subject} ${item.category}`.toLowerCase().includes(needle));
-      const sorted = [...filtered].sort((left, right) => {
-        const leftPriority = mode === "revise" && [left.created_by, left.updated_by].includes(scopeEmail) ? 0 : 1;
-        const rightPriority = mode === "revise" && [right.created_by, right.updated_by].includes(scopeEmail) ? 0 : 1;
-        return leftPriority - rightPriority || new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
-      });
-      const shown = [...new Map(sorted.map((item) => [item.source_article_id || `${item.subject}/${item.category}/${item.slug || item.title}`, item])).values()];
-      count.textContent = `${shown.length}件`;
-      list.innerHTML = shown.length
-        ? shown.map((item) => `<article class="article"><div><h2>${escapeHtml(item.title || "無題の原稿")}</h2><p>${escapeHtml(item.subject)} / ${escapeHtml(item.category)} ・ 最終更新 ${escapeHtml(formatDate(item.updated_at))}</p></div><div><div class="badges"><span class="badge ${item.status}">${labels[item.status]}</span>${isTest(item) ? '<span class="badge">テスト</span>' : ""}${item.published_at ? '<span class="badge published">公開済み</span>' : ""}</div><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">編集画面を開く →</a></div></article>`).join("")
-        : '<p class="list-empty">条件に一致する原稿はありません。上の「新規記事作成」から新しい原稿を作成できます。</p>';
-    };
-
-    const load = async () => {
-      try {
-        const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin", cache: "no-store" });
-        const data = await readJson<{ documents?: Article[]; scope?: { email?: string }; error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "原稿一覧を取得できませんでした。");
-        items = data.documents ?? [];
-        scopeEmail = data.scope?.email ?? "";
-        render();
-      } catch (error) {
-        list.innerHTML = `<p class="list-empty">${escapeHtml(error instanceof Error ? error.message : "原稿一覧を取得できませんでした。")}</p>`;
-      }
-    };
-
-    [query, status, publication, test].forEach((control) => control.addEventListener("input", render));
-    void load();
-  };
-
-  const initializeReviewView = async (root: HTMLElement, list: HTMLElement) => {
-    const search = root.querySelector<HTMLInputElement>("[data-review-query]")!;
-    const filter = root.querySelector<HTMLSelectElement>("[data-review-filter]")!;
-    const reset = root.querySelector<HTMLButtonElement>("[data-review-reset]")!;
-    const refresh = root.querySelector<HTMLButtonElement>("[data-review-refresh]")!;
-    const count = root.querySelector<HTMLOutputElement>("[data-review-count]")!;
-    const total = root.querySelector<HTMLElement>("[data-review-total]")!;
-    const mine = root.querySelector<HTMLElement>("[data-review-mine]")!;
-    const unassigned = root.querySelector<HTMLElement>("[data-review-unassigned]")!;
-    const updated = root.querySelector<HTMLElement>("[data-review-updated]")!;
-
-    let reviewers: Reviewer[] = [];
-    let requests: ReviewRequest[] = [];
-
-    const reviewerOptions = (item: ReviewRequest) => [
-      '<option value="">未割り当て</option>',
-      ...reviewers
-        .filter((reviewer) => reviewer.subjects.includes("*") || reviewer.subjects.includes(item.subject))
-        .map((reviewer) => `<option value="${escapeHtml(reviewer.email)}"${reviewer.email.toLowerCase() === (item.reviewer_email ?? "").toLowerCase() ? " selected" : ""}>${escapeHtml(reviewer.displayName)}</option>`),
-    ].join("");
-
-    const render = () => {
-      const needle = search.value.trim().toLocaleLowerCase();
-      const visible = requests.filter((item) =>
-        (filter.value === "all" || (filter.value === "mine" && item.assignedToMe) || (filter.value === "unassigned" && !item.reviewer_email)) &&
-        (!needle || `${item.title} ${item.subject} ${item.category} ${item.requester_display_name}`.toLocaleLowerCase().includes(needle)));
-      const latest = [...requests].sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime())[0];
-      total.textContent = String(requests.length);
-      mine.textContent = String(requests.filter((item) => item.assignedToMe).length);
-      unassigned.textContent = String(requests.filter((item) => !item.reviewer_email).length);
-      updated.textContent = latest ? formatDateTime(latest.updated_at) : "—";
-      count.textContent = `${visible.length}件表示 / 全${requests.length}件`;
-      list.innerHTML = visible.length
-        ? visible.map((item) => `<article class="article review-item ${item.assignedToMe ? "is-mine" : item.reviewer_email ? "is-assigned" : "is-unassigned"}"><div class="review-item-head"><div><div class="review-chips"><span class="review-chip">${escapeHtml(item.subject)}</span><span class="review-chip">${escapeHtml(item.category || "カテゴリ未設定")}</span>${item.assignedToMe ? '<span class="review-chip is-priority">自分への依頼</span>' : item.reviewer_email ? '<span class="review-chip">担当あり</span>' : '<span class="review-chip is-open">未割り当て</span>'}</div><h2>${escapeHtml(item.title || "無題の原稿")}</h2><p>依頼者: ${escapeHtml(item.requester_display_name)} ・ 最終更新 ${escapeHtml(formatDateTime(item.updated_at))}</p></div><a href="/admin/editor/?document=${encodeURIComponent(item.id)}">査読を開く →</a></div><div class="review-assign"><label for="reviewer-${escapeHtml(item.id)}">査読担当</label><select id="reviewer-${escapeHtml(item.id)}" data-reviewer-for="${escapeHtml(item.id)}">${reviewerOptions(item)}</select><button type="button" class="quiet-button" data-save-reviewer="${escapeHtml(item.id)}">担当を保存</button><output data-reviewer-message="${escapeHtml(item.id)}">現在の担当: ${escapeHtml(item.reviewer_email ? item.reviewerDisplayName : "未割り当て")}</output></div></article>`).join("")
-        : '<p class="list-empty">条件に一致する査読依頼はありません。原稿の状態を「査読中」にすると、ここに表示されます。</p>';
-    };
-
-    const load = async () => {
-      refresh.disabled = true;
-      list.innerHTML = '<p class="list-empty">査読依頼を読み込んでいます…</p>';
-      try {
-        const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin", cache: "no-store" });
-        const data = await readJson<{ requests?: ReviewRequest[]; reviewers?: Reviewer[]; error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "査読依頼を読み込めませんでした。");
-        reviewers = data.reviewers ?? [];
-        requests = data.requests ?? [];
-        render();
-      } catch (error) {
-        list.innerHTML = `<p class="list-empty">${escapeHtml(error instanceof Error ? error.message : "査読依頼を読み込めませんでした。")}</p>`;
-      } finally {
-        refresh.disabled = false;
-      }
-    };
-
-    search.addEventListener("input", render);
-    filter.addEventListener("change", render);
-    reset.addEventListener("click", () => { search.value = ""; filter.value = "all"; render(); search.focus(); });
-    refresh.addEventListener("click", () => { void load(); });
-    list.addEventListener("click", (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-save-reviewer]");
-      if (!button) return;
-      const id = button.dataset.saveReviewer ?? "";
-      const select = list.querySelector<HTMLSelectElement>(`[data-reviewer-for="${id}"]`);
-      const message = list.querySelector<HTMLOutputElement>(`[data-reviewer-message="${id}"]`);
-      if (!id || !select) return;
-      button.disabled = true;
-      if (message) message.value = "保存中…";
-      void (async () => {
-        const response = await fetch(`/api/admin/editor/review-requests/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ reviewerEmail: select.value }) });
-        const data = await readJson<{ error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "査読担当を保存できませんでした。");
-        await load();
-      })().catch((error: unknown) => {
-        if (message) message.value = error instanceof Error ? error.message : "査読担当を保存できませんでした。";
-        button.disabled = false;
-      });
-    });
-
-    await load();
-  };
-
-  document.addEventListener("astro:page-load", initializeArticleIndex);
-  initializeArticleIndex();
+  });
 </script>
