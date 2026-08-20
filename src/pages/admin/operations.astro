@@ -10,79 +10,925 @@ const holidayCountries = [
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
 ---
+
 <AdminLayout title="タスク管理" description="運営作業を共有する場所">
-<main class="operations" data-operations>
-<header><h1 data-project-title>タスク管理</h1><span>進捗報告と、次に行うタスクを共有します。</span></header>
-<div class="grid">
-<section><h2>進捗を報告</h2><p>編集・査読の完了後に、ここへ短く記録できます。</p><p class="discord-notice">記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。</p><label class="field-label">進捗内容<textarea data-progress placeholder="例：群の定義を修正し、査読コメント3件に対応しました。"></textarea></label><button data-send-progress>進捗を記録してDiscordへ送る</button><output data-progress-feedback aria-live="polite"></output><h3 class="subheading">自分が投げた進捗報告</h3><div data-progress-list></div></section>
-<section><h2>ToDo</h2><p>「自分がこなす」「自分が依頼」「すべて」を切り替えると、この直下の一覧が変わります。</p><div class="task-filters" role="group" aria-label="ToDoの表示対象"><button type="button" class="is-selected" data-task-filter="assigned" aria-pressed="true">自分がこなす</button><button type="button" data-task-filter="created" aria-pressed="false">自分が依頼</button><button type="button" data-task-filter="all" aria-pressed="false">すべて</button></div><input data-task-title placeholder="タスク名"/><label class="field-label">対象分野<select data-task-subject><option value="">全体</option>{subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}</select></label><label class="field-label">担当者<select data-task-assignee><option value="">担当者を指定しない</option></select></label><div class="task-deadline"><label class="field-label">期限日時<input data-task-due type="datetime-local" /></label><label class="field-label">期限のタイムゾーン<select data-task-due-timezone>{timezones.map(([value, label]) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}</select></label></div><div class="task-reminder-settings"><h3>自分用リマインダー</h3><p>期限基準の「N日前」「N時間前」「当日毎時」、または指定日時を複数登録できます。メール欄が空欄なら通知ベルに表示します。</p><div data-task-reminder-list><div class="task-reminder-row" data-task-reminder-row><label class="field-label">種類<select data-reminder-kind><option value="before_days">N日前</option><option value="before_hours">N時間前</option><option value="due_day_hourly">当日毎時</option><option value="absolute">指定日時</option></select></label><label class="field-label" data-reminder-amount-label>数量<input data-reminder-amount type="number" min="1" max="8760" placeholder="N" /></label><label class="field-label" data-reminder-start-label hidden>開始時刻<input data-reminder-start type="time" value="09:00" /></label><label class="field-label" data-reminder-at-label hidden>日時<input data-reminder-at type="datetime-local" /></label><button type="button" class="task-reminder-remove" data-remove-reminder hidden>削除</button></div></div><button type="button" class="secondary-button" data-add-task-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し（1つのリマインダーにのみ適用）<select data-task-reminder-repeat><option value="none">1回</option><option value="daily">毎日</option><option value="weekly">毎週</option><option value="monthly">毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input data-task-reminder-email type="email" maxlength="254" placeholder="自分のメールアドレス" /></label></div><textarea data-task-details placeholder="補足・依頼内容（任意）"></textarea><button data-create-task>タスクを追加</button><output class="operation-feedback" data-task-feedback aria-live="polite"></output><div data-task-list aria-live="polite"></div></section>
-<section class="wide"><h2>同時作業会・交流会の日程</h2><p>日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。</p><div class="calendar-settings" aria-label="カレンダー表示設定"><label class="field-label timezone-combobox">表示するタイムゾーン<div><input data-calendar-timezone role="combobox" aria-label="表示するタイムゾーン" aria-autocomplete="list" aria-expanded="false" aria-controls="atlasez-timezone-options" value="Asia/Tokyo" placeholder="タイムゾーンを検索"/><button type="button" data-timezone-toggle aria-label="タイムゾーン候補を開く">▼</button></div><div id="atlasez-timezone-options" class="timezone-options" data-timezone-options role="listbox" hidden></div></label><label class="field-label">表示する祝日の国・地域（複数選択可）<select data-calendar-holiday-country multiple size="4">{holidayCountries.map(([value, label]) => <option value={value} selected={value === "JP"}>{label}</option>)}</select></label><label class="field-label">暦の表示<select data-calendar-system>{calendarSystems.map(([value, label]) => <option value={value} selected={value === "gregory"}>{label}</option>)}</select></label></div><datalist id="atlasez-timezone-datalist">{timezones.map(([value, label]) => <option value={value} label={label}></option>)}</datalist><div class="calendar-head"><button type="button" data-calendar-prev aria-label="前の月">‹</button><strong data-calendar-title>読み込み中…</strong><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-week" data-event-calendar aria-label="日程カレンダー"></div><small class="calendar-note">祝日は date-holidays で自動計算します（206か国と対応する州・地域、ISC。データ: CC BY-SA 3.0）。未対応の地域は公開iCalを追加する方式へ拡張できます。</small><div class="event-create" data-event-create hidden><input data-event-title placeholder="催し名"/><input data-event-start type="datetime-local" aria-label="開始日時"/><input data-event-end type="datetime-local" aria-label="終了日時"/><input data-event-details placeholder="場所・URL・補足" aria-label="場所・URL・補足"/><input data-event-timezone list="atlasez-timezone-datalist" value="Asia/Tokyo" placeholder="日程の基準タイムゾーン" aria-label="日程の基準タイムゾーン"/><button data-create-event>日程を追加</button></div><output class="operation-feedback" data-event-feedback aria-live="polite"></output><div data-event-list aria-live="polite"></div><details class="availability-blocks" data-block-editor><summary>自分の可否期間を登録</summary><p>終日が初期値です。必要な場合だけ時刻を指定できます。他メンバーには表示名と可否だけを共有し、メモは本人と管理者だけに表示します。</p><label class="all-day-toggle"><input type="checkbox" data-block-all-day checked/>終日</label><div class="availability-block-form"><input data-block-start type="datetime-local" aria-label="可否期間の開始"/><input data-block-end type="datetime-local" aria-label="可否期間の終了"/><select data-block-kind aria-label="可否"><option value="unavailable">動けない</option><option value="available">動ける</option></select><input data-block-label placeholder="理由・メモ（任意）"/><button type="button" data-create-block>期間を追加</button></div><output class="operation-feedback" data-block-feedback aria-live="polite"></output><div data-block-list></div></details></section>
-</div></main>
+  <main class="operations" data-operations>
+    <header>
+      <h1 data-project-title>タスク管理</h1>
+      <span>進捗報告と、次に行うタスクを共有します。</span>
+    </header>
+    <div class="grid">
+      <section>
+        <h2>進捗を報告</h2>
+        <p>編集・査読の完了後に、ここへ短く記録できます。</p>
+        <p class="discord-notice">
+          記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。
+        </p>
+        <label class="field-label"
+          >進捗内容<textarea
+            data-progress
+            placeholder="例：群の定義を修正し、査読コメント3件に対応しました。"
+          ></textarea></label
+        ><button data-send-progress>進捗を記録してDiscordへ送る</button
+        ><output data-progress-feedback aria-live="polite"></output>
+        <h3 class="subheading">自分が投げた進捗報告</h3>
+        <div data-progress-list></div>
+      </section>
+      <section>
+        <h2>ToDo</h2>
+        <p>
+          「自分がこなす」「自分が依頼」「すべて」を切り替えると、この直下の一覧が変わります。
+        </p>
+        <div class="task-filters" role="group" aria-label="ToDoの表示対象">
+          <button
+            type="button"
+            class="is-selected"
+            data-task-filter="assigned"
+            aria-pressed="true"
+          >
+            自分がこなす</button
+          ><button
+            type="button"
+            data-task-filter="created"
+            aria-pressed="false"
+          >
+            自分が依頼</button
+          ><button type="button" data-task-filter="all" aria-pressed="false">
+            すべて
+          </button>
+        </div>
+        <input data-task-title placeholder="タスク名" /><label
+          class="field-label"
+          >対象分野<select data-task-subject>
+            <option value="">全体</option>
+            {subjects.map((subject) =>
+            <option value="{subject.slug}">{subject.name}</option>
+            )}
+          </select></label
+        ><label class="field-label"
+          >担当者<select data-task-assignee>
+            <option value="">担当者を指定しない</option>
+          </select></label
+        >
+        <div class="task-deadline">
+          <label class="field-label"
+            >期限日時<input data-task-due type="datetime-local" /></label
+          ><label class="field-label"
+            >期限のタイムゾーン<select data-task-due-timezone>
+              {timezones.map(([value, label]) =>
+              <option value="{value}" selected="{value" ="" ="" ="Asia/Tokyo" }>
+                {label}
+              </option>
+              )}
+            </select></label
+          >
+        </div>
+        <div class="task-reminder-settings">
+          <h3>自分用リマインダー</h3>
+          <p>
+            期限基準の「N日前」「N時間前」「当日毎時」、または指定日時を複数登録できます。メール欄が空欄なら通知ベルに表示します。
+          </p>
+          <div data-task-reminder-list>
+            <div class="task-reminder-row" data-task-reminder-row>
+              <label class="field-label"
+                >種類<select data-reminder-kind>
+                  <option value="before_days">N日前</option>
+                  <option value="before_hours">N時間前</option>
+                  <option value="due_day_hourly">当日毎時</option>
+                  <option value="absolute">指定日時</option>
+                </select></label
+              ><label class="field-label" data-reminder-amount-label
+                >数量<input
+                  data-reminder-amount
+                  type="number"
+                  min="1"
+                  max="8760"
+                  placeholder="N" /></label
+              ><label class="field-label" data-reminder-start-label hidden
+                >開始時刻<input
+                  data-reminder-start
+                  type="time"
+                  value="09:00" /></label
+              ><label class="field-label" data-reminder-at-label hidden
+                >日時<input data-reminder-at type="datetime-local" /></label
+              ><button
+                type="button"
+                class="task-reminder-remove"
+                data-remove-reminder
+                hidden
+              >
+                削除
+              </button>
+            </div>
+          </div>
+          <button type="button" class="secondary-button" data-add-task-reminder>
+            リマインダーを追加</button
+          ><label class="field-label"
+            >指定日時の繰り返し（1つのリマインダーにのみ適用）<select
+              data-task-reminder-repeat
+            >
+              <option value="none">1回</option>
+              <option value="daily">毎日</option>
+              <option value="weekly">毎週</option>
+              <option value="monthly">毎月</option>
+            </select></label
+          ><label class="field-label"
+            >自分の通知先メールアドレス（任意）<input
+              data-task-reminder-email
+              type="email"
+              maxlength="254"
+              placeholder="自分のメールアドレス"
+          /></label>
+        </div>
+        <textarea
+          data-task-details
+          placeholder="補足・依頼内容（任意）"
+        ></textarea
+        ><button data-create-task>タスクを追加</button
+        ><output
+          class="operation-feedback"
+          data-task-feedback
+          aria-live="polite"
+        ></output>
+        <div data-task-list aria-live="polite"></div>
+      </section>
+      <section class="wide">
+        <h2>同時作業会・交流会の日程</h2>
+        <p>
+          日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。
+        </p>
+        <div class="calendar-settings" aria-label="カレンダー表示設定">
+          <label class="field-label timezone-combobox"
+            >表示するタイムゾーン
+            <div>
+              <input
+                data-calendar-timezone
+                role="combobox"
+                aria-label="表示するタイムゾーン"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="atlasez-timezone-options"
+                value="Asia/Tokyo"
+                placeholder="タイムゾーンを検索"
+              /><button
+                type="button"
+                data-timezone-toggle
+                aria-label="タイムゾーン候補を開く"
+              >
+                ▼
+              </button>
+            </div>
+            <div
+              id="atlasez-timezone-options"
+              class="timezone-options"
+              data-timezone-options
+              role="listbox"
+              hidden
+            ></div></label
+          ><label class="field-label"
+            >表示する祝日の国・地域（複数選択可）<select
+              data-calendar-holiday-country
+              multiple
+              size="4"
+            >
+              {holidayCountries.map(([value, label]) =>
+              <option value="{value}" selected="{value" ="" ="" ="JP" }>
+                {label}
+              </option>
+              )}
+            </select></label
+          ><label class="field-label"
+            >暦の表示<select data-calendar-system>
+              {calendarSystems.map(([value, label]) =>
+              <option value="{value}" selected="{value" ="" ="" ="gregory" }>
+                {label}
+              </option>
+              )}
+            </select></label
+          >
+        </div>
+        <datalist id="atlasez-timezone-datalist">
+          {timezones.map(([value, label]) =>
+          <option value="{value}" label="{label}"></option>
+          )}
+        </datalist>
+        <div class="calendar-head">
+          <button type="button" data-calendar-prev aria-label="前の月">‹</button
+          ><strong data-calendar-title>読み込み中…</strong
+          ><button type="button" data-calendar-next aria-label="次の月">
+            ›
+          </button>
+        </div>
+        <div
+          class="calendar-week"
+          data-event-calendar
+          aria-label="日程カレンダー"
+        ></div>
+        <small class="calendar-note"
+          >祝日は date-holidays
+          で自動計算します（206か国と対応する州・地域、ISC。データ: CC BY-SA
+          3.0）。未対応の地域は公開iCalを追加する方式へ拡張できます。</small
+        >
+        <div class="event-create" data-event-create hidden>
+          <input data-event-title placeholder="催し名" /><input
+            data-event-start
+            type="datetime-local"
+            aria-label="開始日時"
+          /><input
+            data-event-end
+            type="datetime-local"
+            aria-label="終了日時"
+          /><input
+            data-event-details
+            placeholder="場所・URL・補足"
+            aria-label="場所・URL・補足"
+          /><input
+            data-event-timezone
+            list="atlasez-timezone-datalist"
+            value="Asia/Tokyo"
+            placeholder="日程の基準タイムゾーン"
+            aria-label="日程の基準タイムゾーン"
+          /><button data-create-event>日程を追加</button>
+        </div>
+        <output
+          class="operation-feedback"
+          data-event-feedback
+          aria-live="polite"
+        ></output>
+        <div data-event-list aria-live="polite"></div>
+        <details class="availability-blocks" data-block-editor>
+          <summary>自分の可否期間を登録</summary>
+          <p>
+            終日が初期値です。必要な場合だけ時刻を指定できます。他メンバーには表示名と可否だけを共有し、メモは本人と管理者だけに表示します。
+          </p>
+          <label class="all-day-toggle"
+            ><input type="checkbox" data-block-all-day checked />終日</label
+          >
+          <div class="availability-block-form">
+            <input
+              data-block-start
+              type="datetime-local"
+              aria-label="可否期間の開始"
+            /><input
+              data-block-end
+              type="datetime-local"
+              aria-label="可否期間の終了"
+            /><select data-block-kind aria-label="可否">
+              <option value="unavailable">動けない</option>
+              <option value="available">動ける</option></select
+            ><input data-block-label placeholder="理由・メモ（任意）" /><button
+              type="button"
+              data-create-block
+            >
+              期間を追加
+            </button>
+          </div>
+          <output
+            class="operation-feedback"
+            data-block-feedback
+            aria-live="polite"
+          ></output>
+          <div data-block-list></div>
+        </details>
+      </section>
+    </div>
+  </main>
 </AdminLayout>
 <style is:global>
-.operations{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.operations > header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.25rem}.operations > header p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.operations h1{font-size:2rem;margin:.25rem 0}.operations > header span,.operations section>p{color:var(--text-secondary);line-height:1.6}.grid{display:grid;gap:1rem;grid-template-columns:1fr 1fr;margin-top:1.25rem}.grid section{border:1px solid var(--border-default);padding:1rem}.grid h2{font-size:1.1rem;margin:0}.grid section>p{font-size:.82rem;margin:.4rem 0 .8rem}.wide{grid-column:span 2}.operations input,.operations textarea{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;margin:.25rem 0;padding:.55rem;width:100%}.operations textarea{min-height:6rem;resize:vertical}.operations button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font:inherit;font-size:.82rem;font-weight:800;margin-top:.35rem;padding:.5rem .7rem}.item{border-top:1px solid var(--border-default);display:grid;gap:.3rem;margin-top:.85rem;padding:.7rem 0}.item small{color:var(--text-secondary)}.task-row{align-items:center;display:flex;gap:.5rem;justify-content:space-between}.task-row select{font:inherit;padding:.25rem}.event-create{display:grid;gap:.35rem;grid-template-columns:1fr 1fr 1fr auto}.event-create[hidden]{display:none!important}.availability{display:flex;flex-wrap:wrap;gap:.35rem}.availability button{background:var(--background-secondary);border-color:var(--border-default);color:var(--text-primary)}.availability button:hover{border-color:var(--accent-primary);color:var(--accent-primary)}@media(max-width:700px){.operations{padding:0 .8rem 3rem}.operations > header{align-items:start;display:block}.grid{grid-template-columns:1fr}.wide{grid-column:auto}.event-create{grid-template-columns:1fr}.task-row{align-items:start;display:grid}}
-  .calendar-head{align-items:center;display:flex;justify-content:center;gap:.7rem;margin:1rem 0 .55rem}.calendar-head button{font-size:1.2rem;line-height:1;margin:0;min-width:2.2rem}.calendar-week{display:grid;gap:1px;grid-template-columns:repeat(7,minmax(0,1fr));background:var(--border-default);border:1px solid var(--border-default)}.calendar-cell{background:var(--background-primary);min-height:6.8rem;padding:.35rem}.calendar-cell--blank{background:var(--background-secondary)}.calendar-day{color:var(--text-secondary);font-size:.7rem;font-weight:800}.calendar-event{background:color-mix(in srgb,var(--accent-primary) 13%,var(--background-primary));border-left:2px solid var(--accent-primary);display:block;font-size:.67rem;line-height:1.35;margin-top:.25rem;overflow:hidden;padding:.15rem .25rem;text-overflow:ellipsis;white-space:nowrap}.calendar-note{color:var(--text-secondary);display:block;font-size:.72rem;margin-top:.5rem}.event-create{grid-template-columns:1fr 1fr 1fr minmax(125px,.7fr) auto}@media(max-width:700px){.calendar-cell{min-height:4.6rem;padding:.25rem}.calendar-event{font-size:.58rem}.event-create{grid-template-columns:1fr}}
-  .calendar-settings{display:grid;gap:.65rem;grid-template-columns:1.35fr 1fr 1fr}.calendar-settings input,.calendar-settings select{margin:.25rem 0}.calendar-settings input[list]{min-width:0}.calendar-note{line-height:1.5}@media(max-width:700px){.calendar-settings{grid-template-columns:1fr}}
-  .calendar-cell--holiday{background:color-mix(in srgb,#d9485f 8%,var(--background-primary))}.calendar-holiday{color:#b33649;display:block;font-size:.61rem;font-weight:800;line-height:1.25;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-deadline{display:grid;gap:.55rem;grid-template-columns:1fr 1fr}.task-deadline input,.task-deadline select{margin:.25rem 0}@media(max-width:700px){.task-deadline{grid-template-columns:1fr}}
-  button.calendar-cell{background:var(--background-primary);border:0;color:var(--text-primary);margin:0;min-height:6.8rem;padding:.35rem;text-align:left;width:100%}button.calendar-cell:hover,button.calendar-cell:focus-visible{box-shadow:inset 0 0 0 2px var(--accent-primary)}button.calendar-cell--holiday{background:color-mix(in srgb,#d9485f 8%,var(--background-primary))}.calendar-availability{border-radius:.25rem;display:block;font-size:.61rem;font-weight:800;margin-top:.18rem;overflow:hidden;padding:.12rem .22rem;text-overflow:ellipsis;white-space:nowrap}.calendar-availability--available{background:#e4f5ea;color:#176b32}.calendar-availability--unavailable{background:#f5e5e7;color:#8b2635}
-  .event-heading{align-items:center;display:flex;gap:.6rem;justify-content:space-between}
-  .event-delete{background:transparent!important;border-color:var(--border-default)!important;color:var(--text-secondary)!important;font-size:.72rem!important;font-weight:700!important;margin:0!important;padding:.3rem .5rem!important}
-  .event-delete:hover{border-color:var(--accent-primary)!important;color:var(--accent-primary)!important}
+  .operations {
+    margin: 0 auto;
+    max-width: 1200px;
+    padding: 0 1.25rem 4rem;
+  }
+  .operations > header {
+    border-bottom: 1px solid var(--border-default);
+    padding: 2rem 0 1.25rem;
+  }
+  .operations > header p {
+    color: var(--accent-primary);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin: 0;
+  }
+  .operations h1 {
+    font-size: 2rem;
+    margin: 0.25rem 0;
+  }
+  .operations > header span,
+  .operations section > p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 1.25rem;
+  }
+  .grid section {
+    border: 1px solid var(--border-default);
+    padding: 1rem;
+  }
+  .grid h2 {
+    font-size: 1.1rem;
+    margin: 0;
+  }
+  .grid section > p {
+    font-size: 0.82rem;
+    margin: 0.4rem 0 0.8rem;
+  }
+  .wide {
+    grid-column: span 2;
+  }
+  .operations input,
+  .operations textarea {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font: inherit;
+    margin: 0.25rem 0;
+    padding: 0.55rem;
+    width: 100%;
+  }
+  .operations textarea {
+    min-height: 6rem;
+    resize: vertical;
+  }
+  .operations button {
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .item {
+    border-top: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.3rem;
+    margin-top: 0.85rem;
+    padding: 0.7rem 0;
+  }
+  .item small {
+    color: var(--text-secondary);
+  }
+  .task-row {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+  }
+  .task-row select {
+    font: inherit;
+    padding: 0.25rem;
+  }
+  .event-create {
+    display: grid;
+    gap: 0.35rem;
+    grid-template-columns: 1fr 1fr 1fr auto;
+  }
+  .event-create[hidden] {
+    display: none !important;
+  }
+  .availability {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .availability button {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+  }
+  .availability button:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  @media (max-width: 700px) {
+    .operations {
+      padding: 0 0.8rem 3rem;
+    }
+    .operations > header {
+      align-items: start;
+      display: block;
+    }
+    .grid {
+      grid-template-columns: 1fr;
+    }
+    .wide {
+      grid-column: auto;
+    }
+    .event-create {
+      grid-template-columns: 1fr;
+    }
+    .task-row {
+      align-items: start;
+      display: grid;
+    }
+  }
+  .calendar-head {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    gap: 0.7rem;
+    margin: 1rem 0 0.55rem;
+  }
+  .calendar-head button {
+    font-size: 1.2rem;
+    line-height: 1;
+    margin: 0;
+    min-width: 2.2rem;
+  }
+  .calendar-week {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    background: var(--border-default);
+    border: 1px solid var(--border-default);
+  }
+  .calendar-cell {
+    background: var(--background-primary);
+    min-height: 6.8rem;
+    padding: 0.35rem;
+  }
+  .calendar-cell--blank {
+    background: var(--background-secondary);
+  }
+  .calendar-day {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+  .calendar-event {
+    background: color-mix(
+      in srgb,
+      var(--accent-primary) 13%,
+      var(--background-primary)
+    );
+    border-left: 2px solid var(--accent-primary);
+    display: block;
+    font-size: 0.67rem;
+    line-height: 1.35;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    padding: 0.15rem 0.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .calendar-note {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.72rem;
+    margin-top: 0.5rem;
+  }
+  .event-create {
+    grid-template-columns: 1fr 1fr 1fr minmax(125px, 0.7fr) auto;
+  }
+  @media (max-width: 700px) {
+    .calendar-cell {
+      min-height: 4.6rem;
+      padding: 0.25rem;
+    }
+    .calendar-event {
+      font-size: 0.58rem;
+    }
+    .event-create {
+      grid-template-columns: 1fr;
+    }
+  }
+  .calendar-settings {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: 1.35fr 1fr 1fr;
+  }
+  .calendar-settings input,
+  .calendar-settings select {
+    margin: 0.25rem 0;
+  }
+  .calendar-settings input[list] {
+    min-width: 0;
+  }
+  .calendar-note {
+    line-height: 1.5;
+  }
+  @media (max-width: 700px) {
+    .calendar-settings {
+      grid-template-columns: 1fr;
+    }
+  }
+  .calendar-cell--holiday {
+    background: color-mix(in srgb, #d9485f 8%, var(--background-primary));
+  }
+  .calendar-holiday {
+    color: #b33649;
+    display: block;
+    font-size: 0.61rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .task-deadline {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: 1fr 1fr;
+  }
+  .task-deadline input,
+  .task-deadline select {
+    margin: 0.25rem 0;
+  }
+  @media (max-width: 700px) {
+    .task-deadline {
+      grid-template-columns: 1fr;
+    }
+  }
+  button.calendar-cell {
+    background: var(--background-primary);
+    border: 0;
+    color: var(--text-primary);
+    margin: 0;
+    min-height: 6.8rem;
+    padding: 0.35rem;
+    text-align: left;
+    width: 100%;
+  }
+  button.calendar-cell:hover,
+  button.calendar-cell:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
+  }
+  button.calendar-cell--holiday {
+    background: color-mix(in srgb, #d9485f 8%, var(--background-primary));
+  }
+  .calendar-availability {
+    border-radius: 0.25rem;
+    display: block;
+    font-size: 0.61rem;
+    font-weight: 800;
+    margin-top: 0.18rem;
+    overflow: hidden;
+    padding: 0.12rem 0.22rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .calendar-availability--available {
+    background: #e4f5ea;
+    color: #176b32;
+  }
+  .calendar-availability--unavailable {
+    background: #f5e5e7;
+    color: #8b2635;
+  }
+  .event-heading {
+    align-items: center;
+    display: flex;
+    gap: 0.6rem;
+    justify-content: space-between;
+  }
+  .event-delete {
+    background: transparent !important;
+    border-color: var(--border-default) !important;
+    color: var(--text-secondary) !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    padding: 0.3rem 0.5rem !important;
+  }
+  .event-delete:hover {
+    border-color: var(--accent-primary) !important;
+    color: var(--accent-primary) !important;
+  }
 </style>
 <style is:global>
-  .participant-summary { border-top: 1px solid var(--border-default); display: grid; gap: .45rem; margin-top: .55rem; padding-top: .55rem; }
-  .participant-counts, .participant-names { display: flex; flex-wrap: wrap; gap: .35rem; }
-  .participant-counts span, .participant-chip { border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); font-size: .72rem; padding: .2rem .45rem; }
-  .participant-chip { color: var(--text-primary); }
-  .participant-available { background: #e4f5ea; border-color: #9bc9a9; }
-  .participant-maybe { background: #fff4d6; border-color: #e5c879; }
-  .participant-unavailable { background: #f5e5e7; border-color: #d8a4ad; }
+  .participant-summary {
+    border-top: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+    padding-top: 0.55rem;
+  }
+  .participant-counts,
+  .participant-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .participant-counts span,
+  .participant-chip {
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    padding: 0.2rem 0.45rem;
+  }
+  .participant-chip {
+    color: var(--text-primary);
+  }
+  .participant-available {
+    background: #e4f5ea;
+    border-color: #9bc9a9;
+  }
+  .participant-maybe {
+    background: #fff4d6;
+    border-color: #e5c879;
+  }
+  .participant-unavailable {
+    background: #f5e5e7;
+    border-color: #d8a4ad;
+  }
 </style>
-<style>.discord-notice{background:color-mix(in srgb,var(--accent-primary),transparent 90%);border-left:3px solid var(--accent-primary);font-size:.8rem!important;font-weight:700;padding:.55rem .7rem}</style>
-<style>.field-label{color:var(--text-secondary);display:grid;font-size:.76rem;font-weight:800;gap:.15rem}.operations select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;margin:.25rem 0;padding:.55rem;width:100%}.operation-feedback{color:var(--text-secondary);display:block;font-size:.76rem;min-height:1.2rem;padding-top:.35rem}.operations button:disabled{cursor:wait;opacity:.62}</style>
-<style>.availability button.is-selected{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary),transparent 75%)}.availability button[aria-pressed="true"]{font-weight:900}</style>
-<style is:global>
-  .subheading{border-top:1px solid var(--border-default);font-size:.82rem;margin:1rem 0 0;padding-top:.75rem}
-  .task-role{background:color-mix(in srgb,var(--accent-primary),transparent 88%);border-radius:999px;color:var(--accent-primary);font-weight:800;padding:.12rem .35rem}
-  .task-reminder-settings{background:color-mix(in srgb,var(--accent-primary),transparent 95%);border:1px solid var(--border-default);margin:.8rem 0;padding:.75rem}
-  .task-reminder-settings h3{font-size:.9rem;margin:0}
-  .task-reminder-settings p,.reminder-editor-note{color:var(--text-secondary);font-size:.75rem;line-height:1.5}
-  .task-reminder-row{align-items:end;border-top:1px solid var(--border-default);display:grid;gap:.4rem;grid-template-columns:1.2fr .8fr 1fr 1.25fr auto;padding-top:.5rem}
-  .task-reminder-row input,.task-reminder-row select{margin:0}
-  .task-reminder-row [hidden]{display:none}
-  .task-reminder-remove,.secondary-button{background:var(--background-secondary)!important;border-color:var(--border-default)!important;color:var(--text-primary)!important}
-  .task-reminder-remove{margin:0!important;white-space:nowrap}
-  .task-reminder-editor{border-top:1px solid var(--border-default);margin-top:.7rem;padding-top:.55rem}
-  .task-reminder-editor summary{color:var(--accent-primary);cursor:pointer;font-size:.78rem;font-weight:800}
-  .task-reminder-rules{display:grid;gap:.45rem}
-  .task-reminder-editor > div > .field-label{margin-top:.5rem}
-  @media(max-width:900px){.task-reminder-row{grid-template-columns:1fr 1fr}.task-reminder-row button{justify-self:start}}
-  @media(max-width:700px){.task-reminder-row{grid-template-columns:1fr}.task-reminder-row button{width:auto}}
+<style>
+  .discord-notice {
+    background: color-mix(in srgb, var(--accent-primary), transparent 90%);
+    border-left: 3px solid var(--accent-primary);
+    font-size: 0.8rem !important;
+    font-weight: 700;
+    padding: 0.55rem 0.7rem;
+  }
+</style>
+<style>
+  .field-label {
+    color: var(--text-secondary);
+    display: grid;
+    font-size: 0.76rem;
+    font-weight: 800;
+    gap: 0.15rem;
+  }
+  .operations select {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font: inherit;
+    margin: 0.25rem 0;
+    padding: 0.55rem;
+    width: 100%;
+  }
+  .operation-feedback {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.76rem;
+    min-height: 1.2rem;
+    padding-top: 0.35rem;
+  }
+  .operations button:disabled {
+    cursor: wait;
+    opacity: 0.62;
+  }
+</style>
+<style>
+  .availability button.is-selected {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--accent-primary), transparent 75%);
+  }
+  .availability button[aria-pressed="true"] {
+    font-weight: 900;
+  }
 </style>
 <style is:global>
-  .task-filters { display:flex; flex-wrap:wrap; gap:.4rem; margin:.7rem 0; }
-  .task-filters button { background:var(--background-primary); border-color:var(--border-default); border-radius:999px; color:var(--text-primary); margin:0; }
-  .task-filters button.is-selected { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
-  .availability-blocks { border-top:1px solid var(--border-default); margin-top:1rem; padding-top:.8rem; }
-  .availability-blocks summary { cursor:pointer; font-weight:800; }
-  .availability-blocks p { font-size:.78rem; }
-  .availability-block-form { display:grid; gap:.4rem; grid-template-columns:1fr 1fr .7fr 1fr auto; }
-  .availability-block-form input,.availability-block-form select { margin:0; min-width:0; }
-  .availability-block-form button { margin:0; }
-  .availability-block-item { align-items:center; display:flex; gap:.5rem; grid-template-columns:1fr auto; justify-content:space-between; }
-  .availability-block-item .event-delete { flex:0 0 auto; }
-  .all-day-toggle { align-items:center; display:flex; font-size:.78rem; font-weight:800; gap:.35rem; margin:.4rem 0; }.all-day-toggle input { margin:0; width:auto; }
-  @media(max-width:900px) { .availability-block-form { grid-template-columns:1fr 1fr; } }
-  @media(max-width:700px) { .availability-block-form { grid-template-columns:1fr; } }
+  .subheading {
+    border-top: 1px solid var(--border-default);
+    font-size: 0.82rem;
+    margin: 1rem 0 0;
+    padding-top: 0.75rem;
+  }
+  .task-role {
+    background: color-mix(in srgb, var(--accent-primary), transparent 88%);
+    border-radius: 999px;
+    color: var(--accent-primary);
+    font-weight: 800;
+    padding: 0.12rem 0.35rem;
+  }
+  .task-reminder-settings {
+    background: color-mix(in srgb, var(--accent-primary), transparent 95%);
+    border: 1px solid var(--border-default);
+    margin: 0.8rem 0;
+    padding: 0.75rem;
+  }
+  .task-reminder-settings h3 {
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .task-reminder-settings p,
+  .reminder-editor-note {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+  .task-reminder-row {
+    align-items: end;
+    border-top: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.4rem;
+    grid-template-columns: 1.2fr 0.8fr 1fr 1.25fr auto;
+    padding-top: 0.5rem;
+  }
+  .task-reminder-row input,
+  .task-reminder-row select {
+    margin: 0;
+  }
+  .task-reminder-row [hidden] {
+    display: none;
+  }
+  .task-reminder-remove,
+  .secondary-button {
+    background: var(--background-secondary) !important;
+    border-color: var(--border-default) !important;
+    color: var(--text-primary) !important;
+  }
+  .task-reminder-remove {
+    margin: 0 !important;
+    white-space: nowrap;
+  }
+  .task-reminder-editor {
+    border-top: 1px solid var(--border-default);
+    margin-top: 0.7rem;
+    padding-top: 0.55rem;
+  }
+  .task-reminder-editor summary {
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+  .task-reminder-rules {
+    display: grid;
+    gap: 0.45rem;
+  }
+  .task-reminder-editor > div > .field-label {
+    margin-top: 0.5rem;
+  }
+  @media (max-width: 900px) {
+    .task-reminder-row {
+      grid-template-columns: 1fr 1fr;
+    }
+    .task-reminder-row button {
+      justify-self: start;
+    }
+  }
+  @media (max-width: 700px) {
+    .task-reminder-row {
+      grid-template-columns: 1fr;
+    }
+    .task-reminder-row button {
+      width: auto;
+    }
+  }
 </style>
 <style is:global>
-  .timezone-combobox{position:relative}.timezone-combobox>div:first-of-type{display:flex}.timezone-combobox>div:first-of-type input{margin-right:0}.timezone-combobox [data-timezone-toggle]{margin:.25rem 0;min-width:2.6rem}.timezone-options{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 .5rem 1.2rem rgb(0 0 0/.16);display:grid;left:0;max-height:18rem;overflow:auto;position:absolute;right:0;top:100%;z-index:20}.timezone-options[hidden]{display:none}.timezone-options button{background:transparent;border:0;color:var(--text-primary);margin:0;padding:.45rem .55rem;text-align:left}.timezone-options button:hover{background:var(--background-secondary);color:var(--accent-primary)}
+  .task-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.7rem 0;
+  }
+  .task-filters button {
+    background: var(--background-primary);
+    border-color: var(--border-default);
+    border-radius: 999px;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .task-filters button.is-selected {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+  }
+  .availability-blocks {
+    border-top: 1px solid var(--border-default);
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+  }
+  .availability-blocks summary {
+    cursor: pointer;
+    font-weight: 800;
+  }
+  .availability-blocks p {
+    font-size: 0.78rem;
+  }
+  .availability-block-form {
+    display: grid;
+    gap: 0.4rem;
+    grid-template-columns: 1fr 1fr 0.7fr 1fr auto;
+  }
+  .availability-block-form input,
+  .availability-block-form select {
+    margin: 0;
+    min-width: 0;
+  }
+  .availability-block-form button {
+    margin: 0;
+  }
+  .availability-block-item {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    grid-template-columns: 1fr auto;
+    justify-content: space-between;
+  }
+  .availability-block-item .event-delete {
+    flex: 0 0 auto;
+  }
+  .all-day-toggle {
+    align-items: center;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 800;
+    gap: 0.35rem;
+    margin: 0.4rem 0;
+  }
+  .all-day-toggle input {
+    margin: 0;
+    width: auto;
+  }
+  @media (max-width: 900px) {
+    .availability-block-form {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 700px) {
+    .availability-block-form {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 <style is:global>
-  .availability { gap: .6rem; margin-top: .45rem; }
-  .availability button { border-radius: .55rem; font-size: .9rem; min-height: 2.8rem; min-width: 8.5rem; padding: .65rem .9rem; }
-  .availability button.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent-primary),transparent 78%); }
-  @media (max-width: 700px) { .availability { display: grid; grid-template-columns: 1fr; } .availability button { width: 100%; } }
+  .timezone-combobox {
+    position: relative;
+  }
+  .timezone-combobox > div:first-of-type {
+    display: flex;
+  }
+  .timezone-combobox > div:first-of-type input {
+    margin-right: 0;
+  }
+  .timezone-combobox [data-timezone-toggle] {
+    margin: 0.25rem 0;
+    min-width: 2.6rem;
+  }
+  .timezone-options {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 0.5rem 1.2rem rgb(0 0 0/0.16);
+    display: grid;
+    left: 0;
+    max-height: 18rem;
+    overflow: auto;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 20;
+  }
+  .timezone-options[hidden] {
+    display: none;
+  }
+  .timezone-options button {
+    background: transparent;
+    border: 0;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+  }
+  .timezone-options button:hover {
+    background: var(--background-secondary);
+    color: var(--accent-primary);
+  }
+</style>
+<style is:global>
+  .availability {
+    gap: 0.6rem;
+    margin-top: 0.45rem;
+  }
+  .availability button {
+    border-radius: 0.55rem;
+    font-size: 0.9rem;
+    min-height: 2.8rem;
+    min-width: 8.5rem;
+    padding: 0.65rem 0.9rem;
+  }
+  .availability button.is-selected {
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--accent-primary), transparent 78%);
+  }
+  @media (max-width: 700px) {
+    .availability {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+    .availability button {
+      width: 100%;
+    }
+  }
 </style>
 <script>
   import { holidaysForRegions, localDateTimeToInstant, supportedHolidayRegions } from '../../lib/calendar-support';
