@@ -38,6 +38,7 @@ const worldCountryPaths = worldMap.locations
       </div>
       <output class="analytics-summary" data-analytics-summary>読み込み中です…</output>
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
+      <button class="button button-outline analytics-more" type="button" data-analytics-more hidden>残りを表示</button>
 
       <div class="analytics-geo-grid">
         <section class="analytics-geo-card" aria-labelledby="search-country-heading">
@@ -101,6 +102,10 @@ const worldCountryPaths = worldMap.locations
   .analytics-table th:first-child, .analytics-table td:first-child { max-width: 32rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
   .analytics-table tr:last-child td { border-bottom: 0; }
   .analytics-table .analytics-meta { color: var(--muted); display: block; font-size: .72rem; margin-top: .15rem; }
+  .analytics-table .analytics-number { display: grid; gap: .2rem; justify-items: end; min-width: 5rem; }
+  .analytics-table .analytics-bar { background: var(--accent); border-radius: 999px; display: block; height: .32rem; max-width: 8rem; min-width: .2rem; opacity: .72; width: var(--bar); }
+  .analytics-table tr[data-analytics-rest][hidden] { display: none; }
+  .analytics-more { margin-top: .55rem; }
   .analytics-geo-grid { display: grid; gap: .9rem; grid-template-columns: 1fr; margin-top: .9rem; }
   .analytics-geo-card { background: var(--surface); border: 1px solid var(--border); border-radius: .5rem; min-width: 0; padding: .85rem; }
   .analytics-geo-heading { align-items: start; display: flex; gap: .7rem; justify-content: space-between; }
@@ -230,6 +235,7 @@ const worldCountryPaths = worldMap.locations
     const analyticsDays = root.querySelector<HTMLSelectElement>("[data-analytics-days]");
     const analyticsList = root.querySelector<HTMLTableSectionElement>("[data-analytics-list]");
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
+    const analyticsMore = root.querySelector<HTMLButtonElement>("[data-analytics-more]");
     const searchCountryMap = root.querySelector<HTMLElement>("[data-search-country-map]");
     const searchCountryList = root.querySelector<HTMLOListElement>("[data-search-country-list]");
     const searchConsoleStatus = root.querySelector<HTMLOutputElement>("[data-search-console-status]");
@@ -279,9 +285,12 @@ const worldCountryPaths = worldMap.locations
         { views: 0, engaged: 0, completed: 0 },
       );
       analyticsSummary.value = `直近${days}日・${articles.length}記事 ／ 閲覧 ${totals.views.toLocaleString()} ・ 読まれた ${totals.engaged.toLocaleString()} ・ 90%到達 ${totals.completed.toLocaleString()}`;
-      analyticsList.innerHTML = articles.length
-        ? articles.map((article) => `<tr><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td>${article.views.toLocaleString()}</td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td></tr>`).join("")
+      const sorted = [...articles].sort((a, b) => b.views - a.views);
+      const maximum = Math.max(...sorted.map((article) => article.views), 1);
+      analyticsList.innerHTML = sorted.length
+        ? sorted.map((article, index) => `<tr${index >= 10 ? " data-analytics-rest hidden" : ""}><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td><span class="analytics-number">${article.views.toLocaleString()}<span class="analytics-bar" style="--bar:${Math.max(2, article.views / maximum * 100)}%"></span></span></td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td></tr>`).join("")
         : '<tr><td colspan="4" class="report-empty">この期間の統計はまだありません。</td></tr>';
+      if (analyticsMore) { analyticsMore.hidden = sorted.length <= 10; analyticsMore.textContent = "残りを表示"; analyticsMore.setAttribute("aria-expanded", "false"); }
     };
     const countryNames: Record<string, string> = {
       AD: "アンドラ", AE: "アラブ首長国連邦", AR: "アルゼンチン", AU: "オーストラリア", AT: "オーストリア", BE: "ベルギー", BR: "ブラジル", CA: "カナダ", CH: "スイス", CL: "チリ", CN: "中国", CO: "コロンビア", CZ: "チェコ", DE: "ドイツ", DK: "デンマーク", ES: "スペイン", FI: "フィンランド", FR: "フランス", GB: "イギリス", GR: "ギリシャ", HK: "香港", HU: "ハンガリー", ID: "インドネシア", IE: "アイルランド", IL: "イスラエル", IN: "インド", IT: "イタリア", JP: "日本", KR: "韓国", LU: "ルクセンブルク", MX: "メキシコ", MY: "マレーシア", NL: "オランダ", NO: "ノルウェー", NZ: "ニュージーランド", PH: "フィリピン", PL: "ポーランド", PT: "ポルトガル", RU: "ロシア", SE: "スウェーデン", SG: "シンガポール", TH: "タイ", TR: "トルコ", TW: "台湾", UA: "ウクライナ", US: "アメリカ合衆国", VN: "ベトナム", ZA: "南アフリカ", ZZ: "判定不能",
@@ -436,6 +445,7 @@ const worldCountryPaths = worldMap.locations
     viewButtons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.adminView === "analytics" ? "analytics" : "reports")));
     root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
     analyticsDays?.addEventListener("change", () => loadAllAnalytics());
+    analyticsMore?.addEventListener("click", () => { const opening = analyticsMore.getAttribute("aria-expanded") !== "true"; analyticsList?.querySelectorAll<HTMLTableRowElement>("[data-analytics-rest]").forEach((row) => { row.hidden = !opening; }); analyticsMore.setAttribute("aria-expanded", String(opening)); analyticsMore.textContent = opening ? "上位10件だけ表示" : "残りを表示"; });
     root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", () => loadAllAnalytics());
     permissionForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
