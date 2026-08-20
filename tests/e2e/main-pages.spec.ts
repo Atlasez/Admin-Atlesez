@@ -503,9 +503,11 @@ test.describe("学習サイト", () => {
       "data-pref-font-size",
       "xlarge",
     );
-    const enlarged = await page.locator("body").evaluate((element) =>
-      Number.parseFloat(getComputedStyle(element).fontSize),
-    );
+    const enlarged = await page
+      .locator("body")
+      .evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).fontSize),
+      );
     expect(enlarged).toBeGreaterThan(16);
   });
 });

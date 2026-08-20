@@ -4386,7 +4386,10 @@ async function listEditorialReviewRequests(
   return json({
     requests: (result.results ?? []).map((item) => ({
       ...item,
-      reviewerDisplayName: item.reviewer_email === "*" ? "分野担当者全員" : item.reviewer_display_name || "表示名未設定",
+      reviewerDisplayName:
+        item.reviewer_email === "*"
+          ? "分野担当者全員"
+          : item.reviewer_display_name || "表示名未設定",
       assignedToMe:
         item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
     })),
@@ -4438,11 +4441,14 @@ async function updateEditorialReviewAssignment(
       { error: "査読担当者のメールアドレスを確認してください。" },
       400,
     );
-  const reviewer = reviewerEmail === "*" ? { found: 1 } : await env.REPORTS.prepare(
-      "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
-    )
-      .bind(reviewerEmail, document.subject)
-      .first<{ found: number }>();
+  const reviewer =
+    reviewerEmail === "*"
+      ? { found: 1 }
+      : await env.REPORTS.prepare(
+          "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
+        )
+          .bind(reviewerEmail, document.subject)
+          .first<{ found: number }>();
   if (!reviewer)
     return json(
       { error: "この原稿の分野を担当できる運営者を選択してください。" },
