@@ -171,6 +171,20 @@ test("E-7: 未保存の変更があると戻る・離脱を警告する", async 
   expect(prevented).toBe(true);
 });
 
+test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  const toggle = page.locator("[data-autosave-toggle]");
+
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("atlasez-editor-autosave")))
+    .toBe("off");
+  await page.reload();
+  await expect(toggle).not.toBeChecked();
+});
+
 test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
