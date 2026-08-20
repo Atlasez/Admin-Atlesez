@@ -6345,8 +6345,6 @@ export default {
         "/admin/permissions/",
         "/admin/applications",
         "/admin/applications/",
-        "/admin/review",
-        "/admin/review/",
       ]);
       if (managerPages.has(url.pathname)) {
         const managerScope = await getGlobalAdminScope(request, env);
