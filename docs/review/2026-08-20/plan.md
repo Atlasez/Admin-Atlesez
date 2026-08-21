@@ -11,6 +11,8 @@
 - 画像は形式・署名・1.5MB上限を検証しD1へ保存、Previewでは認証付きAPIからBlob URLへ変換済み。
 - 現行Googleフォームは17問。既存画面に不足していた生年月日、居住市区町村、現在所属する団体、応募経路、応募理由、希望する役割、面談可能日時、質問欄の8項目を追加する。
 - 管理Workerの本番・Commit Preview設定は `wrangler.admin.jsonc` の `ADMIN_AUTH_MODE: cloudflare-access`。Google OAuthのログイン処理は変更対象外とする。
+- PR #12 のページ実装を実際のWorker経由で確認したところ、`genres.astro`・`manage.astro`・`calendar.astro` は生成されているのに、`src/admin-worker.ts` のページ許可リストから3ルートが抜けていた。`run_worker_first: ["/*"]` のため静的アセットへ到達せず、`Not found` の404になっていた。許可ルートを共通定義へ切り出し、生成済み管理ページとの対応を単体テストで固定する。
+- Astro遷移後の `AdminNav.astro` はURLの `manage` を `management` として扱わず、タスク画面も旧称「進捗・ToDo・日程」を表示していた。サーバー描画側とクライアント側のルート・表示名マップを一致させる。
 - E-13の枠移動操作は `editor.astro` が各枠に `top/right/bottom/left` の4ボタンを生成し、CSSも四辺へ配置している。E2Eで上下左右の存在を固定する。
 
 ## 方針のみの項目
@@ -69,6 +71,7 @@ R2採用時はオブジェクトキーを `project/{projectId}/{uuid}` とし、
 - ST-1: タイトルと分野を別要素・改行で表示する既存実装をテストする。
 - ST-2: 上位10件＋折りたたみと、最大値比の横棒を追加する。
 - AD-1/AD-2: 管理メニューの入口ページを追加し、各タイルへ必要役割タグを表示する。
+- PR-12追加修正（C-1/L-4/AD-1/AD-2）: `/admin/calendar/`・`/admin/genres/`・`/admin/manage/` をWorkerの許可対象に追加し、OAuth戻り先の `project` を保持する。管理ページのルート定義を一元化し、クライアントナビの「カレンダー」「各ジャンル概要」「管理トップ」「タスク管理」表示を同期する。
 
 ## 未対応箇所一覧（G-1監査）
 

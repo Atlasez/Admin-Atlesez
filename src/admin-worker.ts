@@ -11,6 +11,8 @@ import {
   type EditorialImageType,
 } from "./lib/editorial-media";
 
+import { isAdminPagePath } from "./lib/admin-routes";
+
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
@@ -5228,43 +5230,15 @@ const adminReturnPath = (value: string | null) => {
   } catch {
     return fallback;
   }
-  const allowedPaths = new Set([
-    "/admin/workspace",
-    "/admin/workspace/",
-    "/admin/portal",
-    "/admin/portal/",
-    "/admin/atlas",
-    "/admin/atlas/",
-    "/admin/semi-platform",
-    "/admin/semi-platform/",
-    "/admin/applications",
-    "/admin/applications/",
-    "/admin/permissions",
-    "/admin/permissions/",
-    "/admin/articles",
-    "/admin/articles/",
-    "/admin/operations",
-    "/admin/operations/",
-    "/admin/review",
-    "/admin/review/",
-    "/admin/reports",
-    "/admin/reports/",
-    "/admin/editor",
-    "/admin/editor/",
-    "/admin/guide",
-    "/admin/guide/",
-    "/admin/introductions",
-    "/admin/introductions/",
-    "/admin/secretariat",
-    "/admin/secretariat/",
-    "/admin/co-working",
-    "/admin/co-working/",
-  ]);
-  if (!allowedPaths.has(parsed.pathname)) return fallback;
+  if (!isAdminPagePath(parsed.pathname)) return fallback;
   const project = parsed.searchParams.get("project");
   const keepProject =
     (parsed.pathname === "/admin/operations" ||
       parsed.pathname === "/admin/operations/" ||
+      parsed.pathname === "/admin/calendar" ||
+      parsed.pathname === "/admin/calendar/" ||
+      parsed.pathname === "/admin/manage" ||
+      parsed.pathname === "/admin/manage/" ||
       parsed.pathname === "/admin/co-working" ||
       parsed.pathname === "/admin/co-working/") &&
     (project === "atlas" ||
@@ -6297,36 +6271,7 @@ export default {
     if (
       url.pathname === "/apply" ||
       url.pathname === "/apply/" ||
-      url.pathname === "/admin/reports" ||
-      url.pathname === "/admin/reports/" ||
-      url.pathname === "/admin/permissions" ||
-      url.pathname === "/admin/permissions/" ||
-      url.pathname === "/admin/editor" ||
-      url.pathname === "/admin/editor/" ||
-      url.pathname === "/admin/workspace" ||
-      url.pathname === "/admin/workspace/" ||
-      url.pathname === "/admin/portal" ||
-      url.pathname === "/admin/portal/" ||
-      url.pathname === "/admin/atlas" ||
-      url.pathname === "/admin/atlas/" ||
-      url.pathname === "/admin/semi-platform" ||
-      url.pathname === "/admin/semi-platform/" ||
-      url.pathname === "/admin/applications" ||
-      url.pathname === "/admin/applications/" ||
-      url.pathname === "/admin/articles" ||
-      url.pathname === "/admin/articles/" ||
-      url.pathname === "/admin/operations" ||
-      url.pathname === "/admin/operations/" ||
-      url.pathname === "/admin/review" ||
-      url.pathname === "/admin/review/" ||
-      url.pathname === "/admin/guide" ||
-      url.pathname === "/admin/guide/" ||
-      url.pathname === "/admin/introductions" ||
-      url.pathname === "/admin/introductions/" ||
-      url.pathname === "/admin/secretariat" ||
-      url.pathname === "/admin/secretariat/" ||
-      url.pathname === "/admin/co-working" ||
-      url.pathname === "/admin/co-working/"
+      isAdminPagePath(url.pathname)
     ) {
       if (url.pathname === "/apply" || url.pathname === "/apply/")
         return fetchAdminAsset(request, env);
