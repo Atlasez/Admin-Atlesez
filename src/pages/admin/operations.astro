@@ -24,14 +24,14 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     <div class="grid">
       <section hidden={calendarPage}>
         <h2>進捗を報告</h2>
-        <p>編集・査読の完了後に、ここへ短く記録できます。</p>
+        <p>編集・フィードバックの完了後に、ここへ短く記録できます。</p>
         <p class="discord-notice">
           記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。
         </p>
         <label class="field-label"
           >進捗内容<textarea
             data-progress
-            placeholder="例：群の定義を修正し、査読コメント3件に対応しました。"
+            placeholder="例：群の定義を修正し、フィードバック3件に対応しました。"
           ></textarea></label
         ><button data-send-progress>進捗を記録してDiscordへ送る</button
         ><output data-progress-feedback aria-live="polite"></output>
@@ -215,6 +215,13 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
           class="calendar-week"
           data-event-calendar
           aria-label="日程カレンダー"
+        ></div>
+        <div
+          class="availability-popover"
+          data-availability-popover
+          role="dialog"
+          aria-label="参加可否のメンバー詳細"
+          hidden
         ></div>
         <small class="calendar-note"
           >祝日は date-holidays
@@ -461,14 +468,44 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     background: var(--background-primary);
     min-height: 6.8rem;
     padding: 0.35rem;
+    position: relative;
   }
   .calendar-cell--blank {
     background: var(--background-secondary);
   }
   .calendar-day {
+    align-items: center;
     color: var(--text-secondary);
+    display: inline-flex;
     font-size: 0.7rem;
     font-weight: 800;
+    height: 1.55rem;
+    justify-content: center;
+    width: 1.55rem;
+  }
+  .calendar-cell-header {
+    align-items: center;
+    display: flex;
+    height: 1.7rem;
+    justify-content: space-between;
+  }
+  .calendar-date-select {
+    align-items: center;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 50%;
+    color: inherit !important;
+    display: inline-flex;
+    height: 1.55rem;
+    justify-content: center;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 1.55rem;
+  }
+  .calendar-cell-content {
+    display: grid;
+    gap: 0.22rem;
+    min-width: 0;
   }
   .calendar-event {
     background: color-mix(
@@ -477,12 +514,17 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       var(--background-primary)
     );
     border-left: 2px solid var(--accent-primary);
-    display: block;
+    display: grid;
     font-size: 0.67rem;
+    gap: 0.08rem;
     line-height: 1.35;
-    margin-top: 0.25rem;
+    margin-top: 0;
     overflow: hidden;
     padding: 0.15rem 0.25rem;
+    text-overflow: ellipsis;
+  }
+  .calendar-event > span:first-child {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -562,55 +604,24 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       grid-template-columns: 1fr;
     }
   }
-  button.calendar-cell {
-    background: var(--background-primary);
-    border: 0;
-    color: var(--text-primary);
-    margin: 0;
-    min-height: 6.8rem;
-    padding: 0.35rem;
-    text-align: left;
-    width: 100%;
-  }
-  button.calendar-cell:hover,
-  button.calendar-cell:focus-visible {
+  .calendar-cell:hover,
+  .calendar-cell:focus-within {
     box-shadow: inset 0 0 0 2px var(--accent-primary);
   }
-  button.calendar-cell--holiday {
+  .calendar-cell--holiday {
     background: color-mix(in srgb, #d9485f 8%, var(--background-primary));
   }
-  button.calendar-cell--selected {
+  .calendar-cell--selected {
     background: color-mix(in srgb, var(--accent-primary) 20%, var(--background-primary));
     box-shadow: inset 0 0 0 2px var(--accent-primary);
   }
-  button.calendar-cell--today .calendar-day {
-    align-items: center;
+  .calendar-cell--today .calendar-date-select {
     background: var(--accent-primary);
-    border-radius: 50%;
     color: #fff;
-    display: inline-flex;
-    height: 1.55rem;
-    justify-content: center;
-    width: 1.55rem;
   }
+  .calendar-cell--today .calendar-day { color:#fff; }
   .calendar-availability {
-    border-radius: 0.25rem;
-    display: block;
-    font-size: 0.61rem;
-    font-weight: 800;
-    margin-top: 0.18rem;
-    overflow: hidden;
-    padding: 0.12rem 0.22rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .calendar-availability--available {
-    background: #e4f5ea;
-    color: #176b32;
-  }
-  .calendar-availability--unavailable {
-    background: #f5e5e7;
-    color: #8b2635;
+    margin-top: 0.08rem;
   }
   .event-heading {
     align-items: center;
@@ -633,42 +644,64 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
   }
 </style>
 <style is:global>
+  .availability-summary-trigger {
+    align-items: center;
+    background: var(--background-secondary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 999px;
+    color: var(--text-primary) !important;
+    display: inline-flex;
+    font-size: .7rem !important;
+    font-weight: 900;
+    gap: .35rem;
+    margin: 0 !important;
+    min-height: 1.7rem;
+    padding: .18rem .48rem !important;
+    width: fit-content;
+  }
+  .availability-summary-trigger:hover,
+  .availability-summary-trigger:focus-visible {
+    border-color: var(--accent-primary) !important;
+  }
+  .availability-count-available { color:#176b32; }
+  .availability-count-maybe { color:#805d00; }
+  .availability-count-unavailable { color:#8b2635; }
+  [data-pref-bg="dark"] .availability-count-available { color:#9ce3b1; }
+  [data-pref-bg="dark"] .availability-count-maybe { color:#f5d778; }
+  [data-pref-bg="dark"] .availability-count-unavailable { color:#ffb5bf; }
+  .calendar-event .availability-summary-trigger {
+    background: transparent !important;
+    border: 0 !important;
+    font-size: .6rem !important;
+    margin-top: .15rem !important;
+    min-height: 1.3rem;
+    padding: 0 !important;
+  }
   .participant-summary {
     border-top: 1px solid var(--border-default);
-    display: grid;
-    gap: 0.45rem;
-    margin-top: 0.55rem;
-    padding-top: 0.55rem;
+    margin-top: .55rem;
+    padding-top: .55rem;
   }
-  .participant-counts,
-  .participant-names {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-  .participant-counts span,
-  .participant-chip {
+  .availability-popover {
+    background: var(--background-primary);
     border: 1px solid var(--border-default);
-    border-radius: 999px;
-    color: var(--text-secondary);
-    font-size: 0.72rem;
-    padding: 0.2rem 0.45rem;
-  }
-  .participant-chip {
+    border-radius: .65rem;
+    box-shadow: 0 .75rem 2rem rgb(0 0 0 / .2);
     color: var(--text-primary);
+    max-height: min(26rem, calc(100vh - 2rem));
+    max-width: min(22rem, calc(100vw - 1.5rem));
+    overflow: auto;
+    padding: .75rem .85rem;
+    position: fixed;
+    width: max-content;
+    z-index: 90;
   }
-  .participant-available {
-    background: #e4f5ea;
-    border-color: #9bc9a9;
-  }
-  .participant-maybe {
-    background: #fff4d6;
-    border-color: #e5c879;
-  }
-  .participant-unavailable {
-    background: #f5e5e7;
-    border-color: #d8a4ad;
-  }
+  .availability-popover[hidden] { display:none; }
+  .availability-popover h3 { font-size:.85rem; margin:0 0 .55rem; }
+  .availability-popover section + section { border-top:1px solid var(--border-default); margin-top:.55rem; padding-top:.55rem; }
+  .availability-popover h4 { font-size:.75rem; margin:0 0 .3rem; }
+  .availability-popover ul { margin:0; padding-left:1.2rem; }
+  .availability-popover li { font-size:.75rem; line-height:1.55; }
 </style>
 <style>
   .discord-notice {
@@ -959,8 +992,10 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
 </style>
 <script>
   import { holidaysForRegions, localDateTimeToInstant, supportedHolidayRegions } from '../../lib/calendar-support';
+  import { recurringCoWorkingEventsForMonth } from '../../lib/co-working-schedule';
   type OperationMember = { email: string; display_name?: string };
-  type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: Array<{ displayName: string; availability: string; isSelf: boolean }> };
+  type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
+  type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
   type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
   type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[] };
@@ -1007,6 +1042,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const eventFeedback = get<HTMLOutputElement>('[data-event-feedback]');
     const blockFeedback = get<HTMLOutputElement>('[data-block-feedback]');
     const projectTitle = get<HTMLElement>('[data-project-title]');
+    const availabilityPopover = get<HTMLElement>('[data-availability-popover]');
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
     const calendarPage = location.pathname.replace(/\/$/, '') === '/admin/calendar';
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
@@ -1106,6 +1142,35 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     };
     const formatDate = (value: string) => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short', timeZone: selectedTimezone() }).format(new Date(value));
     const dateParts = (value: string) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: selectedTimezone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(value)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+    const participantNames = (participants: OperationParticipant[], availability: string) => participants.filter((participant) => participant.availability === availability).map((participant) => participant.isSelf ? '自分' : participant.displayName);
+    const availabilitySummary = (context: string, participants: OperationParticipant[], counts?: Record<string, number>) => {
+      const available = participantNames(participants, 'available');
+      const maybe = participantNames(participants, 'maybe');
+      const unavailable = participantNames(participants, 'unavailable');
+      const availableCount = counts?.available ?? available.length;
+      const maybeCount = counts?.maybe ?? maybe.length;
+      const unavailableCount = counts?.unavailable ?? unavailable.length;
+      if (!availableCount && !maybeCount && !unavailableCount) return '';
+      const countMarkup = `${availableCount ? `<span class="availability-count-available">○${availableCount}</span>` : ''}${maybeCount ? `<span class="availability-count-maybe">△${maybeCount}</span>` : ''}${unavailableCount ? `<span class="availability-count-unavailable">×${unavailableCount}</span>` : ''}`;
+      return `<button type="button" class="availability-summary-trigger" data-availability-summary aria-haspopup="dialog" aria-label="${escapeHtml(context)}。クリックまたは右クリックでメンバーを表示" data-summary-title="${escapeHtml(context)}" data-available-members="${escapeHtml(JSON.stringify(available))}" data-maybe-members="${escapeHtml(JSON.stringify(maybe))}" data-unavailable-members="${escapeHtml(JSON.stringify(unavailable))}">${countMarkup}</button>`;
+    };
+    const dayParticipants = (blocks: AvailabilityBlock[]): OperationParticipant[] => {
+      const byMember = new Map<string, AvailabilityBlock>();
+      for (const block of blocks) {
+        const memberKey = (block.email || block.display_name || block.id).toLowerCase();
+        const current = byMember.get(memberKey);
+        if (!current || (current.kind === 'available' && block.kind === 'unavailable')) byMember.set(memberKey, block);
+      }
+      return [...byMember.values()].map((block) => ({ displayName: block.display_name || '表示名未設定', availability: block.kind, isSelf: Boolean(block.isSelf) }));
+    };
+    const calendarEvents = () => {
+      const storedEvents = data.events ?? [];
+      if (projectId !== 'atlas') return storedEvents;
+      const storedIds = new Set(storedEvents.map((event) => event.id));
+      const storedCoWorkingTimes = new Set(storedEvents.filter((event) => event.title.includes('同時作業会')).map((event) => new Date(event.starts_at).getTime()));
+      const recurringEvents: OperationEvent[] = recurringCoWorkingEventsForMonth(month.getFullYear(), month.getMonth()).filter((event) => !storedIds.has(event.id) && !storedCoWorkingTimes.has(new Date(event.starts_at).getTime()));
+      return [...storedEvents, ...recurringEvents];
+    };
     const renderCalendar = () => {
       const first = new Date(month.getFullYear(), month.getMonth(), 1), last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       const selectedRegions = [...holidayCountry.selectedOptions].map((option) => option.value);
@@ -1113,17 +1178,21 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       const calendarFormatter = new Intl.DateTimeFormat(`ja-JP-u-ca-${calendarSystem.value || 'gregory'}`, { year: 'numeric', month: 'long' });
       const dayFormatter = new Intl.DateTimeFormat(`ja-JP-u-ca-${calendarSystem.value || 'gregory'}`, { day: 'numeric' });
       calendarTitle.textContent = calendarFormatter.format(first);
-      const cells = ['日','月','火','水','木','金','土'].map((day) => `<div class="calendar-cell calendar-cell--blank"><span class="calendar-day">${day}</span></div>`);
+      const cells = ['日','月','火','水','木','金','土'].map((day) => `<div class="calendar-cell calendar-cell--blank"><div class="calendar-cell-header"><span class="calendar-day">${day}</span></div></div>`);
       for (let index = 0; index < first.getDay(); index += 1) cells.push('<div class="calendar-cell calendar-cell--blank"></div>');
+      const visibleEvents = calendarEvents();
       for (let day = 1; day <= last.getDate(); day += 1) {
         const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayEvents = (data.events ?? []).filter((event) => { const parts = dateParts(event.starts_at); return `${parts.year}-${parts.month}-${parts.day}` === key; });
+        const dayEvents = visibleEvents.filter((event) => { const parts = dateParts(event.starts_at); return `${parts.year}-${parts.month}-${parts.day}` === key; });
         const dayHolidays = holidays.filter((holiday) => holiday.date === key);
         const nextDate = new Date(`${key}T00:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate() + 1);
         const dayStart = localDateTimeToInstant(`${key}T00:00`, selectedTimezone());
         const dayEnd = localDateTimeToInstant(`${nextDate.toISOString().slice(0, 10)}T00:00`, selectedTimezone());
         const dayBlocks = (data.availabilityBlocks ?? []).filter((block) => new Date(block.starts_at) < new Date(dayEnd) && new Date(block.ends_at) > new Date(dayStart));
-        cells.push(`<button type="button" class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span>${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" title="${escapeHtml(event.title)}">${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>`; }).join('')}${dayBlocks.map((block) => `<span class="calendar-availability calendar-availability--${block.kind}">${escapeHtml(block.isSelf ? '自分' : block.display_name || 'メンバー')}：${block.kind === 'available' ? '動ける' : '動けない'}</span>`).join('')}</button>`);
+        const participants = dayParticipants(dayBlocks);
+        const dateLabel = `${month.getFullYear()}年${month.getMonth() + 1}月${day}日`;
+        const eventMarkup = dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" data-calendar-event-id="${escapeHtml(event.id)}" title="${escapeHtml(event.title)}"><span>${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>${availabilitySummary(`${event.title}の参加状況`, event.participants ?? [], event.availabilityCounts)}</span>`; }).join('');
+        cells.push(`<div class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><div class="calendar-cell-header" data-calendar-date-header><button type="button" class="calendar-date-select" data-calendar-select aria-label="${escapeHtml(dateLabel)}を可否期間に選択"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span></button></div><div class="calendar-cell-content">${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${eventMarkup}${availabilitySummary(`${dateLabel}の対応可否`, participants)}</div></div>`);
       }
       calendar.innerHTML = cells.join('');
       const today = dateParts(new Date().toISOString());
@@ -1150,7 +1219,11 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
         });
       });
       const availabilityLabels: Record<string, string> = { available: '参加できる', maybe: '未定', unavailable: '参加できない' };
-      events.innerHTML = (data.events ?? []).map((item) => { const counts = item.availabilityCounts ?? {}; const participants = item.participants ?? []; return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${data.scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary"><div class="participant-counts"><span>参加 ${counts.available ?? 0}</span><span>未定 ${counts.maybe ?? 0}</span><span>不参加 ${counts.unavailable ?? 0}</span></div><div class="participant-names">${participants.length ? participants.map((participant) => `<span class="participant-chip participant-${escapeHtml(participant.availability)}">${escapeHtml(participant.isSelf ? '自分' : participant.displayName)}：${escapeHtml(availabilityLabels[participant.availability] ?? participant.availability)}</span>`).join('') : '<span>まだ参加登録はありません。</span>'}</div></div></article>`; }).join('') || '<p>登録された日程はありません。</p>';
+      events.innerHTML = (data.events ?? []).map((item) => {
+        const participants = item.participants ?? [];
+        const summary = availabilitySummary(`${item.title}の参加状況`, participants, item.availabilityCounts);
+        return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${data.scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary">${summary || '<span>まだ参加登録はありません。</span>'}</div></article>`;
+      }).join('') || '<p>登録された日程はありません。</p>';
       const blocks = data.availabilityBlocks ?? [];
       const ownBlocks = blocks.filter((item) => item.isSelf);
       get<HTMLElement>('[data-block-list]').innerHTML = ownBlocks.length ? ownBlocks.map((item) => `<div class="item availability-block-item"><span><b>${item.kind === 'available' ? '動ける' : '動けない'}</b> ・ ${formatDate(item.starts_at)} 〜 ${formatDate(item.ends_at)}${item.label ? ` ・ ${escapeHtml(String(item.label))}` : ''}</span><button type="button" class="event-delete" data-delete-block="${escapeHtml(String(item.id))}">削除</button></div>`).join('') : '<p>登録した可否期間はありません。</p>';
@@ -1158,6 +1231,51 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     };
     const load = async () => { data = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; } finally { button.disabled = false; } };
+    let activeAvailabilityTrigger: HTMLButtonElement | null = null;
+    const closeAvailabilityPopover = (restoreFocus = false) => {
+      availabilityPopover.hidden = true;
+      if (restoreFocus) activeAvailabilityTrigger?.focus();
+      activeAvailabilityTrigger = null;
+    };
+    const readMemberNames = (button: HTMLButtonElement, key: 'availableMembers' | 'maybeMembers' | 'unavailableMembers') => {
+      try { const value = JSON.parse(button.dataset[key] || '[]'); return Array.isArray(value) ? value.map(String) : []; }
+      catch { return []; }
+    };
+    const openAvailabilityPopover = (button: HTMLButtonElement, point?: { x: number; y: number }) => {
+      const groups = [
+        { title: '参加可能 ○', names: readMemberNames(button, 'availableMembers') },
+        { title: '未定 △', names: readMemberNames(button, 'maybeMembers') },
+        { title: '参加不可 ×', names: readMemberNames(button, 'unavailableMembers') },
+      ].filter((group) => group.names.length);
+      availabilityPopover.innerHTML = `<h3>${escapeHtml(button.dataset.summaryTitle || '参加可否')}</h3>${groups.length ? groups.map((group) => `<section><h4>${group.title}</h4><ul>${group.names.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ul></section>`).join('') : '<p>メンバー情報はありません。</p>'}`;
+      availabilityPopover.hidden = false;
+      activeAvailabilityTrigger = button;
+      const anchor = button.getBoundingClientRect();
+      const popover = availabilityPopover.getBoundingClientRect();
+      const preferredLeft = point?.x ?? anchor.left;
+      const preferredTop = point?.y ?? anchor.bottom + 6;
+      availabilityPopover.style.left = `${Math.max(8, Math.min(preferredLeft, window.innerWidth - popover.width - 8))}px`;
+      availabilityPopover.style.top = `${Math.max(8, Math.min(preferredTop, window.innerHeight - popover.height - 8))}px`;
+    };
+    root.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-availability-summary]');
+      if (!button) return;
+      event.preventDefault();
+      if (activeAvailabilityTrigger === button && !availabilityPopover.hidden) closeAvailabilityPopover();
+      else openAvailabilityPopover(button);
+    });
+    root.addEventListener('contextmenu', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-availability-summary]');
+      if (!button) return;
+      event.preventDefault();
+      openAvailabilityPopover(button, { x: event.clientX, y: event.clientY });
+    });
+    document.addEventListener('click', (event) => {
+      const target = event.target as Node;
+      if (availabilityPopover.hidden || availabilityPopover.contains(target) || activeAvailabilityTrigger?.contains(target)) return;
+      closeAvailabilityPopover();
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !availabilityPopover.hidden) closeAvailabilityPopover(true); });
     get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
     get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: get<HTMLInputElement>('[data-task-title]').value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: get<HTMLTextAreaElement>('[data-task-details]').value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); taskDue.value = ''; }, 'タスクを追加しました。'); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
@@ -1181,7 +1299,9 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       renderCalendar();
     };
     calendar.addEventListener('click', (event) => {
-      const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-calendar-date]');
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-availability-summary], .calendar-event')) return;
+      const cell = target.closest<HTMLElement>('[data-calendar-date]');
       const date = cell?.dataset.calendarDate ?? '';
       if (!date) return;
       if (!calendarSelectionStart || (calendarSelectionStart && calendarSelectionEnd && calendarSelectionStart !== calendarSelectionEnd)) {

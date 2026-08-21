@@ -34,6 +34,25 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const startDate = `${year}-${month}-10`;
   const endDate = `${year}-${month}-12`;
+  const recurringDay = Array.from(
+    { length: new Date(year, now.getMonth() + 1, 0).getDate() },
+    (_, index) => index + 1,
+  ).find((day) => new Date(year, now.getMonth(), day).getDay() === 2)!;
+  const recurringDate = `${year}-${month}-${String(recurringDay).padStart(2, "0")}`;
+  const recurringStartsAt = new Date(
+    Date.UTC(year, now.getMonth(), recurringDay, 12, 0),
+  ).toISOString();
+  const emptyDay = Array.from(
+    { length: new Date(year, now.getMonth() + 1, 0).getDate() },
+    (_, index) => index + 1,
+  ).find(
+    (day) =>
+      day !== 10 &&
+      day !== 11 &&
+      day !== recurringDay &&
+      new Date(year, now.getMonth(), day).getDay() === 6,
+  )!;
+  const emptyDate = `${year}-${month}-${String(emptyDay).padStart(2, "0")}`;
   let savedBlock: Record<string, unknown> | undefined;
 
   await page.route("**/api/admin/operations**", async (route) => {
@@ -61,9 +80,44 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
         members: [
           { email: "alice@example.com", display_name: "Alice" },
           { email: "bob@example.com", display_name: "Bob" },
+          { email: "carol@example.com", display_name: "Carol" },
         ],
         tasks: [],
-        events: [],
+        events: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            title: "企画会議",
+            starts_at: `${startDate}T15:00:00Z`,
+            ends_at: null,
+            availability: "available",
+            availabilityCounts: { available: 1, maybe: 0, unavailable: 2 },
+            participants: [
+              {
+                displayName: "Alice",
+                availability: "available",
+                isSelf: true,
+              },
+              {
+                displayName: "Bob",
+                availability: "unavailable",
+                isSelf: false,
+              },
+              {
+                displayName: "Carol",
+                availability: "unavailable",
+                isSelf: false,
+              },
+            ],
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            title: "同時作業会",
+            starts_at: recurringStartsAt,
+            ends_at: null,
+            availabilityCounts: { available: 0, maybe: 0, unavailable: 0 },
+            participants: [],
+          },
+        ],
         progress: [],
         availabilityBlocks: [
           {
@@ -81,6 +135,17 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
             id: "other-block",
             email: "bob@example.com",
             display_name: "Bob",
+            starts_at: `${startDate}T00:00:00Z`,
+            ends_at: `${endDate}T00:00:00Z`,
+            timezone: "Asia/Tokyo",
+            label: "",
+            kind: "unavailable",
+            isSelf: false,
+          },
+          {
+            id: "carol-block",
+            email: "carol@example.com",
+            display_name: "Carol",
             starts_at: `${startDate}T00:00:00Z`,
             ends_at: `${endDate}T00:00:00Z`,
             timezone: "Asia/Tokyo",
@@ -116,15 +181,84 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   );
   await page.locator('[data-calendar-tab="agenda"]').click();
 
-  await expect(page.getByText("自分：動ける").first()).toBeVisible();
-  await expect(page.getByText("Bob：動けない").first()).toBeVisible();
+  const startCell = page.locator(`[data-calendar-date="${startDate}"]`);
+  const daySummary = startCell.getByRole("button", {
+    name: /の対応可否。クリックまたは右クリック/,
+  });
+  await expect(daySummary).toHaveText("○1×2");
+  await expect(startCell).not.toContainText("Alice");
+  await expect(startCell).not.toContainText("Bob");
+  await expect(startCell).not.toContainText("Carol");
+
+  await daySummary.click({ button: "right" });
+  const popover = page.locator("[data-availability-popover]");
+  await expect(popover).toBeVisible();
+  await expect(popover).toContainText("参加可能 ○");
+  await expect(popover).toContainText("自分");
+  await expect(popover).toContainText("参加不可 ×");
+  await expect(popover).toContainText("Bob");
+  await expect(popover).toContainText("Carol");
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+  await daySummary.click();
+  await expect(popover).toBeVisible();
+  await page.locator("[data-calendar-title]").click();
+  await expect(popover).toBeHidden();
+
+  const eventSummary = startCell
+    .locator('[data-calendar-event-id="11111111-1111-4111-8111-111111111111"]')
+    .getByRole("button");
+  await expect(eventSummary).toHaveText("○1×2");
+  await eventSummary.click();
+  await expect(popover).toContainText("企画会議の参加状況");
+  await expect(popover).toContainText("Carol");
+  await page.keyboard.press("Escape");
+
+  const recurringCell = page.locator(`[data-calendar-date="${recurringDate}"]`);
+  await expect(
+    recurringCell.locator(".calendar-event", { hasText: "同時作業会" }),
+  ).toHaveCount(1);
+
+  const eventHeader = await startCell
+    .locator("[data-calendar-date-header]")
+    .boundingBox();
+  const emptyCell = page.locator(`[data-calendar-date="${emptyDate}"]`);
+  const emptyHeader = await emptyCell
+    .locator("[data-calendar-date-header]")
+    .boundingBox();
+  const eventCellBox = await startCell.boundingBox();
+  const emptyCellBox = await emptyCell.boundingBox();
+  expect(eventHeader?.height).toBe(emptyHeader?.height);
+  expect((eventHeader?.y ?? 0) - (eventCellBox?.y ?? 0)).toBe(
+    (emptyHeader?.y ?? 0) - (emptyCellBox?.y ?? 0),
+  );
+  const todayButton = page.locator(
+    ".calendar-cell--today .calendar-date-select",
+  );
+  const todayNumber = todayButton.locator(".calendar-day");
+  const todayButtonBox = await todayButton.boundingBox();
+  const todayNumberBox = await todayNumber.boundingBox();
+  expect(
+    Math.abs(
+      (todayButtonBox?.x ?? 0) +
+        (todayButtonBox?.width ?? 0) / 2 -
+        ((todayNumberBox?.x ?? 0) + (todayNumberBox?.width ?? 0) / 2),
+    ),
+  ).toBeLessThan(1);
+  expect(
+    Math.abs(
+      (todayButtonBox?.y ?? 0) +
+        (todayButtonBox?.height ?? 0) / 2 -
+        ((todayNumberBox?.y ?? 0) + (todayNumberBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThan(1);
+
   await expect(page.getByText("本人だけのメモ")).toHaveCount(1);
 
-  const startCell = page.locator(`[data-calendar-date="${startDate}"]`);
   const endCell = page.locator(`[data-calendar-date="${endDate}"]`);
   await startCell.scrollIntoViewIfNeeded();
-  await startCell.click();
-  await endCell.click();
+  await startCell.locator("[data-calendar-select]").click();
+  await endCell.locator("[data-calendar-select]").click();
   await expect(startCell).toHaveClass(/calendar-cell--selected/);
   await expect(endCell).toHaveClass(/calendar-cell--selected/);
 
