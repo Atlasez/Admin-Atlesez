@@ -39,11 +39,11 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
         <div data-progress-list></div>
       </section>
       <section hidden={calendarPage}>
-        <h2>ToDo</h2>
+        <h2>タスク作成・依頼</h2>
         <p>
-          「自分がこなす」「自分が依頼」「すべて」を切り替えると、この直下の一覧が変わります。
+          表示対象を切り替えると、このフォームの下にあるタスク一覧が変わります。
         </p>
-        <div class="task-filters" role="group" aria-label="ToDoの表示対象">
+        <div class="task-filters" role="group" aria-label="タスクの表示対象">
           <button
             type="button"
             class="is-selected"
@@ -975,11 +975,9 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((item) => item.setAttribute('aria-current', item === tab ? 'page' : 'false'));
       history.replaceState(null, '', tab.href);
     }));
-    const taskSection = Array.from(root.querySelectorAll<HTMLElement>('.grid > section')).find((section) => section.querySelector('h2')?.textContent?.trim() === 'ToDo');
+    const taskSection = Array.from(root.querySelectorAll<HTMLElement>('.grid > section')).find((section) => section.querySelector('h2')?.textContent?.trim() === 'タスク作成・依頼');
     if (taskSection) {
-      const heading = taskSection.querySelector('h2');
       const description = taskSection.querySelector('p');
-      if (heading) heading.textContent = 'タスク作成・依頼';
       if (description) description.textContent = '表示対象を切り替えると、このフォームの下にあるタスク一覧が変わります。';
     }
     const get = <T extends Element>(selector: string) => root.querySelector<T>(selector)!;
@@ -1087,7 +1085,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       const rules = taskReminderRules(item);
       const repeat = String(item.reminder_repeat || rules[0]?.repeat || 'none');
       const rows = rules.map((rule) => reminderRowHtml(rule)).join('') || '<p class="reminder-empty">リマインダーは設定されていません。</p>';
-      return `<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}"><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" /></label><button type="button" data-save-reminders>このToDoの設定を保存</button><output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
+      return `<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}"><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" /></label><button type="button" data-save-reminders>このタスクの設定を保存</button><output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
     };
     populateTimezones();
     const api = async <T,>(url: string, method = 'GET', body?: unknown): Promise<T> => {
@@ -1144,7 +1142,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       assignee.innerHTML = '<option value="">担当者を指定しない</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}">${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
       reports.innerHTML = (data.progress ?? []).map((item) => `<article class="item"><span>${escapeHtml(String(item.body ?? ''))}</span><small>自分が投げた進捗報告 ・ ${formatDate(String(item.created_at))}</small></article>`).join('') || '<p>自分が投げた進捗報告はまだありません。</p>';
       const visibleTasks = (data.tasks ?? []).filter((item) => taskFilter === 'all' || (taskFilter === 'assigned' ? item.assignee_email === data.scope.email : item.created_by === data.scope.email));
-      tasks.innerHTML = visibleTasks.map((item) => `<article class="item"><div class="task-row"><b>${escapeHtml(String(item.title ?? ''))}</b><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><small><span class="task-role">${item.assignee_email === data.scope.email ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span> ${escapeHtml(String(item.subject || '全体'))}${item.assignee_email ? ` ・担当：${escapeHtml(members.get(String(item.assignee_email)) || '表示名未設定')}` : ' ・担当未指定'}${item.created_by ? ` ・依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}` : ''}${item.due_at ? ` ・期限：${escapeHtml(String(item.due_at).replace('T',' '))}（${escapeHtml(String(item.due_timezone || 'Asia/Tokyo'))}）` : ''}</small>${item.details ? `<small>${escapeHtml(String(item.details))}</small>` : ''}${taskReminderEditor(item)}</article>`).join('') || '<p>この条件のToDoはありません。</p>';
+      tasks.innerHTML = visibleTasks.map((item) => `<article class="item"><div class="task-row"><b>${escapeHtml(String(item.title ?? ''))}</b><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><small><span class="task-role">${item.assignee_email === data.scope.email ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span> ${escapeHtml(String(item.subject || '全体'))}${item.assignee_email ? ` ・担当：${escapeHtml(members.get(String(item.assignee_email)) || '表示名未設定')}` : ' ・担当未指定'}${item.created_by ? ` ・依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}` : ''}${item.due_at ? ` ・期限：${escapeHtml(String(item.due_at).replace('T',' '))}（${escapeHtml(String(item.due_timezone || 'Asia/Tokyo'))}）` : ''}</small>${item.details ? `<small>${escapeHtml(String(item.details))}</small>` : ''}${taskReminderEditor(item)}</article>`).join('') || '<p>この条件のタスクはありません。</p>';
       tasks.querySelectorAll('small').forEach((small) => {
         small.childNodes.forEach((node) => {
           if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.includes('依頼者：')) return;
@@ -1161,7 +1159,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const load = async () => { data = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; } finally { button.disabled = false; } };
     get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
-    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: get<HTMLInputElement>('[data-task-title]').value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: get<HTMLTextAreaElement>('[data-task-details]').value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); taskDue.value = ''; }, 'ToDoを追加しました。'); });
+    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: get<HTMLInputElement>('[data-task-title]').value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: get<HTMLTextAreaElement>('[data-task-details]').value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); taskDue.value = ''; }, 'タスクを追加しました。'); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
     refreshReminderRows(taskReminderList);
     root.addEventListener('change', (event) => { const row = (event.target as HTMLElement).closest<HTMLElement>('[data-task-reminder-row]'); if (row) refreshReminderRow(row); });
