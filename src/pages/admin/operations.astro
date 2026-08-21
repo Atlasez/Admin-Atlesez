@@ -38,11 +38,14 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
         <h3 class="subheading">自分が投げた進捗報告</h3>
         <div data-progress-list></div>
       </section>
-      <section hidden={calendarPage}>
-        <h2>タスク作成・依頼</h2>
-        <p>
-          表示対象を切り替えると、このフォームの下にあるタスク一覧が変わります。
-        </p>
+      <section class="task-workspace" hidden={calendarPage}>
+        <div class="task-list-heading">
+          <div>
+            <h2>タスク一覧</h2>
+            <p>表示対象を切り替えると、一覧に表示するタスクが変わります。</p>
+          </div>
+          <button type="button" class="task-create-open" data-open-task-create aria-label="タスクを作成・依頼">＋</button>
+        </div>
         <div class="task-filters" role="group" aria-label="タスクの表示対象">
           <button
             type="button"
@@ -61,6 +64,14 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
             すべて
           </button>
         </div>
+        <div data-task-list aria-live="polite"></div>
+        <output class="operation-feedback" data-task-list-feedback aria-live="polite"></output>
+        <dialog class="task-create-dialog" data-task-create-dialog aria-labelledby="task-create-heading">
+          <div class="task-create-panel">
+            <div class="task-create-heading">
+              <h2 id="task-create-heading">タスク作成・依頼</h2>
+              <button type="button" class="task-create-close" data-close-task-create aria-label="タスク作成画面を閉じる">×</button>
+            </div>
         <input data-task-title placeholder="タスク名" /><label
           class="field-label"
           >対象分野<select data-task-subject>
@@ -142,13 +153,14 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
           data-task-details
           placeholder="補足・依頼内容（任意）"
         ></textarea
-        ><button data-create-task>タスクを追加</button
+        ><button type="button" data-create-task>タスクを追加</button
         ><output
           class="operation-feedback"
           data-task-feedback
           aria-live="polite"
         ></output>
-        <div data-task-list aria-live="polite"></div>
+          </div>
+        </dialog>
       </section>
       <section class="wide" hidden={!calendarPage}>
         <h2>同時作業会・交流会の日程</h2>
@@ -863,6 +875,72 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     border-color: var(--accent-primary);
     color: #fff;
   }
+  .task-list-heading {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+  .task-list-heading p {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    margin: 0.4rem 0 0;
+  }
+  .task-create-open {
+    align-items: center;
+    border-radius: 50%;
+    display: inline-flex;
+    flex: 0 0 2.5rem;
+    font-size: 1.35rem !important;
+    height: 2.5rem;
+    justify-content: center;
+    line-height: 1;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 2.5rem;
+  }
+  .task-create-dialog {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.7rem;
+    color: var(--text-primary);
+    max-height: calc(100vh - 2rem);
+    max-width: calc(100vw - 2rem);
+    overflow: auto;
+    padding: 0;
+    width: min(44rem, calc(100vw - 2rem));
+  }
+  .task-create-dialog::backdrop {
+    background: rgb(0 0 0 / 0.48);
+  }
+  .task-create-panel {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1rem;
+  }
+  .task-create-heading {
+    align-items: center;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.35rem;
+    padding-bottom: 0.7rem;
+  }
+  .task-create-close {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--text-secondary) !important;
+    font-size: 1.3rem !important;
+    line-height: 1;
+    margin: 0 !important;
+    padding: 0.25rem 0.45rem !important;
+  }
+  .task-create-close:hover,
+  .task-create-close:focus-visible {
+    border-color: var(--border-default) !important;
+    color: var(--text-primary) !important;
+  }
   .availability-blocks {
     border-top: 1px solid var(--border-default);
     margin-top: 1rem;
@@ -1010,11 +1088,6 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((item) => item.setAttribute('aria-current', item === tab ? 'page' : 'false'));
       history.replaceState(null, '', tab.href);
     }));
-    const taskSection = Array.from(root.querySelectorAll<HTMLElement>('.grid > section')).find((section) => section.querySelector('h2')?.textContent?.trim() === 'タスク作成・依頼');
-    if (taskSection) {
-      const description = taskSection.querySelector('p');
-      if (description) description.textContent = '表示対象を切り替えると、このフォームの下にあるタスク一覧が変わります。';
-    }
     const get = <T extends Element>(selector: string) => root.querySelector<T>(selector)!;
     const progress = get<HTMLTextAreaElement>('[data-progress]');
     const tasks = get<HTMLElement>('[data-task-list]');
@@ -1039,6 +1112,11 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const taskReminderRepeat = get<HTMLSelectElement>('[data-task-reminder-repeat]');
     const progressFeedback = get<HTMLOutputElement>('[data-progress-feedback]');
     const taskFeedback = get<HTMLOutputElement>('[data-task-feedback]');
+    const taskListFeedback = get<HTMLOutputElement>('[data-task-list-feedback]');
+    const taskCreateDialog = get<HTMLDialogElement>('[data-task-create-dialog]');
+    const taskCreateOpen = get<HTMLButtonElement>('[data-open-task-create]');
+    const taskTitle = get<HTMLInputElement>('[data-task-title]');
+    const taskDetails = get<HTMLTextAreaElement>('[data-task-details]');
     const eventFeedback = get<HTMLOutputElement>('[data-event-feedback]');
     const blockFeedback = get<HTMLOutputElement>('[data-block-feedback]');
     const projectTitle = get<HTMLElement>('[data-project-title]');
@@ -1230,7 +1308,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       renderCalendar();
     };
     const load = async () => { data = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
-    const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; } finally { button.disabled = false; } };
+    const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
     let activeAvailabilityTrigger: HTMLButtonElement | null = null;
     const closeAvailabilityPopover = (restoreFocus = false) => {
       availabilityPopover.hidden = true;
@@ -1276,8 +1354,12 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       closeAvailabilityPopover();
     });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !availabilityPopover.hidden) closeAvailabilityPopover(true); });
+    taskCreateOpen.addEventListener('click', () => { taskFeedback.value = ''; taskCreateDialog.showModal(); taskTitle.focus(); });
+    get<HTMLButtonElement>('[data-close-task-create]').addEventListener('click', () => taskCreateDialog.close());
+    taskCreateDialog.addEventListener('click', (event) => { if (event.target === taskCreateDialog) taskCreateDialog.close(); });
+    taskCreateDialog.addEventListener('close', () => taskCreateOpen.focus());
     get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
-    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: get<HTMLInputElement>('[data-task-title]').value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: get<HTMLTextAreaElement>('[data-task-details]').value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); taskDue.value = ''; }, 'タスクを追加しました。'); });
+    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
     refreshReminderRows(taskReminderList);
     root.addEventListener('change', (event) => { const row = (event.target as HTMLElement).closest<HTMLElement>('[data-task-reminder-row]'); if (row) refreshReminderRow(row); });
@@ -1285,7 +1367,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     get<HTMLButtonElement>('[data-create-event]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, eventFeedback, async () => { const eventTimezone = get<HTMLInputElement>('[data-event-timezone]').value || 'Asia/Tokyo'; await api('/api/admin/operations/events', 'POST', { projectId, title: get<HTMLInputElement>('[data-event-title]').value, startsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-event-start]').value, eventTimezone), endsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-event-end]').value, eventTimezone), details: get<HTMLInputElement>('[data-event-details]').value, timezone: eventTimezone }); }, '日程を追加しました。'); });
     root.querySelectorAll<HTMLButtonElement>('[data-task-filter]').forEach((button) => button.addEventListener('click', () => { taskFilter = (button.dataset.taskFilter as typeof taskFilter) || 'assigned'; root.querySelectorAll<HTMLButtonElement>('[data-task-filter]').forEach((item) => { const active = item === button; item.classList.toggle('is-selected', active); item.setAttribute('aria-pressed', String(active)); }); render(); }));
     get<HTMLButtonElement>('[data-create-block]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, blockFeedback, async () => { const zone = selectedTimezone(); await api('/api/admin/operations/availability-blocks', 'POST', { startsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-block-start]').value, zone), endsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-block-end]').value, zone), timezone: zone, kind: get<HTMLSelectElement>('[data-block-kind]').value, label: get<HTMLInputElement>('[data-block-label]').value }); }, '可否期間を追加しました。'); });
-    tasks.addEventListener('change', (event) => { const select = (event.target as HTMLElement).closest<HTMLSelectElement>('[data-task-status]'); if (!select) return; select.disabled = true; void api(`/api/admin/operations/tasks/${encodeURIComponent(select.dataset.taskStatus ?? '')}`, 'PATCH', { status: select.value }).then(load).catch((error) => { taskFeedback.value = error instanceof Error ? error.message : '状態を更新できませんでした。'; }).finally(() => { select.disabled = false; }); });
+    tasks.addEventListener('change', (event) => { const select = (event.target as HTMLElement).closest<HTMLSelectElement>('[data-task-status]'); if (!select) return; select.disabled = true; taskListFeedback.value = ''; void api(`/api/admin/operations/tasks/${encodeURIComponent(select.dataset.taskStatus ?? '')}`, 'PATCH', { status: select.value }).then(load).catch((error) => { taskListFeedback.value = error instanceof Error ? error.message : '状態を更新できませんでした。'; }).finally(() => { select.disabled = false; }); });
     events.addEventListener('click', (event) => { const target = event.target as HTMLElement; const deleteButton = target.closest<HTMLButtonElement>('[data-delete-event]'); if (deleteButton) { if (!confirm('この日程と参加登録を削除しますか？')) return; deleteButton.disabled = true; eventFeedback.value = '日程を削除中…'; void api(`/api/admin/operations/events/${encodeURIComponent(deleteButton.dataset.deleteEvent ?? '')}`, 'DELETE').then(async () => { eventFeedback.value = '日程を削除しました。'; await load(); }).catch((error) => { eventFeedback.value = error instanceof Error ? error.message : '日程を削除できませんでした。'; }).finally(() => { deleteButton.disabled = false; }); return; } const button = target.closest<HTMLButtonElement>('[data-availability]'); if (!button) return; button.disabled = true; eventFeedback.value = '参加状態を保存中…'; void api(`/api/admin/operations/events/${encodeURIComponent(button.dataset.event ?? '')}/availability`, 'PUT', { availability: button.dataset.availability }).then(async () => { eventFeedback.value = '参加状態を保存しました。'; await load(); }).catch((error) => { eventFeedback.value = error instanceof Error ? error.message : '参加状態を保存できませんでした。'; }).finally(() => { button.disabled = false; }); });
     root.querySelector<HTMLElement>('[data-block-list]')!.addEventListener('click', (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-delete-block]'); if (!button) return; button.disabled = true; void api(`/api/admin/operations/availability-blocks/${encodeURIComponent(button.dataset.deleteBlock ?? '')}`, 'DELETE').then(load).catch((error) => { blockFeedback.value = error instanceof Error ? error.message : '可否期間を削除できませんでした。'; }).finally(() => { button.disabled = false; }); });
     get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
