@@ -13,6 +13,7 @@ export const EDITORIAL_ASSET_ID_PATTERN =
 
 export type EditorialAssetReference = {
   id: string;
+  documentId: string;
   filename: string;
 };
 
@@ -24,7 +25,7 @@ export type EditorialLatexAssetReference = EditorialAssetReference & {
 export const editorialAssetMarker = (id: string) => `asset://${id}`;
 
 export const publicEditorialAssetPath = (asset: EditorialAssetReference) =>
-  `../../../../../images/editorial/${asset.id}/${asset.filename}`;
+  `/images/editorial/${asset.documentId}/${asset.filename}`;
 
 export const sanitizeEditorialFilename = (
   filename: string,
@@ -38,6 +39,24 @@ export const sanitizeEditorialFilename = (
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
   return `${basename || "image"}.${extension}`;
+};
+
+export const uniqueEditorialFilename = (
+  filename: string,
+  existingFilenames: Iterable<string>,
+) => {
+  const existing = new Set(
+    [...existingFilenames].map((value) => value.toLowerCase()),
+  );
+  if (!existing.has(filename.toLowerCase())) return filename;
+  const match = /^(.*?)(\.[a-z0-9]+)$/i.exec(filename);
+  const basename = match?.[1] ?? filename;
+  const extension = match?.[2] ?? "";
+  for (let suffix = 2; suffix <= 10_000; suffix += 1) {
+    const candidate = `${basename}-${suffix}${extension}`;
+    if (!existing.has(candidate.toLowerCase())) return candidate;
+  }
+  throw new Error("画像ファイル名の重複を解決できませんでした。");
 };
 
 export const sanitizeEditorialLatexName = (value: string, filename: string) => {
@@ -68,6 +87,39 @@ export const editorialLatexNamesIn = (body: string) => [
     ].map((match) => match[1].toLowerCase()),
   ),
 ];
+
+export const editorialAssetIsReferenced = (
+  body: string,
+  asset: EditorialLatexAssetReference,
+) => {
+  if (
+    editorialAssetIdsIn(body).some(
+      (id) => id.toLowerCase() === asset.id.toLowerCase(),
+    ) ||
+    editorialLatexNamesIn(body).includes(asset.latexName.toLowerCase())
+  )
+    return true;
+
+  const expectedPaths = new Set(
+    [asset.documentId, asset.id].map(
+      (directory) =>
+        `/images/editorial/${directory.toLowerCase()}/${asset.filename.toLowerCase()}`,
+    ),
+  );
+  const markdownUrls = [
+    ...body.matchAll(/!\[[^\]]*\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g),
+  ].map((match) => match[1]);
+  return markdownUrls.some((value) => {
+    let pathname = value.split(/[?#]/, 1)[0];
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch {
+      // 不正なpercent encodingは参照として扱わない。
+    }
+    const normalized = pathname.replace(/\\/g, "/").toLowerCase();
+    return [...expectedPaths].some((expected) => normalized.endsWith(expected));
+  });
+};
 
 export const replaceEditorialLatexReferences = (
   body: string,

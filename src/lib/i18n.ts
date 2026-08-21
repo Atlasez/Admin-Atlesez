@@ -104,7 +104,7 @@ const ui = {
     postExercise: "事後演習",
     exercisePreparing: "演習は準備中です",
     authors: "執筆",
-    reviewers: "査読",
+    reviewers: "フィードバック",
     updatedAt: "最終更新",
     toc: "目次",
     languages: "言語",

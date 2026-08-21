@@ -68,12 +68,12 @@ const pageLabel = ({
   "semi-platform": "ゼミプラットフォームHome",
   secretariat: "運営事務局Home",
   editor: "記事編集",
-  articles: "編集・査読",
+  articles: "編集・フィードバック",
   workspace: "マイページ",
   operations: "タスク管理",
   calendar: "カレンダー",
   genres: "各ジャンル概要",
-  review: "査読スペース",
+  review: "フィードバック一覧",
   reports: "問題報告・統計",
   permissions: "運営者・担当管理",
   guide: "作業の進め方",
@@ -94,7 +94,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
       <a href="/admin/introductions/?project=portal" data-admin-site="portal" data-admin-page="introductions" data-admin-i18n data-admin-ja="運営紹介" data-admin-en="Operator introductions" aria-current={site === "portal" && current === "introductions" ? "page" : undefined}>運営紹介</a>
-      <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・査読</a>
+      <a href="/admin/articles/" data-admin-site="atlas" data-admin-page="articles" hidden={site !== "atlas"} aria-current={current === "articles" && site === "atlas" ? "page" : undefined}>編集・フィードバック</a>
       <a href="/admin/operations/?project=atlas" data-admin-site="atlas" data-admin-page="operations" hidden={site !== "atlas"} aria-current={current === "operations" && site === "atlas" ? "page" : undefined}>タスク管理</a>
       <a href="/admin/calendar/?project=atlas" data-admin-site="atlas" data-admin-page="calendar" hidden={site !== "atlas"} aria-current={current === "calendar" && site === "atlas" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/operations/?project=secretariat" data-admin-site="secretariat" data-admin-page="operations" hidden={site !== "secretariat"} aria-current={current === "operations" && site === "secretariat" ? "page" : undefined}>事務局タスク管理</a>
@@ -109,7 +109,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         <a href={`/admin/co-working/?project=secretariat`} data-admin-site="secretariat" data-admin-page="co-working" hidden={site !== "secretariat"} aria-current={current === "co-working" && site === "secretariat" ? "page" : undefined}>事務局の日程・交流</a>
         <a href={`/admin/co-working/?project=seminar-platform`} data-admin-site="semi-platform" data-admin-page="co-working" hidden={site !== "semi-platform"} aria-current={current === "co-working" && site === "semi-platform" ? "page" : undefined}>ゼミ日程・交流</a>
         <a href={`/admin/permissions/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="permissions" aria-current={current === "permissions" ? "page" : undefined}>運営者・担当管理</a>
-        <a href="/admin/review/" data-manager-only hidden data-admin-site="atlas" data-admin-page="review" aria-current={current === "review" && site === "atlas" ? "page" : undefined}>査読スペース</a>
+        <a href="/admin/review/" data-manager-only hidden data-admin-site="atlas" data-admin-page="review" aria-current={current === "review" && site === "atlas" ? "page" : undefined}>フィードバック一覧</a>
         <a href={`/admin/reports/?project=${projectSlug}`} data-admin-site={site} data-admin-page="reports" aria-current={current === "reports" ? "page" : undefined}>問題報告・統計</a>
         <a href={`/admin/guide/?project=${projectSlug}`} data-admin-site={site} data-admin-page="guide" aria-current={current === "guide" ? "page" : undefined}>作業の進め方</a>
         <a href={`/admin/applications/?project=${projectSlug}`} data-manager-only hidden data-admin-site={site} data-admin-page="applications" aria-current={current === "applications" ? "page" : undefined}>応募管理</a>
@@ -161,7 +161,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     applyLanguage(currentLanguage());
 
     type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'secretariat'; slug: string; current: string; home: string; label: string };
-    const pageLabels: Record<string, string> = { articles: '編集・査読', editor: '記事編集', workspace: 'マイページ', operations: 'タスク管理', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', 'co-working': '同時作業会', reports: '問題報告・統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: '査読スペース' };
+    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', operations: 'タスク管理', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', 'co-working': '同時作業会', reports: '問題報告・統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: 'フィードバック一覧' };
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
@@ -303,7 +303,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           const unreadCount = notifications.filter((item) => !item.read).length;
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
-          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: '査読依頼', approved: '査読完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
+          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: 'フィードバック依頼', approved: 'フィードバック完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
           notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
         } catch { notificationList.textContent = '通知を取得できませんでした'; }
       };

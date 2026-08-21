@@ -120,6 +120,15 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(subject).toHaveValue("mathematics");
   await expect(subject.locator("option")).toHaveCount(1);
   await expect(subject.locator("option")).toHaveText("数学");
+
+  const settings = page.locator("details.metadata");
+  const personalNotebook = page.locator("details.personal-notebook");
+  await expect(settings.locator("summary")).toHaveText("記事設定");
+  await expect(personalNotebook.locator("summary")).toHaveText("自分用メモ帳");
+  await settings.locator("summary").click();
+  await expect(settings).not.toHaveAttribute("open", "");
+  await personalNotebook.locator("summary").click();
+  await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
 test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示する", async ({
@@ -197,7 +206,9 @@ test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", 
   await expect(guide).toBeVisible();
 });
 
-test("V-2: 査読担当者と依頼内容を選んで保存できる", async ({ page }) => {
+test("V-2: フィードバック担当者と依頼内容を選んで保存できる", async ({
+  page,
+}) => {
   await mockAdminApi(page);
   await page.route("**/api/admin/editor/review-requests", async (route) => {
     await route.fulfill({
@@ -227,7 +238,7 @@ test("V-2: 査読担当者と依頼内容を選んで保存できる", async ({ 
   );
   await page.goto("./admin/editor/?document=doc-1");
 
-  await page.getByRole("button", { name: "査読を依頼する" }).click();
+  await page.getByRole("button", { name: "フィードバックを依頼する" }).click();
   const dialog = page.locator("[data-review-request-dialog]");
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("option")).toContainText([
@@ -242,7 +253,9 @@ test("V-2: 査読担当者と依頼内容を選んで保存できる", async ({ 
   await dialog
     .locator("[data-review-request-note]")
     .fill("定義と例を重点確認してください");
-  await dialog.getByRole("button", { name: "査読を依頼する" }).click();
+  await dialog
+    .getByRole("button", { name: "フィードバックを依頼する" })
+    .click();
 
   await expect
     .poll(() => assignment)
@@ -251,7 +264,7 @@ test("V-2: 査読担当者と依頼内容を選んで保存できる", async ({ 
       note: "定義と例を重点確認してください",
     });
   await expect(page.locator("[data-save-message]")).toHaveText(
-    "査読を依頼しました。",
+    "フィードバックを依頼しました。",
   );
 });
 
@@ -285,6 +298,12 @@ test("H-1: 保存版と現在の本文の差分を表示できる", async ({ pag
     "- 古い本文です。",
   );
   await expect(page.locator("[data-revision-diff]")).toContainText(
+    "+ 群の本文です。",
+  );
+  await expect(page.locator(".revision-diff-line.is-removed")).toContainText(
+    "- 古い本文です。",
+  );
+  await expect(page.locator(".revision-diff-line.is-added")).toContainText(
     "+ 群の本文です。",
   );
 });
@@ -481,6 +500,41 @@ test("CK-1: 自分の確認済み反応を再クリックして取り消せる",
   await expect(action.locator(".comment-action-count")).toHaveText("0");
 });
 
+test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存・破棄しない", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("atlasez-editor-autosave", "off"),
+  );
+  await mockAdminApi(page);
+  let documentPatchCount = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      request.method() === "PATCH" &&
+      url.pathname === "/api/admin/editor/documents/doc-1"
+    )
+      documentPatchCount += 1;
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const body = page.locator("[data-body]");
+  const unsavedBody = `${documentItem.body}\n\n未保存の追記です。`;
+  await body.fill(unsavedBody);
+  await page
+    .locator('[data-comment-context="comment-1"]')
+    .getByRole("button", { name: /確認済み/ })
+    .click();
+
+  await expect(body).toHaveValue(unsavedBody);
+  expect(documentPatchCount).toBe(0);
+  const prevented = await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    return !window.dispatchEvent(event);
+  });
+  expect(prevented).toBe(true);
+});
+
 test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する", async ({
   page,
 }) => {
@@ -559,7 +613,9 @@ test("IM-1: 認証付き画像を取得してPreviewへBlob表示する", async 
   });
   await page.goto("./admin/editor/?document=doc-1");
 
-  const previewImage = page.locator(`[data-editorial-asset="${assetId}"]`);
+  const previewImage = page
+    .locator("[data-preview]")
+    .locator(`[data-editorial-asset="${assetId}"]`);
   await expect(previewImage).toHaveAttribute("src", /^blob:/);
   await expect
     .poll(() =>
@@ -569,7 +625,162 @@ test("IM-1: 認証付き画像を取得してPreviewへBlob表示する", async 
   await expect(page.locator("[data-media-status]")).toHaveText("1件の素材");
 });
 
-test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
+test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功する", async ({
+  page,
+}) => {
+  const documentId = "22222222-2222-4222-8222-222222222222";
+  const assetId = "33333333-3333-4333-8333-333333333333";
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64",
+  );
+  let savedDocument: typeof documentItem | null = null;
+  let assets: Array<Record<string, unknown>> = [];
+  let deleteSucceeded = false;
+  await page.route("**/api/admin/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/admin/editor/documents") {
+      if (request.method() === "POST") {
+        const payload = request.postDataJSON();
+        savedDocument = {
+          ...documentItem,
+          ...payload,
+          id: documentId,
+          source_article_id: null,
+          concept_id: payload.conceptId,
+          writing_memo: payload.writingMemo,
+          latex_engine: payload.latexEngine,
+        };
+        await route.fulfill({
+          status: 201,
+          json: { ok: true, id: documentId },
+        });
+      } else
+        await route.fulfill({
+          json: {
+            documents: savedDocument ? [savedDocument] : [],
+            mentionNames: [],
+            scope: {
+              email: "alice@example.com",
+              subjects: ["mathematics"],
+              isManager: true,
+            },
+          },
+        });
+      return;
+    }
+    if (url.pathname === `/api/admin/editor/documents/${documentId}`) {
+      if (request.method() === "PATCH") {
+        const payload = request.postDataJSON();
+        savedDocument = { ...savedDocument!, ...payload, body: payload.body };
+        await route.fulfill({ json: { ok: true } });
+      } else
+        await route.fulfill({
+          json: { document: savedDocument, comments: [] },
+        });
+      return;
+    }
+    if (url.pathname === `/api/admin/editor/documents/${documentId}/assets`) {
+      if (request.method() === "POST") {
+        assets = [
+          {
+            id: assetId,
+            filename: "diagram.png",
+            mediaType: "image/png",
+            bytes: png.byteLength,
+            alt: "図",
+            latexName: "diagram",
+            createdAt: "2026-08-21T00:00:00.000Z",
+            marker: `asset://${assetId}`,
+          },
+        ];
+        await route.fulfill({ status: 201, json: { asset: assets[0] } });
+      } else await route.fulfill({ json: { assets } });
+      return;
+    }
+    if (url.pathname === `/api/admin/editor/assets/${assetId}`) {
+      if (request.method() === "DELETE") {
+        if (savedDocument?.body.includes(`asset://${assetId}`)) {
+          await route.fulfill({
+            status: 409,
+            json: {
+              error:
+                "本文から画像参照を削除して原稿を保存してから、素材を削除してください。",
+            },
+          });
+        } else {
+          assets = [];
+          deleteSucceeded = true;
+          await route.fulfill({ json: { ok: true } });
+        }
+      } else
+        await route.fulfill({
+          contentType: "image/png",
+          body: png,
+        });
+      return;
+    }
+    if (url.pathname === "/api/admin/personal-workspace") {
+      await route.fulfill({ json: { privateNote: "", updatedAt: null } });
+      return;
+    }
+    if (url.pathname.endsWith("/revisions")) {
+      await route.fulfill({ json: { revisions: [] } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: "Not found" } });
+  });
+
+  await page.goto("./admin/editor/?new=1");
+  await page.locator('[name="title"]').fill("画像フローのテスト");
+  await page.locator('[name="summary"]').fill("画像の一連操作を確認します。");
+  await page.locator('[name="slug"]').fill("image-flow-test");
+  await page
+    .locator('[name="conceptId"]')
+    .fill("math.group-theory.image-flow-test");
+  await page.locator("[data-body]").fill("## 画像");
+  await page.locator("[data-save-document]").click();
+  await page
+    .locator("[data-progress-dialog]")
+    .getByRole("button", { name: "編集を続ける" })
+    .click();
+
+  await page.locator('[data-pane-tab="media"]').click();
+  await page.locator("[data-media-alt]").fill("図");
+  await page.locator("[data-media-input]").setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
+  await expect(page.locator(".media-item-name b")).toHaveText("diagram.png");
+  const previewImage = page
+    .locator(`[data-editorial-asset="${assetId}"]`)
+    .last();
+  await expect(previewImage).toHaveAttribute("src", /^blob:/);
+
+  await page.locator("[data-save-document]").click();
+  await page
+    .locator("[data-progress-dialog]")
+    .getByRole("button", { name: "編集を続ける" })
+    .click();
+  await page.locator("[data-body]").fill("## 画像\n\n画像参照を削除しました。");
+  await page.locator("[data-save-document]").click();
+  await page
+    .locator("[data-progress-dialog]")
+    .getByRole("button", { name: "編集を続ける" })
+    .click();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "削除", exact: true }).click();
+  await expect(page.locator("[data-media-status]")).toHaveText(
+    "素材はまだありません",
+  );
+  await expect(page.locator(".media-item")).toHaveCount(0);
+  expect(deleteSucceeded).toBe(true);
+});
+
+test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
   await mockAdminApi(page);
@@ -582,17 +793,15 @@ test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライ
     "true",
   );
 
-  await page.locator('[data-pane-tab="memo"]').click();
   await page.locator('[data-pane-tab="media"]').click();
-  await expect(page.locator(".editor-split > section:visible")).toHaveCount(5);
-  for (const pane of ["writing", "preview", "media", "review", "memo"]) {
+  await expect(page.locator(".editor-split > section:visible")).toHaveCount(4);
+  for (const pane of ["writing", "preview", "media", "review"]) {
     await expect(
       page.locator(`[data-editor-pane="${pane}"] [data-pane-edge]`),
     ).toHaveCount(4);
   }
-  await expect(
-    page.locator('[data-editor-pane="memo"] [data-edge="top"]'),
-  ).toHaveAttribute("aria-label", "メモ枠を上へ移動");
+  await expect(page.locator('[data-pane-tab="memo"]')).toHaveCount(0);
+  await expect(page.locator(".memo-area")).toHaveCount(0);
 
   const popupPromise = page.waitForEvent("popup");
   await page.locator('[data-pane-popout="writing"]').click();

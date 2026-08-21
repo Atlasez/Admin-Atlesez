@@ -14,33 +14,19 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.getByRole("link", { name: /^査読/ })).toHaveCount(0);
   });
 
-  test("原稿一覧に同じスタイルの3導線だけを表示する", async ({ page }) => {
+  test("原稿一覧はコンパクトな作業対象フィルタを表示する", async ({ page }) => {
     await page.goto("admin/articles/");
 
-    const workflowCards = page.locator(".workflow-card");
-    await expect(workflowCards).toHaveCount(3);
-    await expect(workflowCards.nth(0)).toHaveAttribute(
-      "href",
-      "/admin/editor/?new=1&from=articles",
-    );
-    await expect(workflowCards.nth(1)).toHaveAttribute(
-      "href",
-      "/admin/articles/?mode=revise#article-list",
-    );
-    await expect(workflowCards.nth(2)).toHaveAttribute(
-      "href",
-      "/admin/articles/?mode=review#article-list",
-    );
+    await expect(page.locator(".workflow-card")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "新規記事を作成" }),
+    ).toHaveAttribute("href", "/admin/editor/?new=1&from=articles");
+    await expect(page.locator("[data-workflow-filter]")).toHaveValue("all");
     await expect(page.locator(".article-view-tabs")).toHaveCount(0);
-    await expect(page.locator(".header-actions")).toHaveCount(0);
-
-    const backgrounds = await workflowCards.evaluateAll((cards) =>
-      cards.map((card) => getComputedStyle(card).backgroundColor),
-    );
-    expect(new Set(backgrounds).size).toBe(1);
+    await expect(page.locator(".header-actions")).toHaveCount(1);
   });
 
-  test("V-1 査読は原稿一覧で未査読に絞り、自分への依頼を優先する", async ({
+  test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
     page,
   }) => {
     await page.route("**/api/admin/editor/documents", async (route) => {
@@ -95,13 +81,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       });
     });
 
-    await page.goto("admin/articles/");
-    await page.getByRole("link", { name: /^査読/ }).click();
+    await page.goto("admin/articles/?mode=review#article-list");
 
     await expect(page).toHaveURL(
       /\/admin\/articles\/\?mode=review#article-list$/,
     );
     await expect(page.locator("[data-status]")).toHaveValue("all");
+    await expect(page.locator("[data-workflow-filter]")).toHaveValue("review");
     await expect(page.locator("[data-list] .article")).toHaveCount(3);
     await expect(page.locator("[data-list] .article").first()).toContainText(
       "自分への査読依頼",
