@@ -32,7 +32,7 @@
 - `npm run format:check`: 成功
 - `npm test`: 35件成功（管理ページルート回帰テスト2件を追加）
 - `npm run build`: 246ページ生成、Pagefind 156ページ索引
-- `npm run test:e2e`: 66件成功
+- `npm run test:e2e`: 67件成功（追加したT-1/T-2/T-5回帰テストを含む）
 - 追加確認: `npm run test:e2e -- tests/e2e/admin-calendar.spec.ts` 2件成功。ローカルAdmin Workerで `/admin/genres/`・`/admin/manage/?project=atlas`・`/admin/calendar/?project=atlas` がすべてHTTP 200
 - ローカルD1: 全35マイグレーション成功
 - Commit Preview: Cloudflare Accessのみでログインし、記事編集画面と実在するコメント・返信・メンション通知を確認
