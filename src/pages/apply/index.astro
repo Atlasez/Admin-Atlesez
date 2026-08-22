@@ -49,6 +49,12 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
             <label><span data-i18n="country">居住国・地域</span><input name="country" list="countries" maxlength="100" required placeholder="例：日本" autocomplete="country-name" /></label>
             <label><span data-i18n="timezone">普段使うタイムゾーン</span><select name="timezone" data-timezone required>{Object.entries(zoneGroups).map(([region, zones]) => <optgroup label={region}>{zones.map((zone) => <option value={zone}>{zone}</option>)}</optgroup>)}</select></label>
           </div>
+          <div class="two">
+            <label>生年月日<input name="birthDate" type="date" required autocomplete="bday" /></label>
+            <label>居住地（都道府県・都市名）<input name="residenceCity" maxlength="160" required autocomplete="address-level1" /></label>
+          </div>
+          <label>現在参加しているサークル・学生団体等（任意）<textarea name="currentOrganizations" maxlength="1000"></textarea></label>
+          <label>このプロジェクトをどこで知りましたか<input name="referralSource" maxlength="500" required /></label>
           <small class="hint" data-i18n="timezoneHelp">IANAのタイムゾーンから選択できます。日程表示の基準になります。</small>
         </fieldset>
 
@@ -58,7 +64,11 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
           <label><span data-i18n="articleIdeas">書いてみたい記事・テーマ</span><textarea name="articleIdeas" maxlength="3000" required placeholder="例：群論の基本概念、英語学習の語源マップ…"></textarea></label>
           <label><span data-i18n="skills">関心のあるプロジェクト・できること</span><textarea name="interests" maxlength="1000" required placeholder="例：記事執筆、査読、翻訳、ページデザイン、運営など"></textarea></label>
           <label><span data-i18n="message">参加したい理由・自己紹介</span><textarea name="message" maxlength="8000" required></textarea></label>
+          <label>参加理由（複数ある場合はすべて）<textarea name="motivationReasons" maxlength="3000" required placeholder="学習記事の執筆、運営への関心、交流など"></textarea></label>
+          <label>希望担当（複数ある場合はすべて）<textarea name="desiredRoles" maxlength="2000" required placeholder="記事執筆、査読、デザイン、システム、運営など"></textarea></label>
+          <label>面談候補日・時間帯<textarea name="interviewAvailability" maxlength="2000" required placeholder="タイムゾーンも併記してください"></textarea></label>
           <label><span data-i18n="availability">参加可能な時間帯など（任意）</span><textarea name="availabilityNote" maxlength="1000"></textarea></label>
+          <label>質問・確認したいこと（任意）<textarea name="applicantQuestions" maxlength="3000"></textarea></label>
         </fieldset>
         <datalist id="countries">{countries.map((country) => <option value={country} />)}</datalist>
         <div class="turnstile" data-turnstile aria-live="polite"></div>

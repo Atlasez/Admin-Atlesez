@@ -36,6 +36,14 @@ describe("calendar support", () => {
     }
   });
 
+  it("shows Japanese holiday names in Japanese", () => {
+    expect(
+      holidaysForRegions(["JP"], 2026).some(
+        (holiday) => holiday.date === "2026-08-11" && holiday.name === "山の日",
+      ),
+    ).toBe(true);
+  });
+
   it("includes subdivision-specific holidays", () => {
     expect(
       holidaysForRegions(["US/CA"], 2026, "en").some(

@@ -73,7 +73,14 @@ const comments = [
   },
 ];
 
-async function mockAdminApi(page: Page) {
+async function mockAdminApi(
+  page: Page,
+  scope = {
+    email: "alice@example.com",
+    subjects: ["mathematics"],
+    isManager: true,
+  },
+) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -82,11 +89,7 @@ async function mockAdminApi(page: Page) {
       payload = {
         documents: [documentItem],
         mentionNames: ["Alice", "Bob"],
-        scope: {
-          email: "alice@example.com",
-          subjects: ["mathematics"],
-          isManager: true,
-        },
+        scope,
       };
     } else if (url.pathname === "/api/admin/editor/documents/doc-1") {
       payload = { document: documentItem, comments };
@@ -105,7 +108,679 @@ async function mockAdminApi(page: Page) {
   });
 }
 
-test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
+test("E-5: 記事設定には担当分野だけを表示する", async ({ page }) => {
+  await mockAdminApi(page, {
+    email: "alice@example.com",
+    subjects: ["mathematics"],
+    isManager: false,
+  });
+  await page.goto("./admin/editor/?new=1");
+
+  const subject = page.locator('select[name="subject"]');
+  await expect(subject).toHaveValue("mathematics");
+  await expect(subject.locator("option")).toHaveCount(1);
+  await expect(subject.locator("option")).toHaveText("数学");
+
+  const settings = page.locator("details.metadata");
+  const personalNotebook = page.locator("details.personal-notebook");
+  await expect(settings.locator("summary")).toHaveText("記事設定");
+  await expect(personalNotebook.locator("summary")).toHaveText("自分用メモ帳");
+  await settings.locator("summary").click();
+  await expect(settings).not.toHaveAttribute("open", "");
+  await personalNotebook.locator("summary").click();
+  await expect(personalNotebook).toHaveAttribute("open", "");
+});
+
+test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  await expect(page.locator(".required-mark")).toHaveCount(6);
+  for (const name of [
+    "title",
+    "summary",
+    "subject",
+    "category",
+    "slug",
+    "conceptId",
+  ]) {
+    await expect(page.locator(`[name="${name}"]`)).toHaveAttribute(
+      "required",
+      "",
+    );
+  }
+});
+
+test("E-6: ダークモードでMarkdown本文を読める配色にする", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  await page.evaluate(() =>
+    document.documentElement.setAttribute("data-pref-bg", "dark"),
+  );
+
+  const colors = await page.locator("[data-body]").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, text: style.color };
+  });
+  expect(colors.background).not.toBe("rgb(255, 255, 255)");
+  expect(colors.background).not.toBe(colors.text);
+});
+
+test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  await page.locator('[name="title"]').fill("未保存のタイトル");
+
+  const prevented = await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    return !window.dispatchEvent(event);
+  });
+  expect(prevented).toBe(true);
+});
+
+test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  const toggle = page.locator("[data-autosave-toggle]");
+
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("atlasez-editor-autosave")),
+    )
+    .toBe("off");
+  await page.reload();
+  await expect(toggle).not.toBeChecked();
+});
+
+test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const guide = page.getByRole("link", { name: "作業の進め方 ↗" });
+  await expect(guide).toHaveAttribute("href", "/admin/guide/?project=atlas");
+  await expect(guide).toHaveAttribute("target", "_blank");
+  await expect(guide).toBeVisible();
+});
+
+test("V-2: フィードバック担当者と依頼内容を選んで保存できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/review-requests", async (route) => {
+    await route.fulfill({
+      json: {
+        reviewers: [
+          {
+            email: "bob@example.com",
+            displayName: "Bob",
+            subjects: ["mathematics"],
+          },
+          {
+            email: "carol@example.com",
+            displayName: "Carol",
+            subjects: ["physics"],
+          },
+        ],
+      },
+    });
+  });
+  let assignment: Record<string, unknown> | null = null;
+  await page.route(
+    "**/api/admin/editor/review-requests/doc-1",
+    async (route) => {
+      assignment = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await page.getByRole("button", { name: "フィードバックを依頼する" }).click();
+  const dialog = page.locator("[data-review-request-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("option")).toContainText([
+    "担当者を選択",
+    "この分野の担当者全員",
+    "Bob",
+  ]);
+  await expect(dialog.locator("option", { hasText: "Carol" })).toHaveCount(0);
+  await dialog
+    .locator("[data-review-request-assignee]")
+    .selectOption("bob@example.com");
+  await dialog
+    .locator("[data-review-request-note]")
+    .fill("定義と例を重点確認してください");
+  await dialog
+    .getByRole("button", { name: "フィードバックを依頼する" })
+    .click();
+
+  await expect
+    .poll(() => assignment)
+    .toEqual({
+      reviewerEmail: "bob@example.com",
+      note: "定義と例を重点確認してください",
+    });
+  await expect(page.locator("[data-save-message]")).toHaveText(
+    "フィードバックを依頼しました。",
+  );
+});
+
+test("H-1: 保存版と現在の本文の差分を表示できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/revisions",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          revisions: [
+            {
+              id: "revision-1",
+              title: "群の定義",
+              summary: "旧要約",
+              body: "## 群\n\n古い本文です。",
+              status: "draft",
+              saved_by: "alice@example.com",
+              saved_at: "2026-08-19T00:00:00.000Z",
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-revision-before]")).toHaveCount(1);
+  await expect(page.locator("[data-revision-after]")).toHaveValue("current");
+  await expect(page.locator("[data-revision-diff]")).toContainText(
+    "- 古い本文です。",
+  );
+  await expect(page.locator("[data-revision-diff]")).toContainText(
+    "+ 群の本文です。",
+  );
+  await expect(page.locator(".revision-diff-line.is-removed")).toContainText(
+    "- 古い本文です。",
+  );
+  await expect(page.locator(".revision-diff-line.is-added")).toContainText(
+    "+ 群の本文です。",
+  );
+});
+
+test("H-2: 版履歴を査読コメント枠から独立して配置する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const revisionWorkspace = page.locator(".revision-workspace");
+  await expect(revisionWorkspace).toBeVisible();
+  await expect(revisionWorkspace).toContainText("版履歴・差分確認");
+  expect(
+    await revisionWorkspace.evaluate((element) =>
+      Boolean(element.closest(".review-panel")),
+    ),
+  ).toBe(false);
+  await expect(page.locator(".editor-split + .revision-workspace")).toHaveCount(
+    1,
+  );
+});
+
+test("CM-1: コメントと返信の両方でレビュータグを挿入できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await page
+    .locator('.review-panel > .comment-tags [data-comment-tag="定義不足"]')
+    .click();
+  await expect(page.locator("[data-comment-body]")).toHaveValue("[定義不足] ");
+
+  const thread = page.locator('[data-comment-context="comment-1"]');
+  await thread.locator("[data-open-reply]").click();
+  await thread.locator('[data-comment-tag="根拠確認"]').click();
+  await expect(thread.locator("[data-reply-body]")).toHaveValue("[根拠確認] ");
+});
+
+test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const body = page.locator("[data-body]");
+  await body.evaluate((element: HTMLTextAreaElement) => {
+    element.focus();
+    element.setSelectionRange(0, 4);
+    element.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await expect(page.locator("[data-selection-action]")).toBeVisible();
+
+  await body.evaluate((element: HTMLTextAreaElement) => {
+    element.setSelectionRange(0, 0);
+    element.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await expect(page.locator("[data-selection-action]")).toBeHidden();
+  await expect(page.locator("[data-comment-selection]")).toHaveText(
+    "範囲未選択：記事全体へのコメントとして送信します。",
+  );
+});
+
+test("CM-3: 本文から消えた元文章もコメントの引用として保持する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    const quotedComments = [
+      {
+        ...comments[0],
+        selections: [
+          {
+            selection_start: 10,
+            selection_end: 19,
+            selection_text: "削除済みの元文章",
+          },
+        ],
+      },
+      ...comments.slice(1),
+    ];
+    await route.fulfill({
+      json: { document: documentItem, comments: quotedComments },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const quote = page.locator(
+    '[data-comment-context="comment-1"] .comment-quote',
+  );
+  await expect(quote).toContainText("対象の文章");
+  await expect(quote).toContainText("削除済みの元文章");
+  await expect(page.locator("[data-body]")).not.toHaveValue(/削除済みの元文章/);
+});
+
+test("CM-7: 親コメントの記事引用を返信へ添付して送信できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const quotedComments = [
+    {
+      ...comments[0],
+      selections: [
+        {
+          selection_start: 5,
+          selection_end: 10,
+          selection_text: "群の本文です。",
+        },
+      ],
+    },
+    ...comments.slice(1),
+  ];
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: { document: documentItem, comments: quotedComments },
+    });
+  });
+  let replyPayload: Record<string, unknown> | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments",
+    async (route) => {
+      replyPayload = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const thread = page.locator('[data-comment-context="comment-1"]');
+  await thread.locator("[data-open-reply]").click();
+  await thread.locator("[data-quote-reply]").click();
+  await expect(page.locator("[data-selected-ranges]")).toContainText(
+    "群の本文です。",
+  );
+  await thread.locator("[data-reply-body]").fill("引用箇所を修正しました。");
+  await thread.locator("[data-send-reply]").click();
+
+  await expect
+    .poll(() => replyPayload)
+    .toMatchObject({
+      parentCommentId: "comment-1",
+      body: "引用箇所を修正しました。",
+      selections: [
+        {
+          start: 5,
+          end: 10,
+          text: "群の本文です。",
+          source: "記事",
+        },
+      ],
+    });
+});
+
+test("CK-1: 自分の確認済み反応を再クリックして取り消せる", async ({ page }) => {
+  await mockAdminApi(page);
+  let toggled = false;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    const updatedComments = [
+      {
+        ...comments[0],
+        acknowledged_by: toggled ? null : "alice@example.com",
+        acknowledged_by_emails: toggled ? [] : ["alice@example.com"],
+        action_actor_counts: {
+          ...comments[0].action_actor_counts,
+          acknowledge: toggled
+            ? []
+            : [
+                {
+                  actor_email: "alice@example.com",
+                  actor_display_name: "Alice",
+                  count: 1,
+                },
+              ],
+        },
+      },
+      ...comments.slice(1),
+    ];
+    await route.fulfill({
+      json: { document: documentItem, comments: updatedComments },
+    });
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments/comment-1",
+    async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ action: "acknowledge" });
+      toggled = true;
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const action = page
+    .locator('[data-comment-context="comment-1"]')
+    .getByRole("button", { name: /確認済み/ });
+  await expect(action).toHaveClass(/is-acted-by-me/);
+  await action.click();
+  await expect(action).not.toHaveClass(/is-acted-by-me/);
+  await expect(action.locator(".comment-action-count")).toHaveText("0");
+});
+
+test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存・破棄しない", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("atlasez-editor-autosave", "off"),
+  );
+  await mockAdminApi(page);
+  let documentPatchCount = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (
+      request.method() === "PATCH" &&
+      url.pathname === "/api/admin/editor/documents/doc-1"
+    )
+      documentPatchCount += 1;
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const body = page.locator("[data-body]");
+  const unsavedBody = `${documentItem.body}\n\n未保存の追記です。`;
+  await body.fill(unsavedBody);
+  await page
+    .locator('[data-comment-context="comment-1"]')
+    .getByRole("button", { name: /確認済み/ })
+    .click();
+
+  await expect(body).toHaveValue(unsavedBody);
+  expect(documentPatchCount).toBe(0);
+  const prevented = await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    return !window.dispatchEvent(event);
+  });
+  expect(prevented).toBe(true);
+});
+
+test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: {
+        document: documentItem,
+        comments: [
+          {
+            ...comments[0],
+            id: "new-comment",
+            acknowledged_at: null,
+            acknowledged_by: null,
+            acknowledged_by_emails: [],
+            unacknowledged_by_emails: [],
+            action_actor_counts: { acknowledge: [], unacknowledge: [] },
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const thread = page.locator('[data-comment-context="new-comment"]');
+  await expect(thread.locator(".thread-status")).toHaveText("対応待ち");
+  await expect(thread.locator(".comment-action-count")).toHaveText(["0", "0"]);
+  await expect(
+    thread.getByRole("button", { name: /確認済み/ }),
+  ).not.toHaveClass(/is-acted-by-me/);
+});
+
+test("IM-1: 認証付き画像を取得してPreviewへBlob表示する", async ({ page }) => {
+  await mockAdminApi(page);
+  const assetId = "11111111-1111-4111-8111-111111111111";
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: {
+        document: {
+          ...documentItem,
+          body: `## 図\n\n![群の図](asset://${assetId})`,
+        },
+        comments,
+      },
+    });
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/assets",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          assets: [
+            {
+              id: assetId,
+              filename: "group.gif",
+              mediaType: "image/gif",
+              bytes: 34,
+              alt: "群の図",
+              latexName: "group-diagram",
+              createdAt: "2026-08-20T00:00:00.000Z",
+              marker: `asset://${assetId}`,
+            },
+          ],
+        },
+      });
+    },
+  );
+  await page.route(`**/api/admin/editor/assets/${assetId}`, async (route) => {
+    await route.fulfill({
+      contentType: "image/gif",
+      body: Buffer.from(
+        "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+        "base64",
+      ),
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const previewImage = page
+    .locator("[data-preview]")
+    .locator(`[data-editorial-asset="${assetId}"]`);
+  await expect(previewImage).toHaveAttribute("src", /^blob:/);
+  await expect
+    .poll(() =>
+      previewImage.evaluate((image: HTMLImageElement) => image.naturalWidth),
+    )
+    .toBe(1);
+  await expect(page.locator("[data-media-status]")).toHaveText("1件の素材");
+});
+
+test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功する", async ({
+  page,
+}) => {
+  const documentId = "22222222-2222-4222-8222-222222222222";
+  const assetId = "33333333-3333-4333-8333-333333333333";
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64",
+  );
+  let savedDocument: typeof documentItem | null = null;
+  let assets: Array<Record<string, unknown>> = [];
+  let deleteSucceeded = false;
+  await page.route("**/api/admin/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/admin/editor/documents") {
+      if (request.method() === "POST") {
+        const payload = request.postDataJSON();
+        savedDocument = {
+          ...documentItem,
+          ...payload,
+          id: documentId,
+          source_article_id: null,
+          concept_id: payload.conceptId,
+          writing_memo: payload.writingMemo,
+          latex_engine: payload.latexEngine,
+        };
+        await route.fulfill({
+          status: 201,
+          json: { ok: true, id: documentId },
+        });
+      } else
+        await route.fulfill({
+          json: {
+            documents: savedDocument ? [savedDocument] : [],
+            mentionNames: [],
+            scope: {
+              email: "alice@example.com",
+              subjects: ["mathematics"],
+              isManager: true,
+            },
+          },
+        });
+      return;
+    }
+    if (url.pathname === `/api/admin/editor/documents/${documentId}`) {
+      if (request.method() === "PATCH") {
+        const payload = request.postDataJSON();
+        savedDocument = { ...savedDocument!, ...payload, body: payload.body };
+        await route.fulfill({ json: { ok: true } });
+      } else
+        await route.fulfill({
+          json: { document: savedDocument, comments: [] },
+        });
+      return;
+    }
+    if (url.pathname === `/api/admin/editor/documents/${documentId}/assets`) {
+      if (request.method() === "POST") {
+        assets = [
+          {
+            id: assetId,
+            filename: "diagram.png",
+            mediaType: "image/png",
+            bytes: png.byteLength,
+            alt: "図",
+            latexName: "diagram",
+            createdAt: "2026-08-21T00:00:00.000Z",
+            marker: `asset://${assetId}`,
+          },
+        ];
+        await route.fulfill({ status: 201, json: { asset: assets[0] } });
+      } else await route.fulfill({ json: { assets } });
+      return;
+    }
+    if (url.pathname === `/api/admin/editor/assets/${assetId}`) {
+      if (request.method() === "DELETE") {
+        if (savedDocument?.body.includes(`asset://${assetId}`)) {
+          await route.fulfill({
+            status: 409,
+            json: {
+              error:
+                "本文から画像参照を削除して原稿を保存してから、素材を削除してください。",
+            },
+          });
+        } else {
+          assets = [];
+          deleteSucceeded = true;
+          await route.fulfill({ json: { ok: true } });
+        }
+      } else
+        await route.fulfill({
+          contentType: "image/png",
+          body: png,
+        });
+      return;
+    }
+    if (url.pathname === "/api/admin/personal-workspace") {
+      await route.fulfill({ json: { privateNote: "", updatedAt: null } });
+      return;
+    }
+    if (url.pathname.endsWith("/revisions")) {
+      await route.fulfill({ json: { revisions: [] } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: "Not found" } });
+  });
+
+  await page.goto("./admin/editor/?new=1");
+  await page.locator('[name="title"]').fill("画像フローのテスト");
+  await page.locator('[name="summary"]').fill("画像の一連操作を確認します。");
+  await page.locator('[name="slug"]').fill("image-flow-test");
+  await page
+    .locator('[name="conceptId"]')
+    .fill("math.group-theory.image-flow-test");
+  await page.locator("[data-body]").fill("## 画像");
+  await page.locator("[data-save-document]").click();
+  await page
+    .locator("[data-progress-dialog]")
+    .getByRole("button", { name: "編集を続ける" })
+    .click();
+
+  await page.locator('[data-pane-tab="media"]').click();
+  await page.locator("[data-media-alt]").fill("図");
+  await page.locator("[data-media-input]").setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
+  await expect(page.locator(".media-item-name b")).toHaveText("diagram.png");
+  const previewImage = page
+    .locator(`[data-editorial-asset="${assetId}"]`)
+    .last();
+  await expect(previewImage).toHaveAttribute("src", /^blob:/);
+
+  await page.locator("[data-save-document]").click();
+  await page
+    .locator("[data-progress-dialog]")
+    .getByRole("button", { name: "編集を続ける" })
+    .click();
+  await page.locator("[data-body]").fill("## 画像\n\n画像参照を削除しました。");
+  await page.locator("[data-save-document]").click();
+  await page
+    .locator("[data-progress-dialog]")
+    .getByRole("button", { name: "編集を続ける" })
+    .click();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "削除", exact: true }).click();
+  await expect(page.locator("[data-media-status]")).toHaveText(
+    "素材はまだありません",
+  );
+  await expect(page.locator(".media-item")).toHaveCount(0);
+  expect(deleteSucceeded).toBe(true);
+});
+
+test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
   await mockAdminApi(page);
@@ -118,17 +793,15 @@ test("E-1〜E-5/E-13: 全5枠をボタンで切り替え、四辺移動とライ
     "true",
   );
 
-  await page.locator('[data-pane-tab="memo"]').click();
   await page.locator('[data-pane-tab="media"]').click();
-  await expect(page.locator(".editor-split > section:visible")).toHaveCount(5);
-  for (const pane of ["writing", "preview", "media", "review", "memo"]) {
+  await expect(page.locator(".editor-split > section:visible")).toHaveCount(4);
+  for (const pane of ["writing", "preview", "media", "review"]) {
     await expect(
       page.locator(`[data-editor-pane="${pane}"] [data-pane-edge]`),
     ).toHaveCount(4);
   }
-  await expect(
-    page.locator('[data-editor-pane="memo"] [data-edge="top"]'),
-  ).toHaveAttribute("aria-label", "メモ枠を上へ移動");
+  await expect(page.locator('[data-pane-tab="memo"]')).toHaveCount(0);
+  await expect(page.locator(".memo-area")).toHaveCount(0);
 
   const popupPromise = page.waitForEvent("popup");
   await page.locator('[data-pane-popout="writing"]').click();
@@ -149,9 +822,9 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   const thread = page.locator('[data-comment-context="comment-1"]');
   await expect(
     thread.getByRole("button", { name: "✓ 確認済み" }),
-  ).toBeDisabled();
-  await expect(thread).not.toContainText("人・");
-  await expect(thread).not.toContainText("・自分");
+  ).toBeEnabled();
+  await expect(thread.locator(".comment-action-count").first()).toHaveText("1");
+  await expect(thread.locator(".comment-action-count").nth(1)).toHaveText("1");
   await expect(thread.locator(".comment-action-actor-list")).toHaveCount(0);
 
   await thread.click({ button: "right" });

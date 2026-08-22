@@ -2,14 +2,24 @@ import {
   EDITORIAL_ASSET_ID_PATTERN,
   EDITORIAL_IMAGE_TYPES,
   MAX_EDITORIAL_ASSET_BYTES,
+  editorialAssetIsReferenced,
   editorialAssetIdsIn,
   editorialLatexNamesIn,
   replaceEditorialAssetMarkers,
   replaceEditorialLatexReferences,
   sanitizeEditorialFilename,
   sanitizeEditorialLatexName,
+  uniqueEditorialFilename,
   type EditorialImageType,
 } from "./lib/editorial-media";
+
+import { isAdminPagePath } from "./lib/admin-routes";
+import {
+  isValidTimeZone,
+  localDateTimeToEpoch,
+  reminderBeforeDue,
+} from "./lib/date-time";
+import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
@@ -409,49 +419,16 @@ const normalizeInstitution = (value: unknown) => {
   return known ?? normalized;
 };
 
-const validTimeZone = (value: string) => {
-  try {
-    new Intl.DateTimeFormat("ja-JP", { timeZone: value }).format();
-    return true;
-  } catch {
-    return false;
-  }
-};
+const validTimeZone = isValidTimeZone;
 
 // datetime-localは選択したタイムゾーンの壁時計時刻として保存する。
 // Workerの実行環境のタイムゾーンに依存しないよう、ここでepochへ変換する。
 const wallTimeToEpoch = (value: string, timeZone: string) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match || !validTimeZone(timeZone)) return Number.NaN;
-  const [year, month, day, hour, minute] = match.slice(1).map(Number);
-  const wall = Date.UTC(year, month - 1, day, hour, minute);
-  let guess = wall;
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const parts = Object.fromEntries(
-      formatter
-        .formatToParts(new Date(guess))
-        .filter((part) => part.type !== "literal")
-        .map((part) => [part.type, part.value]),
-    );
-    const represented = Date.UTC(
-      Number(parts.year),
-      Number(parts.month) - 1,
-      Number(parts.day),
-      Number(parts.hour),
-      Number(parts.minute),
-    );
-    guess = wall - (represented - guess);
+  try {
+    return localDateTimeToEpoch(value, timeZone);
+  } catch {
+    return Number.NaN;
   }
-  return guess;
 };
 
 type TaskReminderRowInput = {
@@ -463,23 +440,6 @@ type TaskReminderRowInput = {
   relativeAmount: number | null;
   relativeUnit: "days" | "hours" | null;
   relativeStart: string | null;
-};
-
-const shiftReminderWallTime = (value: string, minutes: number) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return "";
-  return new Date(
-    Date.UTC(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5]),
-    ) +
-      minutes * 60_000,
-  )
-    .toISOString()
-    .slice(0, 16);
 };
 
 const hourlyReminderWallTimes = (dueAt: string, start: string) => {
@@ -525,21 +485,27 @@ const reminderInputRows = (
           error:
             "期限基準のリマインダーには、期限・正しい数量・単位が必要です。",
         };
-      const remindAt = shiftReminderWallTime(
-        dueAt,
-        -amount * (unit === "days" ? 24 * 60 : 60),
-      );
-      if (wallTimeToEpoch(remindAt, dueTimezone) > Date.now())
-        rows.push({
-          remindAt,
-          timezone: dueTimezone,
-          label: `${amount}${unit === "days" ? "日前" : "時間前"}`,
-          repeat: "none",
-          relativeKind: "before",
-          relativeAmount: amount,
-          relativeUnit: unit,
-          relativeStart: null,
-        });
+      let remindAt = "";
+      try {
+        remindAt = reminderBeforeDue(dueAt, dueTimezone, amount, unit);
+      } catch {
+        return {
+          error:
+            "期限またはリマインダー日時が存在しない時刻です。タイムゾーンを確認してください。",
+        };
+      }
+      if (wallTimeToEpoch(remindAt, dueTimezone) <= Date.now())
+        return { error: "リマインダー日時は現在より後にしてください。" };
+      rows.push({
+        remindAt,
+        timezone: dueTimezone,
+        label: `${amount}${unit === "days" ? "日前" : "時間前"}`,
+        repeat: "none",
+        relativeKind: "before",
+        relativeAmount: amount,
+        relativeUnit: unit,
+        relativeStart: null,
+      });
       continue;
     }
     if (kind === "due_day_hourly") {
@@ -555,29 +521,39 @@ const reminderInputRows = (
       const times = hourlyReminderWallTimes(dueAt, start);
       if (!times.length)
         return { error: "当日毎時の開始時刻は期限時刻より前にしてください。" };
+      const futureTimes = times.filter(
+        (remindAt) => wallTimeToEpoch(remindAt, dueTimezone) > Date.now(),
+      );
+      if (!futureTimes.length)
+        return { error: "未来のリマインダー日時を設定してください。" };
       rows.push(
-        ...times
-          .filter(
-            (remindAt) => wallTimeToEpoch(remindAt, dueTimezone) > Date.now(),
-          )
-          .map((remindAt) => ({
-            remindAt,
-            timezone: dueTimezone,
-            label: `期限当日の毎時（${start}から）`,
-            repeat: "none",
-            relativeKind: "due_day_hourly" as const,
-            relativeAmount: null,
-            relativeUnit: null,
-            relativeStart: start,
-          })),
+        ...futureTimes.map((remindAt) => ({
+          remindAt,
+          timezone: dueTimezone,
+          label: `期限当日の毎時（${start}から）`,
+          repeat: "none",
+          relativeKind: "due_day_hourly" as const,
+          relativeAmount: null,
+          relativeUnit: null,
+          relativeStart: start,
+        })),
       );
       continue;
     }
     const remindAt = text(item.remindAt, 32);
     if (!remindAt) continue;
+    const timezone = text(item.timezone, 80) || dueTimezone;
+    const epoch = wallTimeToEpoch(remindAt, timezone);
+    if (!Number.isFinite(epoch))
+      return {
+        error:
+          "リマインダー日時が存在しない時刻です。タイムゾーンを確認してください。",
+      };
+    if (epoch <= Date.now())
+      return { error: "リマインダー日時は現在より後にしてください。" };
     rows.push({
       remindAt,
-      timezone: text(item.timezone, 80) || dueTimezone,
+      timezone,
       label: text(item.label, 120),
       repeat: text(item.repeat, 12) || "none",
       relativeKind: "absolute",
@@ -587,44 +563,6 @@ const reminderInputRows = (
     });
   }
   return { rows };
-};
-
-const nextReminderWallTime = (
-  value: string,
-  repeat: string,
-  timeZone: string,
-): string | null => {
-  if (
-    !["daily", "weekly", "monthly"].includes(repeat) ||
-    !validTimeZone(timeZone)
-  )
-    return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return null;
-  const next = new Date(
-    Date.UTC(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5]),
-    ),
-  );
-  if (repeat === "daily") next.setUTCDate(next.getUTCDate() + 1);
-  if (repeat === "weekly") next.setUTCDate(next.getUTCDate() + 7);
-  if (repeat === "monthly") {
-    const day = next.getUTCDate();
-    next.setUTCDate(1);
-    next.setUTCMonth(next.getUTCMonth() + 1);
-    const lastDay = new Date(
-      Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
-    ).getUTCDate();
-    next.setUTCDate(Math.min(day, lastDay));
-  }
-  const wall = next.toISOString().slice(0, 16);
-  return wallTimeToEpoch(wall, timeZone) > Date.now()
-    ? wall
-    : nextReminderWallTime(wall, repeat, timeZone);
 };
 
 type AdminScope = {
@@ -638,8 +576,13 @@ const cookieValue = (request: Request, name: string) => {
   const prefix = `${name}=`;
   for (const item of (request.headers.get("cookie") ?? "").split(";")) {
     const value = item.trim();
-    if (value.startsWith(prefix))
-      return decodeURIComponent(value.slice(prefix.length));
+    if (value.startsWith(prefix)) {
+      try {
+        return decodeURIComponent(value.slice(prefix.length));
+      } catch {
+        return "";
+      }
+    }
   }
   return "";
 };
@@ -799,6 +742,7 @@ async function listArticleReports(
     reports: result.results.map((report) => ({
       ...report,
       contact: scope.isManager ? report.contact : null,
+      can_manage: scope.allSubjects || scope.subjects.includes(report.subject),
     })),
   });
 }
@@ -816,23 +760,17 @@ async function listArticleAnalytics(
   const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
     .toISOString()
     .slice(0, 10);
-  const filters = ["day >= ?"];
-  const values: unknown[] = [since];
-  if (!scope.allSubjects) {
-    filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
-    values.push(...scope.subjects);
-  }
   const result = await env.REPORTS.prepare(
     `SELECT article_id, MAX(article_title) AS article_title, subject, category,
         SUM(views) AS views, SUM(engaged_reads) AS engaged_reads,
         SUM(completed_reads) AS completed_reads
      FROM article_analytics_daily
-     WHERE ${filters.join(" AND ")}
+     WHERE day >= ?
      GROUP BY article_id, subject, category
      ORDER BY completed_reads DESC, engaged_reads DESC, views DESC, article_title ASC
      LIMIT 50`,
   )
-    .bind(...values)
+    .bind(since)
     .all<ArticleAnalytics>();
   return json({ days, articles: result.results });
 }
@@ -869,7 +807,7 @@ async function listSearchConsoleQueryStats(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const snapshot = await env.REPORTS.prepare(
     `SELECT snapshot_id, start_date, end_date, MAX(fetched_at) AS fetched_at
@@ -1579,17 +1517,20 @@ async function uploadEditorialAsset(
   if (!imageSignatureMatches(data, mediaType))
     return json({ error: "画像の形式を確認できませんでした。" }, 415);
   const id = crypto.randomUUID();
-  const filename = sanitizeEditorialFilename(file.name, mediaType);
-  const alt = text(form.get("alt"), 180);
-  const latexName = sanitizeEditorialLatexName(
-    text(form.get("latexName"), 120),
-    filename,
-  );
   const existingNames = await env.REPORTS.prepare(
     "SELECT id, filename, latex_name FROM editorial_assets WHERE document_id = ?",
   )
     .bind(documentId)
     .all<{ id: string; filename: string; latex_name: string }>();
+  const filename = uniqueEditorialFilename(
+    sanitizeEditorialFilename(file.name, mediaType),
+    existingNames.results.map((asset) => asset.filename),
+  );
+  const alt = text(form.get("alt"), 180);
+  const latexName = sanitizeEditorialLatexName(
+    text(form.get("latexName"), 120),
+    filename,
+  );
   const duplicateName = existingNames.results.some(
     (asset) =>
       (
@@ -1670,13 +1611,17 @@ async function deleteEditorialAsset(
   const latexName =
     asset.latex_name || sanitizeEditorialLatexName("", asset.filename);
   if (
-    asset.body.includes(`asset://${asset.id}`) ||
-    editorialLatexNamesIn(asset.body).includes(latexName.toLowerCase())
+    editorialAssetIsReferenced(asset.body, {
+      id: asset.id,
+      documentId: asset.document_id,
+      filename: asset.filename,
+      latexName,
+    })
   )
     return json(
       {
         error:
-          "本文で使用中の素材は削除できません。先に本文から参照を外してください。",
+          "本文で使用中の素材は削除できません。本文から画像参照を削除して原稿を保存してから、素材を削除してください。",
       },
       409,
     );
@@ -2352,7 +2297,7 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
   if (isResponse(scope)) return scope;
   const [profile, discord] = await Promise.all([
     env.REPORTS.prepare(
-      "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, updated_at FROM editorial_member_profiles WHERE email = ?",
+      "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, affiliation_type, country, timezone, updated_at FROM editorial_member_profiles WHERE email = ?",
     )
       .bind(scope.email)
       .first<{
@@ -2363,6 +2308,9 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
         university: string;
         year: string;
         interests: string;
+        affiliation_type: string;
+        country: string;
+        timezone: string;
         updated_at: string;
       }>(),
     env.REPORTS.prepare(
@@ -2576,15 +2524,50 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  // 表示名・所属・学年・担当分野は全分野管理者の管理画面で一元管理する。
-  // 個人ページから変更できるのは本人のプロフィール画像だけに限定する。
-  let payload: { avatarUrl?: unknown };
+  let payload: {
+    avatarUrl?: unknown;
+    displayName?: unknown;
+    university?: unknown;
+    year?: unknown;
+    affiliationType?: unknown;
+    country?: unknown;
+    timezone?: unknown;
+    bio?: unknown;
+  };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const avatarUrl = text(payload.avatarUrl, 3_000_000);
+  const current = await env.REPORTS.prepare(
+    "SELECT display_name,bio,avatar_url,university,year,affiliation_type,country,timezone FROM editorial_member_profiles WHERE email=?",
+  )
+    .bind(scope.email)
+    .first<Record<string, string>>();
+  const sent = (key: keyof typeof payload) =>
+    Object.prototype.hasOwnProperty.call(payload, key);
+  const avatarUrl = sent("avatarUrl")
+    ? text(payload.avatarUrl, 3_000_000)
+    : (current?.avatar_url ?? "");
+  const displayName = sent("displayName")
+    ? text(payload.displayName, 120)
+    : (current?.display_name ?? "");
+  const university = sent("university")
+    ? text(payload.university, 160)
+    : (current?.university ?? "");
+  const year = sent("year") ? text(payload.year, 80) : (current?.year ?? "");
+  const affiliationType = sent("affiliationType")
+    ? text(payload.affiliationType, 80)
+    : (current?.affiliation_type ?? "");
+  const country = sent("country")
+    ? text(payload.country, 100)
+    : (current?.country ?? "");
+  const timezone = sent("timezone")
+    ? text(payload.timezone, 80) || "Asia/Tokyo"
+    : (current?.timezone ?? "Asia/Tokyo");
+  const bio = sent("bio") ? text(payload.bio, 2_000) : (current?.bio ?? "");
+  if (!validTimeZone(timezone))
+    return json({ error: "タイムゾーンを正しく選択してください。" }, 400);
   if (
     avatarUrl &&
     ((!/^https:\/\//i.test(avatarUrl) &&
@@ -2603,10 +2586,26 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   const updatedAt = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
-      `INSERT INTO editorial_member_profiles (email, avatar_url, updated_at) VALUES (?, ?, ?)
-      ON CONFLICT(email) DO UPDATE SET avatar_url=excluded.avatar_url,updated_at=excluded.updated_at`,
+      `INSERT INTO editorial_member_profiles
+       (email, display_name, bio, avatar_url, university, year, affiliation_type, country, timezone, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email) DO UPDATE SET
+       display_name=excluded.display_name,bio=excluded.bio,avatar_url=excluded.avatar_url,
+       university=excluded.university,year=excluded.year,affiliation_type=excluded.affiliation_type,
+       country=excluded.country,timezone=excluded.timezone,updated_at=excluded.updated_at`,
     )
-      .bind(scope.email, avatarUrl, updatedAt)
+      .bind(
+        scope.email,
+        displayName,
+        bio,
+        avatarUrl,
+        university,
+        year,
+        affiliationType,
+        country,
+        timezone,
+        updatedAt,
+      )
       .run();
   } catch {
     return json(
@@ -2625,6 +2624,7 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
     `SELECT a.id,a.name,a.email,a.family_name,a.given_name,a.middle_name,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
+      a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
       a.desired_subjects,a.article_ideas,a.availability_note,a.provisioning_status,a.provisioning_error,a.provisioned_at,a.accepted_by,
       COALESCE(d.discord_user_id, '') AS verified_discord_user_id
      FROM atlasez_member_applications a
@@ -2900,7 +2900,7 @@ async function operationsOverview(
   const taskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
   const reminderRows = taskRows.length
     ? await env.REPORTS.prepare(
-        `SELECT id,task_id,remind_at,timezone,label,notified_at,relative_kind,relative_amount,relative_unit,relative_start
+        `SELECT id,task_id,remind_at,remind_at_utc,timezone,label,notified_at,relative_kind,relative_amount,relative_unit,relative_start
          FROM editorial_task_reminders
          WHERE task_id IN (${taskRows.map(() => "?").join(",")})
          ORDER BY remind_at ASC`,
@@ -2932,6 +2932,14 @@ async function operationsOverview(
     project,
     tasks: taskRows.map((task) => ({
       ...task,
+      reminder_email:
+        scope.isManager ||
+        String(task.created_by ?? "").toLowerCase() ===
+          scope.email.toLowerCase() ||
+        String(task.assignee_email ?? "").toLowerCase() ===
+          scope.email.toLowerCase()
+          ? task.reminder_email
+          : null,
       reminders: remindersByTask.get(String(task.id)) ?? [],
     })),
     availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
@@ -3078,8 +3086,22 @@ async function createOperation(
       return json({ error: "期限はカレンダーから指定してください。" }, 400);
     if (dueAt && !validTimeZone(dueTimezone))
       return json({ error: "期限のタイムゾーンを確認してください。" }, 400);
+    if (dueAt && !Number.isFinite(wallTimeToEpoch(dueAt, dueTimezone)))
+      return json({ error: "期限が存在しない日時です。" }, 400);
     if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
       return json({ error: "通知先メールアドレスを確認してください。" }, 400);
+    if (
+      reminderEmail &&
+      reminderEmail !== scope.email &&
+      reminderEmail !== (assignee ?? "").toLowerCase()
+    )
+      return json(
+        {
+          error:
+            "リマインダーの通知先は担当者または自分のメールアドレスにしてください。",
+        },
+        403,
+      );
     if (
       !new Set(["none", "once", "daily", "weekly", "monthly"]).has(
         reminderRepeat,
@@ -3098,6 +3120,10 @@ async function createOperation(
           { error: "リマインダー日時またはタイムゾーンを確認してください。" },
           400,
         );
+      if (
+        !Number.isFinite(wallTimeToEpoch(reminder.remindAt, reminder.timezone))
+      )
+        return json({ error: "リマインダーが存在しない日時です。" }, 400);
     }
     if (reminderRows.length > 1 && reminderRepeat !== "none")
       return json(
@@ -3110,10 +3136,10 @@ async function createOperation(
     const taskId = crypto.randomUUID();
     const singleRepeatingReminder =
       reminderRows.length === 1 && reminderRepeat !== "none";
-    await env.REPORTS.prepare(
-      "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?,?,?)",
-    )
-      .bind(
+    const taskStatements = [
+      env.REPORTS.prepare(
+        "INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,'open',?,?,?,?,?,?,?,?)",
+      ).bind(
         taskId,
         project.id,
         subject,
@@ -3132,27 +3158,28 @@ async function createOperation(
         scope.email,
         now,
         now,
-      )
-      .run();
-    if (reminderRows.length)
-      await env.REPORTS.batch(
-        reminderRows.map((reminder) =>
-          env.REPORTS.prepare(
-            "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-          ).bind(
-            crypto.randomUUID(),
-            taskId,
-            reminder.remindAt,
-            reminder.timezone,
-            reminder.label,
-            reminder.relativeKind,
-            reminder.relativeAmount,
-            reminder.relativeUnit,
-            reminder.relativeStart,
-            now,
-          ),
+      ),
+      ...reminderRows.map((reminder) =>
+        env.REPORTS.prepare(
+          "INSERT INTO editorial_task_reminders (id,task_id,remind_at,remind_at_utc,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ).bind(
+          crypto.randomUUID(),
+          taskId,
+          reminder.remindAt,
+          new Date(
+            wallTimeToEpoch(reminder.remindAt, reminder.timezone),
+          ).toISOString(),
+          reminder.timezone,
+          reminder.label,
+          reminder.relativeKind,
+          reminder.relativeAmount,
+          reminder.relativeUnit,
+          reminder.relativeStart,
+          now,
         ),
-      );
+      ),
+    ];
+    await env.REPORTS.batch(taskStatements);
     return json({ ok: true });
   }
   const title = text(payload.title, 200);
@@ -3236,6 +3263,18 @@ async function updateTask(
     const reminderEmail = text(payload.reminderEmail, 254).toLowerCase();
     if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
       return json({ error: "通知先メールアドレスを確認してください。" }, 400);
+    if (
+      reminderEmail &&
+      reminderEmail !== scope.email &&
+      reminderEmail !== (task.assignee_email ?? "").toLowerCase()
+    )
+      return json(
+        {
+          error:
+            "リマインダーの通知先は担当者または自分のメールアドレスにしてください。",
+        },
+        403,
+      );
     const reminderRowsResult = reminderInputRows(
       Array.isArray(payload.reminders) ? payload.reminders : [],
       task.due_at ?? "",
@@ -3256,6 +3295,10 @@ async function updateTask(
           { error: "リマインダー日時またはタイムゾーンを確認してください。" },
           400,
         );
+      if (
+        !Number.isFinite(wallTimeToEpoch(reminder.remindAt, reminder.timezone))
+      )
+        return json({ error: "リマインダーが存在しない日時です。" }, 400);
     }
     const statements = [
       env.REPORTS.prepare(
@@ -3280,11 +3323,14 @@ async function updateTask(
     statements.push(
       ...reminderRows.map((reminder) =>
         env.REPORTS.prepare(
-          "INSERT INTO editorial_task_reminders (id,task_id,remind_at,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO editorial_task_reminders (id,task_id,remind_at,remind_at_utc,timezone,label,relative_kind,relative_amount,relative_unit,relative_start,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         ).bind(
           crypto.randomUUID(),
           taskId,
           reminder.remindAt,
+          new Date(
+            wallTimeToEpoch(reminder.remindAt, reminder.timezone),
+          ).toISOString(),
           reminder.timezone,
           reminder.label,
           reminder.relativeKind,
@@ -3467,6 +3513,14 @@ async function submitMemberApplication(
     desiredSubjects?: unknown;
     articleIdeas?: unknown;
     availabilityNote?: unknown;
+    birthDate?: unknown;
+    residenceCity?: unknown;
+    currentOrganizations?: unknown;
+    referralSource?: unknown;
+    motivationReasons?: unknown;
+    desiredRoles?: unknown;
+    interviewAvailability?: unknown;
+    applicantQuestions?: unknown;
   };
   try {
     payload = (await request.json()) as typeof payload;
@@ -3501,7 +3555,15 @@ async function submitMemberApplication(
   const country = normalizedText(payload.country, 100),
     timezone = normalizedText(payload.timezone, 80),
     articleIdeas = text(payload.articleIdeas, 3_000),
-    availabilityNote = text(payload.availabilityNote, 1_000);
+    availabilityNote = text(payload.availabilityNote, 1_000),
+    birthDate = text(payload.birthDate, 10),
+    residenceCity = normalizedText(payload.residenceCity, 160),
+    currentOrganizations = text(payload.currentOrganizations, 1_000),
+    referralSource = text(payload.referralSource, 500),
+    motivationReasons = text(payload.motivationReasons, 3_000),
+    desiredRoles = text(payload.desiredRoles, 2_000),
+    interviewAvailability = text(payload.interviewAvailability, 2_000),
+    applicantQuestions = text(payload.applicantQuestions, 3_000);
   const desiredSubjectSlugs = [
     ...new Set(
       Array.isArray(payload.desiredSubjects)
@@ -3522,6 +3584,12 @@ async function submitMemberApplication(
     !country ||
     !timezone ||
     !articleIdeas ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
+    !residenceCity ||
+    !referralSource ||
+    !motivationReasons ||
+    !desiredRoles ||
+    !interviewAvailability ||
     !desiredSubjectSlugs.length
   )
     return json(
@@ -3609,7 +3677,9 @@ async function submitMemberApplication(
     );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
-    "INSERT INTO atlasez_member_applications (id,name,email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note) VALUES (?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,'',?)",
+    `INSERT INTO atlasez_member_applications
+     (id,name,email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -3633,6 +3703,14 @@ async function submitMemberApplication(
       desiredSubjectSlugs.join(","),
       articleIdeas,
       availabilityNote,
+      birthDate,
+      residenceCity,
+      currentOrganizations,
+      referralSource,
+      motivationReasons,
+      desiredRoles,
+      interviewAvailability,
+      applicantQuestions,
     )
     .run();
   // 応募は個人情報を含むため、Discordへは一切転送しない。運営内運営が管理画面でのみ閲覧する。
@@ -4257,10 +4335,11 @@ async function listEditorialReviewRequests(
   const reviewerFilter = scope.allSubjects
     ? ""
     : ` WHERE p.subject = '*' OR p.subject IN (${scope.subjects.map(() => "?").join(",")})`;
+  const subjectValues = scope.allSubjects ? [] : scope.subjects;
   const [result, reviewerResult] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
-         r.reviewer_email,
+         r.reviewer_email, r.request_note,
          COALESCE(NULLIF(TRIM(requester.display_name), ''), '表示名未設定') AS requester_display_name,
          COALESCE(NULLIF(TRIM(reviewer.display_name), ''), '') AS reviewer_display_name
        FROM editorial_documents d
@@ -4271,7 +4350,7 @@ async function listEditorialReviewRequests(
        ORDER BY CASE WHEN lower(r.reviewer_email) = lower(?) THEN 0 WHEN r.reviewer_email IS NULL THEN 2 ELSE 1 END,
                 d.updated_at ASC LIMIT 100`,
     )
-      .bind(scope.email, ...scope.subjects)
+      .bind(scope.email, ...subjectValues)
       .all<{
         id: string;
         subject: string;
@@ -4282,6 +4361,7 @@ async function listEditorialReviewRequests(
         reviewer_email: string | null;
         requester_display_name: string;
         reviewer_display_name: string;
+        request_note: string;
       }>(),
     env.REPORTS.prepare(
       `SELECT p.email,
@@ -4292,13 +4372,16 @@ async function listEditorialReviewRequests(
        GROUP BY p.email, m.display_name
        ORDER BY display_name, p.email`,
     )
-      .bind(...scope.subjects)
+      .bind(...subjectValues)
       .all<{ email: string; display_name: string; subjects: string | null }>(),
   ]);
   return json({
     requests: (result.results ?? []).map((item) => ({
       ...item,
-      reviewerDisplayName: item.reviewer_display_name || "表示名未設定",
+      reviewerDisplayName:
+        item.reviewer_email === "*"
+          ? "分野担当者全員"
+          : item.reviewer_display_name || "表示名未設定",
       assignedToMe:
         item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
     })),
@@ -4319,7 +4402,7 @@ async function updateEditorialReviewAssignment(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { reviewerEmail?: unknown };
+  let payload: { reviewerEmail?: unknown; note?: unknown };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -4336,6 +4419,7 @@ async function updateEditorialReviewAssignment(
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の査読権限がありません。" }, 403);
   const reviewerEmail = text(payload.reviewerEmail, 320).toLowerCase();
+  const requestNote = text(payload.note, 2_000);
   if (!reviewerEmail) {
     await env.REPORTS.prepare(
       "DELETE FROM editorial_review_assignments WHERE document_id = ?",
@@ -4344,16 +4428,19 @@ async function updateEditorialReviewAssignment(
       .run();
     return json({ ok: true, reviewerEmail: null });
   }
-  if (!EMAIL_PATTERN.test(reviewerEmail))
+  if (reviewerEmail !== "*" && !EMAIL_PATTERN.test(reviewerEmail))
     return json(
       { error: "査読担当者のメールアドレスを確認してください。" },
       400,
     );
-  const reviewer = await env.REPORTS.prepare(
-    "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
-  )
-    .bind(reviewerEmail, document.subject)
-    .first<{ found: number }>();
+  const reviewer =
+    reviewerEmail === "*"
+      ? { found: 1 }
+      : await env.REPORTS.prepare(
+          "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
+        )
+          .bind(reviewerEmail, document.subject)
+          .first<{ found: number }>();
   if (!reviewer)
     return json(
       { error: "この原稿の分野を担当できる運営者を選択してください。" },
@@ -4361,12 +4448,12 @@ async function updateEditorialReviewAssignment(
     );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
-    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
-       requested_by = excluded.requested_by, updated_at = excluded.updated_at`,
+       requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note`,
   )
-    .bind(documentId, reviewerEmail, scope.email, now, now)
+    .bind(documentId, reviewerEmail, scope.email, now, now, requestNote)
     .run();
   return json({ ok: true, reviewerEmail });
 }
@@ -4482,8 +4569,26 @@ async function updateEditorialCommentStatus(
   if (
     (action === "acknowledge" || action === "unacknowledge") &&
     latestAction?.action === action
-  )
-    return json({ ok: true, action, actorEmail: scope.email, unchanged: true });
+  ) {
+    const statements = [
+      env.REPORTS.prepare(
+        "DELETE FROM editorial_comment_actions WHERE comment_id = ? AND lower(actor_email) = lower(?) AND action IN ('acknowledge','unacknowledge')",
+      ).bind(commentId, scope.email),
+    ];
+    if (action === "acknowledge")
+      statements.push(
+        env.REPORTS.prepare(
+          "UPDATE editorial_comments SET acknowledged_at = NULL, acknowledged_by = NULL WHERE id = ? AND lower(acknowledged_by) = lower(?)",
+        ).bind(commentId, scope.email),
+      );
+    await env.REPORTS.batch(statements);
+    return json({
+      ok: true,
+      action,
+      actorEmail: scope.email,
+      toggledOff: true,
+    });
+  }
   const now = new Date().toISOString();
   const stateUpdate =
     action === "acknowledge"
@@ -4918,7 +5023,10 @@ async function writeEditorialDocumentToGitHub(
     return json({ error: "GitHub上の公開先を確認できませんでした。" }, 502);
   const assets = await listEditorialAssetsForDocument(env, document.id);
   const assetsById = new Map(
-    assets.map((asset) => [asset.id.toLowerCase(), asset]),
+    assets.map((asset) => [
+      asset.id.toLowerCase(),
+      { ...asset, documentId: asset.document_id },
+    ]),
   );
   const referencedAssetIds = editorialAssetIdsIn(document.body);
   const missingAsset = referencedAssetIds.find(
@@ -4940,6 +5048,7 @@ async function writeEditorialDocumentToGitHub(
         latexName.toLowerCase(),
         {
           id: asset.id,
+          documentId: asset.document_id,
           filename: asset.filename,
           latexName,
           alt: asset.alt_text,
@@ -5109,49 +5218,29 @@ const googleOAuthConfigured = (env: Env) =>
 const adminReturnPath = (value: string | null) => {
   const fallback = "/admin/reports";
   if (!value) return fallback;
+  const candidate = value.trim();
+  if (
+    !candidate.startsWith("/") ||
+    candidate.startsWith("//") ||
+    candidate.includes("\\")
+  )
+    return fallback;
   let parsed: URL;
   try {
-    parsed = new URL(value, "https://admin.local");
+    parsed = new URL(candidate, "https://admin.local");
   } catch {
     return fallback;
   }
-  const allowedPaths = new Set([
-    "/admin/workspace",
-    "/admin/workspace/",
-    "/admin/portal",
-    "/admin/portal/",
-    "/admin/atlas",
-    "/admin/atlas/",
-    "/admin/semi-platform",
-    "/admin/semi-platform/",
-    "/admin/applications",
-    "/admin/applications/",
-    "/admin/permissions",
-    "/admin/permissions/",
-    "/admin/articles",
-    "/admin/articles/",
-    "/admin/operations",
-    "/admin/operations/",
-    "/admin/review",
-    "/admin/review/",
-    "/admin/reports",
-    "/admin/reports/",
-    "/admin/editor",
-    "/admin/editor/",
-    "/admin/guide",
-    "/admin/guide/",
-    "/admin/introductions",
-    "/admin/introductions/",
-    "/admin/secretariat",
-    "/admin/secretariat/",
-    "/admin/co-working",
-    "/admin/co-working/",
-  ]);
-  if (!allowedPaths.has(parsed.pathname)) return fallback;
+  if (parsed.origin !== "https://admin.local") return fallback;
+  if (!isAdminPagePath(parsed.pathname)) return fallback;
   const project = parsed.searchParams.get("project");
   const keepProject =
     (parsed.pathname === "/admin/operations" ||
       parsed.pathname === "/admin/operations/" ||
+      parsed.pathname === "/admin/calendar" ||
+      parsed.pathname === "/admin/calendar/" ||
+      parsed.pathname === "/admin/manage" ||
+      parsed.pathname === "/admin/manage/" ||
       parsed.pathname === "/admin/co-working" ||
       parsed.pathname === "/admin/co-working/") &&
     (project === "atlas" ||
@@ -5518,22 +5607,93 @@ async function completeGoogleLogin(
 }
 
 async function logoutAdmin(request: Request, env: Env): Promise<Response> {
-  if (googleOAuthEnabled(env)) {
-    const token = cookieValue(request, ADMIN_SESSION_COOKIE);
-    if (token)
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const token = cookieValue(request, ADMIN_SESSION_COOKIE);
+  if (token) {
+    try {
       await env.REPORTS.prepare(
         "DELETE FROM admin_auth_sessions WHERE session_hash = ?",
       )
         .bind(await hash(token))
         .run();
+    } catch {
+      console.error(
+        JSON.stringify({ event: "admin_logout_failed", category: "d1" }),
+      );
+      return json(
+        { error: "ログアウトを完了できませんでした。もう一度お試しください。" },
+        500,
+      );
+    }
   }
-  // 保護ページを経由せず認証入口へ戻す。ログアウト直後に404へ落ちないようにする。
+  const requestUrl = new URL(request.url);
   const headers = new Headers({
-    location: `${adminPublicOrigin(request, env)}/auth/google/login?returnTo=%2Fadmin%2Feditor%2F`,
+    location: cloudflareAccessEnabled(env)
+      ? `${requestUrl.origin}/cdn-cgi/access/logout`
+      : `${requestUrl.origin}/auth/logged-out`,
   });
   headers.append("set-cookie", cookie(ADMIN_SESSION_COOKIE, "", 0));
-  return new Response(null, { status: 302, headers });
+  headers.append(
+    "set-cookie",
+    cookie(GOOGLE_STATE_COOKIE, "", 0, "/auth/google"),
+  );
+  return new Response(null, { status: 303, headers });
 }
+
+async function logoutGoogleSession(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const token = cookieValue(request, ADMIN_SESSION_COOKIE);
+  if (token) {
+    try {
+      await env.REPORTS.prepare(
+        "DELETE FROM admin_auth_sessions WHERE session_hash = ?",
+      )
+        .bind(await hash(token))
+        .run();
+    } catch {
+      console.error(
+        JSON.stringify({
+          event: "admin_google_session_logout_failed",
+          category: "d1",
+        }),
+      );
+      return json(
+        { error: "Googleセッションのログアウトを完了できませんでした。" },
+        500,
+      );
+    }
+  }
+  const headers = new Headers({
+    location: adminReturnPath(
+      new URL(request.url).searchParams.get("returnTo"),
+    ),
+  });
+  headers.append("set-cookie", cookie(ADMIN_SESSION_COOKIE, "", 0));
+  headers.append(
+    "set-cookie",
+    cookie(GOOGLE_STATE_COOKIE, "", 0, "/auth/google"),
+  );
+  return new Response(null, { status: 303, headers });
+}
+
+const loggedOutPage = () =>
+  new Response(
+    '<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ログアウトしました</title><main><h1>ログアウトしました</h1><p>再度利用する場合は、管理サイトへアクセスして認証してください。</p></main></html>',
+    {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "content-security-policy":
+          "default-src 'none'; style-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      },
+    },
+  );
 
 async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
@@ -5562,8 +5722,17 @@ async function adminNotifications(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const profile = await env.REPORTS.prepare(
+    "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
+  )
+    .bind(scope.email)
+    .first<{ display_name: string }>();
+  const mentionNeedle = profile?.display_name?.trim()
+    ? `@${profile.display_name.trim()}`
+    : "";
   const [
     commentRows,
+    mentionRows,
     approvedRows,
     publishedRows,
     reviewRows,
@@ -5581,6 +5750,29 @@ async function adminNotifications(
         document_id: string;
         title: string;
       }>(),
+    mentionNeedle
+      ? env.REPORTS.prepare(
+          "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by != ? AND c.created_by != ? AND instr(c.body, ?) > 0 ORDER BY c.created_at DESC LIMIT 12",
+        )
+          .bind(scope.email, scope.email, mentionNeedle)
+          .all<{
+            id: string;
+            body: string;
+            parent_comment_id: string | null;
+            created_at: string;
+            document_id: string;
+            title: string;
+          }>()
+      : Promise.resolve({
+          results: [] as {
+            id: string;
+            body: string;
+            parent_comment_id: string | null;
+            created_at: string;
+            document_id: string;
+            title: string;
+          }[],
+        }),
     env.REPORTS.prepare(
       "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
     )
@@ -5635,6 +5827,14 @@ async function adminNotifications(
       id: `comment-${item.id}`,
       kind: "comment",
       title: `${item.parent_comment_id ? "コメントに返信" : "記事に新しいコメント"}：${item.title}`,
+      detail: item.body.slice(0, 90),
+      href: `/admin/editor/?document=${encodeURIComponent(item.document_id)}`,
+      updatedAt: item.created_at,
+    })),
+    ...(mentionRows.results ?? []).map((item) => ({
+      id: `mention-${item.id}`,
+      kind: "mention",
+      title: `メンションされました：${item.title}`,
       detail: item.body.slice(0, 90),
       href: `/admin/editor/?document=${encodeURIComponent(item.document_id)}`,
       updatedAt: item.created_at,
@@ -5716,7 +5916,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|approved|published|review|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
+                /^(comment|mention|approved|published|review|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
@@ -5735,110 +5935,6 @@ async function markAdminNotificationsRead(
     ),
   );
   return json({ ok: true });
-}
-
-const emailSafe = (value: string) =>
-  value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        character
-      ] ?? character,
-  );
-
-async function dispatchDueTaskReminders(env: Env) {
-  if (!env.RESEND_API_KEY) return;
-  const rows = await env.REPORTS.prepare(
-    `SELECT r.id AS reminder_id,t.title,t.details,t.due_at,t.due_timezone,
-            r.remind_at,r.timezone,r.label,r.relative_kind,
-            CASE WHEN (SELECT COUNT(*) FROM editorial_task_reminders rr WHERE rr.task_id=r.task_id)=1 THEN COALESCE(t.reminder_repeat,'none') ELSE 'none' END AS repeat,
-            NULLIF(TRIM(t.reminder_email),'') AS recipient_email
-     FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
-     WHERE t.status != 'done' AND NULLIF(TRIM(t.reminder_email),'') IS NOT NULL
-     ORDER BY r.remind_at ASC LIMIT 2000`,
-  ).all<{
-    reminder_id: string;
-    title: string;
-    details: string | null;
-    due_at: string | null;
-    due_timezone: string;
-    remind_at: string;
-    timezone: string;
-    label: string;
-    relative_kind: string;
-    repeat: string;
-    recipient_email: string | null;
-  }>();
-  for (const row of rows.results ?? []) {
-    const reminderEpoch = wallTimeToEpoch(
-      row.remind_at,
-      row.timezone || row.due_timezone,
-    );
-    if (
-      !EMAIL_PATTERN.test(row.recipient_email ?? "") ||
-      !Number.isFinite(reminderEpoch) ||
-      reminderEpoch > Date.now()
-    )
-      continue;
-    const sent = await env.REPORTS.prepare(
-      "SELECT sent_at FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?",
-    )
-      .bind(row.reminder_id, row.recipient_email)
-      .first<{ sent_at: string }>();
-    if (sent) continue;
-    const claimed = (await env.REPORTS.prepare(
-      "INSERT OR IGNORE INTO editorial_task_reminder_deliveries (reminder_id,recipient_email,sent_at) VALUES (?,?,?)",
-    )
-      .bind(row.reminder_id, row.recipient_email, `__pending__:${Date.now()}`)
-      .run()) as { meta?: { changes?: number } };
-    if (!claimed.meta?.changes) continue;
-    const dueLabel = row.due_at
-      ? `${row.due_at.replace("T", " ")} (${row.due_timezone})`
-      : "期限未設定";
-    try {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.RESEND_API_KEY}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          from: env.EMAIL_FROM ?? "Atlasez運営 <onboarding@resend.dev>",
-          to: [row.recipient_email],
-          subject: `ToDoリマインダー：${row.title}`,
-          text: `AtlasezのToDoリマインダーです。\n\n${row.title}\nリマインダー：${row.label || "設定した日時"}\n期限：${dueLabel}${row.details ? `\n\n${row.details}` : ""}`,
-          html: `<h2>ToDoリマインダー</h2><p><b>${emailSafe(row.title)}</b></p><p>リマインダー：${emailSafe(row.label || "設定した日時")}<br>期限：${emailSafe(dueLabel)}</p>${row.details ? `<pre>${emailSafe(row.details)}</pre>` : ""}`,
-        }),
-      });
-      if (!response.ok) throw new Error("メール送信に失敗しました。");
-      const next = nextReminderWallTime(
-        row.remind_at,
-        row.repeat,
-        row.timezone || row.due_timezone,
-      );
-      if (next)
-        await env.REPORTS.batch([
-          env.REPORTS.prepare(
-            "UPDATE editorial_task_reminders SET remind_at=?,notified_at=NULL WHERE id=?",
-          ).bind(next, row.reminder_id),
-          env.REPORTS.prepare(
-            "DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?",
-          ).bind(row.reminder_id, row.recipient_email),
-        ]);
-      else
-        await env.REPORTS.prepare(
-          "UPDATE editorial_task_reminder_deliveries SET sent_at=? WHERE reminder_id=? AND recipient_email=?",
-        )
-          .bind(new Date().toISOString(), row.reminder_id, row.recipient_email)
-          .run();
-    } catch {
-      await env.REPORTS.prepare(
-        "DELETE FROM editorial_task_reminder_deliveries WHERE reminder_id=? AND recipient_email=?",
-      )
-        .bind(row.reminder_id, row.recipient_email)
-        .run();
-    }
-  }
 }
 
 export default {
@@ -5862,12 +5958,16 @@ export default {
       request.method === "GET"
     )
       return completeSearchConsoleImport(request, env);
-    // ナビゲーションからの直接アクセス（GET）でもログアウトできるようにする。
-    if (
-      url.pathname === "/auth/logout" &&
-      (request.method === "POST" || request.method === "GET")
-    )
-      return logoutAdmin(request, env);
+    if (url.pathname === "/auth/logout")
+      return request.method === "POST"
+        ? logoutAdmin(request, env)
+        : json({ error: "POSTのみ利用できます。" }, 405);
+    if (url.pathname === "/auth/google/logout")
+      return request.method === "POST"
+        ? logoutGoogleSession(request, env)
+        : json({ error: "POSTのみ利用できます。" }, 405);
+    if (url.pathname === "/auth/logged-out" && request.method === "GET")
+      return loggedOutPage();
     if (
       url.pathname === "/api/public/application-config" &&
       request.method === "GET"
@@ -6144,36 +6244,7 @@ export default {
     if (
       url.pathname === "/apply" ||
       url.pathname === "/apply/" ||
-      url.pathname === "/admin/reports" ||
-      url.pathname === "/admin/reports/" ||
-      url.pathname === "/admin/permissions" ||
-      url.pathname === "/admin/permissions/" ||
-      url.pathname === "/admin/editor" ||
-      url.pathname === "/admin/editor/" ||
-      url.pathname === "/admin/workspace" ||
-      url.pathname === "/admin/workspace/" ||
-      url.pathname === "/admin/portal" ||
-      url.pathname === "/admin/portal/" ||
-      url.pathname === "/admin/atlas" ||
-      url.pathname === "/admin/atlas/" ||
-      url.pathname === "/admin/semi-platform" ||
-      url.pathname === "/admin/semi-platform/" ||
-      url.pathname === "/admin/applications" ||
-      url.pathname === "/admin/applications/" ||
-      url.pathname === "/admin/articles" ||
-      url.pathname === "/admin/articles/" ||
-      url.pathname === "/admin/operations" ||
-      url.pathname === "/admin/operations/" ||
-      url.pathname === "/admin/review" ||
-      url.pathname === "/admin/review/" ||
-      url.pathname === "/admin/guide" ||
-      url.pathname === "/admin/guide/" ||
-      url.pathname === "/admin/introductions" ||
-      url.pathname === "/admin/introductions/" ||
-      url.pathname === "/admin/secretariat" ||
-      url.pathname === "/admin/secretariat/" ||
-      url.pathname === "/admin/co-working" ||
-      url.pathname === "/admin/co-working/"
+      isAdminPagePath(url.pathname)
     ) {
       if (url.pathname === "/apply" || url.pathname === "/apply/")
         return fetchAdminAsset(request, env);
@@ -6192,8 +6263,6 @@ export default {
         "/admin/permissions/",
         "/admin/applications",
         "/admin/applications/",
-        "/admin/review",
-        "/admin/review/",
       ]);
       if (managerPages.has(url.pathname)) {
         const managerScope = await getGlobalAdminScope(request, env);
@@ -6214,10 +6283,20 @@ export default {
     return new Response("Not found", { status: 404 });
   },
   async scheduled(
-    _controller: unknown,
+    controller: unknown,
     env: Env,
     ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
+    const cron =
+      typeof controller === "object" &&
+      controller !== null &&
+      "cron" in controller
+        ? String((controller as { cron?: unknown }).cron ?? "")
+        : "";
+    if (cron === "*/5 * * * *") {
+      ctx.waitUntil(dispatchDueTaskReminders(env));
+      return;
+    }
     ctx.waitUntil(
       Promise.all([
         syncPublishedArticleBackups(env),

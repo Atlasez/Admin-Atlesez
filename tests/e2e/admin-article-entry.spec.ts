@@ -14,30 +14,91 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.getByRole("link", { name: /^査読/ })).toHaveCount(0);
   });
 
-  test("原稿一覧に同じスタイルの3導線だけを表示する", async ({ page }) => {
+  test("原稿一覧はコンパクトな作業対象フィルタを表示する", async ({ page }) => {
     await page.goto("admin/articles/");
 
-    const workflowCards = page.locator(".workflow-card");
-    await expect(workflowCards).toHaveCount(3);
-    await expect(workflowCards.nth(0)).toHaveAttribute(
-      "href",
-      "/admin/editor/?new=1&from=articles",
-    );
-    await expect(workflowCards.nth(1)).toHaveAttribute(
-      "href",
-      "/admin/articles/?mode=revise#article-list",
-    );
-    await expect(workflowCards.nth(2)).toHaveAttribute(
-      "href",
-      "/admin/review/",
-    );
+    await expect(page.locator(".workflow-card")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "新規記事を作成" }),
+    ).toHaveAttribute("href", "/admin/editor/?new=1&from=articles");
+    await expect(page.locator("[data-workflow-filter]")).toHaveValue("all");
     await expect(page.locator(".article-view-tabs")).toHaveCount(0);
-    await expect(page.locator(".header-actions")).toHaveCount(0);
+    await expect(page.locator(".header-actions")).toHaveCount(1);
+  });
 
-    const backgrounds = await workflowCards.evaluateAll((cards) =>
-      cards.map((card) => getComputedStyle(card).backgroundColor),
+  test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "other-review",
+              subject: "physics",
+              category: "mechanics",
+              slug: "other-review",
+              title: "別の担当者への査読",
+              status: "in-review",
+              updated_at: "2026-08-20T02:00:00.000Z",
+              published_at: null,
+              reviewer_email: "bob@example.com",
+            },
+            {
+              id: "my-review",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "my-review",
+              title: "自分への査読依頼",
+              status: "in-review",
+              updated_at: "2026-08-20T01:00:00.000Z",
+              published_at: null,
+              reviewer_email: "alice@example.com",
+            },
+            {
+              id: "approved",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "approved",
+              title: "査読済み原稿",
+              status: "approved",
+              updated_at: "2026-08-20T03:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "draft",
+              subject: "mathematics",
+              category: "algebra",
+              slug: "draft",
+              title: "まだ下書きの原稿",
+              status: "draft",
+              updated_at: "2026-08-20T04:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?mode=review#article-list");
+
+    await expect(page).toHaveURL(
+      /\/admin\/articles\/\?mode=review#article-list$/,
     );
-    expect(new Set(backgrounds).size).toBe(1);
+    await expect(page.locator("[data-status]")).toHaveValue("all");
+    await expect(page.locator("[data-workflow-filter]")).toHaveValue("review");
+    await expect(page.locator("[data-list] .article")).toHaveCount(3);
+    await expect(page.locator("[data-list] .article").first()).toContainText(
+      "自分への査読依頼",
+    );
+    await expect(page.locator("[data-list]")).not.toContainText("査読済み原稿");
+    await expect(page.locator("[data-list]")).toContainText("まだ下書きの原稿");
+
+    await page.goto("admin/review/");
+    await expect(page).toHaveURL(
+      /\/admin\/articles\/\?mode=review#article-list$/,
+    );
   });
 });
 

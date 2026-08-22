@@ -64,10 +64,10 @@
 
 /* ---------- 表示設定: 文字サイズ ---------- */
 [data-pref-font-size="large"] {
-  --text-scale: 1.15;
+  font-size: 115%;
 }
 [data-pref-font-size="xlarge"] {
-  --text-scale: 1.3;
+  font-size: 130%;
 }
 
 /* ---------- 表示設定: 行間 ---------- */
