@@ -1,5 +1,5 @@
-import { Temporal } from "@js-temporal/polyfill";
 import Holidays from "date-holidays";
+export { localDateTimeToInstant } from "./date-time";
 
 export type HolidayRegion = {
   code: string;
@@ -84,12 +84,4 @@ export function holidaysForRegions(
       regionName: selectedRegion.name,
     }));
   });
-}
-
-export function localDateTimeToInstant(value: string, timezone: string) {
-  if (!value) return "";
-  return Temporal.PlainDateTime.from(value)
-    .toZonedDateTime(timezone, { disambiguation: "reject" })
-    .toInstant()
-    .toString();
 }
