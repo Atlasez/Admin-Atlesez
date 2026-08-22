@@ -3,6 +3,7 @@
   "name": "atlasez-admin-local",
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
+  "preview_urls": false,
   "vars": {
     "ADMIN_AUTH_MODE": "local",
     "ADMIN_LOCAL_EMAIL": "local-editor@atlasez.test",

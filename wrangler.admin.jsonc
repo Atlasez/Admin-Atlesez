@@ -3,6 +3,7 @@
   "name": "atlasez-admin",
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
+  "preview_urls": false,
   "vars": {
     "ADMIN_AUTH_MODE": "cloudflare-access",
     "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin.ukyoukay0.workers.dev",
