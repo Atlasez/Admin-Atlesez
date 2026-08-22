@@ -20,6 +20,20 @@
       "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EDITORIAL_COLLABORATION",
+        "class_name": "EditorialCollaborationRoom",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "editorial-collaboration-v1",
+      "new_sqlite_classes": ["EditorialCollaborationRoom"],
+    },
+  ],
   "triggers": {
     "crons": ["0 * * * *", "*/5 * * * *"],
   },

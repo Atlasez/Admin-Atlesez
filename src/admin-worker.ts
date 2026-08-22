@@ -20,6 +20,7 @@ import {
   reminderBeforeDue,
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
+import * as Y from "yjs";
 
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
@@ -37,9 +38,29 @@ interface D1Database {
   batch<T = unknown>(statements: D1PreparedStatement[]): Promise<T[]>;
 }
 
+type DurableObjectId = object;
+interface DurableObjectStub {
+  fetch(request: Request): Promise<Response>;
+}
+interface DurableObjectNamespace {
+  idFromName(name: string): DurableObjectId;
+  get(id: DurableObjectId): DurableObjectStub;
+}
+interface DurableObjectStorage {
+  get<T>(key: string): Promise<T | undefined>;
+  put<T>(key: string, value: T): Promise<void>;
+}
+interface DurableObjectState {
+  storage: DurableObjectStorage;
+  acceptWebSocket(socket: WebSocket): void;
+  getWebSockets(): WebSocket[];
+  waitUntil(promise: Promise<unknown>): void;
+}
+
 interface Env {
   ASSETS: Fetcher;
   REPORTS: D1Database;
+  EDITORIAL_COLLABORATION?: DurableObjectNamespace;
   /** 既定は cloudflare-access。Google移行時のみ google-oauth を設定する。 */
   ADMIN_AUTH_MODE?: string;
   /** Google OAuth後に必ず戻す運営サイトの固定URL。Preview URLでは認証を完結させない。 */
@@ -123,6 +144,7 @@ type EditorialComment = {
   acknowledged_by_emails?: string[];
   unacknowledged_by_emails?: string[];
   selections?: EditorialCommentSelection[];
+  tags?: string[];
 };
 type EditorialCommentSelection = {
   id: string;
@@ -153,6 +175,7 @@ type EditorialCommentPayload = {
   selectionText?: unknown;
   parentCommentId?: unknown;
   selections?: unknown;
+  tags?: unknown;
 };
 type ArticleReport = {
   id: string;
@@ -212,6 +235,18 @@ const LATEX_ENGINES = new Set<LatexEngine>([
 const MAX_ADMIN_NOTE_LENGTH = 4_000;
 const MAX_EDITORIAL_BODY_LENGTH = 240_000;
 const MAX_EDITORIAL_COMMENT_LENGTH = 8_000;
+const EDITORIAL_COMMENT_TAGS = new Set([
+  "定義不足",
+  "根拠確認",
+  "表記修正",
+  "要相談",
+  "例・図の追加",
+  "数式確認",
+  "構成改善",
+  "翻訳・用語",
+  "アクセシビリティ",
+  "公開前確認",
+]);
 const MAX_PERSONAL_WORKSPACE_NOTE_LENGTH = 12_000;
 const MAX_OPERATION_TEXT_LENGTH = 8_000;
 const ACCESS_EMAIL_HEADER = "Cf-Access-Authenticated-User-Email";
@@ -4651,6 +4686,23 @@ async function getEditorialDocument(
       ...(selectionsByComment.get(selection.comment_id) ?? []),
       selection,
     ]);
+  const tagRows = commentIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT comment_id, position, tag FROM editorial_comment_tags
+         WHERE comment_id IN (${commentIds.map(() => "?").join(",")})
+         ORDER BY position ASC`,
+      )
+        .bind(...commentIds)
+        .all<{ comment_id: string; position: number; tag: string }>()
+    : {
+        results: [] as { comment_id: string; position: number; tag: string }[],
+      };
+  const tagsByComment = new Map<string, string[]>();
+  for (const tag of tagRows.results ?? [])
+    tagsByComment.set(tag.comment_id, [
+      ...(tagsByComment.get(tag.comment_id) ?? []),
+      tag.tag,
+    ]);
   const actorCountList = (counts: Map<string, number>) =>
     [...counts.entries()].map(([actor_email, count]) => ({
       actor_email,
@@ -4709,6 +4761,7 @@ async function getEditorialDocument(
         resolve: actorCountList(current.actorCounts.resolve),
         reopen: actorCountList(current.actorCounts.reopen),
       },
+      tags: tagsByComment.get(comment.id) ?? [],
       selections:
         selectionsByComment.get(comment.id) ??
         (comment.selection_text
@@ -4793,6 +4846,25 @@ function editorialCommentSelections(
   return selections;
 }
 
+function editorialCommentTags(
+  payload: EditorialCommentPayload,
+): string[] | null | Response {
+  if (payload.tags === undefined) return null;
+  if (!Array.isArray(payload.tags))
+    return json({ error: "コメントタグを確認してください。" }, 400);
+  const tags = [
+    ...new Set(
+      payload.tags
+        .filter((tag): tag is string => typeof tag === "string")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (tags.length > 6 || tags.some((tag) => !EDITORIAL_COMMENT_TAGS.has(tag)))
+    return json({ error: "選択できないコメントタグが含まれています。" }, 400);
+  return tags;
+}
+
 async function replaceEditorialCommentSelections(
   env: Env,
   commentId: string,
@@ -4817,6 +4889,25 @@ async function replaceEditorialCommentSelections(
         selection.end,
         selection.text,
       )
+      .run();
+}
+
+async function replaceEditorialCommentTags(
+  env: Env,
+  commentId: string,
+  tags: string[],
+) {
+  await env.REPORTS.prepare(
+    "DELETE FROM editorial_comment_tags WHERE comment_id = ?",
+  )
+    .bind(commentId)
+    .run();
+  for (const [position, tag] of tags.entries())
+    await env.REPORTS.prepare(
+      `INSERT INTO editorial_comment_tags (id, comment_id, position, tag)
+       VALUES (?, ?, ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), commentId, position, tag)
       .run();
 }
 
@@ -4917,19 +5008,8 @@ async function updateEditorialDocument(
       values.subject !== existing.subject)
   )
     return json({ error: "この分野の原稿を更新する権限がありません。" }, 403);
-  const owner = await env.REPORTS.prepare(
-    "SELECT created_by FROM editorial_documents WHERE id = ?",
-  )
-    .bind(documentId)
-    .first<{ created_by: string }>();
-  if (!scope.isManager && owner?.created_by !== scope.email)
-    return json(
-      {
-        error:
-          "原稿を編集できるのは作成者本人です。査読コメントは追加できます。",
-      },
-      403,
-    );
+  // 同じ分野の担当者は共同執筆者として保存できる。担当外の管理者は
+  // 従来どおり本文を変更できず、フィードバック状態とコメントだけを扱う。
   if (
     isReviewOnly &&
     (values.subject !== existing.subject ||
@@ -5208,6 +5288,8 @@ async function createEditorialComment(
   if (!body) return json({ error: "コメントを入力してください。" }, 400);
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
+  const tags = editorialCommentTags(payload);
+  if (tags instanceof Response) return tags;
   const document = await env.REPORTS.prepare(
     "SELECT subject, status FROM editorial_documents WHERE id = ?",
   )
@@ -5250,6 +5332,7 @@ async function createEditorialComment(
     )
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
+  await replaceEditorialCommentTags(env, commentId, tags ?? []);
   return json({ ok: true }, 201);
 }
 
@@ -5373,6 +5456,8 @@ async function editEditorialComment(
   if (!body) return json({ error: "コメントを入力してください。" }, 400);
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
+  const tags = editorialCommentTags(payload);
+  if (tags instanceof Response) return tags;
   const comment = await env.REPORTS.prepare(
     `SELECT c.id, c.created_by, d.subject, d.status FROM editorial_comments c
      JOIN editorial_documents d ON d.id = c.document_id WHERE c.id = ? AND c.document_id = ?`,
@@ -5406,6 +5491,7 @@ async function editEditorialComment(
     )
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
+  if (tags) await replaceEditorialCommentTags(env, commentId, tags);
   return json({ ok: true });
 }
 
@@ -5446,12 +5532,18 @@ async function deleteEditorialComment(
     .bind(commentId)
     .all<{ id: string }>();
   const ids = [commentId, ...(childRows.results ?? []).map((row) => row.id)];
-  for (const id of ids)
+  for (const id of ids) {
     await env.REPORTS.prepare(
       "DELETE FROM editorial_comment_selections WHERE comment_id = ?",
     )
       .bind(id)
       .run();
+    await env.REPORTS.prepare(
+      "DELETE FROM editorial_comment_tags WHERE comment_id = ?",
+    )
+      .bind(id)
+      .run();
+  }
   await env.REPORTS.prepare(
     "DELETE FROM editorial_comments WHERE id = ? OR parent_comment_id = ?",
   )
@@ -6681,6 +6773,186 @@ async function markAdminNotificationsRead(
   return json({ ok: true });
 }
 
+type CollaborationAttachment = {
+  sessionId: string;
+  email: string;
+  displayName: string;
+  field: string;
+};
+
+const collaborationAttachment = (
+  socket: WebSocket,
+): CollaborationAttachment => {
+  const value = (
+    socket as WebSocket & { deserializeAttachment?: () => unknown }
+  ).deserializeAttachment?.();
+  if (!value || typeof value !== "object")
+    return { sessionId: "", email: "", displayName: "メンバー", field: "" };
+  const attachment = value as Partial<CollaborationAttachment>;
+  return {
+    sessionId: attachment.sessionId ?? "",
+    email: attachment.email ?? "",
+    displayName: attachment.displayName ?? attachment.email ?? "メンバー",
+    field: attachment.field ?? "",
+  };
+};
+
+export class EditorialCollaborationRoom {
+  private readonly yDocument = new Y.Doc();
+  private initializedDocumentId = "";
+
+  constructor(
+    private readonly state: DurableObjectState,
+    private readonly env: Env,
+  ) {
+    this.yDocument.on("update", (update: Uint8Array, origin: unknown) => {
+      for (const socket of this.state.getWebSockets())
+        if (socket !== origin && socket.readyState === WebSocket.OPEN)
+          socket.send(update);
+      this.state.waitUntil(
+        this.state.storage.put(
+          "yjs-state",
+          Y.encodeStateAsUpdate(this.yDocument),
+        ),
+      );
+    });
+  }
+
+  private async initialize(documentId: string) {
+    if (this.initializedDocumentId === documentId) return;
+    const saved = await this.state.storage.get<ArrayBuffer | Uint8Array>(
+      "yjs-state",
+    );
+    if (saved) Y.applyUpdate(this.yDocument, new Uint8Array(saved));
+    else {
+      const document = await this.env.REPORTS.prepare(
+        "SELECT title, summary, body FROM editorial_documents WHERE id = ?",
+      )
+        .bind(documentId)
+        .first<Pick<EditorialDocument, "title" | "summary" | "body">>();
+      if (!document) throw new Error("原稿が見つかりません。");
+      this.yDocument.transact(() => {
+        this.yDocument.getText("title").insert(0, document.title);
+        this.yDocument.getText("summary").insert(0, document.summary);
+        this.yDocument.getText("body").insert(0, document.body);
+      }, "initial");
+    }
+    this.initializedDocumentId = documentId;
+  }
+
+  private broadcastPresence() {
+    const participants = this.state
+      .getWebSockets()
+      .filter((socket) => socket.readyState === WebSocket.OPEN)
+      .map(collaborationAttachment)
+      .filter((item) => item.sessionId);
+    const message = JSON.stringify({ type: "presence", participants });
+    for (const socket of this.state.getWebSockets())
+      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    await this.initialize(request.headers.get("x-atlasez-document-id") ?? "");
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
+      return json({ error: "WebSocket接続が必要です。" }, 426);
+    const Pair = (
+      globalThis as unknown as {
+        WebSocketPair: new () => { 0: WebSocket; 1: WebSocket };
+      }
+    ).WebSocketPair;
+    const pair = new Pair();
+    const client = pair[0];
+    const server = pair[1] as WebSocket & {
+      serializeAttachment?: (value: unknown) => void;
+    };
+    const encodedDisplayName = request.headers.get("x-atlasez-user-name") ?? "";
+    let displayName = "メンバー";
+    try {
+      displayName = decodeURIComponent(encodedDisplayName) || displayName;
+    } catch {
+      /* invalid encoded names fall back to the generic label */
+    }
+    server.serializeAttachment?.({
+      sessionId: crypto.randomUUID(),
+      email: request.headers.get("x-atlasez-user-email") ?? "",
+      displayName,
+      field: "",
+    } satisfies CollaborationAttachment);
+    this.state.acceptWebSocket(server);
+    server.send(Y.encodeStateAsUpdate(this.yDocument));
+    this.broadcastPresence();
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    } as ResponseInit & { webSocket: WebSocket });
+  }
+
+  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) {
+    if (typeof message !== "string") {
+      Y.applyUpdate(this.yDocument, new Uint8Array(message), socket);
+      return;
+    }
+    try {
+      const payload = JSON.parse(message) as { type?: string; field?: unknown };
+      if (payload.type !== "presence") return;
+      const attachment = collaborationAttachment(socket);
+      attachment.field =
+        typeof payload.field === "string" ? payload.field.slice(0, 80) : "";
+      (
+        socket as WebSocket & { serializeAttachment?: (value: unknown) => void }
+      ).serializeAttachment?.(attachment);
+      this.broadcastPresence();
+    } catch {
+      /* malformed presence messages are ignored */
+    }
+  }
+
+  webSocketClose() {
+    this.broadcastPresence();
+  }
+  webSocketError() {
+    this.broadcastPresence();
+  }
+}
+
+async function connectEditorialCollaboration(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!env.EDITORIAL_COLLABORATION)
+    return json({ error: "同時編集サービスが設定されていません。" }, 503);
+  const document = await env.REPORTS.prepare(
+    "SELECT subject FROM editorial_documents WHERE id = ?",
+  )
+    .bind(documentId)
+    .first<{ subject: string }>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (!canEditSubject(scope, document.subject))
+    return json({ error: "この原稿を同時編集する権限がありません。" }, 403);
+  const profile = await env.REPORTS.prepare(
+    "SELECT display_name FROM editorial_member_profiles WHERE lower(email) = lower(?)",
+  )
+    .bind(scope.email)
+    .first<{ display_name: string }>()
+    .catch(() => null);
+  const headers = new Headers(request.headers);
+  headers.set("x-atlasez-document-id", documentId);
+  headers.set("x-atlasez-user-email", scope.email);
+  headers.set(
+    "x-atlasez-user-name",
+    encodeURIComponent(
+      profile?.display_name?.trim() || scope.email.split("@")[0],
+    ),
+  );
+  const id = env.EDITORIAL_COLLABORATION.idFromName(documentId);
+  return env.EDITORIAL_COLLABORATION.get(id).fetch(
+    new Request(request, { headers }),
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -6920,6 +7192,17 @@ export default {
     }
     if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
       return editorialBoard(request, env);
+    const editorialCollaborationMatch = url.pathname.match(
+      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/collaboration$/i,
+    );
+    if (editorialCollaborationMatch)
+      return request.headers.get("upgrade")?.toLowerCase() === "websocket"
+        ? connectEditorialCollaboration(
+            request,
+            env,
+            editorialCollaborationMatch[1],
+          )
+        : json({ error: "WebSocket接続が必要です。" }, 426);
     const editorialAssetCollectionMatch = url.pathname.match(
       /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/assets$/i,
     );

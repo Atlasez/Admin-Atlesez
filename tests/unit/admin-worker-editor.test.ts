@@ -90,4 +90,98 @@ describe("admin worker editor APIs", () => {
     );
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
   });
+
+  it("stores approved comment tags independently from the comment body", async () => {
+    const executed: { query: string; values: unknown[] }[] = [];
+    class RecordingStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      constructor(private readonly sql: string) {
+        super(sql);
+      }
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async first<T>() {
+        if (
+          this.sql.includes("SELECT subject, status FROM editorial_documents")
+        )
+          return { subject: "mathematics", status: "draft" } as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.sql, values: this.values });
+        return {};
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new RecordingStatement(query),
+      },
+    };
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222/comments",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "http://localhost",
+          },
+          body: JSON.stringify({
+            body: "定義を補足してください。",
+            tags: ["定義不足", "例・図の追加"],
+            selections: [],
+          }),
+        },
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(201);
+    const tagInserts = executed.filter((entry) =>
+      entry.query.includes("INSERT INTO editorial_comment_tags"),
+    );
+    expect(tagInserts.map((entry) => entry.values.at(-1))).toEqual([
+      "定義不足",
+      "例・図の追加",
+    ]);
+    const commentInsert = executed.find((entry) =>
+      entry.query.includes("INSERT INTO editorial_comments"),
+    );
+    expect(commentInsert?.values).toContain("定義を補足してください。");
+    expect(commentInsert?.values).not.toContain("[定義不足]");
+  });
+
+  it("rejects comment tags outside the supported review taxonomy", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222/comments",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "http://localhost",
+          },
+          body: JSON.stringify({
+            body: "確認してください。",
+            tags: ["任意タグ"],
+          }),
+        },
+      ),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "選択できないコメントタグが含まれています。",
+    });
+  });
 });

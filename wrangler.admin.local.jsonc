@@ -21,6 +21,20 @@
       "preview_database_id": "atlasez-reports-local",
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EDITORIAL_COLLABORATION",
+        "class_name": "EditorialCollaborationRoom",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "editorial-collaboration-v1",
+      "new_sqlite_classes": ["EditorialCollaborationRoom"],
+    },
+  ],
   "triggers": {
     "crons": ["0 3 * * *", "*/5 * * * *"],
   },
