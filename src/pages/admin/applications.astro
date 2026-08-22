@@ -1,26 +1,23 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 ---
-
 <AdminLayout title="運営参加応募" description="運営参加応募の確認">
   <main class="applications" data-applications>
-    <header class="applications__header">
-      <div class="applications__title-row">
-        <div>
-          <h1>運営参加応募</h1>
-          <span>応募を確認し、受入・見送りを管理します。</span>
-        </div>
-        <button type="button" class="button button--quiet" data-refresh-applications>一覧を更新</button>
-      </div>
+    <header>
+      <h1>運営参加応募</h1>
+      <span>受入時に運営者登録・プロフィール反映・Discordロール同期まで実行します。失敗した同期は同じ画面から安全に再試行できます。</span>
     </header>
-
+    <section class="application-flow" aria-labelledby="application-flow-title">
+      <div class="flow-heading"><div><p>参加手続き</p><h2 id="application-flow-title">応募から参加までの流れ</h2></div><span>各段階の確認内容を見ながら対応できます。</span></div>
+      <ol class="flow-steps">
+        <li><span class="flow-step-number">1</span><div><strong>応募内容を確認</strong><small>希望分野、書きたい記事、参加理由を確認します。</small></div></li>
+        <li><span class="flow-step-number">2</span><div><strong>確認中に変更</strong><small>追加確認が必要な応募を確認中として整理します。</small></div></li>
+        <li><span class="flow-step-number">3</span><div><strong>受入を確定</strong><small>運営者登録とプロフィール反映を実行します。</small></div></li>
+        <li><span class="flow-step-number">4</span><div><strong>参加環境を整える</strong><small>Discord連携を確認し、必要なら同期を再試行します。</small></div></li>
+      </ol>
+    </section>
     <section class="application-overview" aria-labelledby="application-list-title">
-      <div class="section-heading">
-        <div>
-          <h2 id="application-list-title">応募一覧</h2>
-        </div>
-        <span class="total-label" data-total-count>—</span>
-      </div>
+      <div class="section-heading"><div><p>応募状況</p><h2 id="application-list-title">応募一覧</h2></div><span data-total-count>—</span></div>
       <div class="summary-grid" aria-label="応募状況">
         <div class="summary-card summary-card--new"><strong data-summary-new>0</strong><span>新規</span></div>
         <div class="summary-card summary-card--reviewing"><strong data-summary-reviewing>0</strong><span>確認中</span></div>
@@ -28,91 +25,47 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         <div class="summary-card summary-card--rejected"><strong data-summary-rejected>0</strong><span>見送り</span></div>
       </div>
       <div class="filter-bar" role="search">
-        <label class="search-field">検索<input type="search" data-search placeholder="名前・メール・所属で検索" /></label>
+        <label>検索<input type="search" data-search placeholder="名前・メール・所属で検索" /></label>
         <label>状態<select data-filter-status><option value="all">すべての状態</option><option value="new">新規</option><option value="reviewing">確認中</option><option value="accepted">受入済み</option><option value="rejected">見送り</option></select></label>
         <button type="button" class="button button--quiet" data-clear-filter>絞り込みを解除</button>
       </div>
     </section>
-
     <output class="notice" data-notice aria-live="polite"></output>
     <div class="application-list" data-list>読み込み中…</div>
   </main>
 </AdminLayout>
-
-<style is:global>
-  .applications{box-sizing:border-box;color:var(--text-primary);margin:0 auto;max-width:1120px;padding:0 1.25rem 4rem}
-  .applications *{box-sizing:border-box}
-  .applications__header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.2rem}
-  .applications__header>p,.section-heading>div>p{color:var(--accent-primary);font-size:.72rem;font-weight:900;letter-spacing:.1em;margin:0 0 .35rem}
-  .applications__title-row{align-items:end;display:flex;gap:1rem;justify-content:space-between}
-  .applications h1{font-size:clamp(1.7rem,3vw,2.25rem);letter-spacing:.02em;margin:0}
-  .applications__header span{color:var(--text-secondary);display:block;font-size:.86rem;line-height:1.6;margin-top:.45rem}
-  .button{appearance:none;border-radius:.35rem;cursor:pointer;font:inherit;font-size:.78rem;font-weight:800;line-height:1.2;min-height:2.35rem;padding:.55rem .75rem;white-space:nowrap}
-  .button--quiet{background:transparent;border:1px solid var(--border-default);color:var(--accent-primary)}
-  .button--quiet:hover,.button--quiet:focus-visible{background:var(--background-secondary);border-color:var(--accent-primary)}
-  .application-overview{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;margin-top:1.25rem;padding:1rem}
-  .section-heading{align-items:end;display:flex;justify-content:space-between}
-  .section-heading h2{font-size:1.15rem;margin:0}
-  .total-label{color:var(--text-secondary);font-size:.76rem}
-  .summary-grid{display:grid;gap:.55rem;grid-template-columns:repeat(4,1fr);margin-top:.9rem}
-  .summary-card{background:var(--background-primary);border:1px solid var(--border-default);border-left:3px solid var(--border-default);display:grid;gap:.12rem;padding:.65rem .75rem}
-  .summary-card strong{font-size:1.35rem;line-height:1.1}
-  .summary-card span{color:var(--text-secondary);font-size:.72rem;font-weight:700}
-  .summary-card--new{border-left-color:#d97706}.summary-card--reviewing{border-left-color:#2563a5}.summary-card--accepted{border-left-color:#27834f}.summary-card--rejected{border-left-color:#9b5a5a}
-  .filter-bar{align-items:end;display:grid;gap:.55rem;grid-template-columns:minmax(220px,1.5fr) minmax(150px,.65fr) auto;margin-top:.85rem}
-  .filter-bar label{color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.28rem}
-  .filter-bar input,.filter-bar select{appearance:auto;background:var(--background-primary);border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);font:inherit;min-height:2.35rem;padding:.45rem .55rem;width:100%}
-  .filter-bar input:focus,.filter-bar select:focus{border-color:var(--accent-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary) 18%,transparent);outline:0}
-  .notice{color:var(--text-secondary);display:block;font-size:.78rem;min-height:1.6rem;padding:.75rem .15rem .15rem}.notice[data-error="true"]{color:#b42318}
-  .application-list{display:grid;gap:.7rem;margin-top:.15rem}
-  .application-empty{border:1px dashed var(--border-default);color:var(--text-secondary);padding:2.2rem 1rem;text-align:center}
-  .app{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.45rem;display:grid;gap:.65rem;padding:.85rem 1rem}
-  .app:hover{border-color:color-mix(in srgb,var(--accent-primary) 60%,var(--border-default))}
-  .app__top{align-items:start;display:flex;gap:1rem;justify-content:space-between;min-width:0}
-  .app__identity{min-width:0}.app__name{font-size:1rem;font-weight:850;line-height:1.35}.app__email{color:var(--text-secondary);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .app__status{align-items:end;display:grid;flex:0 0 auto;gap:.25rem;justify-items:end}.status-badge,.sync-badge{border:1px solid var(--border-default);border-radius:999px;font-size:.68rem;font-weight:800;padding:.25rem .5rem;white-space:nowrap}.status-badge--new{background:#fff4df;border-color:#e4b86d;color:#855200}.status-badge--reviewing{background:#edf5ff;border-color:#91b8df;color:#1d568b}.status-badge--accepted{background:#eaf7ee;border-color:#8cc99e;color:#176b32}.status-badge--rejected{background:#f8eeee;border-color:#d5a2a2;color:#7d3333}.app__date{color:var(--text-secondary);font-size:.65rem}
-  .app__facts,.app__subjects{display:flex;flex-wrap:wrap;gap:.35rem}.fact,.subject-chip{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.7rem;line-height:1.25;padding:.28rem .48rem}.fact b{color:var(--accent-primary);font-weight:850}.subject-chip{color:var(--text-primary)}
-  .app__footer{align-items:center;border-top:1px solid var(--border-default);display:flex;gap:.6rem;justify-content:space-between;padding-top:.6rem}.sync-badge{color:var(--text-secondary)}.sync-badge--synced{background:#eaf7ee;border-color:#8cc99e;color:#176b32}.sync-badge--failed{background:#fff1f0;border-color:#f2a6a0;color:#9f211b}.sync-badge--pending{background:#fff8e1;border-color:#dfbd65;color:#765600}
-  .app__actions{align-items:center;display:flex;flex-wrap:wrap;gap:.45rem;justify-content:flex-end}.app__actions select{appearance:auto;background:var(--background-primary);border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);font:inherit;font-size:.74rem;min-height:2.15rem;padding:.4rem .5rem}.app__actions button{background:var(--accent-primary);border:1px solid var(--accent-primary);border-radius:.3rem;color:#fff;cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2.15rem;padding:.4rem .55rem}.app__actions button:disabled{cursor:wait;opacity:.55}
-  .app details{border-top:1px solid var(--border-default);padding-top:.55rem}.app summary{color:var(--accent-primary);cursor:pointer;font-size:.74rem;font-weight:800;list-style:none}.app summary::-webkit-details-marker{display:none}.app summary::before{content:"＋ ";font-size:.85rem}.app details[open] summary::before{content:"− "}.app__details{display:grid;gap:.65rem;grid-template-columns:repeat(2,minmax(0,1fr));padding-top:.6rem}.app__details section{min-width:0}.app__details h3{color:var(--text-secondary);font-size:.7rem;margin:0 0 .25rem}.app pre{font:inherit;font-size:.78rem;line-height:1.6;margin:0;white-space:pre-wrap}.provisioning-error{background:#fff7f6;border-left:3px solid #b42318;color:#7a271a;font-size:.75rem;margin:0;padding:.55rem;white-space:pre-wrap}.member-link{color:var(--accent-primary);font-size:.74rem;font-weight:800}
-  @media(max-width:720px){.applications{padding:0 .85rem 3rem}.applications__header{padding-top:1.25rem}.applications__title-row{align-items:start;display:grid}.applications__title-row .button{justify-self:start}.summary-grid{grid-template-columns:repeat(2,1fr)}.filter-bar{grid-template-columns:1fr}.filter-bar .button{justify-self:start}.app{padding:.8rem}.app__top{display:grid;gap:.45rem}.app__status{align-items:start;display:flex;justify-content:space-between}.app__footer{align-items:start;display:grid}.app__actions{justify-content:start}.app__details{grid-template-columns:1fr}}
+<style>
+  .applications{margin:0 auto;max-width:1100px;padding:0 1.25rem 4rem}.applications header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.2rem}.applications header p{color:var(--accent-primary);font-size:.75rem;font-weight:800;letter-spacing:.08em;margin:0}.applications h1{font-size:2rem;margin:.3rem 0}.applications header span,.app small{color:var(--text-secondary)}.application-flow{border:1px solid var(--border-default);margin-top:1.25rem;padding:1rem}.flow-heading{align-items:end;display:flex;gap:1rem;justify-content:space-between}.flow-heading p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.08em;margin:0 0 .3rem}.flow-heading h2{font-size:1.15rem;margin:0}.flow-heading>span{color:var(--text-secondary);font-size:.76rem}.flow-steps{display:grid;gap:.65rem;grid-template-columns:repeat(4,minmax(0,1fr));list-style:none;margin:.9rem 0 0;padding:0}.flow-steps li{background:var(--background-secondary);border-top:3px solid var(--accent-primary);display:flex;gap:.55rem;min-height:7rem;padding:.75rem}.flow-step-number{align-items:center;background:var(--accent-primary);border-radius:50%;color:#fff;display:flex;flex:0 0 1.55rem;font-size:.78rem;font-weight:900;height:1.55rem;justify-content:center;width:1.55rem}.flow-steps strong{display:block;font-size:.82rem;line-height:1.35}.flow-steps small{color:var(--text-secondary);display:block;font-size:.7rem;line-height:1.55;margin-top:.35rem}.notice{display:block;min-height:1.5rem;padding-top:.75rem}.notice[data-error="true"]{color:#b42318}.app{border:1px solid var(--border-default);display:grid;gap:.75rem;margin-top:1rem;padding:1rem}.top{align-items:center;display:flex;gap:1rem;justify-content:space-between}.top h2{font-size:1rem;margin:0}.actions{align-items:center;display:flex;flex-wrap:wrap;gap:.5rem}.actions select,.actions button{font:inherit;padding:.45rem .65rem}.actions button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font-weight:700}.actions button:disabled{cursor:wait;opacity:.55}.badge{border:1px solid var(--border-default);border-radius:999px;font-size:.72rem;font-weight:700;padding:.25rem .5rem}.badge[data-state="synced"]{background:#e8f7ed;border-color:#78bd8b;color:#176b32}.badge[data-state="failed"]{background:#fff1f0;border-color:#f2a6a0;color:#9f211b}.badge[data-state="skipped"]{background:#fff8e1;border-color:#dfbd65;color:#765600}.facts{display:flex;flex-wrap:wrap;gap:.35rem}.facts span{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.75rem;padding:.25rem .45rem}.app h3{font-size:.82rem;margin:.25rem 0 0}.app pre{font:inherit;line-height:1.65;margin:0;white-space:pre-wrap}.provisioning-error{background:#fff7f6;border-left:3px solid #b42318;color:#7a271a;font-size:.78rem;margin:0;padding:.6rem;white-space:pre-wrap}.member-link{color:var(--accent-primary);font-size:.78rem;font-weight:700}@media(max-width:650px){.applications{padding:0 .85rem 3rem}.top{align-items:start;display:grid}.actions,.actions select,.actions button{width:100%}.flow-heading{align-items:start;display:grid}.flow-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:420px){.flow-steps{grid-template-columns:1fr}}
+  .application-overview{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;margin-top:1.25rem;padding:1rem}.section-heading{align-items:end;display:flex;justify-content:space-between}.section-heading p{color:var(--accent-primary);font-size:.72rem;font-weight:900;letter-spacing:.1em;margin:0 0 .35rem}.section-heading h2{font-size:1.15rem;margin:0}.section-heading>span{color:var(--text-secondary);font-size:.76rem}.summary-grid{display:grid;gap:.55rem;grid-template-columns:repeat(4,1fr);margin-top:.9rem}.summary-card{background:var(--background-primary);border:1px solid var(--border-default);border-left:3px solid var(--border-default);display:grid;gap:.12rem;padding:.65rem .75rem}.summary-card strong{font-size:1.35rem;line-height:1.1}.summary-card span{color:var(--text-secondary);font-size:.72rem;font-weight:700}.summary-card--new{border-left-color:#d97706}.summary-card--reviewing{border-left-color:#2563a5}.summary-card--accepted{border-left-color:#27834f}.summary-card--rejected{border-left-color:#9b5a5a}.filter-bar{align-items:end;display:grid;gap:.55rem;grid-template-columns:minmax(220px,1.5fr) minmax(150px,.65fr) auto;margin-top:.85rem}.filter-bar label{color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.28rem}.filter-bar input,.filter-bar select{appearance:auto;background:var(--background-primary);border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);font:inherit;min-height:2.35rem;padding:.45rem .55rem;width:100%}.button{appearance:none;border-radius:.35rem;cursor:pointer;font:inherit;font-size:.78rem;font-weight:800;line-height:1.2;min-height:2.35rem;padding:.55rem .75rem;white-space:nowrap}.button--quiet{background:transparent;border:1px solid var(--border-default);color:var(--accent-primary)}.button--quiet:hover,.button--quiet:focus-visible{background:var(--background-primary);border-color:var(--accent-primary)}.application-list{display:grid;gap:.7rem}.application-empty{border:1px dashed var(--border-default);color:var(--text-secondary);padding:2.2rem 1rem;text-align:center}.application-list .app{margin-top:0}@media(max-width:650px){.summary-grid{grid-template-columns:repeat(2,1fr)}.filter-bar{grid-template-columns:1fr}.filter-bar .button{justify-self:start}}
 </style>
-
 <script>
-  const initializeApplications=()=>{
-    const root=document.querySelector<HTMLElement>('[data-applications]');
-    if(!root||root.dataset.applicationsReady==='true')return;
-    root.dataset.applicationsReady='true';
+  const root=document.querySelector<HTMLElement>('[data-applications]');
+  if(root){
     const esc=(value:unknown)=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]??char));
     const notice=root.querySelector<HTMLOutputElement>('[data-notice]')!;
     const list=root.querySelector<HTMLElement>('[data-list]')!;
-    const refreshButton=root.querySelector<HTMLButtonElement>('[data-refresh-applications]');
     const search=root.querySelector<HTMLInputElement>('[data-search]')!;
     const statusFilter=root.querySelector<HTMLSelectElement>('[data-filter-status]')!;
     const clearFilter=root.querySelector<HTMLButtonElement>('[data-clear-filter]');
     const totalCount=root.querySelector<HTMLElement>('[data-total-count]')!;
     const summary={new:root.querySelector<HTMLElement>('[data-summary-new]')!,reviewing:root.querySelector<HTMLElement>('[data-summary-reviewing]')!,accepted:root.querySelector<HTMLElement>('[data-summary-accepted]')!,rejected:root.querySelector<HTMLElement>('[data-summary-rejected]')!};
-    const provisioningLabel:Record<string,string>={not_started:'同期未実行',pending:'同期準備中',synced:'Discord同期済み',skipped:'Discord未連携',failed:'Discord同期要確認'};
-    const statusLabel:Record<string,string>={new:'新規応募',reviewing:'確認中',accepted:'受入済み',rejected:'見送り'};
-    const statusTone:Record<string,string>={new:'new',reviewing:'reviewing',accepted:'accepted',rejected:'rejected'};
-    let subjectLabels:Record<string,string>={};let applications:any[]=[];
+    const provisioningLabel:Record<string,string>={not_started:'未実行',pending:'同期準備中',synced:'Discord同期済み',skipped:'Discord未連携',failed:'Discord同期要確認'};
+    let subjectLabels:Record<string,string>={};
     const setNotice=(message:string,error=false)=>{notice.value=message;notice.dataset.error=String(error)};
-    const showError=(message:string)=>setNotice(message,true);
     const displayName=(application:any)=>{const split=[application.form_language==='en'?application.given_name:application.family_name,application.form_language==='en'?application.middle_name:'',application.form_language==='en'?application.family_name:application.given_name].filter(Boolean).join(' ');return split||application.name||'氏名未設定'};
-    const dateLabel=(value:unknown)=>{if(!value)return '日時未設定';const date=new Date(String(value));return Number.isNaN(date.valueOf())?'日時未設定':new Intl.DateTimeFormat('ja-JP',{dateStyle:'medium'}).format(date)};
-    const fields=(application:any)=>`<div class="app__facts"><span class="fact"><b>所属</b> ${esc(application.affiliation_type||'未設定')}・${esc(application.institution||'未設定')}</span><span class="fact"><b>学年</b> ${esc(application.grade||'未設定')}</span><span class="fact"><b>国・地域</b> ${esc(application.country||'未設定')}</span><span class="fact"><b>Discord</b> ${application.verified_discord_user_id?'登録済み':'未登録'}</span></div>`;
-    const actions=(application:any)=>{const accepted=application.status==='accepted';const state=application.provisioning_status||'not_started';const tone=state==='synced'?'synced':state==='failed'?'failed':state==='pending'?'pending':'';return `<span class="sync-badge sync-badge--${tone}">${esc(provisioningLabel[state]??state)}</span><div class="app__actions"><select data-id="${esc(application.id)}" ${accepted?'disabled':''} aria-label="${esc(displayName(application))}の状態"><option value="new" ${application.status==='new'?'selected':''}>新規</option><option value="reviewing" ${application.status==='reviewing'?'selected':''}>確認中</option><option value="accepted" ${accepted?'selected':''}>受入済み</option><option value="rejected" ${application.status==='rejected'?'selected':''}>見送り</option></select>${accepted&&state!=='synced'?`<button type="button" data-retry="${esc(application.id)}">同期を再試行</button>`:''}</div>`};
+    const fields=(application:any)=>`<div class="facts"><span>${esc(application.affiliation_type||'所属未設定')}：${esc(application.institution||'—')}</span><span>${esc(application.grade||'—')}</span><span>${esc(application.country||'—')} / ${esc(application.residence_city||'都市未登録')}</span><span>生年月日：${esc(application.birth_date||'—')}</span><span>${esc(application.timezone||'—')}</span>${application.verified_discord_user_id?'<span>確認済みDiscord ID登録済み</span>':'<span>Discord ID未登録</span>'}</div><details class="application-original-fields"><summary>Googleフォーム原本に準拠した回答</summary><h3>知ったきっかけ</h3><pre>${esc(application.referral_source||'—')}</pre><h3>現在のサークル・学生団体</h3><pre>${esc(application.current_organizations||'—')}</pre><h3>参加理由</h3><pre>${esc(application.motivation_reasons||'—')}</pre><h3>希望担当</h3><pre>${esc(application.desired_roles||'—')}</pre><h3>面談候補日</h3><pre>${esc(application.interview_availability||'—')}</pre><h3>質問</h3><pre>${esc(application.applicant_questions||'—')}</pre></details>`;
+    const actions=(application:any)=>{const accepted=application.status==='accepted';const state=application.provisioning_status||'not_started';return `<div class="actions"><span class="badge" data-state="${esc(state)}">${esc(provisioningLabel[state]??state)}</span><select data-id="${esc(application.id)}" ${accepted?'disabled aria-label="受入済み"':''}><option value="new" ${application.status==='new'?'selected':''}>新規</option><option value="reviewing" ${application.status==='reviewing'?'selected':''}>確認中</option><option value="accepted" ${accepted?'selected':''}>受入・運営者登録</option><option value="rejected" ${application.status==='rejected'?'selected':''}>見送り</option></select>${accepted&&state!=='synced'?`<button type="button" data-retry="${esc(application.id)}">Discord同期を再試行</button>`:''}</div>`};
+    let applications:any[]=[];
     const renderSummary=()=>{totalCount.textContent=`${applications.length}件`;for(const key of ['new','reviewing','accepted','rejected'])summary[key as keyof typeof summary].textContent=String(applications.filter(application=>application.status===key).length)};
     const matches=(application:any)=>{const query=search.value.trim().toLocaleLowerCase();const status=statusFilter.value;const haystack=[displayName(application),application.email,application.institution,application.desired_subjects].join(' ').toLocaleLowerCase();return (!query||haystack.includes(query))&&(status==='all'||application.status===status)};
-    const render=(items:any[])=>{const visible=items.filter(matches);list.innerHTML=visible.length?visible.map(application=>{const status=application.status||'new';const subjects=String(application.desired_subjects||'').split(',').map((subject:string)=>subject.trim()).filter(Boolean);return `<article class="app"><div class="app__top"><div class="app__identity"><div class="app__name">${esc(displayName(application))}</div><div class="app__email">${esc(application.email||'メールアドレス未設定')}</div></div><div class="app__status"><span class="status-badge status-badge--${esc(statusTone[status]??'new')}">${esc(statusLabel[status]??status)}</span><time class="app__date" datetime="${esc(application.created_at||'')}">${esc(dateLabel(application.created_at))}</time></div></div>${fields(application)}<div class="app__subjects">${subjects.length?subjects.map((subject:string)=>`<span class="subject-chip">${esc(subjectLabels[subject]??subject)}</span>`).join(''):'<span class="subject-chip">希望分野未設定</span>'}</div><div class="app__footer">${actions(application)}</div><details><summary>応募内容を確認</summary><div class="app__details"><section><h3>書きたい記事・テーマ</h3><pre>${esc(application.article_ideas||'—')}</pre></section><section><h3>できること・関心</h3><pre>${esc(application.interests||'—')}</pre></section><section><h3>参加理由・自己紹介</h3><pre>${esc(application.message||'—')}</pre></section>${application.availability_note?`<section><h3>参加可能な時間帯</h3><pre>${esc(application.availability_note)}</pre></section>`:''}</div></details>${application.provisioning_error?`<p class="provisioning-error">${esc(application.provisioning_error)}</p>`:''}${status==='accepted'&&!application.verified_discord_user_id?'<a class="member-link" href="/admin/permissions/">参加者管理で本人確認後、DiscordユーザーIDを登録する →</a>':''}</article>`}).join(''):'<p class="application-empty">条件に一致する応募はありません。</p>'};
-    const refresh=()=>{render(applications)};
-    const load=async()=>{refreshButton?.setAttribute('disabled','');list.innerHTML='<p class="application-empty">応募を読み込んでいます…</p>';try{const response=await fetch(`/api/admin/applications?updated=${Date.now()}`,{credentials:'same-origin',cache:'no-store'});const contentType=response.headers.get('content-type')??'';if(!contentType.includes('application/json'))throw Error('認証が切れました。ページを再読み込みしてログインし直してください。');const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();render(applications)}catch(error){const message=error instanceof Error?error.message:'読み込めませんでした。';list.innerHTML=`<p class="application-empty">${esc(message)}</p>`;showError(message)}finally{refreshButton?.removeAttribute('disabled')}};
-    refreshButton?.addEventListener('click',()=>{void load()});search.addEventListener('input',refresh);statusFilter.addEventListener('change',refresh);clearFilter?.addEventListener('click',()=>{search.value='';statusFilter.value='all';refresh()});
-    const update=async(id:string,status:string,button?:HTMLButtonElement)=>{button?.setAttribute('disabled','');setNotice(status==='accepted'?'受入登録とDiscord同期を実行中…':'応募状態を更新中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'更新できませんでした。');const warning=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';setNotice(warning?`受入登録は完了しました。${warning}`:'更新しました。',Boolean(warning));await load()}catch(error){const message=error instanceof Error?error.message:'更新できませんでした。';setNotice(message,true);showError(message);await load()}finally{button?.removeAttribute('disabled')}};
+    const render=(items:any[])=>{const visible=items.filter(matches);list.innerHTML=visible.length?visible.map(application=>`<article class="app"><div class="top"><h2>${esc(displayName(application))} <small>${esc(application.email)}</small></h2>${actions(application)}</div>${fields(application)}<h3>希望分野</h3><div class="facts">${String(application.desired_subjects||'').split(',').filter(Boolean).map(subject=>`<span>${esc(subjectLabels[subject]??subject)}</span>`).join('')||'<span>旧形式応募：未設定</span>'}</div><h3>書きたい記事・テーマ</h3><pre>${esc(application.article_ideas||'—')}</pre><h3>できること・関心</h3><pre>${esc(application.interests)}</pre><h3>参加理由・自己紹介</h3><pre>${esc(application.message)}</pre>${application.availability_note?`<h3>参加可能な時間帯</h3><pre>${esc(application.availability_note)}</pre>`:''}${application.provisioning_error?`<p class="provisioning-error">${esc(application.provisioning_error)}</p>`:''}${application.status==='accepted'&&!application.verified_discord_user_id?'<a class="member-link" href="/admin/permissions/">本人確認後、参加者一覧でDiscordユーザーIDを登録する →</a>':''}</article>`).join(''):'<p class="application-empty">条件に一致する応募はありません。</p>'};
+    const refresh=()=>render(applications);
+    const load=async()=>{try{const response=await fetch('/api/admin/applications',{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch(error){list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};
+    search.addEventListener('input',refresh);statusFilter.addEventListener('change',refresh);clearFilter?.addEventListener('click',()=>{search.value='';statusFilter.value='all';refresh()});
+    const update=async(id:string,status:string,button?:HTMLButtonElement)=>{button?.setAttribute('disabled','');setNotice(status==='accepted'?'運営者登録とDiscord同期を実行中…':'状態を更新中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'更新できませんでした。');const warning=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';setNotice(warning?`運営者登録は完了しました。${warning}`:'更新しました。',Boolean(warning));await load()}catch(error){setNotice(error instanceof Error?error.message:'更新できませんでした。',true);await load()}finally{button?.removeAttribute('disabled')}};
     root.addEventListener('change',event=>{const select=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-id]');if(!select)return;if(select.value==='accepted'&&!confirm('受入を確定しますか？ 運営者登録・プロフィール反映・Discordロール同期を実行します。')){void load();return}void update(select.dataset.id??'',select.value)});
     root.addEventListener('click',event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-retry]');if(button)void update(button.dataset.retry??'','accepted',button)});
     void load();
-  };
-  document.addEventListener('astro:page-load',initializeApplications);
-  initializeApplications();
+  }
 </script>

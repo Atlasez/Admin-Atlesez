@@ -8,7 +8,7 @@ WHERE id = 'semi-platform'
     WHERE project_id = 'semi-platform'
   )
   AND NOT EXISTS (
-    SELECT 1 FROM editorial_tasks
+    SELECT 1 FROM atlasez_project_todos
     WHERE project_id = 'semi-platform'
   )
   AND NOT EXISTS (

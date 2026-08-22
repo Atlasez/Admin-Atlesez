@@ -9,6 +9,8 @@ import { join } from "node:path";
 
 const dist = process.argv[2] ?? "dist";
 const basePath = (process.argv[3] ?? "/").replace(/\/$/, "");
+// Workerが処理する動的ルートは、静的ビルド成果物内のファイルとしては存在しない。
+const dynamicPathPrefixes = ["/api/", "/auth/"];
 
 function walk(dir) {
   const out = [];
@@ -41,6 +43,8 @@ for (const file of files) {
     if (basePath && url.startsWith(basePath)) url = url.slice(basePath.length);
     if (!url.startsWith("/")) continue; // 相対リンクは対象外（記事内では使わない方針）
     const clean = url.split("?")[0];
+    if (dynamicPathPrefixes.some((prefix) => clean.startsWith(prefix)))
+      continue;
     const candidates = [
       join(dist, clean),
       join(dist, clean, "index.html"),
