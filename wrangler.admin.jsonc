@@ -29,12 +29,12 @@
       },
     ],
   },
-  "migrations": [
-    {
-      "tag": "editorial-collaboration-v1",
-      "new_sqlite_classes": ["EditorialCollaborationRoom"],
+  "exports": {
+    "EditorialCollaborationRoom": {
+      "type": "durable-object",
+      "storage": "sqlite",
     },
-  ],
+  },
   "triggers": {
     "crons": ["0 * * * *", "*/5 * * * *"],
   },
