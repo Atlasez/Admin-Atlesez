@@ -206,6 +206,47 @@ test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", 
   await expect(guide).toBeVisible();
 });
 
+test("数学ブロックをdirectiveで入力し、公開サイトと同じ境界でプレビューする", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const body = page.locator("[data-body]");
+  await body.fill(`::::folding[詳しい条件]
+外側の本文
+
+:::rem[注意]
+注釈本文
+:::
+::::
+
+:::proof
+証明本文 ◻
+:::`);
+
+  const preview = page.locator("[data-preview]");
+  const folding = preview.locator("details.folding").first();
+  await expect(folding.locator(":scope > summary")).toHaveText("詳しい条件");
+  await folding.locator(":scope > summary").click();
+  await expect(folding.locator("aside.rem")).toContainText("注釈本文");
+  await expect(folding.locator(".rem-title")).toHaveText("注意");
+  await expect(preview.locator("details.proof-details")).toContainText(
+    "証明本文 ◻",
+  );
+
+  await body.fill(":::::rem\n無効な注釈\n:::::");
+  await expect(preview.locator(".katex-error").first()).toContainText(
+    "::: または ::::",
+  );
+
+  await body.fill("枠で囲む本文");
+  await body.selectText();
+  await page.getByRole("button", { name: "注釈", exact: true }).click();
+  await expect(body).toHaveValue(/:::rem\[注釈\]\n枠で囲む本文\n:::/u);
+  await expect(preview.locator("aside.rem")).toContainText("枠で囲む本文");
+});
+
 test("V-2: フィードバック担当者と依頼内容を選んで保存できる", async ({
   page,
 }) => {
