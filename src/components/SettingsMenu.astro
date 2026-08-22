@@ -35,6 +35,7 @@ const close = locale === "ja" ? "閉じる" : "Close";
 <style>
   .settings-menu {
     position: relative;
+    z-index: 210;
     border: 0;
     border-radius: 0;
   }
@@ -81,7 +82,7 @@ const close = locale === "ja" ? "閉じる" : "Close";
   .settings-panel {
     position: absolute;
     right: 0;
-    z-index: 30;
+    z-index: 220;
     width: 18rem;
     max-width: min(20rem, calc(100vw - 2 * var(--space-3)));
     margin-top: var(--space-1);

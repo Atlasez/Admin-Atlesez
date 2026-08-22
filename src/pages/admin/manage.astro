@@ -1,0 +1,22 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+const project = Astro.url.searchParams.get("project") === "secretariat" ? "secretariat" : Astro.url.searchParams.get("project") === "seminar-platform" ? "seminar-platform" : "atlas";
+---
+
+<AdminLayout title="管理トップ" description="管理機能の入口">
+  <main class="management-home">
+    <header><p>管理</p><h1>管理トップ</h1><span>目的から管理画面を選べます。権限が必要な機能は、対象の役割を持つメンバーにだけ表示されます。</span></header>
+    <section aria-label="管理機能">
+      <a href={`/admin/permissions/?project=${project}`} data-manager-only hidden><strong>運営者・担当管理</strong><small>ログイン許可、担当分野、プロフィールを管理する</small><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span>開く →</span></a>
+      {project === "atlas" && <a href="/admin/review/" data-manager-only hidden><strong>フィードバック一覧</strong><small>フィードバック依頼と担当状況を確認する</small><ul class="role-tags"><li>統括</li><li>フィードバック担当</li></ul><span>開く →</span></a>}
+      <a href={`/admin/reports/?project=${project}`}><strong>問題報告・統計</strong><small>問題報告と閲覧状況を確認する</small><ul class="role-tags"><li>運営メンバー</li></ul><span>開く →</span></a>
+      <a href={`/admin/guide/?project=${project}`}><strong>作業の進め方</strong><small>プロジェクトの手順とルールを確認する</small><ul class="role-tags"><li>運営メンバー</li></ul><span>開く →</span></a>
+      <a href={`/admin/applications/?project=${project}`} data-manager-only hidden><strong>応募管理</strong><small>運営参加応募の確認と受入を行う</small><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span>開く →</span></a>
+      <a href={`/admin/co-working/?project=${project}`}><strong>同時作業会</strong><small>作業会の日程と参加状況を管理する</small><ul class="role-tags"><li>運営メンバー</li></ul><span>開く →</span></a>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .management-home{margin:0 auto;max-width:1100px;padding:0 1.25rem 4rem}.management-home header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.25rem}.management-home header p{color:var(--accent-primary);font-size:.74rem;font-weight:900;margin:0}.management-home h1{font-size:2rem;margin:.25rem 0}.management-home header span{color:var(--text-secondary);line-height:1.6}.management-home section{display:grid;gap:.75rem;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1.25rem}.management-home a{background:var(--background-secondary);border:1px solid var(--border-default);color:var(--text-primary);display:grid;gap:.4rem;min-height:7rem;padding:1rem;text-decoration:none}.management-home a:hover{border-color:var(--accent-primary)}.management-home a[hidden]{display:none!important}.management-home strong{font-size:.95rem}.management-home small{color:var(--text-secondary);line-height:1.55}.management-home a>span{color:var(--accent-primary);font-size:.75rem;font-weight:800;margin-top:auto}.role-tags{display:flex;flex-wrap:wrap;gap:.25rem;list-style:none;margin:0;padding:0}.role-tags li{background:var(--background-primary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;font-weight:800;padding:.18rem .4rem}@media(max-width:760px){.management-home{padding:0 .85rem 3rem}.management-home section{grid-template-columns:1fr}}
+</style>

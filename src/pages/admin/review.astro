@@ -1,0 +1,27 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+---
+
+<AdminLayout title="フィードバック" description="原稿一覧のフィードバック表示へ移動します">
+  <main class="review-redirect">
+    <h1>フィードバック一覧へ移動します</h1>
+    <p>
+      フィードバック機能は原稿一覧へ統合されました。自動で移動しない場合は、<a
+        href="/admin/articles/?mode=review#article-list"
+        >フィードバック対象の原稿一覧</a
+      >を開いてください。
+    </p>
+  </main>
+</AdminLayout>
+
+<script is:inline>
+  location.replace("/admin/articles/?mode=review#article-list");
+</script>
+
+<style>
+  .review-redirect {
+    margin: 0 auto;
+    max-width: 48rem;
+    padding: 3rem 1.25rem;
+  }
+</style>

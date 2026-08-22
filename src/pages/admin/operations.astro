@@ -9,85 +9,1085 @@ const holidayCountries = [
   ["JP", "日本"], ["US", "米国"], ["GB", "英国"], ["FR", "フランス"], ["DE", "ドイツ"], ["KR", "韓国"], ["CN", "中国"], ["TW", "台湾"], ["IN", "インド"], ["AU", "オーストラリア"], ["CA", "カナダ"],
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
+const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
+const calendarSettings = Astro.url.searchParams.get("tab") === "settings";
+const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
 ---
-<AdminLayout title="進捗・ToDo・日程" description="運営作業を共有する場所">
-<main class="operations" data-operations>
-<header><h1 data-project-title>進捗・ToDo・日程</h1><span>作業を終えたら進捗を残し、次の作業と参加可能な日程を共有します。</span></header>
-<div class="grid">
-<section><h2>進捗を報告</h2><p>編集・査読の完了後に、ここへ短く記録できます。</p><p class="discord-notice">記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。</p><label class="field-label">進捗内容<textarea data-progress placeholder="例：群の定義を修正し、査読コメント3件に対応しました。"></textarea></label><button data-send-progress>進捗を記録してDiscordへ送る</button><output data-progress-feedback aria-live="polite"></output><h3 class="subheading">自分が投げた進捗報告</h3><div data-progress-list></div></section>
-<section><h2>ToDo</h2><p>「自分がこなす」「自分が依頼」「すべて」を切り替えると、この直下の一覧が変わります。</p><div class="task-filters" role="group" aria-label="ToDoの表示対象"><button type="button" class="is-selected" data-task-filter="assigned" aria-pressed="true">自分がこなす</button><button type="button" data-task-filter="created" aria-pressed="false">自分が依頼</button><button type="button" data-task-filter="all" aria-pressed="false">すべて</button></div><input data-task-title placeholder="タスク名"/><label class="field-label">対象分野<select data-task-subject><option value="">全体</option>{subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}</select></label><label class="field-label">担当者<select data-task-assignee><option value="">担当者を指定しない</option></select></label><div class="task-deadline"><label class="field-label">期限日時<input data-task-due type="datetime-local" /></label><label class="field-label">期限のタイムゾーン<select data-task-due-timezone>{timezones.map(([value, label]) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}</select></label></div><div class="task-reminder-settings"><h3>自分用リマインダー</h3><p>期限基準の「N日前」「N時間前」「当日毎時」、または指定日時を複数登録できます。メール欄が空欄なら通知ベルに表示します。</p><div data-task-reminder-list><div class="task-reminder-row" data-task-reminder-row><label class="field-label">種類<select data-reminder-kind><option value="before_days">N日前</option><option value="before_hours">N時間前</option><option value="due_day_hourly">当日毎時</option><option value="absolute">指定日時</option></select></label><label class="field-label" data-reminder-amount-label>数量<input data-reminder-amount type="number" min="1" max="8760" placeholder="N" /></label><label class="field-label" data-reminder-start-label hidden>開始時刻<input data-reminder-start type="time" value="09:00" /></label><label class="field-label" data-reminder-at-label hidden>日時<input data-reminder-at type="datetime-local" /></label><button type="button" class="task-reminder-remove" data-remove-reminder hidden>削除</button></div></div><button type="button" class="secondary-button" data-add-task-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し（1つのリマインダーにのみ適用）<select data-task-reminder-repeat><option value="none">1回</option><option value="daily">毎日</option><option value="weekly">毎週</option><option value="monthly">毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input data-task-reminder-email type="email" maxlength="254" placeholder="自分のメールアドレス" /></label></div><textarea data-task-details placeholder="補足・依頼内容（任意）"></textarea><button data-create-task>タスクを追加</button><output class="operation-feedback" data-task-feedback aria-live="polite"></output><div data-task-list aria-live="polite"></div></section>
-<section class="wide"><h2>同時作業会・交流会の日程</h2><p>全分野管理者は日程を追加できます。各メンバーは「参加できる／未定／参加できない」を自分で登録します。</p><div class="calendar-settings" aria-label="カレンダー表示設定"><label class="field-label">表示するタイムゾーン<input data-calendar-timezone list="atlasez-timezone-options" value="Asia/Tokyo" placeholder="例：Asia/Tokyo（入力して検索）"/></label><label class="field-label">祝日の国・地域<select data-calendar-holiday-country>{holidayCountries.map(([value, label]) => <option value={value} selected={value === "JP"}>{label}</option>)}</select></label><label class="field-label">暦の表示<select data-calendar-system>{calendarSystems.map(([value, label]) => <option value={value} selected={value === "gregory"}>{label}</option>)}</select></label></div><datalist id="atlasez-timezone-options">{timezones.map(([value, label]) => <option value={value} label={label}></option>)}</datalist><div class="calendar-head"><button type="button" data-calendar-prev aria-label="前の月">‹</button><strong data-calendar-title>読み込み中…</strong><button type="button" data-calendar-next aria-label="次の月">›</button></div><div class="calendar-week" data-event-calendar aria-label="日程カレンダー"></div><small class="calendar-note">選択した国・地域の固定祝日を表示します。祝日の名称や振替休日は今後の外部祝日カレンダー連携で拡張できます。</small><div class="event-create" data-event-create hidden><input data-event-title placeholder="催し名"/><input data-event-start type="datetime-local" aria-label="開始日時"/><input data-event-end type="datetime-local" aria-label="終了日時"/><input data-event-details placeholder="場所・URL・補足" aria-label="場所・URL・補足"/><input data-event-timezone list="atlasez-timezone-options" value="Asia/Tokyo" placeholder="日程の基準タイムゾーン" aria-label="日程の基準タイムゾーン"/><button data-create-event>日程を追加</button></div><output class="operation-feedback" data-event-feedback aria-live="polite"></output><div data-event-list aria-live="polite"></div><details class="availability-blocks"><summary>自分の可否期間を登録</summary><p>テスト期間や一時滞在など、日程調整で考慮してほしい期間を自分だけの予定として登録できます。</p><div class="availability-block-form"><input data-block-start type="datetime-local" aria-label="可否期間の開始"/><input data-block-end type="datetime-local" aria-label="可否期間の終了"/><select data-block-kind aria-label="可否"><option value="unavailable">動けない</option><option value="available">動ける</option></select><input data-block-label placeholder="理由・メモ（任意）"/><button type="button" data-create-block>期間を追加</button></div><output class="operation-feedback" data-block-feedback aria-live="polite"></output><div data-block-list></div></details></section>
-</div></main>
+
+<AdminLayout title={calendarPage ? "カレンダー" : "タスク管理"} description="運営作業を共有する場所">
+  <main class="operations" data-operations data-calendar-view={calendarSettings ? "settings" : "agenda"}>
+    <header>
+      <h1 data-project-title>{calendarPage ? "カレンダー" : "タスク管理"}</h1>
+      <span>{calendarPage ? "日程、参加可否、祝日を確認します。" : "進捗報告と、次に行うタスクを共有します。"}</span>
+      <nav class="operations-tabs" aria-label="タスクとカレンダー"><a href={`/admin/operations/${Astro.url.search}`} aria-current={!calendarPage ? "page" : undefined}>タスク管理</a><a href={`/admin/calendar/${Astro.url.search}`} aria-current={calendarPage ? "page" : undefined}>カレンダー</a></nav>
+    </header>
+    <div class="grid">
+      <section hidden={calendarPage}>
+        <h2>進捗を報告</h2>
+        <p>編集・フィードバックの完了後に、ここへ短く記録できます。</p>
+        <p class="discord-notice">
+          記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。
+        </p>
+        <label class="field-label"
+          >進捗内容<textarea
+            data-progress
+            placeholder="例：群の定義を修正し、フィードバック3件に対応しました。"
+          ></textarea></label
+        ><button data-send-progress>進捗を記録してDiscordへ送る</button
+        ><output data-progress-feedback aria-live="polite"></output>
+        <h3 class="subheading">自分が投げた進捗報告</h3>
+        <div data-progress-list></div>
+      </section>
+      <section class="task-workspace" hidden={calendarPage}>
+        <div class="task-list-heading">
+          <div>
+            <h2>タスク一覧</h2>
+            <p>表示対象を切り替えると、一覧に表示するタスクが変わります。</p>
+          </div>
+          <button type="button" class="task-create-open" data-open-task-create aria-label="タスクを作成・依頼">＋</button>
+        </div>
+        <div class="task-filters" role="group" aria-label="タスクの表示対象">
+          <button
+            type="button"
+            class="is-selected"
+            data-task-filter="assigned"
+            aria-pressed="true"
+          >
+            自分がこなす</button
+          ><button
+            type="button"
+            data-task-filter="created"
+            aria-pressed="false"
+          >
+            自分が依頼</button
+          ><button type="button" data-task-filter="all" aria-pressed="false">
+            すべて
+          </button>
+        </div>
+        <div data-task-list aria-live="polite"></div>
+        <output class="operation-feedback" data-task-list-feedback aria-live="polite"></output>
+        <dialog class="task-create-dialog" data-task-create-dialog aria-labelledby="task-create-heading">
+          <div class="task-create-panel">
+            <div class="task-create-heading">
+              <h2 id="task-create-heading">タスク作成・依頼</h2>
+              <button type="button" class="task-create-close" data-close-task-create aria-label="タスク作成画面を閉じる">×</button>
+            </div>
+        <input data-task-title placeholder="タスク名" /><label
+          class="field-label"
+          >対象分野<select data-task-subject>
+            <option value="">全体</option>
+            {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
+          </select></label
+        ><label class="field-label"
+          >担当者<select data-task-assignee>
+            <option value="">担当者を指定しない</option>
+          </select></label
+        >
+        <div class="task-deadline">
+          <label class="field-label"
+            >期限日時<input data-task-due type="datetime-local" /></label
+          ><label class="field-label"
+            >期限のタイムゾーン<select data-task-due-timezone>
+              {timezones.map(([value, label]) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}
+            </select></label
+          >
+        </div>
+        <div class="task-reminder-settings">
+          <h3>自分用リマインダー</h3>
+          <p>
+            期限基準の「N日前」「N時間前」「当日毎時」、または指定日時を複数登録できます。メール欄が空欄なら通知ベルに表示します。
+          </p>
+          <div data-task-reminder-list>
+            <div class="task-reminder-row" data-task-reminder-row>
+              <label class="field-label"
+                >種類<select data-reminder-kind>
+                  <option value="before_days">N日前</option>
+                  <option value="before_hours">N時間前</option>
+                  <option value="due_day_hourly">当日毎時</option>
+                  <option value="absolute">指定日時</option>
+                </select></label
+              ><label class="field-label" data-reminder-amount-label
+                >数量<input
+                  data-reminder-amount
+                  type="number"
+                  min="1"
+                  max="8760"
+                  placeholder="N" /></label
+              ><label class="field-label" data-reminder-start-label hidden
+                >開始時刻<input
+                  data-reminder-start
+                  type="time"
+                  value="09:00" /></label
+              ><label class="field-label" data-reminder-at-label hidden
+                >日時<input data-reminder-at type="datetime-local" /></label
+              ><button
+                type="button"
+                class="task-reminder-remove"
+                data-remove-reminder
+                hidden
+              >
+                削除
+              </button>
+            </div>
+          </div>
+          <button type="button" class="secondary-button" data-add-task-reminder>
+            リマインダーを追加</button
+          ><label class="field-label"
+            >指定日時の繰り返し（1つのリマインダーにのみ適用）<select
+              data-task-reminder-repeat
+            >
+              <option value="none">1回</option>
+              <option value="daily">毎日</option>
+              <option value="weekly">毎週</option>
+              <option value="monthly">毎月</option>
+            </select></label
+          ><label class="field-label"
+            >自分の通知先メールアドレス（任意）<input
+              data-task-reminder-email
+              type="email"
+              maxlength="254"
+              placeholder="自分のメールアドレス"
+          /></label>
+        </div>
+        <textarea
+          data-task-details
+          placeholder="補足・依頼内容（任意）"
+        ></textarea
+        ><button type="button" data-create-task>タスクを追加</button
+        ><output
+          class="operation-feedback"
+          data-task-feedback
+          aria-live="polite"
+        ></output>
+          </div>
+        </dialog>
+      </section>
+      <section class="wide" hidden={!calendarPage}>
+        <h2>同時作業会・交流会の日程</h2>
+        <p>
+          日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。
+        </p>
+        <nav class="calendar-view-tabs" aria-label="カレンダー表示"><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}`} data-calendar-tab="agenda" aria-current={!calendarSettings ? "page" : undefined}>予定</a><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}&tab=settings`} data-calendar-tab="settings" aria-current={calendarSettings ? "page" : undefined}>設定</a></nav>
+        <div class="calendar-settings" aria-label="カレンダー表示設定">
+          <label class="field-label timezone-combobox"
+            >表示するタイムゾーン
+            <div>
+              <input
+                data-calendar-timezone
+                role="combobox"
+                aria-label="表示するタイムゾーン"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="atlasez-timezone-options"
+                value="Asia/Tokyo"
+                placeholder="タイムゾーンを検索"
+              /><button
+                type="button"
+                data-timezone-toggle
+                aria-label="タイムゾーン候補を開く"
+              >
+                ▼
+              </button>
+            </div>
+            <div
+              id="atlasez-timezone-options"
+              class="timezone-options"
+              data-timezone-options
+              role="listbox"
+              hidden
+            ></div></label
+          ><label class="field-label holiday-picker"
+            >表示する祝日の国・地域（複数選択可）
+            <div class="holiday-tags" data-holiday-tags></div>
+            <button type="button" class="holiday-add" data-holiday-add aria-expanded="false">タグを追加</button>
+            <select
+              data-calendar-holiday-country
+              multiple
+              size="4"
+            >
+              {holidayCountries.map(([value, label]) => <option value={value} selected={value === "JP"}>{label}</option>)}
+            </select></label
+          ><label class="field-label"
+            >暦の表示<select data-calendar-system>
+              {calendarSystems.map(([value, label]) => <option value={value} selected={value === "gregory"}>{label}</option>)}
+            </select></label
+          >
+        </div>
+        <datalist id="atlasez-timezone-datalist">
+          {timezones.map(([value, label]) => <option value={value} label={label}></option>)}
+        </datalist>
+        <div class="calendar-head">
+          <button type="button" data-calendar-prev aria-label="前の月">‹</button
+          ><strong data-calendar-title>読み込み中…</strong
+          ><button type="button" data-calendar-next aria-label="次の月">
+            ›
+          </button>
+        </div>
+        <div
+          class="calendar-week"
+          data-event-calendar
+          aria-label="日程カレンダー"
+        ></div>
+        <div
+          class="availability-popover"
+          data-availability-popover
+          role="dialog"
+          aria-label="参加可否のメンバー詳細"
+          hidden
+        ></div>
+        <small class="calendar-note"
+          >祝日は date-holidays
+          で自動計算します（206か国と対応する州・地域、ISC。データ: CC BY-SA
+          3.0）。未対応の地域は公開iCalを追加する方式へ拡張できます。</small
+        >
+        <div class="event-create" data-event-create hidden>
+          <input data-event-title placeholder="催し名" /><input
+            data-event-start
+            type="datetime-local"
+            aria-label="開始日時"
+          /><input
+            data-event-end
+            type="datetime-local"
+            aria-label="終了日時"
+          /><input
+            data-event-details
+            placeholder="場所・URL・補足"
+            aria-label="場所・URL・補足"
+          /><input
+            data-event-timezone
+            list="atlasez-timezone-datalist"
+            value="Asia/Tokyo"
+            placeholder="日程の基準タイムゾーン"
+            aria-label="日程の基準タイムゾーン"
+          /><button data-create-event>日程を追加</button>
+        </div>
+        <output
+          class="operation-feedback"
+          data-event-feedback
+          aria-live="polite"
+        ></output>
+        <div data-event-list aria-live="polite"></div>
+        <details class="availability-blocks" data-block-editor>
+          <summary>自分の可否期間を登録</summary>
+          <p>
+            終日が初期値です。必要な場合だけ時刻を指定できます。他メンバーには表示名と可否だけを共有し、メモは本人と管理者だけに表示します。
+          </p>
+          <label class="all-day-toggle"
+            ><input type="checkbox" data-block-all-day checked />終日</label
+          >
+          <div class="availability-block-form">
+            <input
+              data-block-start
+              type="datetime-local"
+              aria-label="可否期間の開始"
+            /><input
+              data-block-end
+              type="datetime-local"
+              aria-label="可否期間の終了"
+            /><select data-block-kind aria-label="可否">
+              <option value="unavailable">動けない</option>
+              <option value="available">動ける</option></select
+            ><input data-block-label placeholder="理由・メモ（任意）" /><button
+              type="button"
+              data-create-block
+            >
+              期間を追加
+            </button>
+          </div>
+          <output
+            class="operation-feedback"
+            data-block-feedback
+            aria-live="polite"
+          ></output>
+          <div data-block-list></div>
+        </details>
+      </section>
+    </div>
+  </main>
 </AdminLayout>
 <style is:global>
-.operations{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.operations > header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.25rem}.operations > header p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.operations h1{font-size:2rem;margin:.25rem 0}.operations > header span,.operations section>p{color:var(--text-secondary);line-height:1.6}.grid{display:grid;gap:1rem;grid-template-columns:1fr 1fr;margin-top:1.25rem}.grid section{border:1px solid var(--border-default);padding:1rem}.grid h2{font-size:1.1rem;margin:0}.grid section>p{font-size:.82rem;margin:.4rem 0 .8rem}.wide{grid-column:span 2}.operations input,.operations textarea{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;margin:.25rem 0;padding:.55rem;width:100%}.operations textarea{min-height:6rem;resize:vertical}.operations button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font:inherit;font-size:.82rem;font-weight:800;margin-top:.35rem;padding:.5rem .7rem}.item{border-top:1px solid var(--border-default);display:grid;gap:.3rem;margin-top:.85rem;padding:.7rem 0}.item small{color:var(--text-secondary)}.task-row{align-items:center;display:flex;gap:.5rem;justify-content:space-between}.task-row select{font:inherit;padding:.25rem}.event-create{display:grid;gap:.35rem;grid-template-columns:1fr 1fr 1fr auto}.event-create[hidden]{display:none!important}.availability{display:flex;flex-wrap:wrap;gap:.35rem}.availability button{background:var(--background-secondary);border-color:var(--border-default);color:var(--text-primary)}.availability button:hover{border-color:var(--accent-primary);color:var(--accent-primary)}@media(max-width:700px){.operations{padding:0 .8rem 3rem}.operations > header{align-items:start;display:block}.grid{grid-template-columns:1fr}.wide{grid-column:auto}.event-create{grid-template-columns:1fr}.task-row{align-items:start;display:grid}}
-  .calendar-head{align-items:center;display:flex;justify-content:center;gap:.7rem;margin:1rem 0 .55rem}.calendar-head button{font-size:1.2rem;line-height:1;margin:0;min-width:2.2rem}.calendar-week{display:grid;gap:1px;grid-template-columns:repeat(7,minmax(0,1fr));background:var(--border-default);border:1px solid var(--border-default)}.calendar-cell{background:var(--background-primary);min-height:6.8rem;padding:.35rem}.calendar-cell--blank{background:var(--background-secondary)}.calendar-day{color:var(--text-secondary);font-size:.7rem;font-weight:800}.calendar-event{background:color-mix(in srgb,var(--accent-primary) 13%,var(--background-primary));border-left:2px solid var(--accent-primary);display:block;font-size:.67rem;line-height:1.35;margin-top:.25rem;overflow:hidden;padding:.15rem .25rem;text-overflow:ellipsis;white-space:nowrap}.calendar-note{color:var(--text-secondary);display:block;font-size:.72rem;margin-top:.5rem}.event-create{grid-template-columns:1fr 1fr 1fr minmax(125px,.7fr) auto}@media(max-width:700px){.calendar-cell{min-height:4.6rem;padding:.25rem}.calendar-event{font-size:.58rem}.event-create{grid-template-columns:1fr}}
-  .calendar-settings{display:grid;gap:.65rem;grid-template-columns:1.35fr 1fr 1fr}.calendar-settings input,.calendar-settings select{margin:.25rem 0}.calendar-settings input[list]{min-width:0}.calendar-note{line-height:1.5}@media(max-width:700px){.calendar-settings{grid-template-columns:1fr}}
-  .calendar-cell--holiday{background:color-mix(in srgb,#d9485f 8%,var(--background-primary))}.calendar-holiday{color:#b33649;display:block;font-size:.61rem;font-weight:800;line-height:1.25;margin-top:.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-deadline{display:grid;gap:.55rem;grid-template-columns:1fr 1fr}.task-deadline input,.task-deadline select{margin:.25rem 0}@media(max-width:700px){.task-deadline{grid-template-columns:1fr}}
-  .event-heading{align-items:center;display:flex;gap:.6rem;justify-content:space-between}
-  .event-delete{background:transparent!important;border-color:var(--border-default)!important;color:var(--text-secondary)!important;font-size:.72rem!important;font-weight:700!important;margin:0!important;padding:.3rem .5rem!important}
-  .event-delete:hover{border-color:var(--accent-primary)!important;color:var(--accent-primary)!important}
+  .operations {
+    margin: 0 auto;
+    max-width: 1200px;
+    padding: 0 1.25rem 4rem;
+  }
+  .operations > header {
+    border-bottom: 1px solid var(--border-default);
+    padding: 2rem 0 1.25rem;
+  }
+  .operations > header p {
+    color: var(--accent-primary);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin: 0;
+  }
+  .operations h1 {
+    font-size: 2rem;
+    margin: 0.25rem 0;
+  }
+  .operations > header span,
+  .operations section > p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .operations-tabs { display:flex; gap:.35rem; margin-top:.75rem; }
+  .operations-tabs a { border:1px solid var(--border-default); color:var(--text-primary); font-size:.76rem; font-weight:800; padding:.4rem .65rem; text-decoration:none; }
+  .operations-tabs a[aria-current="page"] { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
+  .calendar-view-tabs { border-bottom:1px solid var(--border-default); display:flex; gap:.2rem; margin:.75rem 0; }
+  .calendar-view-tabs a { border-bottom:3px solid transparent; color:var(--text-secondary); font-size:.78rem; font-weight:800; padding:.45rem .7rem; text-decoration:none; }
+  .calendar-view-tabs a[aria-current="page"] { border-bottom-color:var(--accent-primary); color:var(--accent-primary); }
+  .operations[data-calendar-view="agenda"] .calendar-settings { display:none; }
+  .operations[data-calendar-view="settings"] .calendar-head,
+  .operations[data-calendar-view="settings"] .calendar-week,
+  .operations[data-calendar-view="settings"] .calendar-note,
+  .operations[data-calendar-view="settings"] .event-create,
+  .operations[data-calendar-view="settings"] [data-event-feedback],
+  .operations[data-calendar-view="settings"] [data-event-list],
+  .operations[data-calendar-view="settings"] .availability-blocks { display:none!important; }
+  .grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 1.25rem;
+  }
+  .grid section {
+    border: 1px solid var(--border-default);
+    padding: 1rem;
+  }
+  .grid h2 {
+    font-size: 1.1rem;
+    margin: 0;
+  }
+  .grid section > p {
+    font-size: 0.82rem;
+    margin: 0.4rem 0 0.8rem;
+  }
+  .wide {
+    grid-column: span 2;
+  }
+  .operations input,
+  .operations textarea {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font: inherit;
+    margin: 0.25rem 0;
+    padding: 0.55rem;
+    width: 100%;
+  }
+  .operations textarea {
+    min-height: 6rem;
+    resize: vertical;
+  }
+  .operations button {
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    margin-top: 0.35rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .item {
+    border-top: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.3rem;
+    margin-top: 0.85rem;
+    padding: 0.7rem 0;
+  }
+  .item small {
+    color: var(--text-secondary);
+  }
+  .task-row {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+  }
+  .task-row select {
+    font: inherit;
+    padding: 0.25rem;
+  }
+  .event-create {
+    display: grid;
+    gap: 0.35rem;
+    grid-template-columns: 1fr 1fr 1fr auto;
+  }
+  .event-create[hidden] {
+    display: none !important;
+  }
+  .availability {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .availability button {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+  }
+  .availability button:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  @media (max-width: 700px) {
+    .operations {
+      padding: 0 0.8rem 3rem;
+    }
+    .operations > header {
+      align-items: start;
+      display: block;
+    }
+    .grid {
+      grid-template-columns: 1fr;
+    }
+    .wide {
+      grid-column: auto;
+    }
+    .event-create {
+      grid-template-columns: 1fr;
+    }
+    .task-row {
+      align-items: start;
+      display: grid;
+    }
+  }
+  .calendar-head {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    gap: 0.7rem;
+    margin: 1rem 0 0.55rem;
+  }
+  .calendar-head button {
+    font-size: 1.2rem;
+    line-height: 1;
+    margin: 0;
+    min-width: 2.2rem;
+  }
+  .calendar-week {
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    background: var(--border-default);
+    border: 1px solid var(--border-default);
+  }
+  .calendar-cell {
+    background: var(--background-primary);
+    min-height: 6.8rem;
+    padding: 0.35rem;
+    position: relative;
+  }
+  .calendar-cell--blank {
+    background: var(--background-secondary);
+  }
+  .calendar-day {
+    align-items: center;
+    color: var(--text-secondary);
+    display: inline-flex;
+    font-size: 0.7rem;
+    font-weight: 800;
+    height: 1.55rem;
+    justify-content: center;
+    width: 1.55rem;
+  }
+  .calendar-cell-header {
+    align-items: center;
+    display: flex;
+    height: 1.7rem;
+    justify-content: space-between;
+  }
+  .calendar-date-select {
+    align-items: center;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 50%;
+    color: inherit !important;
+    display: inline-flex;
+    height: 1.55rem;
+    justify-content: center;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 1.55rem;
+  }
+  .calendar-cell-content {
+    display: grid;
+    gap: 0.22rem;
+    min-width: 0;
+  }
+  .calendar-event {
+    background: color-mix(
+      in srgb,
+      var(--accent-primary) 13%,
+      var(--background-primary)
+    );
+    border-left: 2px solid var(--accent-primary);
+    display: grid;
+    font-size: 0.67rem;
+    gap: 0.08rem;
+    line-height: 1.35;
+    margin-top: 0;
+    overflow: hidden;
+    padding: 0.15rem 0.25rem;
+    text-overflow: ellipsis;
+  }
+  .calendar-event > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .calendar-note {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.72rem;
+    margin-top: 0.5rem;
+  }
+  .event-create {
+    grid-template-columns: 1fr 1fr 1fr minmax(125px, 0.7fr) auto;
+  }
+  @media (max-width: 700px) {
+    .calendar-cell {
+      min-height: 4.6rem;
+      padding: 0.25rem;
+    }
+    .calendar-event {
+      font-size: 0.58rem;
+    }
+    .event-create {
+      grid-template-columns: 1fr;
+    }
+  }
+  .calendar-settings {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: 1.35fr 1fr 1fr;
+  }
+  .holiday-picker { align-content:start; position:relative; }
+  .holiday-picker > select { display:none; }
+  .holiday-picker.is-open > select { display:block; max-height:11rem; position:absolute; top:100%; z-index:25; }
+  .holiday-tags { display:flex; flex-wrap:wrap; gap:.3rem; min-height:2rem; }
+  .holiday-tags button { background:var(--background-secondary); border-color:var(--border-default); border-radius:999px; color:var(--text-primary); font-size:.7rem; margin:0; padding:.25rem .45rem; }
+  .holiday-tags span { color:var(--text-secondary); font-size:.72rem; }
+  .holiday-add { background:var(--background-primary)!important; border-color:var(--accent-primary)!important; color:var(--accent-primary)!important; justify-self:start; margin:0!important; }
+  .calendar-settings input,
+  .calendar-settings select {
+    margin: 0.25rem 0;
+  }
+  .calendar-settings input[list] {
+    min-width: 0;
+  }
+  .calendar-note {
+    line-height: 1.5;
+  }
+  @media (max-width: 700px) {
+    .calendar-settings {
+      grid-template-columns: 1fr;
+    }
+  }
+  .calendar-cell--holiday {
+    background: color-mix(in srgb, #d9485f 8%, var(--background-primary));
+  }
+  .calendar-holiday {
+    color: #b33649;
+    display: block;
+    font-size: 0.61rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .task-deadline {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: 1fr 1fr;
+  }
+  .task-deadline input,
+  .task-deadline select {
+    margin: 0.25rem 0;
+  }
+  @media (max-width: 700px) {
+    .task-deadline {
+      grid-template-columns: 1fr;
+    }
+  }
+  .calendar-cell:hover,
+  .calendar-cell:focus-within {
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
+  }
+  .calendar-cell--holiday {
+    background: color-mix(in srgb, #d9485f 8%, var(--background-primary));
+  }
+  .calendar-cell--selected {
+    background: color-mix(in srgb, var(--accent-primary) 20%, var(--background-primary));
+    box-shadow: inset 0 0 0 2px var(--accent-primary);
+  }
+  .calendar-cell--today .calendar-date-select {
+    background: var(--accent-primary);
+    color: #fff;
+  }
+  .calendar-cell--today .calendar-day { color:#fff; }
+  .calendar-availability {
+    margin-top: 0.08rem;
+  }
+  .event-heading {
+    align-items: center;
+    display: flex;
+    gap: 0.6rem;
+    justify-content: space-between;
+  }
+  .event-delete {
+    background: transparent !important;
+    border-color: var(--border-default) !important;
+    color: var(--text-secondary) !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    padding: 0.3rem 0.5rem !important;
+  }
+  .event-delete:hover {
+    border-color: var(--accent-primary) !important;
+    color: var(--accent-primary) !important;
+  }
 </style>
 <style is:global>
-  .participant-summary { border-top: 1px solid var(--border-default); display: grid; gap: .45rem; margin-top: .55rem; padding-top: .55rem; }
-  .participant-counts, .participant-names { display: flex; flex-wrap: wrap; gap: .35rem; }
-  .participant-counts span, .participant-chip { border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); font-size: .72rem; padding: .2rem .45rem; }
-  .participant-chip { color: var(--text-primary); }
-  .participant-available { background: #e4f5ea; border-color: #9bc9a9; }
-  .participant-maybe { background: #fff4d6; border-color: #e5c879; }
-  .participant-unavailable { background: #f5e5e7; border-color: #d8a4ad; }
+  .availability-summary-trigger {
+    align-items: center;
+    background: var(--background-secondary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 999px;
+    color: var(--text-primary) !important;
+    display: inline-flex;
+    font-size: .7rem !important;
+    font-weight: 900;
+    gap: .35rem;
+    margin: 0 !important;
+    min-height: 1.7rem;
+    padding: .18rem .48rem !important;
+    width: fit-content;
+  }
+  .availability-summary-trigger:hover,
+  .availability-summary-trigger:focus-visible {
+    border-color: var(--accent-primary) !important;
+  }
+  .availability-count-available { color:#176b32; }
+  .availability-count-maybe { color:#805d00; }
+  .availability-count-unavailable { color:#8b2635; }
+  [data-pref-bg="dark"] .availability-count-available { color:#9ce3b1; }
+  [data-pref-bg="dark"] .availability-count-maybe { color:#f5d778; }
+  [data-pref-bg="dark"] .availability-count-unavailable { color:#ffb5bf; }
+  .calendar-event .availability-summary-trigger {
+    background: transparent !important;
+    border: 0 !important;
+    font-size: .6rem !important;
+    margin-top: .15rem !important;
+    min-height: 1.3rem;
+    padding: 0 !important;
+  }
+  .participant-summary {
+    border-top: 1px solid var(--border-default);
+    margin-top: .55rem;
+    padding-top: .55rem;
+  }
+  .availability-popover {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: .65rem;
+    box-shadow: 0 .75rem 2rem rgb(0 0 0 / .2);
+    color: var(--text-primary);
+    max-height: min(26rem, calc(100vh - 2rem));
+    max-width: min(22rem, calc(100vw - 1.5rem));
+    overflow: auto;
+    padding: .75rem .85rem;
+    position: fixed;
+    width: max-content;
+    z-index: 90;
+  }
+  .availability-popover[hidden] { display:none; }
+  .availability-popover h3 { font-size:.85rem; margin:0 0 .55rem; }
+  .availability-popover section + section { border-top:1px solid var(--border-default); margin-top:.55rem; padding-top:.55rem; }
+  .availability-popover h4 { font-size:.75rem; margin:0 0 .3rem; }
+  .availability-popover ul { margin:0; padding-left:1.2rem; }
+  .availability-popover li { font-size:.75rem; line-height:1.55; }
 </style>
-<style>.discord-notice{background:color-mix(in srgb,var(--accent-primary),transparent 90%);border-left:3px solid var(--accent-primary);font-size:.8rem!important;font-weight:700;padding:.55rem .7rem}</style>
-<style>.field-label{color:var(--text-secondary);display:grid;font-size:.76rem;font-weight:800;gap:.15rem}.operations select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;margin:.25rem 0;padding:.55rem;width:100%}.operation-feedback{color:var(--text-secondary);display:block;font-size:.76rem;min-height:1.2rem;padding-top:.35rem}.operations button:disabled{cursor:wait;opacity:.62}</style>
-<style>.availability button.is-selected{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary),transparent 75%)}.availability button[aria-pressed="true"]{font-weight:900}</style>
-<style is:global>
-  .subheading{border-top:1px solid var(--border-default);font-size:.82rem;margin:1rem 0 0;padding-top:.75rem}
-  .task-role{background:color-mix(in srgb,var(--accent-primary),transparent 88%);border-radius:999px;color:var(--accent-primary);font-weight:800;padding:.12rem .35rem}
-  .task-reminder-settings{background:color-mix(in srgb,var(--accent-primary),transparent 95%);border:1px solid var(--border-default);margin:.8rem 0;padding:.75rem}
-  .task-reminder-settings h3{font-size:.9rem;margin:0}
-  .task-reminder-settings p,.reminder-editor-note{color:var(--text-secondary);font-size:.75rem;line-height:1.5}
-  .task-reminder-row{align-items:end;border-top:1px solid var(--border-default);display:grid;gap:.4rem;grid-template-columns:1.2fr .8fr 1fr 1.25fr auto;padding-top:.5rem}
-  .task-reminder-row input,.task-reminder-row select{margin:0}
-  .task-reminder-row [hidden]{display:none}
-  .task-reminder-remove,.secondary-button{background:var(--background-secondary)!important;border-color:var(--border-default)!important;color:var(--text-primary)!important}
-  .task-reminder-remove{margin:0!important;white-space:nowrap}
-  .task-reminder-editor{border-top:1px solid var(--border-default);margin-top:.7rem;padding-top:.55rem}
-  .task-reminder-editor summary{color:var(--accent-primary);cursor:pointer;font-size:.78rem;font-weight:800}
-  .task-reminder-rules{display:grid;gap:.45rem}
-  .task-reminder-editor > div > .field-label{margin-top:.5rem}
-  @media(max-width:900px){.task-reminder-row{grid-template-columns:1fr 1fr}.task-reminder-row button{justify-self:start}}
-  @media(max-width:700px){.task-reminder-row{grid-template-columns:1fr}.task-reminder-row button{width:auto}}
+<style>
+  .discord-notice {
+    background: color-mix(in srgb, var(--accent-primary), transparent 90%);
+    border-left: 3px solid var(--accent-primary);
+    font-size: 0.8rem !important;
+    font-weight: 700;
+    padding: 0.55rem 0.7rem;
+  }
+</style>
+<style>
+  .field-label {
+    color: var(--text-secondary);
+    display: grid;
+    font-size: 0.76rem;
+    font-weight: 800;
+    gap: 0.15rem;
+  }
+  .operations select {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font: inherit;
+    margin: 0.25rem 0;
+    padding: 0.55rem;
+    width: 100%;
+  }
+  .operation-feedback {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.76rem;
+    min-height: 1.2rem;
+    padding-top: 0.35rem;
+  }
+  .operations button:disabled {
+    cursor: wait;
+    opacity: 0.62;
+  }
+</style>
+<style>
+  .availability button.is-selected {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--accent-primary), transparent 75%);
+  }
+  .availability button[aria-pressed="true"] {
+    font-weight: 900;
+  }
 </style>
 <style is:global>
-  .task-filters { display:flex; flex-wrap:wrap; gap:.4rem; margin:.7rem 0; }
-  .task-filters button { background:var(--background-primary); border-color:var(--border-default); border-radius:999px; color:var(--text-primary); margin:0; }
-  .task-filters button.is-selected { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
-  .availability-blocks { border-top:1px solid var(--border-default); margin-top:1rem; padding-top:.8rem; }
-  .availability-blocks summary { cursor:pointer; font-weight:800; }
-  .availability-blocks p { font-size:.78rem; }
-  .availability-block-form { display:grid; gap:.4rem; grid-template-columns:1fr 1fr .7fr 1fr auto; }
-  .availability-block-form input,.availability-block-form select { margin:0; min-width:0; }
-  .availability-block-form button { margin:0; }
-  .availability-block-item { align-items:center; display:flex; gap:.5rem; grid-template-columns:1fr auto; justify-content:space-between; }
-  .availability-block-item .event-delete { flex:0 0 auto; }
-  @media(max-width:900px) { .availability-block-form { grid-template-columns:1fr 1fr; } }
-  @media(max-width:700px) { .availability-block-form { grid-template-columns:1fr; } }
+  .subheading {
+    border-top: 1px solid var(--border-default);
+    font-size: 0.82rem;
+    margin: 1rem 0 0;
+    padding-top: 0.75rem;
+  }
+  .task-role {
+    background: color-mix(in srgb, var(--accent-primary), transparent 88%);
+    border-radius: 999px;
+    color: var(--accent-primary);
+    font-weight: 800;
+    padding: 0.12rem 0.35rem;
+  }
+  .task-reminder-settings {
+    background: color-mix(in srgb, var(--accent-primary), transparent 95%);
+    border: 1px solid var(--border-default);
+    margin: 0.8rem 0;
+    padding: 0.75rem;
+  }
+  .task-reminder-settings h3 {
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  .task-reminder-settings p,
+  .reminder-editor-note {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+  .task-reminder-row {
+    align-items: end;
+    border-top: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.4rem;
+    grid-template-columns: 1.2fr 0.8fr 1fr 1.25fr auto;
+    padding-top: 0.5rem;
+  }
+  .task-reminder-row input,
+  .task-reminder-row select {
+    margin: 0;
+  }
+  .task-reminder-row [hidden] {
+    display: none;
+  }
+  .task-reminder-remove,
+  .secondary-button {
+    background: var(--background-secondary) !important;
+    border-color: var(--border-default) !important;
+    color: var(--text-primary) !important;
+  }
+  .task-reminder-remove {
+    margin: 0 !important;
+    white-space: nowrap;
+  }
+  .task-reminder-editor {
+    border-top: 1px solid var(--border-default);
+    margin-top: 0.7rem;
+    padding-top: 0.55rem;
+  }
+  .task-reminder-editor summary {
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+  .task-reminder-rules {
+    display: grid;
+    gap: 0.45rem;
+  }
+  .task-reminder-editor > div > .field-label {
+    margin-top: 0.5rem;
+  }
+  @media (max-width: 900px) {
+    .task-reminder-row {
+      grid-template-columns: 1fr 1fr;
+    }
+    .task-reminder-row button {
+      justify-self: start;
+    }
+  }
+  @media (max-width: 700px) {
+    .task-reminder-row {
+      grid-template-columns: 1fr;
+    }
+    .task-reminder-row button {
+      width: auto;
+    }
+  }
 </style>
 <style is:global>
-  .availability { gap: .6rem; margin-top: .45rem; }
-  .availability button { border-radius: .55rem; font-size: .9rem; min-height: 2.8rem; min-width: 8.5rem; padding: .65rem .9rem; }
-  .availability button.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent-primary),transparent 78%); }
-  @media (max-width: 700px) { .availability { display: grid; grid-template-columns: 1fr; } .availability button { width: 100%; } }
+  .task-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.7rem 0;
+  }
+  .task-filters button {
+    background: var(--background-primary);
+    border-color: var(--border-default);
+    border-radius: 999px;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .task-filters button.is-selected {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+  }
+  .task-list-heading {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+  .task-list-heading p {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    margin: 0.4rem 0 0;
+  }
+  .task-create-open {
+    align-items: center;
+    border-radius: 50%;
+    display: inline-flex;
+    flex: 0 0 2.5rem;
+    font-size: 1.35rem !important;
+    height: 2.5rem;
+    justify-content: center;
+    line-height: 1;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 2.5rem;
+  }
+  .task-create-dialog {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.7rem;
+    color: var(--text-primary);
+    max-height: calc(100vh - 2rem);
+    max-width: calc(100vw - 2rem);
+    overflow: auto;
+    padding: 0;
+    width: min(44rem, calc(100vw - 2rem));
+  }
+  .task-create-dialog::backdrop {
+    background: rgb(0 0 0 / 0.48);
+  }
+  .task-create-panel {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1rem;
+  }
+  .task-create-heading {
+    align-items: center;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.35rem;
+    padding-bottom: 0.7rem;
+  }
+  .task-create-close {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--text-secondary) !important;
+    font-size: 1.3rem !important;
+    line-height: 1;
+    margin: 0 !important;
+    padding: 0.25rem 0.45rem !important;
+  }
+  .task-create-close:hover,
+  .task-create-close:focus-visible {
+    border-color: var(--border-default) !important;
+    color: var(--text-primary) !important;
+  }
+  .availability-blocks {
+    border-top: 1px solid var(--border-default);
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+  }
+  .availability-blocks summary {
+    cursor: pointer;
+    font-weight: 800;
+  }
+  .availability-blocks p {
+    font-size: 0.78rem;
+  }
+  .availability-block-form {
+    display: grid;
+    gap: 0.4rem;
+    grid-template-columns: 1fr 1fr 0.7fr 1fr auto;
+  }
+  .availability-block-form input,
+  .availability-block-form select {
+    margin: 0;
+    min-width: 0;
+  }
+  .availability-block-form button {
+    margin: 0;
+  }
+  .availability-block-item {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    grid-template-columns: 1fr auto;
+    justify-content: space-between;
+  }
+  .availability-block-item .event-delete {
+    flex: 0 0 auto;
+  }
+  .all-day-toggle {
+    align-items: center;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 800;
+    gap: 0.35rem;
+    margin: 0.4rem 0;
+  }
+  .all-day-toggle input {
+    margin: 0;
+    width: auto;
+  }
+  @media (max-width: 900px) {
+    .availability-block-form {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 700px) {
+    .availability-block-form {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<style is:global>
+  .timezone-combobox {
+    position: relative;
+  }
+  .timezone-combobox > div:first-of-type {
+    display: flex;
+  }
+  .timezone-combobox > div:first-of-type input {
+    margin-right: 0;
+  }
+  .timezone-combobox [data-timezone-toggle] {
+    margin: 0.25rem 0;
+    min-width: 2.6rem;
+  }
+  .timezone-options {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 0.5rem 1.2rem rgb(0 0 0/0.16);
+    display: grid;
+    left: 0;
+    max-height: 18rem;
+    overflow: auto;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 20;
+  }
+  .timezone-options[hidden] {
+    display: none;
+  }
+  .timezone-options button {
+    background: transparent;
+    border: 0;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+  }
+  .timezone-options button:hover {
+    background: var(--background-secondary);
+    color: var(--accent-primary);
+  }
+</style>
+<style is:global>
+  .availability {
+    gap: 0.6rem;
+    margin-top: 0.45rem;
+  }
+  .availability button {
+    border-radius: 0.55rem;
+    font-size: 0.9rem;
+    min-height: 2.8rem;
+    min-width: 8.5rem;
+    padding: 0.65rem 0.9rem;
+  }
+  .availability button.is-selected {
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--accent-primary), transparent 78%);
+  }
+  @media (max-width: 700px) {
+    .availability {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+    .availability button {
+      width: 100%;
+    }
+  }
 </style>
 <script>
+  import { holidaysForRegions, localDateTimeToInstant, supportedHolidayRegions } from '../../lib/calendar-support';
+  import { recurringCoWorkingEventsForMonth } from '../../lib/co-working-schedule';
   type OperationMember = { email: string; display_name?: string };
-  type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: Array<{ displayName: string; availability: string; isSelf: boolean }> };
+  type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
+  type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
-  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: Array<Record<string, any>> };
+  type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
+  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[] };
   const initializeOperations = () => {
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
     root.dataset.initialized = 'true';
+    root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((tab) => tab.addEventListener('click', (event) => {
+      event.preventDefault();
+      const view = tab.dataset.calendarTab === 'settings' ? 'settings' : 'agenda';
+      root.dataset.calendarView = view;
+      root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((item) => item.setAttribute('aria-current', item === tab ? 'page' : 'false'));
+      history.replaceState(null, '', tab.href);
+    }));
     const get = <T extends Element>(selector: string) => root.querySelector<T>(selector)!;
     const progress = get<HTMLTextAreaElement>('[data-progress]');
     const tasks = get<HTMLElement>('[data-task-list]');
@@ -98,6 +1098,12 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
     const calendarTitle = get<HTMLElement>('[data-calendar-title]');
     const timezone = get<HTMLInputElement>('[data-calendar-timezone]');
     const holidayCountry = get<HTMLSelectElement>('[data-calendar-holiday-country]');
+    const holidayTags = get<HTMLElement>('[data-holiday-tags]');
+    const holidayAdd = get<HTMLButtonElement>('[data-holiday-add]');
+    const timezoneOptions = get<HTMLElement>('[data-timezone-options]');
+    const timezoneToggle = get<HTMLButtonElement>('[data-timezone-toggle]');
+    const blockEditor = get<HTMLDetailsElement>('[data-block-editor]');
+    const blockAllDay = get<HTMLInputElement>('[data-block-all-day]');
     const calendarSystem = get<HTMLSelectElement>('[data-calendar-system]');
     const taskDue = get<HTMLInputElement>('[data-task-due]');
     const taskDueTimezone = get<HTMLSelectElement>('[data-task-due-timezone]');
@@ -106,30 +1112,65 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
     const taskReminderRepeat = get<HTMLSelectElement>('[data-task-reminder-repeat]');
     const progressFeedback = get<HTMLOutputElement>('[data-progress-feedback]');
     const taskFeedback = get<HTMLOutputElement>('[data-task-feedback]');
+    const taskListFeedback = get<HTMLOutputElement>('[data-task-list-feedback]');
+    const taskCreateDialog = get<HTMLDialogElement>('[data-task-create-dialog]');
+    const taskCreateOpen = get<HTMLButtonElement>('[data-open-task-create]');
+    const taskTitle = get<HTMLInputElement>('[data-task-title]');
+    const taskDetails = get<HTMLTextAreaElement>('[data-task-details]');
     const eventFeedback = get<HTMLOutputElement>('[data-event-feedback]');
     const blockFeedback = get<HTMLOutputElement>('[data-block-feedback]');
     const projectTitle = get<HTMLElement>('[data-project-title]');
+    const availabilityPopover = get<HTMLElement>('[data-availability-popover]');
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
+    const calendarPage = location.pathname.replace(/\/$/, '') === '/admin/calendar';
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
+    const renderHolidayTags = () => {
+      holidayTags.innerHTML = [...holidayCountry.selectedOptions].map((option) => `<button type="button" data-remove-holiday="${escapeHtml(option.value)}" aria-label="${escapeHtml(option.textContent || option.value)}を外す">${escapeHtml(option.textContent || option.value)} ×</button>`).join('') || '<span>祝日を表示しない</span>';
+    };
+    holidayAdd.addEventListener('click', () => {
+      const opening = !holidayCountry.closest('.holiday-picker')?.classList.contains('is-open');
+      holidayCountry.closest('.holiday-picker')?.classList.toggle('is-open', opening);
+      holidayAdd.setAttribute('aria-expanded', String(opening));
+    });
+    holidayTags.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-holiday]');
+      if (!button) return;
+      const option = [...holidayCountry.options].find((item) => item.value === button.dataset.removeHoliday);
+      if (option) option.selected = false;
+      renderHolidayTags();
+      renderCalendar();
+    });
     const populateTimezones = () => {
       const values = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-      const fallbackValues = [...root.querySelectorAll<HTMLOptionElement>('#atlasez-timezone-options option')].map((option) => option.value);
-      const allValues = values.length ? values : fallbackValues;
-      const datalist = root.querySelector<HTMLDataListElement>('#atlasez-timezone-options');
+      const fallbackValues = [...root.querySelectorAll<HTMLOptionElement>('#atlasez-timezone-datalist option')].map((option) => option.value);
+      const allValues = [...new Set(['UTC', ...(values.length ? values : fallbackValues)])];
+      const datalist = root.querySelector<HTMLDataListElement>('#atlasez-timezone-datalist');
       if (datalist) datalist.innerHTML = allValues.map((value) => `<option value="${escapeHtml(value)}" label="${escapeHtml(value.replaceAll('_', ' / '))}"></option>`).join('');
       root.querySelectorAll<HTMLSelectElement>('[data-task-due-timezone]').forEach((select) => {
         const current = select.value || 'Asia/Tokyo';
         select.innerHTML = allValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value.replaceAll('_', ' / '))}</option>`).join('');
         select.value = allValues.includes(current) ? current : 'Asia/Tokyo';
       });
-      root.querySelectorAll<HTMLInputElement>('[data-calendar-timezone], [data-event-timezone]').forEach((input) => input.setAttribute('list', 'atlasez-timezone-options'));
+      root.querySelectorAll<HTMLInputElement>('[data-event-timezone]').forEach((input) => input.setAttribute('list', 'atlasez-timezone-datalist'));
+      const renderTimezoneOptions = () => {
+        const query = timezone.value.trim().toLocaleLowerCase();
+        timezoneOptions.innerHTML = allValues.filter((value) => !query || value.toLocaleLowerCase().includes(query)).slice(0, 80).map((value) => `<button type="button" role="option" data-timezone-value="${escapeHtml(value)}">${escapeHtml(value.replaceAll('_', ' / '))}</button>`).join('');
+      };
+      timezone.addEventListener('input', () => { renderTimezoneOptions(); timezoneOptions.hidden = false; timezone.setAttribute('aria-expanded', 'true'); });
+      timezoneToggle.addEventListener('click', () => { timezoneOptions.hidden = !timezoneOptions.hidden; timezone.setAttribute('aria-expanded', String(!timezoneOptions.hidden)); renderTimezoneOptions(); });
+      timezoneOptions.addEventListener('click', (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-timezone-value]'); if (!button) return; timezone.value = button.dataset.timezoneValue ?? 'UTC'; timezoneOptions.hidden = true; timezone.setAttribute('aria-expanded', 'false'); render(); });
+      renderTimezoneOptions();
+      const selectedRegions = new Set([...holidayCountry.selectedOptions].map((option) => option.value));
+      holidayCountry.innerHTML = supportedHolidayRegions().map((region) => `<option value="${escapeHtml(region.code)}" ${selectedRegions.has(region.code) ? 'selected' : ''}>${escapeHtml(region.name)}（${escapeHtml(region.code)}）</option>`).join('');
     };
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
+    renderHolidayTags();
     const selected = (actual: string, expected: string) => actual === expected ? 'selected' : '';
     const reminderKind = (rule: ReminderRule) => rule.relative_kind === 'before' ? (rule.relative_unit === 'hours' ? 'before_hours' : 'before_days') : rule.relative_kind === 'due_day_hourly' ? 'due_day_hourly' : 'absolute';
     const reminderRowHtml = (rule: ReminderRule = {}) => {
       const kind = reminderKind(rule);
-      return `<div class="task-reminder-row" data-task-reminder-row><label class="field-label">種類<select data-reminder-kind><option value="before_days" ${selected(kind, 'before_days')}>N日前</option><option value="before_hours" ${selected(kind, 'before_hours')}>N時間前</option><option value="due_day_hourly" ${selected(kind, 'due_day_hourly')}>当日毎時</option><option value="absolute" ${selected(kind, 'absolute')}>指定日時</option></select></label><label class="field-label" data-reminder-amount-label>数量<input data-reminder-amount type="number" min="1" max="8760" value="${escapeHtml(String(rule.relative_amount ?? ''))}" placeholder="N" /></label><label class="field-label" data-reminder-start-label>開始時刻<input data-reminder-start type="time" value="${escapeHtml(String(rule.relative_start || '09:00'))}" /></label><label class="field-label" data-reminder-at-label>日時<input data-reminder-at type="datetime-local" value="${escapeHtml(String(rule.remind_at || ''))}" /></label><button type="button" class="task-reminder-remove" data-remove-reminder>削除</button></div>`;
+      const reminderTimezone = rule.timezone || taskDueTimezone.value || 'Asia/Tokyo';
+      return `<div class="task-reminder-row" data-task-reminder-row><input type="hidden" data-reminder-timezone value="${escapeHtml(reminderTimezone)}" /><label class="field-label">種類<select data-reminder-kind><option value="before_days" ${selected(kind, 'before_days')}>N日前</option><option value="before_hours" ${selected(kind, 'before_hours')}>N時間前</option><option value="due_day_hourly" ${selected(kind, 'due_day_hourly')}>当日毎時</option><option value="absolute" ${selected(kind, 'absolute')}>指定日時</option></select></label><label class="field-label" data-reminder-amount-label>数量<input data-reminder-amount type="number" min="1" max="8760" value="${escapeHtml(String(rule.relative_amount ?? ''))}" placeholder="N" /></label><label class="field-label" data-reminder-start-label>開始時刻<input data-reminder-start type="time" value="${escapeHtml(String(rule.relative_start || '09:00'))}" /></label><label class="field-label" data-reminder-at-label>日時<input data-reminder-at type="datetime-local" value="${escapeHtml(String(rule.remind_at || ''))}" /></label><button type="button" class="task-reminder-remove" data-remove-reminder>削除</button></div>`;
     };
     const refreshReminderRow = (row: HTMLElement) => {
       const kind = row.querySelector<HTMLSelectElement>('[data-reminder-kind]')?.value || 'before_days';
@@ -148,7 +1189,7 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
       const remindAt = row.querySelector<HTMLInputElement>('[data-reminder-at]')?.value || '';
       if (kind === 'before_days' || kind === 'before_hours') return amount ? { kind: 'before', amount: Number(amount), unit: kind === 'before_days' ? 'days' : 'hours' } : null;
       if (kind === 'due_day_hourly') return { kind: 'due_day_hourly', start };
-      return { kind: 'absolute', remindAt, timezone: taskDueTimezone.value || 'Asia/Tokyo', repeat, label: '指定日時' };
+      return { kind: 'absolute', remindAt, timezone: row.querySelector<HTMLInputElement>('[data-reminder-timezone]')?.value || taskDueTimezone.value || 'Asia/Tokyo', repeat, label: '指定日時' };
     }).filter((row) => row !== null && (row.kind !== 'absolute' || row.remindAt));
     const taskReminderRules = (item: Record<string, any>): ReminderRule[] => {
       const rules = Array.isArray(item.reminders) ? item.reminders as ReminderRule[] : [];
@@ -159,7 +1200,7 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
       const rules = taskReminderRules(item);
       const repeat = String(item.reminder_repeat || rules[0]?.repeat || 'none');
       const rows = rules.map((rule) => reminderRowHtml(rule)).join('') || '<p class="reminder-empty">リマインダーは設定されていません。</p>';
-      return `<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}"><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" /></label><button type="button" data-save-reminders>このToDoの設定を保存</button><output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
+      return `<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}"><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" /></label><button type="button" data-save-reminders>このタスクの設定を保存</button><output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
     };
     populateTimezones();
     const api = async <T,>(url: string, method = 'GET', body?: unknown): Promise<T> => {
@@ -171,6 +1212,8 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
     };
     let data: OperationData = { scope: { isManager: false } };
     let month = new Date(); month = new Date(month.getFullYear(), month.getMonth(), 1);
+    let calendarSelectionStart = '';
+    let calendarSelectionEnd = '';
     try { const local = Intl.DateTimeFormat().resolvedOptions().timeZone; if (local) timezone.value = local; } catch { /* 既定の日本時間を使う */ }
     const selectedTimezone = () => {
       const candidate = timezone.value.trim() || 'Asia/Tokyo';
@@ -178,79 +1221,195 @@ const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japane
     };
     const formatDate = (value: string) => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short', timeZone: selectedTimezone() }).format(new Date(value));
     const dateParts = (value: string) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: selectedTimezone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(value)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
-    const holidayName = (key: string) => {
-      const [year, monthNumber, day] = key.split('-').map(Number);
-      const monthDay = `${String(monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const fixed: Record<string, Record<string, string>> = {
-        JP: {'01-01':'元日','02-11':'建国記念の日','02-23':'天皇誕生日','04-29':'昭和の日','05-03':'憲法記念日','05-04':'みどりの日','05-05':'こどもの日','08-11':'山の日','11-03':'文化の日','11-23':'勤労感謝の日'},
-        US: {'01-01':'New Year’s Day','06-19':'Juneteenth','07-04':'Independence Day','11-11':'Veterans Day','12-25':'Christmas Day'},
-        GB: {'01-01':'New Year’s Day','12-25':'Christmas Day','12-26':'Boxing Day'},
-        FR: {'01-01':'Jour de l’An','05-01':'Fête du Travail','07-14':'Fête nationale','11-11':'Armistice','12-25':'Noël'},
-        DE: {'01-01':'Neujahr','05-01':'Tag der Arbeit','10-03':'Tag der Deutschen Einheit','12-25':'1. Weihnachtstag','12-26':'2. Weihnachtstag'},
-        KR: {'01-01':'신정','03-01':'삼일절','05-05':'어린이날','06-06':'현충일','08-15':'광복절','10-03':'개천절','10-09':'한글날','12-25':'성탄절'},
-        CN: {'01-01':'元旦','05-01':'劳动节','10-01':'国庆节'},
-        TW: {'01-01':'元旦','02-28':'和平紀念日','05-01':'勞動節','10-10':'國慶日','12-25':'行憲紀念日'},
-        IN: {'01-26':'Republic Day','08-15':'Independence Day','10-02':'Gandhi Jayanti','12-25':'Christmas Day'},
-        AU: {'01-01':'New Year’s Day','01-26':'Australia Day','04-25':'Anzac Day','12-25':'Christmas Day','12-26':'Boxing Day'},
-        CA: {'01-01':'New Year’s Day','07-01':'Canada Day','09-30':'National Day for Truth and Reconciliation','11-11':'Remembrance Day','12-25':'Christmas Day'},
-      };
-      const country = holidayCountry.value || 'JP';
-      const name = fixed[country]?.[monthDay];
-      if (name) return name;
-      const dow = new Date(year, monthNumber - 1, day).getDay();
-      if (country === 'JP') { if (monthNumber === 1 && dow === 1 && day >= 8 && day <= 14) return '成人の日'; if (monthNumber === 7 && dow === 1 && day >= 15 && day <= 21) return '海の日'; if (monthNumber === 9 && dow === 1 && day >= 15 && day <= 21) return '敬老の日'; if (monthNumber === 10 && dow === 1 && day >= 8 && day <= 14) return 'スポーツの日'; }
-      if (country === 'US') { if (monthNumber === 1 && dow === 1 && day <= 21 && day >= 15) return 'Martin Luther King Jr. Day'; if (monthNumber === 5 && dow === 1 && day >= 25) return 'Memorial Day'; if (monthNumber === 9 && dow === 1 && day <= 7) return 'Labor Day'; if (monthNumber === 11 && dow === 4 && day >= 22 && day <= 28) return 'Thanksgiving Day'; }
-      if (country === 'GB' && monthNumber === 5 && dow === 1 && day <= 7) return 'Early May bank holiday';
-      return '';
+    const participantNames = (participants: OperationParticipant[], availability: string) => participants.filter((participant) => participant.availability === availability).map((participant) => participant.isSelf ? '自分' : participant.displayName);
+    const availabilitySummary = (context: string, participants: OperationParticipant[], counts?: Record<string, number>) => {
+      const available = participantNames(participants, 'available');
+      const maybe = participantNames(participants, 'maybe');
+      const unavailable = participantNames(participants, 'unavailable');
+      const availableCount = counts?.available ?? available.length;
+      const maybeCount = counts?.maybe ?? maybe.length;
+      const unavailableCount = counts?.unavailable ?? unavailable.length;
+      if (!availableCount && !maybeCount && !unavailableCount) return '';
+      const countMarkup = `${availableCount ? `<span class="availability-count-available">○${availableCount}</span>` : ''}${maybeCount ? `<span class="availability-count-maybe">△${maybeCount}</span>` : ''}${unavailableCount ? `<span class="availability-count-unavailable">×${unavailableCount}</span>` : ''}`;
+      return `<button type="button" class="availability-summary-trigger" data-availability-summary aria-haspopup="dialog" aria-label="${escapeHtml(context)}。クリックまたは右クリックでメンバーを表示" data-summary-title="${escapeHtml(context)}" data-available-members="${escapeHtml(JSON.stringify(available))}" data-maybe-members="${escapeHtml(JSON.stringify(maybe))}" data-unavailable-members="${escapeHtml(JSON.stringify(unavailable))}">${countMarkup}</button>`;
+    };
+    const dayParticipants = (blocks: AvailabilityBlock[]): OperationParticipant[] => {
+      const byMember = new Map<string, AvailabilityBlock>();
+      for (const block of blocks) {
+        const memberKey = (block.email || block.display_name || block.id).toLowerCase();
+        const current = byMember.get(memberKey);
+        if (!current || (current.kind === 'available' && block.kind === 'unavailable')) byMember.set(memberKey, block);
+      }
+      return [...byMember.values()].map((block) => ({ displayName: block.display_name || '表示名未設定', availability: block.kind, isSelf: Boolean(block.isSelf) }));
+    };
+    const calendarEvents = () => {
+      const storedEvents = data.events ?? [];
+      if (projectId !== 'atlas') return storedEvents;
+      const storedIds = new Set(storedEvents.map((event) => event.id));
+      const storedCoWorkingTimes = new Set(storedEvents.filter((event) => event.title.includes('同時作業会')).map((event) => new Date(event.starts_at).getTime()));
+      const recurringEvents: OperationEvent[] = recurringCoWorkingEventsForMonth(month.getFullYear(), month.getMonth()).filter((event) => !storedIds.has(event.id) && !storedCoWorkingTimes.has(new Date(event.starts_at).getTime()));
+      return [...storedEvents, ...recurringEvents];
     };
     const renderCalendar = () => {
       const first = new Date(month.getFullYear(), month.getMonth(), 1), last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+      const selectedRegions = [...holidayCountry.selectedOptions].map((option) => option.value);
+      const holidays = holidaysForRegions(selectedRegions, month.getFullYear());
       const calendarFormatter = new Intl.DateTimeFormat(`ja-JP-u-ca-${calendarSystem.value || 'gregory'}`, { year: 'numeric', month: 'long' });
       const dayFormatter = new Intl.DateTimeFormat(`ja-JP-u-ca-${calendarSystem.value || 'gregory'}`, { day: 'numeric' });
       calendarTitle.textContent = calendarFormatter.format(first);
-      const cells = ['日','月','火','水','木','金','土'].map((day) => `<div class="calendar-cell calendar-cell--blank"><span class="calendar-day">${day}</span></div>`);
+      const cells = ['日','月','火','水','木','金','土'].map((day) => `<div class="calendar-cell calendar-cell--blank"><div class="calendar-cell-header"><span class="calendar-day">${day}</span></div></div>`);
       for (let index = 0; index < first.getDay(); index += 1) cells.push('<div class="calendar-cell calendar-cell--blank"></div>');
+      const visibleEvents = calendarEvents();
       for (let day = 1; day <= last.getDate(); day += 1) {
         const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayEvents = (data.events ?? []).filter((event) => { const parts = dateParts(event.starts_at); return `${parts.year}-${parts.month}-${parts.day}` === key; });
-        const holiday = holidayName(key); cells.push(`<div class="calendar-cell${holiday ? ' calendar-cell--holiday' : ''}"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span>${holiday ? `<span class="calendar-holiday" title="祝日">${escapeHtml(holiday)}</span>` : ''}${dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" title="${escapeHtml(event.title)}">${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>`; }).join('')}</div>`);
+        const dayEvents = visibleEvents.filter((event) => { const parts = dateParts(event.starts_at); return `${parts.year}-${parts.month}-${parts.day}` === key; });
+        const dayHolidays = holidays.filter((holiday) => holiday.date === key);
+        const nextDate = new Date(`${key}T00:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+        const dayStart = localDateTimeToInstant(`${key}T00:00`, selectedTimezone());
+        const dayEnd = localDateTimeToInstant(`${nextDate.toISOString().slice(0, 10)}T00:00`, selectedTimezone());
+        const dayBlocks = (data.availabilityBlocks ?? []).filter((block) => new Date(block.starts_at) < new Date(dayEnd) && new Date(block.ends_at) > new Date(dayStart));
+        const participants = dayParticipants(dayBlocks);
+        const dateLabel = `${month.getFullYear()}年${month.getMonth() + 1}月${day}日`;
+        const eventMarkup = dayEvents.map((event) => { const parts = dateParts(event.starts_at); return `<span class="calendar-event" data-calendar-event-id="${escapeHtml(event.id)}" title="${escapeHtml(event.title)}"><span>${parts.hour}:${parts.minute} ${escapeHtml(event.title)}</span>${availabilitySummary(`${event.title}の参加状況`, event.participants ?? [], event.availabilityCounts)}</span>`; }).join('');
+        cells.push(`<div class="calendar-cell${dayHolidays.length ? ' calendar-cell--holiday' : ''}" data-calendar-date="${key}"><div class="calendar-cell-header" data-calendar-date-header><button type="button" class="calendar-date-select" data-calendar-select aria-label="${escapeHtml(dateLabel)}を可否期間に選択"><span class="calendar-day">${escapeHtml(dayFormatter.format(new Date(month.getFullYear(), month.getMonth(), day)))}</span></button></div><div class="calendar-cell-content">${dayHolidays.map((holiday) => `<span class="calendar-holiday" title="${escapeHtml(holiday.regionName)}">${escapeHtml(holiday.region)}: ${escapeHtml(holiday.name)}</span>`).join('')}${eventMarkup}${availabilitySummary(`${dateLabel}の対応可否`, participants)}</div></div>`);
       }
       calendar.innerHTML = cells.join('');
+      const today = dateParts(new Date().toISOString());
+      const todayKey = `${today.year}-${today.month}-${today.day}`;
+      const orderedSelection = calendarSelectionStart && calendarSelectionEnd ? [calendarSelectionStart, calendarSelectionEnd].sort() : [];
+      calendar.querySelectorAll<HTMLElement>('[data-calendar-date]').forEach((cell) => {
+        const key = cell.dataset.calendarDate ?? '';
+        cell.classList.toggle('calendar-cell--today', key === todayKey);
+        cell.classList.toggle('calendar-cell--selected', orderedSelection.length === 2 && key >= orderedSelection[0] && key <= orderedSelection[1]);
+      });
     };
     const render = () => {
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
-      projectTitle.textContent = `${data.project?.name || 'プロジェクト'}：進捗・ToDo・日程`;
+      projectTitle.textContent = `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = !data.scope.isManager;
       assignee.innerHTML = '<option value="">担当者を指定しない</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}">${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
       reports.innerHTML = (data.progress ?? []).map((item) => `<article class="item"><span>${escapeHtml(String(item.body ?? ''))}</span><small>自分が投げた進捗報告 ・ ${formatDate(String(item.created_at))}</small></article>`).join('') || '<p>自分が投げた進捗報告はまだありません。</p>';
       const visibleTasks = (data.tasks ?? []).filter((item) => taskFilter === 'all' || (taskFilter === 'assigned' ? item.assignee_email === data.scope.email : item.created_by === data.scope.email));
-      tasks.innerHTML = visibleTasks.map((item) => `<article class="item"><div class="task-row"><b>${escapeHtml(String(item.title ?? ''))}</b><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><small><span class="task-role">${item.assignee_email === data.scope.email ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span> ${escapeHtml(String(item.subject || '全体'))}${item.assignee_email ? ` ・担当：${escapeHtml(members.get(String(item.assignee_email)) || '表示名未設定')}` : ' ・担当未指定'}${item.created_by ? ` ・依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}` : ''}${item.due_at ? ` ・期限：${escapeHtml(String(item.due_at).replace('T',' '))}（${escapeHtml(String(item.due_timezone || 'Asia/Tokyo'))}）` : ''}</small>${item.details ? `<small>${escapeHtml(String(item.details))}</small>` : ''}${taskReminderEditor(item)}</article>`).join('') || '<p>この条件のToDoはありません。</p>';
+      tasks.innerHTML = visibleTasks.map((item) => `<article class="item"><div class="task-row"><b>${escapeHtml(String(item.title ?? ''))}</b><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><small><span class="task-role">${item.assignee_email === data.scope.email ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span> ${escapeHtml(String(item.subject || '全体'))}${item.assignee_email ? ` ・担当：${escapeHtml(members.get(String(item.assignee_email)) || '表示名未設定')}` : ' ・担当未指定'}${item.created_by ? ` ・依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}` : ''}${item.due_at ? ` ・期限：${escapeHtml(String(item.due_at).replace('T',' '))}（${escapeHtml(String(item.due_timezone || 'Asia/Tokyo'))}）` : ''}</small>${item.details ? `<small>${escapeHtml(String(item.details))}</small>` : ''}${taskReminderEditor(item)}</article>`).join('') || '<p>この条件のタスクはありません。</p>';
+      tasks.querySelectorAll('small').forEach((small) => {
+        small.childNodes.forEach((node) => {
+          if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.includes('依頼者：')) return;
+          for (const [memberEmail, memberName] of members) node.textContent = node.textContent.replace(memberEmail, memberName);
+        });
+      });
       const availabilityLabels: Record<string, string> = { available: '参加できる', maybe: '未定', unavailable: '参加できない' };
-      events.innerHTML = (data.events ?? []).map((item) => { const counts = item.availabilityCounts ?? {}; const participants = item.participants ?? []; return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${data.scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary"><div class="participant-counts"><span>参加 ${counts.available ?? 0}</span><span>未定 ${counts.maybe ?? 0}</span><span>不参加 ${counts.unavailable ?? 0}</span></div><div class="participant-names">${participants.length ? participants.map((participant) => `<span class="participant-chip participant-${escapeHtml(participant.availability)}">${escapeHtml(participant.isSelf ? '自分' : participant.displayName)}：${escapeHtml(availabilityLabels[participant.availability] ?? participant.availability)}</span>`).join('') : '<span>まだ参加登録はありません。</span>'}</div></div></article>`; }).join('') || '<p>登録された日程はありません。</p>';
+      events.innerHTML = (data.events ?? []).map((item) => {
+        const participants = item.participants ?? [];
+        const summary = availabilitySummary(`${item.title}の参加状況`, participants, item.availabilityCounts);
+        return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${data.scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary">${summary || '<span>まだ参加登録はありません。</span>'}</div></article>`;
+      }).join('') || '<p>登録された日程はありません。</p>';
       const blocks = data.availabilityBlocks ?? [];
-      get<HTMLElement>('[data-block-list]').innerHTML = blocks.length ? blocks.map((item) => `<div class="item availability-block-item"><span><b>${item.kind === 'available' ? '動ける' : '動けない'}</b> ・ ${escapeHtml(String(item.starts_at).replace('T',' '))} 〜 ${escapeHtml(String(item.ends_at).replace('T',' '))}${item.label ? ` ・ ${escapeHtml(String(item.label))}` : ''}</span><button type="button" class="event-delete" data-delete-block="${escapeHtml(String(item.id))}">削除</button></div>`).join('') : '<p>登録した可否期間はありません。</p>';
+      const ownBlocks = blocks.filter((item) => item.isSelf);
+      get<HTMLElement>('[data-block-list]').innerHTML = ownBlocks.length ? ownBlocks.map((item) => `<div class="item availability-block-item"><span><b>${item.kind === 'available' ? '動ける' : '動けない'}</b> ・ ${formatDate(item.starts_at)} 〜 ${formatDate(item.ends_at)}${item.label ? ` ・ ${escapeHtml(String(item.label))}` : ''}</span><button type="button" class="event-delete" data-delete-block="${escapeHtml(String(item.id))}">削除</button></div>`).join('') : '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
     const load = async () => { data = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
-    const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; } finally { button.disabled = false; } };
+    const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
+    let activeAvailabilityTrigger: HTMLButtonElement | null = null;
+    const closeAvailabilityPopover = (restoreFocus = false) => {
+      availabilityPopover.hidden = true;
+      if (restoreFocus) activeAvailabilityTrigger?.focus();
+      activeAvailabilityTrigger = null;
+    };
+    const readMemberNames = (button: HTMLButtonElement, key: 'availableMembers' | 'maybeMembers' | 'unavailableMembers') => {
+      try { const value = JSON.parse(button.dataset[key] || '[]'); return Array.isArray(value) ? value.map(String) : []; }
+      catch { return []; }
+    };
+    const openAvailabilityPopover = (button: HTMLButtonElement, point?: { x: number; y: number }) => {
+      const groups = [
+        { title: '参加可能 ○', names: readMemberNames(button, 'availableMembers') },
+        { title: '未定 △', names: readMemberNames(button, 'maybeMembers') },
+        { title: '参加不可 ×', names: readMemberNames(button, 'unavailableMembers') },
+      ].filter((group) => group.names.length);
+      availabilityPopover.innerHTML = `<h3>${escapeHtml(button.dataset.summaryTitle || '参加可否')}</h3>${groups.length ? groups.map((group) => `<section><h4>${group.title}</h4><ul>${group.names.map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ul></section>`).join('') : '<p>メンバー情報はありません。</p>'}`;
+      availabilityPopover.hidden = false;
+      activeAvailabilityTrigger = button;
+      const anchor = button.getBoundingClientRect();
+      const popover = availabilityPopover.getBoundingClientRect();
+      const preferredLeft = point?.x ?? anchor.left;
+      const preferredTop = point?.y ?? anchor.bottom + 6;
+      availabilityPopover.style.left = `${Math.max(8, Math.min(preferredLeft, window.innerWidth - popover.width - 8))}px`;
+      availabilityPopover.style.top = `${Math.max(8, Math.min(preferredTop, window.innerHeight - popover.height - 8))}px`;
+    };
+    root.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-availability-summary]');
+      if (!button) return;
+      event.preventDefault();
+      if (activeAvailabilityTrigger === button && !availabilityPopover.hidden) closeAvailabilityPopover();
+      else openAvailabilityPopover(button);
+    });
+    root.addEventListener('contextmenu', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-availability-summary]');
+      if (!button) return;
+      event.preventDefault();
+      openAvailabilityPopover(button, { x: event.clientX, y: event.clientY });
+    });
+    document.addEventListener('click', (event) => {
+      const target = event.target as Node;
+      if (availabilityPopover.hidden || availabilityPopover.contains(target) || activeAvailabilityTrigger?.contains(target)) return;
+      closeAvailabilityPopover();
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !availabilityPopover.hidden) closeAvailabilityPopover(true); });
+    taskCreateOpen.addEventListener('click', () => { taskFeedback.value = ''; taskCreateDialog.showModal(); taskTitle.focus(); });
+    get<HTMLButtonElement>('[data-close-task-create]').addEventListener('click', () => taskCreateDialog.close());
+    taskCreateDialog.addEventListener('click', (event) => { if (event.target === taskCreateDialog) taskCreateDialog.close(); });
+    taskCreateDialog.addEventListener('close', () => taskCreateOpen.focus());
     get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
-    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: get<HTMLInputElement>('[data-task-title]').value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: get<HTMLTextAreaElement>('[data-task-details]').value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); taskDue.value = ''; }, 'ToDoを追加しました。'); });
+    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
     refreshReminderRows(taskReminderList);
     root.addEventListener('change', (event) => { const row = (event.target as HTMLElement).closest<HTMLElement>('[data-task-reminder-row]'); if (row) refreshReminderRow(row); });
     root.addEventListener('click', (event) => { const target = event.target as HTMLElement; const remove = target.closest<HTMLButtonElement>('[data-remove-reminder]'); if (remove) { remove.closest<HTMLElement>('[data-task-reminder-row]')?.remove(); return; } const add = target.closest<HTMLButtonElement>('[data-add-reminder]'); if (add) { const container = add.closest<HTMLElement>('[data-reminder-editor]')?.querySelector<HTMLElement>('.task-reminder-rules'); if (container) { container.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(container); } return; } const save = target.closest<HTMLButtonElement>('[data-save-reminders]'); if (!save) return; const editor = save.closest<HTMLElement>('[data-reminder-editor]'); if (!editor) return; const feedback = editor.querySelector<HTMLOutputElement>('[data-reminder-feedback]'); const repeat = editor.querySelector<HTMLSelectElement>('[data-reminder-repeat]')?.value || 'none'; const email = editor.querySelector<HTMLInputElement>('[data-reminder-email]')?.value || ''; const reminderContainer = editor.querySelector<HTMLElement>('.task-reminder-rules'); if (!feedback || !reminderContainer) return; void runButtonAction(save, feedback, async () => { await api(`/api/admin/operations/tasks/${encodeURIComponent(editor.dataset.reminderEditor || '')}`, 'PATCH', { reminderAction: 'replace', reminders: collectReminderRows(reminderContainer, repeat), reminderEmail: email }); }, 'リマインダーを保存しました。'); });
-    get<HTMLButtonElement>('[data-create-event]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, eventFeedback, async () => { await api('/api/admin/operations/events', 'POST', { projectId, title: get<HTMLInputElement>('[data-event-title]').value, startsAt: get<HTMLInputElement>('[data-event-start]').value, endsAt: get<HTMLInputElement>('[data-event-end]').value, details: get<HTMLInputElement>('[data-event-details]').value, timezone: get<HTMLInputElement>('[data-event-timezone]').value || 'Asia/Tokyo' }); }, '日程を追加しました。'); });
+    get<HTMLButtonElement>('[data-create-event]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, eventFeedback, async () => { const eventTimezone = get<HTMLInputElement>('[data-event-timezone]').value || 'Asia/Tokyo'; await api('/api/admin/operations/events', 'POST', { projectId, title: get<HTMLInputElement>('[data-event-title]').value, startsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-event-start]').value, eventTimezone), endsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-event-end]').value, eventTimezone), details: get<HTMLInputElement>('[data-event-details]').value, timezone: eventTimezone }); }, '日程を追加しました。'); });
     root.querySelectorAll<HTMLButtonElement>('[data-task-filter]').forEach((button) => button.addEventListener('click', () => { taskFilter = (button.dataset.taskFilter as typeof taskFilter) || 'assigned'; root.querySelectorAll<HTMLButtonElement>('[data-task-filter]').forEach((item) => { const active = item === button; item.classList.toggle('is-selected', active); item.setAttribute('aria-pressed', String(active)); }); render(); }));
-    get<HTMLButtonElement>('[data-create-block]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, blockFeedback, async () => { await api('/api/admin/operations/availability-blocks', 'POST', { startsAt: get<HTMLInputElement>('[data-block-start]').value, endsAt: get<HTMLInputElement>('[data-block-end]').value, timezone: timezone.value, kind: get<HTMLSelectElement>('[data-block-kind]').value, label: get<HTMLInputElement>('[data-block-label]').value }); }, '可否期間を追加しました。'); });
-    tasks.addEventListener('change', (event) => { const select = (event.target as HTMLElement).closest<HTMLSelectElement>('[data-task-status]'); if (!select) return; select.disabled = true; void api(`/api/admin/operations/tasks/${encodeURIComponent(select.dataset.taskStatus ?? '')}`, 'PATCH', { status: select.value }).then(load).catch((error) => { taskFeedback.value = error instanceof Error ? error.message : '状態を更新できませんでした。'; }).finally(() => { select.disabled = false; }); });
+    get<HTMLButtonElement>('[data-create-block]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, blockFeedback, async () => { const zone = selectedTimezone(); await api('/api/admin/operations/availability-blocks', 'POST', { startsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-block-start]').value, zone), endsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-block-end]').value, zone), timezone: zone, kind: get<HTMLSelectElement>('[data-block-kind]').value, label: get<HTMLInputElement>('[data-block-label]').value }); }, '可否期間を追加しました。'); });
+    tasks.addEventListener('change', (event) => { const select = (event.target as HTMLElement).closest<HTMLSelectElement>('[data-task-status]'); if (!select) return; select.disabled = true; taskListFeedback.value = ''; void api(`/api/admin/operations/tasks/${encodeURIComponent(select.dataset.taskStatus ?? '')}`, 'PATCH', { status: select.value }).then(load).catch((error) => { taskListFeedback.value = error instanceof Error ? error.message : '状態を更新できませんでした。'; }).finally(() => { select.disabled = false; }); });
     events.addEventListener('click', (event) => { const target = event.target as HTMLElement; const deleteButton = target.closest<HTMLButtonElement>('[data-delete-event]'); if (deleteButton) { if (!confirm('この日程と参加登録を削除しますか？')) return; deleteButton.disabled = true; eventFeedback.value = '日程を削除中…'; void api(`/api/admin/operations/events/${encodeURIComponent(deleteButton.dataset.deleteEvent ?? '')}`, 'DELETE').then(async () => { eventFeedback.value = '日程を削除しました。'; await load(); }).catch((error) => { eventFeedback.value = error instanceof Error ? error.message : '日程を削除できませんでした。'; }).finally(() => { deleteButton.disabled = false; }); return; } const button = target.closest<HTMLButtonElement>('[data-availability]'); if (!button) return; button.disabled = true; eventFeedback.value = '参加状態を保存中…'; void api(`/api/admin/operations/events/${encodeURIComponent(button.dataset.event ?? '')}/availability`, 'PUT', { availability: button.dataset.availability }).then(async () => { eventFeedback.value = '参加状態を保存しました。'; await load(); }).catch((error) => { eventFeedback.value = error instanceof Error ? error.message : '参加状態を保存できませんでした。'; }).finally(() => { button.disabled = false; }); });
     root.querySelector<HTMLElement>('[data-block-list]')!.addEventListener('click', (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-delete-block]'); if (!button) return; button.disabled = true; void api(`/api/admin/operations/availability-blocks/${encodeURIComponent(button.dataset.deleteBlock ?? '')}`, 'DELETE').then(load).catch((error) => { blockFeedback.value = error instanceof Error ? error.message : '可否期間を削除できませんでした。'; }).finally(() => { button.disabled = false; }); });
     get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
     get<HTMLButtonElement>('[data-calendar-next]').addEventListener('click', () => { month = new Date(month.getFullYear(), month.getMonth() + 1, 1); renderCalendar(); });
+    const selectCalendarRange = (start: string, end: string) => {
+      const ordered = [start, end].sort();
+      const after = new Date(`${ordered[1]}T00:00:00Z`); after.setUTCDate(after.getUTCDate() + 1);
+      get<HTMLInputElement>('[data-block-start]').value = `${ordered[0]}T00:00`;
+      get<HTMLInputElement>('[data-block-end]').value = `${after.toISOString().slice(0, 10)}T00:00`;
+      blockAllDay.checked = true;
+      renderCalendar();
+    };
+    calendar.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-availability-summary], .calendar-event')) return;
+      const cell = target.closest<HTMLElement>('[data-calendar-date]');
+      const date = cell?.dataset.calendarDate ?? '';
+      if (!date) return;
+      if (!calendarSelectionStart || (calendarSelectionStart && calendarSelectionEnd && calendarSelectionStart !== calendarSelectionEnd)) {
+        calendarSelectionStart = date;
+        calendarSelectionEnd = date;
+      } else {
+        calendarSelectionEnd = date;
+        blockEditor.open = true;
+      }
+      selectCalendarRange(calendarSelectionStart, calendarSelectionEnd);
+    });
+    blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
     timezone.addEventListener('input', () => { render(); });
-    holidayCountry.addEventListener('change', () => { renderCalendar(); });
+    holidayCountry.addEventListener('change', () => { renderHolidayTags(); renderCalendar(); });
     calendarSystem.addEventListener('change', () => { renderCalendar(); });
-    void load().catch((error) => { const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。'; tasks.textContent = message; events.textContent = message; reports.textContent = message; calendarTitle.textContent = '読み込めませんでした'; });
+    // API の応答を待たずに月表示を作る。認証切れや一時的な取得失敗が
+    // あっても、カレンダーそのものと月移動は利用できる状態を保つ。
+    renderCalendar();
+    void load().catch((error) => {
+      const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';
+      tasks.textContent = message;
+      events.textContent = message;
+      reports.textContent = message;
+      eventFeedback.value = `予定を読み込めませんでした。${message}`;
+    });
   };
   document.addEventListener('astro:page-load', initializeOperations);
   initializeOperations();

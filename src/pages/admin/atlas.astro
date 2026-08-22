@@ -6,17 +6,20 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <header class="project-heading">
       <div>
         <h1>アトラス学習サイト</h1>
-        <span>原稿・査読・問題報告・進捗を、このプロジェクト内で管理します。</span>
+        <span>原稿・フィードバック・問題報告・進捗を、このプロジェクト内で管理します。</span>
       </div>
       <a href="/admin/portal/">メンバー用サイトへ</a>
     </header>
 
     <section class="project-links" aria-label="学習サイト運営メニュー">
-      <a class="is-primary" href="/admin/articles/"><strong>編集・査読</strong><small>作成中の記事を一覧で確認し、新規作成・加筆修正・査読へ進む</small><span>一覧を開く →</span></a>
+      <a href="/admin/articles/"><strong>編集・フィードバック</strong><small>原稿一覧で既存記事を確認してから、作成・加筆修正・フィードバックへ進む</small><span>原稿一覧を開く →</span></a>
+      <a href="/admin/genres/"><strong>各ジャンル概要</strong><small>分野の目的とカテゴリ構成を確認する</small><span>概要を見る →</span></a>
       <a href="/admin/co-working/?project=atlas"><strong>同時作業会</strong><small>開催場所・日時・参加可否を確認する</small><span>日程を見る →</span></a>
-      <a href="/admin/operations/?project=atlas"><strong>進捗・ToDo・日程</strong><small>作業報告、担当タスク、予定をまとめて管理する</small><span>管理する →</span></a>
+      <a href="/admin/operations/?project=atlas"><strong>タスク管理</strong><small>作業報告と担当タスクを管理する</small><span>管理する →</span></a>
+      <a href="/admin/calendar/?project=atlas"><strong>カレンダー</strong><small>日程、参加可否、祝日を確認する</small><span>カレンダーを開く →</span></a>
       <a href="/admin/reports/"><strong>問題報告・統計</strong><small>読者からの報告と閲覧状況を確認する</small><span>確認する →</span></a>
-      <a href="/admin/guide/"><strong>作業の進め方</strong><small>執筆・加筆・査読の手順を確認する</small><span>読む →</span></a>
+      <a href="/admin/guide/"><strong>作業の進め方</strong><small>執筆・加筆・フィードバックの手順を確認する</small><span>読む →</span></a>
+      <a href="/admin/manage/"><strong>管理トップ</strong><small>管理機能を目的別に確認する</small><span>管理メニューを開く →</span></a>
       <a href="/admin/permissions/?project=atlas" data-manager-only hidden><strong>運営者・担当管理</strong><small>ログイン許可、担当分野、メンバー情報を管理する</small><span>管理画面を開く →</span></a>
     </section>
   </main>
@@ -28,16 +31,13 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .project-heading h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: .25rem 0; }
   .project-heading span { color: var(--text-secondary); line-height: 1.6; }
   .project-heading > a { color: var(--accent-primary); font-size: .8rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
-  .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; padding: 1.25rem; text-decoration: none; }
-  .project-links a.is-primary { border-top: 4px solid var(--accent-primary); }
-  .project-links a.is-primary strong { font-size: 1.12rem; }
+  .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1.5rem; }
+  .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; min-height: 6.5rem; padding: 1.25rem; text-decoration: none; }
   .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
-  .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
-  .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
-  .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1.6rem; }
-  .project-links a { min-height: 6.5rem; }
   .project-links [data-manager-only][hidden] { display: none !important; }
   .project-links strong { font-size: .98rem; }
+  .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .project-links span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
   @media (max-width: 800px) {
     .project-home { padding: 0 .8rem 3rem; }
     .project-heading { align-items: start; display: grid; }

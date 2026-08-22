@@ -18,12 +18,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       <div class="project-entry-cards">
         <a class="project-entry-card" href="/admin/atlas/">
           <strong data-admin-i18n data-admin-ja="学習サイト「アトラス」運営" data-admin-en="Atlas learning site operations">学習サイト「アトラス」運営</strong>
-          <small data-admin-i18n data-admin-ja="原稿、編集・査読、問題報告、進捗・ToDo・日程" data-admin-en="Articles, review, reports, progress, tasks and events">原稿、編集・査読、問題報告、進捗・ToDo・日程</small>
+          <small data-admin-i18n data-admin-ja="原稿、編集・フィードバック、問題報告、進捗、タスク管理、カレンダー" data-admin-en="Articles, feedback, reports, progress, tasks and events">原稿、編集・フィードバック、問題報告、進捗、タスク管理、カレンダー</small>
           <span data-admin-i18n data-admin-ja="学習サイト運営へ →" data-admin-en="Open learning site operations →">学習サイト運営へ →</span>
         </a>
         <a class="project-entry-card" href="/admin/secretariat/">
           <strong data-admin-i18n data-admin-ja="Atlasez運営事務局" data-admin-en="Atlasez Secretariat">Atlasez運営事務局</strong>
-          <small data-admin-i18n data-admin-ja="事務局のToDo、依頼、日程調整、同時作業会" data-admin-en="Secretariat tasks, requests, scheduling and co-working">事務局のToDo、依頼、日程調整、同時作業会</small>
+          <small data-admin-i18n data-admin-ja="事務局のタスク、依頼、日程調整、同時作業会" data-admin-en="Secretariat tasks, requests, scheduling and co-working">事務局のタスク、依頼、日程調整、同時作業会</small>
           <span data-admin-i18n data-admin-ja="事務局サイトへ →" data-admin-en="Open Secretariat →">事務局サイトへ →</span>
         </a>
         <a class="project-entry-card" href="/admin/semi-platform/">
@@ -46,8 +46,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </section>
       <section class="home-section">
         <div class="section-heading">
-          <div><h2 data-admin-i18n data-admin-ja="自分の未完了ToDo" data-admin-en="My open tasks">自分の未完了ToDo</h2></div>
-          <a href="/admin/operations/" data-admin-i18n data-admin-ja="ToDoを開く" data-admin-en="Open tasks">ToDoを開く</a>
+          <div><h2 data-admin-i18n data-admin-ja="自分の未完了タスク" data-admin-en="My open tasks">自分の未完了タスク</h2></div>
+          <a href="/admin/operations/" data-admin-i18n data-admin-ja="タスク管理を開く" data-admin-en="Open tasks">タスク管理を開く</a>
         </div>
         <div data-todos>読み込み中…</div>
       </section>
@@ -57,7 +57,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 <style>
   .portal { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
   .portal > header { border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.1rem 0 1.3rem; }
-  .portal > header p, .section-kicker { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; margin: 0; }
   .portal h1 { font-size: clamp(2rem, 4vw, 2.7rem); letter-spacing: -.04em; margin: .25rem 0; }
   .portal > header span, .portal small { color: var(--text-secondary); line-height: 1.6; }
   .project-entry { align-items: center; border: 1px solid var(--border-default); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) minmax(24rem, 1.4fr); margin: 1.5rem 0; padding: 1.25rem; }
@@ -135,11 +134,19 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const timezoneNote = root.querySelector<HTMLElement>('[data-calendar-timezone-note]')!;
     const todosView = root.querySelector<HTMLElement>('[data-todos]')!;
     const sourceInputs = [...root.querySelectorAll<HTMLInputElement>('[data-calendar-source]')];
+    const lifecycle = new AbortController();
+    document.addEventListener('astro:before-swap', () => lifecycle.abort(), { once: true, signal: lifecycle.signal });
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
     type PortalLanguage = 'ja' | 'en';
-    const getLanguage = (): PortalLanguage => localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
+    const getLanguage = (): PortalLanguage => {
+      try {
+        const preferences = JSON.parse(localStorage.getItem('atlasez-prefs') ?? '{}') as { lang?: string };
+        if (preferences.lang === 'eng' || preferences.lang === 'en') return 'en';
+      } catch { /* fall back to the legacy language key */ }
+      return localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
+    };
     const copy = {
-      ja: { noTodos: '未完了のToDoはありません。', status: '状態', today: '今日の予定', noTodayEvents: '今日の予定はありません。', personal: '自分の期限', organization: '同時作業会・交流会', timezone: '表示タイムゾーン' },
+      ja: { noTodos: '未完了のタスクはありません。', status: '状態', today: '今日の予定', noTodayEvents: '今日の予定はありません。', personal: '自分の期限', organization: '同時作業会・交流会', timezone: '表示タイムゾーン' },
       en: { noTodos: 'There are no open tasks.', status: 'Status', today: "Today's schedule", noTodayEvents: 'There are no events today.', personal: 'My deadline', organization: 'Co-working & social event', timezone: 'Time zone' },
     } as const;
     let portalData: PortalData | null = null;
@@ -195,8 +202,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     };
     const renderTodos = (data: PortalData) => { const language = getLanguage(); const todos = data.todos ?? []; todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`; };
     const renderPortal = (data: PortalData) => { renderCalendar(); renderTodos(data); };
-    sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar));
-    document.addEventListener('atlasez-admin-language-change', () => { if (portalData) renderPortal(portalData); });
+    sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar, { signal: lifecycle.signal }));
+    window.addEventListener('atlasez-lang-change', () => { if (portalData) renderPortal(portalData); }, { signal: lifecycle.signal });
     void fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
       const contentType = response.headers.get('content-type') ?? '';
       const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
