@@ -6807,413 +6807,435 @@ async function connectEditorialCollaboration(
   return namespace.get(id).fetch(new Request(request, { headers }));
 }
 
+async function handleAdminRequest(
+  request: Request,
+  env: Env,
+  ctx?: WorkerExecutionContext,
+): Promise<Response> {
+  const url = new URL(request.url);
+  // 運営サイトの入口は常に編集室へ案内する。静的サイトのルートを
+  // 公開してしまわないため、ここで明示的にリダイレクトする。
+  if (url.pathname === "/")
+    return Response.redirect(`${url.origin}/admin/portal/`, 302);
+  if (url.pathname === "/auth/google/login" && request.method === "GET")
+    return startGoogleLogin(request, env);
+  if (url.pathname === "/auth/google/callback" && request.method === "GET")
+    return completeGoogleLogin(request, env);
+  if (
+    url.pathname === "/auth/google/search-console" &&
+    request.method === "GET"
+  )
+    return startSearchConsoleImport(request, env);
+  if (
+    url.pathname === "/auth/google/search-console/callback" &&
+    request.method === "GET"
+  )
+    return completeSearchConsoleImport(request, env);
+  if (url.pathname === "/auth/logout")
+    return request.method === "POST"
+      ? logoutAdmin(request, env)
+      : json({ error: "POSTのみ利用できます。" }, 405);
+  if (url.pathname === "/auth/google/logout")
+    return request.method === "POST"
+      ? logoutGoogleSession(request, env)
+      : json({ error: "POSTのみ利用できます。" }, 405);
+  if (url.pathname === "/auth/logged-out" && request.method === "GET")
+    return loggedOutPage();
+  if (
+    url.pathname === "/api/public/application-config" &&
+    request.method === "GET"
+  )
+    return publicApplicationConfig(env);
+  if (url.pathname === "/api/apply" && request.method === "POST")
+    return submitMemberApplication(request, env);
+  if (url.pathname === "/api/admin/auth-status" && request.method === "GET")
+    return adminAuthStatus(request, env);
+  if (url.pathname === "/api/admin/notifications" && request.method === "GET")
+    return adminNotifications(request, env);
+  if (
+    url.pathname === "/api/admin/notifications/read" &&
+    request.method === "POST"
+  )
+    return markAdminNotificationsRead(request, env);
+  if (url.pathname === "/api/admin/report-admin-permissions") {
+    if (request.method === "GET")
+      return listReportAdminPermissions(request, env);
+    if (request.method === "POST")
+      return createReportAdminPermission(request, env);
+    if (request.method === "DELETE")
+      return deleteReportAdminPermission(request, env);
+    return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
+  }
+  if (
+    url.pathname === "/api/admin/discord-member-roles" &&
+    request.method === "POST"
+  ) {
+    try {
+      return await syncDiscordMemberRoles(request, env);
+    } catch (error) {
+      return json(
+        {
+          error: `Discordロール同期中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
+        },
+        500,
+      );
+    }
+  }
+  if (
+    url.pathname === "/api/admin/member-discord-user" &&
+    request.method === "PUT"
+  )
+    return updateMemberDiscordUserId(request, env);
+  if (
+    url.pathname === "/api/admin/discord-provision-roles" &&
+    request.method === "POST"
+  ) {
+    try {
+      return await provisionDiscordAttributeRoles(request, env);
+    } catch (error) {
+      return json(
+        {
+          error: `ロール準備中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
+        },
+        500,
+      );
+    }
+  }
+  if (
+    url.pathname === "/api/admin/member-attributes" &&
+    request.method === "PUT"
+  )
+    return updateMemberAttributes(request, env);
+  if (url.pathname === "/api/admin/article-reports") {
+    return request.method === "GET"
+      ? listArticleReports(request, env)
+      : json({ error: "GETのみ利用できます。" }, 405);
+  }
+  if (
+    url.pathname === "/api/admin/article-analytics" &&
+    request.method === "GET"
+  )
+    return listArticleAnalytics(request, env);
+  if (
+    url.pathname === "/api/admin/search-console-country-analytics" &&
+    request.method === "GET"
+  )
+    return listSearchConsoleCountryStats(request, env);
+  if (
+    url.pathname === "/api/admin/search-console-query-analytics" &&
+    request.method === "GET"
+  )
+    return listSearchConsoleQueryStats(request, env);
+  if (url.pathname === "/api/admin/personal-workspace") {
+    if (request.method === "GET") return getPersonalWorkspace(request, env);
+    if (request.method === "PUT") return savePersonalWorkspace(request, env);
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  }
+  if (url.pathname === "/api/admin/profile") {
+    if (request.method === "GET") return getMyProfile(request, env);
+    if (request.method === "PUT") return saveMyProfile(request, env);
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  }
+  if (url.pathname === "/api/admin/project-profile") {
+    if (request.method === "GET") return getProjectMemberProfile(request, env);
+    if (request.method === "PUT") return saveProjectMemberProfile(request, env);
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  }
+  if (
+    url.pathname === "/api/admin/project-introductions" &&
+    request.method === "GET"
+  )
+    return listProjectIntroductions(request, env);
+  if (
+    url.pathname === "/api/admin/project-profile-change-requests" &&
+    request.method === "GET"
+  )
+    return listProjectProfileChangeRequests(request, env);
+  const projectProfileChangeRequestMatch = url.pathname.match(
+    /^\/api\/admin\/project-profile-change-requests\/([0-9a-f-]{36})$/i,
+  );
+  if (projectProfileChangeRequestMatch && request.method === "PATCH")
+    return reviewProjectProfileChangeRequest(
+      request,
+      env,
+      projectProfileChangeRequestMatch[1],
+    );
+  if (
+    url.pathname === "/api/admin/profile-change-requests" &&
+    request.method === "GET"
+  )
+    return listProfileChangeRequests(request, env);
+  const profileChangeRequestMatch = url.pathname.match(
+    /^\/api\/admin\/profile-change-requests\/([0-9a-f-]{36})$/i,
+  );
+  if (profileChangeRequestMatch && request.method === "PATCH")
+    return reviewProfileChangeRequest(
+      request,
+      env,
+      profileChangeRequestMatch[1],
+    );
+  if (url.pathname === "/api/admin/portal" && request.method === "GET")
+    return portalOverview(request, env);
+  if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
+    return memberTasksOverview(request, env);
+  if (url.pathname === "/api/admin/member-calendar" && request.method === "GET")
+    return memberCalendarOverview(request, env);
+  if (url.pathname === "/api/admin/projects" && request.method === "POST")
+    return createAtlasezProject(request, env);
+  if (url.pathname === "/api/admin/applications" && request.method === "GET")
+    return listApplications(request, env);
+  const applicationMatch = url.pathname.match(
+    /^\/api\/admin\/applications\/([0-9a-f-]{36})$/i,
+  );
+  if (applicationMatch && request.method === "PATCH")
+    return updateApplication(request, env, applicationMatch[1]);
+  if (url.pathname === "/api/admin/operations" && request.method === "GET")
+    return operationsOverview(request, env);
+  if (
+    url.pathname === "/api/admin/operations/tasks" &&
+    request.method === "POST"
+  )
+    return createOperation(request, env, "task");
+  if (
+    url.pathname === "/api/admin/operations/progress" &&
+    request.method === "POST"
+  )
+    return createOperation(request, env, "progress");
+  if (
+    url.pathname === "/api/admin/operations/events" &&
+    request.method === "POST"
+  )
+    return createOperation(request, env, "event");
+  if (
+    url.pathname === "/api/admin/operations/availability-blocks" &&
+    request.method === "POST"
+  )
+    return createAvailabilityBlock(request, env);
+  const availabilityBlockMatch = url.pathname.match(
+    /^\/api\/admin\/operations\/availability-blocks\/([0-9a-f-]{36})$/i,
+  );
+  if (availabilityBlockMatch && request.method === "DELETE")
+    return deleteAvailabilityBlock(request, env, availabilityBlockMatch[1]);
+  const taskMatch = url.pathname.match(
+    /^\/api\/admin\/operations\/tasks\/([0-9a-f-]{36})$/i,
+  );
+  if (taskMatch && request.method === "PATCH")
+    return updateTask(request, env, taskMatch[1]);
+  const availabilityMatch = url.pathname.match(
+    /^\/api\/admin\/operations\/events\/([0-9a-f-]{36})\/availability$/i,
+  );
+  if (availabilityMatch && request.method === "PUT")
+    return updateEventAvailability(request, env, availabilityMatch[1]);
+  const eventMatch = url.pathname.match(
+    /^\/api\/admin\/operations\/events\/([0-9a-f-]{36})$/i,
+  );
+  if (eventMatch && request.method === "DELETE")
+    return deleteEvent(request, env, eventMatch[1]);
+  if (
+    url.pathname === "/api/admin/editor/sync-publication-status" &&
+    request.method === "POST"
+  )
+    return syncEditorialPublicationStatusForAdmin(request, env);
+  if (url.pathname === "/api/admin/editor/documents") {
+    if (request.method === "GET") return listEditorialDocuments(request, env);
+    if (request.method === "POST") return createEditorialDocument(request, env);
+    return json({ error: "GET、POSTのみ利用できます。" }, 405);
+  }
+  if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
+    return editorialBoard(request, env);
+  const editorialCollaborationMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/collaboration$/i,
+  );
+  if (editorialCollaborationMatch)
+    return request.headers.get("upgrade")?.toLowerCase() === "websocket"
+      ? connectEditorialCollaboration(
+          request,
+          env,
+          editorialCollaborationMatch[1],
+          ctx?.exports?.EditorialCollaborationRoom,
+        )
+      : json({ error: "WebSocket接続が必要です。" }, 426);
+  const editorialAssetCollectionMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/assets$/i,
+  );
+  if (editorialAssetCollectionMatch) {
+    if (request.method === "GET")
+      return listEditorialAssets(
+        request,
+        env,
+        editorialAssetCollectionMatch[1],
+      );
+    if (request.method === "POST")
+      return uploadEditorialAsset(
+        request,
+        env,
+        editorialAssetCollectionMatch[1],
+      );
+    return json({ error: "GET、POSTのみ利用できます。" }, 405);
+  }
+  const editorialAssetMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/assets\/([0-9a-f-]{36})$/i,
+  );
+  if (editorialAssetMatch && request.method === "GET")
+    return serveEditorialAsset(request, env, editorialAssetMatch[1]);
+  if (editorialAssetMatch && request.method === "DELETE")
+    return deleteEditorialAsset(request, env, editorialAssetMatch[1]);
+  if (
+    url.pathname === "/api/admin/editor/review-requests" &&
+    request.method === "GET"
+  )
+    return listEditorialReviewRequests(request, env);
+  const editorialReviewAssignmentMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/review-requests\/([0-9a-f-]{36})$/i,
+  );
+  if (editorialReviewAssignmentMatch && request.method === "PATCH")
+    return updateEditorialReviewAssignment(
+      request,
+      env,
+      editorialReviewAssignmentMatch[1],
+    );
+  const editorialRevisionMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/revisions$/i,
+  );
+  if (editorialRevisionMatch && request.method === "GET")
+    return listEditorialRevisions(request, env, editorialRevisionMatch[1]);
+  const editorialCommentMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/comments$/i,
+  );
+  if (editorialCommentMatch)
+    return request.method === "POST"
+      ? createEditorialComment(request, env, editorialCommentMatch[1])
+      : json({ error: "POSTのみ利用できます。" }, 405);
+  const editorialCommentStatusMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/comments\/([0-9a-f-]{36})$/i,
+  );
+  if (editorialCommentStatusMatch)
+    return request.method === "PATCH"
+      ? (await request
+          .clone()
+          .json()
+          .then((payload) => payload?.action === "edit")
+          .catch(() => false))
+        ? editEditorialComment(
+            request,
+            env,
+            editorialCommentStatusMatch[1],
+            editorialCommentStatusMatch[2],
+          )
+        : updateEditorialCommentStatus(
+            request,
+            env,
+            editorialCommentStatusMatch[1],
+            editorialCommentStatusMatch[2],
+          )
+      : request.method === "DELETE"
+        ? deleteEditorialComment(
+            request,
+            env,
+            editorialCommentStatusMatch[1],
+            editorialCommentStatusMatch[2],
+          )
+        : json({ error: "PATCH、DELETEのみ利用できます。" }, 405);
+  const editorialPublishMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/publish$/i,
+  );
+  if (editorialPublishMatch)
+    return request.method === "POST"
+      ? publishEditorialDocument(request, env, editorialPublishMatch[1])
+      : json({ error: "POSTのみ利用できます。" }, 405);
+  const editorialUnpublishMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/unpublish$/i,
+  );
+  if (editorialUnpublishMatch)
+    return request.method === "POST"
+      ? unpublishEditorialDocument(request, env, editorialUnpublishMatch[1])
+      : json({ error: "POSTのみ利用できます。" }, 405);
+  const editorialDocumentMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})$/i,
+  );
+  if (editorialDocumentMatch) {
+    if (request.method === "GET")
+      return getEditorialDocument(request, env, editorialDocumentMatch[1]);
+    if (request.method === "PATCH")
+      return updateEditorialDocument(request, env, editorialDocumentMatch[1]);
+    return json({ error: "GET、PATCHのみ利用できます。" }, 405);
+  }
+  const match = url.pathname.match(
+    /^\/api\/admin\/article-reports\/([0-9a-f-]{36})$/i,
+  );
+  if (match)
+    return request.method === "PATCH"
+      ? updateArticleReport(request, env, match[1])
+      : json({ error: "PATCHのみ利用できます。" }, 405);
+  if (
+    url.pathname === "/apply" ||
+    url.pathname === "/apply/" ||
+    isAdminPagePath(url.pathname)
+  ) {
+    if (url.pathname === "/apply" || url.pathname === "/apply/")
+      return fetchAdminAsset(request, env);
+    if (authMode(env) === "google-oauth") {
+      const identity = await getAuthenticatedEmail(request, env);
+      if (identity instanceof Response)
+        return new Response(null, {
+          status: 302,
+          headers: {
+            location: `/auth/google/login?returnTo=${encodeURIComponent(adminReturnPath(`${url.pathname}${url.search}`))}`,
+          },
+        });
+    }
+    const managerPages = new Set([
+      "/admin/permissions",
+      "/admin/permissions/",
+      "/admin/applications",
+      "/admin/applications/",
+    ]);
+    if (managerPages.has(url.pathname)) {
+      const managerScope = await getGlobalAdminScope(request, env);
+      if (isResponse(managerScope)) return managerScope;
+    }
+    return fetchAdminAsset(request, env);
+  }
+  // Permit only the static support files used by the admin UI.  All learning
+  // site pages remain unreachable from this Worker.
+  if (
+    url.pathname.startsWith("/_astro/") ||
+    url.pathname.startsWith("/images/") ||
+    url.pathname.startsWith("/data/") ||
+    url.pathname === "/favicon.svg"
+  ) {
+    return env.ASSETS.fetch(request);
+  }
+  return new Response("Not found", { status: 404 });
+}
+
 export default {
   async fetch(
     request: Request,
     env: Env,
     ctx?: WorkerExecutionContext,
   ): Promise<Response> {
-    const url = new URL(request.url);
-    // 運営サイトの入口は常に編集室へ案内する。静的サイトのルートを
-    // 公開してしまわないため、ここで明示的にリダイレクトする。
-    if (url.pathname === "/")
-      return Response.redirect(`${url.origin}/admin/portal/`, 302);
-    if (url.pathname === "/auth/google/login" && request.method === "GET")
-      return startGoogleLogin(request, env);
-    if (url.pathname === "/auth/google/callback" && request.method === "GET")
-      return completeGoogleLogin(request, env);
-    if (
-      url.pathname === "/auth/google/search-console" &&
-      request.method === "GET"
-    )
-      return startSearchConsoleImport(request, env);
-    if (
-      url.pathname === "/auth/google/search-console/callback" &&
-      request.method === "GET"
-    )
-      return completeSearchConsoleImport(request, env);
-    if (url.pathname === "/auth/logout")
-      return request.method === "POST"
-        ? logoutAdmin(request, env)
-        : json({ error: "POSTのみ利用できます。" }, 405);
-    if (url.pathname === "/auth/google/logout")
-      return request.method === "POST"
-        ? logoutGoogleSession(request, env)
-        : json({ error: "POSTのみ利用できます。" }, 405);
-    if (url.pathname === "/auth/logged-out" && request.method === "GET")
-      return loggedOutPage();
-    if (
-      url.pathname === "/api/public/application-config" &&
-      request.method === "GET"
-    )
-      return publicApplicationConfig(env);
-    if (url.pathname === "/api/apply" && request.method === "POST")
-      return submitMemberApplication(request, env);
-    if (url.pathname === "/api/admin/auth-status" && request.method === "GET")
-      return adminAuthStatus(request, env);
-    if (url.pathname === "/api/admin/notifications" && request.method === "GET")
-      return adminNotifications(request, env);
-    if (
-      url.pathname === "/api/admin/notifications/read" &&
-      request.method === "POST"
-    )
-      return markAdminNotificationsRead(request, env);
-    if (url.pathname === "/api/admin/report-admin-permissions") {
-      if (request.method === "GET")
-        return listReportAdminPermissions(request, env);
-      if (request.method === "POST")
-        return createReportAdminPermission(request, env);
-      if (request.method === "DELETE")
-        return deleteReportAdminPermission(request, env);
-      return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
-    }
-    if (
-      url.pathname === "/api/admin/discord-member-roles" &&
-      request.method === "POST"
-    ) {
-      try {
-        return await syncDiscordMemberRoles(request, env);
-      } catch (error) {
+    try {
+      return await handleAdminRequest(request, env, ctx);
+    } catch (error) {
+      const requestId = crypto.randomUUID();
+      console.error("admin worker request failed", {
+        requestId,
+        method: request.method,
+        pathname: new URL(request.url).pathname,
+        error,
+      });
+      if (new URL(request.url).pathname.startsWith("/api/"))
         return json(
           {
-            error: `Discordロール同期中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
+            error:
+              "データを読み込めませんでした。時間をおいて再読み込みしてください。改善しない場合は運営管理者へ連絡してください。",
+            requestId,
           },
           500,
         );
-      }
+      return new Response("Internal Server Error", { status: 500 });
     }
-    if (
-      url.pathname === "/api/admin/member-discord-user" &&
-      request.method === "PUT"
-    )
-      return updateMemberDiscordUserId(request, env);
-    if (
-      url.pathname === "/api/admin/discord-provision-roles" &&
-      request.method === "POST"
-    ) {
-      try {
-        return await provisionDiscordAttributeRoles(request, env);
-      } catch (error) {
-        return json(
-          {
-            error: `ロール準備中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
-          },
-          500,
-        );
-      }
-    }
-    if (
-      url.pathname === "/api/admin/member-attributes" &&
-      request.method === "PUT"
-    )
-      return updateMemberAttributes(request, env);
-    if (url.pathname === "/api/admin/article-reports") {
-      return request.method === "GET"
-        ? listArticleReports(request, env)
-        : json({ error: "GETのみ利用できます。" }, 405);
-    }
-    if (
-      url.pathname === "/api/admin/article-analytics" &&
-      request.method === "GET"
-    )
-      return listArticleAnalytics(request, env);
-    if (
-      url.pathname === "/api/admin/search-console-country-analytics" &&
-      request.method === "GET"
-    )
-      return listSearchConsoleCountryStats(request, env);
-    if (
-      url.pathname === "/api/admin/search-console-query-analytics" &&
-      request.method === "GET"
-    )
-      return listSearchConsoleQueryStats(request, env);
-    if (url.pathname === "/api/admin/personal-workspace") {
-      if (request.method === "GET") return getPersonalWorkspace(request, env);
-      if (request.method === "PUT") return savePersonalWorkspace(request, env);
-      return json({ error: "GET、PUTのみ利用できます。" }, 405);
-    }
-    if (url.pathname === "/api/admin/profile") {
-      if (request.method === "GET") return getMyProfile(request, env);
-      if (request.method === "PUT") return saveMyProfile(request, env);
-      return json({ error: "GET、PUTのみ利用できます。" }, 405);
-    }
-    if (url.pathname === "/api/admin/project-profile") {
-      if (request.method === "GET")
-        return getProjectMemberProfile(request, env);
-      if (request.method === "PUT")
-        return saveProjectMemberProfile(request, env);
-      return json({ error: "GET、PUTのみ利用できます。" }, 405);
-    }
-    if (
-      url.pathname === "/api/admin/project-introductions" &&
-      request.method === "GET"
-    )
-      return listProjectIntroductions(request, env);
-    if (
-      url.pathname === "/api/admin/project-profile-change-requests" &&
-      request.method === "GET"
-    )
-      return listProjectProfileChangeRequests(request, env);
-    const projectProfileChangeRequestMatch = url.pathname.match(
-      /^\/api\/admin\/project-profile-change-requests\/([0-9a-f-]{36})$/i,
-    );
-    if (projectProfileChangeRequestMatch && request.method === "PATCH")
-      return reviewProjectProfileChangeRequest(
-        request,
-        env,
-        projectProfileChangeRequestMatch[1],
-      );
-    if (
-      url.pathname === "/api/admin/profile-change-requests" &&
-      request.method === "GET"
-    )
-      return listProfileChangeRequests(request, env);
-    const profileChangeRequestMatch = url.pathname.match(
-      /^\/api\/admin\/profile-change-requests\/([0-9a-f-]{36})$/i,
-    );
-    if (profileChangeRequestMatch && request.method === "PATCH")
-      return reviewProfileChangeRequest(
-        request,
-        env,
-        profileChangeRequestMatch[1],
-      );
-    if (url.pathname === "/api/admin/portal" && request.method === "GET")
-      return portalOverview(request, env);
-    if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
-      return memberTasksOverview(request, env);
-    if (
-      url.pathname === "/api/admin/member-calendar" &&
-      request.method === "GET"
-    )
-      return memberCalendarOverview(request, env);
-    if (url.pathname === "/api/admin/projects" && request.method === "POST")
-      return createAtlasezProject(request, env);
-    if (url.pathname === "/api/admin/applications" && request.method === "GET")
-      return listApplications(request, env);
-    const applicationMatch = url.pathname.match(
-      /^\/api\/admin\/applications\/([0-9a-f-]{36})$/i,
-    );
-    if (applicationMatch && request.method === "PATCH")
-      return updateApplication(request, env, applicationMatch[1]);
-    if (url.pathname === "/api/admin/operations" && request.method === "GET")
-      return operationsOverview(request, env);
-    if (
-      url.pathname === "/api/admin/operations/tasks" &&
-      request.method === "POST"
-    )
-      return createOperation(request, env, "task");
-    if (
-      url.pathname === "/api/admin/operations/progress" &&
-      request.method === "POST"
-    )
-      return createOperation(request, env, "progress");
-    if (
-      url.pathname === "/api/admin/operations/events" &&
-      request.method === "POST"
-    )
-      return createOperation(request, env, "event");
-    if (
-      url.pathname === "/api/admin/operations/availability-blocks" &&
-      request.method === "POST"
-    )
-      return createAvailabilityBlock(request, env);
-    const availabilityBlockMatch = url.pathname.match(
-      /^\/api\/admin\/operations\/availability-blocks\/([0-9a-f-]{36})$/i,
-    );
-    if (availabilityBlockMatch && request.method === "DELETE")
-      return deleteAvailabilityBlock(request, env, availabilityBlockMatch[1]);
-    const taskMatch = url.pathname.match(
-      /^\/api\/admin\/operations\/tasks\/([0-9a-f-]{36})$/i,
-    );
-    if (taskMatch && request.method === "PATCH")
-      return updateTask(request, env, taskMatch[1]);
-    const availabilityMatch = url.pathname.match(
-      /^\/api\/admin\/operations\/events\/([0-9a-f-]{36})\/availability$/i,
-    );
-    if (availabilityMatch && request.method === "PUT")
-      return updateEventAvailability(request, env, availabilityMatch[1]);
-    const eventMatch = url.pathname.match(
-      /^\/api\/admin\/operations\/events\/([0-9a-f-]{36})$/i,
-    );
-    if (eventMatch && request.method === "DELETE")
-      return deleteEvent(request, env, eventMatch[1]);
-    if (
-      url.pathname === "/api/admin/editor/sync-publication-status" &&
-      request.method === "POST"
-    )
-      return syncEditorialPublicationStatusForAdmin(request, env);
-    if (url.pathname === "/api/admin/editor/documents") {
-      if (request.method === "GET") return listEditorialDocuments(request, env);
-      if (request.method === "POST")
-        return createEditorialDocument(request, env);
-      return json({ error: "GET、POSTのみ利用できます。" }, 405);
-    }
-    if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
-      return editorialBoard(request, env);
-    const editorialCollaborationMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/collaboration$/i,
-    );
-    if (editorialCollaborationMatch)
-      return request.headers.get("upgrade")?.toLowerCase() === "websocket"
-        ? connectEditorialCollaboration(
-            request,
-            env,
-            editorialCollaborationMatch[1],
-            ctx?.exports?.EditorialCollaborationRoom,
-          )
-        : json({ error: "WebSocket接続が必要です。" }, 426);
-    const editorialAssetCollectionMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/assets$/i,
-    );
-    if (editorialAssetCollectionMatch) {
-      if (request.method === "GET")
-        return listEditorialAssets(
-          request,
-          env,
-          editorialAssetCollectionMatch[1],
-        );
-      if (request.method === "POST")
-        return uploadEditorialAsset(
-          request,
-          env,
-          editorialAssetCollectionMatch[1],
-        );
-      return json({ error: "GET、POSTのみ利用できます。" }, 405);
-    }
-    const editorialAssetMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/assets\/([0-9a-f-]{36})$/i,
-    );
-    if (editorialAssetMatch && request.method === "GET")
-      return serveEditorialAsset(request, env, editorialAssetMatch[1]);
-    if (editorialAssetMatch && request.method === "DELETE")
-      return deleteEditorialAsset(request, env, editorialAssetMatch[1]);
-    if (
-      url.pathname === "/api/admin/editor/review-requests" &&
-      request.method === "GET"
-    )
-      return listEditorialReviewRequests(request, env);
-    const editorialReviewAssignmentMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/review-requests\/([0-9a-f-]{36})$/i,
-    );
-    if (editorialReviewAssignmentMatch && request.method === "PATCH")
-      return updateEditorialReviewAssignment(
-        request,
-        env,
-        editorialReviewAssignmentMatch[1],
-      );
-    const editorialRevisionMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/revisions$/i,
-    );
-    if (editorialRevisionMatch && request.method === "GET")
-      return listEditorialRevisions(request, env, editorialRevisionMatch[1]);
-    const editorialCommentMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/comments$/i,
-    );
-    if (editorialCommentMatch)
-      return request.method === "POST"
-        ? createEditorialComment(request, env, editorialCommentMatch[1])
-        : json({ error: "POSTのみ利用できます。" }, 405);
-    const editorialCommentStatusMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/comments\/([0-9a-f-]{36})$/i,
-    );
-    if (editorialCommentStatusMatch)
-      return request.method === "PATCH"
-        ? (await request
-            .clone()
-            .json()
-            .then((payload) => payload?.action === "edit")
-            .catch(() => false))
-          ? editEditorialComment(
-              request,
-              env,
-              editorialCommentStatusMatch[1],
-              editorialCommentStatusMatch[2],
-            )
-          : updateEditorialCommentStatus(
-              request,
-              env,
-              editorialCommentStatusMatch[1],
-              editorialCommentStatusMatch[2],
-            )
-        : request.method === "DELETE"
-          ? deleteEditorialComment(
-              request,
-              env,
-              editorialCommentStatusMatch[1],
-              editorialCommentStatusMatch[2],
-            )
-          : json({ error: "PATCH、DELETEのみ利用できます。" }, 405);
-    const editorialPublishMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/publish$/i,
-    );
-    if (editorialPublishMatch)
-      return request.method === "POST"
-        ? publishEditorialDocument(request, env, editorialPublishMatch[1])
-        : json({ error: "POSTのみ利用できます。" }, 405);
-    const editorialUnpublishMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/unpublish$/i,
-    );
-    if (editorialUnpublishMatch)
-      return request.method === "POST"
-        ? unpublishEditorialDocument(request, env, editorialUnpublishMatch[1])
-        : json({ error: "POSTのみ利用できます。" }, 405);
-    const editorialDocumentMatch = url.pathname.match(
-      /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})$/i,
-    );
-    if (editorialDocumentMatch) {
-      if (request.method === "GET")
-        return getEditorialDocument(request, env, editorialDocumentMatch[1]);
-      if (request.method === "PATCH")
-        return updateEditorialDocument(request, env, editorialDocumentMatch[1]);
-      return json({ error: "GET、PATCHのみ利用できます。" }, 405);
-    }
-    const match = url.pathname.match(
-      /^\/api\/admin\/article-reports\/([0-9a-f-]{36})$/i,
-    );
-    if (match)
-      return request.method === "PATCH"
-        ? updateArticleReport(request, env, match[1])
-        : json({ error: "PATCHのみ利用できます。" }, 405);
-    if (
-      url.pathname === "/apply" ||
-      url.pathname === "/apply/" ||
-      isAdminPagePath(url.pathname)
-    ) {
-      if (url.pathname === "/apply" || url.pathname === "/apply/")
-        return fetchAdminAsset(request, env);
-      if (authMode(env) === "google-oauth") {
-        const identity = await getAuthenticatedEmail(request, env);
-        if (identity instanceof Response)
-          return new Response(null, {
-            status: 302,
-            headers: {
-              location: `/auth/google/login?returnTo=${encodeURIComponent(adminReturnPath(`${url.pathname}${url.search}`))}`,
-            },
-          });
-      }
-      const managerPages = new Set([
-        "/admin/permissions",
-        "/admin/permissions/",
-        "/admin/applications",
-        "/admin/applications/",
-      ]);
-      if (managerPages.has(url.pathname)) {
-        const managerScope = await getGlobalAdminScope(request, env);
-        if (isResponse(managerScope)) return managerScope;
-      }
-      return fetchAdminAsset(request, env);
-    }
-    // Permit only the static support files used by the admin UI.  All learning
-    // site pages remain unreachable from this Worker.
-    if (
-      url.pathname.startsWith("/_astro/") ||
-      url.pathname.startsWith("/images/") ||
-      url.pathname.startsWith("/data/") ||
-      url.pathname === "/favicon.svg"
-    ) {
-      return env.ASSETS.fetch(request);
-    }
-    return new Response("Not found", { status: 404 });
   },
   async scheduled(
     controller: unknown,

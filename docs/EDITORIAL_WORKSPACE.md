@@ -56,3 +56,12 @@ npm run deploy:admin:collaboration
 ```
 
 通常のローカル開発では`wrangler.admin.local.jsonc`が同じクラスをローカルDurable Objectとして起動するため、従来どおり`npm run dev:admin`だけで確認できます。
+
+運営APIが参照するD1マイグレーションは、該当コードのPreviewを確認する前に適用します。未適用のまま新しいAPIを開くと、Worker側でテーブル不足となり、プロフィールや画像を含む複数の表示が同時に失敗します。
+
+```sh
+npx wrangler d1 migrations list atlasez-reports --remote --config wrangler.admin.jsonc
+npx wrangler d1 migrations apply atlasez-reports --remote --config wrangler.admin.jsonc
+```
+
+適用後は再度`migrations list`を実行し、未適用一覧が空であることを確認してください。既存コードとの互換性がない破壊的マイグレーションは、この手順でPreview用に先行適用せず、段階的なマイグレーションとして分割します。

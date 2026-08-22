@@ -39,6 +39,32 @@ const emptyEnv = {
 };
 
 describe("admin worker editor APIs", () => {
+  it("returns JSON for unexpected API failures instead of a Cloudflare HTML error", async () => {
+    const brokenEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: () => {
+          throw new Error("no such table: editorial_member_profiles");
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/profile"),
+      brokenEnv as never,
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    const data = (await response.json()) as {
+      error?: string;
+      requestId?: string;
+    };
+    expect(data.error).toContain("データを読み込めませんでした");
+    expect(data.error).not.toContain("no such table");
+    expect(data.requestId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("returns empty review request collections for an all-subject manager", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/api/admin/editor/review-requests"),

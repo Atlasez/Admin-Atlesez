@@ -55,6 +55,27 @@ test("大元マイページは基本情報を承認申請として送る", async
   });
 });
 
+test("APIがHTMLエラーを返してもJSON解析例外を画面へ表示しない", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: "text/html",
+      body: "<!DOCTYPE html><title>Worker error</title>",
+    }),
+  );
+
+  await page.goto("admin/member-profile/");
+  await expect(page.locator("[data-message]")).toContainText(
+    "プロフィール情報を読み込めませんでした。（HTTP 500）",
+  );
+  await expect(page.locator("[data-message]")).not.toContainText(
+    "Unexpected token",
+  );
+});
+
 test("横断タスク管理で複数プロジェクトを一覧・更新できる", async ({ page }) => {
   await baseAdminMocks(page);
   await page.route("**/api/admin/profile", (route) =>
