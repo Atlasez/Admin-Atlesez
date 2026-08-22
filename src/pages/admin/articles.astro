@@ -7,9 +7,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <header>
       <div>
         <h1>編集・フィードバック</h1>
-        <span data-mode-description
-          >既存の原稿を一覧で確認してから、作成・加筆修正・フィードバックへ進めます。</span
-        >
       </div>
       <div class="header-actions">
         <a href="/admin/editor/?new=1&from=articles">新規記事を作成</a>
@@ -353,7 +350,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
     const workflow = root.querySelector<HTMLSelectElement>("[data-workflow-filter]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
-    const description = root.querySelector<HTMLElement>("[data-mode-description]")!;
     let items: Article[] = [];
     let scopeEmail = "";
 
@@ -363,10 +359,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const labels = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" };
     const isTest = (article: Article) => /(^|[\\s_-])test($|[\\s_-])|テスト/i.test(article.title);
     const currentWorkflow = () => workflow.value as "all" | "revise" | "review";
-    const updateDescription = () => {
-      const mode = currentWorkflow();
-      description.textContent = mode === "review" ? "フィードバック済みでない原稿に絞り込み、自分への依頼を最優先で表示します。" : mode === "revise" ? "自分が作成・更新した原稿を優先して表示します。" : "既存の原稿を一覧で確認してから、作成・加筆修正・フィードバックへ進めます。";
-    };
     const render = () => {
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
@@ -378,7 +370,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       });
       const shown = [...new Map(sorted.map((article) => [article.source_article_id || `${article.subject}/${article.category}/${article.slug || article.title}`, article])).values()];
       count.textContent = `${shown.length}件`;
-      list.innerHTML = shown.length ? shown.map((article) => `<article class="article"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && article.reviewer_email === scopeEmail ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div><a href="/admin/editor/?document=${encodeURIComponent(article.id)}">編集・フィードバックを開く →</a></div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
+      list.innerHTML = shown.length ? shown.map((article) => `<article class="article"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && article.reviewer_email === scopeEmail ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div><a href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を編集・フィードバックで開く">→</a></div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
     };
     const load = async () => {
       try {
@@ -393,9 +385,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";
       }
     };
-    updateDescription();
     window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
-    [query, status, publication, test, workflow].forEach((element) => element.addEventListener("input", () => { updateDescription(); render(); }));
+    [query, status, publication, test, workflow].forEach((element) => element.addEventListener("input", render));
     void load();
   };
   document.addEventListener("astro:page-load", initializeArticleIndex);

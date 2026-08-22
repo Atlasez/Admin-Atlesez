@@ -8,7 +8,7 @@ const statusLabel = { published: "公開中", preparing: "準備中" } as const;
 
 <AdminLayout title="各ジャンル概要" description="アトラスの分野・カテゴリ構成を確認します">
   <main class="genres">
-    <header><div><p>ジャンル構成</p><h1>各ジャンル概要</h1><span>記事の作成・編集前に、分野の目的とカテゴリ構成を確認できます。</span></div><a href="/admin/articles/">原稿一覧へ</a></header>
+    <header><div><h1>各ジャンル概要</h1></div><a href="/admin/articles/" aria-label="原稿一覧を開く">→</a></header>
     <nav aria-label="分野内リンク">{subjects.map((subject) => <a href={`#${subject.data.slug}`}>{subject.data.name.ja}</a>)}</nav>
     <div class="genre-grid">
       {subjects.map((subject) => (

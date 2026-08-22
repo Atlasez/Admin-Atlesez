@@ -1,5 +1,49 @@
 import { expect, test } from "@playwright/test";
 
+test("管理メニューはプロジェクト遷移後も同じ個数・順序を保つ", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await route.fulfill({
+      json: { email: "manager@example.com", isManager: true },
+    });
+  });
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/portal", (route) =>
+    route.fulfill({ json: { todos: [], calendar: { events: [] } } }),
+  );
+
+  await page.goto("admin/atlas/");
+  const menu = page.locator(".admin-management-menu");
+  const common = [
+    "管理トップ",
+    "運営内自己紹介",
+    "同時作業会",
+    "運営者・担当管理",
+    "問題報告・統計",
+    "作業の進め方",
+    "応募管理",
+  ];
+  await menu.locator("summary").click();
+  await expect(menu.locator(":scope > div > a:visible")).toHaveText(common);
+
+  await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
+  await page.getByRole("link", { name: /Atlasez運営事務局/ }).click();
+  await menu.locator("summary").click();
+  await expect(menu.locator(":scope > div > a:visible")).toHaveText([
+    "管理トップ",
+    "運営内自己紹介",
+    "事務局の日程・交流",
+    ...common.slice(3),
+  ]);
+});
+
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
   const now = new Date();
   const expectedDays = new Date(
@@ -167,8 +211,16 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   expect(await holidayRegions.locator("option").count()).toBeGreaterThanOrEqual(
     500,
   );
-  await page.locator('[data-calendar-tab="settings"]').click();
+  await expect(
+    page.locator("[data-calendar-settings-dialog]"),
+  ).not.toBeVisible();
+  await page.locator("[data-open-calendar-settings]").click();
+  await expect(page.locator("[data-calendar-settings-dialog]")).toBeVisible();
   await page.locator("[data-holiday-add]").click();
+  await page.locator("[data-holiday-search]").fill("US/CA");
+  await expect(
+    holidayRegions.locator('option[value="US/CA"]'),
+  ).not.toHaveAttribute("hidden", "");
   await holidayRegions.selectOption(["JP", "US/CA"]);
   await expect(holidayRegions.locator("option:checked")).toHaveCount(2);
 
@@ -179,7 +231,15 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   await expect(page.locator("[data-calendar-timezone]")).toHaveValue(
     "America/New_York",
   );
-  await page.locator('[data-calendar-tab="agenda"]').click();
+  await page.locator("[data-calendar-timezone]").fill("Kathmandu");
+  await expect(
+    page.locator('[data-timezone-value="Asia/Kathmandu"]'),
+  ).toContainText("UTC+05:45");
+  await page.locator('[data-timezone-value="Asia/Kathmandu"]').click();
+  await expect(
+    page.locator('[data-timezone-value="Asia/Kathmandu"]'),
+  ).toHaveCount(1);
+  await page.locator("[data-close-calendar-settings]").click();
 
   const startCell = page.locator(`[data-calendar-date="${startDate}"]`);
   const daySummary = startCell.getByRole("button", {
@@ -278,7 +338,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   await expect.poll(() => savedBlock).toBeDefined();
   expect(savedBlock).toMatchObject({
     kind: "unavailable",
-    timezone: "America/New_York",
+    timezone: "Asia/Kathmandu",
   });
   expect(String(savedBlock?.startsAt)).toMatch(/Z$/);
   expect(String(savedBlock?.endsAt)).toMatch(/Z$/);

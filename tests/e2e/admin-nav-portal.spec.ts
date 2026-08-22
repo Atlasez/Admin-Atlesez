@@ -180,7 +180,7 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   await expect(page.getByText("EVENTS", { exact: true })).toHaveCount(0);
   await expect(page.getByText("MY TASKS", { exact: true })).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "主要プロジェクト" }),
+    page.getByRole("heading", { name: "参加中のプロジェクト" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "同時作業会・交流会の日程" }),

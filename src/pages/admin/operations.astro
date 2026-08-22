@@ -1,24 +1,20 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
+import { getTimeZoneOptions } from "../../lib/timezones";
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
-const timezones = [
-  ["Asia/Tokyo", "日本（東京）"], ["Asia/Seoul", "韓国（ソウル）"], ["Asia/Shanghai", "中国（上海）"], ["Asia/Taipei", "台湾（台北）"], ["Asia/Hong_Kong", "香港"], ["Asia/Singapore", "シンガポール"], ["Asia/Bangkok", "タイ（バンコク）"], ["Asia/Kolkata", "インド（コルカタ）"], ["Asia/Dubai", "アラブ首長国連邦（ドバイ）"], ["Australia/Sydney", "オーストラリア（シドニー）"], ["Pacific/Auckland", "ニュージーランド（オークランド）"], ["Europe/London", "英国（ロンドン）"], ["Europe/Paris", "フランス・中央ヨーロッパ"], ["Europe/Berlin", "ドイツ（ベルリン）"], ["Europe/Rome", "イタリア（ローマ）"], ["Europe/Madrid", "スペイン（マドリード）"], ["Europe/Moscow", "ロシア（モスクワ）"], ["Africa/Cairo", "エジプト（カイロ）"], ["Africa/Johannesburg", "南アフリカ（ヨハネスブルク）"], ["America/Sao_Paulo", "ブラジル（サンパウロ）"], ["America/New_York", "米国東部（ニューヨーク）"], ["America/Chicago", "米国中部（シカゴ）"], ["America/Denver", "米国山岳部（デンバー）"], ["America/Los_Angeles", "米国太平洋（ロサンゼルス）"], ["America/Anchorage", "米国アラスカ"], ["Pacific/Honolulu", "米国ハワイ"], ["America/Toronto", "カナダ（トロント）"], ["America/Vancouver", "カナダ（バンクーバー）"], ["America/Mexico_City", "メキシコ（メキシコシティ）"], ["UTC", "協定世界時（UTC）"],
-] as const;
+const timezones = getTimeZoneOptions(new Date());
 const holidayCountries = [
   ["JP", "日本"], ["US", "米国"], ["GB", "英国"], ["FR", "フランス"], ["DE", "ドイツ"], ["KR", "韓国"], ["CN", "中国"], ["TW", "台湾"], ["IN", "インド"], ["AU", "オーストラリア"], ["CA", "カナダ"],
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
 const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
-const calendarSettings = Astro.url.searchParams.get("tab") === "settings";
-const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
 ---
 
 <AdminLayout title={calendarPage ? "カレンダー" : "タスク管理"} description="運営作業を共有する場所">
-  <main class="operations" data-operations data-calendar-view={calendarSettings ? "settings" : "agenda"}>
+  <main class="operations" data-operations>
     <header>
       <h1 data-project-title>{calendarPage ? "カレンダー" : "タスク管理"}</h1>
-      <span>{calendarPage ? "日程、参加可否、祝日を確認します。" : "進捗報告と、次に行うタスクを共有します。"}</span>
       <nav class="operations-tabs" aria-label="タスクとカレンダー"><a href={`/admin/operations/${Astro.url.search}`} aria-current={!calendarPage ? "page" : undefined}>タスク管理</a><a href={`/admin/calendar/${Astro.url.search}`} aria-current={calendarPage ? "page" : undefined}>カレンダー</a></nav>
     </header>
     <div class="grid">
@@ -88,7 +84,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
             >期限日時<input data-task-due type="datetime-local" /></label
           ><label class="field-label"
             >期限のタイムゾーン<select data-task-due-timezone>
-              {timezones.map(([value, label]) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}
+              {timezones.map(({ value, label }) => <option value={value} selected={value === "Asia/Tokyo"}>{label}</option>)}
             </select></label
           >
         </div>
@@ -167,8 +163,10 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
         <p>
           日付をクリック、またはドラッグして、自分が動ける／動けない期間を登録できます。
         </p>
-        <nav class="calendar-view-tabs" aria-label="カレンダー表示"><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}`} data-calendar-tab="agenda" aria-current={!calendarSettings ? "page" : undefined}>予定</a><a href={`/admin/calendar/?project=${encodeURIComponent(projectQuery)}&tab=settings`} data-calendar-tab="settings" aria-current={calendarSettings ? "page" : undefined}>設定</a></nav>
-        <div class="calendar-settings" aria-label="カレンダー表示設定">
+        <div class="calendar-actions"><button type="button" data-open-calendar-settings aria-haspopup="dialog">⚙️ 設定</button></div>
+        <dialog class="calendar-settings-dialog" data-calendar-settings-dialog aria-labelledby="calendar-settings-heading">
+          <div class="calendar-settings-heading"><h2 id="calendar-settings-heading">カレンダー設定</h2><button type="button" data-close-calendar-settings aria-label="設定を閉じる">×</button></div>
+          <div class="calendar-settings" aria-label="カレンダー表示設定">
           <label class="field-label timezone-combobox"
             >表示するタイムゾーン
             <div>
@@ -200,6 +198,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
             >表示する祝日の国・地域（複数選択可）
             <div class="holiday-tags" data-holiday-tags></div>
             <button type="button" class="holiday-add" data-holiday-add aria-expanded="false">タグを追加</button>
+            <input type="search" data-holiday-search placeholder="国・地域名、コードで検索" aria-label="祝日の国・地域を検索" />
             <select
               data-calendar-holiday-country
               multiple
@@ -212,9 +211,10 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
               {calendarSystems.map(([value, label]) => <option value={value} selected={value === "gregory"}>{label}</option>)}
             </select></label
           >
-        </div>
+          </div>
+        </dialog>
         <datalist id="atlasez-timezone-datalist">
-          {timezones.map(([value, label]) => <option value={value} label={label}></option>)}
+          {timezones.map(({ value, label }) => <option value={value} label={label}></option>)}
         </datalist>
         <div class="calendar-head">
           <button type="button" data-calendar-prev aria-label="前の月">‹</button
@@ -334,17 +334,13 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
   .operations-tabs { display:flex; gap:.35rem; margin-top:.75rem; }
   .operations-tabs a { border:1px solid var(--border-default); color:var(--text-primary); font-size:.76rem; font-weight:800; padding:.4rem .65rem; text-decoration:none; }
   .operations-tabs a[aria-current="page"] { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
-  .calendar-view-tabs { border-bottom:1px solid var(--border-default); display:flex; gap:.2rem; margin:.75rem 0; }
-  .calendar-view-tabs a { border-bottom:3px solid transparent; color:var(--text-secondary); font-size:.78rem; font-weight:800; padding:.45rem .7rem; text-decoration:none; }
-  .calendar-view-tabs a[aria-current="page"] { border-bottom-color:var(--accent-primary); color:var(--accent-primary); }
-  .operations[data-calendar-view="agenda"] .calendar-settings { display:none; }
-  .operations[data-calendar-view="settings"] .calendar-head,
-  .operations[data-calendar-view="settings"] .calendar-week,
-  .operations[data-calendar-view="settings"] .calendar-note,
-  .operations[data-calendar-view="settings"] .event-create,
-  .operations[data-calendar-view="settings"] [data-event-feedback],
-  .operations[data-calendar-view="settings"] [data-event-list],
-  .operations[data-calendar-view="settings"] .availability-blocks { display:none!important; }
+  .calendar-actions { display:flex; justify-content:flex-end; margin:.75rem 0; }
+  .calendar-actions button { margin:0; }
+  .calendar-settings-dialog { background:var(--background-primary); border:1px solid var(--border-default); color:var(--text-primary); max-width:44rem; padding:1rem; width:calc(100% - 2rem); }
+  .calendar-settings-dialog::backdrop { background:#001a2c73; }
+  .calendar-settings-heading { align-items:center; border-bottom:1px solid var(--border-default); display:flex; justify-content:space-between; margin-bottom:1rem; padding-bottom:.7rem; }
+  .calendar-settings-heading h2 { margin:0; }
+  .calendar-settings-heading button { background:transparent; border:0; color:var(--text-primary); font-size:1.25rem; margin:0; }
   .grid {
     display: grid;
     gap: 1rem;
@@ -568,7 +564,9 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
   }
   .holiday-picker { align-content:start; position:relative; }
   .holiday-picker > select { display:none; }
-  .holiday-picker.is-open > select { display:block; max-height:11rem; position:absolute; top:100%; z-index:25; }
+  .holiday-picker.is-open > select { display:block; max-height:11rem; position:static; width:100%; }
+  .holiday-picker > input[type="search"] { display:none; }
+  .holiday-picker.is-open > input[type="search"] { display:block; }
   .holiday-tags { display:flex; flex-wrap:wrap; gap:.3rem; min-height:2rem; }
   .holiday-tags button { background:var(--background-secondary); border-color:var(--border-default); border-radius:999px; color:var(--text-primary); font-size:.7rem; margin:0; padding:.25rem .45rem; }
   .holiday-tags span { color:var(--text-secondary); font-size:.72rem; }
@@ -631,6 +629,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     background: var(--accent-primary);
     color: #fff;
   }
+  .calendar-cell--today { background:color-mix(in srgb,var(--accent-primary) 12%,var(--background-primary)); box-shadow:inset 0 0 0 3px var(--accent-primary); }
   .calendar-cell--today .calendar-day { color:#fff; }
   .calendar-availability {
     margin-top: 0.08rem;
@@ -1071,6 +1070,7 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
 <script>
   import { holidaysForRegions, localDateTimeToInstant, supportedHolidayRegions } from '../../lib/calendar-support';
   import { recurringCoWorkingEventsForMonth } from '../../lib/co-working-schedule';
+  import { getTimeZoneOptions } from '../../lib/timezones';
   type OperationMember = { email: string; display_name?: string };
   type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
   type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
@@ -1081,13 +1081,6 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
     root.dataset.initialized = 'true';
-    root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((tab) => tab.addEventListener('click', (event) => {
-      event.preventDefault();
-      const view = tab.dataset.calendarTab === 'settings' ? 'settings' : 'agenda';
-      root.dataset.calendarView = view;
-      root.querySelectorAll<HTMLAnchorElement>('[data-calendar-tab]').forEach((item) => item.setAttribute('aria-current', item === tab ? 'page' : 'false'));
-      history.replaceState(null, '', tab.href);
-    }));
     const get = <T extends Element>(selector: string) => root.querySelector<T>(selector)!;
     const progress = get<HTMLTextAreaElement>('[data-progress]');
     const tasks = get<HTMLElement>('[data-task-list]');
@@ -1100,6 +1093,8 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     const holidayCountry = get<HTMLSelectElement>('[data-calendar-holiday-country]');
     const holidayTags = get<HTMLElement>('[data-holiday-tags]');
     const holidayAdd = get<HTMLButtonElement>('[data-holiday-add]');
+    const holidaySearch = get<HTMLInputElement>('[data-holiday-search]');
+    const calendarSettingsDialog = get<HTMLDialogElement>('[data-calendar-settings-dialog]');
     const timezoneOptions = get<HTMLElement>('[data-timezone-options]');
     const timezoneToggle = get<HTMLButtonElement>('[data-timezone-toggle]');
     const blockEditor = get<HTMLDetailsElement>('[data-block-editor]');
@@ -1131,7 +1126,10 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       const opening = !holidayCountry.closest('.holiday-picker')?.classList.contains('is-open');
       holidayCountry.closest('.holiday-picker')?.classList.toggle('is-open', opening);
       holidayAdd.setAttribute('aria-expanded', String(opening));
+      if (opening) holidaySearch.focus();
     });
+    get<HTMLButtonElement>('[data-open-calendar-settings]').addEventListener('click', () => calendarSettingsDialog.showModal());
+    get<HTMLButtonElement>('[data-close-calendar-settings]').addEventListener('click', () => calendarSettingsDialog.close());
     holidayTags.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-holiday]');
       if (!button) return;
@@ -1141,20 +1139,20 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
       renderCalendar();
     });
     const populateTimezones = () => {
-      const values = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-      const fallbackValues = [...root.querySelectorAll<HTMLOptionElement>('#atlasez-timezone-datalist option')].map((option) => option.value);
-      const allValues = [...new Set(['UTC', ...(values.length ? values : fallbackValues)])];
+      const timeZoneOptions = getTimeZoneOptions();
+      const allValues = timeZoneOptions.map((option) => option.value);
+      const labels = new Map(timeZoneOptions.map((option) => [option.value, option.label]));
       const datalist = root.querySelector<HTMLDataListElement>('#atlasez-timezone-datalist');
-      if (datalist) datalist.innerHTML = allValues.map((value) => `<option value="${escapeHtml(value)}" label="${escapeHtml(value.replaceAll('_', ' / '))}"></option>`).join('');
+      if (datalist) datalist.innerHTML = allValues.map((value) => `<option value="${escapeHtml(value)}" label="${escapeHtml(labels.get(value) ?? value)}"></option>`).join('');
       root.querySelectorAll<HTMLSelectElement>('[data-task-due-timezone]').forEach((select) => {
         const current = select.value || 'Asia/Tokyo';
-        select.innerHTML = allValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value.replaceAll('_', ' / '))}</option>`).join('');
+        select.innerHTML = allValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(labels.get(value) ?? value)}</option>`).join('');
         select.value = allValues.includes(current) ? current : 'Asia/Tokyo';
       });
       root.querySelectorAll<HTMLInputElement>('[data-event-timezone]').forEach((input) => input.setAttribute('list', 'atlasez-timezone-datalist'));
       const renderTimezoneOptions = () => {
         const query = timezone.value.trim().toLocaleLowerCase();
-        timezoneOptions.innerHTML = allValues.filter((value) => !query || value.toLocaleLowerCase().includes(query)).slice(0, 80).map((value) => `<button type="button" role="option" data-timezone-value="${escapeHtml(value)}">${escapeHtml(value.replaceAll('_', ' / '))}</button>`).join('');
+        timezoneOptions.innerHTML = allValues.filter((value) => !query || `${value} ${labels.get(value) ?? ''}`.toLocaleLowerCase().includes(query)).slice(0, 80).map((value) => `<button type="button" role="option" data-timezone-value="${escapeHtml(value)}">${escapeHtml(labels.get(value) ?? value)}</button>`).join('');
       };
       timezone.addEventListener('input', () => { renderTimezoneOptions(); timezoneOptions.hidden = false; timezone.setAttribute('aria-expanded', 'true'); });
       timezoneToggle.addEventListener('click', () => { timezoneOptions.hidden = !timezoneOptions.hidden; timezone.setAttribute('aria-expanded', String(!timezoneOptions.hidden)); renderTimezoneOptions(); });
@@ -1399,6 +1397,10 @@ const projectQuery = Astro.url.searchParams.get("project") ?? "atlas";
     blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
     timezone.addEventListener('input', () => { render(); });
     holidayCountry.addEventListener('change', () => { renderHolidayTags(); renderCalendar(); });
+    holidaySearch.addEventListener('input', () => {
+      const query = holidaySearch.value.trim().toLocaleLowerCase();
+      [...holidayCountry.options].forEach((option) => { option.hidden = Boolean(query) && !`${option.textContent ?? ''} ${option.value}`.toLocaleLowerCase().includes(query); });
+    });
     calendarSystem.addEventListener('change', () => { renderCalendar(); });
     // API の応答を待たずに月表示を作る。認証切れや一時的な取得失敗が
     // あっても、カレンダーそのものと月移動は利用できる状態を保つ。
