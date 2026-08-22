@@ -1927,6 +1927,36 @@ async function operationProjectRole(
   return membership?.role ?? null;
 }
 
+const projectRoleLabel = (role: string) =>
+  role === "manager"
+    ? "運営内運営"
+    : role === "member"
+      ? "運営メンバー"
+      : role || "担当未設定";
+
+async function projectAssignmentLabels(
+  env: Env,
+  projectId: string,
+  email: string,
+  role: string,
+): Promise<string[]> {
+  const labels = [projectRoleLabel(role)];
+  if (projectId !== "atlas") return labels;
+  const permissions = await env.REPORTS.prepare(
+    "SELECT subject FROM report_admin_permissions WHERE email=? ORDER BY subject",
+  )
+    .bind(email)
+    .all<{ subject: string }>();
+  for (const permission of permissions.results ?? []) {
+    const label =
+      permission.subject === "*"
+        ? "全ジャンル管理"
+        : `${APPLICATION_SUBJECT_LABELS[permission.subject] ?? permission.subject}担当`;
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
 async function getSecretariatReviewerScope(
   request: Request,
   env: Env,
@@ -1946,17 +1976,47 @@ async function resolveOperationProject(
   requested: string,
 ): Promise<OperationProject | Response> {
   const key = requested.trim().toLowerCase() || "atlas";
-  const project = await env.REPORTS.prepare(
+  let project = await env.REPORTS.prepare(
     "SELECT id, slug, name, description FROM atlasez_projects WHERE id = ? OR slug = ? LIMIT 1",
   )
     .bind(key, key)
     .first<OperationProject>();
+  // 過去データにはゼミプラットフォームの旧ID `semi-platform` が残る場合がある。
+  // UIの正規slugを維持しつつ、移行済みでない環境でも既存参加者を失わない。
+  if (!project && key === "seminar-platform")
+    project = await env.REPORTS.prepare(
+      "SELECT id, slug, name, description FROM atlasez_projects WHERE id = 'semi-platform' OR slug = 'semi-platform' LIMIT 1",
+    ).first<OperationProject>();
   if (!project)
     return json({ error: "指定したプロジェクトが見つかりません。" }, 404);
   const role = await operationProjectRole(env, scope, project.id);
   if (!role)
     return json({ error: "このプロジェクトのメンバーではありません。" }, 403);
   return project;
+}
+
+type ProjectReviewerScope = {
+  scope: AdminScope;
+  project: OperationProject;
+};
+
+async function getProjectReviewerScope(
+  request: Request,
+  env: Env,
+  requestedProject: string,
+): Promise<ProjectReviewerScope | Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const project = await resolveOperationProject(env, scope, requestedProject);
+  if (isResponse(project)) return project;
+  const role = await operationProjectRole(env, scope, project.id);
+  if (role !== "manager")
+    return json(
+      { error: "このプロジェクトの運営内運営のみ利用できます。" },
+      403,
+    );
+  return { scope, project };
 }
 
 async function postDiscordWebhook(url: string | undefined, content: string) {
@@ -2967,6 +3027,320 @@ async function reviewProfileChangeRequest(
   return json({ ok: true, status });
 }
 
+async function getProjectMemberProfile(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const requestedProject =
+    new URL(request.url).searchParams.get("project") ?? "atlas";
+  const project = await resolveOperationProject(env, scope, requestedProject);
+  if (isResponse(project)) return project;
+  const role = await operationProjectRole(env, scope, project.id);
+  if (!role)
+    return json({ error: "このプロジェクトのメンバーではありません。" }, 403);
+  const [memberProfile, projectProfile, latestRequest] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT display_name,avatar_url,university,year
+       FROM editorial_member_profiles WHERE email=?`,
+    )
+      .bind(scope.email)
+      .first<Record<string, unknown>>(),
+    env.REPORTS.prepare(
+      `SELECT internal_bio,updated_at FROM editorial_project_member_profiles
+       WHERE project_id=? AND email=?`,
+    )
+      .bind(project.id, scope.email)
+      .first<Record<string, unknown>>(),
+    env.REPORTS.prepare(
+      `SELECT id,proposed_internal_bio,status,submitted_at,reviewed_at,review_note
+       FROM editorial_project_profile_change_requests
+       WHERE project_id=? AND email=? ORDER BY submitted_at DESC LIMIT 1`,
+    )
+      .bind(project.id, scope.email)
+      .first<Record<string, unknown>>(),
+  ]);
+  const assignments = await projectAssignmentLabels(
+    env,
+    project.id,
+    scope.email,
+    role,
+  );
+  return json({
+    email: scope.email,
+    project: { ...project, role },
+    canReview: role === "manager",
+    assignments,
+    memberProfile: memberProfile ?? {
+      display_name: "",
+      avatar_url: "",
+      university: "",
+      year: "",
+    },
+    projectProfile: projectProfile ?? { internal_bio: "", updated_at: null },
+    profileChangeRequest: latestRequest ?? null,
+  });
+}
+
+async function saveProjectMemberProfile(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  let payload: { projectId?: unknown; internalBio?: unknown };
+  try {
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  await ensureAtlasMembership(env, scope);
+  const requestedProject = text(payload.projectId, 80) || "atlas";
+  const project = await resolveOperationProject(env, scope, requestedProject);
+  if (isResponse(project)) return project;
+  const internalBio = text(payload.internalBio, 4_000);
+  const [approved, pending, memberProfile] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT internal_bio FROM editorial_project_member_profiles
+       WHERE project_id=? AND email=?`,
+    )
+      .bind(project.id, scope.email)
+      .first<{ internal_bio: string }>(),
+    env.REPORTS.prepare(
+      `SELECT id,task_id FROM editorial_project_profile_change_requests
+       WHERE project_id=? AND email=? AND status='pending'
+       ORDER BY submitted_at DESC LIMIT 1`,
+    )
+      .bind(project.id, scope.email)
+      .first<{ id: string; task_id: string | null }>(),
+    env.REPORTS.prepare(
+      "SELECT display_name FROM editorial_member_profiles WHERE email=?",
+    )
+      .bind(scope.email)
+      .first<{ display_name: string }>(),
+  ]);
+  if (!pending && internalBio === (approved?.internal_bio ?? ""))
+    return json({ ok: true, approvalRequired: false, noChange: true });
+
+  const now = new Date().toISOString();
+  const requestId = pending?.id ?? crypto.randomUUID();
+  const taskId = pending?.task_id ?? crypto.randomUUID();
+  const displayName = memberProfile?.display_name?.trim() || scope.email;
+  const taskTitle = `運営内自己紹介変更の承認：${displayName}`;
+  const taskDetails = [
+    `申請者: ${scope.email}`,
+    `プロジェクト: ${project.name}`,
+    "プロジェクト管理の「運営内自己紹介の承認」から内容を確認してください。",
+  ].join("\n");
+  const statements = pending
+    ? [
+        env.REPORTS.prepare(
+          `UPDATE editorial_project_profile_change_requests
+           SET proposed_internal_bio=?,submitted_at=?,review_note=''
+           WHERE id=? AND status='pending'`,
+        ).bind(internalBio, now, requestId),
+        env.REPORTS.prepare(
+          `UPDATE editorial_tasks SET title=?,details=?,status='open',updated_at=?
+           WHERE id=?`,
+        ).bind(taskTitle, taskDetails, now, taskId),
+      ]
+    : [
+        env.REPORTS.prepare(
+          `INSERT INTO editorial_project_profile_change_requests
+           (id,project_id,email,proposed_internal_bio,status,task_id,submitted_at)
+           VALUES (?,?,?,?,'pending',?,?)`,
+        ).bind(requestId, project.id, scope.email, internalBio, taskId, now),
+        env.REPORTS.prepare(
+          `INSERT INTO editorial_tasks
+           (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,
+            reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at)
+           VALUES (?,?, 'project-profile-change',NULL,?,?,'open',NULL,'Asia/Tokyo',
+            NULL,'none',NULL,?,?,?)`,
+        ).bind(
+          taskId,
+          project.id,
+          taskTitle,
+          taskDetails,
+          scope.email,
+          now,
+          now,
+        ),
+      ];
+  try {
+    await env.REPORTS.batch(statements);
+  } catch {
+    return json(
+      { error: "変更申請をプロジェクトの運営へ送れませんでした。" },
+      500,
+    );
+  }
+  return json({
+    ok: true,
+    approvalRequired: true,
+    requestId,
+    taskId,
+    submittedAt: now,
+  });
+}
+
+async function listProjectIntroductions(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const requestedProject =
+    new URL(request.url).searchParams.get("project") ?? "atlas";
+  const project = await resolveOperationProject(env, scope, requestedProject);
+  if (isResponse(project)) return project;
+  const members = await env.REPORTS.prepare(
+    `SELECT m.email,m.role,
+      COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
+      COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year,
+      COALESCE(p.avatar_url,'') AS avatar_url,
+      COALESCE(pp.internal_bio,'') AS internal_bio,pp.updated_at
+     FROM atlasez_project_memberships m
+     LEFT JOIN editorial_member_profiles p ON p.email=m.email
+     LEFT JOIN editorial_project_member_profiles pp
+       ON pp.project_id=m.project_id AND pp.email=m.email
+     WHERE m.project_id=?
+     ORDER BY display_name,m.email`,
+  )
+    .bind(project.id)
+    .all<Record<string, unknown>>();
+  const entries = await Promise.all(
+    (members.results ?? []).map(async (member) => ({
+      ...member,
+      assignments: await projectAssignmentLabels(
+        env,
+        project.id,
+        String(member.email ?? ""),
+        String(member.role ?? "member"),
+      ),
+    })),
+  );
+  return json({ project, entries });
+}
+
+async function listProjectProfileChangeRequests(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const parsed = new URL(request.url);
+  const requestedProject = parsed.searchParams.get("project") ?? "atlas";
+  const reviewer = await getProjectReviewerScope(
+    request,
+    env,
+    requestedProject,
+  );
+  if (isResponse(reviewer)) return reviewer;
+  const requestedStatus = parsed.searchParams.get("status") ?? "pending";
+  if (!new Set(["pending", "approved", "rejected", "all"]).has(requestedStatus))
+    return json({ error: "申請状態を確認してください。" }, 400);
+  const statusFilter = requestedStatus === "all" ? "" : "AND r.status=?";
+  const statement = env.REPORTS.prepare(
+    `SELECT r.*,COALESCE(NULLIF(TRIM(p.display_name),''),r.email) AS display_name,
+      COALESCE(pp.internal_bio,'') AS current_internal_bio
+     FROM editorial_project_profile_change_requests r
+     LEFT JOIN editorial_member_profiles p ON p.email=r.email
+     LEFT JOIN editorial_project_member_profiles pp
+       ON pp.project_id=r.project_id AND pp.email=r.email
+     WHERE r.project_id=? ${statusFilter}
+     ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC
+     LIMIT 300`,
+  );
+  const result =
+    requestedStatus === "all"
+      ? await statement.bind(reviewer.project.id).all<Record<string, unknown>>()
+      : await statement
+          .bind(reviewer.project.id, requestedStatus)
+          .all<Record<string, unknown>>();
+  return json({
+    project: reviewer.project,
+    reviewer: reviewer.scope.email,
+    requests: result.results ?? [],
+  });
+}
+
+async function reviewProjectProfileChangeRequest(
+  request: Request,
+  env: Env,
+  requestId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const row = await env.REPORTS.prepare(
+    "SELECT * FROM editorial_project_profile_change_requests WHERE id=?",
+  )
+    .bind(requestId)
+    .first<Record<string, unknown>>();
+  if (!row) return json({ error: "変更申請が見つかりません。" }, 404);
+  const project = await resolveOperationProject(
+    env,
+    scope,
+    String(row.project_id ?? ""),
+  );
+  if (isResponse(project)) return project;
+  const role = await operationProjectRole(env, scope, project.id);
+  if (role !== "manager")
+    return json(
+      { error: "このプロジェクトの運営内運営のみ利用できます。" },
+      403,
+    );
+  if (row.status !== "pending")
+    return json({ error: "この変更申請は既に処理済みです。" }, 409);
+  let payload: { action?: unknown; reviewNote?: unknown };
+  try {
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const action = text(payload.action, 20);
+  if (action !== "approve" && action !== "reject")
+    return json({ error: "承認または却下を選択してください。" }, 400);
+  const now = new Date().toISOString();
+  const status = action === "approve" ? "approved" : "rejected";
+  const statements = [
+    env.REPORTS.prepare(
+      `UPDATE editorial_project_profile_change_requests
+       SET status=?,reviewed_by=?,reviewed_at=?,review_note=?
+       WHERE id=? AND status='pending'`,
+    ).bind(
+      status,
+      scope.email,
+      now,
+      text(payload.reviewNote, 2_000),
+      requestId,
+    ),
+  ];
+  if (action === "approve")
+    statements.push(
+      env.REPORTS.prepare(
+        `INSERT INTO editorial_project_member_profiles
+         (project_id,email,internal_bio,updated_at) VALUES (?,?,?,?)
+         ON CONFLICT(project_id,email) DO UPDATE SET
+           internal_bio=excluded.internal_bio,updated_at=excluded.updated_at`,
+      ).bind(project.id, row.email, row.proposed_internal_bio, now),
+    );
+  if (row.task_id)
+    statements.push(
+      env.REPORTS.prepare(
+        "UPDATE editorial_tasks SET status='done',updated_at=? WHERE id=?",
+      ).bind(now, row.task_id),
+    );
+  await env.REPORTS.batch(statements);
+  return json({ ok: true, status });
+}
+
 async function listApplications(request: Request, env: Env): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -3174,7 +3548,10 @@ async function operationsOverview(
     new URL(request.url).searchParams.get("project") ?? "atlas";
   const project = await resolveOperationProject(env, scope, requestedProject);
   if (isResponse(project)) return project;
-  const filters = scope.allSubjects
+  const projectRole = await operationProjectRole(env, scope, project.id);
+  const canSeeAllProjectOperations =
+    scope.allSubjects || projectRole === "manager";
+  const filters = canSeeAllProjectOperations
     ? ["project_id = ?"]
     : [
         "project_id = ? AND (assignee_email = ? OR created_by = ? OR subject IS NULL" +
@@ -3183,14 +3560,16 @@ async function operationsOverview(
             : "") +
           ")",
       ];
-  const values: unknown[] = scope.allSubjects
+  const values: unknown[] = canSeeAllProjectOperations
     ? [project.id]
     : [project.id, scope.email, scope.email, ...scope.subjects];
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
-  const memberWhere = scope.allSubjects
+  const memberWhere = canSeeAllProjectOperations
     ? ""
     : ` WHERE subject = '*' OR subject IN (${scope.subjects.map(() => "?").join(",")})`;
-  const memberValues: unknown[] = scope.allSubjects ? [] : scope.subjects;
+  const memberValues: unknown[] = canSeeAllProjectOperations
+    ? []
+    : scope.subjects;
   const [tasks, events, progress, members, availability, availabilityBlocks] =
     await Promise.all([
       env.REPORTS.prepare(
@@ -5589,6 +5968,12 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/calendar/" ||
       parsed.pathname === "/admin/manage" ||
       parsed.pathname === "/admin/manage/" ||
+      parsed.pathname === "/admin/workspace" ||
+      parsed.pathname === "/admin/workspace/" ||
+      parsed.pathname === "/admin/introductions" ||
+      parsed.pathname === "/admin/introductions/" ||
+      parsed.pathname === "/admin/project-profile-requests" ||
+      parsed.pathname === "/admin/project-profile-requests/" ||
       parsed.pathname === "/admin/co-working" ||
       parsed.pathname === "/admin/co-working/") &&
     (project === "atlas" ||
@@ -6047,6 +6432,16 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const identity = scope.email;
+  const managerProjects = scope.isManager
+    ? await env.REPORTS.prepare(
+        "SELECT id FROM atlasez_projects ORDER BY id",
+      ).all<{ id: string }>()
+    : await env.REPORTS.prepare(
+        `SELECT project_id AS id FROM atlasez_project_memberships
+         WHERE email=? AND role='manager' ORDER BY project_id`,
+      )
+        .bind(identity)
+        .all<{ id: string }>();
   const token = cookieValue(request, ADMIN_SESSION_COOKIE);
   const googleSession = token
     ? await env.REPORTS.prepare(
@@ -6058,6 +6453,7 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   return json({
     email: identity,
     isManager: scope.isManager,
+    managerProjects: (managerProjects.results ?? []).map((row) => row.id),
     googlePreviewEnabled: googleOAuthEnabled(env) && googleOAuthConfigured(env),
     googleAuthenticated: googleSession?.email === identity,
     authMode: authMode(env),
@@ -6411,6 +6807,32 @@ export default {
       if (request.method === "PUT") return saveMyProfile(request, env);
       return json({ error: "GET、PUTのみ利用できます。" }, 405);
     }
+    if (url.pathname === "/api/admin/project-profile") {
+      if (request.method === "GET")
+        return getProjectMemberProfile(request, env);
+      if (request.method === "PUT")
+        return saveProjectMemberProfile(request, env);
+      return json({ error: "GET、PUTのみ利用できます。" }, 405);
+    }
+    if (
+      url.pathname === "/api/admin/project-introductions" &&
+      request.method === "GET"
+    )
+      return listProjectIntroductions(request, env);
+    if (
+      url.pathname === "/api/admin/project-profile-change-requests" &&
+      request.method === "GET"
+    )
+      return listProjectProfileChangeRequests(request, env);
+    const projectProfileChangeRequestMatch = url.pathname.match(
+      /^\/api\/admin\/project-profile-change-requests\/([0-9a-f-]{36})$/i,
+    );
+    if (projectProfileChangeRequestMatch && request.method === "PATCH")
+      return reviewProjectProfileChangeRequest(
+        request,
+        env,
+        projectProfileChangeRequestMatch[1],
+      );
     if (
       url.pathname === "/api/admin/profile-change-requests" &&
       request.method === "GET"

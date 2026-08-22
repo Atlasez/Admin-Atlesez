@@ -2,42 +2,47 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { OPERATOR_INTRODUCTIONS } from "../../data/operator-introductions";
 
-const introductions = OPERATOR_INTRODUCTIONS.map((entry) => {
+const requestedProject = Astro.url.searchParams.get("project") ?? "atlas";
+const project = requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "seminar-platform" : "atlas";
+const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : project === "seminar-platform" ? "ゼミプラットフォーム" : "学習サイト「アトラス」運営";
+const legacyIntroductions = OPERATOR_INTRODUCTIONS.map((entry) => {
   const roleIndex = entry.paragraphs.findIndex((paragraph) => paragraph.startsWith("役職・担当："));
   return {
     name: entry.name,
     affiliation: entry.paragraphs[0] ?? "",
-    role: roleIndex >= 0 ? entry.paragraphs[roleIndex].replace(/^役職・担当：\s*/, "") : "",
-    details: entry.paragraphs.filter((_, index) => index > 0 && index !== roleIndex),
+    assignments: roleIndex >= 0 ? [entry.paragraphs[roleIndex].replace(/^役職・担当：\s*/, "")] : [],
+    internalBio: entry.paragraphs.filter((_, index) => index > 0 && index !== roleIndex).join("\n\n"),
   };
 });
 ---
 
-<AdminLayout title="運営内自己紹介" description="運営メンバーの自己紹介">
-  <main class="introductions-page">
+<AdminLayout title="運営内自己紹介" description={`${projectLabel}の運営メンバーの自己紹介`}>
+  <main class="introductions-page" data-introductions-page data-project={project}>
     <header class="page-heading">
       <h1>運営内自己紹介</h1>
+      <a href={`/admin/workspace/?project=${project}`}>自分の自己紹介を変更する</a>
     </header>
-    <section class="introduction-list" aria-label="運営メンバー一覧">
-      {introductions.map((person) => <article class="introduction-row">
+    <output data-introductions-message aria-live="polite"></output>
+    <section class="introduction-list" data-introduction-list aria-label="運営メンバー一覧">
+      {legacyIntroductions.map((person) => <article class="introduction-row">
         <div class="introduction-summary">
           <h2>{person.name}</h2>
           <p>{person.affiliation}</p>
-          {person.role && <strong>{person.role}</strong>}
+          {person.assignments.map((assignment) => <strong>{assignment}</strong>)}
         </div>
-        {person.details.length > 0 && <details open><summary>自己紹介</summary><div>{person.details.map((detail) => <p>{detail}</p>)}</div></details>}
+        {person.internalBio && <div class="introduction-body"><p>{person.internalBio}</p></div>}
       </article>)}
     </section>
   </main>
 </AdminLayout>
 
-<style is:global>
-  .introductions-page{box-sizing:border-box;margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}
-  .page-heading{border-bottom:1px solid var(--border-default);margin:0 auto;padding:2.6rem 0 1.5rem;text-align:center;width:min(100%,60rem)}
-  .page-heading p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.08em;margin:0}.page-heading h1{font-size:clamp(1.8rem,4vw,2.4rem);margin:.35rem 0}.page-heading span{color:var(--text-secondary);font-size:.9rem}
-  .introduction-list{margin:1.25rem auto 0;width:min(100%,60rem)}
-  .introduction-row{border-bottom:1px solid var(--border-default);display:grid;gap:1.25rem;grid-template-columns:minmax(13rem,.7fr) minmax(0,1.5fr);padding:1rem .25rem}.introduction-row:first-child{border-top:1px solid var(--border-default)}
-  .introduction-summary h2{font-size:1rem;margin:0 0 .25rem}.introduction-summary p,.introduction-summary strong{color:var(--text-secondary);display:block;font-size:.78rem;line-height:1.55;margin:0}.introduction-summary strong{color:var(--accent-primary);font-weight:800;margin-top:.2rem}
-  .introduction-row details{min-width:0}.introduction-row summary{color:var(--accent-primary);cursor:pointer;font-size:.78rem;font-weight:800;list-style:none;margin-bottom:.35rem}.introduction-row summary::-webkit-details-marker{display:none}.introduction-row summary::before{content:"− ";font-size:1rem}.introduction-row details:not([open]) summary::before{content:"＋ "}.introduction-row details div{display:grid;gap:.35rem}.introduction-row details p{color:var(--text-secondary);font-size:.78rem;line-height:1.65;margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
-  @media(max-width:700px){.introductions-page{padding:0 .85rem 3rem}.page-heading{padding:2rem 0 1.2rem}.introduction-row{display:block;padding:.9rem .1rem}.introduction-row details{margin-top:.65rem}.introduction-row details[open] summary{border-bottom:1px solid var(--border-default);padding-bottom:.35rem}}
+<style>
+  .introductions-page{box-sizing:border-box;margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;margin:0 auto;padding:2rem 0 1.25rem;width:min(100%,60rem)}.page-heading h1{font-size:clamp(1.8rem,4vw,2.4rem);margin:0}.page-heading a{color:var(--accent-primary);font-size:.78rem;font-weight:800;text-decoration:none}.introductions-page>output{color:var(--text-secondary);display:block;font-size:.76rem;margin:.7rem auto 0;min-height:1.1em;width:min(100%,60rem)}.introduction-list{margin:1.25rem auto 0;width:min(100%,60rem)}.introduction-row{border-bottom:1px solid var(--border-default);display:grid;gap:1.25rem;grid-template-columns:minmax(13rem,.7fr) minmax(0,1.5fr);padding:1rem .25rem}.introduction-row:first-child{border-top:1px solid var(--border-default)}.introduction-summary h2{font-size:1rem;margin:0 0 .25rem}.introduction-summary p,.introduction-summary strong{color:var(--text-secondary);display:block;font-size:.78rem;line-height:1.55;margin:0}.introduction-summary strong{color:var(--accent-primary);font-weight:800;margin-top:.2rem}.introduction-body{min-width:0}.introduction-body p{color:var(--text-secondary);font-size:.78rem;line-height:1.65;margin:0;overflow-wrap:anywhere;white-space:pre-wrap}.introduction-empty{color:var(--text-secondary);padding:2rem;text-align:center}@media(max-width:700px){.introductions-page{padding:0 .85rem 3rem}.page-heading{align-items:start;display:grid}.introduction-row{display:block;padding:.9rem .1rem}.introduction-body{margin-top:.65rem}}
 </style>
+
+<script>
+  type IntroductionEntry={display_name?:string;university?:string;year?:string;internal_bio?:string;assignments?:string[]};
+  const initializeIntroductions=()=>{const root=document.querySelector<HTMLElement>("[data-introductions-page]");if(!root||root.dataset.initialized==="true")return;root.dataset.initialized="true";const project=root.dataset.project??"atlas";const list=root.querySelector<HTMLElement>("[data-introduction-list]")!;const message=root.querySelector<HTMLOutputElement>("[data-introductions-message]")!;const esc=(value:string)=>value.replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]??character));
+    void fetch(`/api/admin/project-introductions?project=${encodeURIComponent(project)}`,{credentials:"same-origin",cache:"no-store"}).then(async response=>{const data=await response.json() as {entries?:IntroductionEntry[];error?:string};if(!response.ok)throw new Error(data.error??"自己紹介を読み込めませんでした。");const entries=data.entries??[];list.innerHTML=entries.length?entries.map(person=>`<article class="introduction-row"><div class="introduction-summary"><h2>${esc(person.display_name?.trim()||"表示名未設定")}</h2><p>${esc([person.university,person.year].filter(Boolean).join(" / ")||"所属未登録")}</p>${(person.assignments??[]).map(item=>`<strong>${esc(item)}</strong>`).join("")}</div><div class="introduction-body"><p>${esc(person.internal_bio?.trim()||"自己紹介はまだ登録されていません。")}</p></div></article>`).join(""):"<p class=\"introduction-empty\">このプロジェクトのメンバーはまだ登録されていません。</p>";message.value=""}).catch(error=>{message.value=`最新情報を読み込めなかったため、登録済みの初期情報を表示しています。${error instanceof Error?` ${error.message}`:""}`});
+  };document.addEventListener("astro:page-load",initializeIntroductions);initializeIntroductions();
+</script>

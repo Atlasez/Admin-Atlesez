@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "member-profile" | "member-tasks" | "member-calendar" | "profile-requests" | "operations" | "calendar" | "genres" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working" | "management";
+  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "member-profile" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "calendar" | "genres" | "review" | "reports" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working" | "management";
   site?: "portal" | "atlas" | "semi-platform" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -66,6 +66,8 @@ const routeCurrent = normalizedPath === "/admin/portal"
                                     ? "member-calendar"
                                     : normalizedPath === "/admin/profile-requests"
                                       ? "profile-requests"
+                                      : normalizedPath === "/admin/project-profile-requests"
+                                        ? "project-profile-requests"
                                       : "atlas";
 const current = requestedCurrent ?? routeCurrent;
 const site = requestedSite ?? routeSite;
@@ -85,6 +87,7 @@ const pageLabel = ({
   "member-tasks": "タスク管理",
   "member-calendar": "カレンダー",
   "profile-requests": "メンバー情報の承認",
+  "project-profile-requests": "運営内自己紹介の承認",
   operations: "タスク管理",
   calendar: "カレンダー",
   genres: "各ジャンル概要",
@@ -120,11 +123,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <a href="/admin/profile-requests/" data-admin-site="secretariat" data-admin-page="profile-requests" hidden={site !== "secretariat"} aria-current={current === "profile-requests" && site === "secretariat" ? "page" : undefined}>メンバー情報の承認</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ・タスク管理</a>
       <a href="/admin/calendar/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="calendar" hidden={site !== "semi-platform"} aria-current={current === "calendar" && site === "semi-platform" ? "page" : undefined}>ゼミ・カレンダー</a>
-    <details class="admin-management-menu" hidden={site === "portal"} open={(["management", "reports", "permissions", "guide", "applications", "co-working", "review"] as string[]).includes(current)}>
+    <details class="admin-management-menu" hidden={site === "portal"} open={(["management", "reports", "permissions", "guide", "applications", "co-working", "review", "project-profile-requests"] as string[]).includes(current)}>
       <summary>管理 <span aria-hidden="true">⌄</span></summary>
       <div>
         <a href={`/admin/manage/?project=${projectSlug}`} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理トップ</a>
         <a href={`/admin/introductions/?project=${projectSlug}`} data-admin-project-link="introductions" data-admin-site={site} data-admin-page="introductions" aria-current={current === "introductions" ? "page" : undefined}>運営内自己紹介</a>
+        <a href={`/admin/project-profile-requests/?project=${projectSlug}`} data-admin-project-link="project-profile-requests" data-project-manager-only hidden data-admin-site={site} data-admin-page="project-profile-requests" aria-current={current === "project-profile-requests" ? "page" : undefined}>運営内自己紹介の承認</a>
         <a href={`/admin/co-working/?project=atlas`} data-admin-site="atlas" data-admin-page="co-working" hidden={site !== "atlas"} aria-current={current === "co-working" && site === "atlas" ? "page" : undefined}>同時作業会</a>
         <a href={`/admin/co-working/?project=secretariat`} data-admin-site="secretariat" data-admin-page="co-working" hidden={site !== "secretariat"} aria-current={current === "co-working" && site === "secretariat" ? "page" : undefined}>事務局の日程・交流</a>
         <a href={`/admin/co-working/?project=seminar-platform`} data-admin-site="semi-platform" data-admin-page="co-working" hidden={site !== "semi-platform"} aria-current={current === "co-working" && site === "semi-platform" ? "page" : undefined}>ゼミ日程・交流</a>
@@ -180,7 +184,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     applyLanguage(currentLanguage());
 
     type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'secretariat'; slug: string; current: string; home: string; label: string };
-    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', operations: 'タスク管理', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', 'co-working': '同時作業会', reports: '問題報告・統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: 'フィードバック一覧' };
+    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', 'co-working': '同時作業会', reports: '問題報告・統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: 'フィードバック一覧' };
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
@@ -213,7 +217,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       primaryNav?.classList.remove('is-open');
       document.querySelectorAll<HTMLElement>('[data-admin-site]').forEach((link) => { link.hidden = link.dataset.adminSite !== state.site; });
       document.querySelectorAll<HTMLElement>('[data-admin-page]').forEach((link) => { link.setAttribute('aria-current', link.dataset.adminPage === state.current && link.closest('[data-admin-site]')?.getAttribute('data-admin-site') === state.site ? 'page' : 'false'); });
-      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['management', 'reports', 'permissions', 'guide', 'applications', 'co-working', 'review'].includes(state.current); });
+      document.querySelectorAll<HTMLDetailsElement>('.admin-management-menu').forEach((menu) => { menu.hidden = state.site === 'portal'; menu.open = ['management', 'reports', 'permissions', 'guide', 'applications', 'co-working', 'review', 'project-profile-requests'].includes(state.current); });
       if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : 'Atlas learning site operations'; }
       const logo = document.querySelector<HTMLAnchorElement>('.admin-nav-brand-logo');
       if (logo) logo.href = state.home;
@@ -223,9 +227,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       }
     };
     syncRouteChrome();
-    const applyManagerVisibility = (isManager: boolean) => {
+    const applyManagerVisibility = (isManager: boolean, managerProjects: string[] = []) => {
       const state = readRouteState();
       document.querySelectorAll<HTMLElement>('[data-manager-only]').forEach((item) => { item.hidden = !isManager || item.dataset.adminSite !== state.site; });
+      const managesCurrentProject = isManager || managerProjects.includes(state.slug) || (state.slug === 'seminar-platform' && managerProjects.includes('semi-platform'));
+      document.querySelectorAll<HTMLElement>('[data-project-manager-only]').forEach((item) => { item.hidden = !managesCurrentProject || item.dataset.adminSite !== state.site; });
     };
     const refreshManagerVisibility = async () => {
       // 遷移後も保持されるナビの権限表示を、毎回サーバーの最新状態へ戻す。
@@ -237,9 +243,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         const response = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
         const contentType = response.headers.get('content-type') ?? '';
         if (requestId !== document.documentElement.dataset.adminNavRequest || !contentType.includes('application/json') || !response.ok) return;
-        const status = await response.json() as { isManager?: boolean };
+        const status = await response.json() as { isManager?: boolean; managerProjects?: string[] };
         if (requestId !== document.documentElement.dataset.adminNavRequest) return;
-        applyManagerVisibility(status.isManager === true);
+        applyManagerVisibility(status.isManager === true, status.managerProjects ?? []);
       } catch {
         // 権限UIの更新失敗だけでページ全体を止めない。次のpage-loadで再試行する。
       }
