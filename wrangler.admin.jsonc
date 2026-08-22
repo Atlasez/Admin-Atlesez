@@ -21,14 +21,6 @@
       "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
     },
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "EDITORIAL_COLLABORATION",
-        "class_name": "EditorialCollaborationRoom",
-      },
-    ],
-  },
   "exports": {
     "EditorialCollaborationRoom": {
       "type": "durable-object",

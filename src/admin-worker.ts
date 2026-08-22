@@ -56,6 +56,12 @@ interface DurableObjectState {
   getWebSockets(): WebSocket[];
   waitUntil(promise: Promise<unknown>): void;
 }
+type WorkerExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+  exports?: {
+    EditorialCollaborationRoom?: DurableObjectNamespace;
+  };
+};
 
 interface Env {
   ASSETS: Fetcher;
@@ -6919,10 +6925,12 @@ async function connectEditorialCollaboration(
   request: Request,
   env: Env,
   documentId: string,
+  collaborationNamespace?: DurableObjectNamespace,
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!env.EDITORIAL_COLLABORATION)
+  const namespace = collaborationNamespace ?? env.EDITORIAL_COLLABORATION;
+  if (!namespace)
     return json({ error: "同時編集サービスが設定されていません。" }, 503);
   const document = await env.REPORTS.prepare(
     "SELECT subject FROM editorial_documents WHERE id = ?",
@@ -6947,14 +6955,16 @@ async function connectEditorialCollaboration(
       profile?.display_name?.trim() || scope.email.split("@")[0],
     ),
   );
-  const id = env.EDITORIAL_COLLABORATION.idFromName(documentId);
-  return env.EDITORIAL_COLLABORATION.get(id).fetch(
-    new Request(request, { headers }),
-  );
+  const id = namespace.idFromName(documentId);
+  return namespace.get(id).fetch(new Request(request, { headers }));
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx?: WorkerExecutionContext,
+  ): Promise<Response> {
     const url = new URL(request.url);
     // 運営サイトの入口は常に編集室へ案内する。静的サイトのルートを
     // 公開してしまわないため、ここで明示的にリダイレクトする。
@@ -7201,6 +7211,7 @@ export default {
             request,
             env,
             editorialCollaborationMatch[1],
+            ctx?.exports?.EditorialCollaborationRoom,
           )
         : json({ error: "WebSocket接続が必要です。" }, 426);
     const editorialAssetCollectionMatch = url.pathname.match(

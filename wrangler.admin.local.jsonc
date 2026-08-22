@@ -22,14 +22,6 @@
       "preview_database_id": "atlasez-reports-local",
     },
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "EDITORIAL_COLLABORATION",
-        "class_name": "EditorialCollaborationRoom",
-      },
-    ],
-  },
   "exports": {
     "EditorialCollaborationRoom": {
       "type": "durable-object",
