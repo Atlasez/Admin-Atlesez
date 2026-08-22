@@ -44,3 +44,15 @@ npm run dev:admin
 ```
 
 `http://localhost:8787/admin/editor` を開きます。ローカル設定では開発専用の全分野権限を使うため、Googleログインは不要です。`wrangler.admin.local.jsonc` の `ADMIN_AUTH_MODE: local` はlocalhost以外では無効になり、本番用の `wrangler.admin.jsonc` には含めません。
+
+## 同時編集WorkerとPR Preview
+
+Cloudflare WorkersはDurable Objectを実装するWorkerにPreview URLを生成しないため、同時編集処理は非公開の`atlasez-editorial-collaboration` Workerへ分離しています。運営サイト本体は外部Durable Object bindingでこのWorkerを参照するため、同時編集を維持したままPRごとのPreview URLを発行できます。
+
+同時編集Workerのコードまたは設定を変更した場合は、運営サイト本体より先に次を実行してください。
+
+```sh
+npm run deploy:admin:collaboration
+```
+
+通常のローカル開発では`wrangler.admin.local.jsonc`が同じクラスをローカルDurable Objectとして起動するため、従来どおり`npm run dev:admin`だけで確認できます。
