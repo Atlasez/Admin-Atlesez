@@ -1,0 +1,81 @@
+name: Preview parity refactor artifact
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Remove published article-body CSS duplication
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'src/pages/atlas/[locale]/[subject]/[category]/[slug].astro';
+          let source = fs.readFileSync(path, 'utf8');
+          const startMarker = '  .article-body {\n    margin-block: var(--space-3);\n  }\n';
+          const endMarker = '  .article-refs,\n  .article-footer {';
+          const start = source.indexOf(startMarker);
+          const end = source.indexOf(endMarker, start);
+          if (start < 0 || end < 0 || end <= start) {
+            throw new Error('Could not locate duplicated article-body CSS block');
+          }
+          source = source.slice(0, start) + source.slice(end);
+          fs.writeFileSync(path, source);
+          NODE
+      - name: Format affected files
+        run: |
+          npx prettier --write \
+            astro.config.mjs \
+            src/layouts/AdminLayout.astro \
+            src/layouts/AtlasLayout.astro \
+            src/lib/article-directives.mjs \
+            src/lib/article-markdown.mjs \
+            src/lib/editor-directives.ts \
+            src/scripts/admin-editor-navigation-guard.ts \
+            src/scripts/admin-editor-published-math-preview.ts \
+            src/scripts/admin-editor-realtime-cursors-yjs.ts \
+            src/scripts/admin-editor-realtime-cursors.ts \
+            src/scripts/admin-editor-subject-preview.ts \
+            src/scripts/article-math-structure.ts \
+            src/styles/article-content.css \
+            'src/pages/atlas/[locale]/[subject]/[category]/[slug].astro' \
+            tests/unit/admin-editor-subject-preview.test.ts \
+            tests/unit/article-math-structure.test.ts
+      - name: Bundle formatted sources
+        run: |
+          mkdir -p /tmp/preview-parity
+          tar -czf /tmp/preview-parity/sources.tgz \
+            astro.config.mjs \
+            src/layouts/AdminLayout.astro \
+            src/layouts/AtlasLayout.astro \
+            src/lib/article-directives.mjs \
+            src/lib/article-markdown.mjs \
+            src/lib/editor-directives.ts \
+            src/scripts/admin-editor-navigation-guard.ts \
+            src/scripts/admin-editor-published-math-preview.ts \
+            src/scripts/admin-editor-realtime-cursors-yjs.ts \
+            src/scripts/admin-editor-realtime-cursors.ts \
+            src/scripts/admin-editor-subject-preview.ts \
+            src/scripts/article-math-structure.ts \
+            src/styles/article-content.css \
+            'src/pages/atlas/[locale]/[subject]/[category]/[slug].astro' \
+            tests/unit/admin-editor-subject-preview.test.ts \
+            tests/unit/article-math-structure.test.ts
+          git diff --binary > /tmp/preview-parity/refactor.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview-parity-refactor
+          path: /tmp/preview-parity
