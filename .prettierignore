@@ -3,6 +3,7 @@ node_modules/
 .astro/
 package-lock.json
 *.astro
+src/scripts/admin-editor-enhancements.ts
 
 versions/
 
