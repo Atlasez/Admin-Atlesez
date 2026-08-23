@@ -14,6 +14,10 @@ export const ARTICLE_KATEX_OPTIONS = {
   },
 };
 
+export const ARTICLE_SHIKI_CONFIG = {
+  themes: { light: "github-light", dark: "github-dark" },
+};
+
 /** @type {import("@astrojs/markdown-remark").AstroMarkdownOptions["remarkPlugins"]} */
 export const ARTICLE_REMARK_PLUGINS = [remarkArticleDirectives, remarkMath];
 
@@ -24,4 +28,5 @@ export const ARTICLE_REHYPE_PLUGINS = [[rehypeKatex, ARTICLE_KATEX_OPTIONS]];
 export const ARTICLE_MARKDOWN_PROCESSOR_OPTIONS = {
   remarkPlugins: ARTICLE_REMARK_PLUGINS,
   rehypePlugins: ARTICLE_REHYPE_PLUGINS,
+  shikiConfig: ARTICLE_SHIKI_CONFIG,
 };
