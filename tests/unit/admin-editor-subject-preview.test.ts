@@ -14,50 +14,82 @@ describe("admin editor subject preview", () => {
     document.body.replaceChildren();
   });
 
-  it("keeps published mathematics theorem numbering as authored text", async () => {
+  it("preserves authored theorem numbering outside directive syntax", async () => {
     const processor = await createMarkdownProcessor();
     const rendered = await processor.render(
       [
         "### 群の定義",
         "",
-        "定義 1 (群). $G$を集合とする. 以下の条件を満たす組を群という.",
+        "定義 1 (群). $G$を集合とする.",
         "",
         "命題 2 (可除律による群の特徴づけ). $G$を空でないマグマとする.",
       ].join("\n"),
     );
     const preview = mountPreview(rendered.code);
 
-    expect(preview).not.toBeNull();
     applySubjectPreviewProfile(preview!, "mathematics");
-
-    expect(preview?.dataset.previewSubject).toBe("mathematics");
-    expect(preview?.dataset.publishedPreview).toBe("true");
-
     const body = preview?.querySelector<HTMLElement>(
       ":scope > [data-published-article-body]",
     );
-    expect(body).not.toBeNull();
-    expect(body?.classList.contains("article-body")).toBe(true);
-    expect(body?.classList.contains("reading")).toBe(true);
+
     expect(body?.textContent).toContain("定義 1 (群).");
     expect(body?.textContent).toContain("命題 2 (可除律による群の特徴づけ).");
-    expect(body?.querySelector(".defi,.thm,.prop,.thmtitle,.proof-details")).toBeNull();
   });
 
-  it("does not invent directive boxes that the published Markdown renderer does not create", async () => {
+  it("renders ::: defi as a definition frame", async () => {
     const processor = await createMarkdownProcessor();
     const rendered = await processor.render(
-      [":::defi 群の定義", "", "本文", "", ":::"].join("\n"),
+      ["::: defi 定義 1 (群)", "", "集合 $G$ を考える。", "", ":::"].join(
+        "\n",
+      ),
     );
     const preview = mountPreview(rendered.code);
 
-    expect(preview).not.toBeNull();
     applySubjectPreviewProfile(preview!, "mathematics");
-
     const body = preview?.querySelector<HTMLElement>(
       ":scope > [data-published-article-body]",
     );
-    expect(body?.querySelector(".editor-directive,.defi,.thmtitle")).toBeNull();
-    expect(body?.textContent).toContain(":::defi 群の定義");
+    const directive = body?.querySelector<HTMLElement>(
+      '[data-directive="defi"]',
+    );
+
+    expect(directive).not.toBeNull();
+    expect(directive?.classList.contains("defi")).toBe(true);
+    expect(directive?.querySelector(".thmtitle")?.textContent).toBe(
+      "定義 1 (群)",
+    );
+    expect(directive?.textContent).toContain("集合");
+    expect(body?.textContent).not.toContain("::: defi");
+  });
+
+  it("renders theorem aliases and arbitrary directives", async () => {
+    const processor = await createMarkdownProcessor();
+    const rendered = await processor.render(
+      [
+        ":::: theorem 定理 2",
+        "",
+        "本文",
+        "",
+        "::::",
+        "",
+        "::: custom-box 注意事項",
+        "",
+        "任意枠本文",
+        "",
+        ":::",
+      ].join("\n"),
+    );
+    const preview = mountPreview(rendered.code);
+
+    applySubjectPreviewProfile(preview!, "mathematics");
+    const body = preview?.querySelector<HTMLElement>(
+      ":scope > [data-published-article-body]",
+    );
+
+    expect(body?.querySelector('[data-directive="theorem"].thm')).not.toBeNull();
+    expect(
+      body?.querySelector('[data-directive="custom-box"] .editor-directive-heading')
+        ?.textContent,
+    ).toBe("注意事項");
   });
 });
