@@ -231,3 +231,25 @@
 .article-body .folding-content {
   padding: 0.8rem 1rem;
 }
+
+/* Admin editor defines generic .article-preview typography later in its Astro
+   stylesheet. These more specific selectors keep preview typography identical
+   to the published article-body rules above instead of letting that editor-only
+   styling win the cascade. */
+.article-preview.article-body h2 {
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: var(--space-1);
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.article-preview.article-body h3 {
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.article-preview.article-body p,
+.article-preview.article-body ul,
+.article-preview.article-body ol {
+  margin-block: 0.7em;
+}
