@@ -18,6 +18,13 @@ type PresenceMessage = {
   participants: PresenceParticipant[];
 };
 
+type ViewportRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 const hashHue = (value: string) => {
   let hash = 0;
   for (const char of value) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
@@ -55,19 +62,17 @@ function installPresenceStyles() {
   const style = document.createElement("style");
   style.dataset.editorRealtimePresence = "true";
   style.textContent = `
-    .writing-area { position: relative; }
     .realtime-cursor-layer {
       inset: 0;
       overflow: hidden;
       pointer-events: none;
-      position: absolute;
-      z-index: 30;
+      position: fixed;
+      z-index: 80;
     }
     .realtime-cursor {
       --cursor-hue: 210;
       border-left: 3px solid hsl(var(--cursor-hue) 72% 48%);
-      height: 1.45em;
-      position: absolute;
+      position: fixed;
       width: 0;
     }
     .realtime-cursor-label {
@@ -90,7 +95,7 @@ function installPresenceStyles() {
       --cursor-hue: 210;
       background: hsl(var(--cursor-hue) 72% 55% / .22);
       border-radius: .15rem;
-      position: absolute;
+      position: fixed;
     }
   `;
   document.head.append(style);
@@ -104,19 +109,18 @@ function initializeRealtimePresence() {
 
   const form = root.querySelector<HTMLFormElement>("[data-document-form]");
   const body = root.querySelector<HTMLTextAreaElement>("[data-body]");
-  const writingArea = root.querySelector<HTMLElement>(".writing-area");
   const participantList = root.querySelector<HTMLElement>(
     "[data-collaboration-participants]",
   );
   const collaborationState = root.querySelector<HTMLElement>(
     "[data-collaboration-state]",
   );
-  if (!form || !body || !writingArea) return;
+  if (!form || !body) return;
 
   const layer = document.createElement("div");
   layer.className = "realtime-cursor-layer";
   layer.setAttribute("aria-hidden", "true");
-  writingArea.append(layer);
+  document.body.append(layer);
 
   const mirror = document.createElement("div");
   mirror.setAttribute("aria-hidden", "true");
@@ -126,14 +130,15 @@ function initializeRealtimePresence() {
     top: "0",
     visibility: "hidden",
     whiteSpace: "pre-wrap",
-    overflowWrap: "break-word",
-    wordBreak: "break-word",
+    overflow: "visible",
     pointerEvents: "none",
   });
   document.body.append(mirror);
 
   let socket: WebSocket | null = null;
   let reconnectTimer = 0;
+  let presenceFrame = 0;
+  let renderFrame = 0;
   let currentDocumentId = "";
   let ownEmail = "";
   let participants: PresenceParticipant[] = [];
@@ -145,7 +150,10 @@ function initializeRealtimePresence() {
     for (const chip of Array.from(participantList.children)) {
       if (!(chip instanceof HTMLElement)) continue;
       const titleKey = chip.title.trim().toLowerCase();
-      const textName = (chip.textContent ?? "").split("・", 1)[0].trim().toLowerCase();
+      const textName = (chip.textContent ?? "")
+        .split("・", 1)[0]
+        .trim()
+        .toLowerCase();
       const key = titleKey || textName;
       if (key && seen.has(key)) {
         chip.remove();
@@ -155,13 +163,18 @@ function initializeRealtimePresence() {
     }
     if (collaborationState) {
       const count = participantList.children.length;
-      if (count > 0) collaborationState.textContent = `同時編集: ${count}人が接続中`;
+      if (count > 0) {
+        collaborationState.textContent = `同時編集: ${count}人が接続中`;
+      }
     }
   };
+
+  const borderNumber = (value: string) => Number.parseFloat(value) || 0;
 
   const syncMirrorStyle = () => {
     const style = getComputedStyle(body);
     const copy = [
+      "direction",
       "fontFamily",
       "fontSize",
       "fontStyle",
@@ -182,44 +195,104 @@ function initializeRealtimePresence() {
       "borderRightWidth",
       "borderBottomWidth",
       "borderLeftWidth",
+      "borderTopStyle",
+      "borderRightStyle",
+      "borderBottomStyle",
+      "borderLeftStyle",
+      "overflowWrap",
+      "wordBreak",
     ] as const;
     for (const property of copy) mirror.style[property] = style[property];
-    mirror.style.boxSizing = style.boxSizing;
-    mirror.style.width = `${body.offsetWidth}px`;
-    mirror.style.minHeight = `${body.offsetHeight}px`;
+
+    const horizontalBorder =
+      borderNumber(style.borderLeftWidth) + borderNumber(style.borderRightWidth);
+    mirror.style.boxSizing = "border-box";
+    mirror.style.width = `${body.clientWidth + horizontalBorder}px`;
+    mirror.style.height = "auto";
+    mirror.style.minHeight = "0";
+    mirror.style.whiteSpace = "pre-wrap";
+  };
+
+  const bodyViewport = () => {
+    const bodyRect = body.getBoundingClientRect();
+    const style = getComputedStyle(body);
+    const left = bodyRect.left + borderNumber(style.borderLeftWidth);
+    const top = bodyRect.top + borderNumber(style.borderTopWidth);
+    const right = bodyRect.right - borderNumber(style.borderRightWidth);
+    const bottom = bodyRect.bottom - borderNumber(style.borderBottomWidth);
+    return { left, top, right, bottom };
+  };
+
+  const clipRect = (rect: ViewportRect): ViewportRect | null => {
+    const viewport = bodyViewport();
+    const left = Math.max(rect.left, viewport.left);
+    const top = Math.max(rect.top, viewport.top);
+    const right = Math.min(rect.left + rect.width, viewport.right);
+    const bottom = Math.min(rect.top + rect.height, viewport.bottom);
+    if (right <= left || bottom <= top) return null;
+    return { left, top, width: right - left, height: bottom - top };
+  };
+
+  const mirrorRectToViewport = (rect: DOMRect, mirrorRect: DOMRect) => {
+    const bodyRect = body.getBoundingClientRect();
+    return {
+      left: bodyRect.left + (rect.left - mirrorRect.left) - body.scrollLeft,
+      top: bodyRect.top + (rect.top - mirrorRect.top) - body.scrollTop,
+      width: rect.width,
+      height: rect.height,
+    };
   };
 
   const caretCoordinates = (position: number) => {
     syncMirrorStyle();
     const safe = Math.max(0, Math.min(position, body.value.length));
     mirror.replaceChildren();
-    const before = document.createTextNode(body.value.slice(0, safe));
+    mirror.append(document.createTextNode(body.value.slice(0, safe)));
+
+    // Always measure a zero-width marker at the caret itself. Using the next
+    // character here is wrong when that character is a newline: its box is
+    // laid out on the following visual line and makes the remote caret appear
+    // one line too low.
     const marker = document.createElement("span");
-    marker.textContent = body.value.slice(safe, safe + 1) || "\u200b";
-    mirror.append(before, marker);
+    marker.textContent = "\u200b";
+    mirror.append(marker);
+
     const markerRect = marker.getBoundingClientRect();
     const mirrorRect = mirror.getBoundingClientRect();
-    const bodyRect = body.getBoundingClientRect();
-    const writingRect = writingArea.getBoundingClientRect();
+    const measured = mirrorRectToViewport(markerRect, mirrorRect);
     const style = getComputedStyle(body);
-    const borderLeft = Number.parseFloat(style.borderLeftWidth) || 0;
-    const borderTop = Number.parseFloat(style.borderTopWidth) || 0;
-    const lineHeight = Number.parseFloat(style.lineHeight) || 20;
+    const lineHeight = borderNumber(style.lineHeight) || markerRect.height || 20;
     return {
-      left:
-        bodyRect.left - writingRect.left + borderLeft +
-        (markerRect.left - mirrorRect.left) - body.scrollLeft,
-      top:
-        bodyRect.top - writingRect.top + borderTop +
-        (markerRect.top - mirrorRect.top) - body.scrollTop,
+      left: measured.left,
+      top: measured.top,
       lineHeight,
     };
   };
 
+  const selectionCoordinates = (start: number, end: number) => {
+    syncMirrorStyle();
+    const from = Math.max(0, Math.min(start, end, body.value.length));
+    const to = Math.max(from, Math.min(Math.max(start, end), body.value.length));
+    if (from === to) return [] as ViewportRect[];
+
+    mirror.replaceChildren();
+    mirror.append(document.createTextNode(body.value.slice(0, from)));
+    const selected = document.createElement("span");
+    selected.textContent = body.value.slice(from, to);
+    mirror.append(selected);
+
+    const mirrorRect = mirror.getBoundingClientRect();
+    return Array.from(selected.getClientRects())
+      .map((rect) => mirrorRectToViewport(rect, mirrorRect))
+      .map(clipRect)
+      .filter((rect): rect is ViewportRect => Boolean(rect));
+  };
+
   const renderParticipants = () => {
     layer.replaceChildren();
-    if (!currentDocumentId) return;
+    if (!currentDocumentId || body.hidden || !body.isConnected) return;
     const bodyLength = body.value.length;
+    const viewport = bodyViewport();
     const visible = participants.filter(
       (participant) =>
         participant.email.toLowerCase() !== ownEmail.toLowerCase() &&
@@ -228,47 +301,69 @@ function initializeRealtimePresence() {
     );
 
     for (const participant of visible) {
-      const start = Math.max(0, Math.min(participant.cursorStart ?? 0, bodyLength));
-      const end = Math.max(0, Math.min(participant.cursorEnd ?? start, bodyLength));
+      const start = Math.max(
+        0,
+        Math.min(participant.cursorStart ?? 0, bodyLength),
+      );
+      const end = Math.max(
+        0,
+        Math.min(participant.cursorEnd ?? start, bodyLength),
+      );
       const hue = hashHue(participant.email || participant.sessionId);
-      const caret = caretCoordinates(end);
 
       if (start !== end) {
-        const selectionStart = caretCoordinates(Math.min(start, end));
-        const selectionEnd = caretCoordinates(Math.max(start, end));
-        const selection = document.createElement("span");
-        selection.className = "realtime-selection";
-        selection.style.setProperty("--cursor-hue", String(hue));
-        selection.style.left = `${selectionStart.left}px`;
-        selection.style.top = `${selectionStart.top}px`;
-        selection.style.height = `${Math.max(
-          selectionStart.lineHeight,
-          selectionEnd.top - selectionStart.top + selectionEnd.lineHeight,
-        )}px`;
-        selection.style.width = `${Math.max(
-          10,
-          body.clientWidth - selectionStart.left - 12,
-        )}px`;
-        layer.append(selection);
+        for (const rect of selectionCoordinates(start, end)) {
+          const selection = document.createElement("span");
+          selection.className = "realtime-selection";
+          selection.style.setProperty("--cursor-hue", String(hue));
+          selection.style.left = `${rect.left}px`;
+          selection.style.top = `${rect.top}px`;
+          selection.style.width = `${Math.max(1, rect.width)}px`;
+          selection.style.height = `${Math.max(1, rect.height)}px`;
+          layer.append(selection);
+        }
+      }
+
+      const caret = caretCoordinates(end);
+      const caretBottom = caret.top + caret.lineHeight;
+      if (
+        caret.left < viewport.left - 1 ||
+        caret.left > viewport.right + 1 ||
+        caretBottom <= viewport.top ||
+        caret.top >= viewport.bottom
+      ) {
+        continue;
       }
 
       const cursor = document.createElement("span");
       cursor.className = "realtime-cursor";
       cursor.style.setProperty("--cursor-hue", String(hue));
       cursor.style.left = `${caret.left}px`;
-      cursor.style.top = `${caret.top}px`;
-      cursor.style.height = `${caret.lineHeight}px`;
+      cursor.style.top = `${Math.max(caret.top, viewport.top)}px`;
+      cursor.style.height = `${Math.min(
+        caret.lineHeight,
+        viewport.bottom - Math.max(caret.top, viewport.top),
+      )}px`;
 
       const label = document.createElement("span");
       label.className = "realtime-cursor-label";
-      label.textContent = participant.displayName || participant.email || "共同編集者";
+      label.textContent =
+        participant.displayName || participant.email || "共同編集者";
       cursor.append(label);
       layer.append(cursor);
     }
     syncParticipantChips();
   };
 
-  const sendPresence = () => {
+  const scheduleRender = () => {
+    if (renderFrame) return;
+    renderFrame = window.requestAnimationFrame(() => {
+      renderFrame = 0;
+      renderParticipants();
+    });
+  };
+
+  const sendPresenceNow = () => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const active = document.activeElement === body;
     socket.send(
@@ -279,6 +374,15 @@ function initializeRealtimePresence() {
         cursorEnd: active ? body.selectionEnd : null,
       }),
     );
+  };
+
+  const schedulePresence = () => {
+    if (presenceFrame) return;
+    presenceFrame = window.requestAnimationFrame(() => {
+      presenceFrame = 0;
+      sendPresenceNow();
+      renderParticipants();
+    });
   };
 
   const connect = (documentId: string) => {
@@ -299,19 +403,21 @@ function initializeRealtimePresence() {
     socket = nextSocket;
     nextSocket.binaryType = "arraybuffer";
 
-    nextSocket.addEventListener("open", sendPresence);
+    nextSocket.addEventListener("open", sendPresenceNow);
     nextSocket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
       try {
-        const payload = JSON.parse(event.data) as SessionMessage | PresenceMessage;
+        const payload = JSON.parse(event.data) as
+          | SessionMessage
+          | PresenceMessage;
         if (payload.type === "session") {
           ownEmail = payload.email;
-          sendPresence();
+          sendPresenceNow();
           return;
         }
         if (payload.type === "presence") {
           participants = dedupePresenceParticipants(payload.participants);
-          renderParticipants();
+          scheduleRender();
         }
       } catch {
         // malformed presence messages are ignored
@@ -324,7 +430,8 @@ function initializeRealtimePresence() {
   };
 
   const currentId = () =>
-    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ?? "";
+    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ??
+    "";
 
   const syncDocumentConnection = () => {
     const id = currentId();
@@ -333,7 +440,9 @@ function initializeRealtimePresence() {
 
   const observer = new MutationObserver(syncDocumentConnection);
   observer.observe(form, { attributes: true, subtree: true });
-  const chipObserver = participantList ? new MutationObserver(syncParticipantChips) : null;
+  const chipObserver = participantList
+    ? new MutationObserver(syncParticipantChips)
+    : null;
   chipObserver?.observe(participantList!, { childList: true });
   const interval = window.setInterval(syncDocumentConnection, 500);
 
@@ -345,14 +454,27 @@ function initializeRealtimePresence() {
     "click",
     "focus",
   ] as const) {
-    body.addEventListener(eventName, () => {
-      sendPresence();
-      window.requestAnimationFrame(renderParticipants);
-    });
+    body.addEventListener(eventName, schedulePresence);
   }
-  body.addEventListener("blur", sendPresence);
-  body.addEventListener("scroll", renderParticipants, { passive: true });
-  window.addEventListener("resize", renderParticipants, { passive: true });
+
+  const onSelectionChange = () => {
+    if (document.activeElement === body) schedulePresence();
+  };
+  document.addEventListener("selectionchange", onSelectionChange);
+  body.addEventListener("pointermove", (event) => {
+    if (event.buttons) schedulePresence();
+  });
+  body.addEventListener("blur", () => {
+    if (presenceFrame) {
+      window.cancelAnimationFrame(presenceFrame);
+      presenceFrame = 0;
+    }
+    sendPresenceNow();
+    scheduleRender();
+  });
+  body.addEventListener("scroll", scheduleRender, { passive: true });
+  window.addEventListener("resize", scheduleRender, { passive: true });
+  window.addEventListener("scroll", scheduleRender, { passive: true });
 
   syncDocumentConnection();
 
@@ -362,8 +484,11 @@ function initializeRealtimePresence() {
       destroyed = true;
       observer.disconnect();
       chipObserver?.disconnect();
+      document.removeEventListener("selectionchange", onSelectionChange);
       window.clearInterval(interval);
       window.clearTimeout(reconnectTimer);
+      if (presenceFrame) window.cancelAnimationFrame(presenceFrame);
+      if (renderFrame) window.cancelAnimationFrame(renderFrame);
       socket?.close();
       mirror.remove();
       layer.remove();
