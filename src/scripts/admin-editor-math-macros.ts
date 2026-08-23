@@ -1,4 +1,4 @@
-import katex from "katex";
+import * as katex from "katex";
 
 export function extractDocumentMacros(source: string): Record<string, string> {
   const macros: Record<string, string> = {};
@@ -33,13 +33,18 @@ export function extractDocumentMacros(source: string): Record<string, string> {
     if (depth !== 0) continue;
 
     const replacement = source.slice(bodyStart, cursor - 1);
-    const validParameters = /^(?:#\d+)*$/.test(parameters);
-    if (!validParameters) continue;
+    if (!/^(?:#\d+)*$/.test(parameters)) continue;
     macros[command] = replacement;
     definition.lastIndex = cursor;
   }
 
   return macros;
+}
+
+export function macroSignature(macros: Record<string, string>): string {
+  return JSON.stringify(
+    Object.entries(macros).sort(([left], [right]) => left.localeCompare(right)),
+  );
 }
 
 function initializeDocumentMacros(): void {
@@ -59,6 +64,7 @@ function initializeDocumentMacros(): void {
     if (rendering) return;
     const macros = extractDocumentMacros(body.value);
     if (!Object.keys(macros).length) return;
+    const signature = macroSignature(macros);
 
     rendering = true;
     try {
@@ -71,11 +77,13 @@ function initializeDocumentMacros(): void {
         const rendered = [...target.querySelectorAll<HTMLElement>(".katex")];
         for (const node of rendered) {
           if (node.closest(".katex .katex")) continue;
+          if (node.dataset.documentMacroSignature === signature) continue;
           const annotation = node.querySelector<HTMLElement>(
             'annotation[encoding="application/x-tex"]',
           );
           const tex = annotation?.textContent;
           if (!tex) continue;
+
           const wrapper = document.createElement("span");
           wrapper.innerHTML = katex.renderToString(tex, {
             displayMode: false,
@@ -83,8 +91,10 @@ function initializeDocumentMacros(): void {
             strict: "ignore",
             throwOnError: false,
           });
-          const replacement = wrapper.firstElementChild;
-          if (replacement) node.replaceWith(replacement);
+          const replacement = wrapper.firstElementChild as HTMLElement | null;
+          if (!replacement) continue;
+          replacement.dataset.documentMacroSignature = signature;
+          node.replaceWith(replacement);
         }
       }
     } finally {
@@ -101,7 +111,9 @@ function initializeDocumentMacros(): void {
   const observer = new MutationObserver(schedule);
   observer.observe(preview, { childList: true, subtree: true });
   const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]");
-  if (referencePreview) observer.observe(referencePreview, { childList: true, subtree: true });
+  if (referencePreview) {
+    observer.observe(referencePreview, { childList: true, subtree: true });
+  }
   body.addEventListener("input", schedule);
   schedule();
 
