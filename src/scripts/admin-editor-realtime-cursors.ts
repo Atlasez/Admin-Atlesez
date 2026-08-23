@@ -4,29 +4,28 @@ import {
   resolveRelativeCursorPosition,
 } from "../lib/editorial-collaboration-presence";
 
-type Participant = {
-  sessionId: string;
-  email: string;
-  displayName: string;
-  field: string;
-  cursorStart: number | null;
-  cursorEnd: number | null;
-  cursorAnchor?: string | null;
-  cursorHead?: string | null;
+type Member = {
+  sessionId?: string;
+  email?: string;
+  displayName?: string;
 };
 
-type PresenceMessage = {
-  type: "presence";
-  participants: Participant[];
-};
-
-type SessionMessage = {
-  type: "session";
-  sessionId: string;
+type CursorState = {
+  id: string;
   email: string;
+  name: string;
+  active: boolean;
+  anchor: number;
+  head: number;
+  relativeAnchor: string | null;
+  relativeHead: string | null;
+  updatedAt: number;
 };
 
 type Rect = { left: number; top: number; width: number; height: number };
+const LOCAL_CURSOR_ORIGIN = "atlasez-local-cursor";
+const REMOTE_ORIGIN = "atlasez-remote-update";
+const STALE_AFTER_MS = 12_000;
 
 const hueFor = (value: string) => {
   let hash = 0;
@@ -34,110 +33,69 @@ const hueFor = (value: string) => {
   return hash % 360;
 };
 
-const dedupeParticipants = (items: Participant[]) => {
-  const merged = new Map<string, Participant>();
-  for (const item of items) {
-    const key =
-      item.email.trim().toLowerCase() ||
-      item.displayName.trim().toLowerCase() ||
-      item.sessionId;
-    const current = merged.get(key);
-    if (!current) {
-      merged.set(key, { ...item });
-      continue;
-    }
-    if (item.displayName) current.displayName = item.displayName;
-    if (item.email) current.email = item.email;
-    if (item.field) current.field = item.field;
-    if (
-      item.cursorHead ||
-      item.cursorAnchor ||
-      item.cursorStart !== null ||
-      item.cursorEnd !== null
-    ) {
-      current.sessionId = item.sessionId;
-      current.cursorStart = item.cursorStart;
-      current.cursorEnd = item.cursorEnd;
-      current.cursorAnchor = item.cursorAnchor ?? null;
-      current.cursorHead = item.cursorHead ?? null;
-    }
+function parseCursorState(value: unknown): CursorState | null {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<CursorState>;
+    if (!parsed.id || typeof parsed.id !== "string") return null;
+    return {
+      id: parsed.id,
+      email: typeof parsed.email === "string" ? parsed.email : "",
+      name: typeof parsed.name === "string" ? parsed.name : "共同編集者",
+      active: parsed.active === true,
+      anchor: typeof parsed.anchor === "number" ? parsed.anchor : 0,
+      head: typeof parsed.head === "number" ? parsed.head : 0,
+      relativeAnchor:
+        typeof parsed.relativeAnchor === "string" ? parsed.relativeAnchor : null,
+      relativeHead:
+        typeof parsed.relativeHead === "string" ? parsed.relativeHead : null,
+      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
+    };
+  } catch {
+    return null;
   }
-  return [...merged.values()];
-};
+}
 
 function ensureStyles(doc: Document) {
   if (doc.querySelector("style[data-atlasez-realtime-cursors]")) return;
   const style = doc.createElement("style");
   style.dataset.atlasezRealtimeCursors = "true";
   style.textContent = `
-    .atlasez-remote-cursor-layer {
-      inset: 0;
-      overflow: hidden;
-      pointer-events: none;
-      position: fixed;
-      z-index: 2147483000;
-    }
-    .atlasez-remote-caret {
-      --remote-hue: 210;
-      border-left: 2px solid hsl(var(--remote-hue) 78% 48%);
-      position: fixed;
-      width: 0;
-    }
-    .atlasez-remote-caret-name {
-      background: hsl(var(--remote-hue) 70% 43%);
-      border-radius: .25rem .25rem .25rem 0;
-      color: #fff;
-      font: 700 11px/1.25 system-ui, sans-serif;
-      left: -2px;
-      max-width: 11rem;
-      overflow: hidden;
-      padding: 2px 5px;
-      position: absolute;
-      text-overflow: ellipsis;
-      top: -17px;
-      white-space: nowrap;
-    }
-    .atlasez-remote-selection {
-      --remote-hue: 210;
-      background: hsl(var(--remote-hue) 76% 55% / .22);
-      border-radius: 2px;
-      position: fixed;
-    }
+    .atlasez-remote-cursor-layer{inset:0;overflow:hidden;pointer-events:none;position:fixed;z-index:2147483000}
+    .atlasez-remote-caret{--remote-hue:210;border-left:2px solid hsl(var(--remote-hue) 78% 48%);position:fixed;width:0}
+    .atlasez-remote-caret-name{background:hsl(var(--remote-hue) 70% 43%);border-radius:.25rem .25rem .25rem 0;color:#fff;font:700 11px/1.25 system-ui,sans-serif;left:-2px;max-width:11rem;overflow:hidden;padding:2px 5px;position:absolute;text-overflow:ellipsis;top:-17px;white-space:nowrap}
+    .atlasez-remote-selection{--remote-hue:210;background:hsl(var(--remote-hue) 76% 55%/.22);border-radius:2px;position:fixed}
   `;
   doc.head.append(style);
 }
 
 function initializeRealtimeCursors() {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
-  if (!root || root.dataset.realtimeCursorsV2 === "true") return;
-  const form = root.querySelector<HTMLFormElement>("[data-document-form]");
-  const textarea = root.querySelector<HTMLTextAreaElement>("[data-body]");
-  if (!form || !textarea) return;
-  root.dataset.realtimeCursorsV2 = "true";
+  const form = root?.querySelector<HTMLFormElement>("[data-document-form]");
+  const textarea = root?.querySelector<HTMLTextAreaElement>("[data-body]");
+  if (!root || !form || !textarea || root.dataset.realtimeCursorsV3 === "true") {
+    return;
+  }
+  root.dataset.realtimeCursorsV3 = "true";
 
+  const localId = crypto.randomUUID();
   let socket: WebSocket | null = null;
-  let reconnectTimer = 0;
-  let currentDocumentId = "";
-  let ownEmail = "";
-  let ownSessionId = "";
-  let participants: Participant[] = [];
+  let documentId = "";
   let destroyed = false;
-  let lastPresenceSignature = "";
+  let ownEmail = "";
+  let ownName = "共同編集者";
+  let serverSessionId = "";
+  let reconnectTimer = 0;
   let ydoc = new Y.Doc();
   let ybody = ydoc.getText("body");
+  let cursors = ydoc.getMap<string>("editor-cursors");
   let layer: HTMLDivElement | null = null;
   let mirror: HTMLDivElement | null = null;
   let surfaceDocument: Document | null = null;
+  let lastSignature = "";
 
   const currentId = () =>
-    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ??
-    "";
-
-  const resetYDoc = () => {
-    ydoc.destroy();
-    ydoc = new Y.Doc();
-    ybody = ydoc.getText("body");
-  };
+    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ?? "";
 
   const ensureSurface = () => {
     const doc = textarea.ownerDocument;
@@ -167,8 +125,7 @@ function initializeRealtimeCursors() {
     return { doc, win: doc.defaultView ?? window };
   };
 
-  const number = (value: string) => Number.parseFloat(value) || 0;
-
+  const px = (value: string) => Number.parseFloat(value) || 0;
   const syncMirror = () => {
     const { win } = ensureSurface();
     if (!mirror) return;
@@ -209,19 +166,19 @@ function initializeRealtimeCursors() {
     mirror.style.height = "auto";
   };
 
-  const viewport = () => {
+  const bounds = () => {
     const { win } = ensureSurface();
     const style = win.getComputedStyle(textarea);
     const rect = textarea.getBoundingClientRect();
     return {
-      left: rect.left + number(style.borderLeftWidth),
-      top: rect.top + number(style.borderTopWidth),
-      right: rect.right - number(style.borderRightWidth),
-      bottom: rect.bottom - number(style.borderBottomWidth),
+      left: rect.left + px(style.borderLeftWidth),
+      top: rect.top + px(style.borderTopWidth),
+      right: rect.right - px(style.borderRightWidth),
+      bottom: rect.bottom - px(style.borderBottomWidth),
     };
   };
 
-  const toTextareaViewport = (rect: DOMRect, mirrorRect: DOMRect): Rect => {
+  const mapRect = (rect: DOMRect, mirrorRect: DOMRect): Rect => {
     const textareaRect = textarea.getBoundingClientRect();
     return {
       left: textareaRect.left + rect.left - mirrorRect.left - textarea.scrollLeft,
@@ -242,9 +199,8 @@ function initializeRealtimeCursors() {
     mirror.append(marker);
     const markerRect = marker.getBoundingClientRect();
     const mirrorRect = mirror.getBoundingClientRect();
-    const mapped = toTextareaViewport(markerRect, mirrorRect);
-    const lineHeight =
-      number(win.getComputedStyle(textarea).lineHeight) || markerRect.height || 20;
+    const mapped = mapRect(markerRect, mirrorRect);
+    const lineHeight = px(win.getComputedStyle(textarea).lineHeight) || 20;
     return { left: mapped.left, top: mapped.top, height: lineHeight };
   };
 
@@ -260,14 +216,14 @@ function initializeRealtimeCursors() {
     selected.textContent = textarea.value.slice(from, to);
     mirror.append(selected);
     const mirrorRect = mirror.getBoundingClientRect();
-    const bounds = viewport();
+    const viewport = bounds();
     return Array.from(selected.getClientRects())
-      .map((rect) => toTextareaViewport(rect, mirrorRect))
+      .map((rect) => mapRect(rect, mirrorRect))
       .map((rect) => {
-        const left = Math.max(bounds.left, rect.left);
-        const top = Math.max(bounds.top, rect.top);
-        const right = Math.min(bounds.right, rect.left + rect.width);
-        const bottom = Math.min(bounds.bottom, rect.top + rect.height);
+        const left = Math.max(viewport.left, rect.left);
+        const top = Math.max(viewport.top, rect.top);
+        const right = Math.min(viewport.right, rect.left + rect.width);
+        const bottom = Math.min(viewport.bottom, rect.top + rect.height);
         return right > left && bottom > top
           ? { left, top, width: right - left, height: bottom - top }
           : null;
@@ -275,34 +231,35 @@ function initializeRealtimeCursors() {
       .filter((rect): rect is Rect => rect !== null);
   };
 
-  const resolvePosition = (participant: Participant, head: boolean) => {
-    const relative = head ? participant.cursorHead : participant.cursorAnchor;
-    const resolved = resolveRelativeCursorPosition(relative, ydoc, ybody);
-    if (resolved !== null) return resolved;
-    return head ? participant.cursorEnd : participant.cursorStart;
+  const resolve = (state: CursorState, head: boolean) => {
+    const relative = head ? state.relativeHead : state.relativeAnchor;
+    const relativeIndex = resolveRelativeCursorPosition(relative, ydoc, ybody);
+    if (relativeIndex !== null) return relativeIndex;
+    return head ? state.head : state.anchor;
   };
 
   const render = () => {
     const { doc } = ensureSurface();
     if (!layer) return;
     layer.replaceChildren();
-    const bounds = viewport();
-    const length = textarea.value.length;
-    const remote = dedupeParticipants(participants).filter((participant) => {
-      const sameUser = ownEmail
-        ? participant.email.toLowerCase() === ownEmail.toLowerCase()
-        : participant.sessionId === ownSessionId;
-      return !sameUser && participant.field === "body";
-    });
+    const viewport = bounds();
+    const now = Date.now();
+    const states = [...cursors.values()]
+      .map(parseCursorState)
+      .filter((state): state is CursorState => Boolean(state))
+      .filter(
+        (state) =>
+          state.id !== localId &&
+          state.active &&
+          now - state.updatedAt < STALE_AFTER_MS,
+      );
 
-    for (const participant of remote) {
-      const rawHead = resolvePosition(participant, true);
-      if (rawHead === null) continue;
-      const rawAnchor = resolvePosition(participant, false) ?? rawHead;
-      const head = Math.max(0, Math.min(rawHead, length));
-      const anchor = Math.max(0, Math.min(rawAnchor, length));
-      const hue = hueFor(participant.email || participant.sessionId);
-
+    for (const state of states) {
+      const rawHead = resolve(state, true);
+      const rawAnchor = resolve(state, false);
+      const head = Math.max(0, Math.min(rawHead, textarea.value.length));
+      const anchor = Math.max(0, Math.min(rawAnchor, textarea.value.length));
+      const hue = hueFor(state.email || state.id);
       for (const rect of selectionRects(anchor, head)) {
         const selection = doc.createElement("span");
         selection.className = "atlasez-remote-selection";
@@ -313,14 +270,13 @@ function initializeRealtimeCursors() {
         selection.style.height = `${Math.max(1, rect.height)}px`;
         layer.append(selection);
       }
-
       const caret = caretRect(head);
       if (!caret) continue;
       if (
-        caret.left < bounds.left - 2 ||
-        caret.left > bounds.right + 2 ||
-        caret.top + caret.height <= bounds.top ||
-        caret.top >= bounds.bottom
+        caret.left < viewport.left - 2 ||
+        caret.left > viewport.right + 2 ||
+        caret.top + caret.height <= viewport.top ||
+        caret.top >= viewport.bottom
       ) {
         continue;
       }
@@ -328,75 +284,91 @@ function initializeRealtimeCursors() {
       line.className = "atlasez-remote-caret";
       line.style.setProperty("--remote-hue", String(hue));
       line.style.left = `${caret.left}px`;
-      line.style.top = `${Math.max(caret.top, bounds.top)}px`;
+      line.style.top = `${Math.max(caret.top, viewport.top)}px`;
       line.style.height = `${Math.max(
         1,
-        Math.min(caret.height, bounds.bottom - Math.max(caret.top, bounds.top)),
+        Math.min(caret.height, viewport.bottom - Math.max(caret.top, viewport.top)),
       )}px`;
       const name = doc.createElement("span");
       name.className = "atlasez-remote-caret-name";
-      name.textContent = participant.displayName || participant.email || "共同編集者";
+      name.textContent = state.name || "共同編集者";
       line.append(name);
       layer.append(line);
     }
   };
 
-  const relativePositions = (anchor: number, head: number) => {
-    if (ybody.toString() !== textarea.value) return { anchor: null, head: null };
-    return {
-      anchor: encodeRelativeCursorPosition(ybody, anchor),
-      head: encodeRelativeCursorPosition(ybody, head),
-    };
+  const updateIdentity = (members: Member[]) => {
+    const own = members.find(
+      (member) =>
+        (serverSessionId && member.sessionId === serverSessionId) ||
+        (ownEmail && member.email?.toLowerCase() === ownEmail.toLowerCase()),
+    );
+    if (own?.email) ownEmail = own.email;
+    if (own?.displayName) ownName = own.displayName;
   };
 
-  const sendCurrentPresence = (force = false) => {
+  const publishCursor = (force = false) => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const active = textarea.ownerDocument.activeElement === textarea;
-    const start = active ? textarea.selectionStart : -1;
-    const end = active ? textarea.selectionEnd : -1;
-    const direction = active ? textarea.selectionDirection : "none";
-    const signature = `${active}:${start}:${end}:${direction}:${textarea.value.length}`;
-    if (!force && signature === lastPresenceSignature) return;
-    lastPresenceSignature = signature;
-    if (!active) {
-      socket.send(
-        JSON.stringify({
-          type: "presence",
-          field: "",
-          cursorStart: null,
-          cursorEnd: null,
-          cursorAnchor: null,
-          cursorHead: null,
-        }),
-      );
-      return;
-    }
-    const backward = direction === "backward";
+    const start = active ? textarea.selectionStart : 0;
+    const end = active ? textarea.selectionEnd : start;
+    const backward = active && textarea.selectionDirection === "backward";
     const anchor = backward ? end : start;
     const head = backward ? start : end;
-    const relative = relativePositions(anchor, head);
-    socket.send(
-      JSON.stringify({
-        type: "presence",
-        field: "body",
-        cursorStart: anchor,
-        cursorEnd: head,
-        cursorAnchor: relative.anchor,
-        cursorHead: relative.head,
-      }),
-    );
+    const signature = `${active}:${anchor}:${head}:${textarea.value.length}:${ownName}:${ownEmail}`;
+    if (!force && signature === lastSignature) return;
+    lastSignature = signature;
+    const inSync = ybody.toString() === textarea.value;
+    const state: CursorState = {
+      id: localId,
+      email: ownEmail,
+      name: ownName,
+      active,
+      anchor,
+      head,
+      relativeAnchor: inSync
+        ? encodeRelativeCursorPosition(ybody, anchor)
+        : null,
+      relativeHead: inSync ? encodeRelativeCursorPosition(ybody, head) : null,
+      updatedAt: Date.now(),
+    };
+    ydoc.transact(() => {
+      cursors.set(localId, JSON.stringify(state));
+    }, LOCAL_CURSOR_ORIGIN);
+
+    // Keep the legacy field-only presence message for the participant list.
+    // Cursor coordinates themselves travel in the Yjs binary update above.
+    socket.send(JSON.stringify({ type: "presence", field: active ? "body" : "" }));
   };
 
-  const connect = (documentId: string) => {
+  const removeCursor = () => {
+    if (!cursors.has(localId)) return;
+    ydoc.transact(() => cursors.delete(localId), LOCAL_CURSOR_ORIGIN);
+  };
+
+  const resetDoc = () => {
+    ydoc.destroy();
+    ydoc = new Y.Doc();
+    ybody = ydoc.getText("body");
+    cursors = ydoc.getMap<string>("editor-cursors");
+    cursors.observe(render);
+    ydoc.on("update", (update, origin) => {
+      if (origin === LOCAL_CURSOR_ORIGIN && socket?.readyState === WebSocket.OPEN) {
+        socket.send(update);
+      }
+    });
+  };
+
+  const connect = (nextDocumentId: string) => {
     window.clearTimeout(reconnectTimer);
     socket?.close();
     socket = null;
-    currentDocumentId = documentId;
+    documentId = nextDocumentId;
     ownEmail = "";
-    ownSessionId = "";
-    participants = [];
-    lastPresenceSignature = "";
-    resetYDoc();
+    ownName = "共同編集者";
+    serverSessionId = "";
+    lastSignature = "";
+    resetDoc();
     render();
     if (!documentId || destroyed) return;
 
@@ -406,65 +378,82 @@ function initializeRealtimeCursors() {
     );
     next.binaryType = "arraybuffer";
     socket = next;
-    next.addEventListener("open", () => sendCurrentPresence(true));
+    next.addEventListener("open", () => publishCursor(true));
     next.addEventListener("message", (event) => {
       if (event.data instanceof ArrayBuffer) {
         try {
-          Y.applyUpdate(ydoc, new Uint8Array(event.data));
-          sendCurrentPresence(true);
+          Y.applyUpdate(ydoc, new Uint8Array(event.data), REMOTE_ORIGIN);
+          publishCursor(true);
           render();
         } catch {
-          // The primary editor socket remains authoritative for content sync.
+          // Ignore malformed collaboration updates.
         }
         return;
       }
       if (typeof event.data !== "string") return;
       try {
-        const message = JSON.parse(event.data) as PresenceMessage | SessionMessage;
+        const message = JSON.parse(event.data) as {
+          type?: string;
+          sessionId?: string;
+          email?: string;
+          participants?: Member[];
+        };
         if (message.type === "session") {
-          ownEmail = message.email;
-          ownSessionId = message.sessionId;
-          sendCurrentPresence(true);
-        } else if (message.type === "presence") {
-          participants = message.participants;
-          render();
+          serverSessionId = message.sessionId ?? "";
+          ownEmail = message.email ?? ownEmail;
+          publishCursor(true);
+        } else if (message.type === "presence" && Array.isArray(message.participants)) {
+          updateIdentity(message.participants);
+          publishCursor(true);
         }
       } catch {
-        // Ignore malformed presence packets.
+        // Legacy or malformed string packets are not required for cursor sync.
       }
     });
     next.addEventListener("close", () => {
-      if (!destroyed && currentDocumentId === documentId) {
-        reconnectTimer = window.setTimeout(() => connect(documentId), 1200);
+      if (!destroyed && documentId === nextDocumentId) {
+        reconnectTimer = window.setTimeout(() => connect(nextDocumentId), 1200);
       }
     });
   };
 
-  const poll = window.setInterval(() => {
-    ensureSurface();
+  resetDoc();
+  const syncConnection = () => {
     const id = currentId();
-    if (id !== currentDocumentId) connect(id);
-    sendCurrentPresence();
+    if (id !== documentId) connect(id);
+  };
+  const poll = window.setInterval(() => {
+    syncConnection();
+    publishCursor();
     render();
   }, 50);
+  const heartbeat = window.setInterval(() => publishCursor(true), 2500);
+  const staleCleanup = window.setInterval(() => {
+    const now = Date.now();
+    const stale = [...cursors.entries()]
+      .filter(([id, raw]) => id !== localId && now - (parseCursorState(raw)?.updatedAt ?? 0) > 60_000)
+      .map(([id]) => id);
+    if (stale.length) {
+      ydoc.transact(() => stale.forEach((id) => cursors.delete(id)), LOCAL_CURSOR_ORIGIN);
+    }
+  }, 15_000);
 
+  const observer = new MutationObserver(syncConnection);
+  observer.observe(form, { attributes: true, subtree: true });
   textarea.addEventListener("scroll", render, { passive: true });
-  textarea.addEventListener("input", () => {
-    sendCurrentPresence(true);
-    render();
-  });
-  textarea.addEventListener("focus", () => sendCurrentPresence(true));
-  textarea.addEventListener("blur", () => sendCurrentPresence(true));
   window.addEventListener("resize", render, { passive: true });
   window.addEventListener("scroll", render, { passive: true });
-
-  connect(currentId());
+  syncConnection();
 
   document.addEventListener(
     "astro:before-swap",
     () => {
       destroyed = true;
+      removeCursor();
+      observer.disconnect();
       window.clearInterval(poll);
+      window.clearInterval(heartbeat);
+      window.clearInterval(staleCleanup);
       window.clearTimeout(reconnectTimer);
       socket?.close();
       ydoc.destroy();
