@@ -2,9 +2,8 @@
 import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 import "katex/contrib/mhchem";
+import { ARTICLE_MARKDOWN_PROCESSOR_OPTIONS } from "./src/lib/article-markdown.mjs";
 
 // サイトURLとベースパスは環境変数だけで切り替えられる。
 // - Cloudflare Pages 本番: SITE_URL=https://<独自ドメイン>  BASE_PATH=/
@@ -31,25 +30,7 @@ export default defineConfig({
   },
   integrations: [sitemap()],
   markdown: {
-    processor: unified({
-      remarkPlugins: [remarkMath],
-      rehypePlugins: [
-        [
-          rehypeKatex,
-          {
-            throwOnError: false,
-            strict: "warn",
-            macros: {
-              "\\dv": "\\frac{\\mathrm{d}#1}{\\mathrm{d}#2}",
-              "\\dvtwo": "\\frac{\\mathrm{d}^{2}#1}{\\mathrm{d}#2^{2}}",
-              "\\dd": "\\,\\mathrm{d}#1",
-              "\\vdot": "\\mathbin{\\cdot}",
-              "\\divergence": "\\nabla\\mathbin{\\cdot}",
-            },
-          },
-        ],
-      ],
-    }),
+    processor: unified(ARTICLE_MARKDOWN_PROCESSOR_OPTIONS),
     shikiConfig: {
       themes: { light: "github-light", dark: "github-dark" },
     },
