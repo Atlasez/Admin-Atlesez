@@ -6,9 +6,10 @@ const readSource = (path: string) =>
 
 describe("article preview parity source of truth", () => {
   it("keeps shared article content styling out of published-page overrides", async () => {
-    const [publishedPage, adminLayout] = await Promise.all([
+    const [publishedPage, adminLayout, baseHead] = await Promise.all([
       readSource("src/pages/atlas/[locale]/[subject]/[category]/[slug].astro"),
       readSource("src/layouts/AdminLayout.astro"),
+      readSource("src/components/BaseHead.astro"),
     ]);
 
     // Page-specific responsive rules may target the rendered article body, but
@@ -24,22 +25,21 @@ describe("article preview parity source of truth", () => {
     ]) {
       expect(publishedPage).not.toContain(selector);
     }
+    expect(baseHead).toContain('import "../styles/article-content.css";');
     expect(adminLayout).toContain('import "../styles/article-content.css";');
     expect(adminLayout).not.toContain("admin-published-preview.css");
   });
 
   it("uses the same Markdown and math-structure modules for public and admin rendering", async () => {
-    const [astroConfig, atlasLayout, previewScript] = await Promise.all([
+    const [astroConfig, baseHead, previewScript] = await Promise.all([
       readSource("astro.config.mjs"),
-      readSource("src/layouts/AtlasLayout.astro"),
+      readSource("src/components/BaseHead.astro"),
       readSource("src/scripts/admin-editor-subject-preview.ts"),
     ]);
 
     expect(astroConfig).toContain("ARTICLE_MARKDOWN_PROCESSOR_OPTIONS");
     expect(previewScript).toContain("ARTICLE_MARKDOWN_PROCESSOR_OPTIONS");
-    expect(atlasLayout).toContain(
-      'import "../scripts/article-math-structure";',
-    );
+    expect(baseHead).toContain('import "../scripts/article-math-structure";');
     expect(previewScript).toContain('from "./article-math-structure"');
   });
 });
