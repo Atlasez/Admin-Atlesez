@@ -2,6 +2,7 @@
 import BaseHead from "../components/BaseHead.astro";
 import AdminNav from "../components/AdminNav.astro";
 import { ClientRouter } from "astro:transitions";
+import "../styles/article-content.css";
 
 interface Props {
   title: string;
@@ -25,6 +26,8 @@ const { title, description } = Astro.props;
       import "../scripts/admin-editor-preview-images";
       import "../scripts/admin-editor-realtime-presence";
       import "../scripts/admin-editor-subject-preview";
+      import "../scripts/admin-editor-math-macros";
+      import "../scripts/admin-editor-collaboration-labels";
     </script>
   </body>
 </html>
