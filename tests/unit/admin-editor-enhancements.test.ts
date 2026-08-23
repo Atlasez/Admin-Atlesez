@@ -10,7 +10,10 @@ import {
   extractDocumentMacros,
   macroSignature,
 } from "../../src/scripts/admin-editor-math-macros";
-import { formatCollaborationLabel } from "../../src/scripts/admin-editor-collaboration-labels";
+import {
+  collaborationParticipantKey,
+  formatCollaborationLabel,
+} from "../../src/scripts/admin-editor-collaboration-labels";
 
 describe("admin editor enhancements", () => {
   it("parses every named :::/:::: directive instead of limiting conversion to theorem aliases", () => {
@@ -129,6 +132,16 @@ describe("admin editor enhancements", () => {
           cursorEnd: 48,
         }),
       ]),
+    );
+  });
+
+  it("uses one identity for email and email-less duplicate collaboration chips", () => {
+    const aliases = new Map([["上杉和輝", "uesugi@example.com"]]);
+    expect(
+      collaborationParticipantKey("UESUGI@example.com", "上杉和輝", aliases),
+    ).toBe("email:uesugi@example.com");
+    expect(collaborationParticipantKey("", "上杉和輝", aliases)).toBe(
+      "email:uesugi@example.com",
     );
   });
 
