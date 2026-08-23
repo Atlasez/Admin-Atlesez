@@ -4,6 +4,7 @@ import {
   subjectHue,
 } from "../../src/scripts/admin-editor-enhancements";
 import { parseEditorialAssetMarker } from "../../src/scripts/admin-editor-comment-images";
+import { parsePreviewAssetMarker } from "../../src/scripts/admin-editor-preview-images";
 
 describe("admin editor enhancements", () => {
   it("parses every named :::/:::: directive instead of limiting conversion to theorem aliases", () => {
@@ -56,5 +57,17 @@ describe("admin editor enhancements", () => {
       id: "a923f490-f674-4ce4-b0af-155001f048d9",
     });
     expect(parseEditorialAssetMarker("ordinary selected text")).toBeNull();
+  });
+
+  it("recognizes article image markers for the live preview fallback", () => {
+    expect(
+      parsePreviewAssetMarker(
+        "![StobbeCondensation.png](asset://a923f490-f674-4ce4-b0af-155001f048d9)",
+      ),
+    ).toEqual({
+      alt: "StobbeCondensation.png",
+      id: "a923f490-f674-4ce4-b0af-155001f048d9",
+    });
+    expect(parsePreviewAssetMarker("![image](https://example.com/image.png)")).toBeNull();
   });
 });
