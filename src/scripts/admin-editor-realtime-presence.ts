@@ -1,3 +1,9 @@
+import * as Y from "yjs";
+import {
+  encodeRelativeCursorPosition,
+  resolveRelativeCursorPosition,
+} from "../lib/editorial-collaboration-presence";
+
 type PresenceParticipant = {
   sessionId: string;
   email: string;
@@ -5,6 +11,8 @@ type PresenceParticipant = {
   field: string;
   cursorStart: number | null;
   cursorEnd: number | null;
+  cursorAnchor?: string | null;
+  cursorHead?: string | null;
 };
 
 type SessionMessage = {
@@ -48,10 +56,17 @@ export function dedupePresenceParticipants(
     if (item.email && !current.email) current.email = item.email;
     if (item.displayName) current.displayName = item.displayName;
     if (item.field) current.field = item.field;
-    if (item.cursorStart !== null || item.cursorEnd !== null) {
+    if (
+      item.cursorStart !== null ||
+      item.cursorEnd !== null ||
+      item.cursorAnchor ||
+      item.cursorHead
+    ) {
       current.sessionId = item.sessionId;
       current.cursorStart = item.cursorStart;
       current.cursorEnd = item.cursorEnd;
+      current.cursorAnchor = item.cursorAnchor ?? null;
+      current.cursorHead = item.cursorHead ?? null;
     }
   }
   return [...merged.values()];
@@ -143,6 +158,14 @@ function initializeRealtimePresence() {
   let ownEmail = "";
   let participants: PresenceParticipant[] = [];
   let destroyed = false;
+  let presenceDocument = new Y.Doc();
+  let presenceBody = presenceDocument.getText("body");
+
+  const resetPresenceDocument = () => {
+    presenceDocument.destroy();
+    presenceDocument = new Y.Doc();
+    presenceBody = presenceDocument.getText("body");
+  };
 
   const syncParticipantChips = () => {
     if (!participantList) return;
@@ -152,6 +175,7 @@ function initializeRealtimePresence() {
       const titleKey = chip.title.trim().toLowerCase();
       const textName = (chip.textContent ?? "")
         .split("・", 1)[0]
+        .split("（", 1)[0]
         .trim()
         .toLowerCase();
       const key = titleKey || textName;
@@ -248,11 +272,6 @@ function initializeRealtimePresence() {
     const safe = Math.max(0, Math.min(position, body.value.length));
     mirror.replaceChildren();
     mirror.append(document.createTextNode(body.value.slice(0, safe)));
-
-    // Always measure a zero-width marker at the caret itself. Using the next
-    // character here is wrong when that character is a newline: its box is
-    // laid out on the following visual line and makes the remote caret appear
-    // one line too low.
     const marker = document.createElement("span");
     marker.textContent = "\u200b";
     mirror.append(marker);
@@ -288,6 +307,21 @@ function initializeRealtimePresence() {
       .filter((rect): rect is ViewportRect => Boolean(rect));
   };
 
+  const resolveParticipantPosition = (
+    participant: PresenceParticipant,
+    kind: "anchor" | "head",
+  ) => {
+    const relative =
+      kind === "anchor" ? participant.cursorAnchor : participant.cursorHead;
+    const resolved = resolveRelativeCursorPosition(
+      relative,
+      presenceDocument,
+      presenceBody,
+    );
+    if (resolved !== null) return resolved;
+    return kind === "anchor" ? participant.cursorStart : participant.cursorEnd;
+  };
+
   const renderParticipants = () => {
     layer.replaceChildren();
     if (!currentDocumentId || body.hidden || !body.isConnected) return;
@@ -297,22 +331,22 @@ function initializeRealtimePresence() {
       (participant) =>
         participant.email.toLowerCase() !== ownEmail.toLowerCase() &&
         participant.field === "body" &&
-        participant.cursorStart !== null,
+        (participant.cursorHead || participant.cursorEnd !== null),
     );
 
     for (const participant of visible) {
-      const start = Math.max(
+      const rawAnchor = resolveParticipantPosition(participant, "anchor");
+      const rawHead = resolveParticipantPosition(participant, "head");
+      if (rawHead === null) continue;
+      const anchor = Math.max(
         0,
-        Math.min(participant.cursorStart ?? 0, bodyLength),
+        Math.min(rawAnchor ?? rawHead, bodyLength),
       );
-      const end = Math.max(
-        0,
-        Math.min(participant.cursorEnd ?? start, bodyLength),
-      );
+      const head = Math.max(0, Math.min(rawHead, bodyLength));
       const hue = hashHue(participant.email || participant.sessionId);
 
-      if (start !== end) {
-        for (const rect of selectionCoordinates(start, end)) {
+      if (anchor !== head) {
+        for (const rect of selectionCoordinates(anchor, head)) {
           const selection = document.createElement("span");
           selection.className = "realtime-selection";
           selection.style.setProperty("--cursor-hue", String(hue));
@@ -324,7 +358,7 @@ function initializeRealtimePresence() {
         }
       }
 
-      const caret = caretCoordinates(end);
+      const caret = caretCoordinates(head);
       const caretBottom = caret.top + caret.lineHeight;
       if (
         caret.left < viewport.left - 1 ||
@@ -363,15 +397,51 @@ function initializeRealtimePresence() {
     });
   };
 
+  const localRelativePositions = () => {
+    if (presenceBody.toString() !== body.value) {
+      return { anchor: null, head: null };
+    }
+    const start = body.selectionStart;
+    const end = body.selectionEnd;
+    const backward = body.selectionDirection === "backward";
+    const anchorIndex = backward ? end : start;
+    const headIndex = backward ? start : end;
+    return {
+      anchor: encodeRelativeCursorPosition(presenceBody, anchorIndex),
+      head: encodeRelativeCursorPosition(presenceBody, headIndex),
+    };
+  };
+
   const sendPresenceNow = () => {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const active = document.activeElement === body;
+    if (!active) {
+      socket.send(
+        JSON.stringify({
+          type: "presence",
+          field: "",
+          cursorStart: null,
+          cursorEnd: null,
+          cursorAnchor: null,
+          cursorHead: null,
+        }),
+      );
+      return;
+    }
+    const start = body.selectionStart;
+    const end = body.selectionEnd;
+    const backward = body.selectionDirection === "backward";
+    const anchorIndex = backward ? end : start;
+    const headIndex = backward ? start : end;
+    const relative = localRelativePositions();
     socket.send(
       JSON.stringify({
         type: "presence",
-        field: active ? "body" : "",
-        cursorStart: active ? body.selectionStart : null,
-        cursorEnd: active ? body.selectionEnd : null,
+        field: "body",
+        cursorStart: anchorIndex,
+        cursorEnd: headIndex,
+        cursorAnchor: relative.anchor,
+        cursorHead: relative.head,
       }),
     );
   };
@@ -393,6 +463,7 @@ function initializeRealtimePresence() {
     ownEmail = "";
     participants = [];
     layer.replaceChildren();
+    resetPresenceDocument();
     currentDocumentId = documentId;
     if (!documentId) return;
 
@@ -405,6 +476,17 @@ function initializeRealtimePresence() {
 
     nextSocket.addEventListener("open", sendPresenceNow);
     nextSocket.addEventListener("message", (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        try {
+          Y.applyUpdate(presenceDocument, new Uint8Array(event.data));
+          scheduleRender();
+          if (document.activeElement === body) schedulePresence();
+        } catch {
+          // Ignore malformed collaboration updates; the main editor socket
+          // remains responsible for document synchronization.
+        }
+        return;
+      }
       if (typeof event.data !== "string") return;
       try {
         const payload = JSON.parse(event.data) as
@@ -490,6 +572,7 @@ function initializeRealtimePresence() {
       if (presenceFrame) window.cancelAnimationFrame(presenceFrame);
       if (renderFrame) window.cancelAnimationFrame(renderFrame);
       socket?.close();
+      presenceDocument.destroy();
       mirror.remove();
       layer.remove();
     },
