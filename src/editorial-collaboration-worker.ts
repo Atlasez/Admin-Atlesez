@@ -30,7 +30,18 @@ type CollaborationAttachment = {
   email: string;
   displayName: string;
   field: string;
+  cursorStart: number | null;
+  cursorEnd: number | null;
 };
+
+const emptyAttachment = (): CollaborationAttachment => ({
+  sessionId: "",
+  email: "",
+  displayName: "メンバー",
+  field: "",
+  cursorStart: null,
+  cursorEnd: null,
+});
 
 const collaborationAttachment = (
   socket: WebSocket,
@@ -38,15 +49,48 @@ const collaborationAttachment = (
   const value = (
     socket as WebSocket & { deserializeAttachment?: () => unknown }
   ).deserializeAttachment?.();
-  if (!value || typeof value !== "object")
-    return { sessionId: "", email: "", displayName: "メンバー", field: "" };
+  if (!value || typeof value !== "object") return emptyAttachment();
   const attachment = value as Partial<CollaborationAttachment>;
   return {
     sessionId: attachment.sessionId ?? "",
     email: attachment.email ?? "",
     displayName: attachment.displayName ?? attachment.email ?? "メンバー",
     field: attachment.field ?? "",
+    cursorStart:
+      typeof attachment.cursorStart === "number" ? attachment.cursorStart : null,
+    cursorEnd:
+      typeof attachment.cursorEnd === "number" ? attachment.cursorEnd : null,
   };
+};
+
+const normalizeCursor = (value: unknown) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(240_000, Math.trunc(value)));
+};
+
+const mergeParticipants = (items: CollaborationAttachment[]) => {
+  const merged = new Map<string, CollaborationAttachment>();
+  for (const item of items) {
+    const key = item.email.trim().toLowerCase() || item.sessionId;
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, { ...item });
+      continue;
+    }
+
+    if (item.displayName && item.displayName !== "メンバー")
+      current.displayName = item.displayName;
+    if (item.field) current.field = item.field;
+
+    const hasCursor = item.cursorStart !== null || item.cursorEnd !== null;
+    if (hasCursor) {
+      current.sessionId = item.sessionId;
+      current.cursorStart = item.cursorStart;
+      current.cursorEnd = item.cursorEnd;
+      if (item.field) current.field = item.field;
+    }
+  }
+  return [...merged.values()];
 };
 
 const json = (value: unknown, status = 200) =>
@@ -99,11 +143,13 @@ export class EditorialCollaborationRoom {
   }
 
   private broadcastPresence() {
-    const participants = this.state
-      .getWebSockets()
-      .filter((socket) => socket.readyState === WebSocket.OPEN)
-      .map(collaborationAttachment)
-      .filter((item) => item.sessionId);
+    const participants = mergeParticipants(
+      this.state
+        .getWebSockets()
+        .filter((socket) => socket.readyState === WebSocket.OPEN)
+        .map(collaborationAttachment)
+        .filter((item) => item.sessionId),
+    );
     const message = JSON.stringify({ type: "presence", participants });
     for (const socket of this.state.getWebSockets())
       if (socket.readyState === WebSocket.OPEN) socket.send(message);
@@ -130,14 +176,24 @@ export class EditorialCollaborationRoom {
     } catch {
       /* invalid encoded names fall back to the generic label */
     }
-    server.serializeAttachment?.({
+    const attachment: CollaborationAttachment = {
       sessionId: crypto.randomUUID(),
       email: request.headers.get("x-atlasez-user-email") ?? "",
       displayName,
       field: "",
-    } satisfies CollaborationAttachment);
+      cursorStart: null,
+      cursorEnd: null,
+    };
+    server.serializeAttachment?.(attachment);
     this.state.acceptWebSocket(server);
     server.send(Y.encodeStateAsUpdate(this.yDocument));
+    server.send(
+      JSON.stringify({
+        type: "session",
+        sessionId: attachment.sessionId,
+        email: attachment.email,
+      }),
+    );
     this.broadcastPresence();
     return new Response(null, {
       status: 101,
@@ -151,11 +207,18 @@ export class EditorialCollaborationRoom {
       return;
     }
     try {
-      const payload = JSON.parse(message) as { type?: string; field?: unknown };
+      const payload = JSON.parse(message) as {
+        type?: string;
+        field?: unknown;
+        cursorStart?: unknown;
+        cursorEnd?: unknown;
+      };
       if (payload.type !== "presence") return;
       const attachment = collaborationAttachment(socket);
       attachment.field =
         typeof payload.field === "string" ? payload.field.slice(0, 80) : "";
+      attachment.cursorStart = normalizeCursor(payload.cursorStart);
+      attachment.cursorEnd = normalizeCursor(payload.cursorEnd);
       (
         socket as WebSocket & { serializeAttachment?: (value: unknown) => void }
       ).serializeAttachment?.(attachment);
