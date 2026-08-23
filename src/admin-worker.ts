@@ -20,6 +20,8 @@ import {
   reminderBeforeDue,
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
+// ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
+// Preview/本番は外部の専用Worker bindingを必ず経由する。
 export { EditorialCollaborationRoom } from "./editorial-collaboration-worker";
 
 interface Fetcher {
@@ -48,11 +50,8 @@ interface DurableObjectNamespace {
 }
 type WorkerExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
-  exports?: {
-    EditorialCollaborationRoom?: DurableObjectNamespace;
-  };
+  exports?: { EditorialCollaborationRoom?: DurableObjectNamespace };
 };
-
 interface Env {
   ASSETS: Fetcher;
   REPORTS: D1Database;
@@ -1684,12 +1683,30 @@ async function serveEditorialAsset(
     >();
   if (!asset || !canReviewDocument(scope, asset.subject, asset.status))
     return new Response("Not found", { status: 404 });
-  const responseBody =
-    asset.data instanceof Uint8Array ? asset.data.slice().buffer : asset.data;
-  return new Response(responseBody as ArrayBuffer, {
+  // D1 は環境によって BLOB を Uint8Array または ArrayBuffer として返す。
+  // D1 の返却型を Response が確実に扱える ArrayBuffer に正規化する。
+  let responseBody: ArrayBuffer | null = null;
+  try {
+    // D1 の BLOB は実行環境により ArrayBuffer/Uint8Array の別Realm型になる
+    // ことがあるため、instanceof 判定ではなくバイト列へ変換する。
+    if (typeof asset.data === "string") {
+      // 一部のD1互換ランタイムはBLOBをbase64文字列で返す。
+      const binary = atob(asset.data);
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      responseBody = bytes.buffer;
+    } else {
+      responseBody = new Uint8Array(asset.data as ArrayBufferLike).slice()
+        .buffer;
+    }
+  } catch {
+    responseBody = null;
+  }
+  if (!responseBody?.byteLength)
+    return new Response("Not found", { status: 404 });
+  return new Response(responseBody, {
     headers: {
       "cache-control": "private, max-age=60",
-      "content-length": String(asset.bytes),
+      "content-length": String(responseBody.byteLength),
       "content-type": asset.media_type,
       "content-disposition": `inline; filename="${asset.filename}"`,
       "x-content-type-options": "nosniff",
@@ -1804,17 +1821,15 @@ async function listEditorialDocuments(
       assignment.reviewer_email,
     ]),
   );
-  const memberFilters = scope.allSubjects
-    ? ""
-    : ` WHERE p.subject IN (${scope.subjects.map(() => "?").join(", ")})`;
+  // メンション候補は、原稿の担当分野だけでなく運営に登録済みの全メンバーを
+  // 表示する。担当分野で絞ると、共同レビュー相手や運営内運営が候補から消え、
+  // 「自分しか候補に出ない」状態になっていた。
   const memberRows = await env.REPORTS.prepare(
     `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(m.display_name), ''), '') AS display_name
      FROM report_admin_permissions p
-     LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(p.email)${memberFilters}
+     LEFT JOIN editorial_member_profiles m ON lower(m.email) = lower(p.email)
      ORDER BY display_name, p.email`,
-  )
-    .bind(...(scope.allSubjects ? [] : scope.subjects))
-    .all<{ email: string; display_name: string }>();
+  ).all<{ email: string; display_name: string }>();
   return json({
     documents: documentRows.map((document) => ({
       ...document,
@@ -4665,7 +4680,10 @@ async function getEditorialDocument(
         }[],
       };
   const authorProfileByEmail = new Map(
-    (authorProfiles.results ?? []).map((profile) => [profile.email, profile]),
+    (authorProfiles.results ?? []).map((profile) => [
+      profile.email.toLowerCase(),
+      profile,
+    ]),
   );
   const selectionRows = commentIds.length
     ? await env.REPORTS.prepare(
@@ -4703,8 +4721,9 @@ async function getEditorialDocument(
     [...counts.entries()].map(([actor_email, count]) => ({
       actor_email,
       actor_display_name:
-        authorProfileByEmail.get(actor_email)?.display_name?.trim() ||
-        actor_email,
+        authorProfileByEmail
+          .get(actor_email.toLowerCase())
+          ?.display_name?.trim() || actor_email,
       count,
     }));
   const commentsWithSelections = commentRows.map((comment) => {
@@ -4742,10 +4761,12 @@ async function getEditorialDocument(
     return {
       ...comment,
       author_display_name:
-        authorProfileByEmail.get(comment.created_by)?.display_name?.trim() ||
-        "運営メンバー",
+        authorProfileByEmail
+          .get(comment.created_by.toLowerCase())
+          ?.display_name?.trim() || "運営メンバー",
       author_avatar_url:
-        authorProfileByEmail.get(comment.created_by)?.avatar_url ?? "",
+        authorProfileByEmail.get(comment.created_by.toLowerCase())
+          ?.avatar_url ?? "",
       acknowledged_by_emails: [...current.actors.acknowledged],
       unacknowledged_by_emails: [...current.actors.unacknowledged],
       resolved_by_emails: [...current.actors.resolved],
@@ -5281,11 +5302,14 @@ async function createEditorialComment(
     return json({ error: "コメントを読み取れませんでした。" }, 400);
   }
   const body = text(payload.body, MAX_EDITORIAL_COMMENT_LENGTH);
-  if (!body) return json({ error: "コメントを入力してください。" }, 400);
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
   const tags = editorialCommentTags(payload);
   if (tags instanceof Response) return tags;
+  // タグや本文引用だけでも、レビュー上の意味を持つコメントとして保存できる。
+  // 本文・タグ・引用のいずれもない空送信だけは従来どおり拒否する。
+  if (!body && !(tags ?? []).length && !selections.length)
+    return json({ error: "コメント本文またはタグを入力してください。" }, 400);
   const document = await env.REPORTS.prepare(
     "SELECT subject, status FROM editorial_documents WHERE id = ?",
   )
@@ -5449,11 +5473,12 @@ async function editEditorialComment(
     return json({ error: "コメントを読み取れませんでした。" }, 400);
   }
   const body = text(payload.body, MAX_EDITORIAL_COMMENT_LENGTH);
-  if (!body) return json({ error: "コメントを入力してください。" }, 400);
   const selections = editorialCommentSelections(payload);
   if (selections instanceof Response) return selections;
   const tags = editorialCommentTags(payload);
   if (tags instanceof Response) return tags;
+  if (!body && !(tags ?? []).length && !selections.length)
+    return json({ error: "コメント本文またはタグを入力してください。" }, 400);
   const comment = await env.REPORTS.prepare(
     `SELECT c.id, c.created_by, d.subject, d.status FROM editorial_comments c
      JOIN editorial_documents d ON d.id = c.document_id WHERE c.id = ? AND c.document_id = ?`,
@@ -6773,11 +6798,13 @@ async function connectEditorialCollaboration(
   request: Request,
   env: Env,
   documentId: string,
-  collaborationNamespace?: DurableObjectNamespace,
+  localNamespace?: DurableObjectNamespace,
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const namespace = collaborationNamespace ?? env.EDITORIAL_COLLABORATION;
+  const namespace =
+    env.EDITORIAL_COLLABORATION ??
+    (env.ADMIN_AUTH_MODE === "local" ? localNamespace : undefined);
   if (!namespace)
     return json({ error: "同時編集サービスが設定されていません。" }, 503);
   const document = await env.REPORTS.prepare(

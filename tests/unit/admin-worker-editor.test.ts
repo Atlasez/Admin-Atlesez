@@ -186,6 +186,53 @@ describe("admin worker editor APIs", () => {
     expect(commentInsert?.values).not.toContain("[定義不足]");
   });
 
+  it("accepts a tag-only comment while rejecting a completely empty comment", async () => {
+    class CommentStatement extends EmptyStatement {
+      constructor(private readonly sql: string) {
+        super(sql);
+      }
+
+      async first<T>() {
+        if (
+          this.sql.includes("SELECT subject, status FROM editorial_documents")
+        )
+          return { subject: "mathematics", status: "draft" } as T;
+        return null as T | null;
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new CommentStatement(query),
+      },
+    };
+    const request = (payload: unknown) =>
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222/comments",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "http://localhost",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+
+    const tagOnly = await worker.fetch(
+      request({ body: "", tags: ["根拠確認"], selections: [] }),
+      env as never,
+    );
+    expect(tagOnly.status).toBe(201);
+
+    const empty = await worker.fetch(
+      request({ body: "", tags: [], selections: [] }),
+      env as never,
+    );
+    expect(empty.status).toBe(400);
+  });
+
   it("rejects comment tags outside the supported review taxonomy", async () => {
     const response = await worker.fetch(
       new Request(
