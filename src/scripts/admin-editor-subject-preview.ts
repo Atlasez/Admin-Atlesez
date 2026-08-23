@@ -15,6 +15,12 @@ const SEMANTIC_DIRECTIVE_CLASSES: Record<string, string> = {
 
 type DirectiveMarker = NonNullable<ReturnType<typeof parseDirectiveMarker>>;
 
+type DirectiveContainer = {
+  section: HTMLElement;
+  body: HTMLElement;
+  semantic: boolean;
+};
+
 function isClosingDirective(value: string, minimumLength: number): boolean {
   const match = /^\s*(:{3,4})\s*$/.exec(value);
   return Boolean(match && match[1].length >= minimumLength);
@@ -27,32 +33,75 @@ function semanticDirectiveClass(name: string): string | null {
 function createDirectiveSection(
   doc: Document,
   marker: DirectiveMarker,
-): { section: HTMLElement; body: HTMLElement } {
+): DirectiveContainer {
   const section = doc.createElement("section");
   section.className = `editor-directive editor-directive-${marker.name.replace(/[^a-z0-9_-]/g, "")}`;
   section.dataset.directive = marker.name;
+
   const semanticClass = semanticDirectiveClass(marker.name);
-  if (semanticClass) section.classList.add(semanticClass);
+  if (semanticClass) {
+    section.classList.add(semanticClass);
+    const heading = doc.createElement("span");
+    heading.className = "thmtitle";
+    heading.textContent = marker.title;
+    section.append(heading);
+    // Published mathematics articles place theorem content directly inside
+    // .defi/.thm/etc. Keeping the section itself as the collection target
+    // makes the editor preview use the same DOM shape and the same CSS.
+    return { section, body: section, semantic: true };
+  }
 
   const heading = doc.createElement("div");
-  heading.className = "editor-directive-heading thmtitle";
+  heading.className = "editor-directive-heading";
   heading.textContent = marker.title;
-
   const body = doc.createElement("div");
   body.className = "editor-directive-body";
   section.append(heading, body);
-  return { section, body };
+  return { section, body, semantic: false };
 }
 
 function normalizeDirectiveSection(section: HTMLElement): void {
   const name = section.dataset.directive?.toLowerCase() ?? "";
   if (!name) return;
   const semanticClass = semanticDirectiveClass(name);
-  if (semanticClass) section.classList.add(semanticClass);
+  if (!semanticClass) return;
+
+  section.classList.add(semanticClass);
   const heading = section.querySelector<HTMLElement>(
-    ":scope > .editor-directive-heading",
+    ":scope > .editor-directive-heading, :scope > .thmtitle",
   );
-  heading?.classList.add("thmtitle");
+  if (heading && heading.className !== "thmtitle") {
+    heading.className = "thmtitle";
+  }
+
+  // Older preview code inserted an editor-only body wrapper. The published
+  // article renderer does not have it, and its padding caused the large empty
+  // area visible in theorem/definition cards. Unwrap it once.
+  const body = section.querySelector<HTMLElement>(":scope > .editor-directive-body");
+  if (body) body.replaceWith(...Array.from(body.childNodes));
+}
+
+function appendPackedContent(
+  container: DirectiveContainer,
+  html: string,
+  text: string,
+): void {
+  if (!html && !text) return;
+  if (!container.semantic) {
+    if (html) container.body.innerHTML = html;
+    else container.body.textContent = text;
+    return;
+  }
+
+  if (html) {
+    const template = container.section.ownerDocument.createElement("template");
+    template.innerHTML = html;
+    container.section.append(template.content);
+  } else {
+    const paragraph = container.section.ownerDocument.createElement("p");
+    paragraph.textContent = text;
+    container.section.append(paragraph);
+  }
 }
 
 function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
@@ -68,17 +117,16 @@ function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
   );
   if (closeIndex < 0) return false;
 
-  const { section, body } = createDirectiveSection(node.ownerDocument, marker);
+  const container = createDirectiveSection(node.ownerDocument, marker);
   const htmlLines = node.innerHTML.replace(/\r\n/g, "\n").split("\n");
   const lineAlignedHtml = htmlLines.length === plainLines.length;
   const bodyHtml = lineAlignedHtml
     ? htmlLines.slice(1, closeIndex).join("\n").trim()
     : "";
   const bodyText = plainLines.slice(1, closeIndex).join("\n").trim();
-  if (bodyHtml) body.innerHTML = bodyHtml;
-  else if (bodyText) body.textContent = bodyText;
+  appendPackedContent(container, bodyHtml, bodyText);
 
-  const replacements: Node[] = [section];
+  const replacements: Node[] = [container.section];
   const trailingHtml = lineAlignedHtml
     ? htmlLines.slice(closeIndex + 1).join("\n").trim()
     : "";
@@ -117,14 +165,11 @@ export function enhancePreviewDirectives(target: HTMLElement): void {
     const marker = node.tagName === "P" ? parseDirectiveMarker(text) : null;
 
     if (marker) {
-      const { section, body } = createDirectiveSection(
-        target.ownerDocument,
-        marker,
-      );
-      if (stack.length > 0) stack.at(-1)?.body.append(section);
-      else node.replaceWith(section);
+      const container = createDirectiveSection(target.ownerDocument, marker);
+      if (stack.length > 0) stack.at(-1)?.body.append(container.section);
+      else node.replaceWith(container.section);
       if (node.isConnected) node.remove();
-      stack.push({ body, fenceLength: marker.fence.length });
+      stack.push({ body: container.body, fenceLength: marker.fence.length });
       continue;
     }
 
@@ -167,10 +212,12 @@ function installSubjectPreviewStyles(doc: Document): void {
       margin-block: 1.4rem 1rem;
       padding: 1rem 1.1rem;
     }
-    .article-preview .editor-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) > .thmtitle {
+    .article-preview .editor-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) > .editor-directive-heading {
       background: var(--accent-subtle, #e8f2f8);
       color: var(--text-primary, #17212a);
-      margin: -1.75rem 0 .8rem -1.1rem;
+      font-weight: 800;
+      margin: -1rem -1.1rem .8rem;
+      padding: .45rem .7rem;
     }
   `;
   doc.head.append(style);
