@@ -5,6 +5,7 @@ import {
 } from "../../src/scripts/admin-editor-enhancements";
 import { parseEditorialAssetMarker } from "../../src/scripts/admin-editor-comment-images";
 import { parsePreviewAssetMarker } from "../../src/scripts/admin-editor-preview-images";
+import { dedupePresenceParticipants } from "../../src/scripts/admin-editor-realtime-presence";
 
 describe("admin editor enhancements", () => {
   it("parses every named :::/:::: directive instead of limiting conversion to theorem aliases", () => {
@@ -68,6 +69,61 @@ describe("admin editor enhancements", () => {
       alt: "StobbeCondensation.png",
       id: "a923f490-f674-4ce4-b0af-155001f048d9",
     });
-    expect(parsePreviewAssetMarker("![image](https://example.com/image.png)")).toBeNull();
+    expect(
+      parsePreviewAssetMarker("![image](https://example.com/image.png)"),
+    ).toBeNull();
+  });
+
+  it("deduplicates multiple collaboration sockets for the same member", () => {
+    const participants = dedupePresenceParticipants([
+      {
+        sessionId: "sync-a",
+        email: "uesugi@example.com",
+        displayName: "上杉和輝",
+        field: "body",
+        cursorStart: null,
+        cursorEnd: null,
+      },
+      {
+        sessionId: "presence-a",
+        email: "UESUGI@example.com",
+        displayName: "上杉和輝",
+        field: "body",
+        cursorStart: 120,
+        cursorEnd: 120,
+      },
+      {
+        sessionId: "sync-b",
+        email: "kobayashi@example.com",
+        displayName: "小林和真",
+        field: "body",
+        cursorStart: null,
+        cursorEnd: null,
+      },
+      {
+        sessionId: "presence-b",
+        email: "kobayashi@example.com",
+        displayName: "小林和真",
+        field: "body",
+        cursorStart: 42,
+        cursorEnd: 48,
+      },
+    ]);
+
+    expect(participants).toHaveLength(2);
+    expect(participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          email: "uesugi@example.com",
+          cursorStart: 120,
+          cursorEnd: 120,
+        }),
+        expect.objectContaining({
+          email: "kobayashi@example.com",
+          cursorStart: 42,
+          cursorEnd: 48,
+        }),
+      ]),
+    );
   });
 });
