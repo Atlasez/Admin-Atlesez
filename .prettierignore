@@ -4,6 +4,11 @@ node_modules/
 package-lock.json
 *.astro
 src/scripts/admin-editor-enhancements.ts
+src/editorial-collaboration-worker.ts
+src/scripts/admin-editor-comment-images.ts
+src/scripts/admin-editor-preview-images.ts
+src/scripts/admin-editor-realtime-presence.ts
+tests/unit/admin-editor-enhancements.test.ts
 
 versions/
 
