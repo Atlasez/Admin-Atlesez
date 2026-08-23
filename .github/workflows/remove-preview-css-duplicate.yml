@@ -1,0 +1,40 @@
+name: Remove final preview CSS duplicate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/member-portal-workflows
+      - name: Remove duplicate mobile KaTeX rule
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'src/pages/atlas/[locale]/[subject]/[category]/[slug].astro';
+          let source = fs.readFileSync(path, 'utf8');
+          const duplicate = `    /* 別行立ての数式は画面幅を超えるので、その式だけ横に送れるようにする */
+              .article-body :global(.katex-display) {
+                overflow-x: auto;
+                overflow-y: hidden;
+              }
+`;
+          if (!source.includes(duplicate)) throw new Error('Duplicate mobile KaTeX rule not found');
+          source = source.replace(duplicate, '');
+          fs.writeFileSync(path, source);
+          NODE
+      - name: Commit removal
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'src/pages/atlas/[locale]/[subject]/[category]/[slug].astro'
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "remove final published article css duplicate"
+          git push origin HEAD:codex/member-portal-workflows
