@@ -1,9 +1,19 @@
+// @vitest-environment jsdom
+
 import { createMarkdownProcessor } from "@astrojs/markdown-remark";
-import { JSDOM } from "jsdom";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { applySubjectPreviewProfile } from "../../src/scripts/admin-editor-subject-preview";
 
+const mountPreview = (html: string) => {
+  document.body.innerHTML = `<article class="article-preview">${html}</article>`;
+  return document.querySelector<HTMLElement>("article");
+};
+
 describe("admin editor subject preview", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+  });
+
   it("converts rendered Markdown directive fences into a mathematics theorem box", async () => {
     const processor = await createMarkdownProcessor();
     const markdown = [
@@ -14,8 +24,7 @@ describe("admin editor subject preview", () => {
       ":::",
     ].join("\n");
     const rendered = await processor.render(markdown);
-    const dom = new JSDOM(`<article class="article-preview">${rendered.code}</article>`);
-    const preview = dom.window.document.querySelector<HTMLElement>("article");
+    const preview = mountPreview(rendered.code);
 
     expect(preview).not.toBeNull();
     applySubjectPreviewProfile(preview!, "mathematics");
@@ -40,8 +49,7 @@ describe("admin editor subject preview", () => {
     const rendered = await processor.render(
       ["::::custom-box 任意枠", "本文", "::::"].join("\n"),
     );
-    const dom = new JSDOM(`<article>${rendered.code}</article>`);
-    const preview = dom.window.document.querySelector<HTMLElement>("article");
+    const preview = mountPreview(rendered.code);
 
     expect(preview).not.toBeNull();
     applySubjectPreviewProfile(preview!, "mathematics");
