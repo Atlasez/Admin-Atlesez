@@ -92,12 +92,6 @@ function installPresenceStyles() {
       border-radius: .15rem;
       position: absolute;
     }
-    .collaboration-participant.is-editing::after {
-      content: " 編集中";
-      font-size: .65em;
-      font-weight: 700;
-      opacity: .7;
-    }
   `;
   document.head.append(style);
 }
@@ -134,11 +128,9 @@ function initializeRealtimePresence() {
     whiteSpace: "pre-wrap",
     overflowWrap: "break-word",
     wordBreak: "break-word",
+    pointerEvents: "none",
   });
   document.body.append(mirror);
-
-  const marker = document.createElement("span");
-  marker.textContent = "\u200b";
 
   let socket: WebSocket | null = null;
   let reconnectTimer = 0;
@@ -146,16 +138,6 @@ function initializeRealtimePresence() {
   let ownEmail = "";
   let participants: PresenceParticipant[] = [];
   let destroyed = false;
-
-  const lineAndColumn = (position: number) => {
-    const safe = Math.max(0, Math.min(position, body.value.length));
-    const before = body.value.slice(0, safe);
-    const lines = before.split("\n");
-    return {
-      line: lines.length,
-      column: (lines.at(-1)?.length ?? 0) + 1,
-    };
-  };
 
   const syncParticipantChips = () => {
     if (!participantList) return;
@@ -171,33 +153,6 @@ function initializeRealtimePresence() {
       }
       if (key) seen.add(key);
     }
-
-    const uniquePeople = new Map<string, PresenceParticipant>();
-    for (const participant of participants) {
-      const key =
-        participant.email.trim().toLowerCase() ||
-        participant.displayName.trim().toLowerCase() ||
-        participant.sessionId;
-      uniquePeople.set(key, participant);
-    }
-
-    for (const chip of Array.from(participantList.children)) {
-      if (!(chip instanceof HTMLElement)) continue;
-      const email = chip.title.trim().toLowerCase();
-      const name = (chip.textContent ?? "").split("・", 1)[0].trim().toLowerCase();
-      const participant =
-        uniquePeople.get(email) ??
-        [...uniquePeople.values()].find(
-          (item) => item.displayName.trim().toLowerCase() === name,
-        );
-      if (!participant || participant.field !== "body" || participant.cursorEnd === null) {
-        continue;
-      }
-      const { line, column } = lineAndColumn(participant.cursorEnd);
-      chip.textContent = `${participant.displayName}・本文・${line}行${column}列`;
-      chip.classList.add("collaboration-participant", "is-editing");
-    }
-
     if (collaborationState) {
       const count = participantList.children.length;
       if (count > 0) collaborationState.textContent = `同時編集: ${count}人が接続中`;
@@ -206,14 +161,19 @@ function initializeRealtimePresence() {
 
   const syncMirrorStyle = () => {
     const style = getComputedStyle(body);
-    const properties = [
-      "boxSizing",
+    const copy = [
       "fontFamily",
       "fontSize",
       "fontStyle",
       "fontWeight",
+      "fontVariant",
       "letterSpacing",
       "lineHeight",
+      "textAlign",
+      "textIndent",
+      "textTransform",
+      "wordSpacing",
+      "tabSize",
       "paddingTop",
       "paddingRight",
       "paddingBottom",
@@ -223,23 +183,36 @@ function initializeRealtimePresence() {
       "borderBottomWidth",
       "borderLeftWidth",
     ] as const;
-    for (const property of properties) mirror.style[property] = style[property];
-    mirror.style.width = `${body.clientWidth}px`;
+    for (const property of copy) mirror.style[property] = style[property];
+    mirror.style.boxSizing = style.boxSizing;
+    mirror.style.width = `${body.offsetWidth}px`;
+    mirror.style.minHeight = `${body.offsetHeight}px`;
   };
 
   const caretCoordinates = (position: number) => {
     syncMirrorStyle();
     const safe = Math.max(0, Math.min(position, body.value.length));
-    mirror.replaceChildren(
-      document.createTextNode(body.value.slice(0, safe)),
-      marker,
-    );
+    mirror.replaceChildren();
+    const before = document.createTextNode(body.value.slice(0, safe));
+    const marker = document.createElement("span");
+    marker.textContent = body.value.slice(safe, safe + 1) || "\u200b";
+    mirror.append(before, marker);
     const markerRect = marker.getBoundingClientRect();
     const mirrorRect = mirror.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
+    const writingRect = writingArea.getBoundingClientRect();
+    const style = getComputedStyle(body);
+    const borderLeft = Number.parseFloat(style.borderLeftWidth) || 0;
+    const borderTop = Number.parseFloat(style.borderTopWidth) || 0;
+    const lineHeight = Number.parseFloat(style.lineHeight) || 20;
     return {
-      left: body.offsetLeft + markerRect.left - mirrorRect.left - body.scrollLeft,
-      top: body.offsetTop + markerRect.top - mirrorRect.top - body.scrollTop,
-      lineHeight: Number.parseFloat(getComputedStyle(body).lineHeight) || 20,
+      left:
+        bodyRect.left - writingRect.left + borderLeft +
+        (markerRect.left - mirrorRect.left) - body.scrollLeft,
+      top:
+        bodyRect.top - writingRect.top + borderTop +
+        (markerRect.top - mirrorRect.top) - body.scrollTop,
+      lineHeight,
     };
   };
 
@@ -255,14 +228,8 @@ function initializeRealtimePresence() {
     );
 
     for (const participant of visible) {
-      const start = Math.max(
-        0,
-        Math.min(participant.cursorStart ?? 0, bodyLength),
-      );
-      const end = Math.max(
-        0,
-        Math.min(participant.cursorEnd ?? start, bodyLength),
-      );
+      const start = Math.max(0, Math.min(participant.cursorStart ?? 0, bodyLength));
+      const end = Math.max(0, Math.min(participant.cursorEnd ?? start, bodyLength));
       const hue = hashHue(participant.email || participant.sessionId);
       const caret = caretCoordinates(end);
 
@@ -294,8 +261,7 @@ function initializeRealtimePresence() {
 
       const label = document.createElement("span");
       label.className = "realtime-cursor-label";
-      label.textContent =
-        participant.displayName || participant.email || "共同編集者";
+      label.textContent = participant.displayName || participant.email || "共同編集者";
       cursor.append(label);
       layer.append(cursor);
     }
@@ -337,9 +303,7 @@ function initializeRealtimePresence() {
     nextSocket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") return;
       try {
-        const payload = JSON.parse(event.data) as
-          | SessionMessage
-          | PresenceMessage;
+        const payload = JSON.parse(event.data) as SessionMessage | PresenceMessage;
         if (payload.type === "session") {
           ownEmail = payload.email;
           sendPresence();
@@ -360,8 +324,7 @@ function initializeRealtimePresence() {
   };
 
   const currentId = () =>
-    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ??
-    "";
+    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ?? "";
 
   const syncDocumentConnection = () => {
     const id = currentId();
@@ -370,9 +333,7 @@ function initializeRealtimePresence() {
 
   const observer = new MutationObserver(syncDocumentConnection);
   observer.observe(form, { attributes: true, subtree: true });
-  const chipObserver = participantList
-    ? new MutationObserver(syncParticipantChips)
-    : null;
+  const chipObserver = participantList ? new MutationObserver(syncParticipantChips) : null;
   chipObserver?.observe(participantList!, { childList: true });
   const interval = window.setInterval(syncDocumentConnection, 500);
 
