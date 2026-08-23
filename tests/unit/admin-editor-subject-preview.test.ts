@@ -14,53 +14,50 @@ describe("admin editor subject preview", () => {
     document.body.replaceChildren();
   });
 
-  it("converts rendered Markdown directive fences into a mathematics theorem box", async () => {
+  it("keeps published mathematics theorem numbering as authored text", async () => {
     const processor = await createMarkdownProcessor();
-    const markdown = [
-      "## 群",
-      "",
-      ":::defi 群の定義",
-      "集合 $G$ に二項演算があるとする。",
-      ":::",
-    ].join("\n");
-    const rendered = await processor.render(markdown);
+    const rendered = await processor.render(
+      [
+        "### 群の定義",
+        "",
+        "定義 1 (群). $G$を集合とする. 以下の条件を満たす組を群という.",
+        "",
+        "命題 2 (可除律による群の特徴づけ). $G$を空でないマグマとする.",
+      ].join("\n"),
+    );
     const preview = mountPreview(rendered.code);
 
     expect(preview).not.toBeNull();
     applySubjectPreviewProfile(preview!, "mathematics");
 
     expect(preview?.dataset.previewSubject).toBe("mathematics");
-    expect(preview?.classList.contains("article-body")).toBe(true);
-    expect(preview?.classList.contains("reading")).toBe(true);
+    expect(preview?.dataset.publishedPreview).toBe("true");
 
-    const directive = preview?.querySelector<HTMLElement>(
-      '[data-directive="defi"]',
+    const body = preview?.querySelector<HTMLElement>(
+      ":scope > [data-published-article-body]",
     );
-    expect(directive).not.toBeNull();
-    expect(directive?.classList.contains("editor-directive")).toBe(true);
-    expect(directive?.classList.contains("defi")).toBe(true);
-    expect(directive?.querySelector(".thmtitle")?.textContent).toBe("群の定義");
-    expect(directive?.textContent).toContain("集合");
-    expect(preview?.textContent).not.toContain(":::defi");
+    expect(body).not.toBeNull();
+    expect(body?.classList.contains("article-body")).toBe(true);
+    expect(body?.classList.contains("reading")).toBe(true);
+    expect(body?.textContent).toContain("定義 1 (群).");
+    expect(body?.textContent).toContain("命題 2 (可除律による群の特徴づけ).");
+    expect(body?.querySelector(".defi,.thm,.prop,.thmtitle,.proof-details")).toBeNull();
   });
 
-  it("converts arbitrary named directives after Markdown rendering", async () => {
+  it("does not invent directive boxes that the published Markdown renderer does not create", async () => {
     const processor = await createMarkdownProcessor();
     const rendered = await processor.render(
-      ["::::custom-box 任意枠", "本文", "::::"].join("\n"),
+      [":::defi 群の定義", "", "本文", "", ":::"].join("\n"),
     );
     const preview = mountPreview(rendered.code);
 
     expect(preview).not.toBeNull();
     applySubjectPreviewProfile(preview!, "mathematics");
 
-    const directive = preview?.querySelector<HTMLElement>(
-      '[data-directive="custom-box"]',
+    const body = preview?.querySelector<HTMLElement>(
+      ":scope > [data-published-article-body]",
     );
-    expect(directive).not.toBeNull();
-    expect(directive?.classList.contains("editor-directive-custom-box")).toBe(
-      true,
-    );
-    expect(directive?.querySelector(".thmtitle")?.textContent).toBe("任意枠");
+    expect(body?.querySelector(".editor-directive,.defi,.thmtitle")).toBeNull();
+    expect(body?.textContent).toContain(":::defi 群の定義");
   });
 });
