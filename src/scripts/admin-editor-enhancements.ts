@@ -191,6 +191,7 @@ function initializeEditorEnhancements(): void {
   const preview = root.querySelector<HTMLElement>("[data-preview]");
   const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]");
   const saveMessage = root.querySelector<HTMLOutputElement>("[data-save-message]");
+  const comments = root.querySelector<HTMLElement>("[data-comment-list]");
   if (!form || !subject || !preview || !saveMessage) return;
 
   const abort = new AbortController();
@@ -229,6 +230,24 @@ function initializeEditorEnhancements(): void {
   subject.addEventListener("input", schedulePreviewEnhancements, { signal });
   subject.addEventListener("change", schedulePreviewEnhancements, { signal });
   schedulePreviewEnhancements();
+
+  comments?.addEventListener("contextmenu", (event) => {
+    const ownerDocument = (event.target as Node | null)?.ownerDocument;
+    const ownerWindow = ownerDocument?.defaultView;
+    if (!ownerDocument || !ownerWindow || ownerDocument === document) return;
+    ownerWindow.setTimeout(() => {
+      const menu = document.querySelector<HTMLElement>("[data-comment-context-menu]");
+      if (!menu) return;
+      ownerDocument.body.append(menu);
+      menu.style.left = `${Math.max(12, Math.min(event.clientX, ownerWindow.innerWidth - menu.offsetWidth - 12))}px`;
+      menu.style.top = `${Math.max(12, Math.min(event.clientY, ownerWindow.innerHeight - menu.offsetHeight - 12))}px`;
+      const close = () => menu.remove();
+      ownerDocument.addEventListener("click", close, { once: true });
+      ownerDocument.addEventListener("keydown", (keyEvent) => {
+        if (keyEvent.key === "Escape") close();
+      }, { once: true });
+    }, 0);
+  }, { signal });
 
   const watchedNames = new Set(["subject", "category", "locale", "slug", "title", "summary", "conceptId", "body", "latexEngine", "status"]);
   form.addEventListener("input", (event) => {
