@@ -1,0 +1,233 @@
+.article-body {
+  margin-block: var(--space-3);
+}
+
+.article-body h2 {
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: var(--space-1);
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.article-body h3 {
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.article-body p,
+.article-body ul,
+.article-body ol {
+  margin-block: 0.7em;
+}
+
+.article-body .defi,
+.article-body .math-definition {
+  background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary));
+  border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default));
+  border-left: 4px solid #6cb4c2;
+  border-radius: 0 0.55rem 0.55rem 0.55rem;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
+  margin-block: 2.8rem 1.15rem;
+  padding: 1.1rem 1.25rem;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: visible;
+}
+
+.article-body .prop,
+.article-body .thm,
+.article-body .lemma,
+.article-body .cor,
+.article-body .example,
+.article-body .math-theorem {
+  background: color-mix(in srgb, #e0c375 12%, var(--background-primary));
+  border: 1px solid color-mix(in srgb, #e0c375 42%, var(--border-default));
+  border-left: 4px solid #d0a53b;
+  border-radius: 0 0.55rem 0.55rem 0.55rem;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
+  margin-block: 2.8rem 1.15rem;
+  padding: 1.1rem 1.25rem;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: visible;
+}
+
+.article-body .defi > :first-child,
+.article-body .prop > :first-child,
+.article-body .thm > :first-child,
+.article-body .lemma > :first-child,
+.article-body .cor > :first-child,
+.article-body .example > :first-child,
+.article-body .math-definition > :first-child,
+.article-body .math-theorem > :first-child {
+  margin-top: 0;
+}
+
+.article-body .defi > :last-child,
+.article-body .prop > :last-child,
+.article-body .thm > :last-child,
+.article-body .lemma > :last-child,
+.article-body .cor > :last-child,
+.article-body .example > :last-child,
+.article-body .math-definition > :last-child,
+.article-body .math-theorem > :last-child {
+  margin-bottom: 0;
+}
+
+.article-body .thmtitle {
+  background: #6cb4c2;
+  border-radius: 0.45rem 0.45rem 0 0;
+  color: #12333a;
+  display: inline-block;
+  font-size: 0.88em;
+  font-weight: 800;
+  margin: -2.55rem 0 0.55rem -1.3rem;
+  padding: 0.3rem 0.8rem;
+}
+
+.article-body .prop .thmtitle,
+.article-body .thm .thmtitle,
+.article-body .lemma .thmtitle,
+.article-body .cor .thmtitle,
+.article-body .example .thmtitle {
+  background: #e0c375;
+  color: #4b3a12;
+}
+
+.article-body .proof-details {
+  margin-block: 1.2rem;
+}
+
+.article-body .proof-details > summary {
+  background: var(--background-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  display: inline-block;
+  font-weight: 800;
+  padding: 0.35rem 0.8rem;
+}
+
+.article-body .proof-details > summary:hover {
+  border-color: var(--accent-primary);
+}
+
+.article-body .proof-details-inner {
+  border-left: 3px solid var(--border-default);
+  margin: 0.4rem 0 0 0.35rem;
+  padding: 0.2rem 0.95rem;
+}
+
+.article-body .katex-display {
+  box-sizing: border-box;
+  display: block;
+  margin-block: 0.9rem;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.15rem;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.article-body .katex-display > .katex {
+  display: inline-block;
+  max-width: none;
+  min-width: max-content;
+}
+
+.article-body .defi > p,
+.article-body .prop > p,
+.article-body .thm > p,
+.article-body .lemma > p,
+.article-body .cor > p,
+.article-body .example > p,
+.article-body .math-definition > p,
+.article-body .math-theorem > p {
+  overflow-wrap: anywhere;
+}
+
+.article-body .supp-details-summary {
+  background: var(--background-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 0.45rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+  margin-block: 0.9rem 0;
+  padding: 0.55rem 0.8rem;
+  position: relative;
+  text-align: center;
+}
+
+.article-body .supp-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.article-body .supp-details-summary::after {
+  content: "+";
+  position: absolute;
+  right: 0.8rem;
+}
+
+.article-body .supp-details[open] .supp-details-summary::after {
+  content: "−";
+}
+
+.article-body .supp-details-inner {
+  border: 1px solid var(--border-default);
+  border-top: 0;
+  border-radius: 0 0 0.45rem 0.45rem;
+  padding: 0.8rem 1rem;
+}
+
+.article-body .rem {
+  background: color-mix(in srgb, var(--background-secondary) 75%, transparent);
+  border: 1px solid var(--border-default);
+  border-left: 4px solid var(--border-strong);
+  border-radius: 0.35rem;
+  color: var(--text-secondary);
+  margin-block: 1.2rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.article-body details.folding {
+  border: 1px solid var(--border-default);
+  border-radius: 0.45rem;
+  margin-block: 1rem;
+  overflow: hidden;
+}
+
+.article-body details.folding > summary {
+  background: var(--background-secondary);
+  cursor: pointer;
+  list-style: none;
+  padding: 0.55rem 0.8rem 0.55rem 2rem;
+  position: relative;
+}
+
+.article-body details.folding > summary::-webkit-details-marker {
+  display: none;
+}
+
+.article-body details.folding > summary::before {
+  border-bottom: 2px solid var(--text-secondary);
+  border-right: 2px solid var(--text-secondary);
+  content: "";
+  height: 0.45rem;
+  left: 0.8rem;
+  position: absolute;
+  top: 0.75rem;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  width: 0.45rem;
+}
+
+.article-body details.folding[open] > summary::before {
+  transform: rotate(225deg);
+}
+
+.article-body .folding-content {
+  padding: 0.8rem 1rem;
+}
