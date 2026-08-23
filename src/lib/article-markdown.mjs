@@ -14,9 +14,13 @@ export const ARTICLE_KATEX_OPTIONS = {
   },
 };
 
+/** @type {import("@astrojs/markdown-remark").AstroMarkdownOptions["remarkPlugins"]} */
 export const ARTICLE_REMARK_PLUGINS = [remarkArticleDirectives, remarkMath];
+
+/** @type {import("@astrojs/markdown-remark").AstroMarkdownOptions["rehypePlugins"]} */
 export const ARTICLE_REHYPE_PLUGINS = [[rehypeKatex, ARTICLE_KATEX_OPTIONS]];
 
+/** @type {import("@astrojs/markdown-remark").AstroMarkdownOptions} */
 export const ARTICLE_MARKDOWN_PROCESSOR_OPTIONS = {
   remarkPlugins: ARTICLE_REMARK_PLUGINS,
   rehypePlugins: ARTICLE_REHYPE_PLUGINS,
