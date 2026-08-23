@@ -1,20 +1,9 @@
-const FIELD_LABELS: Record<string, string> = {
-  title: "タイトルを編集中",
-  summary: "要約を編集中",
-  body: "本文を編集中",
-};
-
 export function formatCollaborationLabel(value: string): string {
-  const parts = value
-    .split("・")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length < 2) return value;
-  const [name, field, ...position] = parts;
-  const label = FIELD_LABELS[field];
-  if (!label) return value;
-  const suffix = position.length ? `（${position.join("・")}）` : "";
-  return `${name}（${label}${suffix}）`;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  const beforeField = trimmed.split("・", 1)[0]?.trim() ?? trimmed;
+  const beforeDetail = beforeField.split("（", 1)[0]?.trim() ?? beforeField;
+  return beforeDetail || trimmed;
 }
 
 function installStyles(doc: Document): void {
@@ -46,9 +35,8 @@ function initializeCollaborationLabels(): void {
     for (const chip of Array.from(list.children)) {
       if (!(chip instanceof HTMLElement)) continue;
       const current = chip.textContent ?? "";
-      const formatted = formatCollaborationLabel(current);
-      if (formatted !== current) chip.dataset.humanLabel = formatted;
-      else delete chip.dataset.humanLabel;
+      chip.dataset.humanLabel = formatCollaborationLabel(current);
+      chip.classList.remove("is-editing");
     }
   };
 
