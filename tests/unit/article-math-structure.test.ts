@@ -16,10 +16,10 @@ describe("shared math article structure", () => {
 
     normalizeMathArticleBody(body);
 
-    expect(body.querySelector(".defi > .thmtitle")?.textContent).toContain(
+    expect(body.querySelector(".defi .thmtitle")?.textContent).toContain(
       "定義 1",
     );
-    expect(body.querySelector(".prop > .thmtitle")?.textContent).toContain(
+    expect(body.querySelector(".prop .thmtitle")?.textContent).toContain(
       "命題 2",
     );
     expect(body.querySelectorAll(".defi")).toHaveLength(1);
