@@ -100,7 +100,7 @@ const currentPath = Astro.url.pathname;
                     {item.label}
                   </a>
                 </li>
-              ))
+              ))}
             }
             <li class="nav-guide">
               <a
@@ -147,6 +147,9 @@ const currentPath = Astro.url.pathname;
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
     </footer>
+    <script>
+      import "../scripts/article-math-structure";
+    </script>
   </body>
 </html>
 
