@@ -35,7 +35,10 @@ export function resolveRelativeCursorPosition(
   if (!encoded) return null;
   try {
     const relative = Y.decodeRelativePosition(base64ToBytes(encoded));
-    const absolute = Y.createAbsolutePositionFromRelativePosition(relative, doc);
+    const absolute = Y.createAbsolutePositionFromRelativePosition(
+      relative,
+      doc,
+    );
     if (!absolute || absolute.type !== expectedText) return null;
     return Math.max(0, Math.min(absolute.index, expectedText.length));
   } catch {
