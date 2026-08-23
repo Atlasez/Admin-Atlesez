@@ -17,7 +17,7 @@ function normalizeDirectiveTitle(wrapper: HTMLElement) {
   let paragraph = wrapper.querySelector<HTMLParagraphElement>(":scope > p");
   if (!paragraph) {
     paragraph = wrapper.ownerDocument.createElement("p");
-    directTitle.insertAdjacentElement("afterend", paragraph);
+    wrapper.insertBefore(paragraph, wrapper.firstChild);
   }
   paragraph.insertBefore(directTitle, paragraph.firstChild);
   if (
@@ -54,7 +54,7 @@ function isMathBlock(node: Element) {
   );
 }
 
-function enhancePublishedMathematics(target: HTMLElement) {
+export function enhancePublishedMathematics(target: HTMLElement) {
   if (target.dataset.previewSubject !== "mathematics") return;
 
   for (const wrapper of target.querySelectorAll<HTMLElement>(
@@ -140,40 +140,4 @@ function enhancePublishedMathematics(target: HTMLElement) {
       next = following;
     }
   }
-}
-
-function initializePublishedMathPreview() {
-  const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
-  const preview = root?.querySelector<HTMLElement>("[data-preview]");
-  if (!root || !preview || root.dataset.publishedMathPreviewReady === "true") {
-    return;
-  }
-  root.dataset.publishedMathPreviewReady = "true";
-
-  let scheduled = false;
-  const apply = () => {
-    scheduled = false;
-    enhancePublishedMathematics(preview);
-    const reference = root.querySelector<HTMLElement>("[data-reference-preview]");
-    if (reference) enhancePublishedMathematics(reference);
-  };
-  const schedule = () => {
-    if (scheduled) return;
-    scheduled = true;
-    queueMicrotask(apply);
-  };
-
-  const observer = new MutationObserver(schedule);
-  observer.observe(preview, { childList: true, subtree: true });
-  schedule();
-  document.addEventListener(
-    "astro:before-swap",
-    () => observer.disconnect(),
-    { once: true },
-  );
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener("astro:page-load", initializePublishedMathPreview);
-  initializePublishedMathPreview();
 }
