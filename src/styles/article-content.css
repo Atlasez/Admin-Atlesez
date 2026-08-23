@@ -94,6 +94,31 @@
   color: #4b3a12;
 }
 
+.article-body .article-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) {
+  background: var(--background-secondary);
+  border: 1px solid var(--border-default);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: 0 0.55rem 0.55rem 0.55rem;
+  margin-block: 1.4rem 1rem;
+  padding: 1rem 1.1rem;
+}
+
+.article-body .article-directive-title {
+  background: var(--accent-subtle);
+  color: var(--text-primary);
+  font-weight: 800;
+  margin: -1rem -1.1rem 0.8rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.article-body .article-directive-body > :first-child {
+  margin-top: 0;
+}
+
+.article-body .article-directive-body > :last-child {
+  margin-bottom: 0;
+}
+
 .article-body .proof-details {
   margin-block: 1.2rem;
 }
@@ -145,6 +170,26 @@
 .article-body .math-definition > p,
 .article-body .math-theorem > p {
   overflow-wrap: anywhere;
+}
+
+.article-body figure {
+  margin: var(--space-3) auto;
+  max-width: 100%;
+}
+
+.article-body figure > img,
+.article-body > img {
+  display: block;
+  height: auto;
+  margin-inline: auto;
+  max-width: 100%;
+}
+
+.article-body blockquote {
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-secondary);
+  margin: var(--space-3) 0;
+  padding: var(--space-1) var(--space-3);
 }
 
 .article-body .supp-details-summary {
@@ -230,26 +275,4 @@
 
 .article-body .folding-content {
   padding: 0.8rem 1rem;
-}
-
-/* Admin editor defines generic .article-preview typography later in its Astro
-   stylesheet. These more specific selectors keep preview typography identical
-   to the published article-body rules above instead of letting that editor-only
-   styling win the cascade. */
-.article-preview.article-body h2 {
-  border-bottom: 1px solid var(--border-default);
-  padding-bottom: var(--space-1);
-  margin-top: var(--space-4);
-  margin-bottom: var(--space-2);
-}
-
-.article-preview.article-body h3 {
-  margin-top: var(--space-3);
-  margin-bottom: var(--space-1);
-}
-
-.article-preview.article-body p,
-.article-preview.article-body ul,
-.article-preview.article-body ol {
-  margin-block: 0.7em;
 }
