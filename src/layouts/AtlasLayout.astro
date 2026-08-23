@@ -7,7 +7,6 @@ import LangSwitch from "../components/LangSwitch.astro";
 import HeaderSearch from "../components/HeaderSearch.astro";
 import { withBase, atlasPath, ORG } from "../lib/site";
 import { t, type Locale } from "../lib/i18n";
-import "../styles/article-content.css";
 
 interface AlternateLink {
   hreflang: string;
@@ -100,7 +99,7 @@ const currentPath = Astro.url.pathname;
                     {item.label}
                   </a>
                 </li>
-              ))}
+              ))
             }
             <li class="nav-guide">
               <a
@@ -147,9 +146,6 @@ const currentPath = Astro.url.pathname;
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
     </footer>
-    <script>
-      import "../scripts/article-math-structure";
-    </script>
   </body>
 </html>
 
