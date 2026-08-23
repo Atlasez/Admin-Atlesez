@@ -5,7 +5,10 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export function formatCollaborationLabel(value: string): string {
-  const parts = value.split("・").map((part) => part.trim()).filter(Boolean);
+  const parts = value
+    .split("・")
+    .map((part) => part.trim())
+    .filter(Boolean);
   if (parts.length < 2) return value;
   const [name, field, ...position] = parts;
   const label = FIELD_LABELS[field];
@@ -14,32 +17,49 @@ export function formatCollaborationLabel(value: string): string {
   return `${name}（${label}${suffix}）`;
 }
 
+function installStyles(doc: Document): void {
+  if (doc.querySelector("style[data-collaboration-human-labels]")) return;
+  const style = doc.createElement("style");
+  style.dataset.collaborationHumanLabels = "true";
+  style.textContent = `
+    [data-collaboration-participants] > span[data-human-label] {
+      font-size: 0 !important;
+    }
+    [data-collaboration-participants] > span[data-human-label]::after {
+      content: attr(data-human-label);
+      font-size: .66rem;
+    }
+  `;
+  doc.head.append(style);
+}
+
 function initializeCollaborationLabels(): void {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
   const list = root?.querySelector<HTMLElement>("[data-collaboration-participants]");
-  if (!root || !list || list.dataset.clearCollaborationLabelsReady === "true") return;
+  if (!root || !list || list.dataset.clearCollaborationLabelsReady === "true") {
+    return;
+  }
   list.dataset.clearCollaborationLabelsReady = "true";
+  installStyles(document);
 
-  let updating = false;
   const update = () => {
-    if (updating) return;
-    updating = true;
-    try {
-      for (const chip of Array.from(list.children)) {
-        if (!(chip instanceof HTMLElement)) continue;
-        const current = chip.textContent ?? "";
-        const formatted = formatCollaborationLabel(current);
-        if (formatted !== current) chip.textContent = formatted;
-      }
-    } finally {
-      updating = false;
+    for (const chip of Array.from(list.children)) {
+      if (!(chip instanceof HTMLElement)) continue;
+      const current = chip.textContent ?? "";
+      const formatted = formatCollaborationLabel(current);
+      if (formatted !== current) chip.dataset.humanLabel = formatted;
+      else delete chip.dataset.humanLabel;
     }
   };
 
   const observer = new MutationObserver(update);
   observer.observe(list, { childList: true, subtree: true, characterData: true });
   update();
-  document.addEventListener("astro:before-swap", () => observer.disconnect(), { once: true });
+  document.addEventListener(
+    "astro:before-swap",
+    () => observer.disconnect(),
+    { once: true },
+  );
 }
 
 if (typeof document !== "undefined") {
