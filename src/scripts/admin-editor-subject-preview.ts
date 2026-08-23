@@ -103,7 +103,7 @@ function installSubjectPreviewStyles(doc: Document): void {
     .article-preview.article-body.reading {
       max-width: var(--reading-width, 50rem);
     }
-    .article-preview .editor-directive {
+    .article-preview .editor-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) {
       background: var(--background-secondary, #f6f8fa);
       border: 1px solid var(--border-default, #d5dde2);
       border-left: 4px solid var(--accent-primary, #176ea6);
@@ -111,48 +111,10 @@ function installSubjectPreviewStyles(doc: Document): void {
       margin-block: 1.4rem 1rem;
       padding: 1rem 1.1rem;
     }
-    .article-preview .editor-directive > .thmtitle {
-      display: inline-block;
-      font-weight: 800;
+    .article-preview .editor-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) > .thmtitle {
+      background: var(--accent-subtle, #e8f2f8);
+      color: var(--text-primary, #17212a);
       margin: -1.75rem 0 .8rem -1.1rem;
-      padding: .28rem .7rem;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive.defi {
-      background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary, #fff));
-      border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default, #d5dde2));
-      border-left: 4px solid #6cb4c2;
-      border-radius: 0 .55rem .55rem .55rem;
-      box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
-      margin-block: 2.8rem 1.15rem;
-      padding: 1.1rem 1.25rem;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive:is(.prop, .thm, .lemma, .cor, .example) {
-      background: color-mix(in srgb, #e0c375 12%, var(--background-primary, #fff));
-      border: 1px solid color-mix(in srgb, #e0c375 42%, var(--border-default, #d5dde2));
-      border-left: 4px solid #d0a53b;
-      border-radius: 0 .55rem .55rem .55rem;
-      box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
-      margin-block: 2.8rem 1.15rem;
-      padding: 1.1rem 1.25rem;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive.defi > .thmtitle {
-      background: #6cb4c2;
-      border-radius: .45rem .45rem 0 0;
-      color: #12333a;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive:is(.prop, .thm, .lemma, .cor, .example) > .thmtitle {
-      background: #e0c375;
-      border-radius: .45rem .45rem 0 0;
-      color: #4b3a12;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive-body > :first-child {
-      margin-top: 0;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive-body > :last-child {
-      margin-bottom: 0;
-    }
-    .article-preview[data-preview-subject="mathematics"] .editor-directive-body > p {
-      overflow-wrap: anywhere;
     }
   `;
   doc.head.append(style);
