@@ -32,6 +32,8 @@ type CollaborationAttachment = {
   field: string;
   cursorStart: number | null;
   cursorEnd: number | null;
+  cursorAnchor: string | null;
+  cursorHead: string | null;
 };
 
 const emptyAttachment = (): CollaborationAttachment => ({
@@ -41,7 +43,18 @@ const emptyAttachment = (): CollaborationAttachment => ({
   field: "",
   cursorStart: null,
   cursorEnd: null,
+  cursorAnchor: null,
+  cursorHead: null,
 });
+
+const normalizeRelativeCursor = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 4096 || !/^[A-Za-z0-9+/=]+$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+};
 
 const collaborationAttachment = (
   socket: WebSocket,
@@ -60,6 +73,8 @@ const collaborationAttachment = (
       typeof attachment.cursorStart === "number" ? attachment.cursorStart : null,
     cursorEnd:
       typeof attachment.cursorEnd === "number" ? attachment.cursorEnd : null,
+    cursorAnchor: normalizeRelativeCursor(attachment.cursorAnchor),
+    cursorHead: normalizeRelativeCursor(attachment.cursorHead),
   };
 };
 
@@ -81,15 +96,22 @@ const mergeParticipants = (items: CollaborationAttachment[]) => {
     }
 
     if (item.email && !current.email) current.email = item.email;
-    if (item.displayName && item.displayName !== "メンバー")
+    if (item.displayName && item.displayName !== "メンバー") {
       current.displayName = item.displayName;
+    }
     if (item.field) current.field = item.field;
 
-    const hasCursor = item.cursorStart !== null || item.cursorEnd !== null;
+    const hasCursor =
+      item.cursorStart !== null ||
+      item.cursorEnd !== null ||
+      item.cursorAnchor !== null ||
+      item.cursorHead !== null;
     if (hasCursor) {
       current.sessionId = item.sessionId;
       current.cursorStart = item.cursorStart;
       current.cursorEnd = item.cursorEnd;
+      current.cursorAnchor = item.cursorAnchor;
+      current.cursorHead = item.cursorHead;
       if (item.field) current.field = item.field;
     }
   }
@@ -111,9 +133,11 @@ export class EditorialCollaborationRoom {
     private readonly env: Env,
   ) {
     this.yDocument.on("update", (update: Uint8Array, origin: unknown) => {
-      for (const socket of this.state.getWebSockets())
-        if (socket !== origin && socket.readyState === WebSocket.OPEN)
+      for (const socket of this.state.getWebSockets()) {
+        if (socket !== origin && socket.readyState === WebSocket.OPEN) {
           socket.send(update);
+        }
+      }
       this.state.waitUntil(
         this.state.storage.put(
           "yjs-state",
@@ -128,8 +152,9 @@ export class EditorialCollaborationRoom {
     const saved = await this.state.storage.get<ArrayBuffer | Uint8Array>(
       "yjs-state",
     );
-    if (saved) Y.applyUpdate(this.yDocument, new Uint8Array(saved));
-    else {
+    if (saved) {
+      Y.applyUpdate(this.yDocument, new Uint8Array(saved));
+    } else {
       const document = await this.env.REPORTS.prepare(
         "SELECT title, summary, body FROM editorial_documents WHERE id = ?",
       )
@@ -154,14 +179,16 @@ export class EditorialCollaborationRoom {
         .filter((item) => item.sessionId),
     );
     const message = JSON.stringify({ type: "presence", participants });
-    for (const socket of this.state.getWebSockets())
+    for (const socket of this.state.getWebSockets()) {
       if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
     await this.initialize(request.headers.get("x-atlasez-document-id") ?? "");
-    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return json({ error: "WebSocket接続が必要です。" }, 426);
+    }
     const Pair = (
       globalThis as unknown as {
         WebSocketPair: new () => { 0: WebSocket; 1: WebSocket };
@@ -186,6 +213,8 @@ export class EditorialCollaborationRoom {
       field: "",
       cursorStart: null,
       cursorEnd: null,
+      cursorAnchor: null,
+      cursorHead: null,
     };
     server.serializeAttachment?.(attachment);
     this.state.acceptWebSocket(server);
@@ -215,6 +244,8 @@ export class EditorialCollaborationRoom {
         field?: unknown;
         cursorStart?: unknown;
         cursorEnd?: unknown;
+        cursorAnchor?: unknown;
+        cursorHead?: unknown;
       };
       if (payload.type !== "presence") return;
       const attachment = collaborationAttachment(socket);
@@ -222,6 +253,8 @@ export class EditorialCollaborationRoom {
         typeof payload.field === "string" ? payload.field.slice(0, 80) : "";
       attachment.cursorStart = normalizeCursor(payload.cursorStart);
       attachment.cursorEnd = normalizeCursor(payload.cursorEnd);
+      attachment.cursorAnchor = normalizeRelativeCursor(payload.cursorAnchor);
+      attachment.cursorHead = normalizeRelativeCursor(payload.cursorHead);
       (
         socket as WebSocket & { serializeAttachment?: (value: unknown) => void }
       ).serializeAttachment?.(attachment);
