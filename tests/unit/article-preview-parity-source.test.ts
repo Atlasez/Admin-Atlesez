@@ -5,13 +5,25 @@ const readSource = (path: string) =>
   readFile(new URL(`../../${path}`, import.meta.url), "utf8");
 
 describe("article preview parity source of truth", () => {
-  it("keeps article content CSS out of the published page and admin overrides", async () => {
+  it("keeps shared article content styling out of published-page overrides", async () => {
     const [publishedPage, adminLayout] = await Promise.all([
       readSource("src/pages/atlas/[locale]/[subject]/[category]/[slug].astro"),
       readSource("src/layouts/AdminLayout.astro"),
     ]);
 
-    expect(publishedPage).not.toContain(".article-body :global(");
+    // Page-specific responsive rules may target the rendered article body, but
+    // reusable directive/content styling must remain in article-content.css.
+    for (const selector of [
+      ".article-body :global(.defi)",
+      ".article-body :global(.thm)",
+      ".article-body :global(.prop)",
+      ".article-body :global(.cor)",
+      ".article-body :global(.lemma)",
+      ".article-body :global(.example)",
+      ".article-body :global(.article-directive)",
+    ]) {
+      expect(publishedPage).not.toContain(selector);
+    }
     expect(adminLayout).toContain('import "../styles/article-content.css";');
     expect(adminLayout).not.toContain("admin-published-preview.css");
   });
