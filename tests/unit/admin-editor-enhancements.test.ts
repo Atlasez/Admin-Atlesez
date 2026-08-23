@@ -151,15 +151,9 @@ describe("admin editor enhancements", () => {
     expect(macroSignature(macros)).toBe(macroSignature({ ...macros }));
   });
 
-  it("uses explanatory collaboration labels instead of ambiguous name-field text", () => {
-    expect(formatCollaborationLabel("上杉和輝・本文")).toBe(
-      "上杉和輝（本文を編集中）",
-    );
-    expect(formatCollaborationLabel("小林和真・本文・12行8列")).toBe(
-      "小林和真（本文を編集中（12行8列））",
-    );
-    expect(formatCollaborationLabel("小林和真・タイトル")).toBe(
-      "小林和真（タイトルを編集中）",
-    );
+  it("shows collaborator names only in the participant UI", () => {
+    expect(formatCollaborationLabel("上杉和輝・本文")).toBe("上杉和輝");
+    expect(formatCollaborationLabel("小林和真・本文・12行8列")).toBe("小林和真");
+    expect(formatCollaborationLabel("小林和真・タイトル")).toBe("小林和真");
   });
 });
