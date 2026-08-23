@@ -152,9 +152,11 @@ function initializePreviewAssetImages(): void {
       status.remove();
     } catch (error) {
       image.removeAttribute("src");
-      image.classList.remove("is-loading", "is-unavailable");
-      status.classList.add("is-error");
-      status.textContent =
+      image.classList.remove("is-loading");
+      image.classList.add("is-unavailable");
+      status.classList.add("is-error", "editorial-image-error");
+      status.textContent = "画像を表示できません。再読み込みしてください。";
+      status.title =
         error instanceof Error
           ? `${error.message} asset://${assetId}`
           : `画像を表示できませんでした。asset://${assetId}`;
