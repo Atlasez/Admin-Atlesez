@@ -21,12 +21,11 @@ const { title, description } = Astro.props;
     <AdminNav />
     <div class="admin-layout-main"><slot /></div>
     <script>
-      import "../scripts/admin-editor-enhancements";
+      import "../scripts/admin-editor-navigation-guard";
       import "../scripts/admin-editor-comment-images";
       import "../scripts/admin-editor-preview-images";
       import "../scripts/admin-editor-realtime-cursors";
       import "../scripts/admin-editor-subject-preview";
-      import "../scripts/admin-editor-published-math-preview";
       import "../scripts/admin-editor-math-macros";
       import "../scripts/admin-editor-collaboration-labels";
     </script>
