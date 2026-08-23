@@ -5,6 +5,7 @@ import {
   parseDirectiveMarker,
   type DirectiveMarker,
 } from "../lib/editor-directives";
+import { normalizeMathArticleBody } from "./article-math-structure";
 
 const SEMANTIC_DIRECTIVE_CLASSES: Record<string, string> = {
   defi: "defi",
@@ -101,11 +102,7 @@ function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
   return true;
 }
 
-/**
- * Compatibility fallback for HTML produced without the shared remark plugin.
- * Runtime preview rendering uses remarkArticleDirectives; this is retained for
- * existing imported/reference HTML and focused unit tests only.
- */
+/** Compatibility fallback for imported HTML produced without the shared remark plugin. */
 export function enhancePreviewDirectives(target: HTMLElement): void {
   const HTMLElementCtor = target.ownerDocument.defaultView?.HTMLElement;
   if (!HTMLElementCtor) return;
@@ -170,6 +167,7 @@ export function applySubjectPreviewProfile(
   target.dataset.publishedPreview = "true";
   const body = ensurePublishedArticleBody(target);
   enhancePreviewDirectives(body);
+  if (subject === "mathematics") normalizeMathArticleBody(body);
 }
 
 function installPreviewShellStyles(doc: Document): void {
@@ -256,6 +254,7 @@ function initializeSubjectPreview(): void {
       const articleBody = ensurePublishedArticleBody(target);
       articleBody.innerHTML = rendered.code;
       prepareEditorialImages(articleBody);
+      if (subject.value === "mathematics") normalizeMathArticleBody(articleBody);
       renderState.set(target, { signature, running: false });
     } catch (error) {
       const articleBody = ensurePublishedArticleBody(target);
@@ -269,7 +268,7 @@ function initializeSubjectPreview(): void {
     void renderTarget(preview, source.value);
     const reference = root.querySelector<HTMLElement>("[data-reference-preview]");
     const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]");
-    if (reference && referenceSource && !reference.hidden) {
+    if (reference && referenceSource) {
       void renderTarget(reference, referenceSource.textContent ?? "");
     }
   };
