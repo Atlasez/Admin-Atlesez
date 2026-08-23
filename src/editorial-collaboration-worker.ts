@@ -71,13 +71,16 @@ const normalizeCursor = (value: unknown) => {
 const mergeParticipants = (items: CollaborationAttachment[]) => {
   const merged = new Map<string, CollaborationAttachment>();
   for (const item of items) {
-    const key = item.email.trim().toLowerCase() || item.sessionId;
+    const normalizedEmail = item.email.trim().toLowerCase();
+    const normalizedName = item.displayName.trim().toLowerCase();
+    const key = normalizedEmail || normalizedName || item.sessionId;
     const current = merged.get(key);
     if (!current) {
       merged.set(key, { ...item });
       continue;
     }
 
+    if (item.email && !current.email) current.email = item.email;
     if (item.displayName && item.displayName !== "メンバー")
       current.displayName = item.displayName;
     if (item.field) current.field = item.field;
