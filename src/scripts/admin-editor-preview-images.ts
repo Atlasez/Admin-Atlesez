@@ -170,7 +170,11 @@ function initializePreviewAssetImages(): void {
     for (const image of target.querySelectorAll<HTMLImageElement>(
       "img[data-editorial-asset]",
     )) {
-      if (!image.src || image.classList.contains("is-unavailable")) {
+      const figure = image.closest<HTMLElement>(".editorial-image") ?? image.parentElement;
+      const hasStableError = Boolean(
+        figure?.querySelector(".editorial-image-error"),
+      );
+      if (!image.src && !hasStableError) {
         void hydrateImage(image);
       }
     }
