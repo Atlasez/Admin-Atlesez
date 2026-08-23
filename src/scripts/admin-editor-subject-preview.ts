@@ -13,6 +13,8 @@ const SEMANTIC_DIRECTIVE_CLASSES: Record<string, string> = {
   example: "example",
 };
 
+type DirectiveMarker = NonNullable<ReturnType<typeof parseDirectiveMarker>>;
+
 function isClosingDirective(value: string, minimumLength: number): boolean {
   const match = /^\s*(:{3,4})\s*$/.exec(value);
   return Boolean(match && match[1].length >= minimumLength);
@@ -20,6 +22,26 @@ function isClosingDirective(value: string, minimumLength: number): boolean {
 
 function semanticDirectiveClass(name: string): string | null {
   return SEMANTIC_DIRECTIVE_CLASSES[name] ?? null;
+}
+
+function createDirectiveSection(
+  doc: Document,
+  marker: DirectiveMarker,
+): { section: HTMLElement; body: HTMLElement } {
+  const section = doc.createElement("section");
+  section.className = `editor-directive editor-directive-${marker.name.replace(/[^a-z0-9_-]/g, "")}`;
+  section.dataset.directive = marker.name;
+  const semanticClass = semanticDirectiveClass(marker.name);
+  if (semanticClass) section.classList.add(semanticClass);
+
+  const heading = doc.createElement("div");
+  heading.className = "editor-directive-heading thmtitle";
+  heading.textContent = marker.title;
+
+  const body = doc.createElement("div");
+  body.className = "editor-directive-body";
+  section.append(heading, body);
+  return { section, body };
 }
 
 function normalizeDirectiveSection(section: HTMLElement): void {
@@ -33,6 +55,44 @@ function normalizeDirectiveSection(section: HTMLElement): void {
   heading?.classList.add("thmtitle");
 }
 
+function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
+  if (node.tagName !== "P") return false;
+  const plainLines = (node.textContent ?? "").replace(/\r\n/g, "\n").split("\n");
+  if (plainLines.length < 3) return false;
+
+  const marker = parseDirectiveMarker(plainLines[0].trim());
+  if (!marker) return false;
+  const closeIndex = plainLines.findIndex(
+    (line, index) =>
+      index > 0 && isClosingDirective(line, marker.fence.length),
+  );
+  if (closeIndex < 0) return false;
+
+  const { section, body } = createDirectiveSection(node.ownerDocument, marker);
+  const htmlLines = node.innerHTML.replace(/\r\n/g, "\n").split("\n");
+  const lineAlignedHtml = htmlLines.length === plainLines.length;
+  const bodyHtml = lineAlignedHtml
+    ? htmlLines.slice(1, closeIndex).join("\n").trim()
+    : "";
+  const bodyText = plainLines.slice(1, closeIndex).join("\n").trim();
+  if (bodyHtml) body.innerHTML = bodyHtml;
+  else if (bodyText) body.textContent = bodyText;
+
+  const replacements: Node[] = [section];
+  const trailingHtml = lineAlignedHtml
+    ? htmlLines.slice(closeIndex + 1).join("\n").trim()
+    : "";
+  const trailingText = plainLines.slice(closeIndex + 1).join("\n").trim();
+  if (trailingHtml || trailingText) {
+    const trailing = node.ownerDocument.createElement("p");
+    if (trailingHtml) trailing.innerHTML = trailingHtml;
+    else trailing.textContent = trailingText;
+    replacements.push(trailing);
+  }
+  node.replaceWith(...replacements);
+  return true;
+}
+
 export function enhancePreviewDirectives(target: HTMLElement): void {
   target
     .querySelectorAll<HTMLElement>(".editor-directive[data-directive]")
@@ -41,30 +101,26 @@ export function enhancePreviewDirectives(target: HTMLElement): void {
   const elementType = target.ownerDocument.defaultView?.HTMLElement;
   if (!elementType) return;
 
+  for (const paragraph of Array.from(target.children)) {
+    if (!(paragraph instanceof elementType)) continue;
+    convertPackedDirectiveParagraph(paragraph as HTMLElement);
+  }
+
   const originalChildren = Array.from(target.children);
   const stack: Array<{ body: HTMLElement; fenceLength: number }> = [];
 
   for (const child of originalChildren) {
     if (!(child instanceof elementType)) continue;
     const node = child as HTMLElement;
+    if (node.matches(".editor-directive[data-directive]")) continue;
     const text = node.textContent?.trim() ?? "";
     const marker = node.tagName === "P" ? parseDirectiveMarker(text) : null;
 
     if (marker) {
-      const section = target.ownerDocument.createElement("section");
-      section.className = `editor-directive editor-directive-${marker.name.replace(/[^a-z0-9_-]/g, "")}`;
-      section.dataset.directive = marker.name;
-      const semanticClass = semanticDirectiveClass(marker.name);
-      if (semanticClass) section.classList.add(semanticClass);
-
-      const heading = target.ownerDocument.createElement("div");
-      heading.className = "editor-directive-heading thmtitle";
-      heading.textContent = marker.title;
-
-      const body = target.ownerDocument.createElement("div");
-      body.className = "editor-directive-body";
-      section.append(heading, body);
-
+      const { section, body } = createDirectiveSection(
+        target.ownerDocument,
+        marker,
+      );
       if (stack.length > 0) stack.at(-1)?.body.append(section);
       else node.replaceWith(section);
       if (node.isConnected) node.remove();
