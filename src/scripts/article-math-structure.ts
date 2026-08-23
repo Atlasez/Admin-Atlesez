@@ -24,7 +24,8 @@ function addTheoremLabel(wrapper: HTMLElement): void {
   const paragraph = wrapper.querySelector<HTMLElement>(":scope > p");
   if (!paragraph || paragraph.querySelector(":scope > .thmtitle")) return;
   const firstText = [...paragraph.childNodes].find(
-    (child) => child.nodeType === Node.TEXT_NODE && (child.textContent ?? "").trim(),
+    (child) =>
+      child.nodeType === Node.TEXT_NODE && (child.textContent ?? "").trim(),
   );
   if (!firstText) return;
   const labelMatch = (firstText.textContent ?? "").match(
@@ -70,7 +71,12 @@ export function normalizeMathArticleBody(mathBody: HTMLElement): void {
     let next = wrapper.nextElementSibling;
     let sawDisplayMath = false;
     while (next) {
-      if (isHeading(next) || isMathBlock(next) || isTheoremLead(next) || isProofLead(next))
+      if (
+        isHeading(next) ||
+        isMathBlock(next) ||
+        isTheoremLead(next) ||
+        isProofLead(next)
+      )
         break;
       if (next.matches(".katex-display")) {
         const following = next.nextElementSibling;
@@ -100,9 +106,16 @@ export function normalizeMathArticleBody(mathBody: HTMLElement): void {
     const inner = mathBody.ownerDocument.createElement("div");
     inner.className = "proof-details-inner";
     const first = node.firstChild;
-    if (first?.nodeType === Node.ELEMENT_NODE && (first as HTMLElement).tagName === "STRONG")
+    if (
+      first?.nodeType === Node.ELEMENT_NODE &&
+      (first as HTMLElement).tagName === "STRONG"
+    )
       first.remove();
-    else node.textContent = (node.textContent ?? "").replace(/^証明[。\.\s]*/u, "");
+    else
+      node.textContent = (node.textContent ?? "").replace(
+        /^証明[。\.\s]*/u,
+        "",
+      );
     node.parentNode?.insertBefore(details, node);
     details.append(summary, inner);
     inner.append(node);
@@ -131,6 +144,9 @@ function initializePublishedMathStructure(): void {
 }
 
 if (typeof document !== "undefined") {
-  document.addEventListener("astro:page-load", initializePublishedMathStructure);
+  document.addEventListener(
+    "astro:page-load",
+    initializePublishedMathStructure,
+  );
   initializePublishedMathStructure();
 }

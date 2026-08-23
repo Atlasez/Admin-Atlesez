@@ -110,7 +110,10 @@ export function enhancePublishedMathematics(target: HTMLElement) {
   }
 
   for (const node of topLevel()) {
-    if (node.tagName !== "P" || !proofLead.test((node.textContent ?? "").trim())) {
+    if (
+      node.tagName !== "P" ||
+      !proofLead.test((node.textContent ?? "").trim())
+    ) {
       continue;
     }
     const details = target.ownerDocument.createElement("details");

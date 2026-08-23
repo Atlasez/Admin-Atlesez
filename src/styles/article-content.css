@@ -94,7 +94,10 @@
   color: #4b3a12;
 }
 
-.article-body .article-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) {
+.article-body
+  .article-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(
+    .example
+  ) {
   background: var(--background-secondary);
   border: 1px solid var(--border-default);
   border-left: 4px solid var(--accent-primary);

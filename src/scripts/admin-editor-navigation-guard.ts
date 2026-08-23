@@ -4,8 +4,15 @@ const GUARD_TOP = "__atlasezEditorGuardTop";
 function initializeNavigationGuard(): void {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
   const form = root?.querySelector<HTMLFormElement>("[data-document-form]");
-  const saveMessage = root?.querySelector<HTMLOutputElement>("[data-save-message]");
-  if (!root || !form || !saveMessage || root.dataset.navigationGuardReady === "true") {
+  const saveMessage = root?.querySelector<HTMLOutputElement>(
+    "[data-save-message]",
+  );
+  if (
+    !root ||
+    !form ||
+    !saveMessage ||
+    root.dataset.navigationGuardReady === "true"
+  ) {
     return;
   }
   root.dataset.navigationGuardReady = "true";
@@ -44,7 +51,9 @@ function initializeNavigationGuard(): void {
     const message = saveMessage.value;
     if (message === lastSaveMessage) return;
     lastSaveMessage = message;
-    if (/自動保存しました|保存しました|フィードバックを依頼しました/.test(message)) {
+    if (
+      /自動保存しました|保存しました|フィードバックを依頼しました/.test(message)
+    ) {
       dirty = false;
     }
   };
@@ -80,7 +89,8 @@ function initializeNavigationGuard(): void {
   `;
   document.head.append(style);
 
-  const state = history.state && typeof history.state === "object" ? history.state : {};
+  const state =
+    history.state && typeof history.state === "object" ? history.state : {};
   if (!state[GUARD_TOP]) {
     history.replaceState({ ...state, [GUARD_BASE]: true }, "", location.href);
     history.pushState({ ...state, [GUARD_TOP]: true }, "", location.href);
@@ -132,7 +142,11 @@ function initializeNavigationGuard(): void {
       leave();
       return;
     }
-    history.pushState({ ...(history.state ?? {}), [GUARD_TOP]: true }, "", location.href);
+    history.pushState(
+      { ...(history.state ?? {}), [GUARD_TOP]: true },
+      "",
+      location.href,
+    );
     if (!dialog.open) dialog.showModal();
   };
   window.addEventListener("popstate", onPopState);

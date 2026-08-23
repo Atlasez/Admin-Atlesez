@@ -16,8 +16,12 @@ describe("shared math article structure", () => {
 
     normalizeMathArticleBody(body);
 
-    expect(body.querySelector(".defi > .thmtitle")?.textContent).toContain("定義 1");
-    expect(body.querySelector(".prop > .thmtitle")?.textContent).toContain("命題 2");
+    expect(body.querySelector(".defi > .thmtitle")?.textContent).toContain(
+      "定義 1",
+    );
+    expect(body.querySelector(".prop > .thmtitle")?.textContent).toContain(
+      "命題 2",
+    );
     expect(body.querySelectorAll(".defi")).toHaveLength(1);
     expect(body.querySelectorAll(".prop")).toHaveLength(1);
   });
@@ -29,7 +33,9 @@ describe("shared math article structure", () => {
     normalizeMathArticleBody(body);
 
     expect(body.querySelectorAll("details.proof-details")).toHaveLength(1);
-    expect(body.querySelector(".proof-details-inner")?.textContent).toContain("ここから証明する");
+    expect(body.querySelector(".proof-details-inner")?.textContent).toContain(
+      "ここから証明する",
+    );
   });
 
   it("does not rewrap authored directive boxes", () => {

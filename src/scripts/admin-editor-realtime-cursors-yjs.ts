@@ -67,7 +67,8 @@ function initialize(): void {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
   const form = root?.querySelector<HTMLFormElement>("[data-document-form]");
   const textarea = root?.querySelector<HTMLTextAreaElement>("[data-body]");
-  if (!root || !form || !textarea || root.dataset.yjsRemoteCursors === "true") return;
+  if (!root || !form || !textarea || root.dataset.yjsRemoteCursors === "true")
+    return;
   root.dataset.yjsRemoteCursors = "true";
 
   const localId = crypto.randomUUID();
@@ -87,7 +88,8 @@ function initialize(): void {
   let surface: Document | null = null;
 
   const currentDocumentId = () =>
-    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ?? "";
+    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ??
+    "";
 
   const ensureSurface = () => {
     const doc = textarea.ownerDocument;
@@ -153,7 +155,8 @@ function initialize(): void {
       "overflowWrap",
       "wordBreak",
     ] as const;
-    for (const property of properties) mirror.style[property] = computed[property];
+    for (const property of properties)
+      mirror.style[property] = computed[property];
     mirror.style.width = `${textarea.offsetWidth}px`;
     mirror.style.minHeight = `${textarea.offsetHeight}px`;
     mirror.style.height = "auto";
@@ -174,7 +177,8 @@ function initialize(): void {
   const mapRect = (rect: DOMRect, mirrorRect: DOMRect): Rect => {
     const textareaRect = textarea.getBoundingClientRect();
     return {
-      left: textareaRect.left + rect.left - mirrorRect.left - textarea.scrollLeft,
+      left:
+        textareaRect.left + rect.left - mirrorRect.left - textarea.scrollLeft,
       top: textareaRect.top + rect.top - mirrorRect.top - textarea.scrollTop,
       width: rect.width,
       height: rect.height,
@@ -204,7 +208,10 @@ function initialize(): void {
     if (!mirror || start === end) return [];
     syncMirror();
     const from = Math.max(0, Math.min(start, end, textarea.value.length));
-    const to = Math.max(from, Math.min(Math.max(start, end), textarea.value.length));
+    const to = Math.max(
+      from,
+      Math.min(Math.max(start, end), textarea.value.length),
+    );
     mirror.replaceChildren(doc.createTextNode(textarea.value.slice(0, from)));
     const selected = doc.createElement("span");
     selected.textContent = textarea.value.slice(from, to);
@@ -249,7 +256,10 @@ function initialize(): void {
       ) {
         continue;
       }
-      const head = Math.max(0, Math.min(resolve(state, true), textarea.value.length));
+      const head = Math.max(
+        0,
+        Math.min(resolve(state, true), textarea.value.length),
+      );
       const anchor = Math.max(
         0,
         Math.min(resolve(state, false), textarea.value.length),
@@ -282,7 +292,10 @@ function initialize(): void {
       line.style.top = `${Math.max(position.top, bounds.top)}px`;
       line.style.height = `${Math.max(
         1,
-        Math.min(position.height, bounds.bottom - Math.max(position.top, bounds.top)),
+        Math.min(
+          position.height,
+          bounds.bottom - Math.max(position.top, bounds.top),
+        ),
       )}px`;
       const label = doc.createElement("span");
       label.className = "yjs-remote-caret-label";
@@ -299,7 +312,8 @@ function initialize(): void {
     cursorMap = ydoc.getMap<string>("editor-cursors");
     cursorMap.observe(render);
     ydoc.on("update", (update, origin) => {
-      if (origin === LOCAL && socket?.readyState === WebSocket.OPEN) socket.send(update);
+      if (origin === LOCAL && socket?.readyState === WebSocket.OPEN)
+        socket.send(update);
     });
   };
 
@@ -322,12 +336,16 @@ function initialize(): void {
       active,
       anchor,
       head,
-      relativeAnchor: inSync ? encodeRelativeCursorPosition(ybody, anchor) : null,
+      relativeAnchor: inSync
+        ? encodeRelativeCursorPosition(ybody, anchor)
+        : null,
       relativeHead: inSync ? encodeRelativeCursorPosition(ybody, head) : null,
       updatedAt: Date.now(),
     };
     ydoc.transact(() => cursorMap.set(localId, JSON.stringify(state)), LOCAL);
-    socket.send(JSON.stringify({ type: "presence", field: active ? "body" : "" }));
+    socket.send(
+      JSON.stringify({ type: "presence", field: active ? "body" : "" }),
+    );
   };
 
   const updateIdentity = (members: Member[]) => {
@@ -385,7 +403,10 @@ function initialize(): void {
           serverSessionId = message.sessionId ?? "";
           ownEmail = message.email ?? ownEmail;
           if (ownEmail !== before) publish(true);
-        } else if (message.type === "presence" && Array.isArray(message.participants)) {
+        } else if (
+          message.type === "presence" &&
+          Array.isArray(message.participants)
+        ) {
           updateIdentity(message.participants);
         }
       } catch {

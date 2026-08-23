@@ -66,7 +66,8 @@ export function isArticleDirectiveClose(value, minimumLength = 3) {
 }
 
 function paragraphText(node) {
-  if (!node || node.type !== "paragraph" || !Array.isArray(node.children)) return null;
+  if (!node || node.type !== "paragraph" || !Array.isArray(node.children))
+    return null;
   if (!node.children.every((child) => child.type === "text")) return null;
   return node.children.map((child) => child.value).join("");
 }
@@ -120,7 +121,11 @@ export function remarkArticleDirectives() {
       }
 
       const active = stack.at(-1);
-      if (active && text !== null && isArticleDirectiveClose(text, active.fenceLength)) {
+      if (
+        active &&
+        text !== null &&
+        isArticleDirectiveClose(text, active.fenceLength)
+      ) {
         output.push({ type: "html", value: active.close });
         stack.pop();
         continue;
@@ -129,7 +134,8 @@ export function remarkArticleDirectives() {
       output.push(node);
     }
 
-    while (stack.length) output.push({ type: "html", value: stack.pop().close });
+    while (stack.length)
+      output.push({ type: "html", value: stack.pop().close });
     tree.children = output;
   };
 }

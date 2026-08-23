@@ -11,7 +11,9 @@ const mountPreview = (html: string) => {
 };
 
 const renderArticleMarkdown = async (markdown: string) => {
-  const processor = await createMarkdownProcessor(ARTICLE_MARKDOWN_PROCESSOR_OPTIONS);
+  const processor = await createMarkdownProcessor(
+    ARTICLE_MARKDOWN_PROCESSOR_OPTIONS,
+  );
   return processor.render(markdown);
 };
 
@@ -28,7 +30,9 @@ describe("admin editor subject preview", () => {
 
     expect(preview.classList.contains("article-main")).toBe(true);
     expect(preview.classList.contains("article-preview")).toBe(false);
-    expect(preview.querySelector(":scope > .article-body.reading")).not.toBeNull();
+    expect(
+      preview.querySelector(":scope > .article-body.reading"),
+    ).not.toBeNull();
   });
 
   it("preserves authored theorem numbering and renders math with KaTeX", async () => {
@@ -44,7 +48,9 @@ describe("admin editor subject preview", () => {
     const preview = mountPreview(rendered.code)!;
 
     applySubjectPreviewProfile(preview, "mathematics");
-    const body = preview.querySelector<HTMLElement>(":scope > .article-body.reading");
+    const body = preview.querySelector<HTMLElement>(
+      ":scope > .article-body.reading",
+    );
 
     expect(body?.textContent).toContain("定義 1 (群).");
     expect(body?.textContent).toContain("命題 2 (可除律による群の特徴づけ).");
@@ -53,19 +59,23 @@ describe("admin editor subject preview", () => {
 
   it("renders ::: defi with the same directive transform used by published Markdown", async () => {
     const rendered = await renderArticleMarkdown(
-      ["::: defi 定義 1 (群)", "", "集合 $G$ を考える。", "", ":::"].join(
-        "\n",
-      ),
+      ["::: defi 定義 1 (群)", "", "集合 $G$ を考える。", "", ":::"].join("\n"),
     );
     const preview = mountPreview(rendered.code)!;
 
     applySubjectPreviewProfile(preview, "mathematics");
-    const body = preview.querySelector<HTMLElement>(":scope > .article-body.reading");
-    const directive = body?.querySelector<HTMLElement>('[data-directive="defi"]');
+    const body = preview.querySelector<HTMLElement>(
+      ":scope > .article-body.reading",
+    );
+    const directive = body?.querySelector<HTMLElement>(
+      '[data-directive="defi"]',
+    );
 
     expect(directive).not.toBeNull();
     expect(directive?.classList.contains("defi")).toBe(true);
-    expect(directive?.querySelector(".thmtitle")?.textContent).toBe("定義 1 (群)");
+    expect(directive?.querySelector(".thmtitle")?.textContent).toBe(
+      "定義 1 (群)",
+    );
     expect(directive?.querySelector("p")?.textContent).toContain("集合");
     expect(body?.textContent).not.toContain("::: defi");
   });
@@ -95,13 +105,20 @@ describe("admin editor subject preview", () => {
     const preview = mountPreview(rendered.code)!;
 
     applySubjectPreviewProfile(preview, "mathematics");
-    const body = preview.querySelector<HTMLElement>(":scope > .article-body.reading");
+    const body = preview.querySelector<HTMLElement>(
+      ":scope > .article-body.reading",
+    );
 
-    expect(body?.querySelector('[data-directive="theorem"].thm')).not.toBeNull();
-    expect(body?.querySelector('details.proof-details[data-directive="proof"]')).not.toBeNull();
     expect(
-      body?.querySelector('[data-directive="custom-box"] .article-directive-title')
-        ?.textContent,
+      body?.querySelector('[data-directive="theorem"].thm'),
+    ).not.toBeNull();
+    expect(
+      body?.querySelector('details.proof-details[data-directive="proof"]'),
+    ).not.toBeNull();
+    expect(
+      body?.querySelector(
+        '[data-directive="custom-box"] .article-directive-title',
+      )?.textContent,
     ).toBe("注意事項");
   });
 });

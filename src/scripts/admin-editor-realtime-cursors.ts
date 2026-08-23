@@ -46,7 +46,9 @@ function parseCursorState(value: unknown): CursorState | null {
       anchor: typeof parsed.anchor === "number" ? parsed.anchor : 0,
       head: typeof parsed.head === "number" ? parsed.head : 0,
       relativeAnchor:
-        typeof parsed.relativeAnchor === "string" ? parsed.relativeAnchor : null,
+        typeof parsed.relativeAnchor === "string"
+          ? parsed.relativeAnchor
+          : null,
       relativeHead:
         typeof parsed.relativeHead === "string" ? parsed.relativeHead : null,
       updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
@@ -73,7 +75,12 @@ function initializeRealtimeCursors() {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
   const form = root?.querySelector<HTMLFormElement>("[data-document-form]");
   const textarea = root?.querySelector<HTMLTextAreaElement>("[data-body]");
-  if (!root || !form || !textarea || root.dataset.realtimeCursorsV3 === "true") {
+  if (
+    !root ||
+    !form ||
+    !textarea ||
+    root.dataset.realtimeCursorsV3 === "true"
+  ) {
     return;
   }
   root.dataset.realtimeCursorsV3 = "true";
@@ -95,7 +102,8 @@ function initializeRealtimeCursors() {
   let lastSignature = "";
 
   const currentId = () =>
-    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ?? "";
+    (form.elements.namedItem("documentId") as HTMLInputElement | null)?.value ??
+    "";
 
   const ensureSurface = () => {
     const doc = textarea.ownerDocument;
@@ -181,7 +189,8 @@ function initializeRealtimeCursors() {
   const mapRect = (rect: DOMRect, mirrorRect: DOMRect): Rect => {
     const textareaRect = textarea.getBoundingClientRect();
     return {
-      left: textareaRect.left + rect.left - mirrorRect.left - textarea.scrollLeft,
+      left:
+        textareaRect.left + rect.left - mirrorRect.left - textarea.scrollLeft,
       top: textareaRect.top + rect.top - mirrorRect.top - textarea.scrollTop,
       width: rect.width,
       height: rect.height,
@@ -209,7 +218,10 @@ function initializeRealtimeCursors() {
     if (!mirror) return [] as Rect[];
     syncMirror();
     const from = Math.max(0, Math.min(start, end, textarea.value.length));
-    const to = Math.max(from, Math.min(Math.max(start, end), textarea.value.length));
+    const to = Math.max(
+      from,
+      Math.min(Math.max(start, end), textarea.value.length),
+    );
     if (from === to) return [] as Rect[];
     mirror.replaceChildren(doc.createTextNode(textarea.value.slice(0, from)));
     const selected = doc.createElement("span");
@@ -287,7 +299,10 @@ function initializeRealtimeCursors() {
       line.style.top = `${Math.max(caret.top, viewport.top)}px`;
       line.style.height = `${Math.max(
         1,
-        Math.min(caret.height, viewport.bottom - Math.max(caret.top, viewport.top)),
+        Math.min(
+          caret.height,
+          viewport.bottom - Math.max(caret.top, viewport.top),
+        ),
       )}px`;
       const name = doc.createElement("span");
       name.className = "atlasez-remote-caret-name";
@@ -338,7 +353,9 @@ function initializeRealtimeCursors() {
 
     // Keep the legacy field-only presence message for the participant list.
     // Cursor coordinates themselves travel in the Yjs binary update above.
-    socket.send(JSON.stringify({ type: "presence", field: active ? "body" : "" }));
+    socket.send(
+      JSON.stringify({ type: "presence", field: active ? "body" : "" }),
+    );
   };
 
   const removeCursor = () => {
@@ -353,7 +370,10 @@ function initializeRealtimeCursors() {
     cursors = ydoc.getMap<string>("editor-cursors");
     cursors.observe(render);
     ydoc.on("update", (update, origin) => {
-      if (origin === LOCAL_CURSOR_ORIGIN && socket?.readyState === WebSocket.OPEN) {
+      if (
+        origin === LOCAL_CURSOR_ORIGIN &&
+        socket?.readyState === WebSocket.OPEN
+      ) {
         socket.send(update);
       }
     });
@@ -402,7 +422,10 @@ function initializeRealtimeCursors() {
           serverSessionId = message.sessionId ?? "";
           ownEmail = message.email ?? ownEmail;
           publishCursor(true);
-        } else if (message.type === "presence" && Array.isArray(message.participants)) {
+        } else if (
+          message.type === "presence" &&
+          Array.isArray(message.participants)
+        ) {
           updateIdentity(message.participants);
           publishCursor(true);
         }
@@ -431,10 +454,17 @@ function initializeRealtimeCursors() {
   const staleCleanup = window.setInterval(() => {
     const now = Date.now();
     const stale = [...cursors.entries()]
-      .filter(([id, raw]) => id !== localId && now - (parseCursorState(raw)?.updatedAt ?? 0) > 60_000)
+      .filter(
+        ([id, raw]) =>
+          id !== localId &&
+          now - (parseCursorState(raw)?.updatedAt ?? 0) > 60_000,
+      )
       .map(([id]) => id);
     if (stale.length) {
-      ydoc.transact(() => stale.forEach((id) => cursors.delete(id)), LOCAL_CURSOR_ORIGIN);
+      ydoc.transact(
+        () => stale.forEach((id) => cursors.delete(id)),
+        LOCAL_CURSOR_ORIGIN,
+      );
     }
   }, 15_000);
 
