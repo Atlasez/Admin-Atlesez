@@ -3,6 +3,7 @@ import {
   parseDirectiveMarker,
   subjectHue,
 } from "../../src/scripts/admin-editor-enhancements";
+import { parseEditorialAssetMarker } from "../../src/scripts/admin-editor-comment-images";
 
 describe("admin editor enhancements", () => {
   it("parses every named :::/:::: directive instead of limiting conversion to theorem aliases", () => {
@@ -43,5 +44,17 @@ describe("admin editor enhancements", () => {
   it("keeps subject preview theming stable per subject", () => {
     expect(subjectHue("mathematics")).toBe(subjectHue("mathematics"));
     expect(subjectHue("mathematics")).not.toBe(subjectHue("kanji"));
+  });
+
+  it("recognizes article image markers stored in comment selections", () => {
+    expect(
+      parseEditorialAssetMarker(
+        "![StobbeCondensation.png](asset://a923f490-f674-4ce4-b0af-155001f048d9)",
+      ),
+    ).toEqual({
+      alt: "StobbeCondensation.png",
+      id: "a923f490-f674-4ce4-b0af-155001f048d9",
+    });
+    expect(parseEditorialAssetMarker("ordinary selected text")).toBeNull();
   });
 });
