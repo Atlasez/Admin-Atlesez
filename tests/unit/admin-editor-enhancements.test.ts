@@ -6,6 +6,11 @@ import {
 import { parseEditorialAssetMarker } from "../../src/scripts/admin-editor-comment-images";
 import { parsePreviewAssetMarker } from "../../src/scripts/admin-editor-preview-images";
 import { dedupePresenceParticipants } from "../../src/scripts/admin-editor-realtime-presence";
+import {
+  extractDocumentMacros,
+  macroSignature,
+} from "../../src/scripts/admin-editor-math-macros";
+import { formatCollaborationLabel } from "../../src/scripts/admin-editor-collaboration-labels";
 
 describe("admin editor enhancements", () => {
   it("parses every named :::/:::: directive instead of limiting conversion to theorem aliases", () => {
@@ -124,6 +129,37 @@ describe("admin editor enhancements", () => {
           cursorEnd: 48,
         }),
       ]),
+    );
+  });
+
+  it("extracts TeX definitions once and shares them across preview equations", () => {
+    const macros = extractDocumentMacros(
+      [
+        "$$",
+        "\\def\\R{\\mathbb{R}}",
+        "\\def\\pair#1#2{(#1,#2)}",
+        "$$",
+        "",
+        "Later: $x \\in \\R$ and $\\pair{x}{y}$.",
+      ].join("\n"),
+    );
+
+    expect(macros).toEqual({
+      "\\R": "\\mathbb{R}",
+      "\\pair": "(#1,#2)",
+    });
+    expect(macroSignature(macros)).toBe(macroSignature({ ...macros }));
+  });
+
+  it("uses explanatory collaboration labels instead of ambiguous name-field text", () => {
+    expect(formatCollaborationLabel("上杉和輝・本文")).toBe(
+      "上杉和輝（本文を編集中）",
+    );
+    expect(formatCollaborationLabel("小林和真・本文・12行8列")).toBe(
+      "小林和真（本文を編集中（12行8列））",
+    );
+    expect(formatCollaborationLabel("小林和真・タイトル")).toBe(
+      "小林和真（タイトルを編集中）",
     );
   });
 });
