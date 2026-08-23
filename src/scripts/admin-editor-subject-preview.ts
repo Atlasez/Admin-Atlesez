@@ -1,4 +1,9 @@
-import { parseDirectiveMarker } from "./admin-editor-enhancements";
+import {
+  isDirectiveClose,
+  parseDirectiveMarker,
+  type DirectiveMarker,
+} from "../lib/editor-directives";
+import { enhancePublishedMathematics } from "./admin-editor-published-math-preview";
 
 const SEMANTIC_DIRECTIVE_CLASSES: Record<string, string> = {
   defi: "defi",
@@ -13,18 +18,11 @@ const SEMANTIC_DIRECTIVE_CLASSES: Record<string, string> = {
   example: "example",
 };
 
-type DirectiveMarker = NonNullable<ReturnType<typeof parseDirectiveMarker>>;
-
 type DirectiveContainer = {
   section: HTMLElement;
   body: HTMLElement;
   semantic: boolean;
 };
-
-function isClosingDirective(value: string, minimumLength: number): boolean {
-  const match = /^\s*(:{3,4})\s*$/.exec(value);
-  return Boolean(match && match[1].length >= minimumLength);
-}
 
 function semanticDirectiveClass(name: string): string | null {
   return SEMANTIC_DIRECTIVE_CLASSES[name] ?? null;
@@ -45,9 +43,6 @@ function createDirectiveSection(
     heading.className = "thmtitle";
     heading.textContent = marker.title;
     section.append(heading);
-    // Published mathematics articles place theorem content directly inside
-    // .defi/.thm/etc. Keeping the section itself as the collection target
-    // makes the editor preview use the same DOM shape and the same CSS.
     return { section, body: section, semantic: true };
   }
 
@@ -62,23 +57,19 @@ function createDirectiveSection(
 
 function normalizeDirectiveSection(section: HTMLElement): void {
   const name = section.dataset.directive?.toLowerCase() ?? "";
-  if (!name) return;
   const semanticClass = semanticDirectiveClass(name);
   if (!semanticClass) return;
-
   section.classList.add(semanticClass);
-  const heading = section.querySelector<HTMLElement>(
-    ":scope > .editor-directive-heading, :scope > .thmtitle",
-  );
-  if (heading && heading.className !== "thmtitle") {
-    heading.className = "thmtitle";
-  }
 
-  // Older preview code inserted an editor-only body wrapper. The published
-  // article renderer does not have it, and its padding caused the large empty
-  // area visible in theorem/definition cards. Unwrap it once.
-  const body = section.querySelector<HTMLElement>(":scope > .editor-directive-body");
-  if (body) body.replaceWith(...Array.from(body.childNodes));
+  const oldBody = section.querySelector<HTMLElement>(
+    ":scope > .editor-directive-body",
+  );
+  if (oldBody) oldBody.replaceWith(...Array.from(oldBody.childNodes));
+
+  const oldHeading = section.querySelector<HTMLElement>(
+    ":scope > .editor-directive-heading",
+  );
+  if (oldHeading) oldHeading.className = "thmtitle";
 }
 
 function appendPackedContent(
@@ -92,7 +83,6 @@ function appendPackedContent(
     else container.body.textContent = text;
     return;
   }
-
   if (html) {
     const template = container.section.ownerDocument.createElement("template");
     template.innerHTML = html;
@@ -112,8 +102,7 @@ function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
   const marker = parseDirectiveMarker(plainLines[0].trim());
   if (!marker) return false;
   const closeIndex = plainLines.findIndex(
-    (line, index) =>
-      index > 0 && isClosingDirective(line, marker.fence.length),
+    (line, index) => index > 0 && isDirectiveClose(line, marker.fence.length),
   );
   if (closeIndex < 0) return false;
 
@@ -149,14 +138,14 @@ export function enhancePreviewDirectives(target: HTMLElement): void {
   const elementType = target.ownerDocument.defaultView?.HTMLElement;
   if (!elementType) return;
 
-  for (const paragraph of Array.from(target.children)) {
-    if (!(paragraph instanceof elementType)) continue;
-    convertPackedDirectiveParagraph(paragraph as HTMLElement);
+  for (const child of Array.from(target.children)) {
+    if (child instanceof elementType) {
+      convertPackedDirectiveParagraph(child as HTMLElement);
+    }
   }
 
   const originalChildren = Array.from(target.children);
   const stack: Array<{ body: HTMLElement; fenceLength: number }> = [];
-
   for (const child of originalChildren) {
     if (!(child instanceof elementType)) continue;
     const node = child as HTMLElement;
@@ -176,13 +165,12 @@ export function enhancePreviewDirectives(target: HTMLElement): void {
     if (
       stack.length > 0 &&
       node.tagName === "P" &&
-      isClosingDirective(text, stack.at(-1)?.fenceLength ?? 3)
+      isDirectiveClose(text, stack.at(-1)?.fenceLength ?? 3)
     ) {
       node.remove();
       stack.pop();
       continue;
     }
-
     if (stack.length > 0) stack.at(-1)?.body.append(node);
   }
 }
@@ -194,6 +182,7 @@ export function applySubjectPreviewProfile(
   target.dataset.previewSubject = subject || "general";
   target.classList.add("article-body", "reading");
   enhancePreviewDirectives(target);
+  enhancePublishedMathematics(target);
 }
 
 function installSubjectPreviewStyles(doc: Document): void {
@@ -201,9 +190,7 @@ function installSubjectPreviewStyles(doc: Document): void {
   const style = doc.createElement("style");
   style.dataset.editorSubjectPreviewStyles = "true";
   style.textContent = `
-    .article-preview.article-body.reading {
-      max-width: var(--reading-width, 50rem);
-    }
+    .article-preview.article-body.reading { max-width: var(--reading-width, 50rem); }
     .article-preview .editor-directive:not(.defi):not(.prop):not(.thm):not(.lemma):not(.cor):not(.example) {
       background: var(--background-secondary, #f6f8fa);
       border: 1px solid var(--border-default, #d5dde2);
@@ -226,25 +213,19 @@ function installSubjectPreviewStyles(doc: Document): void {
 function initializeSubjectPreview(): void {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
   if (!root || root.dataset.subjectPreviewReady === "true") return;
-
   const subject = root.querySelector<HTMLSelectElement>("[data-subject]");
   const preview = root.querySelector<HTMLElement>("[data-preview]");
   if (!subject || !preview) return;
 
   root.dataset.subjectPreviewReady = "true";
   installSubjectPreviewStyles(document);
-
   let scheduled = false;
   const apply = () => {
     scheduled = false;
     const subjectSlug = subject.value || "general";
     applySubjectPreviewProfile(preview, subjectSlug);
-    const referencePreview = root.querySelector<HTMLElement>(
-      "[data-reference-preview]",
-    );
-    if (referencePreview) {
-      applySubjectPreviewProfile(referencePreview, subjectSlug);
-    }
+    const reference = root.querySelector<HTMLElement>("[data-reference-preview]");
+    if (reference) applySubjectPreviewProfile(reference, subjectSlug);
   };
   const schedule = () => {
     if (scheduled) return;
@@ -254,21 +235,15 @@ function initializeSubjectPreview(): void {
 
   const observer = new MutationObserver(schedule);
   observer.observe(preview, { childList: true, subtree: true });
-  const referencePreview = root.querySelector<HTMLElement>(
-    "[data-reference-preview]",
-  );
-  if (referencePreview) {
-    observer.observe(referencePreview, { childList: true, subtree: true });
-  }
+  const reference = root.querySelector<HTMLElement>("[data-reference-preview]");
+  if (reference) observer.observe(reference, { childList: true, subtree: true });
   subject.addEventListener("input", schedule);
   subject.addEventListener("change", schedule);
   schedule();
 
   document.addEventListener(
     "astro:before-swap",
-    () => {
-      observer.disconnect();
-    },
+    () => observer.disconnect(),
     { once: true },
   );
 }
