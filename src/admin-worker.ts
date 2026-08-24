@@ -81,6 +81,8 @@ interface Env {
   /** Cloudflare Turnstile。応募フォーム公開時は必須にする。 */
   TURNSTILE_SECRET_KEY?: string;
   PUBLIC_TURNSTILE_SITE_KEY?: string;
+  /** Atlasez.com の公開Workerから応募を受け取るための共有Secret。 */
+  PUBLIC_APPLICATION_INGEST_TOKEN?: string;
 }
 
 type ReportStatus = "new" | "reviewing" | "resolved";
@@ -4274,8 +4276,22 @@ async function deleteAvailabilityBlock(
 async function submitMemberApplication(
   request: Request,
   env: Env,
+  source: "same-origin" | "public-worker" = "same-origin",
 ): Promise<Response> {
-  if (!isSameOrigin(request))
+  if (source === "public-worker") {
+    const configuredToken = env.PUBLIC_APPLICATION_INGEST_TOKEN?.trim();
+    const suppliedToken =
+      request.headers.get("x-atlasez-application-token") ?? "";
+    if (
+      !configuredToken ||
+      !suppliedToken ||
+      configuredToken.length !== suppliedToken.length ||
+      ![...configuredToken].every(
+        (character, index) => character === suppliedToken[index],
+      )
+    )
+      return json({ error: "応募送信の認証に失敗しました。" }, 401);
+  } else if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (
     request.headers.get("content-type")?.includes("application/json") !== true
@@ -6942,6 +6958,11 @@ async function handleAdminRequest(
     return publicApplicationConfig(env);
   if (url.pathname === "/api/apply" && request.method === "POST")
     return submitMemberApplication(request, env);
+  if (url.pathname === "/api/public/applications") {
+    if (request.method !== "POST")
+      return json({ error: "POSTのみ利用できます。" }, 405);
+    return submitMemberApplication(request, env, "public-worker");
+  }
   if (url.pathname === "/api/admin/auth-status" && request.method === "GET")
     return adminAuthStatus(request, env);
   if (url.pathname === "/api/admin/notifications" && request.method === "GET")
