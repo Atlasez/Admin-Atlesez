@@ -3407,6 +3407,42 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   });
 }
 
+async function listApplicationPrefectureStats(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const rows = await env.REPORTS.prepare(
+    "SELECT project_answers FROM atlasez_member_applications",
+  ).all<{ project_answers: string | null }>();
+  const counts = new Map<string, number>();
+  for (const row of rows.results) {
+    if (!row.project_answers) continue;
+    try {
+      const answers = JSON.parse(row.project_answers) as {
+        residencePrefecture?: unknown;
+      };
+      const prefecture =
+        typeof answers.residencePrefecture === "string"
+          ? answers.residencePrefecture.trim()
+          : "";
+      if (prefecture) counts.set(prefecture, (counts.get(prefecture) ?? 0) + 1);
+    } catch {
+      // 応募時期によっては追加設問がJSON化されていないため、その応募は除外する。
+    }
+  }
+  return json({
+    prefectures: [...counts.entries()]
+      .map(([prefecture, applications]) => ({ prefecture, applications }))
+      .sort(
+        (a, b) =>
+          b.applications - a.applications ||
+          a.prefecture.localeCompare(b.prefecture, "ja"),
+      ),
+  });
+}
+
 async function updateApplication(
   request: Request,
   env: Env,
@@ -7160,6 +7196,11 @@ async function handleAdminRequest(
     return createAtlasezProject(request, env);
   if (url.pathname === "/api/admin/applications" && request.method === "GET")
     return listApplications(request, env);
+  if (
+    url.pathname === "/api/admin/application-prefecture-analytics" &&
+    request.method === "GET"
+  )
+    return listApplicationPrefectureStats(request, env);
   const applicationMatch = url.pathname.match(
     /^\/api\/admin\/applications\/([0-9a-f-]{36})$/i,
   );
