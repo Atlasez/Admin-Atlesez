@@ -1,5 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "812021e62fa20465950b61be55dfe064",
   "name": "atlasez-editorial-collaboration",
   "main": "src/editorial-collaboration-worker.ts",
   "compatibility_date": "2026-07-26",
@@ -9,7 +10,7 @@
     {
       "binding": "REPORTS",
       "database_name": "atlasez-reports",
-      "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
+      "database_id": "d5112a62-7ed6-49c8-b6a2-18ee2dbab678",
     },
   ],
   "exports": {
