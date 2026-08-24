@@ -1,6 +1,6 @@
 # 運営画面をGoogleログインへ移行する手順
 
-現在の既定方式はCloudflare Accessです。`ADMIN_AUTH_MODE` を設定しない限り、既存のAccess認証ヘッダーだけを受け付けるため、今回の追加で運用中のログイン方式は変わりません。
+本番の管理WorkerはGoogle OAuthで認証します。Cloudflare Accessは入口に設定せず、Googleで確認したメールアドレスをD1の`report_admin_permissions`と照合します。
 
 ## Cloudflare Accessを維持したまま試す
 
@@ -15,7 +15,7 @@ Googleが本人確認を行い、管理Workerが確認済みメールアドレ�
 ## 切替の準備
 
 1. Google Cloud ConsoleでOAuth同意画面を公開し、OAuth 2.0の「ウェブアプリケーション」クライアントを作成する。
-2. 承認済みリダイレクトURIに`https://atlasez-admin.ukyoukay0.workers.dev/auth/google/callback`を登録する。
+2. 承認済みリダイレクトURIに`https://atlasez-admin.atlasez-adm.workers.dev/auth/google/callback`を登録する。
 3. Cloudflare Worker `atlasez-admin` のSecretへ、次を登録する。値はGitHubやチャットに貼らない。
 
    - `GOOGLE_OAUTH_CLIENT_ID`
@@ -23,9 +23,9 @@ Googleが本人確認を行い、管理Workerが確認済みメールアドレ�
 
 4. 本番D1へ`migrations/0005_admin_google_oauth_sessions.sql`を適用する。
 5. テスト用の運営者メールを`report_admin_permissions`へ追加し、`/auth/google/login`でGoogleアカウントを選択してログインできることを確認する。
-6. Cloudflare Accessを維持して試す場合は、Workerの通常変数`ADMIN_AUTH_MODE`を`hybrid-preview`に設定してデプロイする。
-7. 確認後にWorkerの通常変数`ADMIN_AUTH_MODE`を`google-oauth`に設定してデプロイする。
-8. 最後にCloudflare Accessアプリケーションと許可メール一覧を無効化・削除する。
+6. 動作確認後、Workerの通常変数`ADMIN_AUTH_MODE`を`google-oauth`に設定してデプロイする。
+7. `report_admin_permissions`へGoogleログインを許可するメールアドレスを登録する。
+8. Cloudflare Accessを使っていた場合は、動作確認後にAccessアプリケーションと許可メール一覧を無効化・削除する。
 
 ## ロールバック
 
