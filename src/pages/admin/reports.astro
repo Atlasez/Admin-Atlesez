@@ -298,9 +298,6 @@ const worldCountryPaths = worldMap.locations
     const iso3ToIso2: Record<string, string> = {
       AUS: "AU", AUT: "AT", BEL: "BE", BRA: "BR", CAN: "CA", CHE: "CH", CHL: "CL", CHN: "CN", COL: "CO", CZE: "CZ", DEU: "DE", DNK: "DK", EGY: "EG", ESP: "ES", FIN: "FI", FRA: "FR", GBR: "GB", GRC: "GR", HKG: "HK", HUN: "HU", IDN: "ID", IND: "IN", IRL: "IE", ISR: "IL", ITA: "IT", JPN: "JP", KOR: "KR", LUX: "LU", MEX: "MX", MYS: "MY", NLD: "NL", NOR: "NO", NZL: "NZ", PHL: "PH", POL: "PL", PRT: "PT", RUS: "RU", SGP: "SG", SWE: "SE", THA: "TH", TUR: "TR", TWN: "TW", UKR: "UA", USA: "US", VNM: "VN", ZAF: "ZA",
     };
-    const mapCoordinates: Record<string, [number, number]> = {
-      JP: [82, 31], US: [22, 29], CA: [20, 20], MX: [24, 38], BR: [35, 67], AR: [31, 84], CL: [27, 78], GB: [47, 22], FR: [48, 26], DE: [51, 25], ES: [46, 29], IT: [51, 31], RU: [69, 23], CN: [72, 34], KR: [78, 37], TW: [76, 42], IN: [66, 50], ID: [78, 65], AU: [83, 79], NZ: [91, 91], ZA: [53, 68], EG: [56, 44], NG: [51, 47], TR: [56, 34], SG: [77, 59], TH: [75, 54], VN: [77, 58], MY: [78, 61], PH: [82, 59],
-    };
     const mapCountryCode = (country: string) => {
       const normalized = country.trim().toUpperCase();
       return (normalized.length === 3 ? iso3ToIso2[normalized] : normalized).toLowerCase();
@@ -323,11 +320,17 @@ const worldCountryPaths = worldMap.locations
           shape.style.fill = `hsl(5 78% ${92 - ratio * 43}%)`;
           shape.setAttribute("aria-label", `${countryLabel(item.country)} ${item.value.toLocaleString()} ${metric}`);
         }
-        const coordinate = mapCoordinates[code.toUpperCase()];
-        if (!coordinate) return;
-        const [x, y] = coordinate;
+        // 国ごとの固定座標は地図の投影・レスポンシブ幅とずれるため、
+        // 実際のSVG形状の表示中心からマーカー位置を求める。
+        if (!shape || item.value <= 0) return;
+        const svgRect = svg.getBoundingClientRect();
+        const shapeRect = shape.getBoundingClientRect();
+        const viewBox = svg.viewBox.baseVal;
+        if (!svgRect.width || !svgRect.height || !shapeRect.width || !shapeRect.height) return;
+        const x = viewBox.x + ((shapeRect.left + shapeRect.width / 2 - svgRect.left) / svgRect.width) * viewBox.width;
+        const y = viewBox.y + ((shapeRect.top + shapeRect.height / 2 - svgRect.top) / svgRect.height) * viewBox.height;
         const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", String(x * 10.1)); circle.setAttribute("cy", String(y * 6.66)); circle.setAttribute("r", String(3 + Math.sqrt(ratio) * 7));
+        circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y)); circle.setAttribute("r", String(3 + Math.sqrt(ratio) * 7));
         circle.setAttribute("aria-label", `${countryLabel(item.country)} ${item.value.toLocaleString()} ${metric}`);
         const title = document.createElementNS("http://www.w3.org/2000/svg", "title"); title.textContent = `${countryLabel(item.country)}: ${item.value.toLocaleString()} ${metric}`; circle.append(title);
         bubbles.append(circle);
