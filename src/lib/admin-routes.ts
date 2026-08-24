@@ -1,5 +1,8 @@
 const adminPageNames = [
   "workspace",
+  "member-profile",
+  "member-tasks",
+  "member-calendar",
   "portal",
   "atlas",
   "semi-platform",
@@ -14,6 +17,8 @@ const adminPageNames = [
   "editor",
   "guide",
   "introductions",
+  "profile-requests",
+  "project-profile-requests",
   "secretariat",
   "co-working",
   "permissions",

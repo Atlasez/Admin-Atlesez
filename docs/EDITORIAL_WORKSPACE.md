@@ -44,3 +44,24 @@ npm run dev:admin
 ```
 
 `http://localhost:8787/admin/editor` を開きます。ローカル設定では開発専用の全分野権限を使うため、Googleログインは不要です。`wrangler.admin.local.jsonc` の `ADMIN_AUTH_MODE: local` はlocalhost以外では無効になり、本番用の `wrangler.admin.jsonc` には含めません。
+
+## 同時編集WorkerとPR Preview
+
+Cloudflare WorkersはDurable Objectを実装するWorkerにPreview URLを生成しないため、同時編集処理は非公開の`atlasez-editorial-collaboration` Workerへ分離しています。運営サイト本体は外部Durable Object bindingでこのWorkerを参照するため、同時編集を維持したままPRごとのPreview URLを発行できます。
+
+同時編集Workerのコードまたは設定を変更した場合は、運営サイト本体より先に次を実行してください。
+
+```sh
+npm run deploy:admin:collaboration
+```
+
+通常のローカル開発では`wrangler.admin.local.jsonc`が同じクラスをローカルDurable Objectとして起動するため、従来どおり`npm run dev:admin`だけで確認できます。
+
+運営APIが参照するD1マイグレーションは、該当コードのPreviewを確認する前に適用します。未適用のまま新しいAPIを開くと、Worker側でテーブル不足となり、プロフィールや画像を含む複数の表示が同時に失敗します。
+
+```sh
+npx wrangler d1 migrations list atlasez-reports --remote --config wrangler.admin.jsonc
+npx wrangler d1 migrations apply atlasez-reports --remote --config wrangler.admin.jsonc
+```
+
+適用後は再度`migrations list`を実行し、未適用一覧が空であることを確認してください。既存コードとの互換性がない破壊的マイグレーションは、この手順でPreview用に先行適用せず、段階的なマイグレーションとして分割します。

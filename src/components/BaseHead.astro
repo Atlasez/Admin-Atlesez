@@ -4,6 +4,7 @@
  */
 import "../styles/tokens.css";
 import "../styles/base.css";
+import "../styles/article-content.css";
 import { IS_PRODUCTION_DEPLOY } from "../lib/deploy";
 
 interface AlternateLink {
@@ -105,4 +106,7 @@ const ogImage = new URL(
       /* localStorage不可の環境では標準表示のまま */
     }
   })();
+</script>
+<script>
+  import "../scripts/article-math-structure";
 </script>
