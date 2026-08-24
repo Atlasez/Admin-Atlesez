@@ -34,6 +34,7 @@ const comments = [
     selection_end: null,
     selection_text: null,
     selections: [],
+    tags: ["定義不足"],
     acknowledged_at: "2026-08-20T01:00:00.000Z",
     acknowledged_by: "alice@example.com",
     acknowledged_by_emails: ["alice@example.com"],
@@ -64,10 +65,21 @@ const comments = [
     selection_end: null,
     selection_text: null,
     selections: [],
+    tags: ["根拠確認"],
     acknowledged_at: null,
     acknowledged_by: null,
     acknowledged_by_emails: [],
     unacknowledged_by_emails: [],
+    action_actor_counts: {
+      acknowledge: [
+        {
+          actor_email: "carol@example.com",
+          actor_display_name: "Carol",
+          count: 1,
+        },
+      ],
+      unacknowledge: [],
+    },
     resolved_at: null,
     resolved_by: null,
   },
@@ -138,6 +150,7 @@ test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示�
   await page.goto("./admin/editor/?new=1");
 
   await expect(page.locator(".required-mark")).toHaveCount(6);
+  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(6);
   for (const name of [
     "title",
     "summary",
@@ -325,21 +338,52 @@ test("H-2: 版履歴を査読コメント枠から独立して配置する", asy
   );
 });
 
-test("CM-1: コメントと返信の両方でレビュータグを挿入できる", async ({
+test("CM-1: コメントと返信に本文とは独立したタグを付与・絞り込みできる", async ({
   page,
 }) => {
   await mockAdminApi(page);
+  let commentPayload: Record<string, unknown> | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments",
+    async (route) => {
+      commentPayload = route.request().postDataJSON();
+      await route.fulfill({ json: { ok: true } });
+    },
+  );
   await page.goto("./admin/editor/?document=doc-1");
 
-  await page
-    .locator('.review-panel > .comment-tags [data-comment-tag="定義不足"]')
-    .click();
-  await expect(page.locator("[data-comment-body]")).toHaveValue("[定義不足] ");
+  const mainTag = page.locator(
+    '.review-panel > .comment-tags [data-comment-tag="定義不足"]',
+  );
+  await mainTag.click();
+  await expect(mainTag).toHaveAttribute("aria-pressed", "true");
+  await page.locator("[data-comment-body]").fill("定義を補足してください。");
+  await page.locator("[data-send-comment]").click();
+  await expect
+    .poll(() => commentPayload)
+    .toMatchObject({
+      body: "定義を補足してください。",
+      tags: ["定義不足"],
+    });
+  expect((commentPayload as unknown as { body: string }).body).not.toContain(
+    "[定義不足]",
+  );
 
   const thread = page.locator('[data-comment-context="comment-1"]');
   await thread.locator("[data-open-reply]").click();
-  await thread.locator('[data-comment-tag="根拠確認"]').click();
-  await expect(thread.locator("[data-reply-body]")).toHaveValue("[根拠確認] ");
+  const replyTag = thread.locator('[data-comment-tag="根拠確認"]');
+  await replyTag.click();
+  await expect(replyTag).toHaveAttribute("aria-pressed", "true");
+  await expect(thread.locator("[data-reply-body]")).toHaveValue("");
+
+  await page.locator("[data-comment-tag-filter]").selectOption("根拠確認");
+  await expect(
+    page.locator('[data-comment-context="comment-1"]'),
+  ).toBeVisible();
+  await page.locator("[data-comment-tag-filter]").selectOption("数式確認");
+  await expect(page.locator("[data-comment-list]")).toContainText(
+    "コメントはありません",
+  );
 });
 
 test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", async ({ page }) => {
@@ -362,6 +406,14 @@ test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", as
   await expect(page.locator("[data-comment-selection]")).toHaveText(
     "範囲未選択：記事全体へのコメントとして送信します。",
   );
+
+  await body.evaluate((element: HTMLTextAreaElement) => {
+    element.setSelectionRange(0, 4);
+    element.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await expect(page.locator("[data-selection-action]")).toBeVisible();
+  await page.locator("[data-comment-body]").click();
+  await expect(page.locator("[data-selection-action]")).toBeHidden();
 });
 
 test("CM-3: 本文から消えた元文章もコメントの引用として保持する", async ({
@@ -394,6 +446,10 @@ test("CM-3: 本文から消えた元文章もコメントの引用として保�
   await expect(quote).toContainText("対象の文章");
   await expect(quote).toContainText("削除済みの元文章");
   await expect(page.locator("[data-body]")).not.toHaveValue(/削除済みの元文章/);
+  await quote.getByRole("button", { name: "本文で確認" }).click();
+  await expect(page.locator("[data-save-message]")).toHaveText(
+    "元の文章は変更または削除されています。コメントには当時の内容を保持しています。",
+  );
 });
 
 test("CM-7: 親コメントの記事引用を返信へ添付して送信できる", async ({
@@ -780,6 +836,44 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
   expect(deleteSucceeded).toBe(true);
 });
 
+test("IM-3: 認証切れ等でHTMLが返った場合は画像として扱わず再試行案内を表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const assetId = "44444444-4444-4444-8444-444444444444";
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: {
+        document: {
+          ...documentItem,
+          body: `![表示できない図](asset://${assetId})`,
+        },
+        comments,
+      },
+    });
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/assets",
+    async (route) => {
+      await route.fulfill({ json: { assets: [] } });
+    },
+  );
+  await page.route(`**/api/admin/editor/assets/${assetId}`, async (route) => {
+    await route.fulfill({
+      contentType: "text/html",
+      body: "<html>login</html>",
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(
+    page.locator("[data-preview] .editorial-image-error"),
+  ).toHaveText("画像を表示できません。再読み込みしてください。");
+  await expect(
+    page.locator(`[data-editorial-asset="${assetId}"]`),
+  ).not.toHaveAttribute("src", /api\/admin/);
+});
+
 test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライブ別窓同期が使える", async ({
   page,
 }) => {
@@ -802,6 +896,22 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   }
   await expect(page.locator('[data-pane-tab="memo"]')).toHaveCount(0);
   await expect(page.locator(".memo-area")).toHaveCount(0);
+
+  const writing = page.locator('[data-editor-pane="writing"]');
+  const preview = page.locator('[data-editor-pane="preview"]');
+  const review = page.locator('[data-editor-pane="review"]');
+  await expect(writing.locator('[data-edge="left"]')).toBeDisabled();
+  await expect(review.locator('[data-edge="right"]')).toBeDisabled();
+  await writing.locator('[data-edge="top"]').click();
+  await expect(writing).toHaveCSS("grid-row-start", "1");
+  await expect(preview).toHaveCSS("grid-row-start", "2");
+  await expect(writing.locator('[data-edge="top"]')).toBeDisabled();
+  await writing.locator('[data-edge="bottom"]').click();
+  await expect(writing).toHaveCSS("grid-row-start", "2");
+  await expect(preview).toHaveCSS("grid-row-start", "1");
+  await writing.locator('[data-edge="right"]').click();
+  await expect(writing).toHaveCSS("grid-column-start", "2");
+  await expect(review).toHaveCSS("grid-column-start", "1");
 
   const popupPromise = page.waitForEvent("popup");
   await page.locator('[data-pane-popout="writing"]').click();
@@ -844,6 +954,11 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
       Number.parseFloat(getComputedStyle(element).fontSize),
     ),
   ).toBeLessThan(14);
+  await thread.locator(".comment-reply").click({ button: "right" });
+  await expect(page.locator("[data-comment-context-menu]")).toContainText(
+    "確認済み：Carol",
+  );
+  await page.keyboard.press("Escape");
 
   await thread.locator("[data-open-reply]").click();
   await expect(thread.locator(".reply-target")).toHaveCount(0);

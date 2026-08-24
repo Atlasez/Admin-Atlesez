@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 type MockOptions = {
   notificationStatus?: number;
+  avatarUrl?: string;
 };
 
 async function mockAdminShell(page: Page, options: MockOptions = {}) {
@@ -23,7 +24,10 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          profile: { display_name: "Alice", avatar_url: "" },
+          profile: {
+            display_name: "Alice",
+            avatar_url: options.avatarUrl ?? "",
+          },
         }),
       });
       return;
@@ -79,6 +83,28 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
     });
   });
 }
+
+test("ブランド・通知・プロフィールの各アイコンを表示する", async ({ page }) => {
+  const avatarUrl =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' fill='%232d6ea8'/%3E%3C/svg%3E";
+  await mockAdminShell(page, { avatarUrl });
+  await page.goto("admin/portal/");
+
+  const brand = page.locator(".admin-nav-brand-logo img");
+  const avatar = page.locator("[data-admin-account-image]");
+  const notification = page.locator("[data-admin-notifications] svg");
+  await expect(brand).toBeVisible();
+  await expect(avatar).toBeVisible();
+  await expect(notification).toBeVisible();
+  await expect(brand).toHaveJSProperty("complete", true);
+  await expect(avatar).toHaveJSProperty("complete", true);
+  expect(
+    await brand.evaluate((image) => (image as HTMLImageElement).naturalWidth),
+  ).toBeGreaterThan(0);
+  expect(
+    await avatar.evaluate((image) => (image as HTMLImageElement).naturalWidth),
+  ).toBeGreaterThan(0);
+});
 
 test("通知panelをtoggle・外側・Escape・閉じるボタンで操作できる", async ({
   page,
@@ -180,7 +206,7 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   await expect(page.getByText("EVENTS", { exact: true })).toHaveCount(0);
   await expect(page.getByText("MY TASKS", { exact: true })).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "主要プロジェクト" }),
+    page.getByRole("heading", { name: "参加中のプロジェクト" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "同時作業会・交流会の日程" }),

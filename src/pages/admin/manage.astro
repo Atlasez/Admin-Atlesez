@@ -1,18 +1,20 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 const project = Astro.url.searchParams.get("project") === "secretariat" ? "secretariat" : Astro.url.searchParams.get("project") === "seminar-platform" ? "seminar-platform" : "atlas";
+const projectSite = project === "seminar-platform" ? "semi-platform" : project;
 ---
 
 <AdminLayout title="管理トップ" description="管理機能の入口">
   <main class="management-home">
-    <header><p>管理</p><h1>管理トップ</h1><span>目的から管理画面を選べます。権限が必要な機能は、対象の役割を持つメンバーにだけ表示されます。</span></header>
+    <header><h1>管理トップ</h1></header>
     <section aria-label="管理機能">
-      <a href={`/admin/permissions/?project=${project}`} data-manager-only hidden><strong>運営者・担当管理</strong><small>ログイン許可、担当分野、プロフィールを管理する</small><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span>開く →</span></a>
-      {project === "atlas" && <a href="/admin/review/" data-manager-only hidden><strong>フィードバック一覧</strong><small>フィードバック依頼と担当状況を確認する</small><ul class="role-tags"><li>統括</li><li>フィードバック担当</li></ul><span>開く →</span></a>}
-      <a href={`/admin/reports/?project=${project}`}><strong>問題報告・統計</strong><small>問題報告と閲覧状況を確認する</small><ul class="role-tags"><li>運営メンバー</li></ul><span>開く →</span></a>
-      <a href={`/admin/guide/?project=${project}`}><strong>作業の進め方</strong><small>プロジェクトの手順とルールを確認する</small><ul class="role-tags"><li>運営メンバー</li></ul><span>開く →</span></a>
-      <a href={`/admin/applications/?project=${project}`} data-manager-only hidden><strong>応募管理</strong><small>運営参加応募の確認と受入を行う</small><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span>開く →</span></a>
-      <a href={`/admin/co-working/?project=${project}`}><strong>同時作業会</strong><small>作業会の日程と参加状況を管理する</small><ul class="role-tags"><li>運営メンバー</li></ul><span>開く →</span></a>
+      <a href={`/admin/permissions/?project=${project}`} data-manager-only hidden><strong>運営者・担当管理</strong><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span aria-label="運営者・担当管理を開く">→</span></a>
+      <a href={`/admin/project-profile-requests/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>運営内自己紹介の承認</strong><ul class="role-tags"><li>運営内運営</li></ul><span aria-label="運営内自己紹介の承認を開く">→</span></a>
+      {project === "atlas" && <a href="/admin/review/" data-manager-only hidden><strong>フィードバック一覧</strong><ul class="role-tags"><li>統括</li><li>フィードバック担当</li></ul><span aria-label="フィードバック一覧を開く">→</span></a>}
+      <a href={`/admin/reports/?project=${project}`}><strong>問題報告・統計</strong><ul class="role-tags"><li>運営メンバー</li></ul><span aria-label="問題報告・統計を開く">→</span></a>
+      <a href={`/admin/guide/?project=${project}`}><strong>作業の進め方</strong><ul class="role-tags"><li>運営メンバー</li></ul><span aria-label="作業の進め方を開く">→</span></a>
+      <a href={`/admin/applications/?project=${project}`} data-manager-only hidden><strong>応募管理</strong><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span aria-label="応募管理を開く">→</span></a>
+      <a href={`/admin/co-working/?project=${project}`}><strong>同時作業会</strong><ul class="role-tags"><li>運営メンバー</li></ul><span aria-label="同時作業会を開く">→</span></a>
     </section>
   </main>
 </AdminLayout>

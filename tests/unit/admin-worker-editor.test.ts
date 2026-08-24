@@ -39,6 +39,32 @@ const emptyEnv = {
 };
 
 describe("admin worker editor APIs", () => {
+  it("returns JSON for unexpected API failures instead of a Cloudflare HTML error", async () => {
+    const brokenEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: () => {
+          throw new Error("no such table: editorial_member_profiles");
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/profile"),
+      brokenEnv as never,
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    const data = (await response.json()) as {
+      error?: string;
+      requestId?: string;
+    };
+    expect(data.error).toContain("データを読み込めませんでした");
+    expect(data.error).not.toContain("no such table");
+    expect(data.requestId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("returns empty review request collections for an all-subject manager", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/api/admin/editor/review-requests"),
@@ -89,5 +115,146 @@ describe("admin worker editor APIs", () => {
       'inline; filename="diagram.png"',
     );
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("stores approved comment tags independently from the comment body", async () => {
+    const executed: { query: string; values: unknown[] }[] = [];
+    class RecordingStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      constructor(private readonly sql: string) {
+        super(sql);
+      }
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async first<T>() {
+        if (
+          this.sql.includes("SELECT subject, status FROM editorial_documents")
+        )
+          return { subject: "mathematics", status: "draft" } as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.sql, values: this.values });
+        return {};
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new RecordingStatement(query),
+      },
+    };
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222/comments",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "http://localhost",
+          },
+          body: JSON.stringify({
+            body: "定義を補足してください。",
+            tags: ["定義不足", "例・図の追加"],
+            selections: [],
+          }),
+        },
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(201);
+    const tagInserts = executed.filter((entry) =>
+      entry.query.includes("INSERT INTO editorial_comment_tags"),
+    );
+    expect(tagInserts.map((entry) => entry.values.at(-1))).toEqual([
+      "定義不足",
+      "例・図の追加",
+    ]);
+    const commentInsert = executed.find((entry) =>
+      entry.query.includes("INSERT INTO editorial_comments"),
+    );
+    expect(commentInsert?.values).toContain("定義を補足してください。");
+    expect(commentInsert?.values).not.toContain("[定義不足]");
+  });
+
+  it("accepts a tag-only comment while rejecting a completely empty comment", async () => {
+    class CommentStatement extends EmptyStatement {
+      constructor(private readonly sql: string) {
+        super(sql);
+      }
+
+      async first<T>() {
+        if (
+          this.sql.includes("SELECT subject, status FROM editorial_documents")
+        )
+          return { subject: "mathematics", status: "draft" } as T;
+        return null as T | null;
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new CommentStatement(query),
+      },
+    };
+    const request = (payload: unknown) =>
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222/comments",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "http://localhost",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+
+    const tagOnly = await worker.fetch(
+      request({ body: "", tags: ["根拠確認"], selections: [] }),
+      env as never,
+    );
+    expect(tagOnly.status).toBe(201);
+
+    const empty = await worker.fetch(
+      request({ body: "", tags: [], selections: [] }),
+      env as never,
+    );
+    expect(empty.status).toBe(400);
+  });
+
+  it("rejects comment tags outside the supported review taxonomy", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222/comments",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "http://localhost",
+          },
+          body: JSON.stringify({
+            body: "確認してください。",
+            tags: ["任意タグ"],
+          }),
+        },
+      ),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "選択できないコメントタグが含まれています。",
+    });
   });
 });

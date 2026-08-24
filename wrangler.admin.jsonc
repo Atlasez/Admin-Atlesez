@@ -3,6 +3,7 @@
   "name": "atlasez-admin",
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
+  "preview_urls": true,
   "vars": {
     "ADMIN_AUTH_MODE": "cloudflare-access",
     "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin.ukyoukay0.workers.dev",
@@ -20,6 +21,15 @@
       "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EDITORIAL_COLLABORATION",
+        "class_name": "EditorialCollaborationRoom",
+        "script_name": "atlasez-editorial-collaboration",
+      },
+    ],
+  },
   "triggers": {
     "crons": ["0 * * * *", "*/5 * * * *"],
   },

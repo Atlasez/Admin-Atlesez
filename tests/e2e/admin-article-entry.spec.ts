@@ -14,16 +14,34 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.getByRole("link", { name: /^査読/ })).toHaveCount(0);
   });
 
-  test("原稿一覧はコンパクトな作業対象フィルタを表示する", async ({ page }) => {
+  test("D-1: 原稿一覧に4つの作業入口を表示し、カード内の旧ボタンは表示しない", async ({
+    page,
+  }) => {
     await page.goto("admin/articles/");
 
     await expect(page.locator(".workflow-card")).toHaveCount(0);
     await expect(
-      page.getByRole("link", { name: "新規記事を作成" }),
+      page.getByRole("link", { name: /新規記事作成/ }),
     ).toHaveAttribute("href", "/admin/editor/?new=1&from=articles");
+    await expect(
+      page.getByRole("button", { name: /加筆・修正/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^査読/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /フィードバック依頼/ }),
+    ).toBeVisible();
     await expect(page.locator("[data-workflow-filter]")).toHaveValue("all");
     await expect(page.locator(".article-view-tabs")).toHaveCount(0);
-    await expect(page.locator(".header-actions")).toHaveCount(1);
+    await expect(page.locator(".header-actions")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /編集・フィードバックを開く/ }),
+    ).toHaveCount(0);
+    const requestButton = page.getByRole("button", {
+      name: /フィードバック依頼/,
+    });
+    await requestButton.click();
+    await expect(page.locator("[data-workflow-filter]")).toHaveValue("request");
+    await expect(requestButton).toHaveAttribute("aria-pressed", "true");
   });
 
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
