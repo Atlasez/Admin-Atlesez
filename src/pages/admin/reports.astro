@@ -268,10 +268,14 @@ const worldCountryPaths = worldMap.locations
     const setPermissionFeedback = (message: string) => {
       if (permissionFeedback) permissionFeedback.textContent = message;
     };
+    let searchConsoleCountries: Array<{ country: string; value: number }> = [];
     const selectView = (view: "reports" | "analytics") => {
       root.dataset.adminActiveView = view;
       viewButtons.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.adminView === view)));
       viewPanels.forEach((panel) => { panel.hidden = panel.dataset.adminViewPanel !== view; });
+      if (view === "analytics" && searchConsoleCountries.length) {
+        requestAnimationFrame(() => renderWorldMap(searchCountryMap, searchConsoleCountries, "クリック"));
+      }
     };
     const renderAnalytics = (articles: Analytics[], days: number) => {
       if (!analyticsList || !analyticsSummary) return;
@@ -348,6 +352,7 @@ const worldCountryPaths = worldMap.locations
         const data = await readApiResponse<{ snapshot?: { start_date: string; end_date: string; fetched_at: string } | null; countries?: SearchCountry[] }>(response);
         if (!response.ok) throw new Error("Search Console統計を読み込めませんでした。");
         const countries = (data.countries ?? []).map((item) => ({ country: item.country, value: Number(item.clicks ?? 0) }));
+        searchConsoleCountries = countries;
         const snapshot = data.snapshot;
         searchConsoleStatus.value = snapshot ? `${snapshot.start_date}〜${snapshot.end_date}を取得（クリック ${countries.reduce((sum, item) => sum + item.value, 0).toLocaleString()}）` : "まだSearch Consoleデータを取得していません。上のボタンから更新してください。";
         renderWorldMap(searchCountryMap, countries, "クリック"); renderCountryList(searchCountryList, countries, (value) => `${value.toLocaleString()}クリック`);
