@@ -3,6 +3,16 @@ node_modules/
 .astro/
 package-lock.json
 *.astro
+src/scripts/admin-editor-enhancements.ts
+src/editorial-collaboration-worker.ts
+src/scripts/admin-editor-comment-images.ts
+src/scripts/admin-editor-preview-images.ts
+src/scripts/admin-editor-realtime-presence.ts
+src/scripts/admin-editor-subject-preview.ts
+src/scripts/admin-editor-math-macros.ts
+src/scripts/admin-editor-collaboration-labels.ts
+tests/unit/admin-editor-enhancements.test.ts
+public/admin-codemirror.js
 
 versions/
 

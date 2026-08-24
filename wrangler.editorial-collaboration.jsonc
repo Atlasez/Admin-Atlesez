@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "atlasez-editorial-collaboration",
+  "main": "src/editorial-collaboration-worker.ts",
+  "compatibility_date": "2026-07-26",
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "REPORTS",
+      "database_name": "atlasez-reports",
+      "database_id": "747c7d1d-301a-4aea-ad09-fc37d442d43c",
+    },
+  ],
+  "exports": {
+    "EditorialCollaborationRoom": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+}

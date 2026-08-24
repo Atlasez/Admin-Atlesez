@@ -6,30 +6,25 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <header>
       <div>
         <h1 data-admin-i18n data-admin-ja="Atlasezメンバー用サイト" data-admin-en="Atlasez member site">Atlasezメンバー用サイト</h1>
-        <span data-admin-i18n data-admin-ja="Atlasezの全プロジェクトを集約した入口です。各プロジェクトHomeから、それぞれの運営ワークスペースへ移動できます。" data-admin-en="One entry point for every Atlasez project. Open each project home to enter its workspace.">Atlasezの全プロジェクトを集約した入口です。各プロジェクトHomeから、それぞれの運営ワークスペースへ移動できます。</span>
       </div>
     </header>
 
     <section class="project-entry" aria-labelledby="projects-entry-heading">
       <div>
-        <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="主要プロジェクト" data-admin-en="Core projects">主要プロジェクト</h2>
-        <span data-admin-i18n data-admin-ja="学習サイト、ゼミプラットフォーム、運営事務局をここから開けます。" data-admin-en="Open the learning site, seminar platform, or Secretariat from here.">学習サイト、ゼミプラットフォーム、運営事務局をここから開けます。</span>
+        <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="参加中のプロジェクト" data-admin-en="Your projects">参加中のプロジェクト</h2>
       </div>
       <div class="project-entry-cards">
         <a class="project-entry-card" href="/admin/atlas/">
           <strong data-admin-i18n data-admin-ja="学習サイト「アトラス」運営" data-admin-en="Atlas learning site operations">学習サイト「アトラス」運営</strong>
-          <small data-admin-i18n data-admin-ja="原稿、編集・フィードバック、問題報告、進捗、タスク管理、カレンダー" data-admin-en="Articles, feedback, reports, progress, tasks and events">原稿、編集・フィードバック、問題報告、進捗、タスク管理、カレンダー</small>
-          <span data-admin-i18n data-admin-ja="学習サイト運営へ →" data-admin-en="Open learning site operations →">学習サイト運営へ →</span>
+          <span data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="学習サイト運営を開く">→</span>
         </a>
         <a class="project-entry-card" href="/admin/secretariat/">
           <strong data-admin-i18n data-admin-ja="Atlasez運営事務局" data-admin-en="Atlasez Secretariat">Atlasez運営事務局</strong>
-          <small data-admin-i18n data-admin-ja="事務局のタスク、依頼、日程調整、同時作業会" data-admin-en="Secretariat tasks, requests, scheduling and co-working">事務局のタスク、依頼、日程調整、同時作業会</small>
-          <span data-admin-i18n data-admin-ja="事務局サイトへ →" data-admin-en="Open Secretariat →">事務局サイトへ →</span>
+          <span data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="運営事務局サイトを開く">→</span>
         </a>
         <a class="project-entry-card" href="/admin/semi-platform/">
           <strong data-admin-i18n data-admin-ja="ゼミプラットフォーム" data-admin-en="Seminar platform">ゼミプラットフォーム</strong>
-          <small data-admin-i18n data-admin-ja="ゼミの運営、依頼、日程調整、現行サイトへの導線" data-admin-en="Seminar operations, tasks, scheduling and the current site">ゼミの運営、依頼、日程調整、現行サイトへの導線</small>
-          <span data-admin-i18n data-admin-ja="ゼミサイトへ →" data-admin-en="Open seminar platform →">ゼミサイトへ →</span>
+          <span data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="ゼミプラットフォームを開く">→</span>
         </a>
       </div>
     </section>
@@ -37,8 +32,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <div class="home-grid">
       <section class="home-section calendar-section">
         <div class="section-heading">
-          <div><h2 data-admin-i18n data-admin-ja="同時作業会・交流会の日程" data-admin-en="Co-working & social events">同時作業会・交流会の日程</h2><small data-admin-i18n data-admin-ja="参加中のプロジェクトの日程" data-admin-en="Events from your projects">参加中のプロジェクトの日程</small><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
-          <a href="/admin/co-working/" data-admin-i18n data-admin-ja="日程を見る" data-admin-en="View events">日程を見る</a>
+          <div><h2 data-admin-i18n data-admin-ja="同時作業会・交流会の日程" data-admin-en="Co-working & social events">同時作業会・交流会の日程</h2><small class="calendar-timezone-note" data-calendar-timezone-note></small></div>
+          <a href="/admin/member-calendar/" data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="横断カレンダーを開く">→</a>
         </div>
         <div class="calendar-toolbar" role="group" aria-label="今日のカレンダー"><div class="calendar-heading"><strong data-calendar-title>読み込み中…</strong><small data-calendar-range></small></div></div>
         <div class="calendar-filters" role="group" aria-label="カレンダー表示対象"><span class="calendar-filter-label" data-admin-i18n data-admin-ja="表示対象" data-admin-en="Showing">表示対象</span><label><input type="checkbox" data-calendar-source="organization" checked /> <span data-admin-i18n data-admin-ja="同時作業会・交流会" data-admin-en="Co-working & socials">同時作業会・交流会</span></label></div>
@@ -47,7 +42,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       <section class="home-section">
         <div class="section-heading">
           <div><h2 data-admin-i18n data-admin-ja="自分の未完了タスク" data-admin-en="My open tasks">自分の未完了タスク</h2></div>
-          <a href="/admin/operations/" data-admin-i18n data-admin-ja="タスク管理を開く" data-admin-en="Open tasks">タスク管理を開く</a>
+          <a href="/admin/member-tasks/" data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="横断タスク管理を開く">→</a>
         </div>
         <div data-todos>読み込み中…</div>
       </section>
@@ -183,7 +178,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       const parts = dateParts(event.startsAt);
       const time = parts.hour && parts.minute ? `${parts.hour}:${parts.minute}` : '—';
       const kind = event.kind === 'personal' ? copy[language].personal : copy[language].organization;
-      const href = event.kind === 'organization' ? '/admin/co-working/' : '/admin/operations/';
+      const href = event.kind === 'organization' ? '/admin/member-calendar/' : '/admin/member-tasks/';
       return `<a class="calendar-agenda-item${event.kind === 'personal' ? ' is-personal' : ''}" href="${href}"><span class="calendar-agenda-time">${escapeHtml(time)}</span><span class="calendar-agenda-copy"><b>${escapeHtml(event.title)}</b><small>${escapeHtml(kind)} / ${escapeHtml(event.projectName)} ・ ${escapeHtml(formatDate(event.startsAt))}</small></span></a>`;
     };
     const renderAgenda = (events: PortalCalendarEvent[], language: PortalLanguage) => {
