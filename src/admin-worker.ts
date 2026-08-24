@@ -412,16 +412,6 @@ const APPLICATION_GRADE_ALIASES: Record<string, string> = {
   博士2年: "D2",
   博士3年: "D3",
 };
-const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
-  中学校: ["中1", "中2", "中3", "その他"],
-  高等学校: ["高1", "高2", "高3", "その他"],
-  高等専門学校: ["高専1", "高専2", "高専3", "高専4", "高専5", "その他"],
-  大学: ["B1", "B2", "B3", "B4", "教職員・研究者", "その他"],
-  大学院: ["M1", "M2", "D1", "D2", "D3", "教職員・研究者", "その他"],
-  "研究機関・教育機関": ["教職員・研究者", "その他"],
-  社会人: ["社会人", "その他"],
-  その他: MEMBER_YEARS,
-};
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
@@ -4400,16 +4390,14 @@ async function submitMemberApplication(
         : [],
     ),
   ];
-  const needsMotivationAndRole = projectSlug !== "thinking-cafe";
-  const needsArticleIdeas =
-    projectSlug === "atlas" || projectSlug === "seminar-platform";
+  const needsGrade = projectSlug === "atlas";
+  const needsRole =
+    projectSlug === "atlas" ||
+    projectSlug === "seminar-platform" ||
+    projectSlug === "secretariat";
   const requiredProjectAnswers: Record<string, string[]> = {
     "thinking-cafe": ["theme"],
-    "student-council-exchange": [
-      "councilStatus",
-      "councilRole",
-      "councilPlans",
-    ],
+    "student-council-exchange": ["councilStatus", "councilPlans"],
     secretariat: ["strengths", "problemAwareness", "plans"],
   };
   const missingProjectAnswer = (requiredProjectAnswers[projectSlug] ?? []).some(
@@ -4418,27 +4406,24 @@ async function submitMemberApplication(
   if (
     !name ||
     !EMAIL_PATTERN.test(email) ||
-    !interests ||
-    !message ||
     !affiliationType ||
     !institution ||
-    !grade ||
     !country ||
     !timezone ||
-    (needsArticleIdeas && !articleIdeas) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
     !residencePrefecture ||
     !residenceCity ||
     !referralSource ||
-    (needsMotivationAndRole && (!motivationReasons || !desiredRoles)) ||
+    !motivationReasons ||
+    (needsGrade && !grade) ||
+    (needsRole && !desiredRoles) ||
     !interviewAvailability ||
     (projectSlug === "atlas" && !desiredSubjectSlugs.length) ||
     missingProjectAnswer
   )
     return json(
       {
-        error:
-          "基本情報、居住地、希望分野、書きたい記事、参加理由を入力してください。",
+        error: "基本情報、居住地、選択項目、参加理由を入力してください。",
       },
       400,
     );
@@ -4451,14 +4436,8 @@ async function submitMemberApplication(
     !(MEMBER_AFFILIATION_TYPES as readonly string[]).includes(affiliationType)
   )
     return json({ error: "所属区分を一覧から選択してください。" }, 400);
-  if (
-    !(MEMBER_YEARS as readonly string[]).includes(grade) ||
-    !(APPLICATION_GRADES_BY_AFFILIATION[affiliationType] ?? []).includes(grade)
-  )
-    return json(
-      { error: "所属区分に対応する学年・立場を選択してください。" },
-      400,
-    );
+  if (needsGrade && grade.length > 80)
+    return json({ error: "学年を80文字以内で入力してください。" }, 400);
   if (!validTimeZone(timezone))
     return json({ error: "タイムゾーンを一覧から選択してください。" }, 400);
   const clientKey = await hash(
