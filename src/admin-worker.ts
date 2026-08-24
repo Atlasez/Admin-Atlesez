@@ -6198,7 +6198,7 @@ async function startSearchConsoleImport(
       "openid email profile https://www.googleapis.com/auth/webmasters.readonly",
     state,
     prompt: "consent",
-    access_type: "online",
+    access_type: "offline",
   }).toString();
   const headers = new Headers({ location: authorization.toString() });
   headers.append(
@@ -6237,7 +6237,7 @@ async function completeSearchConsoleImport(
       302,
     );
 
-  let token: { access_token?: string };
+  let token: { access_token?: string; refresh_token?: string };
   try {
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -6251,7 +6251,10 @@ async function completeSearchConsoleImport(
       }),
     });
     if (!tokenResponse.ok) throw new Error("token exchange failed");
-    token = (await tokenResponse.json()) as { access_token?: string };
+    token = (await tokenResponse.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+    };
   } catch {
     return Response.redirect(
       `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
@@ -6264,22 +6267,58 @@ async function completeSearchConsoleImport(
       302,
     );
 
+  if (token.refresh_token) {
+    await env.REPORTS.prepare(
+      `INSERT INTO search_console_oauth_tokens (email,refresh_token,updated_at)
+       VALUES (?,?,?)
+       ON CONFLICT(email) DO UPDATE SET refresh_token=excluded.refresh_token,updated_at=excluded.updated_at`,
+    )
+      .bind(scope.email, token.refresh_token, new Date().toISOString())
+      .run();
+  }
+
   const days = Number.isInteger(savedState.days)
     ? Math.min(90, Math.max(1, savedState.days ?? 30))
     : 30;
+  try {
+    await importSearchConsoleData(env, token.access_token, days);
+  } catch {
+    return Response.redirect(
+      `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
+      302,
+    );
+  }
+  return Response.redirect(
+    `${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`,
+    302,
+  );
+}
+
+type SearchConsoleRow = {
+  keys?: string[];
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+  position?: number;
+};
+
+const searchConsoleDateRange = (days: number) => {
   const endDate = new Date();
   endDate.setUTCDate(endDate.getUTCDate() - 2);
   const startDate = new Date(endDate);
   startDate.setUTCDate(startDate.getUTCDate() - days + 1);
-  const start = startDate.toISOString().slice(0, 10);
-  const end = endDate.toISOString().slice(0, 10);
-  type SearchConsoleRow = {
-    keys?: string[];
-    clicks?: number;
-    impressions?: number;
-    ctr?: number;
-    position?: number;
+  return {
+    start: startDate.toISOString().slice(0, 10),
+    end: endDate.toISOString().slice(0, 10),
   };
+};
+
+async function importSearchConsoleData(
+  env: Env,
+  accessToken: string,
+  days: number,
+) {
+  const { start, end } = searchConsoleDateRange(days);
   const querySearchConsole = async (
     dimensions: string[],
     rowLimit: number,
@@ -6289,7 +6328,7 @@ async function completeSearchConsoleImport(
       {
         method: "POST",
         headers: {
-          authorization: `Bearer ${token.access_token}`,
+          authorization: `Bearer ${accessToken}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -6312,10 +6351,7 @@ async function completeSearchConsoleImport(
       querySearchConsole(["query"], 100),
     ]);
   } catch {
-    return Response.redirect(
-      `${adminPublicOrigin(request, env)}/admin/reports/?gsc=error`,
-      302,
-    );
+    throw new Error("Search Console query failed");
   }
 
   const snapshotId = crypto.randomUUID();
@@ -6368,10 +6404,45 @@ async function completeSearchConsoleImport(
     );
   const statements = [...countryStatements, ...queryStatements];
   if (statements.length) await env.REPORTS.batch(statements);
-  return Response.redirect(
-    `${adminPublicOrigin(request, env)}/admin/reports/?gsc=imported`,
-    302,
+  return {
+    start,
+    end,
+    countries: countryStatements.length,
+    queries: queryStatements.length,
+  };
+}
+
+async function refreshSearchConsoleAccessToken(env: Env, refreshToken: string) {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+      client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!response.ok) throw new Error("Search Console token refresh failed");
+  const token = (await response.json()) as { access_token?: string };
+  if (!token.access_token)
+    throw new Error("Search Console access token missing");
+  return token.access_token;
+}
+
+async function syncSearchConsoleFromStoredToken(env: Env) {
+  if (!googleOAuthConfigured(env))
+    return { skipped: true, reason: "oauth-not-configured" };
+  const stored = await env.REPORTS.prepare(
+    "SELECT email,refresh_token FROM search_console_oauth_tokens ORDER BY updated_at DESC LIMIT 1",
+  ).first<{ email: string; refresh_token: string }>();
+  if (!stored?.refresh_token)
+    return { skipped: true, reason: "authorization-required" };
+  const accessToken = await refreshSearchConsoleAccessToken(
+    env,
+    stored.refresh_token,
   );
+  return importSearchConsoleData(env, accessToken, 30);
 }
 
 async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
@@ -7359,6 +7430,12 @@ export default {
         syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
         dispatchDueTaskReminders(env),
+        syncSearchConsoleFromStoredToken(env).catch((error) => {
+          console.error("search_console_cron_failed", {
+            error: error instanceof Error ? error.message : "unknown error",
+          });
+          return { skipped: false, failed: true };
+        }),
       ]),
     );
   },
