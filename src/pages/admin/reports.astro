@@ -325,10 +325,11 @@ const worldCountryPaths = worldMap.locations
         if (!shape || item.value <= 0) return;
         const svgRect = svg.getBoundingClientRect();
         const shapeRect = shape.getBoundingClientRect();
-        const viewBox = svg.viewBox.baseVal;
-        if (!svgRect.width || !svgRect.height || !shapeRect.width || !shapeRect.height) return;
-        const x = viewBox.x + ((shapeRect.left + shapeRect.width / 2 - svgRect.left) / svgRect.width) * viewBox.width;
-        const y = viewBox.y + ((shapeRect.top + shapeRect.height / 2 - svgRect.top) / svgRect.height) * viewBox.height;
+        const viewBox = (svg.getAttribute("viewBox") ?? "").trim().split(/\s+/).map(Number);
+        if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value)) || !svgRect.width || !svgRect.height || !shapeRect.width || !shapeRect.height) return;
+        const [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight] = viewBox;
+        const x = viewBoxX + ((shapeRect.left + shapeRect.width / 2 - svgRect.left) / svgRect.width) * viewBoxWidth;
+        const y = viewBoxY + ((shapeRect.top + shapeRect.height / 2 - svgRect.top) / svgRect.height) * viewBoxHeight;
         const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y)); circle.setAttribute("r", String(3 + Math.sqrt(ratio) * 7));
         circle.setAttribute("aria-label", `${countryLabel(item.country)} ${item.value.toLocaleString()} ${metric}`);
