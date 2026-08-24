@@ -7,7 +7,7 @@
   "preview_urls": true,
   "vars": {
     "ADMIN_AUTH_MODE": "google-oauth",
-    "ADMIN_PUBLIC_ORIGIN": "https://atlasez-admin.atlasez-adm.workers.dev",
+    "ADMIN_PUBLIC_ORIGIN": "https://admin.atlasez.org",
   },
   "assets": {
     "directory": "./dist",

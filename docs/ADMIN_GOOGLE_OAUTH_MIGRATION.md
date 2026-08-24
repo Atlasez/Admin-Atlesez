@@ -15,7 +15,7 @@ Googleが本人確認を行い、管理Workerが確認済みメールアドレ�
 ## 切替の準備
 
 1. Google Cloud ConsoleでOAuth同意画面を公開し、OAuth 2.0の「ウェブアプリケーション」クライアントを作成する。
-2. 承認済みリダイレクトURIに`https://atlasez-admin.atlasez-adm.workers.dev/auth/google/callback`を登録する。
+2. 承認済みリダイレクトURIに`https://admin.atlasez.org/auth/google/callback`を登録する。
 3. Cloudflare Worker `atlasez-admin` のSecretへ、次を登録する。値はGitHubやチャットに貼らない。
 
    - `GOOGLE_OAUTH_CLIENT_ID`
