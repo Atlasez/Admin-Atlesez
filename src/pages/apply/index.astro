@@ -22,10 +22,18 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         <p data-i18n="eyebrow">ATLASEZ / MEMBER APPLICATION</p>
         <select data-language hidden aria-hidden="true"><option value="ja" selected>日本語</option></select>
       </div>
-      <h1 data-i18n="title">運営参加応募</h1>
-      <p class="intro" data-i18n="intro">入力内容は運営参加の選考・連絡、承認後の担当設定にのみ使います。応募内容は運営内運営のみが閲覧します。</p>
+      <h1 data-project-title>運営参加応募</h1>
+      <p class="intro" data-project-intro>入力内容は運営参加の選考・連絡、承認後の担当設定にのみ使います。応募内容は運営内運営のみが閲覧します。</p>
+      <nav class="form-directory" aria-label="応募フォームの種類">
+        <a href="/apply/?project=atlas" data-form-link="atlas">学習サイト</a>
+        <a href="/apply/?project=thinking-cafe" data-form-link="thinking-cafe">考えるカフェ</a>
+        <a href="/apply/?project=seminar-platform" data-form-link="seminar-platform">ゼミプラットフォーム</a>
+        <a href="/apply/?project=student-council-exchange" data-form-link="student-council-exchange">生徒会</a>
+        <a href="/apply/?project=secretariat" data-form-link="secretariat">運営事務局</a>
+      </nav>
 
       <form data-application>
+        <input type="hidden" name="projectSlug" data-project-slug value="atlas" />
         <fieldset>
           <legend data-i18n="basic">基本情報</legend>
           <div class="name-grid">
@@ -58,14 +66,27 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
           <small class="hint" data-i18n="timezoneHelp">IANAのタイムゾーンから選択できます。日程表示の基準になります。</small>
         </fieldset>
 
-        <fieldset>
+        <fieldset data-project-content>
           <legend data-i18n="interestsTitle">参加したい内容</legend>
-          <fieldset class="subject-field"><legend data-i18n="subjectsLabel">関心のある分野（複数選択可・上限なし）</legend><div class="subjects">{subjects.map((subject) => <label><input type="checkbox" name="desiredSubjects" value={subject.data.slug} /><span data-subject-ja={subject.data.name.ja} data-subject-en={subject.data.name.en ?? subject.data.name.ja}>{subject.data.name.ja}</span></label>)}<label><input type="checkbox" name="desiredSubjects" value="other" /><span data-subject-ja="その他" data-subject-en="Other">その他</span></label></div></fieldset>
-          <label><span data-i18n="articleIdeas">書いてみたい記事・テーマ</span><textarea name="articleIdeas" maxlength="3000" required placeholder="例：群論の基本概念、英語学習の語源マップ…"></textarea></label>
-          <label><span data-i18n="skills">関心のあるプロジェクト・できること</span><textarea name="interests" maxlength="1000" required placeholder="例：記事執筆、査読、翻訳、ページデザイン、運営など"></textarea></label>
-          <label><span data-i18n="message">参加したい理由・自己紹介</span><textarea name="message" maxlength="8000" required></textarea></label>
-          <label>参加理由（複数ある場合はすべて）<textarea name="motivationReasons" maxlength="3000" required placeholder="学習記事の執筆、運営への関心、交流など"></textarea></label>
-          <label>希望担当（複数ある場合はすべて）<textarea name="desiredRoles" maxlength="2000" required placeholder="記事執筆、査読、デザイン、システム、運営など"></textarea></label>
+          <fieldset class="subject-field" data-project-only="atlas"><legend data-i18n="subjectsLabel">関心のある分野（複数選択可・上限なし）</legend><div class="subjects">{subjects.map((subject) => <label><input type="checkbox" name="desiredSubjects" value={subject.data.slug} /><span data-subject-ja={subject.data.name.ja} data-subject-en={subject.data.name.en ?? subject.data.name.ja}>{subject.data.name.ja}</span></label>)}<label><input type="checkbox" name="desiredSubjects" value="other" /><span data-subject-ja="その他" data-subject-en="Other">その他</span></label></div></fieldset>
+          <label data-copy-field="articleIdeas"><span data-i18n="articleIdeas">書いてみたい記事・テーマ</span><textarea name="articleIdeas" maxlength="3000" required placeholder="例：群論の基本概念、英語学習の語源マップ…"></textarea></label>
+          <label data-copy-field="interests"><span data-i18n="skills">関心のあるプロジェクト・できること</span><textarea name="interests" maxlength="1000" required placeholder="例：記事執筆、査読、翻訳、ページデザイン、運営など"></textarea></label>
+          <label data-copy-field="message"><span data-i18n="message">参加したい理由・自己紹介</span><textarea name="message" maxlength="8000" required></textarea></label>
+          <label data-copy-field="motivation">参加理由（複数ある場合はすべて）<textarea name="motivationReasons" maxlength="3000" required placeholder="学習記事の執筆、運営への関心、交流など"></textarea></label>
+          <label data-copy-field="roles">希望担当（複数ある場合はすべて）<textarea name="desiredRoles" maxlength="2000" required placeholder="記事執筆、査読、デザイン、システム、運営など"></textarea></label>
+          <div class="project-extra" data-project-extra="thinking-cafe" hidden>
+            <label>参加してみたいテーマ<textarea data-project-answer="theme" maxlength="3000" required></textarea></label>
+          </div>
+          <div class="project-extra" data-project-extra="student-council-exchange" hidden>
+            <label>生徒会への所属または所属経験の有無<input data-project-answer="councilStatus" maxlength="300" required /></label>
+            <label>生徒会での役職名<input data-project-answer="councilRole" maxlength="300" required /></label>
+            <label>運営としてどんな活動や企画をしたいですか？<textarea data-project-answer="councilPlans" maxlength="4000" required></textarea></label>
+          </div>
+          <div class="project-extra" data-project-extra="secretariat" hidden>
+            <label>あなたの得意なこと・資格・実績<textarea data-project-answer="strengths" maxlength="4000" required></textarea></label>
+            <label>日頃持っている問題意識<textarea data-project-answer="problemAwareness" maxlength="4000" required></textarea></label>
+            <label>本協議会で取り組みたいこと<textarea data-project-answer="plans" maxlength="4000" required></textarea></label>
+          </div>
           <label>面談候補日・時間帯<textarea name="interviewAvailability" maxlength="2000" required placeholder="タイムゾーンも併記してください"></textarea></label>
           <label><span data-i18n="availability">参加可能な時間帯など（任意）</span><textarea name="availabilityNote" maxlength="1000"></textarea></label>
           <label>質問・確認したいこと（任意）<textarea name="applicantQuestions" maxlength="3000"></textarea></label>
@@ -82,6 +103,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
 
 <style>
   .apply{box-sizing:border-box;margin:0 auto;max-width:920px;padding:2rem 1.25rem 4rem}.brand{color:var(--accent-primary);font-size:1.1rem;font-weight:800;text-decoration:none}.apply section{border-top:2px solid var(--accent-primary);margin-top:2rem;padding-top:1.5rem}.language-row{align-items:center;display:flex;justify-content:space-between;gap:1rem}.apply p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.language-picker{align-items:center;display:flex;gap:.45rem;font-size:.78rem;font-weight:700}.language-picker select{padding:.35rem .5rem}.apply h1{font-size:2rem;margin:.35rem 0}.intro{color:var(--text-secondary)!important;font-size:.9rem!important;letter-spacing:0!important;line-height:1.7}.apply form{display:grid;gap:1rem;margin-top:1.5rem}.apply fieldset{border:1px solid var(--border-default);display:grid;gap:.8rem;margin:0;padding:1rem}.apply legend{color:var(--accent-primary);font-size:.82rem;font-weight:800;padding:0 .35rem}.apply label{display:grid;font-size:.82rem;font-weight:800;gap:.35rem}.apply input,.apply textarea,.apply select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;min-height:2.8rem;padding:.65rem;width:100%}.apply textarea{min-height:6rem;resize:vertical}.apply small{color:var(--text-secondary);font-size:.74rem;font-weight:500;line-height:1.5}.two,.name-grid{display:grid;gap:.8rem;grid-template-columns:repeat(2,minmax(0,1fr))}.name-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kana-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:calc(66.666% - .25rem)}.subject-field{background:var(--background-secondary);padding:.8rem}.subjects{display:flex;flex-wrap:wrap;gap:.45rem}.subjects label{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);border-radius:999px;display:flex;font-size:.76rem;gap:.3rem;padding:.3rem .55rem}.subjects input{accent-color:var(--accent-primary);min-height:1rem;padding:0;width:auto}.hint{display:block}.apply button{background:var(--accent-primary);border:0;color:#fff;cursor:pointer;font:inherit;font-weight:800;padding:.8rem}.apply output{color:var(--text-secondary);min-height:1.3rem}.trap{height:0;opacity:0;overflow:hidden;pointer-events:none}.language-picker select{min-height:2rem}@media(max-width:650px){.apply{padding:1.25rem .85rem 3rem}.language-row{align-items:flex-start;flex-direction:column}.two,.name-grid,.kana-grid{grid-template-columns:1fr;max-width:none}}
+  .form-directory{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem}.form-directory a{border:1px solid var(--border-default);border-radius:999px;color:var(--text-primary);font-size:.76rem;padding:.35rem .6rem;text-decoration:none}.form-directory a[aria-current="true"]{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff}.project-extra{display:grid;gap:.8rem}
   .apply select{height:2.8rem;max-height:2.8rem}
 </style>
 
@@ -106,6 +128,53 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const institutionList = form.querySelector<HTMLDataListElement>("#institution-directory")!;
     const institutionStatus = form.querySelector<HTMLElement>("[data-institution-status]")!;
     const middle = form.querySelector<HTMLElement>(".middle-name")!;
+    const projectSlugInput = form.querySelector<HTMLInputElement>("[data-project-slug]")!;
+    const projectTitle = page.querySelector<HTMLElement>("[data-project-title]")!;
+    const projectIntro = page.querySelector<HTMLElement>("[data-project-intro]")!;
+    const projectForms: Record<string, { title: string; intro: string; article: string; interests: string; message: string; motivation: string; roles: string; articlePlaceholder: string }> = {
+      atlas: { title: "学習サイト「アトラス」運営応募", intro: "学習サイト「アトラス」の記事執筆・査読・翻訳・運営に関する応募フォームです。", article: "書いてみたい記事・テーマ", interests: "関心のあるプロジェクト・できること", message: "参加したい理由・自己紹介", motivation: "参加理由（複数ある場合はすべて）", roles: "希望担当（複数ある場合はすべて）", articlePlaceholder: "例：群論の基本概念、英語学習の語源マップ…" },
+      "thinking-cafe": { title: "考えるカフェ参加・運営応募", intro: "考えるカフェで扱いたいテーマや、対話の場づくりへの関心をお聞きします。", article: "参加してみたいテーマ", interests: "興味のある対話分野・できること", message: "参加してみたい理由・自己紹介", motivation: "", roles: "", articlePlaceholder: "考えてみたい問いや話し合いたいテーマ" },
+      "seminar-platform": { title: "ゼミプラットフォーム運営応募", intro: "ゼミの企画・参加・運営に関する応募フォームです。", article: "ゼミで扱いたいテーマ", interests: "関心のある分野・できること", message: "参加したい理由・自己紹介", motivation: "参加理由", roles: "担当したい仕事内容", articlePlaceholder: "立ち上げたいゼミや扱いたいテーマ" },
+      "student-council-exchange": { title: "日本生徒会協会運営応募", intro: "生徒会活動の経験や、学校を越えた交流・企画への関心をお聞きします。", article: "取り組みたい活動・企画", interests: "関心のある生徒会活動・できること", message: "参加したい理由・自己紹介", motivation: "参加理由", roles: "希望する役割", articlePlaceholder: "交流会、情報共有、企画など" },
+      secretariat: { title: "Atlasez運営事務局応募", intro: "Atlasez全体の運営事務局で取り組みたいことをお聞きします。", article: "本協議会で取り組みたいこと", interests: "得意なこと・資格・実績", message: "志望動機・自己紹介", motivation: "志望動機", roles: "希望する部署", articlePlaceholder: "取り組みたい課題や具体的な活動" },
+    };
+    const queryProject = new URLSearchParams(location.search).get("project") ?? "atlas";
+    const projectSlug = Object.hasOwn(projectForms, queryProject) ? queryProject : "atlas";
+    const projectConfig = projectForms[projectSlug];
+    projectSlugInput.value = projectSlug;
+    projectTitle.textContent = projectConfig.title;
+    projectIntro.textContent = projectConfig.intro;
+    for (const link of page.querySelectorAll<HTMLAnchorElement>("[data-form-link]")) {
+      if (link.dataset.formLink === projectSlug) link.setAttribute("aria-current", "true"); else link.removeAttribute("aria-current");
+    }
+    const copyField = (key: string, label: string, placeholder: string) => {
+      const field = form.querySelector<HTMLElement>(`[data-copy-field="${key}"]`);
+      if (!field) return;
+      const span = field.querySelector<HTMLElement>("span");
+      const control = field.querySelector<HTMLInputElement | HTMLTextAreaElement>("input,textarea");
+      if (span) span.textContent = label;
+      if (control && "placeholder" in control) control.placeholder = placeholder;
+    };
+    copyField("articleIdeas", projectConfig.article, projectConfig.articlePlaceholder);
+    copyField("interests", projectConfig.interests, "経験・関心・貢献できること");
+    copyField("message", projectConfig.message, "");
+    copyField("motivation", projectConfig.motivation, "");
+    copyField("roles", projectConfig.roles, "");
+    const setProjectField = (selector: string, visible: boolean, required: boolean) => {
+      const field = form.querySelector<HTMLElement>(selector);
+      if (!field) return;
+      field.hidden = !visible;
+      for (const control of field.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input,textarea")) control.required = visible && required;
+    };
+    setProjectField('[data-project-only="atlas"]', projectSlug === "atlas", false);
+    setProjectField('[data-copy-field="articleIdeas"]', projectSlug !== "thinking-cafe" && projectSlug !== "student-council-exchange" && projectSlug !== "secretariat", true);
+    setProjectField('[data-copy-field="motivation"]', projectSlug !== "thinking-cafe", true);
+    setProjectField('[data-copy-field="roles"]', projectSlug !== "thinking-cafe", true);
+    for (const extra of form.querySelectorAll<HTMLElement>("[data-project-extra]")) {
+      const visible = extra.dataset.projectExtra === projectSlug;
+      extra.hidden = !visible;
+      for (const control of extra.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input,textarea")) control.required = visible;
+    }
     const grades: Record<string, string[]> = { "中学校": ["中1", "中2", "中3", "その他"], "高等学校": ["高1", "高2", "高3", "その他"], "高等専門学校": ["高専1", "高専2", "高専3", "高専4", "高専5", "その他"], "大学": ["B1", "B2", "B3", "B4", "教職員・研究者", "その他"], "大学院": ["M1", "M2", "D1", "D2", "D3", "教職員・研究者", "その他"], "研究機関・教育機関": ["教職員・研究者", "その他"], "社会人": ["社会人", "その他"], "その他": ["中1", "中2", "中3", "高1", "高2", "高3", "高専1", "高専2", "高専3", "高専4", "高専5", "B1", "B2", "B3", "B4", "M1", "M2", "D1", "D2", "D3", "教職員・研究者", "社会人", "その他"] };
     const updateGrades = () => { const allowed = new Set(grades[affiliation.value] ?? []); for (const option of [...grade.options]) option.hidden = Boolean(option.value) && !allowed.has(option.value); if (grade.value && !allowed.has(grade.value)) grade.value = ""; grade.disabled = !affiliation.value; };
     affiliation.addEventListener("change", updateGrades); updateGrades();
@@ -124,6 +193,6 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     language.addEventListener("change", updateLanguage); updateLanguage();
     let turnstileToken = "";
     fetch("/api/public/application-config").then((response) => response.json()).then((config: { turnstileSiteKey?: string }) => { if (!config.turnstileSiteKey) return; const script = document.createElement("script"); script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; script.async = true; script.onload = () => { const turnstile = (window as unknown as { turnstile?: { render: (target: HTMLElement, options: Record<string, unknown>) => void } }).turnstile; turnstile?.render(slot, { sitekey: config.turnstileSiteKey, callback: (token: string) => { turnstileToken = token; }, "expired-callback": () => { turnstileToken = ""; } }); }; document.head.append(script); }).catch(() => undefined);
-    form.addEventListener("submit", async (event) => { event.preventDefault(); const submittedLanguage = language.value as "ja" | "en"; result.value = submittedLanguage === "en" ? "Submitting…" : "送信中…"; const fd = new FormData(form); const fields = Object.fromEntries(fd) as Record<string, unknown>; fields.desiredSubjects = fd.getAll("desiredSubjects"); fields.formLanguage = submittedLanguage; try { const response = await fetch("/api/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fields, turnstileToken }) }); const data = await response.json().catch(() => ({})) as { error?: string }; if (!response.ok) throw new Error(data.error ?? (submittedLanguage === "en" ? "The application could not be submitted." : "送信できませんでした。")); form.reset(); language.value = submittedLanguage; updateLanguage(); updateGrades(); turnstileToken = ""; result.value = submittedLanguage === "en" ? "Your application has been received. We will contact you after review." : "応募を受け付けました。確認後、運営からご連絡します。"; } catch (error) { result.value = error instanceof Error ? error.message : "送信できませんでした。"; } });
+    form.addEventListener("submit", async (event) => { event.preventDefault(); const submittedLanguage = language.value as "ja" | "en"; result.value = submittedLanguage === "en" ? "Submitting…" : "送信中…"; const fd = new FormData(form); const fields = Object.fromEntries(fd) as Record<string, unknown>; fields.desiredSubjects = fd.getAll("desiredSubjects"); fields.formLanguage = submittedLanguage; fields.projectAnswers = Object.fromEntries([...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-project-answer]")].map((control) => [control.dataset.projectAnswer ?? "", control.value.trim()]).filter(([key, value]) => key && value)); try { const response = await fetch("/api/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fields, turnstileToken }) }); const data = await response.json().catch(() => ({})) as { error?: string }; if (!response.ok) throw new Error(data.error ?? (submittedLanguage === "en" ? "The application could not be submitted." : "送信できませんでした。")); form.reset(); language.value = submittedLanguage; projectSlugInput.value = projectSlug; updateLanguage(); updateGrades(); turnstileToken = ""; result.value = submittedLanguage === "en" ? "Your application has been received. We will contact you after review." : "応募を受け付けました。確認後、運営からご連絡します。"; } catch (error) { result.value = error instanceof Error ? error.message : "送信できませんでした。"; } });
   }
 </script>

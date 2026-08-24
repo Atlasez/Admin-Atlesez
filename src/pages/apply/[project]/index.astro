@@ -1,0 +1,29 @@
+---
+export function getStaticPaths() {
+  const forms = {
+    atlas: "学習サイト「アトラス」",
+    "thinking-cafe": "考えるカフェ",
+    "seminar-platform": "ゼミプラットフォーム",
+    "student-council-exchange": "日本生徒会協会",
+    secretariat: "運営事務局",
+  } as const;
+  return Object.entries(forms).map(([project, name]) => ({ params: { project }, props: { name } }));
+}
+
+const { project } = Astro.params;
+const name = project === "thinking-cafe" ? "考えるカフェ" : project === "seminar-platform" ? "ゼミプラットフォーム" : project === "student-council-exchange" ? "日本生徒会協会" : project === "secretariat" ? "運営事務局" : "学習サイト「アトラス」";
+const target = `/apply/?project=${encodeURIComponent(project ?? "atlas")}`;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content={`0;url=${target}`} />
+    <title>{name}応募フォーム</title>
+  </head>
+  <body>
+    <p><a href={target}>{name}応募フォームを開く</a></p>
+    <script is:inline define:vars={{ target }}>location.replace(target);</script>
+  </body>
+</html>
