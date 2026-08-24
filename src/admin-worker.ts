@@ -6108,6 +6108,10 @@ function googleCallbackUrl(request: Request, env: Env) {
   return `${adminPublicOrigin(request, env)}/auth/google/callback`;
 }
 
+function searchConsoleCallbackUrl(request: Request, env: Env) {
+  return `${adminPublicOrigin(request, env)}/auth/google/search-console/callback`;
+}
+
 const searchConsoleProperty = "sc-domain:atlasez.org";
 
 async function startSearchConsoleImport(
@@ -6134,7 +6138,9 @@ async function startSearchConsoleImport(
   const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorization.search = new URLSearchParams({
     client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
-    redirect_uri: `${adminPublicOrigin(request, env)}/auth/google/search-console/callback`,
+    // Reuse the already-authorized login callback. The callback dispatches
+    // back to this flow by matching the Search Console state cookie.
+    redirect_uri: googleCallbackUrl(request, env),
     response_type: "code",
     scope:
       "openid email profile https://www.googleapis.com/auth/webmasters.readonly",
@@ -6149,7 +6155,7 @@ async function startSearchConsoleImport(
       SEARCH_CONSOLE_STATE_COOKIE,
       JSON.stringify({ state, days }),
       10 * 60,
-      "/auth/google/search-console",
+      "/auth/google",
     ),
   );
   return new Response(null, { status: 302, headers });
@@ -6158,6 +6164,7 @@ async function startSearchConsoleImport(
 async function completeSearchConsoleImport(
   request: Request,
   env: Env,
+  redirectUri = searchConsoleCallbackUrl(request, env),
 ): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -6187,7 +6194,7 @@ async function completeSearchConsoleImport(
         code,
         client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
         client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
-        redirect_uri: `${adminPublicOrigin(request, env)}/auth/google/search-console/callback`,
+        redirect_uri: redirectUri,
         grant_type: "authorization_code",
       }),
     });
@@ -6355,6 +6362,16 @@ async function completeGoogleLogin(
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code") ?? "";
   const state = requestUrl.searchParams.get("state") ?? "";
+  let searchConsoleState: { state?: string } = {};
+  try {
+    searchConsoleState = JSON.parse(
+      cookieValue(request, SEARCH_CONSOLE_STATE_COOKIE),
+    ) as typeof searchConsoleState;
+  } catch {
+    // Search Console用Cookieがない通常ログインとして続行する。
+  }
+  if (code && state && state === searchConsoleState.state)
+    return completeSearchConsoleImport(request, env, googleCallbackUrl(request, env));
   let savedState: { state?: string; returnTo?: string } = {};
   try {
     savedState = JSON.parse(cookieValue(request, GOOGLE_STATE_COOKIE)) as {
