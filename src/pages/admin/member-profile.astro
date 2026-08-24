@@ -2,6 +2,12 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getTimeZoneOptions } from "../../lib/timezones";
 const timezones = getTimeZoneOptions(new Date());
+const memberYears = [
+  "中1", "中2", "中3", "高1", "高2", "高3",
+  "高専1", "高専2", "高専3", "高専4", "高専5",
+  "B1", "B2", "B3", "B4", "M1", "M2", "D1", "D2", "D3",
+  "教職員・研究者", "社会人", "その他",
+];
 ---
 <AdminLayout title="マイページ" description="メンバー基本情報を管理します">
   <main class="member-profile" data-member-profile>
@@ -18,7 +24,7 @@ const timezones = getTimeZoneOptions(new Date());
       <div class="form-grid">
         <label>氏名<input data-display-name maxlength="120" required /></label>
         <label>学校・所属<input data-university maxlength="200" /></label>
-        <label>学年等<input data-year maxlength="80" /></label>
+        <label>学年等<select data-year><option value="">選択してください</option>{memberYears.map((year) => <option value={year}>{year}</option>)}</select></label>
         <label>所属区分<select data-affiliation-type><option value="">選択してください</option><option value="student">学生</option><option value="faculty">教職員</option><option value="worker">社会人</option><option value="other">その他</option></select></label>
         <label>国・地域<input data-country maxlength="120" /></label>
         <label>タイムゾーン<input data-timezone list="member-profile-timezones" value="Asia/Tokyo" placeholder="地域名・都市名で検索" /><small data-timezone-offset></small></label>

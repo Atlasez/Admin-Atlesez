@@ -280,6 +280,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const formatNotificationTime = (value?: string) => value ? new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
       const profileCacheKey = 'atlasez-admin-profile-cache';
       type CachedProfile = { email?: string; display_name?: string; avatar_url?: string };
+      type ProfileResponse = { profile?: { display_name?: string; avatar_url?: string }; profileChangeRequest?: { status?: string; proposed_display_name?: string } };
       const readCachedProfile = (): CachedProfile | null => {
         try {
           const cached = sessionStorage.getItem(profileCacheKey);
@@ -315,8 +316,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           try {
             const profileResponse = await fetch('/api/admin/profile', { credentials: 'same-origin', cache: 'no-store' });
             if (profileResponse.ok) {
-              const profile = await profileResponse.json() as { profile?: { display_name?: string; avatar_url?: string } };
-              const nextProfile = { ...(profile.profile ?? {}), email: status.email };
+              const profile = await profileResponse.json() as ProfileResponse;
+              const pendingName = profile.profileChangeRequest?.status === 'pending' ? profile.profileChangeRequest.proposed_display_name?.trim() : '';
+              const nextProfile = { ...(profile.profile ?? {}), ...(pendingName ? { display_name: pendingName } : {}), email: status.email };
               applyProfile(nextProfile, status.email);
               try { sessionStorage.setItem(profileCacheKey, JSON.stringify(nextProfile)); } catch { /* storage may be unavailable */ }
             }
