@@ -370,6 +370,14 @@ const APPLICATION_SUBJECT_LABELS: Record<string, string> = {
   linguistics: "言語学",
   other: "その他",
 };
+const APPLICATION_FORM_LABELS: Record<string, string> = {
+  atlas: "学習サイト「アトラス」",
+  "thinking-cafe": "考えるカフェ",
+  "seminar-platform": "ゼミプラットフォーム",
+  "student-council-exchange": "日本生徒会協会",
+  secretariat: "運営事務局",
+};
+const APPLICATION_FORM_SLUGS = new Set(Object.keys(APPLICATION_FORM_LABELS));
 const APPLICATION_AFFILIATION_ALIASES: Record<string, string> = {
   中学: "中学校",
   中学生: "中学校",
@@ -3391,7 +3399,8 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
-    `SELECT a.id,a.name,a.email,a.family_name,a.given_name,a.middle_name,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
+    `SELECT a.id,a.name,a.email,a.family_name,a.given_name,a.middle_name,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.project_slug,a.project_answers,
+      a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
       a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
       a.desired_subjects,a.article_ideas,a.availability_note,a.provisioning_status,a.provisioning_error,a.provisioned_at,a.accepted_by,
       COALESCE(d.discord_user_id, '') AS verified_discord_user_id
@@ -3402,6 +3411,7 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   return json({
     applications: rows.results,
     subjectLabels: APPLICATION_SUBJECT_LABELS,
+    formLabels: APPLICATION_FORM_LABELS,
   });
 }
 
@@ -3429,7 +3439,7 @@ async function updateApplication(
   if (!["new", "reviewing", "accepted", "rejected"].includes(status))
     return json({ error: "状態を確認してください。" }, 400);
   const application = await env.REPORTS.prepare(
-    `SELECT name,email,status,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note
+    `SELECT name,email,status,project_slug,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note
      FROM atlasez_member_applications WHERE id=?`,
   )
     .bind(id)
@@ -3437,6 +3447,7 @@ async function updateApplication(
       name: string;
       email: string;
       status: string;
+      project_slug: string;
       family_name: string;
       given_name: string;
       middle_name: string;
@@ -3479,6 +3490,11 @@ async function updateApplication(
         .filter((value) => APPLICATION_SUBJECT_LABELS[value]),
     ),
   ];
+  const projectSlug = APPLICATION_FORM_SLUGS.has(application.project_slug)
+    ? application.project_slug
+    : "atlas";
+  const membershipProjectId =
+    projectSlug === "seminar-platform" ? "semi-platform" : projectSlug;
   const interestLabels = subjects
     .map((subject) => APPLICATION_SUBJECT_LABELS[subject])
     .filter(Boolean);
@@ -3510,14 +3526,14 @@ async function updateApplication(
       .filter(Boolean)
       .join(" ") || application.name;
   const statements: D1PreparedStatement[] = [
-    ...subjects.map((subject) =>
+    ...(projectSlug === "atlas" ? subjects : []).map((subject) =>
       env.REPORTS.prepare(
         "INSERT OR IGNORE INTO report_admin_permissions (email,subject) VALUES (?,?)",
       ).bind(application.email, subject),
     ),
     env.REPORTS.prepare(
-      "INSERT INTO atlasez_project_memberships (project_id,email,role,joined_at) VALUES ('atlas',?,'member',?) ON CONFLICT(project_id,email) DO NOTHING",
-    ).bind(application.email, now),
+      "INSERT INTO atlasez_project_memberships (project_id,email,role,joined_at) VALUES (?,?,'member',?) ON CONFLICT(project_id,email) DO NOTHING",
+    ).bind(membershipProjectId, application.email, now),
     env.REPORTS.prepare(
       `INSERT INTO editorial_member_profiles (email,display_name,availability_note,university,year,interests,affiliation_type,country,timezone,updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET
@@ -4294,6 +4310,8 @@ async function submitMemberApplication(
     desiredRoles?: unknown;
     interviewAvailability?: unknown;
     applicantQuestions?: unknown;
+    projectSlug?: unknown;
+    projectAnswers?: unknown;
   };
   try {
     payload = (await request.json()) as typeof payload;
@@ -4337,6 +4355,25 @@ async function submitMemberApplication(
     desiredRoles = text(payload.desiredRoles, 2_000),
     interviewAvailability = text(payload.interviewAvailability, 2_000),
     applicantQuestions = text(payload.applicantQuestions, 3_000);
+  const requestedProjectSlug = text(payload.projectSlug, 60) || "atlas";
+  if (!APPLICATION_FORM_SLUGS.has(requestedProjectSlug))
+    return json({ error: "応募フォームの種類を確認してください。" }, 400);
+  const projectSlug = requestedProjectSlug;
+  const projectAnswerRecord: Record<string, string> = {};
+  if (
+    payload.projectAnswers &&
+    typeof payload.projectAnswers === "object" &&
+    !Array.isArray(payload.projectAnswers)
+  ) {
+    for (const [key, value] of Object.entries(
+      payload.projectAnswers as Record<string, unknown>,
+    )) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,60}$/.test(key)) continue;
+      const answer = text(value, 4_000);
+      if (answer) projectAnswerRecord[key] = answer;
+    }
+  }
+  const projectAnswers = JSON.stringify(projectAnswerRecord);
   const desiredSubjectSlugs = [
     ...new Set(
       Array.isArray(payload.desiredSubjects)
@@ -4346,6 +4383,17 @@ async function submitMemberApplication(
         : [],
     ),
   ];
+  const needsMotivationAndRole = projectSlug !== "thinking-cafe";
+  const needsArticleIdeas =
+    projectSlug === "atlas" || projectSlug === "seminar-platform";
+  const requiredProjectAnswers: Record<string, string[]> = {
+    "thinking-cafe": ["theme"],
+    "student-council-exchange": ["councilStatus", "councilRole", "councilPlans"],
+    secretariat: ["strengths", "problemAwareness", "plans"],
+  };
+  const missingProjectAnswer = (requiredProjectAnswers[projectSlug] ?? []).some(
+    (key) => !projectAnswerRecord[key],
+  );
   if (
     !name ||
     !EMAIL_PATTERN.test(email) ||
@@ -4356,14 +4404,14 @@ async function submitMemberApplication(
     !grade ||
     !country ||
     !timezone ||
-    !articleIdeas ||
+    (needsArticleIdeas && !articleIdeas) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
     !residenceCity ||
     !referralSource ||
-    !motivationReasons ||
-    !desiredRoles ||
+    (needsMotivationAndRole && (!motivationReasons || !desiredRoles)) ||
     !interviewAvailability ||
-    !desiredSubjectSlugs.length
+    (projectSlug === "atlas" && !desiredSubjectSlugs.length) ||
+    missingProjectAnswer
   )
     return json(
       {
@@ -4451,8 +4499,8 @@ async function submitMemberApplication(
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO atlasez_member_applications
-     (id,name,email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
+     (id,name,email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,project_slug,project_answers,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -4468,6 +4516,8 @@ async function submitMemberApplication(
       message,
       now,
       now,
+      projectSlug,
+      projectAnswers,
       affiliationType,
       institution,
       grade,
@@ -7211,12 +7261,9 @@ async function handleAdminRequest(
     return request.method === "PATCH"
       ? updateArticleReport(request, env, match[1])
       : json({ error: "PATCHのみ利用できます。" }, 405);
-  if (
-    url.pathname === "/apply" ||
-    url.pathname === "/apply/" ||
-    isAdminPagePath(url.pathname)
-  ) {
-    if (url.pathname === "/apply" || url.pathname === "/apply/")
+  const isApplicationPath = /^\/apply(?:\/[^/]+)?\/?$/.test(url.pathname);
+  if (isApplicationPath || isAdminPagePath(url.pathname)) {
+    if (isApplicationPath)
       return fetchAdminAsset(request, env);
     if (authMode(env) === "google-oauth") {
       const identity = await getAuthenticatedEmail(request, env);
