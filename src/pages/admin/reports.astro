@@ -1,9 +1,16 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import japanMap from "@svg-maps/japan";
 import worldMap from "@svg-maps/world";
 
 const worldCountryPaths = worldMap.locations
   .map((location: { id: string; name: string; path: string }) => `<path class="country-shape" data-country-shape="${location.id}" d="${location.path}"><title>${location.name}</title></path>`)
+  .join("");
+const prefectureNames: Record<string, string> = {
+  aichi: "愛知県", akita: "秋田県", aomori: "青森県", chiba: "千葉県", ehime: "愛媛県", fukui: "福井県", fukuoka: "福岡県", fukushima: "福島県", gifu: "岐阜県", gunma: "群馬県", hiroshima: "広島県", hokkaido: "北海道", hyogo: "兵庫県", ibaraki: "茨城県", ishikawa: "石川県", iwate: "岩手県", kagawa: "香川県", kagoshima: "鹿児島県", kanagawa: "神奈川県", kochi: "高知県", kumamoto: "熊本県", kyoto: "京都府", mie: "三重県", miyagi: "宮城県", miyazaki: "宮崎県", nagano: "長野県", nagasaki: "長崎県", nara: "奈良県", niigata: "新潟県", oita: "大分県", okayama: "岡山県", okinawa: "沖縄県", osaka: "大阪府", saga: "佐賀県", saitama: "埼玉県", shiga: "滋賀県", shimane: "島根県", shizuoka: "静岡県", tochigi: "栃木県", tokushima: "徳島県", tokyo: "東京都", tottori: "鳥取県", toyama: "富山県", wakayama: "和歌山県", yamagata: "山形県", yamaguchi: "山口県", yamanashi: "山梨県",
+};
+const japanPrefecturePaths = japanMap.locations
+  .map((location: { id: string; name: string; path: string }) => `<path class="prefecture-shape" data-prefecture-shape="${location.id}" d="${location.path}"><title>${prefectureNames[location.id] ?? location.name}</title></path>`)
   .join("");
 ---
 
@@ -47,7 +54,13 @@ const worldCountryPaths = worldMap.locations
           </div>
           <p class="analytics-geo-description">Google検索から学習サイトへ流入したクリック・表示回数を国別に表示します。運営サイトへのログイン情報は集計しません。</p>
           <output class="analytics-gsc-status" data-search-console-status>Search Consoleのデータを読み込み中です…</output>
-          <div class="geo-layout"><div class="world-map" data-search-country-map role="img" aria-label="学習サイトへの検索流入国別地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g><g class="map-bubbles" data-map-bubbles></g></svg></div><ol class="geo-list" data-search-country-list></ol></div>
+          <div class="geo-layout"><div class="world-map" data-search-country-map role="img" aria-label="学習サイトへの検索流入国別地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g><g class="map-bubbles" data-map-bubbles></g></svg></div></div>
+        </section>
+        <section class="analytics-geo-card" aria-labelledby="prefecture-heading">
+          <div class="analytics-geo-heading"><div><p class="eyebrow">応募フォーム集計</p><h3 id="prefecture-heading">日本の応募者分布（都道府県別）</h3></div></div>
+          <p class="analytics-geo-description">応募フォームに登録された居住地（都道府県）を集計し、日本地図上にポインターを表示します。サイト訪問者数ではなく、応募件数の集計です。</p>
+          <output class="analytics-gsc-status" data-prefecture-status>都道府県の応募集計を読み込み中です…</output>
+          <div class="japan-map" data-prefecture-map role="img" aria-label="応募者の都道府県別分布地図"><svg viewBox={japanMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="japan-ocean" x="0" y="0" width="438" height="516"></rect><g class="japan-prefectures" set:html={japanPrefecturePaths}></g><g class="map-bubbles" data-prefecture-bubbles></g></svg></div>
         </section>
       </div>
 
@@ -122,6 +135,13 @@ const worldCountryPaths = worldMap.locations
   :global(.world-map .country-shape:hover) { stroke: #ffffff; stroke-width: 1.8; }
   :global(.world-map .map-bubbles circle) { fill: #ef6c67; stroke: #ffffff; stroke-width: 1.7; }
   :global(.world-map .map-bubbles circle:hover) { fill: #f4a62a; }
+  .japan-map { background: #4b7fa8; border: 1px solid var(--border); border-radius: .45rem; margin: 0 auto; max-width: 34rem; overflow: hidden; }
+  .japan-map svg { display: block; height: auto; width: 100%; }
+  :global(.japan-map .japan-ocean) { fill: #4b7fa8; }
+  :global(.japan-map .prefecture-shape) { fill: #f7fafc; stroke: #a9c8de; stroke-linejoin: round; stroke-width: 1.15; transition: fill .18s ease, stroke .18s ease; }
+  :global(.japan-map .prefecture-shape:hover) { stroke: #ffffff; stroke-width: 1.8; }
+  :global(.japan-map .map-bubbles circle) { fill: #ef6c67; stroke: #ffffff; stroke-width: 1.7; }
+  :global(.japan-map .map-bubbles circle:hover) { fill: #f4a62a; }
   .geo-list { display: grid; gap: .28rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); list-style: none; margin: 0; max-height: 9.5rem; overflow: auto; padding: 0; }
   .geo-list li { align-items: baseline; border-bottom: 1px solid var(--border); display: flex; font-size: .7rem; gap: .35rem; justify-content: space-between; padding: .25rem 0; }
   .geo-list li:last-child { border-bottom: 0; }
@@ -216,6 +236,7 @@ const worldCountryPaths = worldMap.locations
     views: number; engaged_reads: number; completed_reads: number;
   };
   type SearchCountry = { country: string; clicks: number; impressions: number; ctr: number; position: number };
+  type PrefectureStat = { prefecture: string; applications: number };
   type SearchQuery = { query: string; clicks: number; impressions: number; ctr: number; position: number };
 
   const initializeReportsAdmin = () => {
@@ -236,7 +257,8 @@ const worldCountryPaths = worldMap.locations
     const analyticsSummary = root.querySelector<HTMLOutputElement>("[data-analytics-summary]");
     const analyticsMore = root.querySelector<HTMLButtonElement>("[data-analytics-more]");
     const searchCountryMap = root.querySelector<HTMLElement>("[data-search-country-map]");
-    const searchCountryList = root.querySelector<HTMLOListElement>("[data-search-country-list]");
+    const prefectureMap = root.querySelector<HTMLElement>("[data-prefecture-map]");
+    const prefectureStatus = root.querySelector<HTMLOutputElement>("[data-prefecture-status]");
     const searchConsoleStatus = root.querySelector<HTMLOutputElement>("[data-search-console-status]");
     const searchQueryList = root.querySelector<HTMLTableSectionElement>("[data-search-query-list]");
     const searchQueryStatus = root.querySelector<HTMLOutputElement>("[data-search-query-status]");
@@ -269,12 +291,16 @@ const worldCountryPaths = worldMap.locations
       if (permissionFeedback) permissionFeedback.textContent = message;
     };
     let searchConsoleCountries: Array<{ country: string; value: number }> = [];
+    let applicationPrefectures: Array<{ prefecture: string; value: number }> = [];
     const selectView = (view: "reports" | "analytics") => {
       root.dataset.adminActiveView = view;
       viewButtons.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.adminView === view)));
       viewPanels.forEach((panel) => { panel.hidden = panel.dataset.adminViewPanel !== view; });
-      if (view === "analytics" && searchConsoleCountries.length) {
-        requestAnimationFrame(() => renderWorldMap(searchCountryMap, searchConsoleCountries, "クリック"));
+      if (view === "analytics") {
+        requestAnimationFrame(() => {
+          if (searchConsoleCountries.length) renderWorldMap(searchCountryMap, searchConsoleCountries, "クリック");
+          if (applicationPrefectures.length) renderJapanMap(prefectureMap, applicationPrefectures, "応募");
+        });
       }
     };
     const renderAnalytics = (articles: Analytics[], days: number) => {
@@ -307,6 +333,9 @@ const worldCountryPaths = worldMap.locations
       return (normalized.length === 3 ? iso3ToIso2[normalized] : normalized).toLowerCase();
     };
     const countryLabel = (code: string) => countryNames[code] ?? code.toUpperCase();
+    const prefectureIds: Record<string, string> = {
+      北海道: "hokkaido", 青森県: "aomori", 岩手県: "iwate", 宮城県: "miyagi", 秋田県: "akita", 山形県: "yamagata", 福島県: "fukushima", 茨城県: "ibaraki", 栃木県: "tochigi", 群馬県: "gunma", 埼玉県: "saitama", 千葉県: "chiba", 東京都: "tokyo", 神奈川県: "kanagawa", 新潟県: "niigata", 富山県: "toyama", 石川県: "ishikawa", 福井県: "fukui", 山梨県: "yamanashi", 長野県: "nagano", 岐阜県: "gifu", 静岡県: "shizuoka", 愛知県: "aichi", 三重県: "mie", 滋賀県: "shiga", 京都府: "kyoto", 大阪府: "osaka", 兵庫県: "hyogo", 奈良県: "nara", 和歌山県: "wakayama", 鳥取県: "tottori", 島根県: "shimane", 岡山県: "okayama", 広島県: "hiroshima", 山口県: "yamaguchi", 徳島県: "tokushima", 香川県: "kagawa", 愛媛県: "ehime", 高知県: "kochi", 福岡県: "fukuoka", 佐賀県: "saga", 長崎県: "nagasaki", 熊本県: "kumamoto", 大分県: "oita", 宮崎県: "miyazaki", 鹿児島県: "kagoshima", 沖縄県: "okinawa",
+    };
     const renderWorldMap = (target: HTMLElement | null, countries: Array<{ country: string; value: number }>, metric: string) => {
       if (!target) return;
       const svg = target.querySelector<SVGSVGElement>("svg");
@@ -341,9 +370,36 @@ const worldCountryPaths = worldMap.locations
         bubbles.append(circle);
       });
     };
-    const renderCountryList = (target: HTMLOListElement | null, countries: Array<{ country: string; value: number }>, formatter: (value: number) => string) => {
+    const renderJapanMap = (target: HTMLElement | null, prefectures: Array<{ prefecture: string; value: number }>, metric: string) => {
       if (!target) return;
-      target.innerHTML = countries.length ? countries.map((item) => `<li><span class="geo-country">${escapeHtml(countryLabel(item.country))}</span><span class="geo-value">${escapeHtml(formatter(item.value))}</span></li>`).join("") : '<li><span class="geo-country">データはまだありません</span></li>';
+      const svg = target.querySelector<SVGSVGElement>("svg");
+      const bubbles = target.querySelector<SVGGElement>("[data-prefecture-bubbles]");
+      if (!svg || !bubbles) return;
+      const shapes = Array.from(target.querySelectorAll<SVGPathElement>("[data-prefecture-shape]"));
+      shapes.forEach((shape) => { shape.style.removeProperty("fill"); shape.removeAttribute("aria-label"); });
+      bubbles.replaceChildren();
+      const max = Math.max(...prefectures.map((item) => item.value), 1);
+      prefectures.forEach((item) => {
+        const shape = shapes.find((candidate) => candidate.dataset.prefectureShape === (prefectureIds[item.prefecture] ?? item.prefecture.toLowerCase()));
+        const ratio = Math.max(0, Math.min(1, item.value / max));
+        if (shape) {
+          shape.style.fill = `hsl(5 78% ${92 - ratio * 43}%)`;
+          shape.setAttribute("aria-label", `${item.prefecture} ${item.value.toLocaleString()} ${metric}`);
+        }
+        if (!shape || item.value <= 0) return;
+        const svgRect = svg.getBoundingClientRect();
+        const shapeRect = shape.getBoundingClientRect();
+        const viewBox = (svg.getAttribute("viewBox") ?? "").trim().split(/\s+/).map(Number);
+        if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value)) || !svgRect.width || !svgRect.height || !shapeRect.width || !shapeRect.height) return;
+        const [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight] = viewBox;
+        const x = viewBoxX + ((shapeRect.left + shapeRect.width / 2 - svgRect.left) / svgRect.width) * viewBoxWidth;
+        const y = viewBoxY + ((shapeRect.top + shapeRect.height / 2 - svgRect.top) / svgRect.height) * viewBoxHeight;
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y)); circle.setAttribute("r", String(3 + Math.sqrt(ratio) * 7));
+        circle.setAttribute("aria-label", `${item.prefecture} ${item.value.toLocaleString()} ${metric}`);
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title"); title.textContent = `${item.prefecture}: ${item.value.toLocaleString()}${metric}`; circle.append(title);
+        bubbles.append(circle);
+      });
     };
     const loadSearchConsoleAnalytics = async () => {
       if (!searchConsoleStatus) return;
@@ -355,8 +411,20 @@ const worldCountryPaths = worldMap.locations
         searchConsoleCountries = countries;
         const snapshot = data.snapshot;
         searchConsoleStatus.value = snapshot ? `${snapshot.start_date}〜${snapshot.end_date}を取得（クリック ${countries.reduce((sum, item) => sum + item.value, 0).toLocaleString()}）` : "まだSearch Consoleデータを取得していません。上のボタンから更新してください。";
-        renderWorldMap(searchCountryMap, countries, "クリック"); renderCountryList(searchCountryList, countries, (value) => `${value.toLocaleString()}クリック`);
+        renderWorldMap(searchCountryMap, countries, "クリック");
       } catch (error) { searchConsoleStatus.value = error instanceof Error ? error.message : "Search Console統計を読み込めませんでした。"; }
+    };
+    const loadApplicationPrefectureAnalytics = async () => {
+      if (!prefectureStatus) return;
+      try {
+        const response = await fetch("/api/admin/application-prefecture-analytics", { credentials: "same-origin", cache: "no-store" });
+        const data = await readApiResponse<{ prefectures?: PrefectureStat[] }>(response);
+        if (!response.ok) throw new Error("都道府県別の応募集計を読み込めませんでした。");
+        applicationPrefectures = (data.prefectures ?? []).map((item) => ({ prefecture: item.prefecture, value: Number(item.applications ?? 0) }));
+        const total = applicationPrefectures.reduce((sum, item) => sum + item.value, 0);
+        prefectureStatus.value = total ? `応募 ${total.toLocaleString()}件（都道府県登録分）` : "都道府県が登録された応募はまだありません。";
+        renderJapanMap(prefectureMap, applicationPrefectures, "応募");
+      } catch (error) { prefectureStatus.value = error instanceof Error ? error.message : "都道府県別の応募集計を読み込めませんでした。"; }
     };
     const loadSearchQueryAnalytics = async () => {
       if (!searchQueryStatus || !searchQueryList) return;
@@ -504,7 +572,7 @@ const worldCountryPaths = worldMap.locations
       } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
       finally { button.disabled = false; button.textContent = "保存"; }
     });
-    const loadAllAnalytics = () => { void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); };
+    const loadAllAnalytics = () => { void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); void loadApplicationPrefectureAnalytics(); };
     const syncSearchConsoleLink = () => { if (searchConsoleImport) searchConsoleImport.href = `/auth/google/search-console?days=${encodeURIComponent(analyticsDays?.value ?? "30")}`; };
     analyticsDays?.addEventListener("change", syncSearchConsoleLink);
     syncSearchConsoleLink();

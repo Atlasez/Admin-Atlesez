@@ -32,6 +32,7 @@
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
     "@js-temporal/polyfill": "^0.5.1",
+    "@svg-maps/japan": "^2.0.0",
     "@svg-maps/world": "^2.0.0",
     "@vvo/tzdb": "^6.196.0",
     "astro": "^7.1.3",
