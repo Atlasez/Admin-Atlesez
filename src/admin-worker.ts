@@ -4390,6 +4390,7 @@ async function submitMemberApplication(
     }
   }
   const projectAnswers = JSON.stringify(projectAnswerRecord);
+  const residencePrefecture = text(projectAnswerRecord.residencePrefecture, 80);
   const desiredSubjectSlugs = [
     ...new Set(
       Array.isArray(payload.desiredSubjects)
@@ -4404,7 +4405,11 @@ async function submitMemberApplication(
     projectSlug === "atlas" || projectSlug === "seminar-platform";
   const requiredProjectAnswers: Record<string, string[]> = {
     "thinking-cafe": ["theme"],
-    "student-council-exchange": ["councilStatus", "councilRole", "councilPlans"],
+    "student-council-exchange": [
+      "councilStatus",
+      "councilRole",
+      "councilPlans",
+    ],
     secretariat: ["strengths", "problemAwareness", "plans"],
   };
   const missingProjectAnswer = (requiredProjectAnswers[projectSlug] ?? []).some(
@@ -4422,6 +4427,7 @@ async function submitMemberApplication(
     !timezone ||
     (needsArticleIdeas && !articleIdeas) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
+    !residencePrefecture ||
     !residenceCity ||
     !referralSource ||
     (needsMotivationAndRole && (!motivationReasons || !desiredRoles)) ||
@@ -4431,7 +4437,8 @@ async function submitMemberApplication(
   )
     return json(
       {
-        error: "基本情報、希望分野、書きたい記事、参加理由を入力してください。",
+        error:
+          "基本情報、居住地、希望分野、書きたい記事、参加理由を入力してください。",
       },
       400,
     );
@@ -6437,7 +6444,11 @@ async function completeGoogleLogin(
     // Search Console用Cookieがない通常ログインとして続行する。
   }
   if (code && state && state === searchConsoleState.state)
-    return completeSearchConsoleImport(request, env, googleCallbackUrl(request, env));
+    return completeSearchConsoleImport(
+      request,
+      env,
+      googleCallbackUrl(request, env),
+    );
   let savedState: { state?: string; returnTo?: string } = {};
   try {
     savedState = JSON.parse(cookieValue(request, GOOGLE_STATE_COOKIE)) as {
@@ -7284,8 +7295,7 @@ async function handleAdminRequest(
       : json({ error: "PATCHのみ利用できます。" }, 405);
   const isApplicationPath = /^\/apply(?:\/[^/]+)?\/?$/.test(url.pathname);
   if (isApplicationPath || isAdminPagePath(url.pathname)) {
-    if (isApplicationPath)
-      return fetchAdminAsset(request, env);
+    if (isApplicationPath) return fetchAdminAsset(request, env);
     if (authMode(env) === "google-oauth") {
       const identity = await getAuthenticatedEmail(request, env);
       if (identity instanceof Response)
