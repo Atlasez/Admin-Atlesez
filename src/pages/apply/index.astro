@@ -94,7 +94,14 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const tz = form.querySelector<HTMLSelectElement>("[data-timezone]")!;
     const affiliation = form.querySelector<HTMLSelectElement>("[data-affiliation]")!;
     const grade = form.querySelector<HTMLSelectElement>("[data-grade]")!;
-    const language = form.querySelector<HTMLSelectElement>("[data-language]")!;
+    const language = form.querySelector<HTMLSelectElement>("[data-language]") ?? (() => {
+      const fallback = document.createElement("select");
+      const option = document.createElement("option");
+      option.value = "ja";
+      option.textContent = "日本語";
+      fallback.append(option);
+      return fallback;
+    })();
     const institutionInput = form.querySelector<HTMLInputElement>("[data-institution-input]")!;
     const institutionList = form.querySelector<HTMLDataListElement>("#institution-directory")!;
     const institutionStatus = form.querySelector<HTMLElement>("[data-institution-status]")!;
