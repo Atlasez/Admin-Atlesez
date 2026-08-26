@@ -8670,6 +8670,9 @@ async function handleAdminRequest(
       return advanceOnboardingTutorial(request, env);
     return json({ error: "GET、POSTのみ利用できます。" }, 405);
   }
+  // 応募フォームから遷移する個人情報保護方針は、認証不要の静的ページとして公開する。
+  if (url.pathname === "/privacy-policy" || url.pathname === "/privacy-policy/")
+    return fetchAdminAsset(request, env);
   if (
     url.pathname === "/api/onboarding/atlas-writing-practice" &&
     request.method === "POST"
