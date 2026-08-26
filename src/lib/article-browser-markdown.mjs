@@ -13,6 +13,11 @@ import {
   remarkArticleMathMacros,
 } from "./article-math.mjs";
 import { assertSafeTikzSource } from "./tikz-policy.mjs";
+import {
+  editorialImageStyle,
+  editorialImageWidthFromUrl,
+  removeEditorialImageWidthFromUrl,
+} from "./editorial-image.mjs";
 
 const TIKZJAX_SCRIPT_URL = "https://tikzjax.com/v1/tikzjax.js";
 const TIKZJAX_FONT_URL = "https://tikzjax.com/v1/fonts.css";
@@ -24,6 +29,36 @@ const tikzSvgCache = new Map();
 const tikzRenderPromises = new Map();
 
 const tikzAttribute = (value) => encodeURIComponent(String(value ?? ""));
+
+const EDITORIAL_ASSET_URL = /^asset:\/\/([0-9a-f-]{36})(?:\?[^)]*)?$/i;
+
+/** Preserve editor-only asset markers so the admin hydrator can load them. */
+export function remarkBrowserEditorialAssets() {
+  return (tree) => {
+    const visit = (node) => {
+      if (!Array.isArray(node?.children)) return;
+      for (const child of node.children) {
+        if (child?.type === "image" && typeof child.url === "string") {
+          const match = EDITORIAL_ASSET_URL.exec(child.url.trim());
+          if (match) {
+            const width = editorialImageWidthFromUrl(child.url);
+            child.url = removeEditorialImageWidthFromUrl(child.url);
+            child.data ??= {};
+            child.data.hProperties ??= {};
+            child.data.hProperties.className = ["is-loading"];
+            child.data.hProperties["data-editorial-asset"] = match[1];
+            if (width) {
+              child.data.hProperties.style = editorialImageStyle(width);
+              child.data.hProperties["data-editorial-image-width"] = width;
+            }
+          }
+        }
+        visit(child);
+      }
+    };
+    visit(tree);
+  };
+}
 
 /** Replace TikZ fences with a safe placeholder for the editor-side hydrator. */
 export function remarkArticleTikzPlaceholder() {
@@ -205,6 +240,7 @@ export async function renderArticleMarkdown(
     .use(remarkMath)
     .use(remarkJapaneseStrong)
     .use(remarkArticleMathMacros, customPresets)
+    .use(remarkBrowserEditorialAssets)
     .use(remarkArticleTikzPlaceholder)
     .use(remarkRehype, { allowDangerousHtml: true });
   if (katex) processor.use(rehypeArticleKatex);

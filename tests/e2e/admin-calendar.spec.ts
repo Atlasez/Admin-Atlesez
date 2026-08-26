@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("管理メニューはプロジェクト遷移後も同じ個数・順序を保つ", async ({
+test("管理タブはプロジェクト遷移後も管理トップへ直接遷移する", async ({
   page,
 }) => {
   await page.route("**/api/admin/auth-status", async (route) => {
@@ -20,30 +20,17 @@ test("管理メニューはプロジェクト遷移後も同じ個数・順序�
   );
 
   await page.goto("admin/atlas/");
-  const menu = page.locator(".admin-management-menu");
-  const common = [
-    "管理トップ",
-    "運営内自己紹介",
-    "運営内自己紹介の承認",
-    "同時作業会",
-    "運営者・担当管理",
-    "問題報告・統計",
-    "作業の進め方",
-    "応募管理",
-  ];
-  await menu.locator("summary").click();
-  await expect(menu.locator(":scope > div > a:visible")).toHaveText(common);
+  const manageLink = page.getByRole("link", { name: "管理", exact: true });
+  await expect(manageLink).toHaveAttribute(
+    "href",
+    "/admin/manage/?project=atlas",
+  );
 
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
   await page.getByRole("link", { name: /Atlasez運営事務局/ }).click();
-  await menu.locator("summary").click();
-  await expect(menu.locator(":scope > div > a:visible")).toHaveText([
-    "管理トップ",
-    "運営内自己紹介",
-    "運営内自己紹介の承認",
-    "事務局の日程・交流",
-    ...common.slice(4),
-  ]);
+  await expect(
+    page.getByRole("link", { name: "管理", exact: true }),
+  ).toHaveAttribute("href", "/admin/manage/?project=secretariat");
 });
 
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {

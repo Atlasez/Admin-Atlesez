@@ -173,12 +173,19 @@ test("E-6: ダークモードでMarkdown本文を読める配色にする", asyn
     document.documentElement.setAttribute("data-pref-bg", "dark"),
   );
 
-  const colors = await page.locator("[data-body]").evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { background: style.backgroundColor, text: style.color };
-  });
+  const colors = await page
+    .locator('.cm-content[aria-label="本文（Markdown）"]')
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        text: style.color,
+        caret: style.caretColor,
+      };
+    });
   expect(colors.background).not.toBe("rgb(255, 255, 255)");
-  expect(colors.background).not.toBe(colors.text);
+  expect(colors.text).not.toBe("rgba(0, 0, 0, 0)");
+  expect(colors.caret).toBe("rgb(255, 255, 255)");
 });
 
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
@@ -906,12 +913,13 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   await expect(writing).toHaveCSS("grid-row-start", "1");
   await expect(preview).toHaveCSS("grid-row-start", "2");
   await expect(writing.locator('[data-edge="top"]')).toBeDisabled();
-  await writing.locator('[data-edge="bottom"]').click();
-  await expect(writing).toHaveCSS("grid-row-start", "2");
+  await preview.locator('[data-edge="top"]').click();
+  await expect(writing).toHaveCSS("grid-row-start", "1");
   await expect(preview).toHaveCSS("grid-row-start", "1");
+  await expect(review).toHaveCSS("grid-row-start", "2");
   await writing.locator('[data-edge="right"]').click();
   await expect(writing).toHaveCSS("grid-column-start", "2");
-  await expect(review).toHaveCSS("grid-column-start", "1");
+  await expect(preview).toHaveCSS("grid-column-start", "1");
 
   const popupPromise = page.waitForEvent("popup");
   await page.locator('[data-pane-popout="writing"]').click();

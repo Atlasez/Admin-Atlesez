@@ -2738,9 +2738,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   [data-pref-bg="dark"] .editor-workspace .writing-area textarea { background: transparent; color: transparent; caret-color: var(--text-primary); }
   [data-pref-bg="dark"] .editor-workspace { --editor-caret-color: #fff; }
   [data-pref-bg="dark"] .editor-workspace .body-editor-surface [data-body],
-  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-content { caret-color: #fff; }
+  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-content,
+  [data-pref-bg="dark"] .body-codemirror .cm-content { caret-color: #fff !important; }
   [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-cursor,
-  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-dropCursor { border-left-color: #fff; }
+  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-dropCursor,
+  [data-pref-bg="dark"] .body-codemirror .cm-cursor,
+  [data-pref-bg="dark"] .body-codemirror .cm-dropCursor { border-left-color: #fff !important; }
   [data-pref-bg="dark"] .math-preset-dialog [data-custom-preset-label],
   [data-pref-bg="dark"] .math-preset-dialog [data-custom-preset-macros] { color: #fff; -webkit-text-fill-color: #fff; caret-color: #fff; opacity: 1; }
   .revision-workspace { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--accent); margin: 1rem .8rem; padding: 1rem; }
