@@ -3588,9 +3588,15 @@ async function memberCalendarOverview(
   await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
-  if (!projectIds.length) return json({ projects: [], events: [] });
+  if (!projectIds.length)
+    return json({
+      scope: { email: scope.email, isManager: false },
+      projects: [],
+      events: [],
+      availabilityBlocks: [],
+    });
   const placeholders = projectIds.map(() => "?").join(",");
-  const [events, availability] = await Promise.all([
+  const [events, availability, availabilityBlocks] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,title,details,starts_at,ends_at,timezone,created_by,created_at
        FROM editorial_events WHERE project_id IN (${placeholders})
@@ -3613,6 +3619,16 @@ async function memberCalendarOverview(
         availability: string;
         display_name: string;
       }>(),
+    env.REPORTS.prepare(
+      `SELECT b.id,b.email,b.starts_at,b.ends_at,b.timezone,
+        CASE WHEN lower(b.email)=lower(?) THEN b.label ELSE '' END AS label,
+        b.kind,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name
+       FROM editorial_member_availability_blocks b
+       LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(b.email)
+       ORDER BY b.starts_at ASC LIMIT 500`,
+    )
+      .bind(scope.email)
+      .all<Record<string, unknown>>(),
   ]);
   const participantsByEvent = new Map<
     string,
@@ -3624,7 +3640,12 @@ async function memberCalendarOverview(
       item,
     ]);
   return json({
-    scope: { email: scope.email },
+    scope: { email: scope.email, isManager: false },
+    availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
+      ...block,
+      isSelf:
+        String(block.email ?? "").toLowerCase() === scope.email.toLowerCase(),
+    })),
     projects,
     events: (events.results ?? []).map((event) => {
       const participants = participantsByEvent.get(String(event.id)) ?? [];
@@ -3643,6 +3664,11 @@ async function memberCalendarOverview(
             (item) => item.availability === "unavailable",
           ).length,
         },
+        participants: participants.map((participant) => ({
+          displayName: participant.display_name,
+          availability: participant.availability,
+          isSelf: participant.email.toLowerCase() === scope.email.toLowerCase(),
+        })),
       };
     }),
   });
@@ -7719,6 +7745,7 @@ const userReturnPath = (value: string | null) => {
     return "/apply/";
   }
   if (parsed.origin !== "https://admin.local") return "/apply/";
+  if (parsed.pathname === "/") return "/";
   if (isAdminPagePath(parsed.pathname)) return adminReturnPath(candidate);
   if (isApplicantPath(parsed.pathname)) return "/applicant/";
   if (isOnboardingPath(parsed.pathname))
@@ -8612,9 +8639,18 @@ async function handleAdminRequest(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
-  // 認証済みでも権限は未確定なので、入口はステージ判定を行う応募導線へ送る。
-  if (url.pathname === "/")
-    return Response.redirect(`${url.origin}/apply/`, 302);
+  if (url.pathname === "/") {
+    const current = await getCurrentUserStage(request, env);
+    if (isResponse(current)) {
+      if (current.status === 401)
+        return Response.redirect(`${url.origin}/apply/`, 302);
+      return current;
+    }
+    return Response.redirect(
+      `${url.origin}${stageHome(current.stage, current.projectSlug)}`,
+      302,
+    );
+  }
   if (url.pathname === "/auth/google/login" && request.method === "GET")
     return startGoogleLogin(request, env);
   if (url.pathname === "/auth/google/callback" && request.method === "GET")

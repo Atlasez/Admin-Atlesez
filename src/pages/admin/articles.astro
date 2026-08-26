@@ -10,10 +10,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </div>
     </header>
     <nav class="workflow-actions" aria-label="編集・フィードバックの作業入口">
-      <a href="/admin/editor/?new=1&from=articles"><strong>新規記事作成</strong><span>新しい原稿を作る</span></a>
-      <button type="button" data-workflow-action="revise"><strong>加筆・修正</strong><span>自分の作業対象を表示</span></button>
-      <button type="button" data-workflow-action="review"><strong>査読</strong><span>フィードバック対象を表示</span></button>
-      <button type="button" data-workflow-action="request"><strong>フィードバック依頼</strong><span>依頼する原稿を表示</span></button>
+      <a href="/admin/editor/?new=1&from=articles"><strong>新規記事作成</strong></a>
+      <button type="button" data-workflow-action="revise"><strong>加筆・修正</strong></button>
+      <button type="button" data-workflow-action="review"><strong>査読</strong></button>
     </nav>
     <section class="filters" id="article-list">
       <input data-query placeholder="タイトル・分野・カテゴリで検索" /><select
@@ -64,7 +63,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     margin: 0;
   }
   .admin-page h1 {
-    font-size: 2rem;
+    font-size: 1.6rem;
     margin: 0.25rem 0;
   }
   .admin-page > header:not(.admin-nav) span {
@@ -87,7 +86,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .workflow-actions {
     display: grid;
     gap: 0.65rem;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: 1.25rem auto;
     max-width: 60rem;
   }
@@ -100,9 +99,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     color: var(--text-primary);
     cursor: pointer;
     display: grid;
+    align-content: center;
     font: inherit;
-    gap: 0.3rem;
-    min-height: 5.5rem;
+    min-height: 4.25rem;
     padding: 0.85rem;
     text-align: left;
     text-decoration: none;
@@ -113,8 +112,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     border-color: var(--accent-primary);
     box-shadow: 0 0.25rem 0.8rem #153c6618;
   }
-  .workflow-actions strong { font-size: 0.95rem; }
-  .workflow-actions span { color: var(--text-secondary); font-size: 0.72rem; }
+  .workflow-actions strong { font-size: 1.18rem; }
   .admin-page > header:not(.admin-nav) .quiet-header-action {
     background: var(--background-primary);
     border: 1px solid var(--border-default);
@@ -229,7 +227,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     font-size: 0.72rem;
   }
   .admin-page h1 {
-    font-size: clamp(1.9rem, 4vw, 2.5rem);
+    font-size: 1.6rem;
     margin: 0.35rem 0;
   }
   .admin-page > header:not(.admin-nav) span {

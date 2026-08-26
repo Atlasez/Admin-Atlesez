@@ -324,6 +324,17 @@ describe("applicant stage server-side access", () => {
     expect(applicationPage.status).toBe(200);
   });
 
+  it("routes an accepted member entering at the site root to the member portal", async () => {
+    const rootPage = await worker.fetch(
+      loggedInRequest("/"),
+      stageEnv("accepted", false, true, true) as never,
+    );
+    expect(rootPage.status).toBe(302);
+    expect(rootPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
+  });
+
   it("keeps the application directory open for an administrator", async () => {
     const applicationPage = await worker.fetch(
       loggedInRequest("/apply/"),

@@ -92,13 +92,12 @@ export function canAccess(stage: UserStage, area: UserArea): boolean {
 /** ステージが許可されない時に案内する、次に進める入口。 */
 export function stageHome(
   stage: UserStage,
-  projectSlug?: string | null,
+  _projectSlug?: string | null,
 ): string {
   if (stage === "NEW_USER" || stage === "APPLICATION_STARTED") return "/apply/";
   if (stage === "ACCEPTED" || stage === "ONBOARDING") return "/onboarding/";
   if (stage === "TUTORIAL") return "/onboarding/tutorial/";
   if (stage === "ADMIN") return "/admin/portal/";
-  if (stage === "MEMBER" && projectSlug)
-    return `/apply/${encodeURIComponent(projectSlug)}/`;
+  if (stage === "MEMBER") return "/admin/portal/";
   return "/applicant/";
 }
