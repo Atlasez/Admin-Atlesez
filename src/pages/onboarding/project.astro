@@ -1,0 +1,75 @@
+---
+import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
+---
+
+<ApplicantLayout title="プロジェクト情報の設定" description="参加プロジェクト内で使う情報を設定します。" showMemberProfile={true}>
+  <section class="onboarding" data-project-onboarding>
+    <p class="eyebrow">ATLASEZ / PROJECT SETUP</p>
+    <p class="step">STEP 2 / 2</p>
+    <h1>プロジェクトの情報を設定してください</h1>
+    <p class="intro">基本情報の入力が完了しました。続けて、参加するプロジェクト内で使う自己紹介を入力してください。</p>
+
+    <dl class="account-summary">
+      <div><dt>Googleアカウント</dt><dd data-email>読み込み中…</dd></div>
+      <div><dt>参加プロジェクト</dt><dd data-project>読み込み中…</dd></div>
+    </dl>
+
+    <form data-project-onboarding-form>
+      <label>プロジェクト内自己紹介<textarea name="internalBio" maxlength="4000" required placeholder="担当・関心・作業可能なことなどを入力してください。"></textarea><small>参加プロジェクトの運営メンバーに表示される自己紹介です。</small></label>
+      <div class="actions">
+        <a class="secondary" href="/onboarding/">基本情報に戻る</a>
+        <button type="submit">保存して案内へ進む</button>
+      </div>
+      <output data-message aria-live="polite"></output>
+    </form>
+  </section>
+</ApplicantLayout>
+
+<style>
+  .onboarding { margin: 0 auto; max-width: 720px; padding: 3rem 1.25rem 5rem; }
+  .eyebrow, .step { color: var(--accent-primary); font-size: .76rem; font-weight: 800; letter-spacing: .08em; margin: 0; }
+  .step { color: var(--text-secondary); letter-spacing: 0; margin-top: .5rem; }
+  h1 { margin: .4rem 0 .6rem; }
+  .intro, small, output { color: var(--text-secondary); line-height: 1.7; }
+  .account-summary { border-top: 2px solid var(--accent-primary); display: grid; margin: 2rem 0; }
+  .account-summary div { border-bottom: 1px solid var(--border-default); display: grid; gap: .65rem; grid-template-columns: minmax(10rem, .8fr) 1fr; padding: .75rem .2rem; }
+  dt { color: var(--text-secondary); font-size: .8rem; font-weight: 800; } dd { margin: 0; overflow-wrap: anywhere; }
+  form { display: grid; gap: 1rem; } label { display: grid; font-size: .86rem; font-weight: 750; gap: .38rem; } textarea { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 12rem; padding: .65rem; resize: vertical; width: 100%; } small { font-size: .75rem; font-weight: 500; }
+  .actions { align-items: center; display: flex; flex-wrap: wrap; gap: .7rem; } button, .secondary { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: var(--on-accent); cursor: pointer; font: inherit; font-weight: 800; min-height: 2.8rem; padding: .65rem 1rem; text-decoration: none; } .secondary { background: var(--background-primary); color: var(--text-primary); }
+  output { min-height: 1.5rem; }
+  @media (max-width: 560px) { .onboarding { padding: 2rem 1rem 4rem; } .account-summary div { grid-template-columns: 1fr; } .actions { align-items: stretch; flex-direction: column; } .actions > * { text-align: center; width: 100%; } }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-project-onboarding]");
+  if (root) {
+    const form = root.querySelector<HTMLFormElement>("[data-project-onboarding-form]")!;
+    const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
+    const setText = (selector: string, value: string) => {
+      const target = root.querySelector<HTMLElement>(selector);
+      if (target) target.textContent = value;
+    };
+    fetch("/api/onboarding/project", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => ({ response, data: await response.json() as { email?: string; project?: string; internalBio?: string; error?: string } }))
+      .then(({ response, data }) => {
+        if (!response.ok) throw new Error(data.error ?? "プロジェクト情報を読み込めませんでした。");
+        setText("[data-email]", data.email ?? "");
+        setText("[data-project]", data.project ?? "");
+        const field = form.elements.namedItem("internalBio");
+        if (field instanceof HTMLTextAreaElement) field.value = data.internalBio ?? "";
+      })
+      .catch((error) => { message.value = error instanceof Error ? error.message : "プロジェクト情報を読み込めませんでした。"; });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      message.value = "保存中…";
+      const field = form.elements.namedItem("internalBio");
+      const internalBio = field instanceof HTMLTextAreaElement ? field.value : "";
+      try {
+        const response = await fetch("/api/onboarding/project", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ internalBio }) });
+        const data = await response.json().catch(() => ({})) as { error?: string; next?: string };
+        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+        location.assign(data.next ?? "/onboarding/tutorial/");
+      } catch (error) { message.value = error instanceof Error ? error.message : "保存できませんでした。"; }
+    });
+  }
+</script>

@@ -131,7 +131,17 @@ const articles = defineCollection({
       })
       .default({ pre: [], post: [] }),
     references: z
-      .array(z.object({ title: z.string(), url: z.url().optional() }))
+      .array(
+        z.object({
+          id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{1,79}$/).optional(),
+          title: z.string(),
+          authors: z.string().optional(),
+          year: z.string().optional(),
+          publisher: z.string().optional(),
+          url: z.url().optional(),
+          note: z.string().optional(),
+        }),
+      )
       .default([]),
   }),
 });

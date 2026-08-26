@@ -53,10 +53,13 @@ export function parseArticleDirectiveMarker(value) {
     .trim()
     .replace(/^\[|\]$/g, "")
     .replace(/^['"]|['"]$/g, "");
+  const idMatch = /\s*\{#([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(rawTitle);
+  const title = (idMatch ? rawTitle.slice(0, idMatch.index) : rawTitle).trim();
   return {
     fence: match[1],
     name,
-    title: rawTitle || DIRECTIVE_LABELS[name] || name,
+    title: title || DIRECTIVE_LABELS[name] || name,
+    id: idMatch?.[1] ?? "",
   };
 }
 
@@ -75,6 +78,9 @@ function paragraphText(node) {
 function directiveMarkup(marker) {
   const safeName = marker.name.replace(/[^a-z0-9_-]/g, "");
   const title = escapeHtml(marker.title);
+  const id = marker.id
+    ? ` id="${escapeHtml(marker.id)}" data-statement-id="${escapeHtml(marker.id)}"`
+    : "";
   if (marker.name === "proof") {
     return {
       open: `<details class="proof-details" data-directive="proof" open><summary>${title}</summary><div class="proof-details-inner">`,
@@ -85,7 +91,7 @@ function directiveMarkup(marker) {
   const semanticClass = SEMANTIC_CLASSES[marker.name];
   if (semanticClass) {
     return {
-      open: `<section class="article-directive ${semanticClass}" data-directive="${safeName}"><div class="thmtitle">${title}</div>`,
+      open: `<section class="article-directive ${semanticClass}" data-directive="${safeName}"${id}><p><span class="thmtitle">${title}</span></p>`,
       close: "</section>",
     };
   }

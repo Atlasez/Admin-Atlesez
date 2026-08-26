@@ -24,6 +24,7 @@ export type DirectiveMarker = {
   fence: string;
   name: string;
   title: string;
+  id: string;
 };
 
 export function parseDirectiveMarker(value: string): DirectiveMarker | null {
@@ -31,10 +32,13 @@ export function parseDirectiveMarker(value: string): DirectiveMarker | null {
   if (!match) return null;
   const name = match[2].toLowerCase();
   const rawTitle = (match[3] ?? "").trim().replace(/^\[|\]$/g, "").replace(/^['"]|['"]$/g, "");
+  const idMatch = /\s*\{#([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(rawTitle);
+  const title = (idMatch ? rawTitle.slice(0, idMatch.index) : rawTitle).trim();
   return {
     fence: match[1],
     name,
-    title: rawTitle || DIRECTIVE_LABELS[name] || name,
+    title: title || DIRECTIVE_LABELS[name] || name,
+    id: idMatch?.[1] ?? "",
   };
 }
 

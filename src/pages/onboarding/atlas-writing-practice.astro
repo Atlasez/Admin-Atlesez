@@ -1,0 +1,217 @@
+---
+import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
+---
+
+<ApplicantLayout title="記事編集の練習" description="アトラスで記事を作るための練習用編集スペースです。" showMemberProfile={true}>
+  <main class="practice" data-atlas-writing-practice>
+    <header>
+      <p class="progress">アトラス実践チュートリアル</p>
+      <h1>記事を作成し、確認を依頼する</h1>
+      <p class="lead">実際の「編集・フィードバック」の流れに沿って、原稿作成、数式のプレビュー、確認依頼、コメント対応、担当と予定の確認までを体験します。ここで入力した内容は練習用で、公開記事・通常の原稿・実際の依頼には保存されません。</p>
+    </header>
+
+    <section class="progress-panel" aria-live="polite"><div><span data-progress-count>1 / 7</span><strong data-progress-title>新規原稿を作成する</strong></div><div class="progress-track" aria-label="練習の進み具合"><span data-progress-bar></span></div><p data-progress-copy>まずは、下のボタンで練習用の編集スペースを開きます。</p></section>
+
+    <section class="start-card" data-start-card>
+      <h2>最初の操作</h2>
+      <p>通常は「編集・フィードバック」を開き、<strong>新規記事作成</strong>を選びます。まず同じ操作をしてください。</p>
+      <button type="button" data-create>新規記事を作成</button>
+    </section>
+
+    <form class="editor" data-practice-form hidden>
+      <div class="document-toolbar"><div><p class="draft-label">練習用 / 下書き</p><h2>新規原稿</h2></div><button type="submit" data-save disabled>下書きを保存して次へ</button></div>
+      <p class="instruction" data-instruction>次に、記事の基本情報を入力してください。練習なので内容は自由です。</p>
+      <div class="metadata">
+        <label>分野<select name="subject" required><option value="mathematics">数学</option><option value="physics">物理</option><option value="chemistry">化学</option></select></label>
+        <label>カテゴリ<select name="category" required><option value="overview">概要</option><option value="set-theory">集合論</option><option value="foundations">基礎</option></select></label>
+        <label>タイトル<input name="title" minlength="4" maxlength="120" required placeholder="例：$x^2$ のグラフ" /></label>
+        <label>要約<textarea name="summary" minlength="10" maxlength="500" required placeholder="例：$y=x^2$ の特徴と見方を説明します。"></textarea></label>
+        <label>概念ID<input name="conceptId" pattern="[a-z0-9-]+" required placeholder="例：quadratic-graph" /><small>英小文字・数字・ハイフンで入力します。</small></label>
+      </div>
+      <section class="metadata-preview" aria-label="記事情報のプレビュー"><p class="preview-label">記事情報のプレビュー</p><h2 data-title-preview>タイトルを入力すると、数式を含めてここに表示されます。</h2><p data-summary-preview>要約を入力すると、数式を含めてここに表示されます。</p></section>
+      <section class="editor-split">
+        <label class="writing-pane">本文（Markdown）<textarea name="body" data-body minlength="40" required placeholder="## はじめに&#10;&#10;放物線 $y=x^2$ は、**上に開くグラフ**です。&#10;&#10;$$&#10;y = x^2&#10;$$"></textarea><small>見出しとして <code>## 見出し</code>、太字として <code>**大切な語句**</code>、数式として <code>$x^2$</code> または <code>$$ ... $$</code> を必ず使ってください。</small></label>
+        <section class="preview-pane" aria-label="本文プレビュー"><h3>本文プレビュー</h3><div data-preview><p>本文を入力すると、ここに表示されます。</p></div></section>
+      </section>
+      <output data-message aria-live="polite"></output>
+    </form>
+
+    <section class="followup" data-followup hidden aria-live="polite"><p class="progress" data-followup-kicker>運営サイトの使い分け</p><h2 data-followup-title>記事・タスク・予定は、それぞれの画面で扱います</h2><div class="followup-content" data-followup-content><p>記事は「編集・フィードバック」、担当と期限は「タスク管理」、開催予定は「カレンダー」、自分の情報とルールは「マイページ」「作業の進め方」で確認します。</p></div><button type="button" data-followup-action hidden></button><output data-followup-message></output></section>
+  </main>
+</ApplicantLayout>
+
+<style>
+  .practice{margin:0 auto;max-width:920px;padding:3rem 1.25rem 5rem}.progress,.draft-label,.preview-label{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.04em;margin:0}.practice h1{margin:.35rem 0 .6rem}.lead{color:var(--text-secondary);line-height:1.8;max-width:62rem}.progress-panel{border-bottom:1px solid var(--border-default);display:grid;gap:.5rem;margin:1.5rem 0 2rem;padding-bottom:1rem}.progress-panel>div:first-child{align-items:baseline;display:flex;gap:.75rem}.progress-panel span{color:var(--accent-primary);font-size:.78rem;font-weight:800}.progress-panel strong{font-size:.95rem}.progress-panel p{color:var(--text-secondary);font-size:.82rem;margin:0}.progress-track{background:var(--background-secondary);height:.35rem;overflow:hidden}.progress-track span{background:var(--accent-primary);display:block;height:100%;transition:width .35s ease;width:14.285%}.start-card,.followup{animation:rise .3s ease-out;border:1px solid var(--border-default);display:grid;gap:1rem;margin:2rem 0;padding:1.4rem}.start-card h2,.followup h2{font-size:1.25rem;margin:0}.start-card p,.followup p{color:var(--text-secondary);line-height:1.7;margin:0}.start-card button,.document-toolbar button,.followup button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:var(--on-accent);cursor:pointer;font:inherit;font-weight:800;min-height:2.8rem;padding:.65rem 1rem;width:max-content}.editor{animation:rise .3s ease-out;border-top:2px solid var(--accent-primary);display:grid;gap:1rem;margin-top:2rem;padding-top:1rem}.document-toolbar{align-items:start;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding-bottom:1rem}.document-toolbar h2{font-size:1.35rem;margin:.18rem 0 0}.document-toolbar button:disabled{cursor:not-allowed;opacity:.55}.instruction{background:var(--background-secondary);border-left:3px solid var(--accent-primary);line-height:1.7;margin:0;padding:.8rem 1rem}.metadata{display:grid;gap:.75rem;grid-template-columns:repeat(2,minmax(0,1fr))}.metadata label,.writing-pane{display:grid;font-size:.82rem;font-weight:800;gap:.38rem}.metadata label:nth-child(3),.metadata label:nth-child(4),.metadata label:nth-child(5){grid-column:1/-1}.metadata input,.metadata select,.metadata textarea,.writing-pane textarea,.followup textarea{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;padding:.65rem;transition:border-color .2s,box-shadow .2s}.metadata input:focus,.metadata textarea:focus,.metadata select:focus,.writing-pane textarea:focus,.followup textarea:focus{border-color:var(--accent-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-primary) 16%,transparent);outline:0}.metadata textarea{min-height:4.5rem}.metadata small,.writing-pane small{color:var(--text-secondary);font-size:.72rem;font-weight:500;line-height:1.5}.metadata-preview{background:var(--background-secondary);border-left:3px solid var(--accent-primary);padding:1rem}.metadata-preview h2{font-size:1.15rem;margin:.4rem 0}.metadata-preview p:last-child{color:var(--text-secondary);line-height:1.7;margin:0}.editor-split{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}.writing-pane textarea{line-height:1.7;min-height:22rem;resize:vertical}.preview-pane{border:1px solid var(--border-default);min-height:22rem;padding:1rem}.preview-pane h3{border-bottom:1px solid var(--border-default);font-size:.9rem;margin:0 0 1rem;padding-bottom:.65rem}.preview-pane :global(h2){font-size:1.25rem}.preview-pane :global(p){line-height:1.75}.preview-pane :global(strong){font-weight:800}.preview-pane :global(.katex-display){overflow:auto}.followup{border-top:3px solid var(--accent-primary);max-width:680px}.followup-content{color:var(--text-secondary);display:grid;gap:.8rem;line-height:1.7}.workflow-screen{background:var(--background-secondary);border:0;display:grid;gap:.8rem;padding:0}.workflow-top{align-items:center;display:flex;gap:.6rem;justify-content:space-between}.workflow-top strong{color:var(--text-primary)}.workflow-badge{background:var(--accent-primary);color:var(--on-accent);font-size:.7rem;font-weight:800;padding:.2rem .45rem}.workflow-screen label{display:grid;font-size:.82rem;font-weight:800;gap:.35rem}.workflow-screen textarea{min-height:6rem;resize:vertical}.sample-comment{background:var(--background-primary);border-left:3px solid var(--accent-primary);padding:.8rem 1rem}.sample-comment strong{color:var(--text-primary)}.task-choices{display:grid;gap:.65rem;grid-template-columns:1fr}.task-choice{background:var(--background-primary)!important;border:1px solid var(--border-default)!important;color:var(--text-primary)!important;display:grid;font-size:.82rem;gap:.25rem;min-height:0!important;padding:1rem!important;text-align:left;transition:border-color .2s,transform .2s,box-shadow .2s}.task-choice span{color:var(--text-secondary);font-weight:500;line-height:1.5}.task-choice[data-selected="true"]{border-color:var(--accent-primary)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-primary) 14%,transparent);transform:translateY(-2px)}.followup output,output{color:var(--text-secondary);display:block;line-height:1.6;min-height:1.5rem}@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}@media(max-width:720px){.practice{padding:2rem 1rem 4rem}.editor-split,.metadata{grid-template-columns:1fr}.metadata label:nth-child(n){grid-column:auto}.document-toolbar{display:grid}.document-toolbar button,.followup button{width:100%}}
+</style>
+
+<script>
+  import renderMathInElement from "katex/contrib/auto-render";
+  import "katex/dist/katex.min.css";
+
+  const root = document.querySelector<HTMLElement>("[data-atlas-writing-practice]");
+  if (root) {
+    const previewMode = new URLSearchParams(location.search).get("preview") === "1";
+    const startCard = root.querySelector<HTMLElement>("[data-start-card]")!;
+    const create = root.querySelector<HTMLButtonElement>("[data-create]")!;
+    const form = root.querySelector<HTMLFormElement>("[data-practice-form]")!;
+    const title = form.elements.namedItem("title") as HTMLInputElement;
+    const summary = form.elements.namedItem("summary") as HTMLTextAreaElement;
+    const conceptId = form.elements.namedItem("conceptId") as HTMLInputElement;
+    const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
+    const preview = root.querySelector<HTMLElement>("[data-preview]")!;
+    const titlePreview = root.querySelector<HTMLElement>("[data-title-preview]")!;
+    const summaryPreview = root.querySelector<HTMLElement>("[data-summary-preview]")!;
+    const save = root.querySelector<HTMLButtonElement>("[data-save]")!;
+    const instruction = root.querySelector<HTMLElement>("[data-instruction]")!;
+    const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
+    const followup = root.querySelector<HTMLElement>("[data-followup]")!;
+    const followupKicker = root.querySelector<HTMLElement>("[data-followup-kicker]")!;
+    const followupTitle = root.querySelector<HTMLElement>("[data-followup-title]")!;
+    const followupContent = root.querySelector<HTMLElement>("[data-followup-content]")!;
+    const followupAction = root.querySelector<HTMLButtonElement>("[data-followup-action]")!;
+    const followupMessage = root.querySelector<HTMLOutputElement>("[data-followup-message]")!;
+    const progressCount = root.querySelector<HTMLElement>("[data-progress-count]");
+    const progressTitle = root.querySelector<HTMLElement>("[data-progress-title]");
+    const progressCopy = root.querySelector<HTMLElement>("[data-progress-copy]");
+    const progressBar = root.querySelector<HTMLElement>("[data-progress-bar]");
+    const mathOptions = { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" as const };
+    let created = false;
+    let practiceStep = 0;
+    let practiceComplete = false;
+    const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    const inline = (value: string) => escape(value).replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    const applyMath = (element: HTMLElement) => renderMathInElement(element, mathOptions);
+    const hasMath = (value: string) => /\$\$[\s\S]+?\$\$|\$[^$\n]+\$/.test(value);
+    const valid = () => created && title.value.trim().length >= 4 && summary.value.trim().length >= 10 && /^[a-z0-9-]+$/.test(conceptId.value.trim()) && body.value.trim().length >= 40 && /^##\s+.+/m.test(body.value) && /\*\*[^*\n]+\*\*/.test(body.value) && hasMath(body.value);
+    const setProgress = (step: number, heading: string, copy: string) => {
+      if (progressCount) progressCount.textContent = `${step} / 7`;
+      if (progressTitle) progressTitle.textContent = heading;
+      if (progressCopy) progressCopy.textContent = copy;
+      if (progressBar) progressBar.style.width = `${(step / 7) * 100}%`;
+    };
+    const renderPreview = () => {
+      titlePreview.innerHTML = inline(title.value) || "タイトルを入力すると、数式を含めてここに表示されます。";
+      summaryPreview.innerHTML = inline(summary.value) || "要約を入力すると、数式を含めてここに表示されます。";
+      const lines = escape(body.value).split("\n");
+      const rendered: string[] = [];
+      let displayMath: string[] | null = null;
+      for (const line of lines) {
+        if (line.trim() === "$$") {
+          if (displayMath) { rendered.push(`<div>$$${displayMath.join("\n")}$$</div>`); displayMath = null; }
+          else displayMath = [];
+          continue;
+        }
+        if (displayMath) { displayMath.push(line); continue; }
+        if (/^##\s+/.test(line)) rendered.push(`<h2>${line.replace(/^##\s+/, "")}</h2>`);
+        else if (line.trim()) rendered.push(`<p>${line.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")}</p>`);
+      }
+      if (displayMath) rendered.push(`<pre>$$${displayMath.join("\n")}</pre>`);
+      const html = rendered.join("");
+      preview.innerHTML = html || "<p>本文を入力すると、ここに表示されます.</p>";
+      [titlePreview, summaryPreview, preview].forEach(applyMath);
+    };
+    const showCompletion = () => {
+      practiceComplete = true;
+      form.hidden = true;
+      followup.hidden = false;
+      followupKicker.textContent = "実践チュートリアル完了";
+      followupTitle.textContent = "運営サイトの基本導線を確認しました";
+      followupContent.innerHTML = '<div class="workflow-screen"><p>ここまでで、記事編集だけでなく、日常の運営で画面を使い分ける流れを確認しました。</p><div class="task-choices"><article class="task-choice"><strong>まず確認する</strong><span>メンバー用サイトで、自分の担当と予定を確認する。</span></article><article class="task-choice"><strong>作業を進める</strong><span>記事は「編集・フィードバック」、担当は「タスク管理」で扱う。</span></article><article class="task-choice"><strong>迷ったら確認する</strong><span>マイページと「作業の進め方」を開き、管理操作は権限を持つ人へ相談する。</span></article></div></div>';
+      followupAction.hidden = false;
+      followupAction.disabled = false;
+      followupAction.textContent = previewMode ? "紹介画面に戻る" : "チュートリアルの最後の案内へ";
+      followupMessage.value = "";
+      followup.dataset.ready = "true";
+      setProgress(7, "実践チュートリアル完了", "次は、実際のタスク・予定・作業案内を確認して活動を始めます。");
+    };
+    const showFollowup = () => {
+      const active = practiceStep === 1 ? "feedback" : practiceStep === 2 ? "resolve" : practiceStep === 3 ? "schedule" : null;
+      if (!active) { if (practiceStep >= 4) showCompletion(); else followup.hidden = true; return; }
+      form.hidden = true; followup.hidden = false; followupMessage.value = ""; followupAction.hidden = false; followupAction.disabled = false;
+      if (active === "feedback") {
+        setProgress(5, "記事作成後に開く場所を知る", "原稿の続きを書く・確認を依頼する・コメントを読む場所を選びます。");
+        followupKicker.textContent = "運営サイトの使い分け";
+        followupTitle.textContent = "5. 記事を扱う画面を選ぶ";
+        followupContent.innerHTML = '<div class="workflow-screen"><p>記事を書いた後、下書きの確認依頼やコメント対応をするのはどの画面でしょうか。</p><div class="task-choices"><button type="button" class="task-choice" data-next-task="articles"><strong>編集・フィードバック</strong><span>原稿を探す、書く、フィードバックを依頼する、コメントを確認する。</span></button><button type="button" class="task-choice" data-next-task="editor"><strong>記事編集</strong><span>選んだ原稿の本文・数式・プレビューを編集する。</span></button></div></div>';
+        followupAction.textContent = "記事の流れを理解して次へ";
+      } else if (active === "resolve") {
+        setProgress(6, "自分の仕事と予定を確認する", "作業を始める前に、担当・期限と予定を分けて確認します。");
+        followupKicker.textContent = "運営サイトの使い分け";
+        followupTitle.textContent = "6. タスクと予定の画面を選ぶ";
+        followupContent.innerHTML = '<div class="workflow-screen"><p>自分の担当・期限を確認してから、開催予定を確認します。使う画面を選んでください。</p><div class="task-choices"><button type="button" class="task-choice" data-next-task="tasks"><strong>タスク管理</strong><span>自分の担当、期限、進捗を確認・更新する。</span></button><button type="button" class="task-choice" data-next-task="calendar"><strong>カレンダー・同時作業会</strong><span>開催日時、参加に必要な案内、予定の詳細を確認する。</span></button></div></div>';
+        followupAction.textContent = "タスクと予定の役割を理解して次へ";
+      } else {
+        setProgress(7, "自分の情報とルールを確認する", "迷ったときの確認先と、管理機能との違いを理解します。");
+        followupKicker.textContent = "運営サイトの使い分け";
+        followupTitle.textContent = "7. 自分の情報と基準資料を知る";
+        followupContent.innerHTML = '<div class="workflow-screen"><p>自分の担当・プロフィールを確認する画面と、作業のルールを確認する画面です。</p><div class="task-choices"><button type="button" class="task-choice" data-next-task="profile"><strong>マイページ</strong><span>自分の担当・プロフィールを確認する。</span></button><button type="button" class="task-choice" data-next-task="guide"><strong>作業の進め方</strong><span>記事の書き方や外部ツールの扱いに迷ったときに読む。</span></button></div><p>応募管理や担当・権限管理は、管理権限が必要な別の機能です。</p></div>';
+        followupAction.textContent = "運営サイトの全体像を理解して完了する";
+      }
+      followup.dataset.ready = "true";
+    };
+    const update = () => {
+      renderPreview();
+      if (practiceStep > 0) { showFollowup(); return; }
+      const informationComplete = title.value.trim().length >= 4 && summary.value.trim().length >= 10 && /^[a-z0-9-]+$/.test(conceptId.value.trim());
+      const bodyComplete = body.value.trim().length >= 40 && /^##\s+.+/m.test(body.value) && /\*\*[^*\n]+\*\*/.test(body.value) && hasMath(body.value);
+      save.disabled = !valid();
+      setProgress(!created ? 1 : !informationComplete ? 2 : !bodyComplete ? 3 : 4, !created ? "新規原稿を作成する" : !informationComplete ? "記事の情報を入力する" : !bodyComplete ? "本文をプレビューで確認する" : "下書きを保存する", !created ? "下のボタンで、練習用の編集スペースを開きます。" : !informationComplete ? "タイトル、要約、概念IDを入力します。" : !bodyComplete ? "数式、見出し、太字を入れてプレビューを確認します。" : "保存すると、フィードバックの練習に進みます。");
+      instruction.textContent = !informationComplete ? "タイトル・要約・概念IDを入力してください。タイトルと要約にも $x^2$ のような数式を書けば、下のプレビューで組版を確認できます。" : !bodyComplete ? "本文に「## 見出し」「**太字にする語句**」と「$x^2$」または「$$ ... $$」を入力し、右のプレビューで確認してください。" : "数式・見出し・太字をプレビューで確認できました。最後に「下書きを保存して次へ」を押してください。";
+    };
+    const submitAction = async (action: string, payload: Record<string, string> = {}) => {
+      if (previewMode) return { step: practiceStep + 1, complete: practiceStep + 1 === 4 };
+      const response = await fetch("/api/onboarding/atlas-writing-practice", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...payload }) });
+      const data = await response.json().catch(() => ({})) as { error?: string; step?: number; complete?: boolean };
+      if (!response.ok) throw new Error(data.error ?? "練習の状態を保存できませんでした。");
+      return { step: data.step ?? practiceStep + 1, complete: Boolean(data.complete) };
+    };
+    create.addEventListener("click", () => { created = true; startCard.hidden = true; form.hidden = false; title.focus(); update(); form.scrollIntoView({ behavior: "smooth", block: "start" }); });
+    form.addEventListener("input", update);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); if (!valid()) return;
+      save.disabled = true; message.value = "練習用の下書きを保存中…";
+      try { const result = await submitAction("save-draft", { title: title.value, body: body.value }); practiceStep = result.step; message.value = ""; showFollowup(); followup.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (error) { message.value = error instanceof Error ? error.message : "練習を保存できませんでした。"; save.disabled = false; }
+    });
+    followupAction.addEventListener("click", async () => {
+      if (practiceComplete) {
+        location.assign(previewMode ? "/admin/onboarding-demo/?project=atlas&atlas-practice=complete" : "/onboarding/tutorial/");
+        return;
+      }
+      if (!followup.querySelector<HTMLElement>("[data-next-task][data-selected='true']")) { followupMessage.value = "画面を一つ選んでから進んでください。"; return; }
+      const action = practiceStep === 1 ? "request-feedback" : practiceStep === 2 ? "resolve-feedback" : "check-schedule";
+      followupAction.disabled = true; followupMessage.value = "操作を確認中…";
+      try {
+        const result = await submitAction(action); practiceStep = result.step;
+        if (result.complete) {
+          message.value = "";
+          showCompletion(); followup.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        showFollowup(); followup.scrollIntoView({ behavior: "smooth", block: "center" });
+      } catch (error) { followupMessage.value = error instanceof Error ? error.message : "操作を保存できませんでした。"; followupAction.disabled = false; }
+    });
+    followupContent.addEventListener("click", (event) => {
+      const choice = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-next-task]");
+      if (!choice) return;
+      followupContent.querySelectorAll<HTMLElement>("[data-next-task]").forEach((item) => { item.dataset.selected = String(item === choice); });
+      followupMessage.value = `「${choice.querySelector("strong")?.textContent ?? "この操作"}」を選びました。完了ボタンで進めます。`;
+    });
+    if (!previewMode) fetch("/api/onboarding/tutorial", { credentials: "same-origin" }).then(async (response) => response.ok ? response.json() as Promise<{ atlasWritingPracticeStep?: number }> : null).then((data) => { if (data?.atlasWritingPracticeStep) { practiceStep = Math.max(0, Math.min(4, data.atlasWritingPracticeStep)); created = true; startCard.hidden = true; form.hidden = practiceStep > 0; showFollowup(); } }).catch(() => undefined);
+    update();
+  }
+</script>
+
+<script is:inline>
+  // Astroの画面遷移中に古いJavaScriptと新しいHTMLが一度だけ混在した場合の回復。
+  // 空のカードを操作させず、最新の静的資産を取り直す。
+  (() => {
+    const url = new URL(location.href);
+    if (url.searchParams.has("onboarding-recovered")) return;
+    window.setTimeout(() => {
+      const followup = document.querySelector("[data-followup]");
+      if (!(followup instanceof HTMLElement) || followup.hidden || followup.dataset.ready === "true") return;
+      url.searchParams.set("onboarding-recovered", "1");
+      location.replace(url.toString());
+    }, 900);
+  })();
+</script>

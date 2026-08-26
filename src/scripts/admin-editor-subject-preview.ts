@@ -1,11 +1,12 @@
-import { createMarkdownProcessor } from "@astrojs/markdown-remark";
-import { ARTICLE_MARKDOWN_PROCESSOR_OPTIONS } from "../lib/article-markdown.mjs";
 import {
   isDirectiveClose,
   parseDirectiveMarker,
   type DirectiveMarker,
 } from "../lib/editor-directives";
-import { normalizeMathArticleBody } from "./article-math-structure";
+import {
+  normalizeMathArticleBody,
+  numberMathStatements,
+} from "./article-math-structure";
 
 const SEMANTIC_DIRECTIVE_CLASSES: Record<string, string> = {
   defi: "defi",
@@ -24,6 +25,8 @@ type DirectiveContainer = {
   section: HTMLElement;
   body: HTMLElement;
   fenceLength: number;
+  headingLine?: HTMLParagraphElement;
+  heading?: HTMLElement;
 };
 
 function semanticDirectiveClass(name: string): string | null {
@@ -51,15 +54,27 @@ function createDirectiveContainer(
   const safeName = marker.name.replace(/[^a-z0-9_-]/g, "");
   section.className = `article-directive article-directive-${safeName}`;
   section.dataset.directive = marker.name;
+  if (marker.id && semanticDirectiveClass(marker.name)) {
+    section.id = marker.id;
+    section.dataset.statementId = marker.id;
+  }
 
   const semanticClass = semanticDirectiveClass(marker.name);
   if (semanticClass) {
     section.classList.add(semanticClass);
-    const heading = doc.createElement("div");
+    const headingLine = doc.createElement("p");
+    const heading = doc.createElement("span");
     heading.className = "thmtitle";
     heading.textContent = marker.title;
-    section.append(heading);
-    return { section, body: section, fenceLength: marker.fence.length };
+    headingLine.append(heading);
+    section.append(headingLine);
+    return {
+      section,
+      body: section,
+      fenceLength: marker.fence.length,
+      headingLine,
+      heading,
+    };
   }
 
   const heading = doc.createElement("div");
@@ -69,6 +84,16 @@ function createDirectiveContainer(
   body.className = "article-directive-body";
   section.append(heading, body);
   return { section, body, fenceLength: marker.fence.length };
+}
+
+function appendDirectiveChild(container: DirectiveContainer, node: HTMLElement) {
+  if (container.headingLine && container.heading && node.tagName === "P") {
+    node.insertBefore(container.heading, node.firstChild);
+    container.headingLine.replaceWith(node);
+    container.headingLine = undefined;
+    return;
+  }
+  container.body.append(node);
 }
 
 function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
@@ -88,7 +113,7 @@ function convertPackedDirectiveParagraph(node: HTMLElement): boolean {
   if (bodyText) {
     const paragraph = node.ownerDocument.createElement("p");
     paragraph.textContent = bodyText;
-    container.body.append(paragraph);
+    appendDirectiveChild(container, paragraph);
   }
 
   const replacements: Node[] = [container.section];
@@ -123,7 +148,7 @@ export function enhancePreviewDirectives(target: HTMLElement): void {
     if (marker) {
       const container = createDirectiveContainer(target.ownerDocument, marker);
       if (stack.length > 0) {
-        stack.at(-1)?.body.append(container.section);
+        appendDirectiveChild(stack.at(-1)!, container.section);
         node.remove();
       } else {
         node.replaceWith(container.section);
@@ -139,7 +164,7 @@ export function enhancePreviewDirectives(target: HTMLElement): void {
       continue;
     }
 
-    if (active) active.body.append(node);
+    if (active) appendDirectiveChild(active, node);
   }
 }
 
@@ -163,11 +188,15 @@ export function applySubjectPreviewProfile(
   target: HTMLElement,
   subject: string,
 ): void {
+  installPreviewShellStyles(target.ownerDocument);
   target.dataset.previewSubject = subject || "general";
   target.dataset.publishedPreview = "true";
   const body = ensurePublishedArticleBody(target);
   enhancePreviewDirectives(body);
-  if (subject === "mathematics") normalizeMathArticleBody(body);
+  if (subject === "mathematics") {
+    normalizeMathArticleBody(body);
+    numberMathStatements(body);
+  }
 }
 
 function installPreviewShellStyles(doc: Document): void {
@@ -178,8 +207,9 @@ function installPreviewShellStyles(doc: Document): void {
     .published-article-preview {
       background: var(--background-primary);
       box-sizing: border-box;
-      height: clamp(32rem, 66vh, 52rem);
-      overflow: auto;
+      height: auto;
+      min-height: clamp(32rem, 66vh, 52rem);
+      overflow: visible;
       padding: 1rem 1.15rem;
     }
     .published-article-preview > .article-body.reading {
@@ -190,114 +220,8 @@ function installPreviewShellStyles(doc: Document): void {
       height: calc(88vh - 10rem);
     }
     @media (max-width: 1080px) {
-      .published-article-preview { height: auto; min-height: 28rem; }
+      .published-article-preview { min-height: 28rem; }
     }
   `;
   doc.head.append(style);
-}
-
-function sourceSignature(source: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `${source.length}:${hash >>> 0}`;
-}
-
-function prepareEditorialImages(target: HTMLElement): void {
-  for (const image of target.querySelectorAll<HTMLImageElement>('img[src^="asset://"]')) {
-    const match = /^asset:\/\/([0-9a-f-]{36})$/i.exec(image.getAttribute("src") ?? "");
-    if (!match) continue;
-    image.dataset.editorialAsset = match[1];
-    image.removeAttribute("src");
-    const figure = image.closest("figure");
-    if (figure) figure.classList.add("editorial-image");
-  }
-}
-
-function initializeSubjectPreview(): void {
-  const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
-  if (!root || root.dataset.subjectPreviewReady === "true") return;
-
-  const subject = root.querySelector<HTMLSelectElement>("[data-subject]");
-  const source = root.querySelector<HTMLTextAreaElement>("[data-body]");
-  const preview = root.querySelector<HTMLElement>("[data-preview]");
-  if (!subject || !source || !preview) return;
-
-  root.dataset.subjectPreviewReady = "true";
-  installPreviewShellStyles(document);
-
-  const previewEngine = root.querySelector<HTMLSelectElement>("[data-preview-engine]");
-  if (previewEngine) {
-    previewEngine.value = "katex";
-    previewEngine.disabled = true;
-    previewEngine.title = "公開記事と同じKaTeX rendererを使用します。";
-  }
-
-  const processorPromise = createMarkdownProcessor(ARTICLE_MARKDOWN_PROCESSOR_OPTIONS);
-  const renderState = new WeakMap<HTMLElement, { signature: string; running: boolean }>();
-  let scheduled = false;
-
-  const renderTarget = async (target: HTMLElement, markdown: string) => {
-    const signature = sourceSignature(markdown);
-    const current = renderState.get(target);
-    const body = target.querySelector<HTMLElement>(":scope > .article-body.reading");
-    if (current?.signature === signature && body) return;
-    if (current?.running) return;
-    renderState.set(target, { signature: current?.signature ?? "", running: true });
-    try {
-      const processor = await processorPromise;
-      const rendered = await processor.render(markdown);
-      target.replaceChildren();
-      applySubjectPreviewProfile(target, subject.value || "general");
-      const articleBody = ensurePublishedArticleBody(target);
-      articleBody.innerHTML = rendered.code;
-      prepareEditorialImages(articleBody);
-      if (subject.value === "mathematics") normalizeMathArticleBody(articleBody);
-      renderState.set(target, { signature, running: false });
-    } catch (error) {
-      const articleBody = ensurePublishedArticleBody(target);
-      articleBody.textContent = error instanceof Error ? error.message : "Previewを描画できませんでした。";
-      renderState.set(target, { signature, running: false });
-    }
-  };
-
-  const apply = () => {
-    scheduled = false;
-    void renderTarget(preview, source.value);
-    const reference = root.querySelector<HTMLElement>("[data-reference-preview]");
-    const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]");
-    if (reference && referenceSource) {
-      void renderTarget(reference, referenceSource.textContent ?? "");
-    }
-  };
-
-  const schedule = () => {
-    if (scheduled) return;
-    scheduled = true;
-    queueMicrotask(apply);
-  };
-
-  const observer = new MutationObserver(schedule);
-  observer.observe(preview, { childList: true, subtree: true });
-  const reference = root.querySelector<HTMLElement>("[data-reference-preview]");
-  if (reference) observer.observe(reference, { childList: true, subtree: true });
-
-  source.addEventListener("input", schedule);
-  source.addEventListener("change", schedule);
-  subject.addEventListener("input", schedule);
-  subject.addEventListener("change", schedule);
-  schedule();
-
-  document.addEventListener(
-    "astro:before-swap",
-    () => observer.disconnect(),
-    { once: true },
-  );
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener("astro:page-load", initializeSubjectPreview);
-  initializeSubjectPreview();
 }

@@ -405,7 +405,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         const rightPriority = (mode === "revise" || mode === "request") && [right.created_by, right.updated_by].includes(scopeEmail) ? 0 : mode === "review" && right.reviewer_email === scopeEmail ? 0 : 1;
         return leftPriority - rightPriority || new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
       });
-      const shown = [...new Map(sorted.map((article) => [article.source_article_id || `${article.subject}/${article.category}/${article.slug || article.title}`, article])).values()];
+      // 公開記事由来の原稿だけは source_article_id でまとめる。
+      // 新規原稿は source_article_id がなく、初期スラッグが同じでも別記事なので
+      // 原稿自身のIDをキーにする（以前は新規原稿同士が一覧から消えていた）。
+      const shown = [...new Map(sorted.map((article) => [article.source_article_id || article.id, article])).values()];
       count.textContent = `${shown.length}件`;
       list.innerHTML = shown.length ? shown.map((article) => `<article class="article" role="link" tabindex="0" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && article.reviewer_email === scopeEmail ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
       updateWorkflowButtons();
@@ -432,6 +435,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       root.querySelector("#article-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
     void load();
+    window.addEventListener("pageshow", () => { void load(); });
   };
   document.addEventListener("astro:page-load", initializeArticleIndex);
   initializeArticleIndex();

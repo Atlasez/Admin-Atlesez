@@ -1,0 +1,85 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+---
+
+<AdminLayout title="オンボーディング紹介" description="運営内運営向けの応募・受入・チュートリアル紹介用デモ">
+  <main class="demo" data-onboarding-demo>
+    <header class="preview-header">
+      <h1>応募から活動開始までの紹介デモ</h1>
+      <p>応募前 → 応募済み → 受入 → プロフィール設定 → チュートリアル → 活動開始、という段階別の表示・アクセス制御を紹介する読み取り専用ページです。</p>
+      <p class="notice">表示中の案内は本番のチュートリアルと同じ構成・操作です。この画面での操作は進捗に保存されません。</p>
+    </header>
+
+    <section class="project-selector" aria-labelledby="project-heading">
+      <h2 id="project-heading">紹介するプロジェクト</h2>
+      <div class="project-tabs" role="tablist" aria-label="紹介するプロジェクト">
+        <button type="button" role="tab" aria-selected="true" data-project="atlas">学習サイト「アトラス」</button>
+        <button type="button" role="tab" aria-selected="false" data-project="secretariat">Atlasez運営事務局</button>
+        <button type="button" role="tab" aria-selected="false" data-project="seminar-platform">ゼミプラットフォーム</button>
+      </div>
+    </section>
+
+    <section class="site-map" aria-labelledby="site-map-heading">
+      <div><p class="progress">運営サイトの地図</p><h2 id="site-map-heading">どの画面で何をするか</h2><p>日常的な作業の画面と、管理権限が必要な画面を分けて確認できます。</p></div>
+      <div class="site-map-grid" data-site-map></div>
+    </section>
+
+    <section class="tutorial" aria-label="チュートリアルのプレビュー">
+      <p class="progress" data-progress>ステップ 1 / 4</p>
+      <h2 data-title>読み込み中…</h2>
+      <p class="intro" data-body>案内を読み込んでいます。</p>
+      <section class="lesson" aria-label="このステップの内容" data-lesson></section>
+      <section class="checkpoint" aria-label="このステップの操作確認" data-checkpoint>
+        <p class="checkpoint__eyebrow">操作して確認</p>
+        <h3 data-checkpoint-prompt></h3>
+        <p data-checkpoint-instruction></p>
+        <div class="checkpoint__choices" data-checkpoint-choices></div>
+        <output data-checkpoint-message aria-live="polite"></output>
+      </section>
+      <section class="guide-card" aria-label="案内内容"><ol data-steps></ol></section>
+      <div class="actions">
+        <button type="button" class="secondary" data-back>前のステップへ戻る</button>
+        <button type="button" data-next>内容を確認して次へ</button>
+      </div>
+      <output data-message aria-live="polite"></output>
+    </section>
+
+    <section class="practice-link" aria-labelledby="practice-heading">
+      <h2 id="practice-heading">実践型チュートリアルも体験できます</h2>
+      <p>アトラスの利用者が実際に行う「新規記事作成 → 本文・太字入力 → プレビュー確認 → 下書き保存」を、紹介用の安全な練習スペースで体験できます。</p>
+      <a href="/onboarding/atlas-writing-practice/?preview=1">アトラスの記事編集練習を体験する</a>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .demo{margin:0 auto;max-width:760px;padding:0 1.25rem 5rem}.preview-header{border-bottom:1px solid var(--border-default);padding:2.2rem 0 1.4rem}.preview-header h1{font-size:clamp(1.8rem,4vw,2.6rem);margin:0 0 .7rem}.preview-header>p{color:var(--text-secondary);line-height:1.75;margin:.5rem 0 0}.notice{background:var(--background-secondary);border-left:3px solid var(--accent-primary);padding:.8rem 1rem}.project-selector{margin:1.75rem 0}.project-selector h2{font-size:1rem;margin:0}.project-tabs{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}.project-tabs button{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font:inherit;font-size:.84rem;font-weight:800;padding:.6rem .75rem}.project-tabs button[aria-selected="true"]{background:var(--accent-primary);border-color:var(--accent-primary);color:var(--on-accent)}
+  .tutorial{margin:0 auto;max-width:760px}.progress,.checkpoint__eyebrow{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:0;margin:0}.site-map{border:1px solid var(--border-default);display:grid;gap:1rem;margin:1.75rem 0;padding:1.25rem}.site-map h2{font-size:1.15rem;margin:.3rem 0}.site-map>div>p:last-child{color:var(--text-secondary);line-height:1.6;margin:0}.site-map-grid{display:grid;gap:.6rem;grid-template-columns:repeat(2,minmax(0,1fr))}.site-map-card{border:1px solid var(--border-default);display:grid;gap:.35rem;padding:.8rem}.site-map-card strong{font-size:.9rem}.site-map-card p{color:var(--text-secondary);font-size:.78rem;line-height:1.55;margin:0}.site-map-card span{color:var(--accent-primary);font-size:.7rem;font-weight:800}.site-map-card[data-access="manager"]{opacity:.72}.tutorial h2{font-size:2rem;margin:.4rem 0 .6rem}.intro,output{color:var(--text-secondary);line-height:1.8}.lesson{border:1px solid var(--border-default);display:grid;gap:1.25rem;margin:2rem 0;padding:1.25rem}.lesson__goal{border-left:3px solid var(--accent-primary);margin:0;padding-left:.8rem}.lesson__group{display:grid;gap:.55rem}.lesson h3{font-size:1rem;margin:0}.lesson ul{display:grid;gap:.55rem;margin:0;padding-left:1.35rem}.lesson li{line-height:1.7}.lesson__tip{background:var(--background-secondary);border:1px solid var(--border-default);font-size:.9rem;line-height:1.7;margin:0;padding:.85rem}.lesson__tip strong{display:block;font-size:.76rem;letter-spacing:.04em;margin-bottom:.25rem}.checkpoint{border-top:3px solid var(--accent-primary);display:grid;gap:.75rem;margin:2rem 0;padding:1.25rem}.checkpoint h3{font-size:1.1rem;margin:0}.checkpoint>p:not(.checkpoint__eyebrow){color:var(--text-secondary);line-height:1.7;margin:0}.checkpoint__choices{display:grid;gap:.6rem}.checkpoint__choice{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);display:grid;gap:.28rem;min-height:0;padding:.9rem;text-align:left}.checkpoint__choice strong{font-size:.9rem}.checkpoint__choice span{color:var(--text-secondary);font-size:.82rem;font-weight:500;line-height:1.55}.checkpoint__choice[data-selected="true"]{border-color:var(--accent-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-primary) 14%,transparent)}.guide-card{border-top:2px solid var(--accent-primary);margin:2rem 0;padding-top:1rem}.guide-card ol{display:grid;gap:.7rem;list-style:none;margin:0;padding:0}.guide-card li{border:1px solid var(--border-default);color:var(--text-secondary);font-size:.84rem;padding:.75rem}.guide-card li[data-current="true"]{border-color:var(--accent-primary);color:var(--text-primary);font-weight:800}.guide-card li[data-done="true"]::before{content:"✓ ";color:var(--accent-primary)}.actions{display:flex;flex-wrap:wrap;gap:.7rem}.actions button{flex:1 1 13rem}button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:var(--on-accent);cursor:pointer;font:inherit;font-weight:800;min-height:2.8rem;padding:.65rem 1rem}button.secondary{background:var(--background-primary);color:var(--text-primary)}button:disabled{cursor:not-allowed;opacity:.6}output{display:block;min-height:1.5rem;margin-top:.75rem}.practice-link{border:1px solid var(--border-default);display:grid;gap:.7rem;margin-top:2rem;padding:1.25rem}.practice-link h2{font-size:1.05rem;margin:0}.practice-link p{color:var(--text-secondary);line-height:1.7;margin:0}.practice-link a{background:var(--accent-primary);color:var(--on-accent);font-size:.86rem;font-weight:800;padding:.7rem 1rem;text-align:center;text-decoration:none}@media(max-width:560px){.demo{padding:0 1rem 4rem}.project-tabs,.site-map-grid{display:grid}.project-tabs button{text-align:left}.tutorial h2{font-size:1.65rem}.lesson,.checkpoint{padding:1rem}}
+</style>
+
+<script>
+  import { projectOperationalAreas, projectTutorialCheckpoints, projectTutorials, type ProjectTutorialStep, type TutorialCheckpoint } from "../../lib/project-tutorials";
+  const initializeOnboardingDemo = () => {
+    const root = document.querySelector<HTMLElement>("[data-onboarding-demo]");
+    if (!root || root.dataset.initialized === "true") return;
+    root.dataset.initialized = "true";
+    const title = root.querySelector<HTMLElement>("[data-title]")!; const body = root.querySelector<HTMLElement>("[data-body]")!; const progress = root.querySelector<HTMLElement>("[data-progress]")!; const lesson = root.querySelector<HTMLElement>("[data-lesson]")!; const checkpoint = root.querySelector<HTMLElement>("[data-checkpoint]")!; const checkpointPrompt = root.querySelector<HTMLElement>("[data-checkpoint-prompt]")!; const checkpointInstruction = root.querySelector<HTMLElement>("[data-checkpoint-instruction]")!; const checkpointChoices = root.querySelector<HTMLElement>("[data-checkpoint-choices]")!; const checkpointMessage = root.querySelector<HTMLOutputElement>("[data-checkpoint-message]")!; const siteMap = root.querySelector<HTMLElement>("[data-site-map]")!; const stepList = root.querySelector<HTMLOListElement>("[data-steps]")!; const back = root.querySelector<HTMLButtonElement>("[data-back]")!; const next = root.querySelector<HTMLButtonElement>("[data-next]")!; const message = root.querySelector<HTMLOutputElement>("[data-message]")!; const buttons = root.querySelectorAll<HTMLButtonElement>("[data-project]");
+    const params = new URLSearchParams(location.search); const atlasPracticeComplete = params.get("atlas-practice") === "complete";
+    let project = "atlas"; let currentStep = atlasPracticeComplete ? projectTutorials.atlas.length - 1 : 0; const selectedCheckpoints = new Map<string, string>();
+    const renderLesson = (step: ProjectTutorialStep) => {
+      const goal = Object.assign(document.createElement("p"), { className: "lesson__goal", textContent: step.goal });
+      const groups = step.groups.map((group) => { const container = document.createElement("section"); container.className = "lesson__group"; const heading = document.createElement("h3"); heading.textContent = group.heading; const list = document.createElement("ul"); list.replaceChildren(...group.items.map((item) => Object.assign(document.createElement("li"), { textContent: item }))); container.replaceChildren(heading, list); return container; });
+      const tip = document.createElement("p"); tip.className = "lesson__tip"; const label = document.createElement("strong"); label.textContent = "確認のポイント"; tip.replaceChildren(label, document.createTextNode(step.tip)); lesson.replaceChildren(goal, ...groups, tip);
+    };
+    const checkpointKey = () => `${project}:${currentStep}`;
+    const renderCheckpoint = (item: TutorialCheckpoint | undefined) => { if (!item) { checkpoint.hidden = true; return; } checkpoint.hidden = false; checkpointPrompt.textContent = item.prompt; checkpointInstruction.textContent = item.instruction; checkpointMessage.value = selectedCheckpoints.has(checkpointKey()) ? "選択を確認しました。次へ進めます。" : "画面を一つ選ぶと、次へ進めます。"; checkpointChoices.replaceChildren(...item.choices.map((choice) => { const button = document.createElement("button"); button.type = "button"; button.className = "checkpoint__choice"; button.dataset.checkpointChoice = choice.id; button.dataset.selected = String(selectedCheckpoints.get(checkpointKey()) === choice.id); const label = document.createElement("strong"); label.textContent = choice.label; const description = document.createElement("span"); description.textContent = choice.description; button.replaceChildren(label, description); return button; })); };
+    const render = () => { const projectSteps = projectTutorials[project] ?? projectTutorials.atlas; const step = projectSteps[currentStep]; const checkpointItem = (projectTutorialCheckpoints[project] ?? projectTutorialCheckpoints.atlas)[currentStep]; progress.textContent = `ステップ ${currentStep + 1} / ${projectSteps.length}`; title.textContent = step.title; body.textContent = step.body; renderLesson(step); renderCheckpoint(checkpointItem); siteMap.replaceChildren(...(projectOperationalAreas[project] ?? projectOperationalAreas.atlas).map((area) => { const card = document.createElement("article"); card.className = "site-map-card"; card.dataset.access = area.access; const name = document.createElement("strong"); name.textContent = area.title; const description = document.createElement("p"); description.textContent = area.purpose; const access = document.createElement("span"); access.textContent = area.access === "manager" ? "管理権限が必要" : "日常の作業で使う"; card.replaceChildren(name, description, access); return card; })); stepList.replaceChildren(...projectSteps.map((item, index) => { const li = document.createElement("li"); li.textContent = item.title; li.dataset.current = String(index === currentStep); li.dataset.done = String(index < currentStep); return li; })); back.disabled = currentStep === 0; const lastStep = currentStep === projectSteps.length - 1; next.disabled = Boolean(checkpointItem) && !selectedCheckpoints.has(checkpointKey()); next.textContent = !lastStep ? "内容を確認して次へ" : project === "atlas" && !atlasPracticeComplete ? "記事編集の練習へ進む" : "紹介を完了する"; message.textContent = atlasPracticeComplete && project === "atlas" ? "記事編集の練習を完了しました。最後の案内を確認して、紹介を完了できます。" : "紹介用の表示のため、進捗は保存されません。"; };
+    checkpointChoices.addEventListener("click", (event) => { const choice = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-checkpoint-choice]"); if (!choice) return; selectedCheckpoints.set(checkpointKey(), choice.dataset.checkpointChoice ?? ""); render(); });
+    buttons.forEach((button) => button.addEventListener("click", () => { project = button.dataset.project ?? "atlas"; currentStep = 0; selectedCheckpoints.clear(); buttons.forEach((item) => item.setAttribute("aria-selected", String(item === button))); render(); }));
+    back.addEventListener("click", () => { if (currentStep > 0) { currentStep -= 1; render(); } });
+    next.addEventListener("click", () => { const projectSteps = projectTutorials[project] ?? projectTutorials.atlas; if (!selectedCheckpoints.has(checkpointKey())) { message.textContent = "画面を一つ選んでから進んでください。"; return; } if (currentStep === projectSteps.length - 1) { if (project === "atlas" && !atlasPracticeComplete) { location.assign("/onboarding/atlas-writing-practice/?preview=1"); return; } message.textContent = `${projectSteps[currentStep].title}まで確認しました。上のプロジェクト切替から、ほかのプロジェクトの紹介も体験できます。`; next.disabled = true; return; } currentStep += 1; render(); });
+    render();
+  };
+  document.addEventListener("astro:page-load", initializeOnboardingDemo);
+  initializeOnboardingDemo();
+</script>

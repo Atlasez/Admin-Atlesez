@@ -108,6 +108,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .home-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 520px) {
+    .portal > header { align-items: start; flex-direction: column; }
+  }
+  @media (max-width: 520px) {
     .project-entry-cards { grid-template-columns: 1fr; }
     .calendar-toolbar { align-items: flex-start; flex-wrap: wrap; }
     .calendar-heading { order: -1; text-align: left; width: calc(100% - 1rem); }

@@ -52,8 +52,8 @@ describe("admin editor subject preview", () => {
       ":scope > .article-body.reading",
     );
 
-    expect(body?.textContent).toContain("定義 1 (群).");
-    expect(body?.textContent).toContain("命題 2 (可除律による群の特徴づけ).");
+    expect(body?.textContent).toContain("定義1(群)");
+    expect(body?.textContent).toContain("命題2(可除律による群の特徴づけ)");
     expect(body?.querySelector(".katex")).not.toBeNull();
   });
 
@@ -73,10 +73,8 @@ describe("admin editor subject preview", () => {
 
     expect(directive).not.toBeNull();
     expect(directive?.classList.contains("defi")).toBe(true);
-    expect(directive?.querySelector(".thmtitle")?.textContent).toBe(
-      "定義 1 (群)",
-    );
-    expect(directive?.querySelector("p")?.textContent).toContain("集合");
+    expect(directive?.querySelector(".thmtitle")?.textContent).toBe("定義1(群)");
+    expect(directive?.textContent).toContain("集合");
     expect(body?.textContent).not.toContain("::: defi");
   });
 

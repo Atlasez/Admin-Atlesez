@@ -39,6 +39,30 @@ const emptyEnv = {
 };
 
 describe("admin worker editor APIs", () => {
+  it("serves the CodeMirror completion module used by the article editor", async () => {
+    let requestedPath = "";
+    const assetEnv = {
+      ...emptyEnv,
+      ASSETS: {
+        fetch: async (request: Request) => {
+          requestedPath = new URL(request.url).pathname;
+          return new Response("completion module", {
+            status: 200,
+            headers: { "content-type": "text/javascript" },
+          });
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/admin-codemirror.js"),
+      assetEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(requestedPath).toBe("/admin-codemirror.js");
+    await expect(response.text()).resolves.toContain("completion module");
+  });
+
   it("returns JSON for unexpected API failures instead of a Cloudflare HTML error", async () => {
     const brokenEnv = {
       ...emptyEnv,

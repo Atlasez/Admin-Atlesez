@@ -30,7 +30,7 @@ describe("article preview parity source of truth", () => {
     expect(adminLayout).not.toContain("admin-published-preview.css");
   });
 
-  it("uses the same Markdown and math-structure modules for public and admin rendering", async () => {
+  it("uses shared math structure without loading server-only Markdown code in the browser", async () => {
     const [astroConfig, baseHead, previewScript] = await Promise.all([
       readSource("astro.config.mjs"),
       readSource("src/components/BaseHead.astro"),
@@ -38,7 +38,7 @@ describe("article preview parity source of truth", () => {
     ]);
 
     expect(astroConfig).toContain("ARTICLE_MARKDOWN_PROCESSOR_OPTIONS");
-    expect(previewScript).toContain("ARTICLE_MARKDOWN_PROCESSOR_OPTIONS");
+    expect(previewScript).not.toContain("@astrojs/markdown-remark");
     expect(baseHead).toContain('import "../scripts/article-math-structure";');
     expect(previewScript).toContain('from "./article-math-structure"');
   });
