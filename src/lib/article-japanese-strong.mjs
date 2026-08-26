@@ -14,12 +14,20 @@ export function remarkJapaneseStrong() {
           for (const match of child.value.matchAll(JAPANESE_STRONG_PATTERN)) {
             matched = true;
             const start = match.index ?? 0;
-            if (start > cursor) next.push({ type: "text", value: child.value.slice(cursor, start) });
-            next.push({ type: "strong", children: [{ type: "text", value: match[1] }] });
+            if (start > cursor)
+              next.push({
+                type: "text",
+                value: child.value.slice(cursor, start),
+              });
+            next.push({
+              type: "strong",
+              children: [{ type: "text", value: match[1] }],
+            });
             cursor = start + match[0].length;
           }
           if (matched) {
-            if (cursor < child.value.length) next.push({ type: "text", value: child.value.slice(cursor) });
+            if (cursor < child.value.length)
+              next.push({ type: "text", value: child.value.slice(cursor) });
             continue;
           }
         }

@@ -263,10 +263,17 @@ export function numberMathStatements(
         const sameLocale = candidates.filter(
           (item) => !options.locale || item.locale === options.locale,
         );
-        const external = sameArticle ?? (sameLocale.length === 1 ? sameLocale[0] : candidates.length === 1 ? candidates[0] : undefined);
+        const external =
+          sameArticle ??
+          (sameLocale.length === 1
+            ? sameLocale[0]
+            : candidates.length === 1
+              ? candidates[0]
+              : undefined);
         if (external?.href) {
           const link = mathBody.ownerDocument.createElement("a");
-          link.className = "math-statement-reference math-statement-reference-external";
+          link.className =
+            "math-statement-reference math-statement-reference-external";
           link.href = `${external.href}#${encodeURIComponent(external.id)}`;
           link.textContent = `${external.articleTitle}:${external.label}${external.number}`;
           fragment.append(link);

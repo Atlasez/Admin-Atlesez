@@ -73,7 +73,9 @@ describe("admin editor subject preview", () => {
 
     expect(directive).not.toBeNull();
     expect(directive?.classList.contains("defi")).toBe(true);
-    expect(directive?.querySelector(".thmtitle")?.textContent).toBe("定義1(群)");
+    expect(directive?.querySelector(".thmtitle")?.textContent).toBe(
+      "定義1(群)",
+    );
     expect(directive?.textContent).toContain("集合");
     expect(body?.textContent).not.toContain("::: defi");
   });

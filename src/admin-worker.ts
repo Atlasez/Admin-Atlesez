@@ -28,9 +28,7 @@ import {
 } from "./lib/date-time";
 import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
-import {
-  normalizeArticleReferences,
-} from "./lib/article-references.mjs";
+import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
 // ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
 // Preview/本番は外部の専用Worker bindingを必ず経由する。
@@ -867,7 +865,12 @@ async function getUserStageForEmail(
            WHERE project_id=? AND lower(email)=lower(?)`,
         )
           .bind(projectId, email)
-          .first<{ tutorial_step: number; tutorial_completed_at: string | null; atlas_writing_practice_step: number | null; atlas_writing_practice_completed_at: string | null }>()
+          .first<{
+            tutorial_step: number;
+            tutorial_completed_at: string | null;
+            atlas_writing_practice_step: number | null;
+            atlas_writing_practice_completed_at: string | null;
+          }>()
       : null;
   const baseProfileComplete = Boolean(profile?.bio?.trim());
   const projectProfileComplete = Boolean(projectProfile?.internal_bio?.trim());
@@ -877,8 +880,19 @@ async function getUserStageForEmail(
     baseProfileComplete,
     projectProfileComplete,
     tutorialStep: Math.max(0, Number(tutorial?.tutorial_step ?? 0)),
-    atlasWritingPracticeStep: Math.max(0, Math.min(4, Number(tutorial?.atlas_writing_practice_step ?? (tutorial?.atlas_writing_practice_completed_at ? 4 : 0)))),
-    atlasWritingPracticeComplete: Boolean(tutorial?.atlas_writing_practice_completed_at),
+    atlasWritingPracticeStep: Math.max(
+      0,
+      Math.min(
+        4,
+        Number(
+          tutorial?.atlas_writing_practice_step ??
+            (tutorial?.atlas_writing_practice_completed_at ? 4 : 0),
+        ),
+      ),
+    ),
+    atlasWritingPracticeComplete: Boolean(
+      tutorial?.atlas_writing_practice_completed_at,
+    ),
     stage: getUserStage({
       applicationStatus,
       profileComplete: baseProfileComplete,
@@ -896,10 +910,7 @@ async function getMemberProfileScope(
 ): Promise<AdminScope | Response> {
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
-  if (
-    current.applicationStatus === "accepted" &&
-    current.baseProfileComplete
-  )
+  if (current.applicationStatus === "accepted" && current.baseProfileComplete)
     return {
       email: current.email,
       subjects: [],
@@ -926,7 +937,7 @@ async function getCurrentUserStage(
 }
 
 const applicantProfileFromRow = (
-  row: Partial<ApplicantProfile> & { email?: string } | null | undefined,
+  row: (Partial<ApplicantProfile> & { email?: string }) | null | undefined,
 ): ApplicantProfile | null => {
   if (!row?.email) return null;
   return {
@@ -1006,7 +1017,9 @@ async function saveApplicationProfile(
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   const identity = await getAuthenticatedEmail(request, env);
   if (isResponse(identity)) return identity;
-  if (request.headers.get("content-type")?.includes("application/json") !== true)
+  if (
+    request.headers.get("content-type")?.includes("application/json") !== true
+  )
     return json({ error: "JSON形式で送信してください。" }, 415);
   let payload: Record<string, unknown>;
   try {
@@ -1020,7 +1033,10 @@ async function saveApplicationProfile(
   const middleName = normalizedText(payload.middleName, 80);
   const familyNameKana = normalizedText(payload.familyNameKana, 80);
   const givenNameKana = normalizedText(payload.givenNameKana, 80);
-  const affiliationEmail = normalizedText(payload.affiliationEmail, 320).toLowerCase();
+  const affiliationEmail = normalizedText(
+    payload.affiliationEmail,
+    320,
+  ).toLowerCase();
   const affiliationType = normalizeAffiliationType(payload.affiliationType);
   const institution = normalizeInstitution(payload.institution);
   const grade = normalizeGrade(payload.grade);
@@ -1045,13 +1061,18 @@ async function saveApplicationProfile(
     (formLanguage === "ja" && (!familyNameKana || !givenNameKana))
   )
     return json({ error: "基本情報をすべて入力してください。" }, 400);
-  if (!(MEMBER_AFFILIATION_TYPES as readonly string[]).includes(affiliationType))
+  if (
+    !(MEMBER_AFFILIATION_TYPES as readonly string[]).includes(affiliationType)
+  )
     return json({ error: "所属区分を一覧から選択してください。" }, 400);
   if (
     !(MEMBER_YEARS as readonly string[]).includes(grade) ||
     !(APPLICATION_GRADES_BY_AFFILIATION[affiliationType] ?? []).includes(grade)
   )
-    return json({ error: "所属区分に対応する学年・立場を選択してください。" }, 400);
+    return json(
+      { error: "所属区分に対応する学年・立場を選択してください。" },
+      400,
+    );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO atlasez_applicant_profiles
@@ -1848,7 +1869,10 @@ const canReviewDocument = (
 ) =>
   canEditSubject(scope, subject) || (scope.isManager && status === "in-review");
 
-async function tikzRendererPackages(request: Request, env: Env): Promise<Response> {
+async function tikzRendererPackages(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   void request;
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -1905,10 +1929,15 @@ async function renderEditorialTikz(
     }
     if (!upstream.ok) {
       const error =
-        responsePayload && typeof responsePayload === "object" && "error" in responsePayload
+        responsePayload &&
+        typeof responsePayload === "object" &&
+        "error" in responsePayload
           ? String(responsePayload.error)
           : "TikZをSVGに変換できませんでした。";
-      return json({ error }, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502);
+      return json(
+        { error },
+        upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502,
+      );
     }
     return json(responsePayload);
   } catch {
@@ -1953,9 +1982,14 @@ const imageSignatureMatches = (
       new TextDecoder().decode(bytes.slice(0, 6)) === "GIF89a"
     );
   if (mediaType === "image/svg+xml") {
-    const source = new TextDecoder().decode(bytes).replace(/^\uFEFF/, "").trimStart();
+    const source = new TextDecoder()
+      .decode(bytes)
+      .replace(/^\uFEFF/, "")
+      .trimStart();
     if (!/^(?:<\?xml[^>]*>\s*)?<svg(?:\s|>)/i.test(source)) return false;
-    return !/<(?:script|foreignObject|iframe|object|embed)\b|<!DOCTYPE\b|<!ENTITY\b|\bon[a-z][a-z0-9_-]*\s*=|(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|javascript:)/i.test(source);
+    return !/<(?:script|foreignObject|iframe|object|embed)\b|<!DOCTYPE\b|<!ENTITY\b|\bon[a-z][a-z0-9_-]*\s*=|(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|javascript:)/i.test(
+      source,
+    );
   }
   return (
     new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" &&
@@ -2038,7 +2072,10 @@ async function uploadEditorialAsset(
     return json({ error: "画像ファイルを選択してください。" }, 400);
   const mediaType = file.type as EditorialImageType;
   if (!(mediaType in EDITORIAL_IMAGE_TYPES))
-    return json({ error: "PNG、JPEG、WebP、GIF、SVGのみ対応しています。" }, 415);
+    return json(
+      { error: "PNG、JPEG、WebP、GIF、SVGのみ対応しています。" },
+      415,
+    );
   const data = new Uint8Array(await file.arrayBuffer());
   if (!data.byteLength || data.byteLength > MAX_EDITORIAL_ASSET_BYTES)
     return json({ error: "画像は1.5MB以下にしてください。" }, 413);
@@ -2295,11 +2332,11 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     payload.lockedRanges === undefined
       ? undefined
       : parseEditorialLockedRanges(payload.lockedRanges, body);
-  if (payload.lockedRanges !== undefined && !lockedRanges)
-    return null;
-  const references = payload.references === undefined
-    ? undefined
-    : normalizeArticleReferences(payload.references, MAX_PERSONAL_REFERENCES);
+  if (payload.lockedRanges !== undefined && !lockedRanges) return null;
+  const references =
+    payload.references === undefined
+      ? undefined
+      : normalizeArticleReferences(payload.references, MAX_PERSONAL_REFERENCES);
   if (
     !SUBJECT_SLUG.test(subject) ||
     !SUBJECT_SLUG.test(category) ||
@@ -2413,13 +2450,23 @@ const normalizePersonalMathPresets = (raw: unknown): PersonalMathPreset[] => {
     if (!/^[a-z0-9][a-z0-9-]{1,79}$/.test(id) || !label) continue;
     const macros: Record<string, string> = {};
     if (!record.macros || typeof record.macros !== "object") continue;
-    for (const [command, replacement] of Object.entries(record.macros as Record<string, unknown>).slice(0, MAX_PERSONAL_MATH_MACROS)) {
+    for (const [command, replacement] of Object.entries(
+      record.macros as Record<string, unknown>,
+    ).slice(0, MAX_PERSONAL_MATH_MACROS)) {
       const normalizedCommand = command.trim();
-      const normalizedReplacement = text(replacement, MAX_PERSONAL_MATH_REPLACEMENT_LENGTH).trim();
-      if (!/^\\[A-Za-z][A-Za-z0-9]*$/.test(normalizedCommand) || !normalizedReplacement) continue;
+      const normalizedReplacement = text(
+        replacement,
+        MAX_PERSONAL_MATH_REPLACEMENT_LENGTH,
+      ).trim();
+      if (
+        !/^\\[A-Za-z][A-Za-z0-9]*$/.test(normalizedCommand) ||
+        !normalizedReplacement
+      )
+        continue;
       macros[normalizedCommand] = normalizedReplacement;
     }
-    if (Object.keys(macros).length) presets.push({ id, label, ...(group ? { group } : {}), macros });
+    if (Object.keys(macros).length)
+      presets.push({ id, label, ...(group ? { group } : {}), macros });
   }
   return presets;
 };
@@ -2432,17 +2479,27 @@ const storedPersonalMathPresets = (raw: string | null | undefined) => {
   }
 };
 
-const storedPersonalReferences = (raw: string | null | undefined): PersonalReference[] => {
+const storedPersonalReferences = (
+  raw: string | null | undefined,
+): PersonalReference[] => {
   try {
-    return normalizeArticleReferences(JSON.parse(raw ?? "[]"), MAX_PERSONAL_REFERENCES) as PersonalReference[];
+    return normalizeArticleReferences(
+      JSON.parse(raw ?? "[]"),
+      MAX_PERSONAL_REFERENCES,
+    ) as PersonalReference[];
   } catch {
     return [];
   }
 };
 
-const storedArticleReferences = (raw: string | null | undefined): PersonalReference[] => {
+const storedArticleReferences = (
+  raw: string | null | undefined,
+): PersonalReference[] => {
   try {
-    return normalizeArticleReferences(JSON.parse(raw ?? "[]"), MAX_PERSONAL_REFERENCES) as PersonalReference[];
+    return normalizeArticleReferences(
+      JSON.parse(raw ?? "[]"),
+      MAX_PERSONAL_REFERENCES,
+    ) as PersonalReference[];
   } catch {
     return [];
   }
@@ -2476,7 +2533,12 @@ async function getPersonalWorkspace(
       "SELECT private_note, updated_at, math_presets, personal_references FROM editorial_personal_workspaces WHERE email = ?",
     )
       .bind(scope.email)
-      .first<{ private_note: string; updated_at: string; math_presets: string; personal_references: string }>(),
+      .first<{
+        private_note: string;
+        updated_at: string;
+        math_presets: string;
+        personal_references: string;
+      }>(),
   ]);
   return json({
     email: scope.email,
@@ -2500,32 +2562,59 @@ async function savePersonalWorkspace(
     request.headers.get("content-type")?.includes("application/json") !== true
   )
     return json({ error: "JSON形式で送信してください。" }, 415);
-  let payload: { privateNote?: unknown; mathPresets?: unknown; references?: unknown };
+  let payload: {
+    privateNote?: unknown;
+    mathPresets?: unknown;
+    references?: unknown;
+  };
   try {
-    payload = (await request.json()) as { privateNote?: unknown; mathPresets?: unknown; references?: unknown };
+    payload = (await request.json()) as {
+      privateNote?: unknown;
+      mathPresets?: unknown;
+      references?: unknown;
+    };
   } catch {
-    return json({ error: "個人ワークスペースの内容を読み取れませんでした。" }, 400);
+    return json(
+      { error: "個人ワークスペースの内容を読み取れませんでした。" },
+      400,
+    );
   }
   const existing = await env.REPORTS.prepare(
     "SELECT private_note, math_presets, personal_references FROM editorial_personal_workspaces WHERE email = ?",
   )
     .bind(scope.email)
-    .first<{ private_note: string; math_presets: string; personal_references: string }>();
-  const privateNote = payload.privateNote === undefined
-    ? existing?.private_note ?? ""
-    : text(payload.privateNote, MAX_PERSONAL_WORKSPACE_NOTE_LENGTH);
-  const mathPresets = payload.mathPresets === undefined
-    ? storedPersonalMathPresets(existing?.math_presets)
-    : normalizePersonalMathPresets(payload.mathPresets);
-  const references = payload.references === undefined
-    ? storedPersonalReferences(existing?.personal_references)
-    : (normalizeArticleReferences(payload.references, MAX_PERSONAL_REFERENCES) as PersonalReference[]);
+    .first<{
+      private_note: string;
+      math_presets: string;
+      personal_references: string;
+    }>();
+  const privateNote =
+    payload.privateNote === undefined
+      ? (existing?.private_note ?? "")
+      : text(payload.privateNote, MAX_PERSONAL_WORKSPACE_NOTE_LENGTH);
+  const mathPresets =
+    payload.mathPresets === undefined
+      ? storedPersonalMathPresets(existing?.math_presets)
+      : normalizePersonalMathPresets(payload.mathPresets);
+  const references =
+    payload.references === undefined
+      ? storedPersonalReferences(existing?.personal_references)
+      : (normalizeArticleReferences(
+          payload.references,
+          MAX_PERSONAL_REFERENCES,
+        ) as PersonalReference[]);
   const updatedAt = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_personal_workspaces (email, private_note, updated_at, math_presets, personal_references) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(email) DO UPDATE SET private_note = excluded.private_note, updated_at = excluded.updated_at, math_presets = excluded.math_presets, personal_references = excluded.personal_references`,
   )
-    .bind(scope.email, privateNote, updatedAt, JSON.stringify(mathPresets), JSON.stringify(references))
+    .bind(
+      scope.email,
+      privateNote,
+      updatedAt,
+      JSON.stringify(mathPresets),
+      JSON.stringify(references),
+    )
     .run();
   return json({ ok: true, updatedAt, mathPresets, references });
 }
@@ -2878,7 +2967,14 @@ async function createApplicationResponseTask(
      (id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,reminder_at,reminder_repeat,reminder_email,created_by,created_at,updated_at)
      VALUES (?, 'secretariat', NULL, NULL, ?, ?, 'open', NULL, 'Asia/Tokyo', NULL, 'none', NULL, ?, ?, ?)`,
   )
-    .bind(crypto.randomUUID(), title, details, "応募フォーム", application.createdAt, application.createdAt)
+    .bind(
+      crypto.randomUUID(),
+      title,
+      details,
+      "応募フォーム",
+      application.createdAt,
+      application.createdAt,
+    )
     .run();
 }
 
@@ -5112,7 +5208,11 @@ async function submitMemberApplication(
       env,
       localDevelopmentEnabled(request, env),
     );
-    const canSubmitForAnotherProject = ["ONBOARDING", "TUTORIAL", "MEMBER"].includes(current.stage);
+    const canSubmitForAnotherProject = [
+      "ONBOARDING",
+      "TUTORIAL",
+      "MEMBER",
+    ].includes(current.stage);
     if (!canAccess(current.stage, "application") && !canSubmitForAnotherProject)
       return json({ error: "このアカウントでは応募を送信済みです。" }, 409);
   }
@@ -5163,12 +5263,29 @@ async function submitMemberApplication(
     : null;
   // 人には見せない入力欄。自動送信ボットの基本的な遮断に使う。
   if (text(payload.website, 200)) return json({ ok: true }, 201);
-  const familyName = normalizedText(payload.familyName, 80) || storedProfile?.family_name || "",
-    givenName = normalizedText(payload.givenName, 80) || storedProfile?.given_name || "",
-    middleName = normalizedText(payload.middleName, 80) || storedProfile?.middle_name || "",
-    familyNameKana = normalizedText(payload.familyNameKana, 80) || storedProfile?.family_name_kana || "",
-    givenNameKana = normalizedText(payload.givenNameKana, 80) || storedProfile?.given_name_kana || "",
-    formLanguage = text(payload.formLanguage, 2) === "en" || (!text(payload.formLanguage, 2) && storedProfile?.form_language === "en") ? "en" : "ja";
+  const familyName =
+      normalizedText(payload.familyName, 80) ||
+      storedProfile?.family_name ||
+      "",
+    givenName =
+      normalizedText(payload.givenName, 80) || storedProfile?.given_name || "",
+    middleName =
+      normalizedText(payload.middleName, 80) ||
+      storedProfile?.middle_name ||
+      "",
+    familyNameKana =
+      normalizedText(payload.familyNameKana, 80) ||
+      storedProfile?.family_name_kana ||
+      "",
+    givenNameKana =
+      normalizedText(payload.givenNameKana, 80) ||
+      storedProfile?.given_name_kana ||
+      "",
+    formLanguage =
+      text(payload.formLanguage, 2) === "en" ||
+      (!text(payload.formLanguage, 2) && storedProfile?.form_language === "en")
+        ? "en"
+        : "ja";
   const legacyName = normalizedText(payload.name, 120),
     name =
       familyName && givenName
@@ -5184,18 +5301,36 @@ async function submitMemberApplication(
     email = authenticatedEmail || submittedEmail,
     interests = normalizedText(payload.interests, 1_000),
     message = text(payload.message, MAX_OPERATION_TEXT_LENGTH);
-  const affiliationType = normalizeAffiliationType(payload.affiliationType) || storedProfile?.affiliation_type || "",
-    affiliationEmail = normalizedText(payload.affiliationEmail, 320).toLowerCase() || storedProfile?.affiliation_email || "",
-    institution = normalizeInstitution(payload.institution) || storedProfile?.institution || "",
+  const affiliationType =
+      normalizeAffiliationType(payload.affiliationType) ||
+      storedProfile?.affiliation_type ||
+      "",
+    affiliationEmail =
+      normalizedText(payload.affiliationEmail, 320).toLowerCase() ||
+      storedProfile?.affiliation_email ||
+      "",
+    institution =
+      normalizeInstitution(payload.institution) ||
+      storedProfile?.institution ||
+      "",
     grade = normalizeGrade(payload.grade) || storedProfile?.grade || "";
-  const country = normalizedText(payload.country, 100) || storedProfile?.country || "",
-    timezone = normalizedText(payload.timezone, 80) || storedProfile?.timezone || "",
+  const country =
+      normalizedText(payload.country, 100) || storedProfile?.country || "",
+    timezone =
+      normalizedText(payload.timezone, 80) || storedProfile?.timezone || "",
     articleIdeas = text(payload.articleIdeas, 3_000),
     availabilityNote = text(payload.availabilityNote, 1_000),
     birthDate = text(payload.birthDate, 10) || storedProfile?.birth_date || "",
-    residenceCity = normalizedText(payload.residenceCity, 160) || storedProfile?.residence_city || "",
-    currentOrganizations = text(payload.currentOrganizations, 1_000) || storedProfile?.current_organizations || "",
-    referralSource = text(payload.referralSource, 500) || storedProfile?.referral_source || "",
+    residenceCity =
+      normalizedText(payload.residenceCity, 160) ||
+      storedProfile?.residence_city ||
+      "",
+    currentOrganizations =
+      text(payload.currentOrganizations, 1_000) ||
+      storedProfile?.current_organizations ||
+      "",
+    referralSource =
+      text(payload.referralSource, 500) || storedProfile?.referral_source || "",
     motivationReasons = text(payload.motivationReasons, 3_000),
     desiredRoles = text(payload.desiredRoles, 2_000),
     interviewAvailability = text(payload.interviewAvailability, 2_000),
@@ -5297,7 +5432,8 @@ async function submitMemberApplication(
     );
   if (!validTimeZone(timezone))
     return json({ error: "タイムゾーンを一覧から選択してください。" }, 400);
-  const rateLimitScope = source === "public-worker" ? "public" : "authenticated";
+  const rateLimitScope =
+    source === "public-worker" ? "public" : "authenticated";
   const clientKey = await hash(
     `${rateLimitScope}:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`,
   );
@@ -5364,7 +5500,7 @@ async function submitMemberApplication(
   const now = new Date().toISOString();
   if (authenticatedEmail) {
     await env.REPORTS.prepare(
-    `INSERT INTO atlasez_applicant_profiles
+      `INSERT INTO atlasez_applicant_profiles
         (email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,
          affiliation_email,affiliation_type,institution,grade,country,timezone,birth_date,residence_city,
          current_organizations,referral_source,created_at,updated_at)
@@ -5466,7 +5602,9 @@ async function submitMemberApplication(
     {
       ok: true,
       turnstileRequired: Boolean(env.TURNSTILE_SECRET_KEY),
-      emailQueued: Boolean(env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim()),
+      emailQueued: Boolean(
+        env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim(),
+      ),
     },
     201,
   );
@@ -5613,10 +5751,7 @@ async function completeOnboarding(
   const bio = text(payload.bio, 4_000);
   const internalBio = text(payload.internalBio, 4_000).trim();
   if (!displayName || !bio)
-    return json(
-      { error: "表示名と運営外自己紹介を入力してください。" },
-      400,
-    );
+    return json({ error: "表示名と運営外自己紹介を入力してください。" }, 400);
   if (!current.projectSlug || !APPLICATION_FORM_SLUGS.has(current.projectSlug))
     return json({ error: "応募先プロジェクトを確認できません。" }, 409);
   const now = new Date().toISOString();
@@ -5663,7 +5798,10 @@ async function getOnboardingProject(
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "onboarding"))
-    return json({ error: "プロジェクト情報を入力できる段階ではありません。" }, 403);
+    return json(
+      { error: "プロジェクト情報を入力できる段階ではありません。" },
+      403,
+    );
   const internalProfile = current.projectSlug
     ? await env.REPORTS.prepare(
         "SELECT internal_bio FROM editorial_project_member_profiles WHERE project_id=? AND lower(email)=lower(?)",
@@ -5689,7 +5827,10 @@ async function completeOnboardingProject(
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "onboarding"))
-    return json({ error: "プロジェクト情報を入力できる段階ではありません。" }, 403);
+    return json(
+      { error: "プロジェクト情報を入力できる段階ではありません。" },
+      403,
+    );
   if (!current.baseProfileComplete)
     return json({ error: "先に基本情報を入力してください。" }, 409);
   if (!isSameOrigin(request))
@@ -5733,7 +5874,10 @@ async function getOnboardingTutorial(
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
   if (current.stage !== "TUTORIAL")
-    return json({ error: "チュートリアルを開始できる段階ではありません。" }, 403);
+    return json(
+      { error: "チュートリアルを開始できる段階ではありません。" },
+      403,
+    );
   return json({
     email: current.email,
     project:
@@ -5755,7 +5899,10 @@ async function advanceOnboardingTutorial(
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
   if (current.stage !== "TUTORIAL")
-    return json({ error: "チュートリアルを進められる段階ではありません。" }, 403);
+    return json(
+      { error: "チュートリアルを進められる段階ではありません。" },
+      403,
+    );
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   let payload: { step?: unknown };
@@ -5766,7 +5913,10 @@ async function advanceOnboardingTutorial(
   }
   const step = Number(payload.step);
   if (!Number.isInteger(step) || step !== current.tutorialStep)
-    return json({ error: "画面を再読み込みして、現在の手順から続けてください。" }, 409);
+    return json(
+      { error: "画面を再読み込みして、現在の手順から続けてください。" },
+      409,
+    );
   if (!current.projectSlug)
     return json({ error: "応募先プロジェクトを確認できません。" }, 409);
   const nextStep = Math.min(step + 1, ONBOARDING_TUTORIAL_STEPS);
@@ -5776,7 +5926,10 @@ async function advanceOnboardingTutorial(
     !current.atlasWritingPracticeComplete
   )
     return json(
-      { error: "アトラスの記事編集練習を完了してから、チュートリアルを完了してください。" },
+      {
+        error:
+          "アトラスの記事編集練習を完了してから、チュートリアルを完了してください。",
+      },
       409,
     );
   const completed = nextStep === ONBOARDING_TUTORIAL_STEPS;
@@ -5803,7 +5956,10 @@ async function advanceOnboardingTutorial(
     )
     .run()) as { meta: { changes?: number } };
   if ((advanced.meta.changes ?? 0) !== 1)
-    return json({ error: "画面を再読み込みして、現在の手順から続けてください。" }, 409);
+    return json(
+      { error: "画面を再読み込みして、現在の手順から続けてください。" },
+      409,
+    );
   return json({
     ok: true,
     step: nextStep,
@@ -5821,7 +5977,10 @@ async function completeAtlasWritingPractice(
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
   if (current.stage !== "TUTORIAL" || current.projectSlug !== "atlas")
-    return json({ error: "アトラスの記事編集練習を開始できる段階ではありません。" }, 403);
+    return json(
+      { error: "アトラスの記事編集練習を開始できる段階ではありません。" },
+      403,
+    );
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   let payload: { action?: unknown; title?: unknown; body?: unknown };
@@ -5831,18 +5990,44 @@ async function completeAtlasWritingPractice(
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
   const action = text(payload.action, 48).trim();
-  const steps = ["save-draft", "request-feedback", "resolve-feedback", "check-schedule"] as const;
-  const currentStep = current.atlasWritingPracticeComplete ? 4 : current.atlasWritingPracticeStep;
+  const steps = [
+    "save-draft",
+    "request-feedback",
+    "resolve-feedback",
+    "check-schedule",
+  ] as const;
+  const currentStep = current.atlasWritingPracticeComplete
+    ? 4
+    : current.atlasWritingPracticeStep;
   if (currentStep >= 4)
-    return json({ ok: true, step: 4, complete: true, next: "/onboarding/tutorial/" });
+    return json({
+      ok: true,
+      step: 4,
+      complete: true,
+      next: "/onboarding/tutorial/",
+    });
   if (action !== steps[currentStep])
-    return json({ error: "画面を再読み込みして、現在の手順から続けてください。" }, 409);
+    return json(
+      { error: "画面を再読み込みして、現在の手順から続けてください。" },
+      409,
+    );
   if (action === "save-draft") {
     const title = text(payload.title, 160).trim();
     const body = text(payload.body, 8_000).trim();
     const hasMath = /\$\$[\s\S]+?\$\$|\$[^$\n]+\$/.test(body);
-    if (title.length < 4 || body.length < 20 || !/\*\*[^*\n]+\*\*/.test(body) || !hasMath)
-      return json({ error: "タイトル、本文、太字（**太字**）と数式（$x^2$ など）を入力してから保存してください。" }, 400);
+    if (
+      title.length < 4 ||
+      body.length < 20 ||
+      !/\*\*[^*\n]+\*\*/.test(body) ||
+      !hasMath
+    )
+      return json(
+        {
+          error:
+            "タイトル、本文、太字（**太字**）と数式（$x^2$ など）を入力してから保存してください。",
+        },
+        400,
+      );
   }
   const now = new Date().toISOString();
   const nextStep = currentStep + 1;
@@ -5854,11 +6039,30 @@ async function completeAtlasWritingPractice(
      WHERE project_id=? AND lower(email)=lower(?) AND tutorial_completed_at IS NULL
        AND atlas_writing_practice_step=?`,
   )
-    .bind(nextStep, nextStep, now, now, onboardingProjectId("atlas"), current.email, currentStep)
+    .bind(
+      nextStep,
+      nextStep,
+      now,
+      now,
+      onboardingProjectId("atlas"),
+      current.email,
+      currentStep,
+    )
     .run()) as { meta: { changes?: number } };
   if ((updated.meta.changes ?? 0) !== 1)
-    return json({ error: "練習の状態を保存できませんでした。ページを読み込み直してから試してください。" }, 409);
-  return json({ ok: true, step: nextStep, complete: nextStep === 4, next: nextStep === 4 ? "/onboarding/tutorial/" : null });
+    return json(
+      {
+        error:
+          "練習の状態を保存できませんでした。ページを読み込み直してから試してください。",
+      },
+      409,
+    );
+  return json({
+    ok: true,
+    step: nextStep,
+    complete: nextStep === 4,
+    next: nextStep === 4 ? "/onboarding/tutorial/" : null,
+  });
 }
 
 async function fetchAdminAsset(request: Request, env: Env): Promise<Response> {
@@ -6385,12 +6589,15 @@ async function updateEditorialDocument(
       values.conceptId !== existing.concept_id ||
       values.body !== existing.body ||
       (values.references !== undefined &&
-        JSON.stringify(values.references) !== (existing.article_references ?? "[]")) ||
+        JSON.stringify(values.references) !==
+          (existing.article_references ?? "[]")) ||
       values.writingMemo !== existing.writing_memo ||
       values.latexEngine !== existing.latex_engine ||
       (values.lockedRanges !== undefined &&
         JSON.stringify(values.lockedRanges) !==
-          JSON.stringify(storedEditorialLockedRanges(existing.locked_ranges, existing.body))))
+          JSON.stringify(
+            storedEditorialLockedRanges(existing.locked_ranges, existing.body),
+          )))
   )
     return json(
       {
@@ -6431,7 +6638,7 @@ async function updateEditorialDocument(
       )
       .run();
   await env.REPORTS.prepare(
-      `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
+    `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
       slug = ?, title = ?, summary = ?, concept_id = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
       updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END
      WHERE id = ?`,
@@ -6450,8 +6657,14 @@ async function updateEditorialDocument(
       values.latexEngine,
       values.status,
       scope.email,
-      JSON.stringify(values.lockedRanges ?? storedEditorialLockedRanges(existing.locked_ranges, existing.body)),
-      JSON.stringify(values.references ?? storedArticleReferences(existing.article_references)),
+      JSON.stringify(
+        values.lockedRanges ??
+          storedEditorialLockedRanges(existing.locked_ranges, existing.body),
+      ),
+      JSON.stringify(
+        values.references ??
+          storedArticleReferences(existing.article_references),
+      ),
       now,
       values.status,
       now,
@@ -7151,9 +7364,13 @@ const editorialMarkdown = (
           ...references.flatMap((reference) => [
             `  - id: ${yaml(reference.id)}`,
             `    title: ${yaml(reference.title)}`,
-            ...(reference.authors ? [`    authors: ${yaml(reference.authors)}`] : []),
+            ...(reference.authors
+              ? [`    authors: ${yaml(reference.authors)}`]
+              : []),
             ...(reference.year ? [`    year: ${yaml(reference.year)}`] : []),
-            ...(reference.publisher ? [`    publisher: ${yaml(reference.publisher)}`] : []),
+            ...(reference.publisher
+              ? [`    publisher: ${yaml(reference.publisher)}`]
+              : []),
             ...(reference.url ? [`    url: ${yaml(reference.url)}`] : []),
             ...(reference.note ? [`    note: ${yaml(reference.note)}`] : []),
           ]),
@@ -7546,28 +7763,35 @@ async function authorizeUserPage(
     if (isResponse(managerScope)) return managerScope;
     return current;
   }
-  if (current.stage === "TUTORIAL" && (pathname === "/onboarding" || pathname === "/onboarding/"))
-    return Response.redirect(`${new URL(request.url).origin}/onboarding/tutorial/`, 302);
+  if (
+    current.stage === "TUTORIAL" &&
+    (pathname === "/onboarding" || pathname === "/onboarding/")
+  )
+    return Response.redirect(
+      `${new URL(request.url).origin}/onboarding/tutorial/`,
+      302,
+    );
   if (
     current.stage === "ONBOARDING" &&
     (pathname === "/onboarding" || pathname === "/onboarding/") &&
     current.baseProfileComplete
   )
-    return Response.redirect(`${new URL(request.url).origin}/onboarding/project/`, 302);
+    return Response.redirect(
+      `${new URL(request.url).origin}/onboarding/project/`,
+      302,
+    );
   if (
     current.stage === "ONBOARDING" &&
     (pathname.startsWith("/onboarding/tutorial") ||
-      (pathname.startsWith("/onboarding/project") && !current.baseProfileComplete))
+      (pathname.startsWith("/onboarding/project") &&
+        !current.baseProfileComplete))
   )
     return Response.redirect(`${new URL(request.url).origin}/onboarding/`, 302);
   if (
     pathname === "/admin/member-profile" ||
     pathname === "/admin/member-profile/"
   ) {
-    if (
-      current.applicationStatus === "accepted" &&
-      current.baseProfileComplete
-    )
+    if (current.applicationStatus === "accepted" && current.baseProfileComplete)
       return current;
   }
   if (
@@ -7579,7 +7803,10 @@ async function authorizeUserPage(
     pathname === "/onboarding/atlas-writing-practice/" &&
     (current.stage !== "TUTORIAL" || current.projectSlug !== "atlas")
   )
-    return Response.redirect(`${new URL(request.url).origin}${stageHome(current.stage, current.projectSlug)}`, 302);
+    return Response.redirect(
+      `${new URL(request.url).origin}${stageHome(current.stage, current.projectSlug)}`,
+      302,
+    );
   if (canAccess(current.stage, area)) return current;
   return Response.redirect(
     `${new URL(request.url).origin}${stageHome(current.stage, current.projectSlug)}`,
@@ -8099,7 +8326,8 @@ async function adminNotifications(
     ? `@${profile.display_name.trim()}`
     : "";
   const canReviewApplications =
-    scope.isManager || (await operationProjectRole(env, scope, "secretariat")) === "manager";
+    scope.isManager ||
+    (await operationProjectRole(env, scope, "secretariat")) === "manager";
   const [
     commentRows,
     mentionRows,
@@ -8171,8 +8399,8 @@ async function adminNotifications(
             title: string;
             updated_by: string;
             updated_at: string;
-        }[],
-      }),
+          }[],
+        }),
     canReviewApplications
       ? env.REPORTS.prepare(
           `SELECT id,name,email,project_slug,created_at
@@ -8256,7 +8484,7 @@ async function adminNotifications(
           detail: `担当分野：${item.subject} ／ 依頼者：${item.updated_by}`,
           href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
           updatedAt: item.updated_at,
-      }))
+        }))
       : []),
     ...(applicationRows.results ?? []).map((item) => ({
       id: `application-${item.id}`,
@@ -8432,15 +8660,20 @@ async function handleAdminRequest(
   }
   if (url.pathname === "/api/onboarding/project") {
     if (request.method === "GET") return getOnboardingProject(request, env);
-    if (request.method === "POST") return completeOnboardingProject(request, env);
+    if (request.method === "POST")
+      return completeOnboardingProject(request, env);
     return json({ error: "GET、POSTのみ利用できます。" }, 405);
   }
   if (url.pathname === "/api/onboarding/tutorial") {
     if (request.method === "GET") return getOnboardingTutorial(request, env);
-    if (request.method === "POST") return advanceOnboardingTutorial(request, env);
+    if (request.method === "POST")
+      return advanceOnboardingTutorial(request, env);
     return json({ error: "GET、POSTのみ利用できます。" }, 405);
   }
-  if (url.pathname === "/api/onboarding/atlas-writing-practice" && request.method === "POST")
+  if (
+    url.pathname === "/api/onboarding/atlas-writing-practice" &&
+    request.method === "POST"
+  )
     return completeAtlasWritingPractice(request, env);
   if (url.pathname === "/api/apply" && request.method === "POST")
     return submitMemberApplication(request, env, "same-origin", ctx);
@@ -8649,9 +8882,15 @@ async function handleAdminRequest(
   }
   if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
     return editorialBoard(request, env);
-  if (url.pathname === "/api/admin/editor/tikz/packages" && request.method === "GET")
+  if (
+    url.pathname === "/api/admin/editor/tikz/packages" &&
+    request.method === "GET"
+  )
     return tikzRendererPackages(request, env);
-  if (url.pathname === "/api/admin/editor/tikz/render" && request.method === "POST")
+  if (
+    url.pathname === "/api/admin/editor/tikz/render" &&
+    request.method === "POST"
+  )
     return renderEditorialTikz(request, env);
   const editorialCollaborationMatch = url.pathname.match(
     /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/collaboration$/i,
@@ -8856,7 +9095,10 @@ export default {
         : "";
     if (cron === "*/5 * * * *") {
       ctx.waitUntil(
-        Promise.all([dispatchDueTaskReminders(env), dispatchApplicationEmails(env)]),
+        Promise.all([
+          dispatchDueTaskReminders(env),
+          dispatchApplicationEmails(env),
+        ]),
       );
       return;
     }

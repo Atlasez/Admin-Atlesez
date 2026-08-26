@@ -18,8 +18,8 @@ describe("user stages", () => {
     expect(canAccess("NEW_USER", "applicant")).toBe(false);
     expect(canAccess("MEMBER", "application")).toBe(true);
     expect(canAccess("ADMIN", "application")).toBe(true);
-  expect(stageHome("NEW_USER")).toBe("/apply/");
-  expect(stageHome("MEMBER", "secretariat")).toBe("/apply/secretariat/");
+    expect(stageHome("NEW_USER")).toBe("/apply/");
+    expect(stageHome("MEMBER", "secretariat")).toBe("/apply/secretariat/");
   });
 
   it("requires profile setup and the tutorial after acceptance before reaching the member stage", () => {

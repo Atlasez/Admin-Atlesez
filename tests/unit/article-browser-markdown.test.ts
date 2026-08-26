@@ -23,8 +23,12 @@ describe("browser article Markdown renderer", () => {
   });
 
   it("keeps Japanese prose after strong emphasis from exposing Markdown markers", async () => {
-    const html = await renderArticleMarkdown("**Euclid整域(Euclidean domain)**という定義");
-    expect(html).toContain("<strong>Euclid整域(Euclidean domain)</strong>という定義");
+    const html = await renderArticleMarkdown(
+      "**Euclid整域(Euclidean domain)**という定義",
+    );
+    expect(html).toContain(
+      "<strong>Euclid整域(Euclidean domain)</strong>という定義",
+    );
     expect(html).not.toContain("**Euclid整域");
   });
 });

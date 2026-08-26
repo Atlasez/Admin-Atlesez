@@ -93,7 +93,8 @@ const DEFAULT_MACROS = {
   "\\divergence": "\\nabla\\mathbin{\\cdot}",
 };
 const PRESET_MARKER = /<!--\s*math-preset:\s*([a-z0-9-]+)\s*-->/gi;
-const PRESET_SOURCE_BLOCK = /<!--\s*math-preset:\s*[a-z0-9-]+\s*-->\s*(?:<!--\s*math-custom-preset:[^>]*-->[\s\S]*?<!--\s*\/math-custom-preset\s*-->\s*)?/gi;
+const PRESET_SOURCE_BLOCK =
+  /<!--\s*math-preset:\s*[a-z0-9-]+\s*-->\s*(?:<!--\s*math-custom-preset:[^>]*-->[\s\S]*?<!--\s*\/math-custom-preset\s*-->\s*)?/gi;
 const commandName = /\\(?:[A-Za-z@]+|.)/y;
 
 function skipSpace(source, index) {

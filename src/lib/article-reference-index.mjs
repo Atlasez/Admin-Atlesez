@@ -13,8 +13,7 @@ const STATEMENT_LABELS = {
   example: "例",
 };
 
-const DIRECTIVE_LINE =
-  /^\s*:{3,4}\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+.*?)?\s*$/gm;
+const DIRECTIVE_LINE = /^\s*:{3,4}\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+.*?)?\s*$/gm;
 
 /**
  * Build the public statement index used to resolve references across articles.

@@ -46,8 +46,11 @@ describe("article math macros", () => {
   });
 
   it("removes editor-only preset comments and custom blocks from preview text", () => {
-    expect(stripMathPresetMarker("<!-- math-preset: algebra -->\n<!-- math-custom-preset: custom-1 -->\n\\newcommand{\\Hom}{...}\n<!-- /math-custom-preset -->\n本文"))
-      .toBe("本文");
+    expect(
+      stripMathPresetMarker(
+        "<!-- math-preset: algebra -->\n<!-- math-custom-preset: custom-1 -->\n\\newcommand{\\Hom}{...}\n<!-- /math-custom-preset -->\n本文",
+      ),
+    ).toBe("本文");
   });
 
   it("renders declarations and presets before KaTeX sees later equations", async () => {

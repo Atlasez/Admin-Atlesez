@@ -71,10 +71,15 @@ export function normalizeTikzPackages(value) {
     const raw = typeof entry === "string" ? entry.trim() : "";
     if (!raw) continue;
     const [name, options = ""] = raw.split(":", 2);
-    if (!safeName.test(name) || !allowed.has(name) || !safeOption.test(options)) {
+    if (
+      !safeName.test(name) ||
+      !allowed.has(name) ||
+      !safeOption.test(options)
+    ) {
       throw new Error(`許可されていないTikZパッケージです: ${name || raw}`);
     }
-    if (!packages.some((item) => item.name === name)) packages.push({ name, options });
+    if (!packages.some((item) => item.name === name))
+      packages.push({ name, options });
   }
   if (packages.length > TIKZ_MAX_PACKAGE_COUNT)
     throw new Error(`TikZパッケージは${TIKZ_MAX_PACKAGE_COUNT}個までです。`);
@@ -105,11 +110,19 @@ export function assertSafeTikzSource(source) {
   const value = String(source ?? "");
   if (!value.trim()) throw new Error("TikZソースが空です。");
   if (value.length > TIKZ_MAX_SOURCE_LENGTH)
-    throw new Error(`TikZソースは${TIKZ_MAX_SOURCE_LENGTH.toLocaleString()}文字以内です。`);
+    throw new Error(
+      `TikZソースは${TIKZ_MAX_SOURCE_LENGTH.toLocaleString()}文字以内です。`,
+    );
   if (TIKZ_DANGEROUS_COMMAND_PATTERN.test(value))
-    throw new Error("外部ファイル読み込みやシェル実行を含むTikZソースは利用できません。");
-  if (/\\(?:documentclass|begin\s*\{document\}|end\s*\{document\})/i.test(value))
-    throw new Error("TikZブロック内にdocument環境やdocumentclassは書けません。");
+    throw new Error(
+      "外部ファイル読み込みやシェル実行を含むTikZソースは利用できません。",
+    );
+  if (
+    /\\(?:documentclass|begin\s*\{document\}|end\s*\{document\})/i.test(value)
+  )
+    throw new Error(
+      "TikZブロック内にdocument環境やdocumentclassは書けません。",
+    );
   return value;
 }
 

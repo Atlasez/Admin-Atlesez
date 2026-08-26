@@ -52,9 +52,16 @@ export function getUserStage({
     case "accepted":
       // 既存の呼び出し元では onboardingComplete が全体完了を表していたため、
       // 明示的な値がないときだけ両方の後方互換値として使う。
-      if (!(profileComplete ?? onboardingComplete ?? false)) return "ONBOARDING";
-      if (!(projectProfileComplete ?? onboardingComplete ?? profileComplete ?? false)) return "ONBOARDING";
-      return tutorialComplete ?? onboardingComplete ?? false
+      if (!(profileComplete ?? onboardingComplete ?? false))
+        return "ONBOARDING";
+      if (!(
+        projectProfileComplete ??
+        onboardingComplete ??
+        profileComplete ??
+        false
+      ))
+        return "ONBOARDING";
+      return (tutorialComplete ?? onboardingComplete ?? false)
         ? "MEMBER"
         : "TUTORIAL";
     default:
@@ -76,12 +83,17 @@ export function canAccess(stage: UserStage, area: UserArea): boolean {
     );
   if (area === "applicant") return stage === "APPLICANT" || stage === "MEMBER";
   if (area === "onboarding")
-    return stage === "ACCEPTED" || stage === "ONBOARDING" || stage === "TUTORIAL";
+    return (
+      stage === "ACCEPTED" || stage === "ONBOARDING" || stage === "TUTORIAL"
+    );
   return stage === "ADMIN";
 }
 
 /** ステージが許可されない時に案内する、次に進める入口。 */
-export function stageHome(stage: UserStage, projectSlug?: string | null): string {
+export function stageHome(
+  stage: UserStage,
+  projectSlug?: string | null,
+): string {
   if (stage === "NEW_USER" || stage === "APPLICATION_STARTED") return "/apply/";
   if (stage === "ACCEPTED" || stage === "ONBOARDING") return "/onboarding/";
   if (stage === "TUTORIAL") return "/onboarding/tutorial/";

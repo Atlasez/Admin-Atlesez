@@ -133,7 +133,10 @@ const articles = defineCollection({
     references: z
       .array(
         z.object({
-          id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{1,79}$/).optional(),
+          id: z
+            .string()
+            .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{1,79}$/)
+            .optional(),
           title: z.string(),
           authors: z.string().optional(),
           year: z.string().optional(),

@@ -7,7 +7,13 @@ import {
   stripMathPresetMarker,
 } from "./math-authoring.mjs";
 
-export { MATH_PRESETS, mathMacrosFromSource, mathPresetIdsFromSource, parseTexMacroDefinitions, stripMathPresetMarker };
+export {
+  MATH_PRESETS,
+  mathMacrosFromSource,
+  mathPresetIdsFromSource,
+  parseTexMacroDefinitions,
+  stripMathPresetMarker,
+};
 
 export function remarkArticleMathMacros(customPresets = {}) {
   return (tree, file) => {

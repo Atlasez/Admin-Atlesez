@@ -122,8 +122,9 @@ function initializeNavigationGuard(): void {
   };
 
   type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-  const controlsInDocumentForm = (): FormControl[] =>
-    [...form.querySelectorAll<FormControl>("input, select, textarea")];
+  const controlsInDocumentForm = (): FormControl[] => [
+    ...form.querySelectorAll<FormControl>("input, select, textarea"),
+  ];
   const documentControls = (): FormControl[] =>
     controlsInDocumentForm().filter((control) => !control.closest("dialog"));
   const validateDocumentFields = () => {
@@ -141,11 +142,15 @@ function initializeNavigationGuard(): void {
     const dialogControls = controlsInDocumentForm().filter(
       (control) => control.closest("dialog") && !control.disabled,
     );
-    dialogControls.forEach((control) => { control.disabled = true; });
+    dialogControls.forEach((control) => {
+      control.disabled = true;
+    });
     try {
       form.requestSubmit();
     } finally {
-      dialogControls.forEach((control) => { control.disabled = false; });
+      dialogControls.forEach((control) => {
+        control.disabled = false;
+      });
     }
   };
 

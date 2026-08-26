@@ -59,7 +59,10 @@ export function remarkArticleTikz() {
     const visit = async (node) => {
       if (!Array.isArray(node?.children)) return;
       for (const child of node.children) {
-        if (child?.type === "code" && String(child.lang ?? "").toLowerCase() === "tikz") {
+        if (
+          child?.type === "code" &&
+          String(child.lang ?? "").toLowerCase() === "tikz"
+        ) {
           try {
             const result = await renderTikzSource(child.value);
             Object.assign(child, {
@@ -84,8 +87,28 @@ export function remarkArticleTikz() {
                 hName: "div",
                 hProperties: { className: ["tikz-error"] },
                 hChildren: [
-                  { type: "element", tagName: "strong", properties: {}, children: [{ type: "text", value: "TikZを描画できませんでした" }] },
-                  { type: "element", tagName: "span", properties: {}, children: [{ type: "text", value: error instanceof Error ? error.message : "SVG変換エラー" }] },
+                  {
+                    type: "element",
+                    tagName: "strong",
+                    properties: {},
+                    children: [
+                      { type: "text", value: "TikZを描画できませんでした" },
+                    ],
+                  },
+                  {
+                    type: "element",
+                    tagName: "span",
+                    properties: {},
+                    children: [
+                      {
+                        type: "text",
+                        value:
+                          error instanceof Error
+                            ? error.message
+                            : "SVG変換エラー",
+                      },
+                    ],
+                  },
                 ],
               },
             });

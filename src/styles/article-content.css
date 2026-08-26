@@ -341,14 +341,15 @@
 .published-article-preview .tikz-error,
 .published-article-preview .tikz-diagram-failed {
   background: color-mix(in srgb, var(--danger, #c62828) 8%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--danger, #c62828) 38%, var(--border));
+  border: 1px solid
+    color-mix(in srgb, var(--danger, #c62828) 38%, var(--border));
   border-left: 4px solid var(--danger, #c62828);
-  border-radius: .45rem;
+  border-radius: 0.45rem;
   color: var(--text);
   display: grid;
-  gap: .25rem;
+  gap: 0.25rem;
   margin: 1rem 0;
-  padding: .75rem .9rem;
+  padding: 0.75rem 0.9rem;
   text-align: left;
 }
 
@@ -357,5 +358,5 @@
 .article-preview .tikz-error span,
 .article-preview .tikz-diagram-failed {
   color: var(--muted);
-  font-size: .86em;
+  font-size: 0.86em;
 }

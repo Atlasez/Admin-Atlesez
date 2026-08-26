@@ -24,7 +24,9 @@ const readJson = (request) =>
     request.on("data", (chunk) => {
       size += chunk.length;
       if (size > maxBodyBytes) {
-        reject(Object.assign(new Error("request too large"), { statusCode: 413 }));
+        reject(
+          Object.assign(new Error("request too large"), { statusCode: 413 }),
+        );
         request.destroy();
         return;
       }
@@ -46,7 +48,8 @@ const authorized = (request) => {
 };
 
 const server = createServer(async (request, response) => {
-  if (!authorized(request)) return send(response, 401, { error: "認証が必要です。" });
+  if (!authorized(request))
+    return send(response, 401, { error: "認証が必要です。" });
   if (request.method === "GET" && request.url === "/healthz")
     return send(response, 200, { ok: true, renderer: "node-tikzjax" });
   if (request.method === "GET" && request.url === "/packages")
@@ -63,7 +66,10 @@ const server = createServer(async (request, response) => {
   } catch (error) {
     const status = Number(error?.statusCode) || 422;
     return send(response, status >= 400 && status < 500 ? status : 500, {
-      error: error instanceof Error ? error.message : "TikZをSVGに変換できませんでした。",
+      error:
+        error instanceof Error
+          ? error.message
+          : "TikZをSVGに変換できませんでした。",
     });
   }
 });

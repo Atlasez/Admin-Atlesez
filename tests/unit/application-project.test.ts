@@ -4,10 +4,7 @@ import { resolveApplicationProjectSlug } from "../../src/lib/application-project
 describe("resolveApplicationProjectSlug", () => {
   it("recognizes the student-council public application URL", () => {
     expect(
-      resolveApplicationProjectSlug(
-        "/apply/student-council-exchange/",
-        "",
-      ),
+      resolveApplicationProjectSlug("/apply/student-council-exchange/", ""),
     ).toBe("student-council-exchange");
   });
 
@@ -21,8 +18,6 @@ describe("resolveApplicationProjectSlug", () => {
   });
 
   it("falls back safely for an unknown project", () => {
-    expect(resolveApplicationProjectSlug("/apply/unknown/", "")).toBe(
-      "atlas",
-    );
+    expect(resolveApplicationProjectSlug("/apply/unknown/", "")).toBe("atlas");
   });
 });

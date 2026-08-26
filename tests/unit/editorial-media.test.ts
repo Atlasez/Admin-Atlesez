@@ -60,9 +60,9 @@ describe("editorial media markers", () => {
     expect(normalizeEditorialImageWidth("73%")).toBe("73%");
     expect(normalizeEditorialImageWidth("0%")).toBe("");
     expect(normalizeEditorialImageWidth("101%")).toBe("");
-    expect(editorialImageUrlWithWidth("/images/editorial/doc/diagram.svg", "73%")).toBe(
-      "/images/editorial/doc/diagram.svg?width=73%",
-    );
+    expect(
+      editorialImageUrlWithWidth("/images/editorial/doc/diagram.svg", "73%"),
+    ).toBe("/images/editorial/doc/diagram.svg?width=73%");
     expect(editorialImageStyle("73%")).toBe("width:73%;max-width:100%;");
   });
 
@@ -127,7 +127,9 @@ describe("editorial media markers", () => {
           ],
         ]),
       ),
-    ).toContain(`![群の図](/images/editorial/${documentId}/diagram.png?width=80%)`);
+    ).toContain(
+      `![群の図](/images/editorial/${documentId}/diagram.png?width=80%)`,
+    );
   });
 
   it("checks only current body references across internal and published URLs", () => {

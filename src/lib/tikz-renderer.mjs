@@ -10,7 +10,7 @@ import {
 const tex2svg =
   typeof tikzjax === "function"
     ? tikzjax
-    : tikzjax?.default ?? tikzjax?.default?.default;
+    : (tikzjax?.default ?? tikzjax?.default?.default);
 if (typeof tex2svg !== "function")
   throw new Error("node-tikzjaxのレンダラーを読み込めませんでした。");
 
@@ -33,7 +33,8 @@ function extractDeclarations(source) {
   body = body.replace(
     /\\usepackage(?:\[([^\]\r\n]*)\])?\{([^}\r\n]+)\}/gi,
     (_, options = "", names) => {
-      for (const name of names.split(",")) packages.push(`${name.trim()}:${options}`);
+      for (const name of names.split(","))
+        packages.push(`${name.trim()}:${options}`);
       return "";
     },
   );
@@ -64,9 +65,16 @@ function normalizeSource(source, packages, libraries) {
 
 function sanitizeRenderedSvg(svg) {
   const value = String(svg ?? "").trim();
-  if (!/^<svg(?:\s|>)/i.test(value) || value.length > TIKZ_MAX_RENDERED_SVG_LENGTH)
+  if (
+    !/^<svg(?:\s|>)/i.test(value) ||
+    value.length > TIKZ_MAX_RENDERED_SVG_LENGTH
+  )
     throw new Error("生成されたSVGが不正または大きすぎます。");
-  if (/<(?:script|foreignObject|iframe|object|embed)\b|\bon[a-z][a-z0-9_-]*\s*=|(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|javascript:)/i.test(value))
+  if (
+    /<(?:script|foreignObject|iframe|object|embed)\b|\bon[a-z][a-z0-9_-]*\s*=|(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|javascript:)/i.test(
+      value,
+    )
+  )
     throw new Error("安全でないSVGを生成したため表示を中止しました。");
   return value;
 }
@@ -79,7 +87,10 @@ export async function renderTikzSource(source, options = {}) {
   );
   const render = async () => {
     const texPackages = Object.fromEntries(
-      normalized.packages.map(({ name, options: packageOptions }) => [name, packageOptions]),
+      normalized.packages.map(({ name, options: packageOptions }) => [
+        name,
+        packageOptions,
+      ]),
     );
     // The bundled e-TeX format already preloads the TikZ base. In this
     // package version adding a documentclass causes the format to fail, so
@@ -93,19 +104,31 @@ export async function renderTikzSource(source, options = {}) {
     return {
       svg: sanitizeRenderedSvg(svg),
       hash: createHash("sha256")
-        .update(JSON.stringify({ source: normalized.body, packages: normalized.packages, libraries: normalized.libraries }))
+        .update(
+          JSON.stringify({
+            source: normalized.body,
+            packages: normalized.packages,
+            libraries: normalized.libraries,
+          }),
+        )
         .digest("hex"),
       packages: normalized.packages,
       libraries: normalized.libraries,
     };
   };
   const result = renderQueue.then(render, render);
-  renderQueue = result.then(() => undefined, () => undefined);
+  renderQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
   return result;
 }
 
 export function tikzErrorHtml(error) {
-  const message = error instanceof Error ? error.message : "TikZをSVGに変換できませんでした。";
+  const message =
+    error instanceof Error
+      ? error.message
+      : "TikZをSVGに変換できませんでした。";
   return `<div class="tikz-error" role="img" aria-label="TikZエラー"><strong>TikZを描画できませんでした</strong><span>${escapeHtml(message)}</span></div>`;
 }
 

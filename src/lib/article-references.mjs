@@ -4,7 +4,8 @@
  * so publishing never depends on the editor's current private list.
  */
 export const ARTICLE_REFERENCE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{1,79}$/;
-export const ARTICLE_CITATION_PATTERN = /\[\[cite:([A-Za-z0-9][A-Za-z0-9_-]*)\]\]/g;
+export const ARTICLE_CITATION_PATTERN =
+  /\[\[cite:([A-Za-z0-9][A-Za-z0-9_-]*)\]\]/g;
 
 export const normalizeArticleReference = (value) => {
   if (!value || typeof value !== "object") return null;
@@ -22,7 +23,9 @@ export const normalizeArticleReference = (value) => {
     title: title.slice(0, 240),
     ...(optional("authors", 240) ? { authors: optional("authors", 240) } : {}),
     ...(optional("year", 32) ? { year: optional("year", 32) } : {}),
-    ...(optional("publisher", 240) ? { publisher: optional("publisher", 240) } : {}),
+    ...(optional("publisher", 240)
+      ? { publisher: optional("publisher", 240) }
+      : {}),
     ...(url && /^https?:\/\/\S+$/i.test(url) ? { url } : {}),
     ...(optional("note", 500) ? { note: optional("note", 500) } : {}),
   };
@@ -34,7 +37,12 @@ export const normalizeArticleReferences = (value, limit = 200) =>
         .slice(0, limit)
         .map(normalizeArticleReference)
         .filter(Boolean)
-        .filter((reference, index, all) => all.findIndex((item) => item.id.toLowerCase() === reference.id.toLowerCase()) === index)
+        .filter(
+          (reference, index, all) =>
+            all.findIndex(
+              (item) => item.id.toLowerCase() === reference.id.toLowerCase(),
+            ) === index,
+        )
     : [];
 
 export const citedReferenceIds = (source) => {
@@ -53,4 +61,5 @@ export const formatArticleReference = (reference) => {
   return `${author}${reference.title}${year}${publisher}`;
 };
 
-export const articleReferenceAnchor = (id) => `reference-${String(id).toLowerCase()}`;
+export const articleReferenceAnchor = (id) =>
+  `reference-${String(id).toLowerCase()}`;

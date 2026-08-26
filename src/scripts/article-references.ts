@@ -4,18 +4,29 @@ type ArticleReferenceIndexItem = { id: string; number: number };
 
 const citationPattern = /\[\[cite:([A-Za-z0-9][A-Za-z0-9_-]*)\]\]/g;
 
-function replaceCitations(body: HTMLElement, index: ArticleReferenceIndexItem[]) {
-  const numbers = new Map(index.map((item) => [item.id.toLowerCase(), item.number]));
+function replaceCitations(
+  body: HTMLElement,
+  index: ArticleReferenceIndexItem[],
+) {
+  const numbers = new Map(
+    index.map((item) => [item.id.toLowerCase(), item.number]),
+  );
   const NodeFilterCtor = body.ownerDocument.defaultView?.NodeFilter;
   if (!NodeFilterCtor) return;
-  const walker = body.ownerDocument.createTreeWalker(body, NodeFilterCtor.SHOW_TEXT, {
-    acceptNode(node) {
-      const parent = node.parentElement;
-      return parent && !parent.closest("a,code,pre,script,style") && /\[\[cite:[A-Za-z0-9][A-Za-z0-9_-]*\]\]/.test(node.textContent ?? "")
-        ? NodeFilterCtor.FILTER_ACCEPT
-        : NodeFilterCtor.FILTER_REJECT;
+  const walker = body.ownerDocument.createTreeWalker(
+    body,
+    NodeFilterCtor.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        return parent &&
+          !parent.closest("a,code,pre,script,style") &&
+          /\[\[cite:[A-Za-z0-9][A-Za-z0-9_-]*\]\]/.test(node.textContent ?? "")
+          ? NodeFilterCtor.FILTER_ACCEPT
+          : NodeFilterCtor.FILTER_REJECT;
+      },
     },
-  });
+  );
   citationPattern.lastIndex = 0;
   const textNodes: Text[] = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
@@ -55,7 +66,9 @@ function initializeArticleReferences() {
   if (!body) return;
   let index: ArticleReferenceIndexItem[] = [];
   try {
-    const serialized = document.querySelector<HTMLScriptElement>("[data-article-reference-index]")?.textContent;
+    const serialized = document.querySelector<HTMLScriptElement>(
+      "[data-article-reference-index]",
+    )?.textContent;
     index = serialized ? JSON.parse(serialized) : [];
   } catch {
     index = [];

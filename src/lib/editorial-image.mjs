@@ -7,7 +7,9 @@ export const EDITORIAL_IMAGE_WIDTHS = Object.freeze([
 ]);
 
 export function normalizeEditorialImageWidth(value) {
-  const normalized = String(value ?? "").trim().replace(/%$/, "");
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/%$/, "");
   if (!/^\d{1,3}$/.test(normalized)) return "";
   const percentage = Number(normalized);
   return percentage >= 1 && percentage <= 100 ? `${percentage}%` : "";
@@ -41,9 +43,10 @@ export function editorialImageUrlWithWidth(url, width) {
 
 export function editorialImageWidthFromLatexOptions(options) {
   const source = String(options ?? "");
-  const match = /(?:^|,)\s*width\s*=\s*(?:(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*\\(?:line|text)width)\s*(?:,|$)/i.exec(
-    source,
-  );
+  const match =
+    /(?:^|,)\s*width\s*=\s*(?:(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*\\(?:line|text)width)\s*(?:,|$)/i.exec(
+      source,
+    );
   if (!match) return "";
   const percentage = match[1]
     ? Number(match[1])
@@ -53,7 +56,9 @@ export function editorialImageWidthFromLatexOptions(options) {
 
 export function editorialImageWidthToLatex(width) {
   const normalized = normalizeEditorialImageWidth(width);
-  return normalized ? `${Number.parseInt(normalized, 10) / 100}\\linewidth` : "";
+  return normalized
+    ? `${Number.parseInt(normalized, 10) / 100}\\linewidth`
+    : "";
 }
 
 export function editorialImageStyle(width) {

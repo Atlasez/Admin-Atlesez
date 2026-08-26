@@ -63,10 +63,22 @@ const stageEnv = (
           return isAdmin ? ({ found: 1 } as T) : null;
         if (query.includes("SELECT bio FROM editorial_member_profiles"))
           return profileComplete ? ({ bio: "profile" } as T) : null;
-        if (query.includes("SELECT display_name,bio FROM editorial_member_profiles"))
-          return profileComplete ? ({ display_name: "Applicant", bio: "profile" } as T) : null;
-        if (query.includes("SELECT internal_bio FROM editorial_project_member_profiles"))
-          return projectProfileComplete ? ({ internal_bio: "project profile" } as T) : null;
+        if (
+          query.includes(
+            "SELECT display_name,bio FROM editorial_member_profiles",
+          )
+        )
+          return profileComplete
+            ? ({ display_name: "Applicant", bio: "profile" } as T)
+            : null;
+        if (
+          query.includes(
+            "SELECT internal_bio FROM editorial_project_member_profiles",
+          )
+        )
+          return projectProfileComplete
+            ? ({ internal_bio: "project profile" } as T)
+            : null;
         if (query.includes("atlasez_member_onboarding_progress"))
           return tutorialComplete
             ? ({
@@ -79,9 +91,10 @@ const stageEnv = (
                 tutorial_step: 0,
                 tutorial_completed_at: null,
                 atlas_writing_practice_step: atlasWritingPracticeStep,
-                atlas_writing_practice_completed_at: atlasWritingPracticeComplete
-                  ? "2026-08-24T12:00:00.000Z"
-                  : null,
+                atlas_writing_practice_completed_at:
+                  atlasWritingPracticeComplete
+                    ? "2026-08-24T12:00:00.000Z"
+                    : null,
               } as T);
         if (query.includes("SELECT project_slug, created_at, status"))
           return applicationStatus
@@ -362,7 +375,16 @@ describe("applicant stage server-side access", () => {
   });
 
   it("opens project setup and the member profile after basic profile setup", async () => {
-    const setupEnv = stageEnv("accepted", false, true, false, false, 0, false, false);
+    const setupEnv = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      false,
+    );
     const root = await worker.fetch(
       loggedInRequest("/onboarding/"),
       setupEnv as never,
