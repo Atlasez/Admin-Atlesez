@@ -80,6 +80,22 @@ const news = (
     }
 
     {
+      p.data.slug === "student-council-exchange" && (
+        <section aria-labelledby="student-council-application-heading">
+          <h2 id="student-council-application-heading">運営メンバーとして参加する</h2>
+          <p class="reading">
+            生徒会交流会の企画・広報・運営に参加したい方は、Googleアカウントでログインして専用フォームから応募できます。
+          </p>
+          <p>
+            <a class="button" href="https://admin.atlasez.org/apply/student-council-exchange/" rel="noopener noreferrer" target="_blank">
+              生徒会交流会の運営に応募する
+            </a>
+          </p>
+        </section>
+      )
+    }
+
+    {
       news.length > 0 && (
         <section aria-labelledby="news-heading">
           <h2 id="news-heading">このプロジェクトの最新情報</h2>

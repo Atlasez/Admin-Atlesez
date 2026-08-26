@@ -1,8 +1,14 @@
+import {
+  editorialImageUrlWithWidth,
+  editorialImageWidthFromLatexOptions,
+} from "./editorial-image.mjs";
+
 export const EDITORIAL_IMAGE_TYPES = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
+  "image/svg+xml": "svg",
 } as const;
 
 export type EditorialImageType = keyof typeof EDITORIAL_IMAGE_TYPES;
@@ -126,13 +132,14 @@ export const replaceEditorialLatexReferences = (
   assets: Map<string, EditorialLatexAssetReference>,
 ) =>
   body.replace(
-    /^\\includegraphics(?:\[[^\]\r\n]{0,240}\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/gm,
-    (whole, name: string) => {
+    /^\\includegraphics(?:\[([^\]\r\n]{0,240})\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/gm,
+    (whole, options: string | undefined, name: string) => {
       const asset = assets.get(name.toLowerCase());
       if (!asset) return whole;
       const safeAlt =
         (asset.alt ?? "").replace(/[\r\n\]]/g, " ").trim() || asset.filename;
-      return `![${safeAlt}](${publicEditorialAssetPath(asset)})`;
+      const width = editorialImageWidthFromLatexOptions(options);
+      return `![${safeAlt}](${editorialImageUrlWithWidth(publicEditorialAssetPath(asset), width)})`;
     },
   );
 
@@ -141,13 +148,13 @@ export const replaceEditorialAssetMarkers = (
   assets: Map<string, EditorialAssetReference>,
 ) =>
   body.replace(
-    /!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})\)/gi,
-    (whole, alt: string, id: string) => {
+    /!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})(?:\?width=(\d{1,3})%?)?\)/gi,
+    (whole, alt: string, id: string, width: string | undefined) => {
       const asset = assets.get(id.toLowerCase()) ?? assets.get(id);
       if (!asset) return whole;
       const safeAlt =
         alt.replace(/[\r\n\]]/g, " ").trim() ||
         asset.filename.replace(/[\r\n\]]/g, " ");
-      return `![${safeAlt}](${publicEditorialAssetPath(asset)})`;
+      return `![${safeAlt}](${editorialImageUrlWithWidth(publicEditorialAssetPath(asset), width ? `${width}%` : "")})`;
     },
   );

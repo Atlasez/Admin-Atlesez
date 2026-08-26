@@ -1,0 +1,59 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import SettingsMenu from "../components/SettingsMenu.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  showMemberProfile?: boolean;
+}
+const { title, description, showMemberProfile = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <BaseHead title={title} description={description} noindex={true} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+    <header class="applicant-header">
+      <a href="/apply/" class="brand">ATLASEZ</a>
+      {showMemberProfile && <nav class="member-navigation" aria-label="メンバーメニュー"><a href="/admin/member-profile/">マイページ</a></nav>}
+      <div class="display-settings"><SettingsMenu /></div>
+      <div class="account" aria-live="polite">
+        <span data-authenticated-email>ログイン情報を確認中…</span>
+        <form method="post" action="/auth/google/logout">
+          <button type="submit">ログアウト</button>
+        </form>
+      </div>
+    </header>
+    <main id="main"><slot /></main>
+    <script>
+      const account = document.querySelector<HTMLElement>("[data-authenticated-email]");
+      fetch("/api/user/status", { credentials: "same-origin", cache: "no-store" })
+        .then(async (response) => ({ response, data: await response.json() as { email?: string } }))
+        .then(({ response, data }) => {
+          if (!account) return;
+          account.textContent = response.ok && data.email ? data.email : "ログイン情報を確認できませんでした。";
+        })
+        .catch(() => {
+          if (account) account.textContent = "ログイン情報を確認できませんでした。";
+        });
+    </script>
+  </body>
+</html>
+
+<style>
+  .applicant-header { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: .8rem max(1rem, calc((100vw - 920px) / 2)); }
+  .brand { color: var(--accent-primary); font-size: 1.05rem; font-weight: 850; text-decoration: none; }
+  .member-navigation { margin-left: auto; }
+  .display-settings { margin-left: auto; }
+  .member-navigation a { border: 1px solid var(--border-default); color: var(--text-primary); font-size: .8rem; font-weight: 800; padding: .38rem .6rem; text-decoration: none; }
+  .member-navigation a:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .account { align-items: center; color: var(--text-secondary); display: flex; font-size: .8rem; gap: .7rem; min-width: 0; }
+  .account span { overflow-wrap: anywhere; }
+  .account form { margin: 0; }
+  .account button { background: transparent; border: 1px solid var(--border-default); color: var(--text-primary); cursor: pointer; font: inherit; padding: .35rem .55rem; white-space: nowrap; }
+  @media (max-width: 560px) { .applicant-header { align-items: flex-start; flex-direction: column; } .member-navigation { margin-left: 0; } .account { align-items: flex-start; flex-direction: column; gap: .4rem; } }
+</style>

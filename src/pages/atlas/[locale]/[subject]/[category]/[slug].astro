@@ -22,6 +22,11 @@ import {
   nextArticles,
   translationArticles,
 } from "../../../../../lib/content";
+import { buildArticleStatementIndex } from "../../../../../lib/article-reference-index.mjs";
+import {
+  articleReferenceAnchor,
+  formatArticleReference,
+} from "../../../../../lib/article-references.mjs";
 import { ORG } from "../../../../../lib/site";
 import "katex/dist/katex.min.css";
 
@@ -46,6 +51,25 @@ const { map } = await getConcepts();
 const sameLocale = await getPublishedArticles(locale);
 const all = await getPublishedArticles();
 const byConcept = indexArticlesByConcept(sameLocale);
+
+const statementIndex = buildArticleStatementIndex(all).map((statement) => ({
+  ...statement,
+  href: articlePath(
+    statement.locale,
+    statement.subject,
+    statement.category,
+    statement.slug,
+  ),
+}));
+const serializedStatementIndex = JSON.stringify(statementIndex).replace(
+  /</g,
+  "\\u003c",
+);
+const serializedReferenceIndex = JSON.stringify(
+  entry.data.references.flatMap((reference, index) =>
+    reference.id ? [{ id: reference.id, number: index + 1 }] : [],
+  ),
+).replace(/</g, "\\u003c");
 
 const prereqs = prerequisiteArticles(entry, map, byConcept);
 const related = relatedArticles(entry, map, byConcept);
@@ -154,27 +178,35 @@ const structuredData = {
     <div class="reading-progress-bar" data-reading-progress></div>
   </div>
 
-  <div class="container article-layout">
+  <div
+    class={`container article-layout${toc.length === 0 ? " article-layout-no-toc" : ""}`}
+  >
     {/* 左: 記事内目次（デスクトップは固定、モバイルは折り畳み） */}
-    <nav class="article-toc" id="article-toc" aria-label={t(locale, "toc")}>
-      <details class="toc-details" open>
-        <summary>{t(locale, "toc")}</summary>
-        <ol class="details-body toc-list">
-          {
-            toc.map((h) => (
-              <li class={`toc-depth-${h.depth}`}>
-                <a href={`#${h.slug}`} data-toc-link={h.slug}>
-                  {tocLabel(h.text)}
-                </a>
-              </li>
-            ))
-          }
-        </ol>
-      </details>
-    </nav>
-    <button type="button" class="mobile-toc-trigger" data-mobile-toc>
-      {t(locale, "toc")}
-    </button>
+    {
+      toc.length > 0 && (
+        <>
+          <nav class="article-toc" id="article-toc" aria-label={t(locale, "toc")}>
+            <details class="toc-details" open>
+              <summary>{t(locale, "toc")}</summary>
+              <ol class="details-body toc-list">
+                {
+                  toc.map((h) => (
+                    <li class={`toc-depth-${h.depth}`}>
+                      <a href={`#${h.slug}`} data-toc-link={h.slug}>
+                        {tocLabel(h.text)}
+                      </a>
+                    </li>
+                  ))
+                }
+              </ol>
+            </details>
+          </nav>
+          <button type="button" class="mobile-toc-trigger" data-mobile-toc>
+            {t(locale, "toc")}
+          </button>
+        </>
+      )
+    }
 
     {/* 中央: 本文（Pagefindの検索対象） */}
     <article class="article-main" data-pagefind-body>
@@ -291,6 +323,17 @@ const structuredData = {
         }
       </header>
 
+      <script
+        type="application/json"
+        data-article-statement-index
+        set:html={serializedStatementIndex}
+      />
+      <script
+        type="application/json"
+        data-article-reference-index
+        set:html={serializedReferenceIndex}
+      />
+
       {
         entry.data.exerciseIds.pre.length > 0 && (
           <div class="article-exercise" role="note">
@@ -323,19 +366,23 @@ const structuredData = {
         <h2 id="refs-heading">{t(locale, "references")}</h2>
         {
           entry.data.references.length > 0 ? (
-            <ul>
+            <ol>
               {entry.data.references.map((r) => (
-                <li>
+                <li
+                  id={r.id ? articleReferenceAnchor(r.id) : undefined}
+                  data-reference-id={r.id}
+                >
                   {r.url ? (
                     <a href={r.url} rel="noopener noreferrer" target="_blank">
-                      {r.title}
+                      {formatArticleReference(r)}
                     </a>
                   ) : (
-                    r.title
+                    formatArticleReference(r)
                   )}
+                  {r.note ? <small> {r.note}</small> : null}
                 </li>
               ))}
-            </ul>
+            </ol>
           ) : (
             <p class="reference-status">
               {locale === "ja"
@@ -579,6 +626,9 @@ const structuredData = {
     align-items: start;
     max-width: 86rem;
   }
+  .article-layout-no-toc {
+    grid-template-columns: minmax(0, 1fr) 14rem;
+  }
   .article-toc {
     position: sticky;
     top: var(--space-3);
@@ -671,6 +721,29 @@ const structuredData = {
     max-width: var(--reading-width);
     margin-top: var(--space-5);
     font-size: calc(0.9rem * var(--text-scale));
+  }
+  .article-refs li {
+    scroll-margin-top: 5rem;
+    margin-block: var(--space-1);
+  }
+  .article-refs li:target {
+    background: var(--background-secondary);
+    border-radius: var(--radius-sm);
+    outline: 2px solid var(--accent-primary);
+    outline-offset: .2rem;
+  }
+  .article-refs small {
+    color: var(--text-secondary);
+  }
+  .article-citation {
+    font-weight: 700;
+    margin-inline: .08em;
+    text-decoration: none;
+  }
+  .article-citation-missing {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: .9em;
   }
   .issue-report {
     width: min(100%, 48rem);

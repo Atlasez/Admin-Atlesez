@@ -1,0 +1,66 @@
+---
+import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
+---
+
+<ApplicantLayout title="基本情報の設定" description="Atlasez参加のための基本情報を設定します。">
+  <section class="onboarding" data-onboarding>
+    <p class="eyebrow">ATLASEZ / ONBOARDING</p>
+    <h1>基本情報を設定してください</h1>
+    <p class="intro">受入が完了しました。まずは共通の基本情報を入力してください。保存後、参加するプロジェクトの項目を入力するページへ進みます。</p>
+
+    <dl class="account-summary">
+      <div><dt>Googleアカウント</dt><dd data-email>読み込み中…</dd></div>
+      <div><dt>参加プロジェクト</dt><dd data-project>読み込み中…</dd></div>
+    </dl>
+
+    <form data-onboarding-form>
+      <label>表示名<input name="displayName" maxlength="120" required autocomplete="name" /></label>
+      <label>運営外自己紹介<textarea name="bio" maxlength="4000" required></textarea><small>公開プロフィールなど、運営外の人にも表示されうる紹介です。</small></label>
+      <button type="submit">基本情報を保存して次へ進む</button>
+      <output data-message aria-live="polite"></output>
+    </form>
+  </section>
+</ApplicantLayout>
+
+<style>
+  .onboarding { margin: 0 auto; max-width: 720px; padding: 3rem 1.25rem 5rem; }
+  .eyebrow { color: var(--accent-primary); font-size: .76rem; font-weight: 800; letter-spacing: .08em; margin: 0; }
+  h1 { margin: .4rem 0 .6rem; }
+  .intro, small, output { color: var(--text-secondary); line-height: 1.7; }
+  .account-summary { border-top: 2px solid var(--accent-primary); display: grid; margin: 2rem 0; }
+  .account-summary div { border-bottom: 1px solid var(--border-default); display: grid; gap: .65rem; grid-template-columns: minmax(10rem, .8fr) 1fr; padding: .75rem .2rem; }
+  dt { color: var(--text-secondary); font-size: .8rem; font-weight: 800; } dd { margin: 0; overflow-wrap: anywhere; }
+  form { display: grid; gap: 1rem; } label { display: grid; font-size: .86rem; font-weight: 750; gap: .38rem; } input, textarea { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 2.8rem; padding: .65rem; width: 100%; } textarea { min-height: 8rem; resize: vertical; } small { font-size: .75rem; font-weight: 500; } button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: var(--on-accent); cursor: pointer; font: inherit; font-weight: 800; min-height: 2.8rem; padding: .65rem; } output { min-height: 1.5rem; } @media (max-width: 560px) { .onboarding { padding: 2rem 1rem 4rem; } .account-summary div { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-onboarding]");
+  if (root) {
+    const form = root.querySelector<HTMLFormElement>("[data-onboarding-form]")!;
+    const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
+    const setText = (selector: string, value: string) => {
+      const target = root.querySelector<HTMLElement>(selector);
+      if (target) target.textContent = value;
+    };
+    fetch("/api/onboarding/me", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => ({ response, data: await response.json() as { email?: string; project?: string; profile?: { displayName?: string; bio?: string; internalBio?: string }; error?: string } }))
+      .then(({ response, data }) => {
+        if (!response.ok) throw new Error(data.error ?? "設定情報を読み込めませんでした。");
+        setText("[data-email]", data.email ?? ""); setText("[data-project]", data.project ?? "");
+        form.elements.namedItem("displayName") instanceof HTMLInputElement && ((form.elements.namedItem("displayName") as HTMLInputElement).value = data.profile?.displayName ?? "");
+        form.elements.namedItem("bio") instanceof HTMLTextAreaElement && ((form.elements.namedItem("bio") as HTMLTextAreaElement).value = data.profile?.bio ?? "");
+        form.elements.namedItem("internalBio") instanceof HTMLTextAreaElement && ((form.elements.namedItem("internalBio") as HTMLTextAreaElement).value = data.profile?.internalBio ?? "");
+      })
+      .catch((error) => { message.value = error instanceof Error ? error.message : "設定情報を読み込めませんでした。"; });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); message.value = "保存中…";
+      const fields = Object.fromEntries(new FormData(form)) as Record<string, string>;
+      try {
+        const response = await fetch("/api/onboarding/me", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(fields) });
+        const data = await response.json().catch(() => ({})) as { error?: string; next?: string };
+        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+        location.assign(data.next ?? "/applicant/");
+      } catch (error) { message.value = error instanceof Error ? error.message : "保存できませんでした。"; }
+    });
+  }
+</script>

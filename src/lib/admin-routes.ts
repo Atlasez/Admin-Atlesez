@@ -22,6 +22,7 @@ const adminPageNames = [
   "secretariat",
   "co-working",
   "permissions",
+  "onboarding-demo",
 ] as const;
 
 export const ADMIN_PAGE_PATHS = adminPageNames.map(

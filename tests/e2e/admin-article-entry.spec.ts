@@ -120,19 +120,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   });
 });
 
-test.describe("A-2 管理メニュー", () => {
-  test("外側クリックとEscapeで閉じる", async ({ page }) => {
+test.describe("A-2 管理導線", () => {
+  test("管理タブは管理トップへ直接遷移する", async ({ page }) => {
     await page.goto("admin/atlas/");
 
-    const menu = page.locator(".admin-management-menu");
-    await menu.locator("summary").click();
-    await expect(menu).toHaveAttribute("open", "");
-    await page.locator(".project-heading h1").click();
-    await expect(menu).not.toHaveAttribute("open", "");
-
-    await menu.locator("summary").click();
-    await expect(menu).toHaveAttribute("open", "");
-    await page.keyboard.press("Escape");
-    await expect(menu).not.toHaveAttribute("open", "");
+    await expect(page.locator(".admin-management-menu")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "管理", exact: true }),
+    ).toHaveAttribute("href", "/admin/manage/?project=atlas");
   });
 });

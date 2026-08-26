@@ -5,9 +5,19 @@
   "main": "src/admin-worker.ts",
   "compatibility_date": "2026-07-26",
   "preview_urls": true,
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "admin.atlasez.org",
+      "custom_domain": true,
+      "zone_name": "atlasez.org",
+    },
+  ],
   "vars": {
     "ADMIN_AUTH_MODE": "google-oauth",
     "ADMIN_PUBLIC_ORIGIN": "https://admin.atlasez.org",
+    "PUBLIC_ANALYTICS_ORIGIN": "https://atlasez-web-1.ukyoukay0.workers.dev",
+    "EMAIL_FROM": "Atlasez運営 <apply@atlasez.org>",
   },
   "assets": {
     "directory": "./dist",

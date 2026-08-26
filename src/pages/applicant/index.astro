@@ -1,0 +1,69 @@
+---
+import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
+---
+
+<ApplicantLayout title="応募状況" description="Atlasezへの応募状況を確認します。">
+  <section class="applicant-page" data-applicant-page>
+    <h1>応募状況</h1>
+    <p class="intro">応募内容を確認しています。選考に関するご連絡は、Googleログイン中のメールアドレスへお送りします。</p>
+
+    <dl class="application-details" aria-live="polite">
+      <div><dt>ログイン中のGoogleアカウント</dt><dd data-application-email>読み込み中…</dd></div>
+      <div><dt>応募したプロジェクト</dt><dd data-application-project>読み込み中…</dd></div>
+      <div><dt>応募日時</dt><dd data-application-submitted>読み込み中…</dd></div>
+      <div><dt>現在の応募ステータス</dt><dd><span class="badge badge-accent" data-application-status>読み込み中…</span></dd></div>
+    </dl>
+    <p class="notice" data-application-message>応募状況を読み込んでいます。</p>
+  </section>
+</ApplicantLayout>
+
+<style>
+  .applicant-page { margin: 0 auto; max-width: 720px; padding: 3rem 1.25rem 5rem; }
+  h1 { margin: .4rem 0 .6rem; }
+  .intro, .notice { color: var(--text-secondary); line-height: 1.7; }
+  .application-details { border-top: 2px solid var(--accent-primary); display: grid; margin: 2rem 0 1rem; }
+  .application-details div { border-bottom: 1px solid var(--border-default); display: grid; gap: .65rem; grid-template-columns: minmax(12rem, .9fr) minmax(0, 1.4fr); padding: 1rem .2rem; }
+  dt { color: var(--text-secondary); font-size: .82rem; font-weight: 700; }
+  dd { margin: 0; overflow-wrap: anywhere; }
+  @media (max-width: 560px) { .applicant-page { padding: 2rem 1rem 4rem; } .application-details div { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-applicant-page]");
+  const statusLabels: Record<string, string> = {
+    new: "応募を受け付けました",
+    reviewing: "確認中",
+    accepted: "受入済み",
+    rejected: "今回は見送り",
+  };
+  const formatSubmittedAt = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : new Intl.DateTimeFormat("ja-JP", { dateStyle: "long", timeStyle: "short" }).format(date);
+  };
+  if (root) {
+    const setText = (selector: string, value: string) => {
+      const target = root.querySelector<HTMLElement>(selector);
+      if (target) target.textContent = value;
+    };
+    fetch("/api/applicant/me", { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => ({ response, data: await response.json() as {
+        email?: string;
+        error?: string;
+        application?: { project: string; submittedAt: string; status: string };
+      } }))
+      .then(({ response, data }) => {
+        if (!response.ok || !data.application) throw new Error(data.error ?? "応募状況を読み込めませんでした。");
+        setText("[data-application-email]", data.email ?? "");
+        setText("[data-application-project]", data.application.project);
+        setText("[data-application-submitted]", formatSubmittedAt(data.application.submittedAt));
+        setText("[data-application-status]", statusLabels[data.application.status] ?? data.application.status);
+        setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "応募状況を読み込めませんでした。";
+        setText("[data-application-message]", message);
+      });
+  }
+</script>

@@ -24,8 +24,8 @@
 .article-body .math-definition {
   background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary));
   border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default));
-  border-left: 4px solid #6cb4c2;
-  border-radius: 0 0.55rem 0.55rem 0.55rem;
+  border-left: 3px solid #6cb4c2;
+  border-radius: 0 0.55rem 0.55rem;
   box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
   margin-block: 2.8rem 1.15rem;
   padding: 1.1rem 1.25rem;
@@ -41,9 +41,9 @@
 .article-body .example,
 .article-body .math-theorem {
   background: color-mix(in srgb, #e0c375 12%, var(--background-primary));
-  border: 1px solid color-mix(in srgb, #e0c375 42%, var(--border-default));
-  border-left: 4px solid #d0a53b;
-  border-radius: 0 0.55rem 0.55rem 0.55rem;
+  border: 1px solid #e0c375;
+  border-left-width: 3px;
+  border-radius: 0 0.55rem 0.55rem;
   box-shadow: 0 2px 5px rgb(0 0 0 / 4%);
   margin-block: 2.8rem 1.15rem;
   padding: 1.1rem 1.25rem;
@@ -75,14 +75,19 @@
 }
 
 .article-body .thmtitle {
-  background: #6cb4c2;
-  border-radius: 0.45rem 0.45rem 0 0;
   color: #12333a;
-  display: inline-block;
-  font-size: 0.88em;
+  float: left;
+  box-sizing: border-box;
+  background: #6cb4c2;
+  border: 3px solid #6cb4c2;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  margin: -51.4px 0 0 -23px;
+  padding: 4px 14px;
+  font-size: 0.95em;
   font-weight: 800;
-  margin: -2.55rem 0 0.55rem -1.3rem;
-  padding: 0.3rem 0.8rem;
+  line-height: 1.5;
+  display: block;
 }
 
 .article-body .prop .thmtitle,
@@ -91,7 +96,28 @@
 .article-body .cor .thmtitle,
 .article-body .example .thmtitle {
   background: #e0c375;
+  border-color: #e0c375;
   color: #4b3a12;
+}
+
+.article-body .example .thmtitle {
+  float: none;
+  border: 3px solid #e0c375;
+  border-radius: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 0.5rem;
+}
+
+.article-body .defi > p:first-child::after,
+.article-body .prop > p:first-child::after,
+.article-body .thm > p:first-child::after,
+.article-body .lemma > p:first-child::after,
+.article-body .cor > p:first-child::after,
+.article-body .example > p:first-child::after {
+  content: "";
+  clear: both;
+  display: table;
 }
 
 .article-body
@@ -278,4 +304,59 @@
 
 .article-body .folding-content {
   padding: 0.8rem 1rem;
+}
+.article-body .tikz-diagram,
+.article-preview .tikz-diagram,
+.published-article-preview .tikz-diagram {
+  display: block;
+  margin: 1.25rem auto;
+  max-width: 100%;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.article-body .tikz-diagram svg,
+.article-preview .tikz-diagram svg,
+.published-article-preview .tikz-diagram svg {
+  display: inline-block;
+  height: auto;
+  max-width: 100%;
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  vertical-align: middle;
+}
+
+.article-body .tikz-diagram-pending,
+.article-preview .tikz-diagram-pending,
+.published-article-preview .tikz-diagram-pending {
+  min-height: 3rem;
+  padding: 1rem;
+}
+
+.article-body .tikz-error,
+.article-body .tikz-diagram-failed,
+.article-preview .tikz-error,
+.article-preview .tikz-diagram-failed,
+.published-article-preview .tikz-error,
+.published-article-preview .tikz-diagram-failed {
+  background: color-mix(in srgb, var(--danger, #c62828) 8%, var(--surface));
+  border: 1px solid
+    color-mix(in srgb, var(--danger, #c62828) 38%, var(--border));
+  border-left: 4px solid var(--danger, #c62828);
+  border-radius: 0.45rem;
+  color: var(--text);
+  display: grid;
+  gap: 0.25rem;
+  margin: 1rem 0;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+}
+
+.article-body .tikz-error span,
+.article-body .tikz-diagram-failed,
+.article-preview .tikz-error span,
+.article-preview .tikz-diagram-failed {
+  color: var(--muted);
+  font-size: 0.86em;
 }

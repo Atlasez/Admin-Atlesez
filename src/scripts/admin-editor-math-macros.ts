@@ -1,4 +1,5 @@
 import * as katex from "katex";
+import { mathMacrosFromSource } from "../lib/math-authoring.mjs";
 
 export function extractDocumentMacros(source: string): Record<string, string> {
   const macros: Record<string, string> = {};
@@ -62,7 +63,16 @@ function initializeDocumentMacros(): void {
   const rerender = () => {
     scheduled = false;
     if (rendering) return;
-    const macros = extractDocumentMacros(body.value);
+    let customPresets: Record<string, { macros?: Record<string, string> }> = {};
+    try {
+      customPresets = JSON.parse(root.dataset.mathPresets ?? "{}");
+    } catch {
+      customPresets = {};
+    }
+    const macros = {
+      ...mathMacrosFromSource(body.value, customPresets).macros,
+      ...extractDocumentMacros(body.value),
+    };
     if (!Object.keys(macros).length) return;
     const signature = macroSignature(macros);
 
@@ -83,16 +93,24 @@ function initializeDocumentMacros(): void {
           );
           const tex = annotation?.textContent;
           if (!tex) continue;
+          const displayMode = Boolean(node.closest(".katex-display"));
 
           const wrapper = document.createElement("span");
           wrapper.innerHTML = katex.renderToString(tex, {
-            displayMode: false,
+            displayMode,
             macros: { ...macros },
             strict: "ignore",
             throwOnError: false,
           });
           const replacement = wrapper.firstElementChild as HTMLElement | null;
           if (!replacement) continue;
+          // `renderToString` wraps display equations in `.katex-display`,
+          // while the macro signature belongs to the inner `.katex` node that
+          // this query visits on the next mutation pass.
+          const signatureNode = replacement.matches(".katex")
+            ? replacement
+            : replacement.querySelector<HTMLElement>(".katex");
+          signatureNode?.setAttribute("data-document-macro-signature", signature);
           replacement.dataset.documentMacroSignature = signature;
           node.replaceWith(replacement);
         }

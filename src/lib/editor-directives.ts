@@ -7,6 +7,7 @@ export type DirectiveMarker = {
   fence: string;
   name: string;
   title: string;
+  id: string;
 };
 
 export function parseDirectiveMarker(value: string): DirectiveMarker | null {

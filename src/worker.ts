@@ -17,6 +17,7 @@ interface ExecutionContext {
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T>(): Promise<T | null>;
+  all<T>(): Promise<{ results: T[] }>;
   run(): Promise<unknown>;
 }
 
@@ -29,6 +30,13 @@ interface Env {
   REPORTS: D1Database;
   DISCORD_REPORT_WEBHOOK_URL?: string;
 }
+
+type RequestWithCloudflareGeo = Request & {
+  cf?: {
+    country?: string | null;
+    regionCode?: string | null;
+  };
+};
 
 type ReportPayload = {
   articleTitle?: unknown;
@@ -53,6 +61,13 @@ type AnalyticsPayload = {
   event?: unknown;
 };
 
+type ArticleAnalyticsRegion = {
+  region_code: string;
+  views: number;
+  engaged_reads: number;
+  completed_reads: number;
+};
+
 const MAX_DETAILS_LENGTH = 6_000;
 const MAX_CONTACT_LENGTH = 320;
 const MIN_FORM_FILL_MS = 1_200;
@@ -65,6 +80,7 @@ const ALLOWED_REPORT_TYPES = new Set([
   "other",
 ]);
 const ALLOWED_ANALYTICS_EVENTS = new Set(["view", "engaged", "complete"]);
+const JAPAN_REGION_CODE = /^JP-(?:0[1-9]|[1-3][0-9]|4[0-7])$/;
 const REPORT_TYPE_LABEL: Record<string, string> = {
   error: "誤り・不具合",
   suggestion: "改善提案",
@@ -88,6 +104,16 @@ const json = (body: unknown, status = 200) =>
 
 const text = (value: unknown, maximum: number) =>
   typeof value === "string" ? value.trim().slice(0, maximum) : "";
+
+const getJapanRegionCode = (request: Request): string | null => {
+  const cf = (request as RequestWithCloudflareGeo).cf;
+  if (text(cf?.country, 2).toUpperCase() !== "JP") return null;
+  const rawRegionCode = text(cf?.regionCode, 32).toUpperCase();
+  const digits = rawRegionCode.match(/^(?:JP[-_])?(\d{1,2})$/)?.[1];
+  if (!digits) return null;
+  const regionCode = `JP-${digits.padStart(2, "0")}`;
+  return JAPAN_REGION_CODE.test(regionCode) ? regionCode : null;
+};
 
 const isTrustedReportOrigin = (origin: string | null, requestUrl: URL) =>
   Boolean(
@@ -408,7 +434,56 @@ async function saveArticleAnalytics(
       now.toISOString(),
     )
     .run();
+  const regionCode = getJapanRegionCode(request);
+  if (regionCode) {
+    await env.REPORTS.prepare(
+      `INSERT INTO article_analytics_region_daily
+        (day, country, region_code, views, engaged_reads, completed_reads, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(day, country, region_code) DO UPDATE SET
+         views = views + excluded.views,
+         engaged_reads = engaged_reads + excluded.engaged_reads,
+         completed_reads = completed_reads + excluded.completed_reads,
+         updated_at = excluded.updated_at`,
+    )
+      .bind(
+        day,
+        "JP",
+        regionCode,
+        increments.view,
+        increments.engaged,
+        increments.complete,
+        now.toISOString(),
+      )
+      .run();
+  }
   return json({ ok: true }, 201);
+}
+
+async function listArticleAnalyticsRegions(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
+  const days = Number.isInteger(daysParam)
+    ? Math.min(90, Math.max(1, daysParam))
+    : 30;
+  const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
+    .toISOString()
+    .slice(0, 10);
+  const result = await env.REPORTS.prepare(
+    `SELECT region_code, SUM(views) AS views,
+        SUM(engaged_reads) AS engaged_reads,
+        SUM(completed_reads) AS completed_reads
+     FROM article_analytics_region_daily
+     WHERE day >= ? AND country = 'JP'
+     GROUP BY region_code
+     ORDER BY views DESC, region_code ASC
+     LIMIT 47`,
+  )
+    .bind(since)
+    .all<ArticleAnalyticsRegion>();
+  return json({ days, country: "JP", regions: result.results });
 }
 
 export default {
@@ -435,6 +510,11 @@ export default {
           request,
         );
       return withCors(await saveArticleAnalytics(request, env), request);
+    }
+    if (url.pathname === "/api/article-analytics-regions") {
+      return request.method === "GET"
+        ? listArticleAnalyticsRegions(request, env)
+        : json({ error: "GETのみ利用できます。" }, 405);
     }
     return env.ASSETS.fetch(request);
   },

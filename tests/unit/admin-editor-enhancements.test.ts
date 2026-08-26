@@ -31,6 +31,11 @@ describe("admin editor enhancements", () => {
       name: "prop",
       title: "命題",
     });
+    expect(parseDirectiveMarker(":::prop ラグランジュ {#lagrange}")).toMatchObject({
+      name: "prop",
+      title: "ラグランジュ",
+      id: "lagrange",
+    });
     expect(parseDirectiveMarker(":::cor")).toMatchObject({
       name: "cor",
       title: "系",

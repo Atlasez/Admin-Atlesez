@@ -1,11 +1,65 @@
 ---
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import { MATH_PRESETS } from "../../lib/math-authoring.mjs";
 import {
   getPlannedArticles,
   plannedArticleTitle,
   plannedProgress,
 } from "../../lib/planned";
+
+const LATEX_COMMAND_GROUPS = [
+  {
+    label: "構造・分数",
+    commands: [
+      ["\\frac{a}{b}", "分数"],
+      ["\\dfrac{a}{b}", "大きな分数"],
+      ["\\sqrt{x}", "平方根"],
+      ["\\sqrt[n]{x}", "n乗根"],
+      ["\\binom{n}{k}", "二項係数"],
+      ["\\begin{pmatrix} ... \\end{pmatrix}", "行列"],
+    ],
+  },
+  {
+    label: "記号・関係",
+    commands: [
+      ["\\alpha, \\beta, \\gamma", "ギリシャ文字"],
+      ["\\infty, \\partial, \\nabla", "無限大・偏微分・勾配"],
+      ["\\in, \\notin, \\subseteq", "集合の関係"],
+      ["\\cup, \\cap, \\setminus", "集合の演算"],
+      ["\\forall, \\exists", "全称・存在"],
+      ["\\Rightarrow, \\Leftrightarrow, \\mapsto", "論理・写像"],
+      ["\\leq, \\geq, \\neq, \\approx", "大小・近似"],
+    ],
+  },
+  {
+    label: "解析・演算",
+    commands: [
+      ["\\sum_{i=1}^{n}", "総和"],
+      ["\\prod_{i=1}^{n}", "総積"],
+      ["\\int_a^b", "定積分"],
+      ["\\iint, \\oint", "多重積分・周回積分"],
+      ["\\lim_{x\\to a}", "極限"],
+      ["\\mathrm{d}x, \\frac{\\partial f}{\\partial x}", "微分"],
+      ["\\log, \\ln, \\exp", "対数・指数"],
+      ["\\sin, \\cos, \\tan", "三角関数"],
+      ["\\det, \\operatorname{rank}", "行列式・階数"],
+    ],
+  },
+  {
+    label: "装飾・標準体",
+    commands: [
+      ["\\mathbb{R}", "黒板太字"],
+      ["\\mathcal{F}", "カリグラフィ体"],
+      ["\\mathfrak{g}", "フラクトゥール体"],
+      ["\\mathbf{v}, \\mathrm{d}x", "太字・ローマン体"],
+      ["\\overline{x}, \\hat{x}, \\vec{x}", "上付き装飾"],
+      ["\\left\\langle x,y \\right\\rangle", "内積"],
+      ["\\left\\lVert x \\right\\rVert", "ノルム"],
+      ["\\text{文章}", "数式内の文章"],
+    ],
+  },
+];
 
 const subjects = (await getCollection("subjects"))
   .sort((a, b) => a.data.order - b.data.order)
@@ -184,30 +238,39 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
           <details class="heading-outline"><summary>見出し一覧</summary><nav data-heading-outline>本文の見出しがここに表示されます。</nav></details>
           <div class="editor-split" aria-label="原稿とプレビュー">
             <section class="writing-area">
-              <div class="pane-heading"><div><h3>本文（Markdown）</h3></div><span data-word-count>0文字</span><div class="pane-controls"><button type="button" data-pane-popout="writing">別窓</button></div></div>
-              <textarea name="body" data-body spellcheck="true" placeholder={"## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"}></textarea>
+              <div class="pane-heading writing-pane-heading"><div class="pane-title"><h3>本文（Markdown）</h3><p class="math-authoring-help">詳細は「使える機能」へ</p></div><span data-word-count>0文字</span><div class="pane-controls"><button type="button" class="diagnostics-trigger" data-open-diagnostics aria-haspopup="dialog" hidden><span>確認事項</span><b data-diagnostics-trigger-count>0</b></button><button type="button" data-open-authoring-help aria-haspopup="dialog">使える機能</button><button type="button" data-pane-popout="writing">別窓</button></div></div>
+              <details class="writing-tools" open><summary>挿入・数式設定</summary><div class="pane-controls writing-tools-controls" aria-label="本文への挿入"><label class="math-preset-control"><span>共通数式</span><button type="button" class="math-preset-picker" data-open-math-preset-library aria-haspopup="dialog"><span data-math-preset-selection>なし</span><span aria-hidden="true">⌄</span></button><select data-math-preset aria-label="共通数式プリセット" hidden><option value="">なし</option>{Object.entries(MATH_PRESETS).map(([value, preset]) => <option value={value}>{preset.label}</option>)}</select></label><button type="button" class="quiet-action" data-add-math-preset>プリセット管理</button><button type="button" class="quiet-action" data-open-reference-library>参考文献</button><button type="button" class="quiet-action" data-insert-math="inline">インライン数式</button><button type="button" class="quiet-action" data-insert-math="display">表示数式</button><button type="button" class="quiet-action" data-insert-math="proposition">命題</button></div></details>
+              <dialog class="math-preset-dialog" data-math-preset-dialog aria-labelledby="math-preset-dialog-title"><div class="math-preset-dialog-inner"><div class="math-preset-dialog-header"><div><p class="eyebrow">LATEX PRESETS</p><h2 id="math-preset-dialog-title">LaTeXプリセット</h2><p>選択したプリセットは記事の数式設定に適用されます。自分用プリセットはここで追加・編集・削除できます。</p></div><button type="button" class="help-close" data-close-math-preset aria-label="プリセットを閉じる">×</button></div><div class="math-preset-library" data-math-preset-library><div class="math-preset-library-heading"><h3>利用できるプリセット</h3><button type="button" class="primary-action" data-start-math-preset>＋ 新規追加</button></div><div class="math-preset-library-list" data-math-preset-library-list></div></div><section class="math-preset-editor" data-math-preset-editor hidden><div class="math-preset-editor-heading"><h3 data-math-preset-editor-title>プリセットを追加</h3><button type="button" class="quiet-action" data-cancel-math-preset-edit>一覧に戻る</button></div><label class="math-preset-group-field">グループ名（任意）<input data-custom-preset-group maxlength="80" placeholder="例：代数・写像" /></label><div data-math-preset-form><label>プリセット名<input data-custom-preset-label maxlength="80" required disabled placeholder="例：自分の解析記号" /></label><label>マクロ<textarea data-custom-preset-macros required disabled placeholder="\\foo = \\mathbb{R}\n\\dd = \\,\\mathrm{d}#1"></textarea></label><output data-custom-preset-message aria-live="polite"></output><div class="math-preset-dialog-actions"><button type="button" class="primary-action" data-custom-preset-save>保存</button></div></div></section></div></dialog>
+              <dialog class="reference-library-dialog" data-reference-library-dialog aria-labelledby="reference-library-title"><div class="reference-library-inner"><div class="reference-library-header"><div><p class="eyebrow">PERSONAL REFERENCES</p><h2 id="reference-library-title">自分用参考文献リスト</h2><p><code>[[cite:識別子]]</code> を本文へ挿入すると、記事内では番号リンクとして表示されます。記事で使った文献は原稿にもコピー保存されます。</p></div><button type="button" class="help-close" data-close-reference-library aria-label="参考文献を閉じる">×</button></div><div class="reference-entry-form" data-reference-entry-form><input type="hidden" data-reference-edit-id /><label>識別子<input data-reference-id maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,79}" required disabled placeholder="例：atiyah-macdonald" /></label><label>書名・論文名<input data-reference-title maxlength="240" required disabled placeholder="例：Introduction to Commutative Algebra" /></label><label>著者・編者<input data-reference-authors maxlength="240" placeholder="例：M. F. Atiyah and I. G. Macdonald" /></label><label>出版年<input data-reference-year maxlength="32" placeholder="例：1969" /></label><label>出版社・掲載誌<input data-reference-publisher maxlength="240" placeholder="例：Addison-Wesley" /></label><label>URL<input data-reference-url type="url" maxlength="2000" placeholder="https://..." /></label><label>メモ<input data-reference-note maxlength="500" placeholder="必要なら版・ページなど" /></label><div class="reference-entry-actions"><button type="button" class="primary-action" data-save-reference>リストに保存</button><button type="button" class="quiet-action" data-cancel-reference-edit hidden>編集をキャンセル</button><output data-reference-entry-message aria-live="polite"></output></div></div><section class="reference-library-section" aria-labelledby="reference-list-heading"><div class="reference-library-section-heading"><h3 id="reference-list-heading">登録済みの文献</h3><span data-reference-count></span></div><div data-reference-library-list></div></section></div></dialog>
+              <div class="editor-lock-bar" data-editor-lock-bar><span data-lock-status>確定部分はありません</span><button type="button" class="quiet-action" data-lock-selection disabled>選択範囲をロック</button><button type="button" class="quiet-action" data-unlock-selection disabled>選択範囲のロック解除</button></div>
+              <dialog class="editor-diagnostics-dialog" data-editor-diagnostics aria-labelledby="editor-diagnostics-title"><div class="editor-diagnostics-inner"><div class="editor-diagnostics-header"><div><p class="eyebrow">EDITOR CHECKS</p><h2 id="editor-diagnostics-title">確認事項</h2><p>保存前に確認してください。本文・プレビューとは別に表示しています。</p></div><button type="button" class="help-close" data-close-editor-diagnostics aria-label="確認事項を閉じる">×</button></div><div class="editor-diagnostics-summary"><strong data-diagnostics-summary></strong><span>記事の表示や参照に関する確認です。</span></div><ul data-diagnostics-list></ul></div></dialog>
+              <dialog class="authoring-help-dialog" data-authoring-help-dialog aria-labelledby="authoring-help-title"><div class="authoring-help-inner"><div class="authoring-help-head"><div><p class="eyebrow">EDITOR HELP</p><h2 id="authoring-help-title">本文で使える機能</h2><p>カテゴリを選ぶと、右側の表示が切り替わります。</p></div><button type="button" class="help-close" data-close-authoring-help aria-label="ヘルプを閉じる">×</button></div><div class="authoring-help-layout"><nav class="authoring-help-nav" aria-label="ヘルプカテゴリ" role="tablist"><button type="button" class="help-topic-button" data-help-topic="markdown" role="tab" aria-selected="false" aria-controls="help-topic-markdown">Markdown</button><button type="button" class="help-topic-button is-active" data-help-topic="latex" role="tab" aria-selected="true" aria-controls="help-topic-latex">LaTeX・数式</button><button type="button" class="help-topic-button" data-help-topic="preset" role="tab" aria-selected="false" aria-controls="help-topic-preset">プリセット・マクロ</button><button type="button" class="help-topic-button" data-help-topic="proposition" role="tab" aria-selected="false" aria-controls="help-topic-proposition">命題・証明</button><button type="button" class="help-topic-button" data-help-topic="reference" role="tab" aria-selected="false" aria-controls="help-topic-reference">参照・番号</button><button type="button" class="help-topic-button" data-help-topic="media" role="tab" aria-selected="false" aria-controls="help-topic-media">画像・TikZ</button><button type="button" class="help-topic-button" data-help-topic="review" role="tab" aria-selected="false" aria-controls="help-topic-review">レビュー</button><button type="button" class="help-topic-button" data-help-topic="screen" role="tab" aria-selected="false" aria-controls="help-topic-screen">画面操作</button><button type="button" class="help-topic-button" data-help-topic="workflow" role="tab" aria-selected="false" aria-controls="help-topic-workflow">保存・公開</button></nav><div class="authoring-help-topics"><section class="help-topic-panel" id="help-topic-markdown" data-help-panel="markdown" role="tabpanel" hidden><h3>Markdownの基本</h3><p><code># 見出し</code>、空行で段落、<code>**太字**</code>、<code>*斜体*</code>、<code>&#96;コード&#96;</code>、<code>- 箇条書き</code>、<code>1. 番号付き</code> が使えます。</p><p>リンクは <code>[表示名](https://...)</code> と書けます。見出しは「見出し一覧」から移動できます。</p></section><section class="help-topic-panel" id="help-topic-latex" data-help-panel="latex" role="tabpanel"><h3>LaTeX数式・入力補完</h3><p><code>$...$</code> は本文中、<code>$$...$$</code> は表示数式です。<code>\</code> を入力するか、本文内で <kbd>Ctrl</kbd> + <kbd>Space</kbd> を押すと候補が出ます。</p><div class="help-command-groups">{LATEX_COMMAND_GROUPS.map((group) => <div class="help-command-group"><h4>{group.label}</h4><ul>{group.commands.map(([command, description]) => <li><code>{command}</code><span>{description}</span></li>)}</ul></div>)}</div><p class="help-tip">候補は入力中に絞り込まれます。候補を選択して <kbd>Enter</kbd>、移動して <kbd>↑</kbd> <kbd>↓</kbd> で確定できます。</p></section><section class="help-topic-panel" id="help-topic-preset" data-help-panel="preset" role="tabpanel" hidden><h3>LaTeXマクロ・共通プリセット</h3><p>「共通数式」から記事ごとにプリセットを選ぶと、よく使う記号を共通設定として使えます。</p><ul class="preset-help-list">{Object.entries(MATH_PRESETS).map(([value, preset]) => <li><code>{value}</code><span>{preset.label}</span><span class="preset-command-list">{Object.keys(preset.macros).join(" ")}</span></li>)}</ul><p>記事固有の定義は数式ブロック内で <code>\newcommand&#123;\foo&#125;[1]&#123;...&#125;</code>、<code>\DeclareMathOperator&#123;\rank&#125;&#123;rank&#125;</code> が使えます。定義は記事内の数式で再利用できます。</p></section><section class="help-topic-panel" id="help-topic-proposition" data-help-panel="proposition" role="tabpanel" hidden><h3>命題・定義・証明</h3><p><code>:::prop タイトル &#123;#識別子&#125;</code> のように書きます。<code>defi</code>（定義）、<code>prop</code>（命題）、<code>thm</code>（定理）、<code>lemma</code>（補題）、<code>cor</code>（系）、<code>example</code>（例）、<code>proof</code>（証明）などに対応しています。</p><button type="button" class="help-insert-button" data-help-insert="proposition">命題のひな形を挿入</button></section><section class="help-topic-panel" id="help-topic-reference" data-help-panel="reference" role="tabpanel" hidden><h3>参照・自動番号・参考文献</h3><p>命題などの参照は <code>[[ref:識別子]]</code>、参考文献の引用は <code>[[cite:識別子]]</code> です。番号は記事で使われた参考文献の登録順に付き、本文の <code>[1]</code> から記事末尾の参考文献へ移動できます。</p><p>「参考文献」ボタンから自分用リストを登録し、「本文へ引用」を押すと識別子の挿入と記事へのコピー保存を同時に行います。URL、著者、出版年、出版社・掲載誌、ページなどのメモも登録できます。</p></section><section class="help-topic-panel" id="help-topic-media" data-help-panel="media" role="tabpanel" hidden><h3>画像・図・TikZ</h3><p>「図・画像」から画像をアップロードして本文へ挿入できます。画像ごとに幅を選び、「既存参照に適用」で挿入済み画像も変更できます。</p><p>TikZは専用ボタンから <code>&#96;&#96;&#96;tikz</code> ブロックとして挿入できます。</p></section><section class="help-topic-panel" id="help-topic-review" data-help-panel="review" role="tabpanel" hidden><h3>コメントとレビュー</h3><p>本文またはプレビューの文章を選択するとコメントを付けられます。タグ、返信、引用添付、<code>@表示名</code> のメンションが使えます。</p><p>コメントを確認したら「確認済み」、修正が必要なら「未反映」を使います。</p></section><section class="help-topic-panel" id="help-topic-screen" data-help-panel="screen" role="tabpanel" hidden><h3>画面操作・共同編集</h3><p>「本文」「プレビュー」「コメント」「図・画像」は表示枠ボタンで切り替えられます。「別窓」で各枠を別ウィンドウにできます。</p><p>共同編集、自分用メモ、改訂比較、見出し一覧も利用できます。</p></section><section class="help-topic-panel" id="help-topic-workflow" data-help-panel="workflow" role="tabpanel" hidden><h3>保存・レビュー依頼・公開</h3><p>「保存する」で下書きを保存し、「フィードバックを依頼する」→確認・修正→承認→「公開する」の順に進めます。「下書きを自動保存」を有効にすると入力中の変更も保存されます。</p></section></div></div><p class="authoring-help-foot"><code>/help</code> は本文の末尾だけでなく、本文内のどこに入力してもこのヘルプを開きます。入力された <code>/help</code> は本文から自動的に取り除かれます。</p></div></dialog>
+              <div class="body-editor-surface" data-body-surface>
+                <pre class="locked-range-markup" data-locked-range-markup aria-hidden="true"></pre>
+                <textarea name="body" data-body spellcheck="true" placeholder={"## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"}></textarea>
+              </div>
             </section>
 
             <section class="preview-area" aria-labelledby="preview-heading">
-              <div class="pane-heading"><div><h3 id="preview-heading">プレビュー</h3><p>本文の入力内容をリアルタイムで確認できます。公開サイトへの反映は「公開」後に行われます。</p></div><span class="live-badge">自動更新</span><div class="pane-controls"><button type="button" data-pane-popout="preview">別窓</button></div></div>
+              <div class="pane-heading"><h3 id="preview-heading">プレビュー</h3><span class="live-badge">自動更新</span><div class="pane-controls"><button type="button" data-preview-expand aria-pressed="false">全文表示</button><button type="button" data-pane-popout="preview">別窓</button></div></div>
               <article class="article-preview" data-preview></article>
             </section>
           <section class="media-area" aria-labelledby="media-studio-heading">
-            <div class="pane-heading"><div><h3 id="media-studio-heading">図・画像</h3><p>アップロードした素材を管理し、本文へ挿入できます。</p></div><span data-media-status aria-live="polite">原稿を保存すると利用できます</span><div class="pane-controls"><button type="button" data-pane-popout="media">別窓</button></div></div>
+            <div class="pane-heading"><h3 id="media-studio-heading">図・画像</h3><span data-media-status aria-live="polite">原稿を保存すると利用できます</span><div class="pane-controls"><button type="button" data-pane-popout="media">別窓</button></div></div>
             <div class="media-studio">
               <div class="media-studio-actions">
                 <label class="media-alt-label">画像の説明（alt）<input type="text" data-media-alt maxlength="180" placeholder="例：正多角形の対称軸" /></label>
                 <label class="media-latex-label">LaTeX名<input type="text" data-media-latex-name maxlength="120" pattern="[A-Za-z][A-Za-z0-9_-]*" placeholder="例：group-diagram" /><small>本文では <code>\includegraphics&#123;group-diagram&#125;</code> と引用します。</small></label>
-                <input type="file" data-media-input accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+                <input type="file" data-media-input accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden />
                 <button type="button" class="quiet-action" data-open-media>画像を選択</button>
                 <button type="button" class="quiet-action" data-insert-tikz>TikZを挿入</button>
               </div>
-              <div class="media-hint">PNG・JPEG・WebP・GIF、1.5MB以下。アップロードした画像はこの原稿に紐づき、Previewにも反映されます。TikZは専用ブロックとして編集できます。</div>
+              <div class="media-hint">PNG・JPEG・WebP・GIF・SVG、1.5MB以下。アップロードした画像はこの原稿に紐づき、Previewにも反映されます。TikZは組版サービス未設定時、無料のブラウザ内TikZJaxでプレビューします。素材一覧の「画像幅」でプリセットまたは1〜100%の任意の幅を指定でき、既存参照にも適用できます。</div>
               <div class="media-list" data-media-list aria-live="polite"></div>
             </div>
           </section>
           <section class="review-panel" aria-labelledby="review-heading">
-            <div class="pane-heading"><div><h3 id="review-heading">フィードバック</h3><p>選択した文章または記事全体について、コメントと返信を記録できます。</p></div><div class="pane-controls"><button type="button" data-pane-popout="review">別窓</button></div></div>
+            <div class="pane-heading"><h3 id="review-heading">フィードバック</h3><div class="pane-controls"><button type="button" data-pane-popout="review">別窓</button></div></div>
             <details class="review-help"><summary>コメントの使い方</summary><p>本文またはプレビューで文章を選択してコメントすると、その文章に紐づきます。対応したら「解決」にしてください。</p></details>
             <div class="comment-list-toolbar"><h4 class="comment-list-heading">コメント</h4><label>タグで絞り込む<select data-comment-tag-filter><option value="">すべて</option>{commentTags.map((tag) => <option value={tag}>{tag}</option>)}</select></label></div>
             <div class="comment-list" data-comment-list></div>
@@ -318,17 +381,22 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-on-hold { background: #f4e5e7; color: #8a3b49; }.state-approved { background: #def4e6; color: #267143; }
   .approval-dialog { width: min(92vw, 31rem); border: 1px solid #d9e3eb; border-radius: 1rem; padding: 1.5rem; color: #183047; box-shadow: 0 1.5rem 5rem #162c4030; }.approval-dialog::backdrop { background: #10203388; }.approval-dialog h2 { margin: .2rem 0 .65rem; }.approval-dialog p { line-height: 1.7; }.approval-actions { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1.25rem; flex-wrap: wrap; }
   .reference-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.8rem; box-shadow:0 1.5rem 5rem #162c4030; color:var(--text); max-height:88vh; padding:1rem; width:min(94vw,68rem); }.reference-dialog::backdrop { background:#10203388; }.reference-dialog-header { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:.2rem 0 .8rem; }.reference-dialog-header h2 { font-size:1.35rem; margin:.15rem 0 .25rem; }.reference-dialog-header p:last-child { color:var(--muted); font-size:.76rem; margin:0; }.reference-dialog-tabs { border-bottom:1px solid var(--border); display:flex; gap:.2rem; margin:.7rem 0; }.reference-dialog-tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:.76rem; font-weight:800; padding:.45rem .6rem; }.reference-dialog-tabs button.is-selected,.reference-dialog-tabs button:hover { border-bottom-color:var(--accent); color:var(--accent); }.reference-preview { background:var(--surface); border:1px solid var(--border); border-radius:.4rem; box-sizing:border-box; height:calc(88vh - 10rem); min-height:18rem; overflow:auto; }.reference-source { background:#18212b; border-radius:.4rem; box-sizing:border-box; color:#eef6ff; font-family:var(--font-mono); font-size:.82rem; line-height:1.65; margin:0; max-height:calc(88vh - 10rem); min-height:18rem; overflow:auto; padding:.9rem; white-space:pre-wrap; }.reference-source[hidden],.reference-preview[hidden] { display:none; }
-  .editor-panel { background: var(--surface); min-width: 0; padding: clamp(1rem, 2vw, 1.5rem); }
+  .reference-library-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.8rem; box-shadow:0 1.5rem 5rem #162c4030; color:var(--text); max-height:90vh; padding:1rem; width:min(94vw,60rem); }.reference-library-dialog::backdrop { background:#10203388; }.reference-library-inner { display:grid; gap:1rem; max-height:calc(90vh - 2rem); overflow:auto; }.reference-library-header { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:.2rem 0 .8rem; }.reference-library-header h2 { font-size:1.35rem; margin:.15rem 0 .3rem; }.reference-library-header p:last-child { color:var(--muted); font-size:.76rem; line-height:1.5; margin:0; }.reference-entry-form { background:var(--surface-alt); border:1px solid var(--border); border-radius:.55rem; display:grid; gap:.65rem; grid-template-columns:repeat(2,minmax(0,1fr)); padding:.8rem; }.reference-entry-form label { display:grid; font-size:.75rem; font-weight:800; gap:.25rem; }.reference-entry-form label:nth-of-type(2),.reference-entry-form label:nth-of-type(6),.reference-entry-form label:nth-of-type(7) { grid-column:span 2; }.reference-entry-actions { align-items:center; display:flex; flex-wrap:wrap; gap:.5rem; grid-column:span 2; }.reference-entry-actions output { color:var(--muted); font-size:.74rem; }.reference-library-section { display:grid; gap:.5rem; }.reference-library-section-heading { align-items:center; display:flex; gap:.5rem; justify-content:space-between; }.reference-library-section-heading h3 { font-size:.95rem; margin:0; }.reference-library-section-heading span { color:var(--muted); font-size:.72rem; }.reference-library-list { display:grid; gap:.5rem; }.reference-library-item { background:var(--surface-alt); border:1px solid var(--border); border-left:3px solid var(--accent); display:grid; gap:.4rem; padding:.6rem .7rem; }.reference-library-item.is-used { border-left-color:var(--success,#2e8b57); }.reference-library-item header { align-items:start; display:flex; gap:.5rem; justify-content:space-between; }.reference-library-item b { font-size:.82rem; overflow-wrap:anywhere; }.reference-library-item p { color:var(--muted); font-size:.73rem; line-height:1.45; margin:0; }.reference-library-item small { color:var(--muted); font-size:.68rem; }.reference-library-item-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.reference-library-item-actions button { min-height:1.9rem; padding:.25rem .5rem; width:auto; }.reference-library-empty { color:var(--muted); font-size:.78rem; margin:0; padding:.7rem 0; }
+  .editor-panel { background: var(--surface); display:flex; flex-direction:column; min-width:0; padding:clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 5rem auto; max-width: 38rem; text-align: center; }.empty-state h2 { color: var(--text); }.editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
-  .document-form { display: grid; gap: 1rem; }.document-form[hidden]{display:none!important}
+  .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span{color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);border-radius:.35rem;color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
-  .editor-split { align-items: stretch; display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel { border: 1px solid var(--border); min-width: 0; overflow: visible; position:relative; }.pane-heading { background: var(--surface-alt); border-bottom: 1px solid var(--border); padding: .75rem .9rem; }.pane-heading h3 { font-size: .95rem; margin: 0; }.pane-heading p { color: var(--muted); font-size: .77rem; margin: .22rem 0 0; }.pane-heading code { background: var(--surface); border: 1px solid var(--border); border-radius: 0; padding: .03rem .2rem; }.pane-heading > span { color: var(--muted); flex: 0 0 auto; font-size: .76rem; }.live-badge { color: var(--success) !important; font-weight: 800; }
+  .editor-split { align-items:stretch; display:grid; gap:1rem; grid-template-columns:repeat(3,minmax(0,1fr)); min-height:0; padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel { border:1px solid var(--border); min-width:0; overflow:visible; position:relative; }.preview-area { display:flex; flex-direction:column; min-height:0; }.pane-heading { background:var(--surface-alt); border-bottom:1px solid var(--border); padding:.75rem .9rem; }.pane-heading h3 { font-size:.95rem; margin:0; }.pane-heading p { color:var(--muted); font-size:.77rem; margin:.22rem 0 0; }.pane-heading code { background:var(--surface); border:1px solid var(--border); border-radius:0; padding:.03rem .2rem; }.pane-heading > span { color:var(--muted); flex:0 0 auto; font-size:.76rem; }.live-badge { color:var(--success) !important; font-weight:800; }
+  /* 本文欄と同じく、通常は枠内でスクロールして編集画面を圧迫しない。 */
+  .preview-area > .article-preview, .preview-area > .published-article-preview { flex:1 1 auto; height:auto !important; max-height:none !important; min-height:clamp(32rem,66vh,52rem); overflow-x:hidden !important; overflow-y:auto !important; overflow-wrap:anywhere; scrollbar-gutter:stable; scrollbar-width:thin; }
+  .preview-area.is-expanded { align-self: start; }
+  .preview-area.is-expanded > .article-preview, .preview-area.is-expanded > .published-article-preview { height: auto !important; max-height: none !important; min-height: clamp(32rem, 66vh, 52rem); overflow: visible !important; }
   .media-studio { background: color-mix(in srgb, var(--accent), transparent 94%); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); overflow: auto; padding: .9rem; }.media-studio h4 { color: var(--text); font-size: .84rem; margin: 0; }.media-studio p, .media-hint, .media-studio small { color: var(--muted); font-size: .72rem; margin: .2rem 0 0; }.media-studio-actions { align-items: end; display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }.media-alt-label, .media-latex-label { color: var(--muted); display: grid; font-size: .72rem; gap: .2rem; min-width: 0; }.media-alt-label input, .media-latex-label input { min-height: 2.1rem; min-width: 0; }.media-latex-label small { line-height: 1.4; }.media-latex-label code { background: var(--surface); border: 1px solid var(--border); padding: .03rem .2rem; }.media-studio-actions .quiet-action { min-height: 2.1rem; width: 100%; }.media-hint { border-left: 2px solid var(--accent); margin-top: .75rem; padding-left: .5rem; }.media-list { display: grid; gap: .55rem; margin-top: .8rem; }.media-item { align-items: center; background: var(--surface); border: 1px solid var(--border); display: grid; gap: .65rem; grid-template-columns: 4.5rem minmax(0, 1fr); padding: .5rem; }.media-item-preview { background: var(--surface-alt); border: 1px solid var(--border); height: 3.7rem; object-fit: contain; width: 4.5rem; }.media-item-copy { display: grid; gap: .2rem; min-width: 0; }.media-item-name { display: grid; min-width: 0; }.media-item-name b { font-size: .73rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-name small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.media-item-actions { display: flex; flex-wrap: wrap; gap: .35rem; grid-column: 2; }.media-item .quiet-action { min-height: 1.9rem; padding: .25rem .5rem; width: auto; }.media-item .quiet-action:disabled { cursor: not-allowed; opacity: .55; }
   .personal-notebook { background: color-mix(in srgb, var(--accent), transparent 95%); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: .45rem; padding: .65rem .75rem .75rem; }.personal-notebook summary { color: var(--text); font-size:.82rem; }.personal-notebook p { color: var(--muted); font-size: .72rem; line-height: 1.5; margin: .45rem 0 .55rem; }.personal-notebook textarea { box-sizing: border-box; display: block; line-height: 1.6; min-height: 8rem; padding: .6rem; resize: vertical; width: 100%; }.personal-notebook-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .55rem; }.personal-notebook-actions output { color: var(--accent); font-size: .72rem; font-weight: 700; }.personal-notebook-actions small { color: var(--muted); font-size: .68rem; margin-left: auto; }
-  [data-body] { background: #fcfdfe; border: 0; border-radius: 0; box-sizing: border-box; display: block; font-family: var(--font-mono); font-size: .9rem; line-height: 1.7; min-height: clamp(32rem, 66vh, 52rem); padding: 1rem; resize: vertical; width: 100%; }.article-preview { background: var(--surface); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); line-height: 1.8; overflow: auto; overflow-wrap: anywhere; padding: 1rem 1.15rem; }.article-preview :global(h2) { border-bottom: 1px solid var(--border); font-size: 1.25rem; margin: 1.3rem 0 .65rem; padding-bottom: .3rem; }.article-preview :global(h3) { font-size: 1.05rem; margin: 1rem 0 .5rem; }.article-preview :global(p) { margin: .65rem 0; }.article-preview :global(pre) { background: #18212b; border-radius: 0; color: #eef6ff; overflow-x: auto; padding: .7rem; }.article-preview :global(.math-display) { overflow-x: auto; padding: .4rem 0; }.article-preview :global(.katex-error) { color: var(--danger); }.article-preview :global(ul), .article-preview :global(ol) { padding-left: 1.5rem; }
+  .body-editor-surface { min-height: clamp(32rem, 66vh, 52rem); position: relative; }.locked-range-markup { background: #fcfdfe; border: 0; box-sizing: border-box; color: #243447; font-family: var(--font-mono); font-size: .9rem; inset: 0; line-height: 1.7; margin: 0; min-height: 100%; overflow: hidden; padding: 1rem; pointer-events: none; position: absolute; white-space: pre-wrap; overflow-wrap: anywhere; width: 100%; }.locked-range-markup mark { background: #ffe1e1; border-left: 4px solid #ef233c; border-radius: .16rem; box-shadow: inset 0 0 0 1px rgb(239 35 60 / .22), 0 0 .15rem rgb(239 35 60 / .1); color: #a10f27; padding: .03em .1em; }.body-editor-surface [data-body] { background: transparent; border: 0; border-radius: 0; box-sizing: border-box; color: transparent; caret-color: #243447; display: block; font-family: var(--font-mono); font-size: .9rem; line-height: 1.7; min-height: clamp(32rem, 66vh, 52rem); padding: 1rem; position: relative; resize: vertical; text-shadow: none; width: 100%; z-index: 1; }.body-editor-surface [data-body]::placeholder { color: #687789; opacity: 1; }.article-preview { background: var(--surface); box-sizing: border-box; height: clamp(32rem, 66vh, 52rem); line-height: 1.8; overflow: auto; overflow-wrap: anywhere; padding: 1rem 1.15rem; }.article-preview :global(h2) { border-bottom: 1px solid var(--border); font-size: 1.25rem; margin: 1.3rem 0 .65rem; padding-bottom: .3rem; }.article-preview :global(h3) { font-size: 1.05rem; margin: 1rem 0 .5rem; }.article-preview :global(p) { margin: .65rem 0; }.article-preview :global(pre) { background: #18212b; border-radius: 0; color: #eef6ff; overflow-x: auto; padding: .7rem; }.article-preview :global(.math-display) { overflow-x: auto; padding: .4rem 0; }.article-preview :global(.katex-error) { color: var(--danger); }.article-preview :global(ul), .article-preview :global(ol) { padding-left: 1.5rem; }
   .article-preview :global(.editorial-image) { margin: 1rem auto; max-width: 100%; text-align: center; }.article-preview :global(.editorial-image img) { display: block; height: auto; margin: 0 auto; max-height: 24rem; max-width: 100%; object-fit: contain; }.article-preview :global(.editorial-image figcaption), .article-preview :global(.tikz-compile-note) { color: var(--muted); font-size: .72rem; margin-top: .35rem; }.article-preview :global(.tikz-source-preview) { background: #18212b; border-radius: .35rem; color: #eef6ff; margin: .8rem 0; overflow: hidden; padding: .6rem .7rem; }.article-preview :global(.tikz-source-preview strong) { display: block; font-size: .75rem; margin-bottom: .35rem; }.article-preview :global(.tikz-source-preview pre) { margin: 0; padding: 0; }.article-preview :global(.tikz-compile-note) { color: #d7e6f2; margin-bottom: 0; }
   .review-panel { padding-bottom: .85rem; }.review-guide { background:var(--surface-alt); border-bottom:1px solid var(--border); display:grid; font-size:.74rem; gap:.2rem .65rem; grid-template-columns:max-content 1fr; line-height:1.5; padding:.7rem .9rem; }.review-guide b { color:var(--accent); }.comment-list-heading { color:var(--muted); font-size:.78rem; letter-spacing:.04em; margin:.85rem .85rem 0; }.comment-list { display: grid; gap: .75rem; max-height: 28rem; overflow: auto; padding: .6rem .85rem .85rem; }.comment-thread { border:1px solid var(--border); }.comment { background: var(--surface-alt); border-left: 3px solid var(--accent); border-radius: .35rem; padding: .65rem .7rem; }.comment.is-resolved { border-left-color: var(--border); opacity:.72; }.comment-replies { border-left:2px solid var(--border); display:grid; gap:.5rem; margin:.65rem .7rem .7rem 1.2rem; padding-left:.65rem; }.comment-reply { background:var(--surface); border-left-color:var(--border-strong); }.comment p { line-height: 1.55; margin: .35rem 0; white-space: pre-wrap; }.comment small { color: var(--muted); font-size: .72rem; }.comment-empty { color: var(--muted); font-size: .85rem; margin: 0; }.comment-quote { background:var(--surface); border-left:2px solid var(--border); color:var(--muted); font-size:.82rem; line-height:1.55; margin:.5rem 0; overflow-wrap:anywhere; padding:.35rem .5rem; white-space:pre-wrap; }.comment-meta,.comment-actions { align-items:center; display:flex; flex-wrap:wrap; gap:.4rem; }.comment-status { border:1px solid var(--border); color:var(--muted); font-size:.7rem; font-weight:800; padding:.12rem .35rem; }.comment-status.is-acknowledged { background:#e5f4ea; border-color:#74a888; color:#21623b; }.comment-status.is-resolved { background:var(--surface); color:var(--muted); }.comment-actions button,.reply-entry button { font-size:.73rem; padding:.25rem .45rem; width:auto; }.reply-entry { background:var(--surface); border-top:1px solid var(--border); display:grid; font-size:.73rem; font-weight:700; gap:.35rem; padding:.6rem .7rem; }.reply-entry span { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.reply-entry textarea { box-sizing:border-box; line-height:1.5; min-height:4.75rem; padding:.45rem; resize:vertical; width:100%; }.selection-action { align-items:center; background:#e8f3fb; border:1px solid #9ac5e2; display:flex; flex-wrap:wrap; font-size:.78rem; gap:.55rem; justify-content:space-between; margin:0 .85rem .65rem; padding:.55rem .65rem; }.selection-action[hidden] { display:none; }.selection-action span { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.selection-action button { width:auto; }.comment-entry { display: grid; font-size: .78rem; font-weight: 800; gap: .35rem; padding: 0 .85rem .6rem; }.comment-entry textarea { box-sizing: border-box; line-height: 1.5; min-height: 5rem; padding: .55rem; resize: vertical; width: 100%; }.selection-hint { background:var(--surface-alt); border-left:2px solid var(--accent); color:var(--muted); font-size:.72rem; font-weight:500; line-height:1.45; padding:.35rem .45rem; }.selection-hint.has-selection { background:#e8f3fb; color:var(--text); }.review-submit { margin-left:.85rem; width:auto; }
   .thread-summary { align-items:center; background:var(--surface); border-bottom:1px solid var(--border); display:flex; font-size:.72rem; gap:.5rem; justify-content:space-between; padding:.38rem .65rem; }.thread-summary small { color:var(--muted); }.thread-status { border:1px solid; font-weight:800; padding:.14rem .4rem; }.thread-status.is-pending { background:#fff2cc; border-color:#d9a429; color:#714f00; }.thread-status.is-acknowledged { background:#e8f3fb; border-color:#72add3; color:#185c86; }.thread-status.is-resolved { background:#e5f4ea; border-color:#74a888; color:#21623b; }.comment.is-resolved { border-left-color:#74a888; }.reply-open { margin:.55rem .7rem; width:auto; }.reply-entry[hidden] { display:none; }.reply-target { background:#f5f7f8; border-left:2px solid var(--accent); color:var(--text); line-height:1.5; max-height:4.5rem; overflow:auto; padding:.35rem .45rem; white-space:pre-wrap; }.reply-entry textarea { min-height:5.5rem; padding:.55rem; }
@@ -343,13 +411,187 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 </style>
 
 <style is:global>
+  /* 公開数学記事の定義・命題枠と同じ見た目を、動的プレビューにも適用する。 */
+  .article-preview .defi,
+  .article-preview .math-definition {
+    background:color-mix(in srgb,#6cb4c2 10%,var(--surface));
+    border:1px solid color-mix(in srgb,#6cb4c2 35%,var(--border));
+    border-left:3px solid #6cb4c2;
+    border-radius:0 .55rem .55rem;
+    box-sizing:border-box;
+    min-width:0;
+    margin-block:2.8rem 1.15rem;
+    overflow:visible;
+    padding:1.1rem 1.25rem;
+    box-shadow:0 2px 5px rgb(0 0 0 / .04);
+  }
+  .article-preview .prop,
+  .article-preview .thm,
+  .article-preview .lemma,
+  .article-preview .cor,
+  .article-preview .math-theorem {
+    background:color-mix(in srgb,#e0c375 12%,var(--surface));
+    border:1px solid #e0c375;
+    border-left-width:3px;
+    border-radius:0 .55rem .55rem;
+    box-sizing:border-box;
+    min-width:0;
+    margin-block:2.8rem 1.15rem;
+    overflow:visible;
+    padding:1.1rem 1.25rem;
+    box-shadow:0 2px 5px rgb(0 0 0 / .04);
+  }
+  .article-preview .example {
+    background:transparent;
+    border:0;
+    border-radius:0;
+    margin-block:2.2rem 1.15rem;
+    padding:0;
+    box-shadow:none;
+  }
+  .article-preview .defi > p,
+  .article-preview .prop > p,
+  .article-preview .thm > p,
+  .article-preview .lemma > p,
+  .article-preview .cor > p,
+  .article-preview .example > p,
+  .article-preview .math-definition > p,
+  .article-preview .math-theorem > p {
+    margin:0;
+    overflow-wrap:anywhere;
+    text-indent:0;
+  }
+  .article-preview .thmtitle {
+    background:#6cb4c2;
+    border:3px solid #6cb4c2;
+    border-bottom:0;
+    border-radius:6px 6px 0 0;
+    box-sizing:border-box;
+    color:#12333a;
+    display:block;
+    float:left;
+    font-size:.95em;
+    font-weight:800;
+    line-height:1.5;
+    margin:-51.4px 0 0 -23px;
+    padding:4px 14px;
+  }
+  .article-preview .prop .thmtitle,
+  .article-preview .thm .thmtitle,
+  .article-preview .lemma .thmtitle,
+  .article-preview .cor .thmtitle,
+  .article-preview .example .thmtitle,
+  .article-preview .math-theorem .thmtitle {
+    background:#e0c375;
+    border-color:#e0c375;
+    color:#4b3a12;
+  }
+  .article-preview .example .thmtitle {
+    border:3px solid #e0c375;
+    border-radius:6px;
+    float:none;
+    margin:0 0 .5rem;
+    max-width:100%;
+    width:fit-content;
+  }
+  .article-preview .defi > p:first-child::after,
+  .article-preview .prop > p:first-child::after,
+  .article-preview .thm > p:first-child::after,
+  .article-preview .lemma > p:first-child::after,
+  .article-preview .cor > p:first-child::after,
+  .article-preview .example > p:first-child::after {
+    clear:both;
+    content:"";
+    display:table;
+  }
+  .article-preview .defi > :first-child,
+  .article-preview .prop > :first-child,
+  .article-preview .thm > :first-child,
+  .article-preview .lemma > :first-child,
+  .article-preview .cor > :first-child,
+  .article-preview .example > :first-child,
+  .article-preview .math-definition > :first-child,
+  .article-preview .math-theorem > :first-child { margin-top:0; }
+  .article-preview .defi > :last-child,
+  .article-preview .prop > :last-child,
+  .article-preview .thm > :last-child,
+  .article-preview .lemma > :last-child,
+  .article-preview .cor > :last-child,
+  .article-preview .example > :last-child,
+  .article-preview .math-definition > :last-child,
+  .article-preview .math-theorem > :last-child { margin-bottom:0; }
+</style>
+
+<style is:global>
   .editor-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .pane-controls { align-items:center; display:flex; flex:0 0 auto; gap:.2rem; }
-  .media-area > .pane-heading { display:grid; gap:.35rem; grid-template-columns:minmax(0,1fr); }
-  .media-area > .pane-heading > .pane-controls { justify-content:flex-end; }
+  .pane-controls { align-items:center; display:flex; flex:0 0 auto; flex-wrap:wrap; gap:.35rem; }
+  .math-preset-control { align-items:center; color:var(--muted); display:flex; flex:1 1 10rem; font-size:.68rem; font-weight:800; gap:.35rem; justify-content:space-between; min-width:0; }
+  .math-preset-control select { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--text); font:inherit; min-height:2rem; min-width:0; padding:.24rem .4rem; width:auto; }
+  .writing-tools { border-bottom:1px solid var(--border); color:var(--muted); font-size:.74rem; }
+  .writing-tools summary { cursor:pointer; font-weight:800; padding:.55rem .9rem; }
+  .writing-tools[open] summary { border-bottom:1px solid var(--border); }
+  .writing-tools .pane-controls { padding:.55rem .9rem .65rem; }
+  .writing-tools p { line-height:1.55; margin:.45rem .9rem .65rem; }
+  .writing-tools code { background:var(--surface); border:1px solid var(--border); padding:.03rem .2rem; }
+  .writing-tools kbd { background:var(--text); border-radius:.2rem; color:var(--surface); font:inherit; font-size:.7rem; padding:.04rem .22rem; }
+  .math-preset-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.65rem; box-shadow:0 1rem 3rem rgb(0 0 0 / .25); color:var(--text); max-width:min(92vw,34rem); padding:1rem; width:100%; }
+  .math-preset-dialog::backdrop { background:rgb(0 0 0 / .5); }
+  .math-preset-dialog h2 { font-size:1rem; margin:0 0 .35rem; }
+  .math-preset-dialog p { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.35rem 0 .8rem; }
+  .math-preset-dialog label { display:grid; gap:.3rem; margin:.65rem 0; font-size:.75rem; font-weight:800; }
+  .math-preset-dialog input, .math-preset-dialog textarea { background:var(--surface-alt); border:1px solid var(--border); box-sizing:border-box; color:var(--text); font:inherit; padding:.5rem; width:100%; }
+  .math-preset-dialog textarea { min-height:8rem; resize:vertical; }
+  .math-preset-dialog output { color:var(--danger,#a03123); display:block; font-size:.72rem; min-height:1.2rem; }
+  .math-preset-dialog-actions { display:flex; flex-wrap:wrap; gap:.45rem; justify-content:flex-end; margin-top:.7rem; }
+  .math-preset-dialog-actions button { width:auto; }
+  .math-preset-dialog-inner { display:grid; gap:1rem; max-height:min(84vh,48rem); overflow:auto; }
+  .math-preset-dialog-header { align-items:start; border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding-bottom:.7rem; }
+  .math-preset-dialog-header h2 { margin:.15rem 0 .25rem; }
+  .math-preset-dialog-header p:last-child { color:var(--muted); line-height:1.5; margin:0; }
+  .math-preset-library { display:grid; gap:.65rem; }
+  .math-preset-library-heading, .math-preset-editor-heading { align-items:center; display:flex; gap:.6rem; justify-content:space-between; }
+  .math-preset-library-heading h3, .math-preset-editor-heading h3 { font-size:.9rem; margin:0; }
+  .math-preset-library-heading button, .math-preset-editor-heading button { width:auto; }
+  .math-preset-library-list { display:grid; gap:.55rem; max-height:clamp(18rem,52vh,32rem); overflow:auto; padding:.1rem .15rem .1rem 0; }
+  .math-preset-group { display:grid; gap:.45rem; }
+  .math-preset-group + .math-preset-group { border-top:1px solid var(--border); padding-top:.75rem; }
+  .math-preset-group > h4 { color:var(--text); font-size:.75rem; margin:0; }
+  .math-preset-group > h4 { align-items:center; display:flex; gap:.5rem; justify-content:space-between; }
+  .math-preset-group-select { flex:0 0 auto; font-size:.68rem; min-height:1.8rem; padding:.2rem .4rem; width:auto; }
+  .math-preset-group > h4 small { color:var(--muted); font-size:.68rem; font-weight:600; }
+  .math-preset-card { background:var(--surface-alt); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:.45rem; overflow:hidden; }
+  .math-preset-card.is-selected { border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent),transparent 78%); }
+  .math-preset-card-header { align-items:center; display:flex; gap:.5rem; justify-content:space-between; padding:.6rem .7rem; }
+  .math-preset-card-select { background:transparent; border:0; color:var(--text); cursor:pointer; display:grid; gap:.12rem; min-width:0; padding:0; text-align:left; }
+  .math-preset-card-select strong { font-size:.82rem; overflow-wrap:anywhere; }
+  .math-preset-card-select small, .math-preset-card-meta { color:var(--muted); font-size:.68rem; }
+  .math-preset-card-actions { display:flex; flex-wrap:wrap; gap:.35rem; }
+  .math-preset-card-actions button { font-size:.7rem; min-height:1.9rem; padding:.25rem .45rem; width:auto; }
+  .math-preset-card-actions .danger-action { color:var(--danger,#c84545); }
+  .math-preset-card-body { border-top:1px solid var(--border); padding:.55rem .7rem .65rem; }
+  .math-preset-card-body summary { color:var(--muted); cursor:pointer; font-size:.7rem; font-weight:800; }
+  .math-preset-macro-list { display:grid; gap:.2rem; margin:.45rem 0 0; padding-left:1.1rem; }
+  .math-preset-macro-list li { color:var(--muted); font-size:.69rem; overflow-wrap:anywhere; }
+  .math-preset-macro-list code { color:var(--text); }
+  .math-preset-editor { background:var(--surface-alt); border:1px solid var(--border); border-radius:.5rem; padding:.75rem; }
+  .math-preset-group-field { margin-top:0 !important; }
+  .math-preset-picker { align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--text); cursor:pointer; display:flex; font:inherit; gap:.5rem; justify-content:space-between; min-height:2rem; min-width:10rem; padding:.24rem .5rem; text-align:left; }
+  .math-preset-picker:hover { border-color:var(--accent); }
+  .editor-lock-bar { align-items:center; background:color-mix(in srgb,var(--accent) 7%,var(--surface)); border-bottom:1px solid var(--border); display:flex; flex-wrap:wrap; gap:.4rem .55rem; min-height:2.55rem; padding:.35rem .9rem; }
+  .editor-lock-bar span { color:var(--muted); flex:1 1 12rem; font-size:.7rem; font-weight:800; line-height:1.4; }
+  .editor-lock-bar button { font-size:.68rem; min-height:1.9rem; padding:.25rem .45rem; width:auto; }
+  .editor-lock-bar button[data-unlock-selection] { color:var(--danger,#a03123); }
   .pane-controls button { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--muted); cursor:pointer; font:inherit; font-size:.68rem; font-weight:800; padding:.25rem .35rem; }
   .pane-controls button:hover { border-color:var(--accent); color:var(--accent); }
   .pane-controls button:disabled { cursor:not-allowed; opacity:.35; }
+  .writing-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:.55rem .75rem; }
+  .writing-pane-heading .pane-controls { align-self:start; }
+  .pane-title { min-width:0; }
+  .math-authoring-help { color:var(--muted); font-size:.72rem !important; line-height:1.35; margin:.28rem 0 0 !important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .math-authoring-help kbd { background:var(--text); border-radius:.2rem; color:var(--surface); font:inherit; font-size:.68rem; padding:.04rem .22rem; }
+  .writing-tools-controls { padding:.55rem .9rem .65rem; }
+  .writing-tools-controls .math-preset-control { flex:1 1 14rem; }
+  .writing-tools-controls button { min-height:2.1rem; }
   .editor-split > section[hidden] { display:none !important; }
   .pane-only { max-width:none; padding:0 clamp(1rem, 3vw, 2.5rem) 3rem; }
   .pane-only .document-sidebar,.pane-only .editor-quick-actions,.pane-only .pane-layout-controls { display:none!important; }
@@ -362,7 +604,49 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .editor-split[data-visible-panes="1"] { grid-template-columns:1fr !important; }
   .comment-thread[data-comment-context] { cursor:context-menu; }
   @media(max-width:1080px) { .editor-split { grid-template-columns:repeat(2,minmax(0,1fr)); }.editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns:3.2rem minmax(0,1fr) !important; }.editor-workspace.sidebar-collapsed .document-sidebar { border-bottom:0; border-right:1px solid var(--border-default); } }
-  @media(max-width:700px) { .editor-split, .editor-split[data-visible-panes="2"] { grid-template-columns:1fr !important; } .pane-controls { flex-wrap:wrap; } }
+  .editor-workspace .writing-pane-heading { display:grid; grid-template-columns:minmax(0,1fr) auto auto; }
+  @media(max-width:700px) { .editor-split, .editor-split[data-visible-panes="2"] { grid-template-columns:1fr !important; } .pane-controls { flex-wrap:wrap; } .editor-workspace .writing-pane-heading { grid-template-columns:minmax(0,1fr) auto; } .editor-workspace .writing-pane-heading > span { grid-column:1; grid-row:2; } .editor-workspace .writing-pane-heading > .pane-controls { grid-column:2; grid-row:1 / span 2; } .writing-tools-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } .writing-tools-controls .math-preset-control { grid-column:1 / -1; } .writing-tools-controls button { width:100%; } }
+</style>
+
+<style is:global>
+  .authoring-help-dialog { background:var(--surface); border:1px solid var(--border); border-radius:.75rem; box-shadow:0 1.5rem 5rem rgb(24 32 39 / .28); color:var(--text); max-height:min(88vh,48rem); max-width:min(48rem,calc(100vw - 2rem)); overflow:hidden; padding:0; width:min(48rem,calc(100vw - 2rem)); }
+  .authoring-help-dialog::backdrop { background:rgb(12 24 34 / .48); backdrop-filter:blur(2px); }
+  .authoring-help-inner { margin:0; padding:0; }
+  .authoring-help-head { align-items:start; background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 13%,var(--surface)),var(--surface)); border-bottom:1px solid var(--border); display:flex; gap:1rem; justify-content:space-between; padding:1rem 1.15rem .85rem; }
+  .authoring-help-head .eyebrow { color:var(--accent); font-size:.66rem; font-weight:900; letter-spacing:.12em; margin:0 0 .2rem; }
+  .authoring-help-head h2 { font-size:1.2rem; margin:0; }
+  .authoring-help-head > div > p:not(.eyebrow) { color:var(--muted); font-size:.74rem; line-height:1.5; margin:.25rem 0 0; }
+  .help-close { background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:1.5rem; line-height:1; padding:.15rem .25rem; }
+  .help-close:hover { color:var(--accent); }
+  .authoring-help-layout { display:grid; gap:0; grid-template-columns:10.5rem minmax(0,1fr); height:min(32rem,calc(88vh - 7rem)); min-height:0; }
+  .authoring-help-nav { align-content:start; background:color-mix(in srgb,var(--surface-alt) 68%,var(--surface)); border-right:1px solid var(--border); display:grid; gap:.25rem; padding:.8rem .65rem; }
+  .help-topic-button { background:transparent; border:1px solid transparent; border-radius:.4rem; color:var(--muted); cursor:pointer; font:inherit; font-size:.72rem; font-weight:750; padding:.55rem .6rem; text-align:left; transition:background-color .14s ease,border-color .14s ease,color .14s ease; }
+  .help-topic-button:hover { background:var(--surface); color:var(--text); }
+  .help-topic-button.is-active { background:var(--accent-subtle); border-color:color-mix(in srgb,var(--accent) 42%,var(--border)); color:var(--accent); }
+  .authoring-help-topics { min-height:0; min-width:0; overflow:auto; padding:1rem 1.15rem; }
+  .help-topic-panel { display:grid; gap:.65rem; min-height:0; align-content:start; }
+  .help-topic-panel[hidden] { display:none; }
+  .help-topic-panel h3 { color:var(--accent); font-size:1rem; margin:0; }
+  .help-topic-panel p { color:var(--muted); font-size:.76rem; line-height:1.65; margin:0; }
+  .authoring-help-topics code, .authoring-help-foot code { background:var(--surface); border:1px solid var(--border); border-radius:.2rem; color:var(--text); padding:.05rem .22rem; }
+  .authoring-help-topics kbd, .authoring-help-foot kbd { background:var(--text); border-radius:.2rem; color:var(--surface); font:inherit; font-size:.68rem; padding:.04rem .22rem; }
+  .help-command-groups { display:grid; gap:.55rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .help-command-group { background:var(--surface-alt); border:1px solid var(--border); border-radius:.45rem; padding:.55rem .6rem; }
+  .help-command-group h4 { color:var(--text); font-size:.72rem; margin:0 0 .35rem; }
+  .help-command-group ul { display:grid; gap:.25rem; list-style:none; margin:0; padding:0; }
+  .help-command-group li { align-items:baseline; display:flex; flex-wrap:wrap; gap:.35rem; }
+  .help-command-group li span { color:var(--muted); font-size:.68rem; }
+  .help-tip { border-left:3px solid var(--accent); padding-left:.65rem; }
+  .help-example { line-height:2 !important; }
+  .preset-help-list { display:grid; gap:.25rem; list-style:none; margin:0; padding:0; }
+  .preset-help-list li { align-items:center; display:flex; gap:.4rem; }
+  .preset-help-list li span { color:var(--muted); font-size:.72rem; }
+  .preset-command-list { color:var(--text) !important; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.64rem !important; overflow-wrap:anywhere; }
+  .help-insert-button { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--accent); cursor:pointer; font:inherit; font-size:.7rem; font-weight:800; justify-self:start; padding:.35rem .5rem; }
+  .help-insert-button:hover { background:var(--accent-subtle); border-color:var(--accent); }
+  .authoring-help-foot { border-top:1px solid var(--border); color:var(--muted); font-size:.72rem; line-height:1.5; margin:0; padding:.75rem 1.15rem 1rem; }
+  @media(prefers-reduced-motion:reduce) { .help-topic-button { transition:none; } }
+  @media(max-width:700px) { .authoring-help-layout { display:block; height:min(30rem,calc(88vh - 8rem)); min-height:0; }.authoring-help-nav { border-bottom:1px solid var(--border); border-right:0; display:flex; gap:.3rem; overflow-x:auto; padding:.55rem .65rem; }.help-topic-button { flex:0 0 auto; white-space:nowrap; }.authoring-help-topics { height:calc(100% - 3.25rem); padding:.85rem .75rem; }.help-command-groups { grid-template-columns:1fr; }.authoring-help-head { padding:.85rem .9rem .7rem; }.authoring-help-foot { padding:.65rem .9rem .85rem; } }
 </style>
 
 <style is:global>
@@ -386,9 +670,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 </style>
 
 <style is:global>
-  /* 返信は同じスレッド内で横方向に確認できるようにする。 */
-  .comment-replies { display:flex; gap:.65rem; margin:.55rem .7rem .7rem 2.25rem; max-width:calc(100% - 2.95rem); overflow-x:auto; padding:0 0 .35rem; }
-  .comment-replies .comment-reply { flex:0 0 min(24rem, 82vw); }
+  /* 動的に生成する返信も、親コメントの下へ縦に積む。 */
+  .comment-replies { border-left:2px solid color-mix(in srgb, var(--border, #d5dde2) 82%, transparent); display:grid; gap:.8rem; margin:.75rem 0 .45rem 3.1rem; max-width:none; overflow:visible; padding:0 0 0 1rem; position:relative; }
+  .comment-replies::before { background:var(--border, #d5dde2); content:""; height:2px; left:0; position:absolute; top:1.2rem; width:.7rem; }
+  .comment-replies[hidden] { display:none; }
+  .comment-replies .comment-reply { min-width:0; width:100%; }
+  @media (max-width:560px) { .comment-replies { margin-left:.85rem; padding-left:.75rem; } }
 </style>
 
 <!-- JavaScriptで追加するコメント要素にも確実に適用する。 -->
@@ -512,16 +799,38 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 </style>
 <style>.site-preview-link,.site-preview-toggle{color:var(--accent);font-size:.76rem;font-weight:800;margin-left:auto;text-decoration:none;white-space:nowrap}.site-preview-toggle{background:transparent;border:1px solid var(--border);cursor:pointer;padding:.35rem .5rem}.site-preview-link:hover,.site-preview-toggle:hover{text-decoration:underline}.site-preview-frame{background:var(--surface);min-height:clamp(32rem,66vh,52rem)}.site-preview-header{align-items:center;background:var(--surface-alt);border-bottom:1px solid var(--border);color:var(--text);display:flex;gap:1rem;font-size:.72rem;padding:.7rem .9rem}.site-preview-header b{color:var(--accent);font-size:.95rem}.site-preview-search{border:1px solid var(--border);color:var(--muted);margin-left:auto;padding:.3rem .5rem}.site-preview-breadcrumb{color:var(--muted);font-size:.72rem;padding:.7rem 1.15rem 0}.site-preview-frame:not(.is-site-mode) .site-preview-header,.site-preview-frame:not(.is-site-mode) .site-preview-breadcrumb{display:none}.site-preview-frame.is-site-mode .article-preview{height:calc(clamp(32rem,66vh,52rem) - 5rem)}
 
-</style><script>
-  import renderMathInElement from "katex/contrib/auto-render";
+<style>.diagnostics-trigger{align-items:center;background:color-mix(in srgb,var(--danger,#c62828) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--danger,#c62828) 35%,var(--border));border-radius:.35rem;color:var(--danger,#c62828);display:inline-flex;gap:.3rem}.diagnostics-trigger b{background:var(--danger,#c62828);border-radius:999px;color:#fff;font-size:.64rem;min-width:1.1rem;padding:.08rem .25rem;text-align:center}.editor-diagnostics-dialog{background:var(--surface);border:1px solid color-mix(in srgb,var(--danger,#c62828) 35%,var(--border));border-left:4px solid var(--danger,#c62828);border-radius:.7rem;box-shadow:0 1.5rem 5rem rgb(0 0 0 / .3);color:var(--text);max-height:min(82vh,38rem);padding:0;width:min(92vw,42rem)}.editor-diagnostics-dialog::backdrop{background:rgb(5 12 18 / .62)}.editor-diagnostics-inner{max-height:min(82vh,38rem);overflow:auto;padding:1rem 1.1rem 1.1rem}.editor-diagnostics-header{align-items:start;border-bottom:1px solid var(--border);display:flex;gap:1rem;justify-content:space-between;padding-bottom:.8rem}.editor-diagnostics-header h2{font-size:1.05rem;margin:.12rem 0 .25rem}.editor-diagnostics-header p:last-child{color:var(--muted);font-size:.75rem;line-height:1.5;margin:0}.editor-diagnostics-summary{align-items:baseline;display:flex;flex-wrap:wrap;gap:.5rem;margin:.9rem 0 .55rem}.editor-diagnostics-summary strong{color:var(--danger,#c62828);font-size:.82rem}.editor-diagnostics-summary span{color:var(--muted);font-size:.72rem}.editor-diagnostics-dialog ul{display:grid;gap:.5rem;list-style:none;margin:0;padding:0}.editor-diagnostics-dialog li{background:color-mix(in srgb,var(--danger,#c62828) 7%,var(--surface-alt));border:1px solid color-mix(in srgb,var(--danger,#c62828) 25%,var(--border));border-left:3px solid var(--warning,#a66a00);border-radius:.35rem;font-size:.76rem;line-height:1.55;padding:.6rem .7rem}.editor-diagnostics-dialog li b{font-variant-numeric:tabular-nums;margin-right:.35rem}.editor-diagnostics-dialog li.is-warning b{color:var(--warning,#a66a00)}.editor-diagnostics-dialog li.is-error{border-left-color:var(--danger,#c62828)}.editor-diagnostics-dialog li.is-error b{color:var(--danger,#c62828)}[data-pref-bg="dark"] .editor-diagnostics-dialog li{background:#3b1720;border-color:#a64756;color:#ffe8eb}</style><style>.media-width-control{align-items:end;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.7rem;gap:.45rem}.media-width-control>label{align-items:center;display:flex;gap:.25rem}.media-width-control select{background:var(--surface);border:1px solid var(--border);color:var(--text);font:inherit;min-height:1.9rem;min-width:8.5rem;padding:.25rem .4rem}.media-width-custom-label input{background:var(--surface);border:1px solid var(--border);color:var(--text);font:inherit;min-height:1.9rem;padding:.25rem .4rem;width:5rem}.media-width-custom-label span{color:var(--muted)}</style><script>
   import "katex/dist/katex.min.css";
   import * as Y from "yjs";
+  import { diagnoseArticleSource } from "../../lib/article-diagnostics.mjs";
+  import { hydrateTikzDiagrams, renderArticleMarkdown } from "../../lib/article-browser-markdown.mjs";
+  import { applySubjectPreviewProfile } from "../../scripts/admin-editor-subject-preview";
+  import {
+    MATH_PRESETS,
+    stripMathPresetMarker,
+    stripTexMacroDefinitions,
+  } from "../../lib/math-authoring.mjs";
+  import {
+    editorialImageStyle,
+    editorialImageUrlWithWidth,
+    editorialImageWidthFromLatexOptions,
+    editorialImageWidthToLatex,
+    normalizeEditorialImageWidth,
+  } from "../../lib/editorial-image.mjs";
+  import {
+    formatArticleReference,
+    normalizeArticleReference,
+    normalizeArticleReferences,
+  } from "../../lib/article-references.mjs";
 
   type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
   type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published" };
   type PlannedArticle = { key: string; subject: string; category: string; title: string; order: number; progress: "not-started" | "in-progress"; slug: string; conceptId: string };
   type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; latexName: string; createdAt: string; marker: string };
-  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null };
+  type LockedRange = { start: number; end: number; text: string };
+  type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
+  type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; locked_ranges?: string | LockedRange[] };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
@@ -531,8 +840,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const payloadElement = document.querySelector<HTMLScriptElement>("#editor-source-data");
     const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
     if (!root || !payloadElement || root.dataset.editorInitialized === "true") return;
+    const requiredEditorElements = ["[data-document-form]", "[data-math-preset-form]", "[data-insert-tikz]"];
+    if (!requiredEditorElements.every((selector) => root.querySelector(selector))) {
+      window.setTimeout(initializeEditorWorkspace, 50);
+      return;
+    }
     root.dataset.editorInitialized = "true";
     const { subjects, articles, plannedArticles, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; commentTags: string[] };
+    const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
@@ -546,6 +861,47 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const category = form.elements.namedItem("category") as HTMLSelectElement;
     const status = form.elements.namedItem("status") as HTMLSelectElement;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
+    const diagnosticsPanel = root.querySelector<HTMLDialogElement>("[data-editor-diagnostics]")!;
+    const diagnosticsTrigger = root.querySelector<HTMLButtonElement>("[data-open-diagnostics]")!;
+    const diagnosticsTriggerCount = root.querySelector<HTMLElement>("[data-diagnostics-trigger-count]")!;
+    const diagnosticsSummary = root.querySelector<HTMLElement>("[data-diagnostics-summary]")!;
+    const diagnosticsList = root.querySelector<HTMLElement>("[data-diagnostics-list]")!;
+    const lockedRangeMarkup = root.querySelector<HTMLElement>("[data-locked-range-markup]")!;
+    const lockStatus = root.querySelector<HTMLElement>("[data-lock-status]")!;
+    const lockSelectionButton = root.querySelector<HTMLButtonElement>("[data-lock-selection]")!;
+    const unlockSelectionButton = root.querySelector<HTMLButtonElement>("[data-unlock-selection]")!;
+    const mathPreset = root.querySelector<HTMLSelectElement>("[data-math-preset]")!;
+    const mathPresetSelection = root.querySelector<HTMLElement>("[data-math-preset-selection]")!;
+    const addMathPresetButton = root.querySelector<HTMLButtonElement>("[data-add-math-preset]")!;
+    const openMathPresetLibraryButton = root.querySelector<HTMLButtonElement>("[data-open-math-preset-library]")!;
+    const mathPresetDialog = root.querySelector<HTMLDialogElement>("[data-math-preset-dialog]")!;
+    const mathPresetForm = root.querySelector<HTMLElement>("[data-math-preset-form]")!;
+    const customPresetLabel = root.querySelector<HTMLInputElement>("[data-custom-preset-label]")!;
+    const customPresetMacros = root.querySelector<HTMLTextAreaElement>("[data-custom-preset-macros]")!;
+    customPresetLabel.setAttribute("data-darkreader-ignore", "true");
+    customPresetMacros.setAttribute("data-darkreader-ignore", "true");
+    const customPresetMessage = root.querySelector<HTMLOutputElement>("[data-custom-preset-message]")!;
+    const mathPresetLibrary = root.querySelector<HTMLElement>("[data-math-preset-library]")!;
+    const mathPresetLibraryList = root.querySelector<HTMLElement>("[data-math-preset-library-list]")!;
+    const mathPresetEditor = root.querySelector<HTMLElement>("[data-math-preset-editor]")!;
+    const mathPresetEditorTitle = root.querySelector<HTMLElement>("[data-math-preset-editor-title]")!;
+    const startMathPresetButton = root.querySelector<HTMLButtonElement>("[data-start-math-preset]")!;
+    const cancelMathPresetEditButton = root.querySelector<HTMLButtonElement>("[data-cancel-math-preset-edit]")!;
+    const customPresetGroup = root.querySelector<HTMLInputElement>("[data-custom-preset-group]")!;
+    const referenceLibraryDialog = root.querySelector<HTMLDialogElement>("[data-reference-library-dialog]")!;
+    const referenceEntryForm = root.querySelector<HTMLElement>("[data-reference-entry-form]")!;
+    const referenceEditId = root.querySelector<HTMLInputElement>("[data-reference-edit-id]")!;
+    const referenceIdInput = root.querySelector<HTMLInputElement>("[data-reference-id]")!;
+    const referenceTitleInput = root.querySelector<HTMLInputElement>("[data-reference-title]")!;
+    const referenceAuthorsInput = root.querySelector<HTMLInputElement>("[data-reference-authors]")!;
+    const referenceYearInput = root.querySelector<HTMLInputElement>("[data-reference-year]")!;
+    const referencePublisherInput = root.querySelector<HTMLInputElement>("[data-reference-publisher]")!;
+    const referenceUrlInput = root.querySelector<HTMLInputElement>("[data-reference-url]")!;
+    const referenceNoteInput = root.querySelector<HTMLInputElement>("[data-reference-note]")!;
+    const referenceEntryMessage = root.querySelector<HTMLOutputElement>("[data-reference-entry-message]")!;
+    const cancelReferenceEditButton = root.querySelector<HTMLButtonElement>("[data-cancel-reference-edit]")!;
+    const referenceLibraryList = root.querySelector<HTMLElement>("[data-reference-library-list]")!;
+    const referenceCount = root.querySelector<HTMLElement>("[data-reference-count]")!;
     const preview = root.querySelector<HTMLElement>("[data-preview]")!;
     const mediaInput = root.querySelector<HTMLInputElement>("[data-media-input]")!;
     const mediaAlt = root.querySelector<HTMLInputElement>("[data-media-alt]")!;
@@ -571,7 +927,31 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const workflowCurrent = root.querySelector<HTMLElement>("[data-workflow-current]")!;
     const workflowHelp = root.querySelector<HTMLElement>("[data-workflow-help]")!;
     const wordCount = root.querySelector<HTMLElement>("[data-word-count]")!;
+    const authoringHelpDialog = root.querySelector<HTMLDialogElement>("[data-authoring-help-dialog]")!;
+    const helpTopicButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-help-topic]")];
+    const helpTopicPanels = [...root.querySelectorAll<HTMLElement>("[data-help-panel]")];
+    const selectHelpTopic = (topic: string) => {
+      helpTopicButtons.forEach((button) => {
+        const selected = button.dataset.helpTopic === topic;
+        button.classList.toggle("is-active", selected);
+        button.setAttribute("aria-selected", String(selected));
+      });
+      helpTopicPanels.forEach((panel) => { panel.hidden = panel.dataset.helpPanel !== topic; });
+    };
+    helpTopicButtons.forEach((button) => button.addEventListener("click", () => selectHelpTopic(button.dataset.helpTopic ?? "latex")));
+    const openAuthoringHelp = () => { if (!authoringHelpDialog.open) authoringHelpDialog.showModal(); };
+    root.querySelector<HTMLButtonElement>("[data-open-authoring-help]")!.addEventListener("click", openAuthoringHelp);
+    root.querySelector<HTMLButtonElement>("[data-close-authoring-help]")!.addEventListener("click", () => authoringHelpDialog.close());
+    authoringHelpDialog.addEventListener("click", (event) => { if (event.target === authoringHelpDialog) authoringHelpDialog.close(); });
+    diagnosticsTrigger.addEventListener("click", () => { if (!diagnosticsPanel.open) diagnosticsPanel.showModal(); });
+    root.querySelector<HTMLButtonElement>("[data-close-editor-diagnostics]")!.addEventListener("click", () => diagnosticsPanel.close());
+    diagnosticsPanel.addEventListener("click", (event) => { if (event.target === diagnosticsPanel) diagnosticsPanel.close(); });
     const previewEngine = root.querySelector<HTMLSelectElement>("[data-preview-engine]")!;
+    // The public Atlas article renderer is KaTeX; keep the editorial preview
+    // on the same engine so macros and layout do not drift before publication.
+    previewEngine.value = "katex";
+    previewEngine.disabled = true;
+    previewEngine.title = "公開記事と同じKaTeX rendererを使用します。";
     const autosaveToggle = root.querySelector<HTMLInputElement>("[data-autosave-toggle]")!;
     const saveButton = root.querySelector<HTMLButtonElement>("[data-save-document]")!;
     const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
@@ -583,6 +963,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const reviewRequestNote = root.querySelector<HTMLTextAreaElement>("[data-review-request-note]")!;
     const reviewRequestMessage = root.querySelector<HTMLOutputElement>("[data-review-request-message]")!;
     const headingOutline = root.querySelector<HTMLElement>("[data-heading-outline]")!;
+    const previewExpandButton = root.querySelector<HTMLButtonElement>("[data-preview-expand]")!;
     const approvalDialog = root.querySelector<HTMLDialogElement>("[data-approval-dialog]")!;
     const unpublishDialog = root.querySelector<HTMLDialogElement>("[data-unpublish-dialog]")!;
     const progressDialog = root.querySelector<HTMLDialogElement>("[data-progress-dialog]")!;
@@ -605,6 +986,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     type PaneKey = typeof paneKeys[number];
     type PaneEdge = "top" | "right" | "bottom" | "left";
     const paneLabels: Record<PaneKey, string> = { writing: "本文", preview: "プレビュー", media: "図・画像", review: "コメント" };
+    previewExpandButton.setAttribute("aria-pressed", "false");
+    previewExpandButton.textContent = "全文表示";
+    previewExpandButton.addEventListener("click", () => {
+      const expanded = paneElements.preview.classList.toggle("is-expanded");
+      previewExpandButton.setAttribute("aria-pressed", String(expanded));
+      previewExpandButton.textContent = expanded ? "枠に戻す" : "全文表示";
+      if (expanded) paneElements.preview.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
     paneKeys.forEach((key) => { paneElements[key].dataset.editorPane = key; });
     let requestedPaneKeys: PaneKey[] = ["writing", "preview", "review"];
     let paneRows: PaneKey[][] = [["writing", "preview", "review"]];
@@ -644,7 +1033,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         const rowIndex = paneRows.findIndex((row) => row.includes(key));
         const columnIndex = rowIndex >= 0 ? paneRows[rowIndex].indexOf(key) : -1;
         const row = paneRows[rowIndex] ?? [];
-        button.disabled = rowIndex < 0 || (edge === "left" && columnIndex === 0) || (edge === "right" && columnIndex === row.length - 1) || (edge === "top" && rowIndex === 0 && paneRows.length >= 3) || (edge === "bottom" && rowIndex === paneRows.length - 1 && paneRows.length >= 3);
+        const targetRow = edge === "top" ? paneRows[rowIndex - 1] : edge === "bottom" ? paneRows[rowIndex + 1] : undefined;
+        button.disabled = rowIndex < 0 || (edge === "left" && columnIndex === 0) || (edge === "right" && columnIndex === row.length - 1) || (edge === "top" && rowIndex === 0 && paneRows.length >= 3) || (edge === "bottom" && rowIndex === paneRows.length - 1 && paneRows.length >= 3) || ((edge === "top" || edge === "bottom") && Boolean(targetRow && targetRow.length >= 3));
       });
     };
     const placePanes = () => paneRows.flat().forEach((key) => { if (paneElements[key].parentElement === editorSplit) editorSplit.append(paneElements[key]); });
@@ -676,14 +1066,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
           else paneRows.push([key]);
         } else {
           const targetRow = paneRows[targetRowIndex];
-          if (targetRow[columnIndex]) {
-            const targetKey = targetRow[columnIndex];
-            targetRow[columnIndex] = key;
-            paneRows[rowIndex][columnIndex] = targetKey;
-          } else {
-            paneRows[rowIndex].splice(columnIndex, 1);
-            targetRow.push(key);
-          }
+          if (targetRow.length >= 3) return;
+          paneRows[rowIndex].splice(columnIndex, 1);
+          targetRow.push(key);
         }
         paneRows = paneRows.filter((row) => row.length);
       }
@@ -794,6 +1179,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     let currentUserEmail = "";
     let isManager = false;
     let assignedSubjects: string[] = [];
+    let customMathPresets: CustomMathPreset[] = [];
+    let editingCustomPresetId: string | null = null;
+    let personalReferences: ArticleReference[] = [];
+    let documentReferences: ArticleReference[] = [];
+    let lockedRanges: LockedRange[] = [];
+    let previousBodyValue = "";
+    let bodyRefreshTimer: number | undefined;
+    let bodyHasMediaSyntax = false;
     let mathJaxLoading: Promise<void> | undefined;
     let hasUnsavedChanges = false;
     const statusLabel = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" } as const;
@@ -840,11 +1233,90 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
     let editorialAssets: EditorialAsset[] = [];
     const formatBytes = (bytes: number) => bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1_000))}KB`;
+    const imageWidthOptions = ["", "25%", "40%", "60%", "80%", "100%"];
+    const imageWidthLabel = (width: string) => width || "自動（最大幅）";
+    const imageWidthNumber = (width: string) => width.replace(/%$/, "");
+    const customWidthInput = (assetId: string) => mediaList.querySelector<HTMLInputElement>(`[data-asset-width-custom="${CSS.escape(assetId)}"]`);
+    const assetWidthInBody = (source: string, assetId: string) => {
+      const escapedId = assetId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const match = new RegExp(`!\\[[^\\]]*\\]\\(asset://${escapedId}(?:\\?width=(\\d{1,3})%?)?\\)`, "i").exec(source);
+      return normalizeEditorialImageWidth(match?.[1] ? `${match[1]}%` : "");
+    };
+    const selectedAssetWidth = (assetId: string) => {
+      const custom = customWidthInput(assetId)?.value.trim() ?? "";
+      const customWidth = custom ? normalizeEditorialImageWidth(`${custom}%`) : "";
+      return customWidth || (mediaList.querySelector<HTMLSelectElement>(`[data-asset-width="${CSS.escape(assetId)}"]`)?.value ?? "");
+    };
     const insertAtCursor = (value: string) => {
       const start = body.selectionStart ?? body.value.length;
       const end = body.selectionEnd ?? start;
       body.setRangeText(value, start, end, "end");
       body.dispatchEvent(new Event("input", { bubbles: true }));
+      body.focus();
+    };
+    const applyAssetWidth = (asset: EditorialAsset, width: string) => {
+      const normalized = normalizeEditorialImageWidth(width);
+      const escapedId = asset.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedLatexName = asset.latexName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      let changed = false;
+      body.value = body.value.replace(
+        new RegExp(`(!\\[[^\\]]*\\]\\(asset://${escapedId})(?:\\?width=\\d{1,3}%?)?(\\))`, "gi"),
+        (_whole, prefix: string, close: string) => {
+          changed = true;
+          return `${prefix}${normalized ? `?width=${normalized}` : ""}${close}`;
+        },
+      );
+      body.value = body.value.replace(
+        new RegExp(`(\\\\includegraphics)(?:\\[([^\\]\\r\\n]*)\\])?(\\{${escapedLatexName}\\})`, "gi"),
+        (_whole, command: string, options: string | undefined, name: string) => {
+          const retained = (options ?? "").split(",").map((part) => part.trim()).filter((part) => part && !/^width\\s*=/i.test(part));
+          if (normalized) retained.push(`width=${editorialImageWidthToLatex(normalized)}`);
+          changed = true;
+          return `${command}${retained.length ? `[${retained.join(",")}]` : ""}${name}`;
+        },
+      );
+      if (!changed) return false;
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    };
+    const groupSelectionValue = (group: string) => `group:${encodeURIComponent(group)}`;
+    const groupNameFromSelection = (selection: string) => selection.startsWith("group:") ? decodeURIComponent(selection.slice("group:".length)) : "";
+    const customPresetGroups = () => {
+      const groups = new Map<string, CustomMathPreset[]>();
+      customMathPresets.forEach((preset) => {
+        const group = preset.group?.trim();
+        if (!group) return;
+        groups.set(group, [...(groups.get(group) ?? []), preset]);
+      });
+      return groups;
+    };
+    const mathPresetIdsInBody = (value = body.value) => [...value.matchAll(/<!--\s*math-preset:\s*([a-z0-9-]+)\s*-->/gi)].map((match) => match[1]);
+    const mathPresetInBody = (value = body.value) => {
+      const ids = mathPresetIdsInBody(value);
+      const groups = customPresetGroups();
+      for (const [group, presets] of groups) {
+        if (presets.length > 1 && presets.every((preset) => ids.includes(preset.id)) && ids.length === presets.length) return groupSelectionValue(group);
+      }
+      return ids[0] ?? "";
+    };
+    const syncMathPreset = () => {
+      const preset = mathPresetInBody();
+      renderMathPresetOptions(preset);
+      mathPreset.value = preset;
+    };
+    const setMathPreset = (preset: string) => {
+      const group = groupNameFromSelection(preset);
+      const selectedCustomPresets = group
+        ? (customPresetGroups().get(group) ?? [])
+        : customMathPresets.filter((item) => item.id === preset);
+      const markers = selectedCustomPresets.map((custom) => `<!-- math-preset: ${custom.id} -->\n<!-- math-custom-preset: ${custom.id} -->\n${customPresetDefinitions(custom)}\n<!-- /math-custom-preset -->`).join("\n");
+      const marker = preset && (group ? selectedCustomPresets.length : preset) ? `${markers || `<!-- math-preset: ${preset} -->`}\n\n` : "";
+      const markerPattern = /^(?:(?:<!--\s*math-preset:\s*[a-z0-9-]+\s*-->\s*(?:<!--\s*math-custom-preset:[^>]+-->[\s\S]*?<!--\s*\/math-custom-preset\s*-->\s*)?)+)/im;
+      body.value = markerPattern.test(body.value)
+        ? body.value.replace(markerPattern, marker)
+        : marker + body.value;
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+      syncMathPreset();
       body.focus();
     };
     const latexNameInBody = (source: string, name: string) => source.split(/\r?\n/).some((line) => {
@@ -855,7 +1327,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       mediaList.innerHTML = editorialAssets.length
         ? editorialAssets.map((asset) => {
           const inBody = body.value.includes(asset.marker) || latexNameInBody(body.value, asset.latexName);
-          return `<div class="media-item"><img class="media-item-preview is-loading" data-editorial-asset="${esc(asset.id)}" alt="${esc(asset.alt || asset.filename)}" loading="lazy" decoding="async" /><div class="media-item-copy"><span class="media-item-name"><b>${esc(asset.filename)}</b><small>${formatBytes(asset.bytes)} ・ LaTeX名: <code>${esc(asset.latexName)}</code>${asset.alt ? ` ・ ${esc(asset.alt)}` : ""}</small></span><div class="media-item-actions"><button type="button" class="quiet-action" data-insert-asset="${esc(asset.id)}">本文へ挿入</button><button type="button" class="quiet-action" data-insert-latex-asset="${esc(asset.id)}">LaTeXコードを挿入</button><button type="button" class="quiet-action" data-delete-asset="${esc(asset.id)}" ${inBody ? "disabled title=\"本文から画像参照を削除して保存してから削除してください\"" : ""}>削除</button></div></div></div>`;
+          const selectedWidth = assetWidthInBody(body.value, asset.id);
+          const widthOptions = imageWidthOptions.map((width) => `<option value="${width}" ${width === selectedWidth ? "selected" : ""}>${imageWidthLabel(width)}</option>`).join("");
+          const customOption = selectedWidth && !imageWidthOptions.includes(selectedWidth) ? `<option value="${selectedWidth}" selected>カスタム（${selectedWidth}）</option>` : "";
+          return `<div class="media-item"><img class="media-item-preview is-loading" data-editorial-asset="${esc(asset.id)}" alt="${esc(asset.alt || asset.filename)}" loading="lazy" decoding="async" /><div class="media-item-copy"><span class="media-item-name"><b>${esc(asset.filename)}</b><small>${formatBytes(asset.bytes)} ・ LaTeX名: <code>${esc(asset.latexName)}</code>${asset.alt ? ` ・ ${esc(asset.alt)}` : ""}</small></span><div class="media-width-control"><label>画像幅<select data-asset-width="${esc(asset.id)}" aria-label="${esc(asset.filename)}の画像幅">${widthOptions}${customOption}</select></label><label class="media-width-custom-label">自由入力<input type="number" data-asset-width-custom="${esc(asset.id)}" min="1" max="100" step="1" inputmode="numeric" value="${esc(imageWidthNumber(selectedWidth))}" placeholder="73" aria-label="${esc(asset.filename)}の画像幅（%）" /><span>%</span></label></div><div class="media-item-actions"><button type="button" class="quiet-action" data-insert-asset="${esc(asset.id)}">本文へ挿入</button><button type="button" class="quiet-action" data-apply-asset-width="${esc(asset.id)}">既存参照に適用</button><button type="button" class="quiet-action" data-insert-latex-asset="${esc(asset.id)}">LaTeXコードを挿入</button><button type="button" class="quiet-action" data-delete-asset="${esc(asset.id)}" ${inBody ? "disabled title=\"本文から画像参照を削除して保存してから削除してください\"" : ""}>削除</button></div></div></div>`;
         }).join("")
         : "<small>アップロードした画像はここに表示されます。画像を追加すると、ここから何度でも本文へ挿入できます。</small>";
       void hydrateAssetImages(mediaList);
@@ -890,9 +1365,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const loadPersonalNote = async () => {
       try {
         const response = await fetch("/api/admin/personal-workspace", { credentials: "same-origin", cache: "no-store" });
-        const data = await read<{ privateNote?: string; privateNoteUpdatedAt?: string | null; error?: string }>(response);
+        const data = await read<{ privateNote?: string; privateNoteUpdatedAt?: string | null; mathPresets?: unknown; references?: unknown; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "自分用メモを読み込めませんでした。");
         personalNote.value = data.privateNote ?? "";
+        customMathPresets = normalizeCustomMathPresets(data.mathPresets);
+        personalReferences = normalizeReferences(data.references);
+        renderReferenceLibrary();
+        root.dataset.mathPresets = JSON.stringify(customPresetMap());
+        renderMathPresetOptions(mathPresetInBody());
         personalNoteUpdated.textContent = data.privateNoteUpdatedAt ? `最終保存：${date(data.privateNoteUpdatedAt)}` : "まだ保存されていません";
         personalNoteMessage.value = "";
       } catch (error) {
@@ -915,16 +1395,149 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         savePersonalNoteButton.disabled = false;
       }
     };
+    let authRedirecting = false;
+    const redirectToAdminLogin = () => {
+      if (authRedirecting) return;
+      authRedirecting = true;
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      saveMessage.value = "ログインの有効期限が切れました。ログイン画面へ移動します…";
+      window.setTimeout(() => {
+        window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
+      }, 250);
+    };
     const read = async <T,>(response: Response) => {
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
-        if (response.status === 401 || response.status === 403) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。");
+        if (response.status === 401) {
+          redirectToAdminLogin();
+          throw new Error("ログインの有効期限が切れました。ログインし直してください。");
+        }
+        if (response.status === 403) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。");
         throw new Error(`サーバーエラーが発生しました（${response.status || "応答形式不明"}）。時間をおいて再試行してください。`);
       }
-      return await response.json() as T;
+      const data = await response.json() as T;
+      if (response.status === 401 && typeof data === "object" && data !== null && "error" in data) {
+        const message = String((data as { error?: unknown }).error ?? "");
+        if (message === "ログインが必要です。" || message.includes("認証が切れ")) redirectToAdminLogin();
+      }
+      return data;
+    };
+    const normalizeCustomMathPresets = (raw: unknown): CustomMathPreset[] => {
+      if (!Array.isArray(raw)) return [];
+      return raw.slice(0, 40).flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const record = item as Record<string, unknown>;
+        const id = typeof record.id === "string" ? record.id.trim() : "";
+        const label = typeof record.label === "string" ? record.label.trim().slice(0, 80) : "";
+        const group = typeof record.group === "string" ? record.group.trim().slice(0, 80) : "";
+        const macros = record.macros && typeof record.macros === "object" ? Object.entries(record.macros as Record<string, unknown>).slice(0, 40).reduce<Record<string, string>>((result, [command, replacement]) => {
+          const normalizedCommand = command.trim();
+          const normalizedReplacement = typeof replacement === "string" ? replacement.trim().slice(0, 2000) : "";
+          if (/^\\[A-Za-z][A-Za-z0-9]*$/.test(normalizedCommand) && normalizedReplacement) result[normalizedCommand] = normalizedReplacement;
+          return result;
+        }, {}) : {};
+        return /^[a-z0-9][a-z0-9-]{1,79}$/.test(id) && label && Object.keys(macros).length ? [{ id, label, ...(group ? { group } : {}), macros }] : [];
+      });
+    };
+    const customPresetMap = () => Object.fromEntries(customMathPresets.map((preset) => [preset.id, preset]));
+    const renderMathPresetOptions = (selected = mathPreset.value) => {
+      const presetOption = (value: string, label: string, macros: Record<string, string>) => `<option value="${esc(value)}" data-math-macros="${esc(JSON.stringify(macros))}">${esc(label)}</option>`;
+      const builtIn = Object.entries(MATH_PRESETS).map(([value, preset]) => presetOption(value, preset.label, preset.macros)).join("");
+      const custom = customMathPresets.length ? `<optgroup label="自分のカスタムプリセット">${customMathPresets.map((preset) => presetOption(preset.id, preset.label, preset.macros)).join("")}</optgroup>` : "";
+      const groups = [...customPresetGroups().entries()].filter(([, presets]) => presets.length > 1).map(([group, presets]) => {
+        const macros = presets.reduce<Record<string, string>>((result, preset) => Object.assign(result, preset.macros), {});
+        return presetOption(groupSelectionValue(group), `${group}（${presets.length}個を一括適用）`, macros);
+      }).join("");
+      const groupOptions = groups ? `<optgroup label="プリセットグループ">${groups}</optgroup>` : "";
+      mathPreset.innerHTML = `<option value="">なし</option>${builtIn}${groupOptions}${custom}`;
+      mathPreset.value = [...mathPreset.options].some((option) => option.value === selected) ? selected : "";
+      mathPresetSelection.textContent = mathPreset.selectedOptions[0]?.textContent ?? "なし";
+    };
+    const customPresetDefinitions = (preset: CustomMathPreset) => Object.entries(preset.macros).map(([command, replacement]) => {
+      const parameters = [...replacement.matchAll(/#(\d+)/g)].reduce((max, match) => Math.max(max, Number(match[1])), 0);
+      return `\\newcommand{${command}}${parameters ? `[${parameters}]` : ""}{${replacement}}`;
+    }).join("\n");
+    const renderMathPresetLibrary = () => {
+      const selected = mathPreset.value;
+      const selectedGroup = groupNameFromSelection(selected);
+      const renderCard = (id: string, label: string, macros: Record<string, string>, custom: boolean) => {
+        const macroItems = Object.entries(macros).map(([command, replacement]) => `<li><code>${esc(command)}</code> = ${esc(replacement)}</li>`).join("");
+        const actions = custom
+          ? `<div class="math-preset-card-actions"><button type="button" class="quiet-action" data-edit-math-preset="${esc(id)}">編集</button><button type="button" class="quiet-action danger-action" data-delete-math-preset="${esc(id)}">削除</button></div>`
+          : '<span class="math-preset-card-meta">標準</span>';
+        const isSelected = selected === id || (custom && selectedGroup && customMathPresets.find((preset) => preset.id === id)?.group?.trim() === selectedGroup);
+        return `<article class="math-preset-card${isSelected ? " is-selected" : ""}"><div class="math-preset-card-header"><button type="button" class="math-preset-card-select" data-select-math-preset="${esc(id)}"><strong>${esc(label)}</strong><small>${esc(id)}</small></button>${actions}</div><div class="math-preset-card-body"><details><summary>マクロ ${Object.keys(macros).length}個を表示</summary><ul class="math-preset-macro-list">${macroItems}</ul></details></div></article>`;
+      };
+      const builtInCards = Object.entries(MATH_PRESETS).map(([id, preset]) => renderCard(id, preset.label, preset.macros, false));
+      const grouped = new Map<string, CustomMathPreset[]>();
+      customMathPresets.forEach((preset) => {
+        const group = preset.group?.trim() || "未分類";
+        grouped.set(group, [...(grouped.get(group) ?? []), preset]);
+      });
+      const builtInSection = `<section class="math-preset-group"><h4>標準プリセット</h4>${builtInCards.join("")}</section>`;
+      const customSections = [...grouped.entries()].map(([group, presets]) => `<section class="math-preset-group"><h4><span>${esc(group)} <small>${presets.length}件</small></span>${presets.length > 1 ? `<button type="button" class="quiet-action math-preset-group-select" data-select-math-preset-group="${esc(groupSelectionValue(group))}">グループを適用</button>` : ""}</h4>${presets.map((preset) => renderCard(preset.id, preset.label, preset.macros, true)).join("")}</section>`);
+      mathPresetLibraryList.innerHTML = [builtInSection, ...customSections].join("") || '<p class="reference-library-empty">利用できるプリセットがありません。</p>';
+    };
+    const parseCustomPresetMacros = (source: string) => {
+      const macros: Record<string, string> = {};
+      for (const [index, line] of source.split(/\r?\n/).entries()) {
+        if (!line.trim()) continue;
+        const match = /^\s*(\\[A-Za-z][A-Za-z0-9]*)\s*=\s*(.+?)\s*$/.exec(line);
+        if (!match) throw new Error(`マクロ${index + 1}行目は「\\foo = 内容」の形式で入力してください。`);
+        if (macros[match[1]]) throw new Error(`マクロ${match[1]}が重複しています。`);
+        macros[match[1]] = match[2].trim();
+      }
+      if (!Object.keys(macros).length) throw new Error("マクロを1つ以上入力してください。");
+      return macros;
+    };
+    const normalizeReferences = (raw: unknown): ArticleReference[] => normalizeArticleReferences(raw, 200) as ArticleReference[];
+    const referenceIsCited = (id: string, source = body.value) => new RegExp(`\\[\\[cite:${id.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\]\\]`, "i").test(source);
+    const resetReferenceEntry = () => {
+      referenceEditId.value = "";
+      referenceIdInput.disabled = false;
+      referenceIdInput.value = "";
+      referenceTitleInput.value = "";
+      referenceAuthorsInput.value = "";
+      referenceYearInput.value = "";
+      referencePublisherInput.value = "";
+      referenceUrlInput.value = "";
+      referenceNoteInput.value = "";
+      cancelReferenceEditButton.hidden = true;
+      referenceEntryMessage.value = "";
+    };
+    const renderReferenceLibrary = () => {
+      referenceCount.textContent = `${personalReferences.length}/200件`;
+      referenceLibraryList.className = "reference-library-list";
+      referenceLibraryList.innerHTML = personalReferences.length
+        ? personalReferences.map((reference) => {
+          const used = documentReferences.some((item) => item.id === reference.id);
+          const details = [reference.authors, reference.year, reference.publisher].filter(Boolean).join(" ・ ");
+          return `<article class="reference-library-item${used ? " is-used" : ""}"><header><b>${esc(reference.id)}</b><small>${used ? "この記事で使用中" : "未使用"}</small></header><p>${esc(formatArticleReference(reference))}</p>${details ? `<small>${esc(details)}</small>` : ""}${reference.url ? `<a href="${esc(reference.url)}" target="_blank" rel="noopener noreferrer">登録URLを開く</a>` : ""}<div class="reference-library-item-actions"><button type="button" class="primary-action" data-cite-reference="${esc(reference.id)}">本文へ引用</button><button type="button" class="quiet-action" data-edit-reference="${esc(reference.id)}">編集</button><button type="button" class="quiet-action" data-delete-reference="${esc(reference.id)}">削除</button></div></article>`;
+        }).join("")
+        : '<p class="reference-library-empty">まだ登録されていません。上のフォームから追加できます。</p>';
+    };
+    const persistPersonalReferences = async () => {
+      const response = await fetch("/api/admin/personal-workspace", { method: "PUT", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ references: personalReferences }) });
+      const data = await read<{ references?: unknown; error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "参考文献リストを保存できませんでした。");
+      personalReferences = normalizeReferences(data.references ?? personalReferences);
+      renderReferenceLibrary();
+    };
+    const appendReferenceToArticle = (reference: ArticleReference) => {
+      if (!documentReferences.some((item) => item.id === reference.id)) documentReferences = [...documentReferences, reference];
+      insertAtCursor(`[[cite:${reference.id}]]`);
+      renderReferenceLibrary();
+      saveMessage.value = `参考文献「${reference.id}」を本文へ挿入しました。記事を保存してください。`;
+    };
+    const persistCustomMathPresets = async () => {
+      const response = await fetch("/api/admin/personal-workspace", { method: "PUT", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ mathPresets: customMathPresets }) });
+      const data = await read<{ mathPresets?: unknown; error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "カスタムプリセットを保存できませんでした。");
+      customMathPresets = normalizeCustomMathPresets(data.mathPresets ?? customMathPresets);
+      root.dataset.mathPresets = JSON.stringify(customPresetMap());
     };
     const selectedSubject = () => subjects.find((item) => item.slug === subject.value) ?? subjects[0];
-    const availableEditorSubjects = () => subjects.filter((item) => isManager || assignedSubjects.includes(item.slug));
+    const availableEditorSubjects = () => subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
     const populateEditorSubjects = (selected = subject.value) => {
       const available = availableEditorSubjects();
       subject.innerHTML = available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
@@ -944,7 +1557,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       fillSourceArticles();
     };
     const populateSourceSubjects = () => {
-      const available = subjects.filter((item) => !assignedSubjects.length || assignedSubjects.includes(item.slug));
+      const available = subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
       sourceSubject.innerHTML = '<option value="">分野を選択…</option>' + available.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
       sourceSubject.disabled = !available.length;
     };
@@ -964,41 +1577,92 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     };
     const inline = (value: string) => esc(value).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     const previewMarkdown = (value: string) => {
-      const lines = value.replace(/\r\n/g, "\n").split("\n");
+      const lines = stripMathPresetMarker(value).replace(/\r\n/g, "\n").split("\n");
       const result: string[] = [];
+      const directives: { fence: number; leadOpen: boolean }[] = [];
+      const directiveLabels: Record<string, string> = { defi: "定義", definition: "定義", prop: "命題", proposition: "命題", thm: "定理", theorem: "定理", lemma: "補題", cor: "系", corollary: "系", example: "例" };
+      const directive = (line: string) => {
+        const match = /^\s*(:{3,4})\s*([A-Za-z][A-Za-z0-9_-]*)(?:\s+(.+?))?\s*$/.exec(line);
+        if (!match) return null;
+        const name = match[2].toLowerCase();
+        const rawTitle = (match[3] ?? "").trim();
+        const id = /\s*\{#([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(rawTitle);
+        return { fence: match[1].length, name, title: (id ? rawTitle.slice(0, id.index) : rawTitle).trim() || directiveLabels[name] || name, id: id?.[1] ?? "" };
+      };
+      const closeDirectiveLead = () => {
+        const active = directives.at(-1);
+        if (active?.leadOpen) { result.push("</p>"); active.leadOpen = false; }
+      };
       let inCode = false; let codeLanguage = ""; let inMath = false; let math: string[] = [];
       for (const raw of lines) {
-        if (raw.trim() === "$$") { if (inMath) { result.push(`<div class="math-display">$$${esc(math.join("\n"))}$$</div>`); math = []; } inMath = !inMath; continue; }
+        if (raw.trim() === "$$") { if (!inMath) closeDirectiveLead(); if (inMath) { const tex = stripTexMacroDefinitions(math.join("\n")); if (tex) result.push(`<div class="math-display">$$${esc(tex)}$$</div>`); math = []; } inMath = !inMath; continue; }
         if (inMath) { math.push(raw); continue; }
         if (raw.trim().startsWith("```")) {
           if (inCode) {
             result.push(codeLanguage === "tikz" ? "</code></pre><p class=\"tikz-compile-note\">TikZソースを保存しました。図の自動組版には管理者がLaTeX組版サービスを接続してください。</p></div>" : "</code></pre>");
             inCode = false; codeLanguage = "";
           } else {
+            closeDirectiveLead();
             codeLanguage = raw.trim().slice(3).trim().toLowerCase(); inCode = true;
             result.push(codeLanguage === "tikz" ? "<div class=\"tikz-source-preview\"><strong>TikZ図（ソース）</strong><pre><code>" : "<pre><code>");
           }
           continue;
         }
         if (inCode) { result.push(`${esc(raw)}\n`); continue; }
-        const asset = /^!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})\)\s*$/i.exec(raw.trim());
-        if (asset) { result.push(`<figure class="editorial-image"><img class="is-loading" data-editorial-asset="${asset[2]}" alt="${esc(asset[1])}" loading="lazy" decoding="async"></figure>`); continue; }
+        const marker = directive(raw);
+        if (marker) {
+          const semantic = directiveLabels[marker.name];
+          const id = marker.id ? ` id="${esc(marker.id)}" data-statement-id="${esc(marker.id)}"` : "";
+          closeDirectiveLead();
+          if (semantic) result.push(`<section class="article-directive ${marker.name === "definition" ? "defi" : marker.name === "proposition" ? "prop" : marker.name === "theorem" ? "thm" : marker.name === "corollary" ? "cor" : marker.name}" data-directive="${esc(marker.name)}"${id}><p><span class="thmtitle">${esc(marker.title)}</span>`);
+          else result.push(`<section class="article-directive article-directive-${esc(marker.name)}" data-directive="${esc(marker.name)}"><div class="article-directive-title">${esc(marker.title)}</div><div class="article-directive-body">`);
+          directives.push({ fence: marker.fence, leadOpen: Boolean(semantic) });
+          continue;
+        }
+        if (directives.length && /^\s*(:{3,4})\s*$/.test(raw) && raw.trim().length >= directives.at(-1)!.fence) {
+          const active = directives.pop()!;
+          if (active.leadOpen) result.push("</p>");
+          result.push("</section>");
+          continue;
+        }
+        const asset = /^!\[([^\]]{0,180})\]\(asset:\/\/([0-9a-f-]{36})(?:\?width=(\d{1,3})%?)?\)\s*$/i.exec(raw.trim());
+        if (asset) {
+          closeDirectiveLead();
+          const width = asset[3] ? `${asset[3]}%` : "";
+          const style = editorialImageStyle(width);
+          result.push(`<figure class="editorial-image"><img class="is-loading" data-editorial-asset="${asset[2]}"${width ? ` data-editorial-image-width="${width}"` : ""} style="${style}" alt="${esc(asset[1])}" loading="lazy" decoding="async"></figure>`);
+          continue;
+        }
         const latexGraphic = /^\\includegraphics(?:\[([^\]]*)\])?\{([A-Za-z][A-Za-z0-9_-]*)\}\s*$/.exec(raw.trim());
         if (latexGraphic) {
+          closeDirectiveLead();
           const latexName = latexGraphic[2].toLowerCase();
           const namedAsset = editorialAssets.find((item) => item.latexName.toLowerCase() === latexName);
-          if (namedAsset) result.push(`<figure class="editorial-image"><img class="is-loading" data-editorial-asset="${namedAsset.id}" alt="${esc(namedAsset.alt || namedAsset.latexName)}" loading="lazy" decoding="async"></figure>`);
+          if (namedAsset) {
+            const width = editorialImageWidthFromLatexOptions(latexGraphic[1]);
+            const style = editorialImageStyle(width);
+            result.push(`<figure class="editorial-image"><img class="is-loading" data-editorial-asset="${namedAsset.id}"${width ? ` data-editorial-image-width="${width}"` : ""} style="${style}" alt="${esc(namedAsset.alt || namedAsset.latexName)}" loading="lazy" decoding="async"></figure>`);
+          }
           else result.push(`<p class="katex-error">LaTeX素材「${esc(latexGraphic[2])}」がこの原稿に見つかりません。</p>`);
           continue;
         }
-        if (/^###\s+/.test(raw)) { result.push(`<h3>${inline(raw.replace(/^###\s+/, ""))}</h3>`); continue; }
-        if (/^##\s+/.test(raw)) { result.push(`<h2>${inline(raw.replace(/^##\s+/, ""))}</h2>`); continue; }
-        if (/^[-*]\s+/.test(raw)) { result.push(`<ul><li>${inline(raw.replace(/^[-*]\s+/, ""))}</li></ul>`); continue; }
-        if (/^\d+\.\s+/.test(raw)) { result.push(`<ol><li>${inline(raw.replace(/^\d+\.\s+/, ""))}</li></ol>`); continue; }
-        if (raw.trim()) result.push(`<p>${inline(raw)}</p>`);
+        if (/^###\s+/.test(raw)) { closeDirectiveLead(); result.push(`<h3>${inline(raw.replace(/^###\s+/, ""))}</h3>`); continue; }
+        if (/^##\s+/.test(raw)) { closeDirectiveLead(); result.push(`<h2>${inline(raw.replace(/^##\s+/, ""))}</h2>`); continue; }
+        if (/^[-*]\s+/.test(raw)) { closeDirectiveLead(); result.push(`<ul><li>${inline(raw.replace(/^[-*]\s+/, ""))}</li></ul>`); continue; }
+        if (/^\d+\.\s+/.test(raw)) { closeDirectiveLead(); result.push(`<ol><li>${inline(raw.replace(/^\d+\.\s+/, ""))}</li></ol>`); continue; }
+        if (raw.trim()) {
+          const active = directives.at(-1);
+          if (active?.leadOpen) { result.push(`${inline(raw)}</p>`); active.leadOpen = false; }
+          else result.push(`<p>${inline(raw)}</p>`);
+        }
       }
       if (inMath) result.push(`<p class="katex-error">数式の閉じる $$ がありません。</p>`);
       if (inCode) result.push(codeLanguage === "tikz" ? "</code></pre><p class=\"tikz-compile-note\">TikZソースを保存しました。図の自動組版には管理者がLaTeX組版サービスを接続してください。</p></div>" : "</code></pre>");
+      while (directives.length) {
+        const active = directives.pop()!;
+        if (active.leadOpen) result.push("</p>");
+        result.push("</section>");
+      }
       return result.join("").replace(/<\/ul><ul>/g, "").replace(/<\/ol><ol>/g, "");
     };
     const assetPreviewUrls = new Map<string, string>();
@@ -1054,20 +1718,84 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       const script = document.createElement("script"); script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"; script.async = true;
       script.onload = () => resolve(); script.onerror = () => reject(new Error("MathJaxを読み込めませんでした。ネットワーク接続を確認してください。")); document.head.append(script);
     });
-    const renderPreviewInto = async (target: HTMLElement, value: string) => {
-      target.innerHTML = previewMarkdown(value);
+    const renderPreviewCitations = (target: HTMLElement, references: ArticleReference[]) => {
+      const numbers = new Map(references.map((reference, index) => [reference.id.toLowerCase(), index + 1]));
+      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, { acceptNode: (node) => node.parentElement && !node.parentElement.closest("a,code,pre,script,style") && /\[\[cite:[a-z0-9][a-z0-9_-]*\]\]/i.test(node.textContent ?? "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
+      const textNodes: Text[] = []; while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+      for (const textNode of textNodes) {
+        const source = textNode.textContent ?? ""; const fragment = document.createDocumentFragment(); let cursor = 0;
+        for (const match of source.matchAll(/\[\[cite:([a-z0-9][a-z0-9_-]*)\]\]/gi)) {
+          const number = numbers.get(match[1].toLowerCase()); fragment.append(source.slice(cursor, match.index));
+          if (number) { const link = document.createElement("a"); link.className = "article-citation"; link.href = `#preview-reference-${number}`; link.textContent = `[${number}]`; link.title = references[number - 1]?.title ?? "参考文献"; fragment.append(link); } else { const missing = document.createElement("span"); missing.className = "article-citation article-citation-missing"; missing.textContent = match[0]; fragment.append(missing); }
+          cursor = (match.index ?? 0) + match[0].length;
+        }
+        fragment.append(source.slice(cursor)); textNode.replaceWith(fragment);
+      }
+      if (!references.length) return;
+      const section = document.createElement("section"); section.className = "article-refs preview-reference-list"; section.innerHTML = "<h3>参考文献</h3><ol></ol>";
+      const list = section.querySelector("ol")!;
+      references.forEach((reference, index) => { const item = document.createElement("li"); item.id = `preview-reference-${index + 1}`; const text = document.createElement("span"); text.textContent = formatArticleReference(reference); item.append(text); if (reference.url) { const link = document.createElement("a"); link.href = reference.url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = "（URL）"; item.append(" ", link); } list.append(item); });
+      target.append(section);
+    };
+    const renderPreviewInto = async (target: HTMLElement, value: string, references: ArticleReference[] = documentReferences, isCurrent: () => boolean = () => true) => {
+      try {
+        const html = await renderArticleMarkdown(value, {
+          customPresets: customPresetMap(),
+          katex: previewEngine.value === "katex",
+        });
+        if (!isCurrent()) return;
+        target.innerHTML = html;
+      } catch (error) {
+        if (!isCurrent()) return;
+        target.innerHTML = previewMarkdown(value);
+        target.insertAdjacentHTML("afterbegin", `<p class="katex-error">公開記事と同じMarkdown変換に失敗したため、簡易プレビューを表示しています。${esc(error instanceof Error ? error.message : "変換エラー")}</p>`);
+      }
+      if (!isCurrent()) return;
+      applySubjectPreviewProfile(target, subject.value || "general");
+      renderPreviewCitations(target, references);
       await hydrateAssetImages(target);
+      await hydrateTikzDiagrams(target, { isCurrent });
+      if (!isCurrent()) return;
       try {
         if (previewEngine.value === "mathjax") {
           await loadMathJax();
           const mathJax = (window as typeof window & { MathJax?: { typesetPromise: (items?: Element[]) => Promise<void> } }).MathJax;
           await mathJax?.typesetPromise([target]);
-        } else renderMathInElement(target, { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }], throwOnError: false, strict: "ignore" });
+        }
       } catch (error) { target.insertAdjacentHTML("afterbegin", `<p class="katex-error">${esc(error instanceof Error ? error.message : "数式を組版できませんでした。")}</p>`); }
     };
+    let previewRenderId = 0;
     const renderPreview = async () => {
-      await renderPreviewInto(preview, body.value);
-      wordCount.textContent = `${body.value.length.toLocaleString()}文字`;
+      const renderId = ++previewRenderId;
+      const value = body.value;
+      const isCurrent = () => renderId === previewRenderId;
+      await renderPreviewInto(preview, value, documentReferences, isCurrent);
+      if (isCurrent()) wordCount.textContent = `${value.length.toLocaleString()}文字`;
+    };
+    const renderDiagnostics = () => {
+      const items = diagnoseArticleSource(body.value, {
+        references: documentReferences,
+        externalReferenceIds: externalStatementIds,
+      });
+      diagnosticsTrigger.hidden = !items.length;
+      diagnosticsTriggerCount.textContent = String(items.length);
+      diagnosticsSummary.textContent = items.length ? `${items.length}件の確認事項` : "";
+      diagnosticsList.innerHTML = items.map((item) => `<li class="is-${item.severity}"><b>${item.severity === "error" ? "エラー" : "注意"} ${item.line}:${item.column}</b>${esc(item.message)}</li>`).join("");
+      if (!items.length && diagnosticsPanel.open) diagnosticsPanel.close();
+    };
+    const hasMediaSyntax = (source: string) => /asset:\/\/|\\includegraphics/i.test(source);
+    const scheduleBodyRefresh = () => {
+      window.clearTimeout(bodyRefreshTimer);
+      bodyRefreshTimer = window.setTimeout(() => {
+        renderHeadingOutline();
+        renderDiagnostics();
+        const nextHasMediaSyntax = hasMediaSyntax(body.value);
+        if (nextHasMediaSyntax !== bodyHasMediaSyntax) {
+          bodyHasMediaSyntax = nextHasMediaSyntax;
+          renderMediaList();
+        }
+        void renderPreview();
+      }, 140);
     };
     const commentSelections = (item: Comment) => item.selections?.length ? item.selections : item.selection_text ? [{ selection_start: item.selection_start, selection_end: item.selection_end, selection_text: item.selection_text }] : [];
     const actionActors = (item: Comment, action: "acknowledge" | "unacknowledge") => {
@@ -1220,7 +1948,103 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     window.addEventListener("scroll", positionMentionSuggestions, { passive: true });
     const formValue = (name: string) => (form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
     let persistedWritingMemo = "";
-    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value });
+    const validLockedRanges = (raw: string | LockedRange[] | undefined, source: string): LockedRange[] => {
+      let parsed: unknown = raw;
+      if (typeof raw === "string") { try { parsed = JSON.parse(raw); } catch { parsed = []; } }
+      if (!Array.isArray(parsed)) return [];
+      const ranges = parsed.filter((item): item is LockedRange => Boolean(item && typeof item === "object" && Number.isInteger((item as LockedRange).start) && Number.isInteger((item as LockedRange).end) && typeof (item as LockedRange).text === "string"))
+        .map((item) => ({ start: item.start, end: item.end, text: item.text }))
+        .filter((item) => item.start >= 0 && item.end > item.start && item.end <= source.length && item.text.length === item.end - item.start && source.slice(item.start, item.end) === item.text)
+        .sort((a, b) => a.start - b.start || a.end - b.end);
+      return ranges.filter((item, index) => index === 0 || ranges[index - 1].end <= item.start);
+    };
+    const rangesOverlapSelection = (start: number, end: number, range: LockedRange) => start === end ? start > range.start && start < range.end : start < range.end && end > range.start;
+    const renderLockedRangeMarkup = () => {
+      const source = body.value;
+      let cursor = 0;
+      const markup: string[] = [];
+      for (const range of lockedRanges) {
+        if (range.start > cursor) markup.push(esc(source.slice(cursor, range.start)));
+        markup.push(`<mark>${esc(source.slice(range.start, range.end))}</mark>`);
+        cursor = range.end;
+      }
+      if (cursor < source.length) markup.push(esc(source.slice(cursor)));
+      lockedRangeMarkup.innerHTML = markup.join("");
+      lockedRangeMarkup.scrollTop = body.scrollTop;
+      lockedRangeMarkup.scrollLeft = body.scrollLeft;
+    };
+    const renderLockControls = () => {
+      const start = body.selectionStart ?? 0;
+      const end = body.selectionEnd ?? start;
+      const hasSelection = end > start && Boolean(body.value.slice(start, end));
+      const overlapping = lockedRanges.filter((range) => rangesOverlapSelection(start, end, range));
+      lockStatus.textContent = lockedRanges.length ? `編集ロック：${lockedRanges.length}箇所（確定部分）` : "確定部分はありません";
+      lockSelectionButton.disabled = !hasSelection || overlapping.length > 0;
+      unlockSelectionButton.disabled = overlapping.length === 0;
+      renderLockedRangeMarkup();
+    };
+    const updateLockedRangesAfterEdit = (before: string, after: string) => {
+      let prefix = 0;
+      while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix += 1;
+      let suffix = 0;
+      while (suffix < before.length - prefix && suffix < after.length - prefix && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix += 1;
+      const beforeEnd = before.length - suffix;
+      const delta = after.length - before.length;
+      if (lockedRanges.some((range) => range.start < beforeEnd && range.end > prefix)) return false;
+      lockedRanges = lockedRanges.map((range) => {
+        if (range.end <= prefix) return range;
+        if (range.start >= beforeEnd) return { ...range, start: range.start + delta, end: range.end + delta };
+        return range;
+      }).filter((range) => after.slice(range.start, range.end) === range.text);
+      return true;
+    };
+    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
+    body.addEventListener("beforeinput", (event) => {
+      const start = body.selectionStart ?? 0;
+      const end = body.selectionEnd ?? start;
+      let affectedStart = start;
+      let affectedEnd = end;
+      if (start === end && event.inputType === "deleteContentBackward") affectedStart = Math.max(0, start - 1);
+      else if (start === end && event.inputType === "deleteContentForward") affectedEnd = Math.min(body.value.length, end + 1);
+      if (lockedRanges.some((range) => rangesOverlapSelection(affectedStart, affectedEnd, range))) {
+        event.preventDefault();
+        saveMessage.value = "確定済みの本文は編集ロックされています。先にロックを解除してください。";
+      }
+    });
+    body.addEventListener("input", () => {
+      const next = body.value;
+      if (!updateLockedRangesAfterEdit(previousBodyValue, next)) {
+        body.value = previousBodyValue;
+        saveMessage.value = "確定済みの本文は編集ロックされています。変更を取り消しました。";
+        renderLockControls();
+        return;
+      }
+      previousBodyValue = next;
+      renderLockControls();
+    });
+    ["select", "keyup", "mouseup"].forEach((eventName) => body.addEventListener(eventName, renderLockControls));
+    body.addEventListener("scroll", () => renderLockedRangeMarkup(), { passive: true });
+    document.addEventListener("selectionchange", () => { if (document.activeElement === body) renderLockControls(); });
+    lockSelectionButton.addEventListener("click", () => {
+      const start = body.selectionStart ?? 0;
+      const end = body.selectionEnd ?? start;
+      const text = body.value.slice(start, end);
+      if (!text || lockedRanges.some((range) => rangesOverlapSelection(start, end, range))) return;
+      lockedRanges = [...lockedRanges, { start, end, text }].sort((a, b) => a.start - b.start);
+      setUnsavedChanges(true);
+      renderLockControls();
+      saveMessage.value = "選択範囲をロックしました。保存すると確定状態が記録されます。";
+    });
+    unlockSelectionButton.addEventListener("click", () => {
+      const start = body.selectionStart ?? 0;
+      const end = body.selectionEnd ?? start;
+      const next = lockedRanges.filter((range) => !rangesOverlapSelection(start, end, range));
+      if (next.length === lockedRanges.length) return;
+      lockedRanges = next;
+      setUnsavedChanges(true);
+      renderLockControls();
+      saveMessage.value = "選択範囲のロックを解除しました。保存すると反映されます。";
+    });
     let autosaveTimer: number | undefined;
     let autosaveInFlight = false;
     autosaveToggle.checked = localStorage.getItem("atlasez-editor-autosave") !== "off";
@@ -1235,9 +2059,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       try {
         saveMessage.value = "下書きを自動保存中…";
         const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
-        if (!response.ok) throw new Error("自動保存に失敗しました。");
+        if (!response.ok) {
+          const data = await read<{ error?: string }>(response);
+          throw new Error(data.error ?? "自動保存に失敗しました。");
+        }
         setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
-      } catch { saveMessage.value = "自動保存に失敗しました。手動で保存してください。"; }
+      } catch { if (!authRedirecting) saveMessage.value = "自動保存に失敗しました。手動で保存してください。"; }
       finally { autosaveInFlight = false; }
     };
     const scheduleAutosave = () => {
@@ -1371,7 +2198,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
       (form.elements.namedItem("conceptId") as HTMLInputElement).value = item.concept_id;
-      status.value = item.status; body.value = item.body; persistedWritingMemo = item.writing_memo ?? "";
+      status.value = item.status; body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? "";
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; publicationState.textContent = item.published_at ? "公開済み" : "未公開"; updateWorkflow(item.status, Boolean(item.published_at)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at); unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at)); reviewButton.hidden = !(Boolean(item.id) && item.status === "draft"); saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id);
@@ -1382,13 +2209,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       if (!selected) return;
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
     const openOutlineDocument = (document: Omit<Document, "body">) => { void openDocument(document.id).then(() => loadRevisions(document.id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); };
-    const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || `${item.subject}/${item.category}/${item.slug}`, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
-    const allowedOutlineSubjects = () => subjects.filter((item) => isManager || assignedSubjects.includes(item.slug));
+    const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || item.id, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
+    const allowedOutlineSubjects = () => subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
     const documentForSourceArticle = (article: SourceArticle) => documents.find((item) => item.source_article_id === article.articleId) ?? documents.find((item) => item.subject === article.subject && item.category === article.category && item.slug === article.slug);
     const documentForPlannedArticle = (item: PlannedArticle) => documents.find((document) => document.subject === item.subject && document.category === item.category && document.title === item.title);
     const fillOutlineCategories = (selected = outlineCategory.value) => {
@@ -1477,7 +2304,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         referenceTitle.textContent = article.title;
         referenceMeta.textContent = `${article.subject} / ${article.category} / ${article.slug} ・ 公開済み記事の構成を参考表示`;
         referenceSource.textContent = article.body;
-        void renderPreviewInto(referencePreview, article.body);
+        void renderPreviewInto(referencePreview, article.body, []);
         referencePreview.hidden = false;
         referenceSource.hidden = true;
         root.querySelectorAll<HTMLButtonElement>("[data-reference-tab]").forEach((tab) => {
@@ -1583,7 +2410,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const setCommentSelection = (selection: SelectedRange | null) => { selectedCommentRange = selection; if (!selection) { commentSelection.textContent = "範囲未選択：記事全体へのコメントとして送信します。"; commentSelection.classList.remove("has-selection"); selectionAction.hidden = true; return; } const shortText = selection.text.slice(0, 80); commentSelection.textContent = `${selection.source}で選択した文章を追加できます：${shortText}${selection.text.length > 80 ? "…" : ""}`; commentSelection.classList.add("has-selection"); selectionActionText.textContent = `${selection.source}で ${selection.text.length} 文字を選択中`; selectionAction.hidden = false; };
     const captureCommentSelection = () => { const start = body.selectionStart; const end = body.selectionEnd; const selected = body.value.slice(start, end).trim(); setCommentSelection(selected ? { start, end, text: selected.slice(0, 2_000), source: "本文" } : null); };
     const capturePreviewSelection = () => { const selection = window.getSelection(); const selected = selection?.toString().trim() ?? ""; if (!selected || !selection?.anchorNode || !preview.contains(selection.anchorNode)) { setCommentSelection(null); return; } setCommentSelection({ start: null, end: null, text: selected.slice(0, 2_000), source: "プレビュー" }); };
-    body.addEventListener("input", () => { setCommentSelection(null); renderHeadingOutline(); renderMediaList(); void renderPreview(); }); body.addEventListener("select", captureCommentSelection); body.addEventListener("keyup", captureCommentSelection); preview.addEventListener("mouseup", capturePreviewSelection); preview.addEventListener("keyup", capturePreviewSelection);
+    body.addEventListener("input", () => {
+      const helpCommand = /(^|[\s])\/help(?=$|[\s])/.exec(body.value);
+      if (helpCommand) {
+        const commandStart = helpCommand.index + helpCommand[1].length;
+        body.value = `${body.value.slice(0, commandStart)}${body.value.slice(commandStart + 5)}`;
+        body.dispatchEvent(new Event("input", { bubbles: true }));
+        openAuthoringHelp();
+      }
+      setCommentSelection(null); scheduleBodyRefresh();
+    }); body.addEventListener("select", captureCommentSelection); body.addEventListener("keyup", captureCommentSelection); preview.addEventListener("mouseup", capturePreviewSelection); preview.addEventListener("keyup", capturePreviewSelection);
     document.addEventListener("selectionchange", () => {
       const browserSelection = window.getSelection();
       if (browserSelection?.anchorNode && preview.contains(browserSelection.anchorNode)) { capturePreviewSelection(); return; }
@@ -1594,18 +2430,42 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     root.querySelector<HTMLButtonElement>("[data-use-selection]")!.addEventListener("click", () => { if (!selectedCommentRange) return; const alreadyAdded = selectedCommentRanges.some((range) => range.source === selectedCommentRange!.source && range.start === selectedCommentRange!.start && range.end === selectedCommentRange!.end && range.text === selectedCommentRange!.text); if (!alreadyAdded && selectedCommentRanges.length < 8) selectedCommentRanges.push(selectedCommentRange); renderSelectedRanges(); setCommentSelection(null); const replyBody = activeReplyId ? comments.querySelector<HTMLTextAreaElement>(`[data-reply-body="${activeReplyId}"]`) : null; const target = replyBody ?? commentBody; target.focus(); target.scrollIntoView({ behavior: "smooth", block: "center" }); }); selectedRanges.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-selection]"); if (!button) return; const index = Number(button.dataset.removeSelection); if (Number.isInteger(index)) { selectedCommentRanges.splice(index, 1); renderSelectedRanges(); } }); headingOutline.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-heading-offset]"); if (!button) return; const offset = Number(button.dataset.headingOffset); body.focus(); body.setSelectionRange(offset, offset); body.scrollTop = Math.max(0, offset / Math.max(1, body.value.length) * body.scrollHeight - body.clientHeight / 2); }); previewEngine.addEventListener("change", () => void renderPreview());
     root.querySelector<HTMLButtonElement>("[data-open-media]")!.addEventListener("click", () => mediaInput.click());
     mediaInput.addEventListener("change", () => { const file = mediaInput.files?.[0]; if (file) void uploadMediaFile(file); });
+    mediaList.addEventListener("change", (event) => {
+      const select = (event.target as HTMLElement).closest<HTMLSelectElement>("[data-asset-width]");
+      if (!select) return;
+      const input = customWidthInput(select.dataset.assetWidth ?? "");
+      if (input) input.value = imageWidthNumber(select.value);
+    });
     mediaList.addEventListener("click", (event) => {
       const target = event.target as HTMLElement;
       const insertButton = target.closest<HTMLButtonElement>("[data-insert-asset]");
       if (insertButton) {
         const asset = editorialAssets.find((item) => item.id === insertButton.dataset.insertAsset);
-        if (asset) { insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`); renderMediaList(); }
+        if (asset) {
+          const width = selectedAssetWidth(asset.id);
+          const marker = editorialImageUrlWithWidth(`asset://${asset.id}`, width);
+          insertAtCursor(`![${asset.alt || asset.filename}](${marker})\n`);
+          renderMediaList();
+        }
+        return;
+      }
+      const applyWidthButton = target.closest<HTMLButtonElement>("[data-apply-asset-width]");
+      if (applyWidthButton) {
+        const asset = editorialAssets.find((item) => item.id === applyWidthButton.dataset.applyAssetWidth);
+        if (!asset) return;
+        const changed = applyAssetWidth(asset, selectedAssetWidth(asset.id));
+        mediaStatus.textContent = changed ? `${imageWidthLabel(selectedAssetWidth(asset.id))}を画像参照に適用しました。` : "本文にこの画像の参照がありません。";
+        if (changed) { renderMediaList(); void renderPreview(); }
         return;
       }
       const latexButton = target.closest<HTMLButtonElement>("[data-insert-latex-asset]");
       if (latexButton) {
         const asset = editorialAssets.find((item) => item.id === latexButton.dataset.insertLatexAsset);
-        if (asset) insertAtCursor(`\\includegraphics[width=0.8\\linewidth]{${asset.latexName}}\n`);
+        if (asset) {
+          const width = selectedAssetWidth(asset.id);
+          const options = width ? `width=${editorialImageWidthToLatex(width)}` : "";
+          insertAtCursor(`\\includegraphics${options ? `[${options}]` : ""}{${asset.latexName}}\n`);
+        }
         return;
       }
       const deleteButton = target.closest<HTMLButtonElement>("[data-delete-asset]");
@@ -1623,7 +2483,190 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         await loadMediaAssets(documentId);
       })().catch((error: unknown) => { mediaStatus.textContent = error instanceof Error ? error.message : "素材を削除できませんでした。"; deleteButton.disabled = false; });
     });
-    root.querySelector<HTMLButtonElement>("[data-insert-tikz]")!.addEventListener("click", () => insertAtCursor("\n```tikz\n\\begin{tikzpicture}\n  \\draw[->] (0,0) -- (2,0) node[right] {$x$};\n\\end{tikzpicture}\n```\n"));
+    root.querySelector<HTMLButtonElement>("[data-insert-tikz]")?.addEventListener("click", () => insertAtCursor("\n```tikz\n\\begin{tikzpicture}\n  \\draw[->] (0,0) -- (2,0) node[right] {$x$};\n\\end{tikzpicture}\n```\n"));
+    root.querySelectorAll<HTMLButtonElement>("[data-help-insert]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.helpInsert === "proposition") insertAtCursor("\n:::prop 命題の題名 {#proposition-id}\n\n本文\n\n:::\n");
+      authoringHelpDialog.close();
+    }));
+    mathPreset.addEventListener("change", () => setMathPreset(mathPreset.value));
+    const setMathPresetDialogFieldsEnabled = (enabled: boolean) => {
+      customPresetLabel.disabled = !enabled;
+      customPresetMacros.disabled = !enabled;
+    };
+    const setReferenceDialogFieldsEnabled = (enabled: boolean) => {
+      referenceIdInput.disabled = !enabled;
+      referenceTitleInput.disabled = !enabled;
+    };
+    // These controls live inside closed dialogs but inside the article form.
+    // Keep their required semantics in the dialog's own manual validation;
+    // native validation of the outer form must never block article saving.
+    customPresetLabel.removeAttribute("required");
+    customPresetMacros.removeAttribute("required");
+    referenceIdInput.removeAttribute("required");
+    referenceTitleInput.removeAttribute("required");
+    const showMathPresetLibrary = () => {
+      renderMathPresetOptions(mathPreset.value);
+      renderMathPresetLibrary();
+      mathPresetLibrary.hidden = false;
+      mathPresetEditor.hidden = true;
+      setMathPresetDialogFieldsEnabled(false);
+      if (!mathPresetDialog.open) mathPresetDialog.showModal();
+    };
+    const startMathPresetEditor = (preset?: CustomMathPreset) => {
+      editingCustomPresetId = preset?.id ?? null;
+      mathPresetEditorTitle.textContent = preset ? "プリセットを編集" : "プリセットを追加";
+      customPresetGroup.value = preset?.group ?? "";
+      customPresetLabel.value = preset?.label ?? "";
+      customPresetMacros.value = preset ? Object.entries(preset.macros).map(([command, replacement]) => command + " = " + replacement).join("\n") : "";
+      customPresetMessage.value = "";
+      mathPresetLibrary.hidden = true;
+      mathPresetEditor.hidden = false;
+      setMathPresetDialogFieldsEnabled(true);
+      if (!mathPresetDialog.open) mathPresetDialog.showModal();
+      customPresetLabel.focus();
+    };
+    setMathPresetDialogFieldsEnabled(false);
+    setReferenceDialogFieldsEnabled(false);
+    openMathPresetLibraryButton.addEventListener("click", showMathPresetLibrary);
+    addMathPresetButton.addEventListener("click", showMathPresetLibrary);
+    startMathPresetButton.addEventListener("click", () => startMathPresetEditor());
+    cancelMathPresetEditButton.addEventListener("click", showMathPresetLibrary);
+    root.querySelector<HTMLButtonElement>("[data-close-math-preset]")?.addEventListener("click", () => mathPresetDialog.close());
+    mathPresetDialog.addEventListener("close", () => {
+      editingCustomPresetId = null;
+      mathPresetLibrary.hidden = false;
+      mathPresetEditor.hidden = true;
+      setMathPresetDialogFieldsEnabled(false);
+    });
+    mathPresetDialog.addEventListener("click", (event) => { if (event.target === mathPresetDialog) mathPresetDialog.close(); });
+    mathPresetLibraryList.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const groupSelectButton = target.closest<HTMLButtonElement>("[data-select-math-preset-group]");
+      if (groupSelectButton) {
+        setMathPreset(groupSelectButton.dataset.selectMathPresetGroup ?? "");
+        renderMathPresetLibrary();
+        mathPresetDialog.close();
+        saveMessage.value = "プリセットグループを適用しました。記事を保存してください。";
+        return;
+      }
+      const selectButton = target.closest<HTMLButtonElement>("[data-select-math-preset]");
+      if (selectButton) {
+        setMathPreset(selectButton.dataset.selectMathPreset ?? "");
+        renderMathPresetLibrary();
+        mathPresetDialog.close();
+        saveMessage.value = "数式プリセットを適用しました。記事を保存してください。";
+        return;
+      }
+      const editButton = target.closest<HTMLButtonElement>("[data-edit-math-preset]");
+      if (editButton) {
+        const preset = customMathPresets.find((item) => item.id === editButton.dataset.editMathPreset);
+        if (preset) startMathPresetEditor(preset);
+        return;
+      }
+      const deleteButton = target.closest<HTMLButtonElement>("[data-delete-math-preset]");
+      if (!deleteButton) return;
+      const id = deleteButton.dataset.deleteMathPreset ?? "";
+      const preset = customMathPresets.find((item) => item.id === id);
+      if (!preset || !window.confirm(`カスタムプリセット「${preset.label}」を削除しますか？`)) return;
+      const previous = customMathPresets;
+      customMathPresets = customMathPresets.filter((item) => item.id !== id);
+      const selectedGroup = groupNameFromSelection(mathPreset.value);
+      if (mathPreset.value === id || (selectedGroup && preset.group?.trim() === selectedGroup)) setMathPreset("");
+      renderMathPresetOptions(mathPreset.value);
+      renderMathPresetLibrary();
+      void persistCustomMathPresets().then(() => {
+        saveMessage.value = "カスタムプリセットを削除しました。記事を保存してください。";
+      }).catch((error: unknown) => {
+        customMathPresets = previous;
+        renderMathPresetOptions(mathPreset.value);
+        renderMathPresetLibrary();
+        saveMessage.value = error instanceof Error ? error.message : "削除できませんでした。";
+      });
+    });
+    mathPresetForm.addEventListener("click", (event) => {
+      const savePresetButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-custom-preset-save]");
+      if (!savePresetButton) return;
+      event.preventDefault();
+      try {
+        const label = customPresetLabel.value.trim();
+        if (!label) throw new Error("プリセット名を入力してください。");
+        const group = customPresetGroup.value.trim().slice(0, 80);
+        const preset: CustomMathPreset = { id: editingCustomPresetId ?? `custom-${crypto.randomUUID()}`, label, ...(group ? { group } : {}), macros: parseCustomPresetMacros(customPresetMacros.value) };
+        const previous = customMathPresets;
+        customMathPresets = editingCustomPresetId
+          ? customMathPresets.map((item) => item.id === editingCustomPresetId ? preset : item)
+          : [...customMathPresets, preset].slice(-40);
+        addMathPresetButton.disabled = true;
+        customPresetMessage.value = "保存中…";
+        void persistCustomMathPresets().then(() => {
+          renderMathPresetOptions(preset.id);
+          renderMathPresetLibrary();
+          setMathPreset(preset.id);
+          mathPresetDialog.close();
+          saveMessage.value = editingCustomPresetId ? "カスタムプリセットを更新しました。記事も保存してください。" : "カスタムプリセットを追加しました。記事も保存してください。";
+        }).catch((error: unknown) => {
+          customMathPresets = previous;
+          renderMathPresetOptions(mathPreset.value);
+          renderMathPresetLibrary();
+          customPresetMessage.value = error instanceof Error ? error.message : "保存できませんでした。";
+        }).finally(() => { addMathPresetButton.disabled = false; });
+      } catch (error) {
+        customPresetMessage.value = error instanceof Error ? error.message : "入力を確認してください。";
+      }
+    });
+    root.querySelector<HTMLButtonElement>("[data-open-reference-library]")!.addEventListener("click", () => { renderReferenceLibrary(); setReferenceDialogFieldsEnabled(true); referenceLibraryDialog.showModal(); });
+    root.querySelector<HTMLButtonElement>("[data-close-reference-library]")!.addEventListener("click", () => referenceLibraryDialog.close());
+    referenceLibraryDialog.addEventListener("close", () => setReferenceDialogFieldsEnabled(false));
+    cancelReferenceEditButton.addEventListener("click", resetReferenceEntry);
+    referenceLibraryDialog.addEventListener("click", (event) => { if (event.target === referenceLibraryDialog) referenceLibraryDialog.close(); });
+    referenceEntryForm.addEventListener("click", (event) => {
+      if (!(event.target as HTMLElement).closest("[data-save-reference]")) return;
+      event.preventDefault();
+      const editingId = referenceEditId.value.trim();
+      const reference = normalizeArticleReference({
+        id: referenceIdInput.value.trim(),
+        title: referenceTitleInput.value,
+        authors: referenceAuthorsInput.value,
+        year: referenceYearInput.value,
+        publisher: referencePublisherInput.value,
+        url: referenceUrlInput.value,
+        note: referenceNoteInput.value,
+      }) as ArticleReference | null;
+      if (!reference) { referenceEntryMessage.value = "識別子・書名を確認してください。識別子は英字、数字、-、_で入力します。"; return; }
+      if (!editingId && personalReferences.some((item) => item.id.toLowerCase() === reference.id.toLowerCase())) { referenceEntryMessage.value = "同じ識別子がすでに登録されています。"; return; }
+      const previousPersonalReferences = personalReferences;
+      const previousDocumentReferences = documentReferences;
+      personalReferences = editingId ? personalReferences.map((item) => item.id === editingId ? reference : item) : [...personalReferences, reference];
+      documentReferences = documentReferences.map((item) => item.id === editingId ? reference : item);
+      referenceEntryMessage.value = "保存中…";
+      void persistPersonalReferences().then(() => { renderReferenceLibrary(); resetReferenceEntry(); referenceEntryMessage.value = "保存しました。"; }).catch((error: unknown) => { personalReferences = previousPersonalReferences; documentReferences = previousDocumentReferences; renderReferenceLibrary(); referenceEntryMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; });
+    });
+    referenceLibraryList.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const citeButton = target.closest<HTMLButtonElement>("[data-cite-reference]");
+      if (citeButton) { const reference = personalReferences.find((item) => item.id === citeButton.dataset.citeReference); if (reference) appendReferenceToArticle(reference); return; }
+      const editButton = target.closest<HTMLButtonElement>("[data-edit-reference]");
+      if (editButton) { const reference = personalReferences.find((item) => item.id === editButton.dataset.editReference); if (!reference) return; referenceEditId.value = reference.id; referenceIdInput.value = reference.id; referenceIdInput.disabled = true; referenceTitleInput.value = reference.title; referenceAuthorsInput.value = reference.authors ?? ""; referenceYearInput.value = reference.year ?? ""; referencePublisherInput.value = reference.publisher ?? ""; referenceUrlInput.value = reference.url ?? ""; referenceNoteInput.value = reference.note ?? ""; cancelReferenceEditButton.hidden = false; referenceEntryMessage.value = "編集中です。"; referenceTitleInput.focus(); return; }
+      const deleteButton = target.closest<HTMLButtonElement>("[data-delete-reference]");
+      if (!deleteButton) return;
+      const id = deleteButton.dataset.deleteReference ?? "";
+      const reference = personalReferences.find((item) => item.id === id);
+      if (!reference || !window.confirm(`参考文献「${id}」を自分用リストから削除しますか？記事内にすでに引用した情報は残ります。`)) return;
+      const previous = personalReferences;
+      personalReferences = personalReferences.filter((item) => item.id !== id);
+      void persistPersonalReferences().catch((error: unknown) => { personalReferences = previous; renderReferenceLibrary(); referenceEntryMessage.value = error instanceof Error ? error.message : "削除できませんでした。"; });
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-insert-math]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.insertMath === "display") {
+        insertAtCursor("\n$$\n\\boxed{ }\n$$\n");
+      } else if (button.dataset.insertMath === "proposition") {
+        insertAtCursor("\n:::prop 命題の題名 {#proposition-id}\n\n本文\n\n:::\n");
+      } else {
+        insertAtCursor("$ $");
+        const cursor = Math.max(0, (body.selectionStart ?? 0) - 1);
+        body.setSelectionRange(cursor, cursor);
+      }
+    }));
     savePersonalNoteButton.addEventListener("click", () => void savePersonalNote());
     personalNote.addEventListener("input", () => { personalNoteMessage.value = "未保存の変更があります。"; });
     void loadPersonalNote();
@@ -1653,7 +2696,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       await loadDocuments();
       await loadRevisions(savedId);
       progressDialog.showModal();
-    })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
+    })().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-panel > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-action]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.commentId; const action = button.dataset.commentAction; if (!documentId || !commentId || !action) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ action }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "コメントの状態を更新できませんでした。"); await reloadComments(documentId); })().catch((error:unknown)=>{ saveMessage.value=error instanceof Error ? error.message : "コメントの状態を更新できませんでした。"; button.disabled=false; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-send-reply]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const parentCommentId = button.dataset.sendReply; const textarea = parentCommentId ? comments.querySelector<HTMLTextAreaElement>(`[data-reply-body="${parentCommentId}"]`) : null; if (!documentId || !parentCommentId || !textarea) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments`, { method:"POST", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ body: textarea.value, parentCommentId, selections: selectedCommentRanges, tags: selectedReplyTags.get(parentCommentId) ?? [] }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "返信を送れませんでした。"); selectedReplyTags.delete(parentCommentId); activeReplyId = null; selectedCommentRanges = []; renderSelectedRanges(); await reloadComments(documentId); })().catch((error:unknown)=>{ saveMessage.value=error instanceof Error ? error.message : "返信を送れませんでした。"; button.disabled=false; }); });
@@ -1675,7 +2718,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);
-  initializeEditorWorkspace();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeEditorWorkspace, { once: true });
+  } else {
+    initializeEditorWorkspace();
+  }
 </script>
 
 <style is:global>
@@ -1686,7 +2733,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .collaboration-status > span { color:var(--muted); font-size:.7rem; font-weight:800; }
   .collaboration-status [data-collaboration-participants] { display:flex; flex-wrap:wrap; gap:.25rem; }
   .collaboration-status [data-collaboration-participants] span { background:var(--accent-subtle); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border)); border-radius:999px; color:var(--accent); font-size:.66rem; font-weight:800; padding:.16rem .38rem; }
-  [data-pref-bg="dark"] .editor-workspace .writing-area textarea { background: var(--background-primary); color: var(--text-primary); caret-color: var(--text-primary); }
+  [data-pref-bg="dark"] .editor-workspace .writing-area .locked-range-markup { background: var(--background-primary); color: var(--text-primary); }
+  [data-pref-bg="dark"] .editor-workspace .writing-area .locked-range-markup mark { background: #671d2a; border-left-color: #ff5c6c; box-shadow: inset 0 0 0 1px rgb(255 92 108 / .35), 0 0 .2rem rgb(255 92 108 / .12); color: #ffe8eb; }
+  [data-pref-bg="dark"] .editor-workspace .writing-area textarea { background: transparent; color: transparent; caret-color: var(--text-primary); }
+  [data-pref-bg="dark"] .editor-workspace { --editor-caret-color: #fff; }
+  [data-pref-bg="dark"] .editor-workspace .body-editor-surface [data-body],
+  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-content,
+  [data-pref-bg="dark"] .body-codemirror .cm-content { caret-color: #fff !important; }
+  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-cursor,
+  [data-pref-bg="dark"] .editor-workspace .cm-editor .cm-dropCursor,
+  [data-pref-bg="dark"] .body-codemirror .cm-cursor,
+  [data-pref-bg="dark"] .body-codemirror .cm-dropCursor { border-left-color: #fff !important; }
+  [data-pref-bg="dark"] .math-preset-dialog [data-custom-preset-label],
+  [data-pref-bg="dark"] .math-preset-dialog [data-custom-preset-macros] { color: #fff; -webkit-text-fill-color: #fff; caret-color: #fff; opacity: 1; }
   .revision-workspace { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--accent); margin: 1rem .8rem; padding: 1rem; }
   .revision-workspace h3 { margin: 0; }
   .revision-workspace > p { color: var(--muted); margin: .35rem 0 .75rem; }
