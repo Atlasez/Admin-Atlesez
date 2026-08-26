@@ -169,12 +169,12 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
           <div class="calendar-settings-heading"><h2 id="calendar-settings-heading">カレンダー設定</h2><button type="button" data-close-calendar-settings aria-label="設定を閉じる">×</button></div>
           <div class="calendar-settings" aria-label="カレンダー表示設定">
           <label class="field-label timezone-combobox"
-            >表示するタイムゾーン
+            >表示タイムゾーン
             <div>
               <input
                 data-calendar-timezone
                 role="combobox"
-                aria-label="表示するタイムゾーン"
+                aria-label="表示タイムゾーン"
                 aria-autocomplete="list"
                 aria-expanded="false"
                 aria-controls="atlasez-timezone-options"
@@ -188,6 +188,7 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
                 ▼
               </button>
             </div>
+            <output data-timezone-offset aria-live="polite"></output>
             <div
               id="atlasez-timezone-options"
               class="timezone-options"
@@ -1091,6 +1092,7 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
     const calendar = get<HTMLElement>('[data-event-calendar]');
     const calendarTitle = get<HTMLElement>('[data-calendar-title]');
     const timezone = get<HTMLInputElement>('[data-calendar-timezone]');
+    const timezoneOffset = get<HTMLOutputElement>('[data-timezone-offset]');
     const holidayCountry = get<HTMLSelectElement>('[data-calendar-holiday-country]');
     const holidayTags = get<HTMLElement>('[data-holiday-tags]');
     const holidayAdd = get<HTMLButtonElement>('[data-holiday-add]');
@@ -1219,6 +1221,12 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
       const candidate = timezone.value.trim() || 'Asia/Tokyo';
       try { new Intl.DateTimeFormat('en', { timeZone: candidate }).format(); return candidate; } catch { return 'Asia/Tokyo'; }
     };
+    const renderTimezoneOffset = () => {
+      try {
+        const part = new Intl.DateTimeFormat('en', { timeZone: selectedTimezone(), timeZoneName: 'longOffset' }).formatToParts(new Date()).find((item) => item.type === 'timeZoneName')?.value || 'GMT';
+        timezoneOffset.value = part === 'GMT' ? 'UTC+00:00' : part.replace(/^GMT/, 'UTC');
+      } catch { timezoneOffset.value = ''; }
+    };
     const formatDate = (value: string) => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short', timeZone: selectedTimezone() }).format(new Date(value));
     const dateParts = (value: string) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: selectedTimezone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(value)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
     const participantNames = (participants: OperationParticipant[], availability: string) => participants.filter((participant) => participant.availability === availability).map((participant) => participant.isSelf ? '自分' : participant.displayName);
@@ -1281,10 +1289,13 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
       calendar.querySelectorAll<HTMLElement>('[data-calendar-date]').forEach((cell) => {
         const key = cell.dataset.calendarDate ?? '';
         cell.classList.toggle('calendar-cell--today', key === todayKey);
+        if (key === todayKey) cell.setAttribute('aria-current', 'date');
+        else cell.removeAttribute('aria-current');
         cell.classList.toggle('calendar-cell--selected', orderedSelection.length === 2 && key >= orderedSelection[0] && key <= orderedSelection[1]);
       });
     };
     const render = () => {
+      renderTimezoneOffset();
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = memberPage || !data.scope.isManager;

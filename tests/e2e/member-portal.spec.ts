@@ -138,6 +138,7 @@ test("横断カレンダーでプロジェクト日程と参加可否を扱え�
   await page.route("**/api/admin/member-calendar", (route) =>
     route.fulfill({
       json: {
+        scope: { email: "manager@example.com", isManager: false },
         projects: [
           { id: "atlas", name: "アトラス" },
           { id: "secretariat", name: "運営事務局" },
