@@ -157,6 +157,39 @@ function initializeNavigationGuard(): void {
     }
   };
 
+  type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+  const controlsInDocumentForm = (): FormControl[] => [
+    ...form.querySelectorAll<FormControl>("input, select, textarea"),
+  ];
+  const documentControls = (): FormControl[] =>
+    controlsInDocumentForm().filter((control) => !control.closest("dialog"));
+  const validateDocumentFields = () => {
+    const invalid = documentControls().find(
+      (control) => !control.disabled && !control.checkValidity(),
+    );
+    if (!invalid) return true;
+    invalid.reportValidity();
+    return false;
+  };
+  const submitDocumentForm = () => {
+    // カスタムプリセット、参考文献、レビュー依頼などのダイアログも
+    // document-form内にあるため、閉じたダイアログのrequired欄が
+    // requestSubmit()を止めないよう、保存イベントの間だけ無効化する。
+    const dialogControls = controlsInDocumentForm().filter(
+      (control) => control.closest("dialog") && !control.disabled,
+    );
+    dialogControls.forEach((control) => {
+      control.disabled = true;
+    });
+    try {
+      form.requestSubmit();
+    } finally {
+      dialogControls.forEach((control) => {
+        control.disabled = false;
+      });
+    }
+  };
+
   saveAndBack.addEventListener("click", () => {
     if (!validateDocumentFields()) {
       message.value = "必須項目を確認してから保存してください。";
