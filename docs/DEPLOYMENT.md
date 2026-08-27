@@ -1,145 +1,42 @@
 # デプロイ（DEPLOYMENT）
 
-本番配信は **Cloudflare Pages** が GitHub リポジトリを直接ビルドして行う。
-GitHub Actions は検証（CI）専用で、デプロイはしない。
+本番はCloudflare Workersで配信しています。Cloudflare Pagesや別アカウントのWorkerへはデプロイしません。
 
-## 1. 構成の切り替えは環境変数のみ
+| 対象                   | Worker          | URL                                               | D1                |
+| ---------------------- | --------------- | ------------------------------------------------- | ----------------- |
+| 公開サイト・学習サイト | `atlasez01`     | `https://atlasez.org` / `https://www.atlasez.org` | `atlasez-reports` |
+| 運営用サイト           | `atlasez-admin` | `https://admin.atlasez.org`                       | `atlasez-reports` |
 
-| 変数        | 役割                                    | 本番で入れる値            |
-| ----------- | --------------------------------------- | ------------------------- |
-| `SITE_URL`  | canonical・OGP・sitemap の絶対URLのもと | `https://<独自ドメイン>`  |
-| `BASE_PATH` | サブディレクトリ配信のときだけ使う      | `/`（既定値なので省略可） |
+## 正規の手順
 
-`astro.config.mjs` のフォールバックは次の順:
+1. `main`へマージする前にCIを通す
+2. ローカルで `npm run verify:deploy-config` を実行する
+3. 公開サイトは `npm run deploy:public`
+4. 運営用サイトは `npm run deploy:admin`
+5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
-```
-SITE_URL → CF_PAGES_URL（Cloudflareが自動で入れる） → http://localhost:4321
-```
+デプロイコマンドには本番ターゲット検証が組み込まれているため、Worker名・アカウント・ルート・D1が違う設定では停止します。CIでも同じ検証を実行します。
 
-`SITE_URL` を **Production 環境にだけ**設定しておけば、プレビュー配信は
-自分自身の `*.pages.dev` URL を canonical に使うので、本番URLと取り違えない。
+## ビルド設定
 
-## 2. Cloudflare Pages の設定
-
-Workers & Pages → 対象プロジェクト → Settings。
-
-### ビルド設定
-
-| 項目                   | 値                       |
-| ---------------------- | ------------------------ |
-| Framework preset       | Astro（または None）     |
-| Build command          | `npm run build`          |
-| Build output directory | `dist`                   |
-| Root directory         | （空欄。リポジトリ直下） |
-| Production branch      | `main`                   |
-
-Node のバージョンはリポジトリの `.nvmrc`（22）が使われる。
-
-### 環境変数
-
-Settings → Environment variables
-
-| 変数       | Production               | Preview    |
-| ---------- | ------------------------ | ---------- |
-| `SITE_URL` | `https://<独自ドメイン>` | 設定しない |
-
-独自ドメインを取るまでは `SITE_URL` に発行済みの `https://<project>.pages.dev`
-を入れておく。ドメイン取得後はこの1箇所を書き換えるだけでよい。
-
-### PR ごとのプレビュー配信
-
-Cloudflare Pages は **push されたブランチごとに自動でビルドし、専用の URL を発行する**。
-本番を上書きすることはないので、PR を並行して走らせても互いに干渉しない。
-
-| 何を push したか        | 出来るもの                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `main`                  | 本番（独自ドメイン / `<project>.pages.dev`）                                                      |
-| その他のブランチ        | プレビュー `https://<ブランチ名>.<project>.pages.dev`                                             |
-| 同ブランチへの追加 push | 上のブランチ URL が最新に差し替わる。過去分も `https://<コミットhash>.<project>.pages.dev` で残る |
-
-ブランチ名の URL は固定なので、PR のレビュー依頼に貼るのはこちらが便利。
-
-**設定の確認**（Workers & Pages → プロジェクト → Settings → Builds & deployments）
-
-1. **Preview deployments** が `All branches` になっていること
-   （`None` だとプレビューが作られない）
-2. **Environment variables** の `SITE_URL` が **Production にだけ**入っていること。
-   Preview 側に入れると、プレビューが本番URLを canonical に出してしまう
-3. GitHub App 連携で入れていれば、PR に プレビューURL が自動でコメントされる。
-   出ない場合は Cloudflare の GitHub App がそのリポジトリに許可されているか確認する
-
-**プレビューは検索エンジンに出ない。** `main` 以外のビルドは自動で全ページ
-`noindex, nofollow` になり、`robots.txt` も `Disallow: /` になる
-（`src/lib/deploy.ts` が `CF_PAGES_BRANCH` を見て判定）。
-本番と同じ内容が二重にインデックスされる事故を防ぐため。
-
-### プレビュー配信の扱い
-
-`main` 以外のブランチのビルドは自動的に
-
-- 全ページに `<meta name="robots" content="noindex, nofollow">`
-- `robots.txt` が `Disallow: /`
-
-になる（`src/lib/deploy.ts` が `CF_PAGES_BRANCH` を見て判定）。
-本番と同じ内容が検索結果に二重に出るのを防ぐため。
-
-## 3. 独自ドメインを取得したあとの手順
-
-1. Cloudflare でドメインを登録（既に Cloudflare がネームサーバなら DNS 設定は自動）
-2. Pages プロジェクト → Custom domains → ドメインとサブドメインを追加
-3. Settings → Environment variables → Production の `SITE_URL` を新ドメインに変更
-4. **再デプロイ**（環境変数の変更だけでは反映されない。Deployments → Retry deployment）
-5. `https://<ドメイン>/robots.txt` に正しい sitemap URL が出ているか確認
-6. Google Search Console にドメインと `sitemap-index.xml` を登録
-
-`public/CNAME` は GitHub Pages 用の仕組みなので、Cloudflare Pages では不要。
-
-## 4. 学習サイトをサブドメインに分けたい場合
-
-`atlasez.org`（組織サイト）と `atlas.atlasez.org`（学習サイト）に分ける案。
-現状は 1 プロジェクトで `/` と `/atlas/` に同居している。分けるなら:
-
-- 同じリポジトリで Pages プロジェクトを 2 つ作り、それぞれ別の
-  `SITE_URL` とビルド設定（出力を絞る）を与える
-- あるいは 1 プロジェクトのまま `_redirects` で
-  `atlas.atlasez.org/*` → `atlasez.org/atlas/:splat` に寄せる
-
-どちらも内部リンクの生成（`src/lib/site.ts`）の見直しが必要なので、
-やるならドメイン確定後にまとめて。
-
-## 5. `public/_headers`
-
-Cloudflare Pages はこのファイルを設定として読み、配信物には含めない。
-
-- 全ページに `nosniff` / `Referrer-Policy` / `X-Frame-Options` などを付与
-- `/_astro/*`（ハッシュ付きファイル名）は 1 年 immutable
-- `/pagefind/*`・`/images/*` は 1 週間
-
-## 6. ロールバック
-
-Cloudflare Pages → Deployments → 戻したいデプロイの「…」→ Rollback。
-ビルド成果物の差し替えだけなので、状態を持たない当サイトでは安全。
-GitHub 側を戻したい場合は該当コミットを `git revert` して push。
-
-## 7. GitHub Pages について
-
-以前は GitHub Actions から `actions/deploy-pages` で公開していたが、
-Cloudflare Pages と二重公開になり重複コンテンツになるため停止した。
-戻す場合は `.github/workflows/ci.yml` に `deploy` ジョブを復活させ、
-`BASE_PATH` を `/<リポジトリ名>` に戻す必要がある。
-
-GitHub 側の設定も Settings → Pages → Source を「None」に戻しておくとよい。
-
-## 8. ローカルでの確認
+本番ビルドでは次を固定します。
 
 ```bash
-npm ci
-npm run dev            # http://localhost:4321/
+SITE_URL=https://atlasez.org
+BASE_PATH=/
 ```
 
-本番と同じ絶対URLで確認したいとき:
+`main`以外のプレビューは検索インデックスに入らないよう`noindex`になります。公開前に本番URLへ向けてビルドし直してください。
+
+## デプロイ後の最低確認
 
 ```bash
-SITE_URL=https://example.com npm run build
-npm run preview
+curl -fsS https://atlasez.org/robots.txt
+curl -fsS https://atlasez.org/sitemap-0.xml
 ```
+
+さらにChromeのログイン済みセッションで、管理トップにカレンダー・応募管理・運営者・担当管理・閲覧統計が表示されることを確認します。
+
+## ロールバック
+
+Workerの直前バージョンへ戻す場合は、Cloudflare WorkersのVersionsから対象Workerを選び、正しいWorker名を確認してロールバックします。別アカウントのWorkerへ切り替える操作は行いません。
