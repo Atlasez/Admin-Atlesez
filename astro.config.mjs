@@ -26,9 +26,7 @@ const BASE_PATH = process.env.BASE_PATH ?? "/";
 // の filter に渡すことで、空カテゴリなどの意図した noindex を自動的に除外する。
 const noindexPaths = new Set();
 const normalizePathname = (value) => {
-  const pathname = value.startsWith("http")
-    ? new URL(value).pathname
-    : value;
+  const pathname = value.startsWith("http") ? new URL(value).pathname : value;
   if (pathname === "/") return "/";
   return `/${pathname.replace(/^\/+|\/+$/g, "")}/`;
 };
@@ -39,9 +37,10 @@ const collectNoindexPages = () => ({
       noindexPaths.clear();
       await Promise.all(
         pages.map(async (page) => {
-          const relativePath = page.pathname === "/"
-            ? "index.html"
-            : `${page.pathname.replace(/^\/+|\/+$/g, "")}/index.html`;
+          const relativePath =
+            page.pathname === "/"
+              ? "index.html"
+              : `${page.pathname.replace(/^\/+|\/+$/g, "")}/index.html`;
           try {
             const html = await readFile(new URL(relativePath, dir), "utf8");
             if (
