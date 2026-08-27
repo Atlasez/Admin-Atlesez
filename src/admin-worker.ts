@@ -3438,30 +3438,33 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   await ensureAtlasMembership(env, scope);
-  const [projects, todos] = await Promise.all([
-    scope.isManager
-      ? env.REPORTS.prepare(
-          `SELECT p.id,p.slug,p.name,p.description,'manager' AS role FROM atlasez_projects p ORDER BY p.name`,
-        ).all()
-      : env.REPORTS.prepare(
-          `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
-        )
-          .bind(scope.email)
-          .all(),
-    env.REPORTS.prepare(
-      `SELECT id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,updated_at
-       FROM editorial_tasks WHERE assignee_email=? AND status != 'done'
-       ORDER BY CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,due_at,updated_at DESC LIMIT 100`,
-    )
-      .bind(scope.email)
-      .all(),
-  ]);
+  const projects = scope.isManager
+    ? await env.REPORTS.prepare(
+        `SELECT p.id,p.slug,p.name,p.description,'manager' AS role FROM atlasez_projects p ORDER BY p.name`,
+      ).all()
+    : await env.REPORTS.prepare(
+        `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
+      )
+        .bind(scope.email)
+        .all();
   const projectRows = projects.results as Array<{
     id: string;
     slug: string;
     name: string;
   }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
+  const todos = projectIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
+           p.name AS project_name
+         FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
+         WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
+           AND t.assignee_email=? AND t.status != 'done'
+         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+      )
+        .bind(...projectIds, scope.email)
+        .all()
+    : { results: [] };
   const rangeStart = new Date();
   rangeStart.setMonth(rangeStart.getMonth() - 2, 1);
   rangeStart.setHours(0, 0, 0, 0);

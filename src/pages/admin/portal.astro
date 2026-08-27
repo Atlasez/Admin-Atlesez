@@ -123,7 +123,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   }
 </style>
 <script>
-  type PortalTodo = { project_id: string; subject?: string | null; title: string; details?: string | null; status: string };
+  type PortalTodo = { project_id: string; project_name?: string; subject?: string | null; title: string; details?: string | null; status: string };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
   type PortalData = { todos?: PortalTodo[]; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; error?: string };
   const initializePortal = () => {
@@ -202,7 +202,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       timezoneNote.textContent = `${copy[language].timezone}: ${timezone()}`;
       renderAgenda(events, language);
     };
-    const renderTodos = (data: PortalData) => { const language = getLanguage(); const todos = data.todos ?? []; todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`; };
+    const renderTodos = (data: PortalData) => { const language = getLanguage(); const todos = data.todos ?? []; todosView.innerHTML = todos.length ? todos.map((todo) => `<article class="todo"><b>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_name ?? todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`).join('') : `<p class="empty">${copy[language].noTodos}</p>`; };
     const renderPortal = (data: PortalData) => { renderCalendar(); renderTodos(data); };
     sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar, { signal: lifecycle.signal }));
     window.addEventListener('atlasez-lang-change', () => { if (portalData) renderPortal(portalData); }, { signal: lifecycle.signal });
