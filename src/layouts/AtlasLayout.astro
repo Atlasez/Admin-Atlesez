@@ -3,7 +3,6 @@
 import BaseHead from "../components/BaseHead.astro";
 import UiLanguage from "../components/UiLanguage.astro";
 import SettingsMenu from "../components/SettingsMenu.astro";
-import LangSwitch from "../components/LangSwitch.astro";
 import HeaderSearch from "../components/HeaderSearch.astro";
 import { withBase, atlasPath, ORG } from "../lib/site";
 import { t, type Locale } from "../lib/i18n";
@@ -34,7 +33,7 @@ const {
   localeSwitchHrefs = {},
   noindex = false,
 } = Astro.props;
-// 現在の公開記事は日本語のみで、下部は表示言語を切り替えるUIに統一する。
+// 現在の公開記事は日本語のみ。表示言語はヘッダーの表示設定に集約する。
 void localeSwitchHrefs;
 
 /**
@@ -141,9 +140,6 @@ const currentPath = Astro.url.pathname;
               {locale === "ja" ? "プライバシーポリシー" : "Privacy Policy"}
             </a>
           </p>
-        </div>
-        <div class="atlas-footer-language">
-          <LangSwitch locale={locale} />
         </div>
       </div>
       <p class="container atlas-copyright">© 2024-2026 Atlasez</p>
@@ -256,11 +252,6 @@ const currentPath = Astro.url.pathname;
   .atlas-footer-title {
     font-weight: 700;
     margin-top: 0;
-  }
-  .atlas-footer-language {
-    align-self: start;
-    display: flex;
-    justify-content: flex-end;
   }
   .atlas-copyright {
     margin-top: var(--space-4);
