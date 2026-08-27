@@ -18,18 +18,19 @@
 2. **学習サイト「アトラス」**（`/atlas/ja/`）
 
 どちらもAstroで静的HTMLとして生成されます。記事や設定はGitHubで管理し、
-`main`ブランチへマージするとCloudflareが自動的に本番サイトをビルドします。
+CI成功後に正しいCloudflare Workerへデプロイします。
+本番のWorkerと復旧手順は[ADMIN_KNOWLEDGE_BASE.md](ADMIN_KNOWLEDGE_BASE.md)を正本とします。
 
 ```text
 編集者がファイルを変更
   → GitHubへPull Request
   → GitHub Actionsが自動検査
   → レビュー・マージ
-  → Cloudflareが本番を自動ビルド・公開
+  → 正規のnpmデプロイコマンドでWorkerへ公開
 ```
 
-本番サイトを直接編集する管理画面やデータベースはありません。
-**GitHub上のファイルが正本（source of truth）**です。
+記事・画面・設定はGitHub上のファイルが正本です。
+応募・コメント・統計などの動的データはCloudflare D1が正本です。
 
 ---
 
@@ -37,12 +38,12 @@
 
 最低限、次の権限を引き継いでください。
 
-| 対象                       | 必要な権限                 | 用途                                         |
-| -------------------------- | -------------------------- | -------------------------------------------- |
-| GitHub `Atlasez/Atlasez01` | Write以上                  | ブランチ、PR、Issue、マージ                  |
-| GitHubリポジトリ設定       | Admin                      | ブランチ保護、Actions、共同管理者の追加      |
-| Cloudflare                 | 対象プロジェクトの編集権限 | ビルド状況、環境変数、ドメイン、ロールバック |
-| 独自ドメイン管理サービス   | DNS編集権限                | ドメイン更新、DNS変更                        |
+| 対象                           | 必要な権限                 | 用途                                         |
+| ------------------------------ | -------------------------- | -------------------------------------------- |
+| GitHub `Atlasez/Admin-Atlesez` | Write以上                  | ブランチ、PR、Issue、マージ                  |
+| GitHubリポジトリ設定           | Admin                      | ブランチ保護、Actions、共同管理者の追加      |
+| Cloudflare                     | 対象プロジェクトの編集権限 | ビルド状況、環境変数、ドメイン、ロールバック |
+| 独自ドメイン管理サービス       | DNS編集権限                | ドメイン更新、DNS変更                        |
 
 個人のパスワードやAPIトークンをMarkdownへ書かないでください。権限は各サービスの
 メンバー招待機能で渡します。退任者の個人アカウントだけに本番権限を残さないでください。
@@ -64,8 +65,8 @@
 使用します。
 
 ```bash
-git clone https://github.com/Atlasez/Atlasez01.git
-cd Atlasez01
+git clone https://github.com/Atlasez/Admin-Atlesez.git
+cd Admin-Atlesez
 npm ci
 npm run dev
 ```
@@ -528,8 +529,8 @@ PR本文には最低限、次を書きます。
 - 実行した検証
 - 画面変更がある場合はPC・スマホの確認結果
 
-レビューとCIが完了したらマージします。`main`へのマージ後、Cloudflareが本番を
-自動更新します。
+レビューとCIが完了したらマージします。公開サイトは`npm run deploy:public`、
+運営用サイトは`npm run deploy:admin`で正しいCloudflare Workerへ更新します。
 
 詳細は[EDITORIAL_WORKFLOW.md](EDITORIAL_WORKFLOW.md)と
 [PUBLISH.md](PUBLISH.md)を参照してください。
@@ -538,7 +539,8 @@ PR本文には最低限、次を書きます。
 
 ## 9. Cloudflareと本番環境
 
-本番配信はCloudflareが担当します。GitHub Actionsは検証専用です。
+本番配信はCloudflare Workersが担当します。GitHub Actionsは検証を行い、
+デプロイは正規のnpmコマンドから実行します。
 
 主な環境変数:
 
