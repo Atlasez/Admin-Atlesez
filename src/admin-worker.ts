@@ -6258,6 +6258,36 @@ async function getEditorialDocument(
           created_at: string;
         }[],
       };
+  const reactionRows = commentIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT comment_id, actor_email, reaction, created_at
+         FROM editorial_comment_reactions
+         WHERE comment_id IN (${commentIds.map(() => "?").join(",")})
+         ORDER BY created_at ASC`,
+      )
+        .bind(...commentIds)
+        .all<{
+          comment_id: string;
+          actor_email: string;
+          reaction: string;
+          created_at: string;
+        }>()
+    : {
+        results: [] as {
+          comment_id: string;
+          actor_email: string;
+          reaction: string;
+          created_at: string;
+        }[],
+      };
+  const reactionsByComment = new Map<string, Map<string, number>>();
+  for (const reaction of reactionRows.results ?? []) {
+    if (reaction.reaction !== "smile") continue;
+    const actors = reactionsByComment.get(reaction.comment_id) ?? new Map();
+    const actor = reaction.actor_email.trim().toLowerCase();
+    if (actor) actors.set(actor, (actors.get(actor) ?? 0) + 1);
+    reactionsByComment.set(reaction.comment_id, actors);
+  }
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
   type CommentActionCounts = Record<CommentAction, number>;
   type CommentActionActors = Record<CommentAction, Map<string, number>>;
@@ -6350,6 +6380,7 @@ async function getEditorialDocument(
       [
         ...commentRows.map((comment) => comment.created_by),
         ...(actionRows.results ?? []).map((action) => action.actor_email),
+        ...(reactionRows.results ?? []).map((reaction) => reaction.actor_email),
       ].filter(Boolean),
     ),
   ];
@@ -6474,6 +6505,15 @@ async function getEditorialDocument(
         reopen: actorCountList(current.actorCounts.reopen),
       },
       tags: tagsByComment.get(comment.id) ?? [],
+      like_actor_counts: [
+        ...(reactionsByComment.get(comment.id) ?? new Map()),
+      ].map(([actor_email, count]) => ({
+        actor_email,
+        actor_display_name:
+          authorProfileByEmail.get(actor_email)?.display_name?.trim() ||
+          actor_email,
+        count,
+      })),
       selections:
         selectionsByComment.get(comment.id) ??
         (comment.selection_text
@@ -7134,7 +7174,8 @@ async function updateEditorialCommentStatus(
     action !== "acknowledge" &&
     action !== "unacknowledge" &&
     action !== "resolve" &&
-    action !== "reopen"
+    action !== "reopen" &&
+    action !== "like"
   )
     return json({ error: "操作を確認してください。" }, 400);
   const comment = await env.REPORTS.prepare(
@@ -7151,6 +7192,46 @@ async function updateEditorialCommentStatus(
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
+  if (action === "like") {
+    const existing = await env.REPORTS.prepare(
+      `SELECT id FROM editorial_comment_reactions
+       WHERE comment_id = ? AND lower(actor_email) = lower(?) AND reaction = 'smile'`,
+    )
+      .bind(commentId, scope.email)
+      .first<{ id: string }>();
+    if (existing) {
+      await env.REPORTS.prepare(
+        "DELETE FROM editorial_comment_reactions WHERE id = ?",
+      )
+        .bind(existing.id)
+        .run();
+      return json({
+        ok: true,
+        action,
+        reaction: "smile",
+        actorEmail: scope.email,
+        toggledOff: true,
+      });
+    }
+    await env.REPORTS.prepare(
+      `INSERT INTO editorial_comment_reactions
+       (id, comment_id, actor_email, reaction, created_at)
+       VALUES (?, ?, ?, 'smile', ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        commentId,
+        scope.email,
+        new Date().toISOString(),
+      )
+      .run();
+    return json({
+      ok: true,
+      action,
+      reaction: "smile",
+      actorEmail: scope.email,
+    });
+  }
   const latestAction = await env.REPORTS.prepare(
     `SELECT action FROM editorial_comment_actions
      WHERE comment_id = ? AND lower(actor_email) = lower(?) AND action IN ('acknowledge','unacknowledge')
