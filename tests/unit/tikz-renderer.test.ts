@@ -27,13 +27,15 @@ describe("TikZ server renderer policy", () => {
 
   it("renders a TikZ block to sanitized SVG", async () => {
     const result = await renderTikzSource(
-      "\\begin{tikzpicture}\\draw[->] (0,0)--(2,0);\\end{tikzpicture}",
+      "\\begin{tikzpicture}\\node at (0,0) {$A$};\\draw[->] (0,0)--(2,0);\\end{tikzpicture}",
       { libraries: ["arrows.meta"] },
     );
     expect(result.svg).toMatch(/^<svg(?:\s|>)/);
     expect(result.svg).toMatch(
       /@import url\(https:\/\/cdn\.jsdelivr\.net\/npm\/node-tikzjax@1\.0\.5\/css\/fonts\.css\)/,
     );
+    expect(result.svg).toContain('stroke="currentColor"');
+    expect(result.svg).not.toMatch(/(?:fill|stroke)="#(?:000|000000)"/i);
     expect(result.svg).not.toMatch(/<script|foreignObject/i);
     expect(result.hash).toHaveLength(64);
   });

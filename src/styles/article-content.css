@@ -308,6 +308,7 @@
 .article-body .tikz-diagram,
 .article-preview .tikz-diagram,
 .published-article-preview .tikz-diagram {
+  color: inherit;
   display: block;
   margin: 1.25rem auto;
   max-width: 100%;

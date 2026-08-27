@@ -38,7 +38,9 @@ const tikzAttribute = (value) => encodeURIComponent(String(value ?? ""));
  * default serif font.
  */
 function embedTikzFontCss(svg) {
-  const value = String(svg ?? "");
+  const value = String(svg ?? "")
+    .replace(/\b(fill|stroke)=(['"])#(?:000|000000)\2/gi, "$1=$2currentColor$2")
+    .replace(/\b(fill|stroke)\s*:\s*#(?:000|000000)\b/gi, "$1: currentColor");
   if (!/^<svg(?:\s|>)/i.test(value)) return value;
   if (/data-atlasez-tikz-fonts/i.test(value)) return value;
   const style =
