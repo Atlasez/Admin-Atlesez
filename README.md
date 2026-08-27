@@ -56,12 +56,12 @@ src/
 ├── components/     # 共通UI（BaseHead, Breadcrumb, A11ySettings, ThemeToggle）
 ├── lib/            # 概念グラフ・i18n・URL・デプロイ判定・ブックマーク
 └── styles/         # デザイントークンと基本スタイル
-public/             # 静的ファイル。_headers は Cloudflare Pages の設定
+public/             # 静的ファイル。_headers はCloudflare配信の設定
 scripts/            # 検証・一括修正・記事の足場
 tests/              # unit (Vitest) / e2e (Playwright + axe)
 docs/               # ドキュメント（docs/README.md が索引）
 versions/           # 過去バージョンのスナップショット（ビルド対象外）
-.github/workflows/  # CI（検証のみ。配信は Cloudflare Pages）
+.github/workflows/  # CI（本番ターゲット検証を含む）
 ```
 
 ## 記事が公開されるまで
@@ -69,19 +69,17 @@ versions/           # 過去バージョンのスナップショット（ビル�
 1. `src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` を追加（`npm run new:article` が楽）
 2. `status: published` にして PR
 3. CI が検証（スキーマ・概念参照・循環・リンク・型・lint・テスト・E2E・axe）
-4. main へマージすると Cloudflare Pages が自動でビルドして公開
+4. CI成功後、正規のCloudflare Workerへデプロイして公開
 
 `draft` と `in-review` の記事はビルドから除外されるため、
 main にマージされていても公開されません。
 
 ## デプロイ
 
-Cloudflare Pages がこのリポジトリを直接ビルドします。
-GitHub Actions は検証専用でデプロイしません。
-
-URL は環境変数 `SITE_URL`（未設定なら Cloudflare の `CF_PAGES_URL`）で決まります。
-`main` 以外のブランチのビルドは自動で `noindex` になります。
-詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+本番はCloudflare Workersの `atlasez01`（公開サイト）と
+`atlasez-admin`（運営用サイト）へ配信します。正しいアカウント・Worker・ルート・D1を
+検査する `npm run verify:deploy-config` を通してから、`npm run deploy:public` または
+`npm run deploy:admin` を使ってください。詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ## 多言語について
 
