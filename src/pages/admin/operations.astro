@@ -2,20 +2,21 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
 import { getTimeZoneOptions } from "../../lib/timezones";
+const { memberMode = false } = Astro.props;
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
 const timezones = getTimeZoneOptions(new Date());
 const holidayCountries = [
   ["JP", "日本"], ["US", "米国"], ["GB", "英国"], ["FR", "フランス"], ["DE", "ドイツ"], ["KR", "韓国"], ["CN", "中国"], ["TW", "台湾"], ["IN", "インド"], ["AU", "オーストラリア"], ["CA", "カナダ"],
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
-const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
+const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
 ---
 
 <AdminLayout title={calendarPage ? "カレンダー" : "タスク管理"} description="運営作業を共有する場所">
-  <main class="operations" data-operations>
+  <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined}>
     <header>
       <h1 data-project-title>{calendarPage ? "カレンダー" : "タスク管理"}</h1>
-      <nav class="operations-tabs" aria-label="タスクとカレンダー"><a href={`/admin/operations/${Astro.url.search}`} aria-current={!calendarPage ? "page" : undefined}>タスク管理</a><a href={`/admin/calendar/${Astro.url.search}`} aria-current={calendarPage ? "page" : undefined}>カレンダー</a></nav>
+      {!memberMode && <nav class="operations-tabs" aria-label="タスクとカレンダー"><a href={`/admin/operations/${Astro.url.search}`} aria-current={!calendarPage ? "page" : undefined}>タスク管理</a><a href={`/admin/calendar/${Astro.url.search}`} aria-current={calendarPage ? "page" : undefined}>カレンダー</a></nav>}
     </header>
     <div class="grid">
       <section hidden={calendarPage}>
@@ -168,12 +169,12 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
           <div class="calendar-settings-heading"><h2 id="calendar-settings-heading">カレンダー設定</h2><button type="button" data-close-calendar-settings aria-label="設定を閉じる">×</button></div>
           <div class="calendar-settings" aria-label="カレンダー表示設定">
           <label class="field-label timezone-combobox"
-            >表示するタイムゾーン
+            >表示タイムゾーン
             <div>
               <input
                 data-calendar-timezone
                 role="combobox"
-                aria-label="表示するタイムゾーン"
+                aria-label="表示タイムゾーン"
                 aria-autocomplete="list"
                 aria-expanded="false"
                 aria-controls="atlasez-timezone-options"
@@ -187,6 +188,7 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
                 ▼
               </button>
             </div>
+            <output data-timezone-offset aria-live="polite"></output>
             <div
               id="atlasez-timezone-options"
               class="timezone-options"
@@ -1090,6 +1092,7 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
     const calendar = get<HTMLElement>('[data-event-calendar]');
     const calendarTitle = get<HTMLElement>('[data-calendar-title]');
     const timezone = get<HTMLInputElement>('[data-calendar-timezone]');
+    const timezoneOffset = get<HTMLOutputElement>('[data-timezone-offset]');
     const holidayCountry = get<HTMLSelectElement>('[data-calendar-holiday-country]');
     const holidayTags = get<HTMLElement>('[data-holiday-tags]');
     const holidayAdd = get<HTMLButtonElement>('[data-holiday-add]');
@@ -1116,6 +1119,7 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
     const blockFeedback = get<HTMLOutputElement>('[data-block-feedback]');
     const projectTitle = get<HTMLElement>('[data-project-title]');
     const availabilityPopover = get<HTMLElement>('[data-availability-popover]');
+    const memberPage = root.dataset.memberMode === 'true';
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
     const calendarPage = location.pathname.replace(/\/$/, '') === '/admin/calendar';
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
@@ -1217,6 +1221,12 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
       const candidate = timezone.value.trim() || 'Asia/Tokyo';
       try { new Intl.DateTimeFormat('en', { timeZone: candidate }).format(); return candidate; } catch { return 'Asia/Tokyo'; }
     };
+    const renderTimezoneOffset = () => {
+      try {
+        const part = new Intl.DateTimeFormat('en', { timeZone: selectedTimezone(), timeZoneName: 'longOffset' }).formatToParts(new Date()).find((item) => item.type === 'timeZoneName')?.value || 'GMT';
+        timezoneOffset.value = part === 'GMT' ? 'UTC+00:00' : part.replace(/^GMT/, 'UTC');
+      } catch { timezoneOffset.value = ''; }
+    };
     const formatDate = (value: string) => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short', timeZone: selectedTimezone() }).format(new Date(value));
     const dateParts = (value: string) => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: selectedTimezone(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(value)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
     const participantNames = (participants: OperationParticipant[], availability: string) => participants.filter((participant) => participant.availability === availability).map((participant) => participant.isSelf ? '自分' : participant.displayName);
@@ -1242,6 +1252,7 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
     };
     const calendarEvents = () => {
       const storedEvents = data.events ?? [];
+      if (memberPage) return storedEvents;
       if (projectId !== 'atlas') return storedEvents;
       const storedIds = new Set(storedEvents.map((event) => event.id));
       const storedCoWorkingTimes = new Set(storedEvents.filter((event) => event.title.includes('同時作業会')).map((event) => new Date(event.starts_at).getTime()));
@@ -1278,13 +1289,16 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
       calendar.querySelectorAll<HTMLElement>('[data-calendar-date]').forEach((cell) => {
         const key = cell.dataset.calendarDate ?? '';
         cell.classList.toggle('calendar-cell--today', key === todayKey);
+        if (key === todayKey) cell.setAttribute('aria-current', 'date');
+        else cell.removeAttribute('aria-current');
         cell.classList.toggle('calendar-cell--selected', orderedSelection.length === 2 && key >= orderedSelection[0] && key <= orderedSelection[1]);
       });
     };
     const render = () => {
+      renderTimezoneOffset();
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
-      projectTitle.textContent = `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : 'タスク管理'}`;
-      get<HTMLElement>('[data-event-create]').hidden = !data.scope.isManager;
+      projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : 'タスク管理'}`;
+      get<HTMLElement>('[data-event-create]').hidden = memberPage || !data.scope.isManager;
       assignee.innerHTML = '<option value="">担当者を指定しない</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}">${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
       reports.innerHTML = (data.progress ?? []).map((item) => `<article class="item"><span>${escapeHtml(String(item.body ?? ''))}</span><small>自分が投げた進捗報告 ・ ${formatDate(String(item.created_at))}</small></article>`).join('') || '<p>自分が投げた進捗報告はまだありません。</p>';
       const visibleTasks = (data.tasks ?? []).filter((item) => taskFilter === 'all' || (taskFilter === 'assigned' ? item.assignee_email === data.scope.email : item.created_by === data.scope.email));
@@ -1306,7 +1320,7 @@ const calendarPage = Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar"
       get<HTMLElement>('[data-block-list]').innerHTML = ownBlocks.length ? ownBlocks.map((item) => `<div class="item availability-block-item"><span><b>${item.kind === 'available' ? '動ける' : '動けない'}</b> ・ ${formatDate(item.starts_at)} 〜 ${formatDate(item.ends_at)}${item.label ? ` ・ ${escapeHtml(String(item.label))}` : ''}</span><button type="button" class="event-delete" data-delete-block="${escapeHtml(String(item.id))}">削除</button></div>`).join('') : '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { data = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
+    const load = async () => { data = memberPage ? await api<OperationData>('/api/admin/member-calendar') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
     let activeAvailabilityTrigger: HTMLButtonElement | null = null;
     const closeAvailabilityPopover = (restoreFocus = false) => {

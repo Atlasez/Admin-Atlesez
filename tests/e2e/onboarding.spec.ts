@@ -58,9 +58,11 @@ test("基本情報とプロジェクト情報を別ページで入力し、マ�
   await expect(page.getByLabel("運営内自己紹介")).toHaveCount(0);
   await page.getByLabel("表示名").fill("山田 花子");
   await page.getByLabel("運営外自己紹介").fill("よろしくお願いします。");
+  const projectNavigation = page.waitForURL(/\/onboarding\/project\/$/);
   await page
     .getByRole("button", { name: "基本情報を保存して次へ進む" })
     .click();
+  await projectNavigation;
   await expect
     .poll(() => savedBasicProfile)
     .toMatchObject({
@@ -68,7 +70,6 @@ test("基本情報とプロジェクト情報を別ページで入力し、マ�
       bio: "よろしくお願いします。",
     });
 
-  await page.goto("onboarding/project/");
   await expect(
     page.getByRole("heading", { name: "プロジェクトの情報を設定してください" }),
   ).toBeVisible();

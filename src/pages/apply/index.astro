@@ -22,7 +22,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       </div>
       <h1 data-project-title>運営参加応募</h1>
       <p class="intro" data-project-intro>入力内容は運営参加の選考・連絡、承認後の担当設定にのみ使います。応募内容は運営内運営のみが閲覧します。</p>
-      <nav class="form-directory" aria-label="応募フォームの種類">
+      <nav class="form-directory" aria-label="応募フォームの種類" data-form-directory hidden>
         <a href="/apply/atlas/" data-form-link="atlas">学習サイト</a>
         <a href="/apply/thinking-cafe/" data-form-link="thinking-cafe">考えるカフェ</a>
         <a href="/apply/seminar-platform/" data-form-link="seminar-platform">ゼミプラットフォーム</a>
@@ -31,16 +31,18 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       </nav>
       <p class="member-project-note" data-member-project-note hidden>基本情報は登録済みです。応募するプロジェクトを上から選ぶと、プロジェクト固有の入力画面へ進めます。</p>
 
-      <form data-application>
-        <p class="privacy-notice"><span data-i18n="privacyNotice">個人情報の取り扱いについて：ご入力いただいた個人情報は、応募内容の確認・選考、応募に関する連絡、受入後のアカウント・担当設定および本人確認のために、必要な範囲で利用します。法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。選考・運営上必要な期間保管し、利用目的を終えた後は適切に削除します。詳しくは</span><a href="/privacy-policy/">プライバシーポリシーをご確認ください。</a></p>
+      <form data-application data-form-ready="false" aria-busy="true">
+        <p class="privacy-notice"><span data-i18n="privacyNotice">個人情報の取り扱いについて：ご入力いただいた個人情報は、応募内容の確認・選考、応募に関する連絡、受入後のアカウント・担当設定および本人確認のために、必要な範囲で利用します。法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。選考・運営上必要な期間保管し、利用目的を終えた後は適切に削除します。</span></p>
         <input type="hidden" name="projectSlug" data-project-slug value="atlas" />
-        <fieldset data-basic-fieldset>
+        <p class="form-loading" data-form-loading aria-live="polite">入力画面を準備しています…</p>
+        <fieldset data-basic-fieldset hidden>
           <legend data-i18n="basic">基本情報</legend>
           <div class="name-grid">
             <label><span data-i18n="familyName">姓</span><input name="familyName" maxlength="80" required autocomplete="family-name" /></label>
             <label><span data-i18n="givenName">名</span><input name="givenName" maxlength="80" required autocomplete="given-name" /></label>
             <label class="middle-name" hidden><span data-i18n="middleName">ミドルネーム（任意）</span><input name="middleName" maxlength="80" autocomplete="additional-name" /></label>
           </div>
+          <label class="name-order-field"><span data-i18n="nameOrder">氏名の表示順</span><select name="nameOrder" data-name-order><option value="family-given" data-name-order-option="family">姓 → 名</option><option value="given-family" data-name-order-option="given">名 → 姓</option></select><small data-i18n="nameOrderHelp">応募者名として表示する順番を選択できます。</small></label>
           <div class="name-grid kana-grid">
             <label><span data-i18n="familyNameKana">姓（ふりがな）</span><input name="familyNameKana" maxlength="80" autocomplete="off" /></label>
             <label><span data-i18n="givenNameKana">名（ふりがな）</span><input name="givenNameKana" maxlength="80" autocomplete="off" /></label>
@@ -63,7 +65,6 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
             <label>居住地（都道府県・都市名）<input name="residenceCity" maxlength="160" required autocomplete="address-level1" /></label>
           </div>
           <label>現在参加しているサークル・学生団体等（任意）<textarea name="currentOrganizations" maxlength="1000"></textarea></label>
-          <label>このプロジェクトをどこで知りましたか<input name="referralSource" maxlength="500" required /></label>
           <small class="hint" data-i18n="timezoneHelp">IANAのタイムゾーンから選択できます。日程表示の基準になります。</small>
           <div class="basic-next" data-basic-next><button type="button" data-next-project>基本情報を保存して次へ</button><output data-profile-message aria-live="polite"></output></div>
         </fieldset>
@@ -71,6 +72,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         <fieldset data-project-content data-project-fieldset hidden>
           <legend data-i18n="interestsTitle">参加したい内容</legend>
           <fieldset class="subject-field" data-project-only="atlas"><legend data-i18n="subjectsLabel">関心のある分野（複数選択可・上限なし）</legend><div class="subjects">{subjects.map((subject) => <label><input type="checkbox" name="desiredSubjects" value={subject.data.slug} /><span data-subject-ja={subject.data.name.ja} data-subject-en={subject.data.name.en ?? subject.data.name.ja}>{subject.data.name.ja}</span></label>)}<label><input type="checkbox" name="desiredSubjects" value="other" /><span data-subject-ja="その他" data-subject-en="Other">その他</span></label></div></fieldset>
+          <label data-project-referral><span data-i18n="referralSource">このプロジェクトをどこで知りましたか？</span><input name="referralSource" maxlength="500" required /></label>
           <label data-copy-field="articleIdeas"><span data-i18n="articleIdeas">書いてみたい記事・テーマ</span><textarea name="articleIdeas" maxlength="3000" required placeholder="例：群論の基本概念、英語学習の語源マップ…"></textarea></label>
           <label data-copy-field="interests"><span data-i18n="skills">関心のあるプロジェクト・できること</span><textarea name="interests" maxlength="1000" required placeholder="例：記事執筆、査読、翻訳、ページデザイン、運営など"></textarea></label>
           <label data-copy-field="message"><span data-i18n="message">参加したい理由・自己紹介</span><textarea name="message" maxlength="8000" required></textarea></label>
@@ -104,7 +106,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
 </ApplicantLayout>
 
 <style>
-  .apply{box-sizing:border-box;margin:0 auto;max-width:920px;padding:2rem 1.25rem 4rem}.brand{color:var(--accent-primary);font-size:1.1rem;font-weight:800;text-decoration:none}.apply section{border-top:2px solid var(--accent-primary);margin-top:2rem;padding-top:1.5rem}.language-row{align-items:center;display:flex;justify-content:space-between;gap:1rem}.apply p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.language-picker{align-items:center;display:flex;gap:.45rem;font-size:.78rem;font-weight:700}.language-picker select{padding:.35rem .5rem}.apply h1{font-size:2rem;margin:.35rem 0}.intro{color:var(--text-secondary)!important;font-size:.9rem!important;letter-spacing:0!important;line-height:1.7}.apply form{display:grid;gap:1rem;margin-top:1.5rem}.apply fieldset{border:1px solid var(--border-default);display:grid;gap:.8rem;margin:0;padding:1rem}.apply legend{color:var(--accent-primary);font-size:.82rem;font-weight:800;padding:0 .35rem}.apply label,.institution-field{display:grid;font-size:.82rem;font-weight:800;gap:.35rem}.apply input,.apply textarea,.apply select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;min-height:2.8rem;padding:.65rem;width:100%}.apply textarea{min-height:6rem;resize:vertical}.apply small{color:var(--text-secondary);font-size:.74rem;font-weight:500;line-height:1.5}.two,.name-grid{display:grid;gap:.8rem;grid-template-columns:repeat(2,minmax(0,1fr))}.name-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kana-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:calc(66.666% - .25rem)}.subject-field{background:var(--background-secondary);padding:.8rem}.subjects{display:flex;flex-wrap:wrap;gap:.45rem}.subjects label{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);border-radius:999px;display:flex;font-size:.76rem;gap:.3rem;padding:.3rem .55rem}.subjects input{accent-color:var(--accent-primary);min-height:1rem;padding:0;width:auto}.hint{display:block}.apply button{background:var(--accent-primary);border:0;color:#fff;cursor:pointer;font:inherit;font-weight:800;padding:.8rem}.apply output{color:var(--text-secondary);min-height:1.3rem}.trap{height:0;opacity:0;overflow:hidden;pointer-events:none}.language-picker select{min-height:2rem}.institution-picker{position:relative}.institution-directory{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 8px 20px rgba(0,0,0,.14);display:grid;gap:0;left:0;max-height:18rem;overflow-y:auto;position:absolute;right:0;top:calc(100% + .2rem);z-index:10}.institution-directory[hidden]{display:none}.institution-directory button{background:var(--background-primary);border:0;border-bottom:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font-size:.78rem;font-weight:600;padding:.65rem .75rem;text-align:left}.institution-directory button:last-child{border-bottom:0}.institution-directory button:hover,.institution-directory button:focus-visible{background:var(--background-secondary);outline:2px solid var(--accent-primary);outline-offset:-2px}.institution-source a{color:var(--accent-primary);font-weight:700}@media(max-width:650px){.apply{padding:1.25rem .85rem 3rem}.language-row{align-items:flex-start;flex-direction:column}.two,.name-grid,.kana-grid{grid-template-columns:1fr;max-width:none}}
+  .apply{box-sizing:border-box;margin:0 auto;max-width:920px;padding:2rem 1.25rem 4rem}.brand{color:var(--accent-primary);font-size:1.1rem;font-weight:800;text-decoration:none}.apply section{border-top:2px solid var(--accent-primary);margin-top:2rem;padding-top:1.5rem}.language-row{align-items:center;display:flex;justify-content:space-between;gap:1rem}.apply p{color:var(--accent-primary);font-size:.76rem;font-weight:800;letter-spacing:.08em;margin:0}.language-picker{align-items:center;display:flex;gap:.45rem;font-size:.78rem;font-weight:700}.language-picker select{padding:.35rem .5rem}.apply h1{font-size:2rem;margin:.35rem 0}.intro{color:var(--text-secondary)!important;font-size:.9rem!important;letter-spacing:0!important;line-height:1.7}.apply form{display:grid;gap:1rem;margin-top:1.5rem}.apply fieldset{border:1px solid var(--border-default);display:grid;gap:.8rem;margin:0;padding:1rem}.apply fieldset[hidden],.apply button[hidden],.apply nav[hidden],.apply .form-loading[hidden]{display:none!important}.form-loading{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:600!important;letter-spacing:0!important;margin:0!important;padding:.75rem .85rem}.apply legend{color:var(--accent-primary);font-size:.82rem;font-weight:800;padding:0 .35rem}.apply label,.institution-field{display:grid;font-size:.82rem;font-weight:800;gap:.35rem}.apply input,.apply textarea,.apply select{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;min-height:2.8rem;padding:.65rem;width:100%}.apply textarea{min-height:6rem;resize:vertical}.apply small{color:var(--text-secondary);font-size:.74rem;font-weight:500;line-height:1.5}.two,.name-grid{display:grid;gap:.8rem;grid-template-columns:repeat(2,minmax(0,1fr))}.name-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.kana-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-width:calc(66.666% - .25rem)}.subject-field{background:var(--background-secondary);padding:.8rem}.subjects{display:flex;flex-wrap:wrap;gap:.45rem}.subjects label{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);border-radius:999px;display:flex;font-size:.76rem;gap:.3rem;padding:.3rem .55rem}.subjects input{accent-color:var(--accent-primary);min-height:1rem;padding:0;width:auto}.hint{display:block}.apply button{background:var(--accent-primary);border:0;color:#fff;cursor:pointer;font:inherit;font-weight:800;padding:.8rem}.apply output{color:var(--text-secondary);min-height:1.3rem}.trap{height:0;opacity:0;overflow:hidden;pointer-events:none}.language-picker select{min-height:2rem}.institution-picker{position:relative}.institution-directory{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 8px 20px rgba(0,0,0,.14);display:grid;gap:0;left:0;max-height:18rem;overflow-y:auto;position:absolute;right:0;top:calc(100% + .2rem);z-index:10}.institution-directory[hidden]{display:none}.institution-directory button{background:var(--background-primary);border:0;border-bottom:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font-size:.78rem;font-weight:600;padding:.65rem .75rem;text-align:left}.institution-directory button:last-child{border-bottom:0}.institution-directory button:hover,.institution-directory button:focus-visible{background:var(--background-secondary);outline:2px solid var(--accent-primary);outline-offset:-2px}.institution-source a{color:var(--accent-primary);font-weight:700}@media(max-width:650px){.apply{padding:1.25rem .85rem 3rem}.language-row{align-items:flex-start;flex-direction:column}.two,.name-grid,.kana-grid{grid-template-columns:1fr;max-width:none}}
+  .required-marker{color:#dc2626;font-size:1em;font-weight:900;margin-left:.22rem}.name-order-field{background:var(--background-secondary);border:1px solid var(--border-default);padding:.65rem .75rem}.name-order-field select{max-width:25rem}
   .form-directory{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem}.form-directory a{border:1px solid var(--border-default);border-radius:999px;color:var(--text-primary);font-size:.76rem;padding:.35rem .6rem;text-decoration:none}.form-directory a[aria-current="true"]{background:var(--accent-primary);border-color:var(--accent-primary);color:#fff}.member-project-note{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:500!important;letter-spacing:0!important;line-height:1.6;margin:1rem 0 0!important;padding:.65rem .75rem}.privacy-notice{background:var(--background-secondary);border-left:3px solid var(--accent-primary);color:var(--text-secondary)!important;font-size:.82rem!important;font-weight:500!important;letter-spacing:0!important;line-height:1.7;margin:0!important;padding:.75rem .85rem}.privacy-notice a{color:var(--accent-primary);font-weight:700}.basic-next{align-items:center;display:flex;flex-wrap:wrap;gap:.6rem}.basic-next button{width:auto}.basic-next output{color:var(--text-secondary);font-size:.78rem}.project-extra{display:grid;gap:.8rem}
   .apply select{height:2.8rem;max-height:2.8rem}
 </style>
@@ -149,6 +152,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const memberProjectNote = page.querySelector<HTMLElement>("[data-member-project-note]")!;
     const projectTitle = page.querySelector<HTMLElement>("[data-project-title]")!;
     const projectIntro = page.querySelector<HTMLElement>("[data-project-intro]")!;
+    const formDirectory = page.querySelector<HTMLElement>("[data-form-directory]")!;
+    const formLoading = form.querySelector<HTMLElement>("[data-form-loading]")!;
     const projectForms: Record<string, { title: string; intro: string; article: string; interests: string; message: string; motivation: string; roles: string; articlePlaceholder: string }> = {
       atlas: { title: "学習サイト「アトラス」運営応募", intro: "学習サイト「アトラス」の記事執筆・査読・翻訳・運営に関する応募フォームです。", article: "書いてみたい記事・テーマ", interests: "関心のあるプロジェクト・できること", message: "参加したい理由・自己紹介", motivation: "参加理由（複数ある場合はすべて）", roles: "希望担当（複数ある場合はすべて）", articlePlaceholder: "例：群論の基本概念、英語学習の語源マップ…" },
       "thinking-cafe": { title: "考えるカフェ参加・運営応募", intro: "考えるカフェで扱いたいテーマや、対話の場づくりへの関心をお聞きします。", article: "参加してみたいテーマ", interests: "興味のある対話分野・できること", message: "参加してみたい理由・自己紹介", motivation: "", roles: "", articlePlaceholder: "考えてみたい問いや話し合いたいテーマ" },
@@ -162,8 +167,6 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const directProjectScreen = !forceBasicStep && (/^\/apply\/[^/]+\/?$/.test(location.pathname) || Boolean(searchParams.get("project")));
     const projectConfig = projectForms[projectSlug];
     projectSlugInput.value = projectSlug;
-    projectTitle.textContent = directProjectScreen ? projectConfig.title : "運営参加応募 / 基本情報";
-    projectIntro.textContent = directProjectScreen ? projectConfig.intro : "まず基本情報を登録し、その後に応募するプロジェクト固有の項目を入力します。基本情報は次回以降の応募でも再利用できます。";
     for (const link of page.querySelectorAll<HTMLAnchorElement>("[data-form-link]")) {
       if (directProjectScreen && link.dataset.formLink === projectSlug) link.setAttribute("aria-current", "true"); else link.removeAttribute("aria-current");
     }
@@ -199,6 +202,39 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const setFieldsetDisabled = (fieldset: HTMLFieldSetElement, disabled: boolean) => {
       for (const control of fieldset.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea")) control.disabled = disabled;
     };
+    const nameOrder = form.querySelector<HTMLSelectElement>("[data-name-order]")!;
+    let nameOrderTouched = false;
+    const requestedNameOrder = searchParams.get("nameOrder");
+    if (requestedNameOrder === "family-given" || requestedNameOrder === "given-family") {
+      nameOrder.value = requestedNameOrder;
+      nameOrderTouched = true;
+    }
+    nameOrder.addEventListener("change", () => { nameOrderTouched = true; });
+    const refreshRequiredMarkers = () => {
+      for (const marker of form.querySelectorAll<HTMLElement>(".required-marker")) marker.remove();
+      for (const label of form.querySelectorAll<HTMLLabelElement>("label")) {
+        const requiredControl = [...label.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input,select,textarea")]
+          .find((control) => control.required && !control.disabled && !control.closest("[hidden]"));
+        if (!requiredControl) continue;
+        const textSpan = [...label.children].find((child) => child instanceof HTMLElement && child.tagName === "SPAN") as HTMLElement | undefined;
+        const marker = document.createElement("span");
+        marker.className = "required-marker";
+        marker.setAttribute("aria-hidden", "true");
+        marker.textContent = "*";
+        if (textSpan) textSpan.append(marker); else label.insertBefore(marker, requiredControl);
+      }
+      const subjectField = form.querySelector<HTMLElement>(".subject-field");
+      if (subjectField && projectSlug === "atlas" && !subjectField.hidden && !subjectField.closest("[hidden]")) {
+        const legend = subjectField.querySelector<HTMLElement>(":scope > legend");
+        if (legend) {
+          const marker = document.createElement("span");
+          marker.className = "required-marker";
+          marker.setAttribute("aria-hidden", "true");
+          marker.textContent = "*";
+          legend.append(marker);
+        }
+      }
+    };
     type ApplicationProfile = { email: string; family_name: string; given_name: string; middle_name: string; family_name_kana: string; given_name_kana: string; form_language: "ja" | "en"; affiliation_email: string; affiliation_type: string; institution: string; grade: string; country: string; timezone: string; birth_date: string; residence_city: string; current_organizations: string; referral_source: string };
     const profilePromise = fetch("/api/application-profile", { credentials: "same-origin", cache: "no-store" })
       .then(async (response) => ({ response, data: await response.json() as { profile?: ApplicationProfile | null; hasProfile?: boolean; stage?: string; error?: string } }));
@@ -218,7 +254,6 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         birthDate: profile.birth_date,
         residenceCity: profile.residence_city,
         currentOrganizations: profile.current_organizations,
-        referralSource: profile.referral_source,
       };
       for (const [name, value] of Object.entries(values)) {
         const control = form.elements.namedItem(name);
@@ -228,14 +263,58 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       updateLanguage();
       updateGrades();
     };
-    const showFormMode = (profile: ApplicationProfile | null, stage: string) => {
+    const profileNeedsCompletion = (profile: ApplicationProfile) => [
+      profile.family_name,
+      profile.given_name,
+      ...(profile.form_language === "ja" ? [profile.family_name_kana, profile.given_name_kana] : []),
+      profile.affiliation_email,
+      profile.affiliation_type,
+      profile.institution,
+      profile.grade,
+      profile.country,
+      profile.timezone,
+      profile.birth_date,
+      profile.residence_city,
+    ].some((value) => !value?.trim());
+    const showFormMode = (profile: ApplicationProfile | null, stage: string, allowBasicFallback = false) => {
       const existingMember = ["ONBOARDING", "TUTORIAL", "MEMBER"].includes(stage);
+      const markReady = () => {
+        formLoading.hidden = true;
+        form.dataset.formReady = "true";
+        form.setAttribute("aria-busy", "false");
+      };
+      const showBasicMode = (message = "") => {
+        projectTitle.textContent = "運営参加応募 / 基本情報";
+        projectIntro.textContent = "まず基本情報を登録し、その後に応募するプロジェクト固有の項目を入力します。基本情報は次回以降の応募でも再利用できます。";
+        formDirectory.hidden = true;
+        basicFieldset.hidden = false;
+        projectFieldset.hidden = true;
+        basicNext.hidden = false;
+        memberProjectNote.hidden = true;
+        setFieldsetDisabled(basicFieldset, false);
+        setFieldsetDisabled(projectFieldset, true);
+        submitButton.hidden = true;
+        refreshRequiredMarkers();
+        if (message) profileMessage.value = message;
+        markReady();
+      };
       if (directProjectScreen) {
         if (!profile) {
+          if (allowBasicFallback) {
+            showBasicMode("基本情報を確認できませんでした。入力内容を確認して、もう一度お試しください。");
+            return;
+          }
           location.assign(`/apply/?project=${encodeURIComponent(projectSlug)}&step=basic`);
           return;
         }
         fillProfile(profile);
+        if (profileNeedsCompletion(profile)) {
+          showBasicMode("不足している基本情報を入力してから、次へ進んでください。");
+          return;
+        }
+        projectTitle.textContent = projectConfig.title;
+        projectIntro.textContent = projectConfig.intro;
+        formDirectory.hidden = false;
         basicFieldset.hidden = true;
         projectFieldset.hidden = false;
         basicNext.hidden = true;
@@ -243,6 +322,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         setFieldsetDisabled(basicFieldset, true);
         setFieldsetDisabled(projectFieldset, false);
         submitButton.hidden = false;
+        refreshRequiredMarkers();
+        markReady();
         return;
       }
       projectFieldset.hidden = true;
@@ -251,16 +332,16 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       if (existingMember) {
         projectTitle.textContent = "応募するプロジェクトを選択";
         projectIntro.textContent = "応募するプロジェクトを上から選択してください。基本情報の入力は不要です。";
+        formDirectory.hidden = false;
         basicFieldset.hidden = true;
         basicNext.hidden = true;
         memberProjectNote.hidden = false;
         setFieldsetDisabled(basicFieldset, true);
+        refreshRequiredMarkers();
+        markReady();
       } else {
-        basicFieldset.hidden = false;
-        basicNext.hidden = false;
-        memberProjectNote.hidden = true;
-        setFieldsetDisabled(basicFieldset, false);
         if (profile) fillProfile(profile);
+        showBasicMode();
       }
     };
     const grades: Record<string, string[]> = { "中学校": ["中1", "中2", "中3", "その他"], "高等学校": ["高1", "高2", "高3", "その他"], "高等専門学校": ["高専1", "高専2", "高専3", "高専4", "高専5", "その他"], "大学": ["B1", "B2", "B3", "B4", "教職員・研究者", "その他"], "大学院": ["M1", "M2", "D1", "D2", "D3", "教職員・研究者", "その他"], "研究機関・教育機関": ["教職員・研究者", "その他"], "社会人": ["社会人", "その他"], "その他": ["中1", "中2", "中3", "高1", "高2", "高3", "高専1", "高専2", "高専3", "高専4", "高専5", "B1", "B2", "B3", "B4", "M1", "M2", "D1", "D2", "D3", "教職員・研究者", "社会人", "その他"] };
@@ -281,9 +362,11 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     document.addEventListener("click", (event) => { if (!(event.target instanceof Node) || !institutionInput.closest(".institution-picker")?.contains(event.target)) closeInstitutionCandidates(); });
     void loadInstitutionDirectory();
     try { const current = Intl.DateTimeFormat().resolvedOptions().timeZone; if ([...tz.options].some((option) => option.value === current)) tz.value = current; } catch { /* 古いブラウザでは既定値を使う */ }
-      const copy: Record<string, Record<string, string>> = { ja: { languageLabel: "表示言語", title: "運営参加応募", intro: "入力内容は運営参加の選考・連絡、承認後の担当設定にのみ使います。応募内容は運営内運営のみが閲覧します。", privacyNotice: "個人情報の取り扱いについて：ご入力いただいた個人情報は、応募内容の確認・選考、応募に関する連絡、受入後のアカウント・担当設定および本人確認のために、必要な範囲で利用します。法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。選考・運営上必要な期間保管し、利用目的を終えた後は適切に削除します。詳しくは", basic: "基本情報", familyName: "姓", givenName: "名", middleName: "ミドルネーム（任意）", familyNameKana: "姓（ふりがな）", givenNameKana: "名（ふりがな）", email: "メールアドレス", affiliationEmail: "学校・所属先のメールアドレス", affiliationEmailHelp: "本人確認のために使用します。学校や勤務先など、所属先から発行されたメールアドレスを入力してください。", affiliationType: "所属区分", institution: "所属機関", institutionHelp: "候補にない学校・研究機関も入力できます。承認時に運営側で表記を確認します。", grade: "学習区分・学年", country: "居住国・地域", timezone: "普段使うタイムゾーン", timezoneHelp: "IANAのタイムゾーンから選択できます。日程表示の基準になります。", interestsTitle: "参加したい内容", subjectsLabel: "関心のある分野（複数選択可・上限なし）", articleIdeas: "書いてみたい記事・テーマ", skills: "関心のあるプロジェクト・できること", message: "参加したい理由・自己紹介", availability: "参加可能な時間帯など（任意）", submit: "応募を送信" }, en: { languageLabel: "Language", title: "Join Atlasez", intro: "We use this information only to review your application, contact you, and set your role after approval. Applications are visible only to the Atlasez management team.", privacyNotice: "Privacy notice: We use the personal information you provide only as needed to review and select applications, contact you, set up accounts and roles after acceptance, and verify your affiliation. We do not share it with third parties without your consent unless required by law. We retain it only as long as necessary for selection and operations, then delete it appropriately. Please see the ", basic: "Basic information", familyName: "Family name", givenName: "Given name", middleName: "Middle name (optional)", familyNameKana: "Family name (phonetic, optional)", givenNameKana: "Given name (phonetic, optional)", email: "Email address", affiliationEmail: "School / affiliation email", affiliationEmailHelp: "Used for identity verification. Enter an email address issued by your school, workplace, or other affiliated institution.", affiliationType: "Education or work category", institution: "Institution", institutionHelp: "You may enter a school or research institution not shown in the suggestions. The management team will verify the display name.", grade: "Study level / year", country: "Country or region", timezone: "Time zone", timezoneHelp: "Choose from the IANA time-zone list. This is used for event scheduling.", interestsTitle: "How you would like to participate", subjectsLabel: "Areas of interest (select any number)", articleIdeas: "Articles or topics you would like to write", skills: "Projects and skills you can contribute", message: "Why you would like to join / introduction", availability: "Available times (optional)", submit: "Submit application" } };
+      const copy: Record<string, Record<string, string>> = { ja: { languageLabel: "表示言語", title: "運営参加応募", intro: "入力内容は運営参加の選考・連絡、承認後の担当設定にのみ使います。応募内容は運営内運営のみが閲覧します。", privacyNotice: "個人情報の取り扱いについて：ご入力いただいた個人情報は、応募内容の確認・選考、応募に関する連絡、受入後のアカウント・担当設定および本人確認のために、必要な範囲で利用します。法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。選考・運営上必要な期間保管し、利用目的を終えた後は適切に削除します。詳しくは", basic: "基本情報", familyName: "姓", givenName: "名", middleName: "ミドルネーム（任意）", nameOrder: "氏名の表示順", nameOrderHelp: "応募者名として表示する順番を選択できます。", familyNameKana: "姓（ふりがな）", givenNameKana: "名（ふりがな）", email: "メールアドレス", affiliationEmail: "学校・所属先のメールアドレス", affiliationEmailHelp: "本人確認のために使用します。学校や勤務先など、所属先から発行されたメールアドレスを入力してください。", affiliationType: "所属区分", institution: "所属機関", institutionHelp: "候補にない学校・研究機関も入力できます。承認時に運営側で表記を確認します。", grade: "学習区分・学年", country: "居住国・地域", timezone: "普段使うタイムゾーン", timezoneHelp: "IANAのタイムゾーンから選択できます。日程表示の基準になります。", referralSource: "このプロジェクトをどこで知りましたか？", interestsTitle: "参加したい内容", subjectsLabel: "関心のある分野（複数選択可・上限なし）", articleIdeas: "書いてみたい記事・テーマ", skills: "関心のあるプロジェクト・できること", message: "参加したい理由・自己紹介", availability: "参加可能な時間帯など（任意）", submit: "応募を送信" }, en: { languageLabel: "Language", title: "Join Atlasez", intro: "We use this information only to review your application, contact you, and set your role after approval. Applications are visible only to the Atlasez management team.", privacyNotice: "Privacy notice: We use the personal information you provide only as needed to review and select applications, contact you, set up accounts and roles after acceptance, and verify your affiliation. We do not share it with third parties without your consent unless required by law. We retain it only as long as necessary for selection and operations, then delete it appropriately. Please see the ", basic: "Basic information", familyName: "Family name", givenName: "Given name", middleName: "Middle name (optional)", nameOrder: "Name display order", nameOrderHelp: "Choose the order used when displaying your applicant name.", familyNameKana: "Family name (phonetic, optional)", givenNameKana: "Given name (phonetic, optional)", email: "Email address", affiliationEmail: "School / affiliation email", affiliationEmailHelp: "Used for identity verification. Enter an email address issued by your school, workplace, or other affiliated institution.", affiliationType: "Education or work category", institution: "Institution", institutionHelp: "You may enter a school or research institution not shown in the suggestions. The management team will verify the display name.", grade: "Study level / year", country: "Country or region", timezone: "Time zone", timezoneHelp: "Choose from the IANA time-zone list. This is used for event scheduling.", referralSource: "How did you hear about this project?", interestsTitle: "How you would like to participate", subjectsLabel: "Areas of interest (select any number)", articleIdeas: "Articles or topics you would like to write", skills: "Projects and skills you can contribute", message: "Why you would like to join / introduction", availability: "Available times (optional)", submit: "Submit application" } };
     const optionCopy: Record<string, Record<string, string>> = { ja: { "中学校": "中学校", "高等学校": "高等学校", "高等専門学校": "高等専門学校", "大学": "大学", "大学院": "大学院", "研究機関・教育機関": "研究機関・教育機関", "社会人": "社会人", "その他": "その他", "中1": "中1", "中2": "中2", "中3": "中3", "高1": "高1", "高2": "高2", "高3": "高3", "高専1": "高専1", "高専2": "高専2", "高専3": "高専3", "高専4": "高専4", "高専5": "高専5", "B1": "B1", "B2": "B2", "B3": "B3", "B4": "B4", "M1": "M1", "M2": "M2", "D1": "D1", "D2": "D2", "D3": "D3", "教職員・研究者": "教職員・研究者" }, en: { "中学校": "Middle school", "高等学校": "High school", "高等専門学校": "College of technology", "大学": "University", "大学院": "Graduate school", "研究機関・教育機関": "Research / education institution", "社会人": "Working professional", "その他": "Other", "中1": "Middle 1", "中2": "Middle 2", "中3": "Middle 3", "高1": "High 1", "高2": "High 2", "高3": "High 3", "高専1": "Kosen 1", "高専2": "Kosen 2", "高専3": "Kosen 3", "高専4": "Kosen 4", "高専5": "Kosen 5", "B1": "Bachelor 1", "B2": "Bachelor 2", "B3": "Bachelor 3", "B4": "Bachelor 4", "M1": "Master 1", "M2": "Master 2", "D1": "Doctoral 1", "D2": "Doctoral 2", "D3": "Doctoral 3", "教職員・研究者": "Faculty / researcher" } };
-    const updateLanguage = () => { const lang = language.value as "ja" | "en"; for (const element of page.querySelectorAll<HTMLElement>("[data-i18n]")) { const key = element.dataset.i18n ?? ""; if (copy[lang][key]) element.textContent = copy[lang][key]; } for (const option of form.querySelectorAll<HTMLOptionElement>("[data-affiliation] option,[data-grade] option")) { if (option.value && optionCopy[lang][option.value]) option.textContent = optionCopy[lang][option.value]; } for (const subject of form.querySelectorAll<HTMLElement>("[data-subject-ja]")) subject.textContent = lang === "en" ? (subject.dataset.subjectEn ?? subject.dataset.subjectJa ?? "") : (subject.dataset.subjectJa ?? ""); middle.hidden = lang !== "en"; const kana = form.querySelectorAll<HTMLInputElement>('input[name$="NameKana"]'); for (const field of kana) field.required = lang === "ja"; document.documentElement.lang = lang; };
+    const updateLanguage = () => { const lang = language.value as "ja" | "en"; for (const element of page.querySelectorAll<HTMLElement>("[data-i18n]")) { const key = element.dataset.i18n ?? ""; if (copy[lang][key]) element.textContent = copy[lang][key]; } for (const option of form.querySelectorAll<HTMLOptionElement>("[data-affiliation] option,[data-grade] option")) { if (option.value && optionCopy[lang][option.value]) option.textContent = optionCopy[lang][option.value]; } for (const option of form.querySelectorAll<HTMLOptionElement>("[data-name-order-option]")) option.textContent = option.dataset.nameOrderOption === "given" ? (lang === "en" ? "Given name → Family name" : "名 → 姓") : (lang === "en" ? "Family name → Given name" : "姓 → 名"); for (const subject of form.querySelectorAll<HTMLElement>("[data-subject-ja]")) subject.textContent = lang === "en" ? (subject.dataset.subjectEn ?? subject.dataset.subjectJa ?? "") : (subject.dataset.subjectJa ?? ""); middle.hidden = lang !== "en"; const kana = form.querySelectorAll<HTMLInputElement>('input[name$="NameKana"]'); for (const field of kana) field.required = lang === "ja"; if (!nameOrderTouched && !requestedNameOrder) nameOrder.value = lang === "en" ? "given-family" : "family-given"; document.documentElement.lang = lang; refreshRequiredMarkers(); };
+    copy.ja.privacyNotice = copy.ja.privacyNotice.replace(/詳しくは$/, "");
+    copy.en.privacyNotice = copy.en.privacyNotice.replace(/Please see the $/, "");
     language.addEventListener("change", updateLanguage); updateLanguage();
     void Promise.all([userStatusPromise, profilePromise]).then(([statusResult, profileResult]) => {
       const stage = statusResult.response.ok ? (statusResult.data.stage ?? "NEW_USER") : "NEW_USER";
@@ -292,8 +375,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       showFormMode(profile, stage);
       if (profile && !directProjectScreen) profileMessage.value = "保存済みの基本情報を読み込みました。変更してから次へ進むこともできます。";
     }).catch(() => {
-      if (directProjectScreen) profileMessage.value = "基本情報を確認できませんでした。ページを再読み込みしてください。";
-      else showFormMode(null, "NEW_USER");
+      showFormMode(null, "NEW_USER", true);
+      profileMessage.value = "基本情報を確認できませんでした。入力内容を確認して、もう一度お試しください。";
     });
     const saveBasicProfileAndContinue = async () => {
       if (!basicFieldset.checkValidity()) { basicFieldset.reportValidity(); return; }
@@ -301,12 +384,12 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       profileMessage.value = "基本情報を保存中…";
       const fd = new FormData(form);
       const fields: Record<string, unknown> = { formLanguage: language.value };
-      for (const name of ["familyName", "givenName", "middleName", "familyNameKana", "givenNameKana", "affiliationEmail", "affiliationType", "institution", "grade", "country", "timezone", "birthDate", "residenceCity", "currentOrganizations", "referralSource"]) fields[name] = fd.get(name) ?? "";
+      for (const name of ["familyName", "givenName", "middleName", "familyNameKana", "givenNameKana", "affiliationEmail", "affiliationType", "institution", "grade", "country", "timezone", "birthDate", "residenceCity", "currentOrganizations"]) fields[name] = fd.get(name) ?? "";
       try {
         const response = await fetch("/api/application-profile", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(fields) });
         const data = await response.json().catch(() => ({})) as { error?: string };
         if (!response.ok) throw new Error(data.error ?? "基本情報を保存できませんでした。");
-        location.assign(`/apply/${encodeURIComponent(projectSlug)}/`);
+        location.assign(`/apply/${encodeURIComponent(projectSlug)}/?nameOrder=${encodeURIComponent(nameOrder.value)}`);
       } catch (error) {
         profileMessage.value = error instanceof Error ? error.message : "基本情報を保存できませんでした。";
         nextProjectButton.disabled = false;
@@ -322,6 +405,10 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       result.value = submittedLanguage === "en" ? "Submitting…" : "送信中…";
       const fd = new FormData(form);
       const fields = Object.fromEntries(fd) as Record<string, unknown>;
+      for (const name of ["familyName", "givenName", "middleName", "familyNameKana", "givenNameKana", "email", "affiliationEmail", "affiliationType", "institution", "grade", "country", "timezone", "birthDate", "residenceCity", "currentOrganizations", "referralSource", "nameOrder"]) {
+        const control = form.elements.namedItem(name);
+        if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) fields[name] = control.value;
+      }
       fields.desiredSubjects = fd.getAll("desiredSubjects");
       fields.formLanguage = submittedLanguage;
       fields.projectAnswers = Object.fromEntries(

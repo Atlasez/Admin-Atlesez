@@ -1057,7 +1057,6 @@ async function saveApplicationProfile(
     !validTimeZone(timezone) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
     !residenceCity ||
-    !referralSource ||
     (formLanguage === "ja" && (!familyNameKana || !givenNameKana))
   )
     return json({ error: "基本情報をすべて入力してください。" }, 400);
@@ -1087,7 +1086,8 @@ async function saveApplicationProfile(
        affiliation_email=excluded.affiliation_email,
        institution=excluded.institution,grade=excluded.grade,country=excluded.country,
        timezone=excluded.timezone,birth_date=excluded.birth_date,residence_city=excluded.residence_city,
-       current_organizations=excluded.current_organizations,referral_source=excluded.referral_source,
+       current_organizations=excluded.current_organizations,
+       referral_source=COALESCE(NULLIF(excluded.referral_source,''),atlasez_applicant_profiles.referral_source),
        updated_at=excluded.updated_at`,
   )
     .bind(
@@ -3588,9 +3588,15 @@ async function memberCalendarOverview(
   await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
-  if (!projectIds.length) return json({ projects: [], events: [] });
+  if (!projectIds.length)
+    return json({
+      scope: { email: scope.email, isManager: false },
+      projects: [],
+      events: [],
+      availabilityBlocks: [],
+    });
   const placeholders = projectIds.map(() => "?").join(",");
-  const [events, availability] = await Promise.all([
+  const [events, availability, availabilityBlocks] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,title,details,starts_at,ends_at,timezone,created_by,created_at
        FROM editorial_events WHERE project_id IN (${placeholders})
@@ -3613,6 +3619,16 @@ async function memberCalendarOverview(
         availability: string;
         display_name: string;
       }>(),
+    env.REPORTS.prepare(
+      `SELECT b.id,b.email,b.starts_at,b.ends_at,b.timezone,
+        CASE WHEN lower(b.email)=lower(?) THEN b.label ELSE '' END AS label,
+        b.kind,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name
+       FROM editorial_member_availability_blocks b
+       LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(b.email)
+       ORDER BY b.starts_at ASC LIMIT 500`,
+    )
+      .bind(scope.email)
+      .all<Record<string, unknown>>(),
   ]);
   const participantsByEvent = new Map<
     string,
@@ -3624,7 +3640,12 @@ async function memberCalendarOverview(
       item,
     ]);
   return json({
-    scope: { email: scope.email },
+    scope: { email: scope.email, isManager: false },
+    availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
+      ...block,
+      isSelf:
+        String(block.email ?? "").toLowerCase() === scope.email.toLowerCase(),
+    })),
     projects,
     events: (events.results ?? []).map((event) => {
       const participants = participantsByEvent.get(String(event.id)) ?? [];
@@ -3643,6 +3664,11 @@ async function memberCalendarOverview(
             (item) => item.availability === "unavailable",
           ).length,
         },
+        participants: participants.map((participant) => ({
+          displayName: participant.display_name,
+          availability: participant.availability,
+          isSelf: participant.email.toLowerCase() === scope.email.toLowerCase(),
+        })),
       };
     }),
   });
@@ -5227,6 +5253,7 @@ async function submitMemberApplication(
     middleName?: unknown;
     familyNameKana?: unknown;
     givenNameKana?: unknown;
+    nameOrder?: unknown;
     formLanguage?: unknown;
     email?: unknown;
     interests?: unknown;
@@ -5287,13 +5314,18 @@ async function submitMemberApplication(
         ? "en"
         : "ja";
   const legacyName = normalizedText(payload.name, 120),
+    requestedNameOrder = text(payload.nameOrder, 20),
+    nameOrder =
+      requestedNameOrder === "given-family" ||
+      (requestedNameOrder === "" && formLanguage === "en")
+        ? "given-family"
+        : "family-given",
     name =
       familyName && givenName
-        ? [
-            formLanguage === "en" ? givenName : familyName,
-            formLanguage === "en" ? middleName : "",
-            formLanguage === "en" ? familyName : givenName,
-          ]
+        ? (nameOrder === "given-family"
+            ? [givenName, formLanguage === "en" ? middleName : "", familyName]
+            : [familyName, formLanguage === "en" ? middleName : "", givenName]
+          )
             .filter(Boolean)
             .join(" ")
         : legacyName,
@@ -5329,8 +5361,7 @@ async function submitMemberApplication(
       text(payload.currentOrganizations, 1_000) ||
       storedProfile?.current_organizations ||
       "",
-    referralSource =
-      text(payload.referralSource, 500) || storedProfile?.referral_source || "",
+    referralSource = text(payload.referralSource, 500),
     motivationReasons = text(payload.motivationReasons, 3_000),
     desiredRoles = text(payload.desiredRoles, 2_000),
     interviewAvailability = text(payload.interviewAvailability, 2_000),
@@ -5663,6 +5694,26 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "applicant"))
     return json({ error: "応募状況を閲覧できる段階ではありません。" }, 403);
+  const profile = await getApplicantProfile(env, current.email);
+  const basicProfileComplete = Boolean(
+    profile &&
+    [
+      profile.family_name,
+      profile.given_name,
+      ...(profile.form_language === "en"
+        ? []
+        : [profile.family_name_kana, profile.given_name_kana]),
+      profile.affiliation_email,
+      profile.affiliation_type,
+      profile.institution,
+      profile.grade,
+      profile.country,
+      profile.timezone,
+      profile.birth_date,
+      profile.residence_city,
+      profile.referral_source,
+    ].every((value) => value.trim()),
+  );
   const application = await env.REPORTS.prepare(
     `SELECT project_slug, created_at, status
      FROM atlasez_member_applications
@@ -5670,9 +5721,17 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   )
     .bind(current.email)
     .first<{ project_slug: string; created_at: string; status: string }>();
-  if (!application) return json({ error: "応募が見つかりません。" }, 404);
+  if (!application)
+    return json({
+      email: current.email,
+      stage: current.stage,
+      basicProfileComplete,
+      application: null,
+    });
   return json({
     email: current.email,
+    stage: current.stage,
+    basicProfileComplete,
     application: {
       project:
         APPLICATION_FORM_LABELS[application.project_slug] ??
@@ -7719,6 +7778,7 @@ const userReturnPath = (value: string | null) => {
     return "/apply/";
   }
   if (parsed.origin !== "https://admin.local") return "/apply/";
+  if (parsed.pathname === "/") return "/";
   if (isAdminPagePath(parsed.pathname)) return adminReturnPath(candidate);
   if (isApplicantPath(parsed.pathname)) return "/applicant/";
   if (isOnboardingPath(parsed.pathname))
@@ -8612,9 +8672,18 @@ async function handleAdminRequest(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
-  // 認証済みでも権限は未確定なので、入口はステージ判定を行う応募導線へ送る。
-  if (url.pathname === "/")
-    return Response.redirect(`${url.origin}/apply/`, 302);
+  if (url.pathname === "/") {
+    const current = await getCurrentUserStage(request, env);
+    if (isResponse(current)) {
+      if (current.status === 401)
+        return Response.redirect(`${url.origin}/applicant/`, 302);
+      return current;
+    }
+    return Response.redirect(
+      `${url.origin}${stageHome(current.stage, current.projectSlug)}`,
+      302,
+    );
+  }
   if (url.pathname === "/auth/google/login" && request.method === "GET")
     return startGoogleLogin(request, env);
   if (url.pathname === "/auth/google/callback" && request.method === "GET")

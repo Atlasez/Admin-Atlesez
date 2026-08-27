@@ -1,5 +1,6 @@
 const GUARD_BASE = "__atlasezEditorGuardBase";
 const GUARD_TOP = "__atlasezEditorGuardTop";
+const EDITOR_RETURN_PATH = "/admin/articles/";
 
 function initializeNavigationGuard(): void {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
@@ -118,7 +119,9 @@ function initializeNavigationGuard(): void {
     leaving = true;
     dirty = false;
     dialog.close();
-    history.go(-2);
+    // 直前の入口が管理トップや外部リンクでも、記事編集の戻り先は
+    // 編集・フィードバック一覧に固定する。
+    window.location.assign(EDITOR_RETURN_PATH);
   };
 
   type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;

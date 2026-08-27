@@ -23,6 +23,10 @@ const { title, description, showMemberProfile = false } = Astro.props;
       <div class="display-settings"><SettingsMenu /></div>
       <div class="account" aria-live="polite">
         <span data-authenticated-email>ログイン情報を確認中…</span>
+        <a class="account-profile" data-account-profile href="/admin/member-profile/" aria-label="マイページを開く" hidden>
+          <span class="account-avatar" data-account-avatar aria-hidden="true">A</span>
+          <span data-authenticated-name>アカウント</span>
+        </a>
         <form method="post" action="/auth/google/logout">
           <button type="submit">ログアウト</button>
         </form>
@@ -31,15 +35,36 @@ const { title, description, showMemberProfile = false } = Astro.props;
     <main id="main"><slot /></main>
     <script>
       const account = document.querySelector<HTMLElement>("[data-authenticated-email]");
-      fetch("/api/user/status", { credentials: "same-origin", cache: "no-store" })
-        .then(async (response) => ({ response, data: await response.json() as { email?: string } }))
-        .then(({ response, data }) => {
-          if (!account) return;
-          account.textContent = response.ok && data.email ? data.email : "ログイン情報を確認できませんでした。";
-        })
-        .catch(() => {
-          if (account) account.textContent = "ログイン情報を確認できませんでした。";
-        });
+      const accountProfile = document.querySelector<HTMLAnchorElement>("[data-account-profile]");
+      const accountName = document.querySelector<HTMLElement>("[data-authenticated-name]");
+      const accountAvatar = document.querySelector<HTMLElement>("[data-account-avatar]");
+      type BasicProfile = { form_language?: "ja" | "en"; family_name?: string; given_name?: string; family_name_kana?: string; given_name_kana?: string; affiliation_email?: string; affiliation_type?: string; institution?: string; grade?: string; country?: string; timezone?: string; birth_date?: string; residence_city?: string; referral_source?: string };
+      const profileComplete = (profile: BasicProfile | null) => Boolean(profile && [
+        profile.family_name, profile.given_name,
+        ...(profile.form_language === "en" ? [] : [profile.family_name_kana, profile.given_name_kana]),
+        profile.affiliation_email, profile.affiliation_type, profile.institution, profile.grade,
+        profile.country, profile.timezone, profile.birth_date, profile.residence_city, profile.referral_source,
+      ].every((value) => value?.trim()));
+      const statusPromise = fetch("/api/user/status", { credentials: "same-origin", cache: "no-store" })
+        .then(async (response) => ({ response, data: await response.json() as { email?: string } }));
+      const profilePromise = fetch("/api/application-profile", { credentials: "same-origin", cache: "no-store" })
+        .then(async (response) => ({ response, data: await response.json() as { profile?: BasicProfile | null } }));
+      Promise.all([statusPromise, profilePromise]).then(([status, profileResult]) => {
+        if (!account) return;
+        const email = status.response.ok ? status.data.email?.trim() ?? "" : "";
+        const profile = profileResult.response.ok ? profileResult.data.profile ?? null : null;
+        if (profileComplete(profile)) {
+          const name = `${profile?.family_name ?? ""} ${profile?.given_name ?? ""}`.trim();
+          if (accountProfile) accountProfile.hidden = false;
+          if (accountName) { accountName.textContent = name || "マイページ"; accountName.title = email; }
+          if (accountAvatar) accountAvatar.textContent = (profile?.family_name ?? profile?.given_name ?? "A").trim().slice(0, 1) || "A";
+          account.hidden = true;
+        } else {
+          account.textContent = email || "ログイン情報を確認できませんでした。";
+        }
+      }).catch(() => {
+        if (account) account.textContent = "ログイン情報を確認できませんでした。";
+      });
     </script>
   </body>
 </html>
@@ -49,11 +74,14 @@ const { title, description, showMemberProfile = false } = Astro.props;
   .brand { color: var(--accent-primary); font-size: 1.05rem; font-weight: 850; text-decoration: none; }
   .member-navigation { margin-left: auto; }
   .display-settings { margin-left: auto; }
-  .member-navigation a { border: 1px solid var(--border-default); color: var(--text-primary); font-size: .8rem; font-weight: 800; padding: .38rem .6rem; text-decoration: none; }
-  .member-navigation a:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
   .account { align-items: center; color: var(--text-secondary); display: flex; font-size: .8rem; gap: .7rem; min-width: 0; }
   .account span { overflow-wrap: anywhere; }
+  .account-profile { align-items: center; color: var(--text-primary); display: inline-flex; font-weight: 800; gap: .45rem; min-width: 0; text-decoration: none; }
+  .account-profile[hidden] { display: none; }
+  .account-profile:hover { color: var(--accent-primary); }
+  .account-avatar { align-items: center; background: linear-gradient(145deg, #2d6ea8, #153c66); border: 1px solid var(--border-default); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 2rem; font-size: .78rem; height: 2rem; justify-content: center; width: 2rem; }
+  .account-profile [data-authenticated-name] { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .account form { margin: 0; }
   .account button { background: transparent; border: 1px solid var(--border-default); color: var(--text-primary); cursor: pointer; font: inherit; padding: .35rem .55rem; white-space: nowrap; }
-  @media (max-width: 560px) { .applicant-header { align-items: flex-start; flex-direction: column; } .member-navigation { margin-left: 0; } .account { align-items: flex-start; flex-direction: column; gap: .4rem; } }
+  @media (max-width: 560px) { .applicant-header { align-items: flex-start; flex-direction: column; } .member-navigation, .display-settings { margin-left: 0; } .account { align-items: flex-start; flex-direction: column; gap: .4rem; } }
 </style>

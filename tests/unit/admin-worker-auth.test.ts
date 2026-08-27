@@ -273,15 +273,12 @@ describe("applicant stage server-side access", () => {
     expect(inserts).toHaveLength(1);
   });
 
-  it("sends a Google-authenticated user without an application to the form", async () => {
+  it("sends a Google-authenticated user without an application to the applicant start page", async () => {
     const applicantPage = await worker.fetch(
       loggedInRequest("/applicant/"),
       stageEnv(null) as never,
     );
-    expect(applicantPage.status).toBe(302);
-    expect(applicantPage.headers.get("location")).toBe(
-      "https://admin.example/apply/",
-    );
+    expect(applicantPage.status).toBe(200);
 
     const adminPage = await worker.fetch(
       loggedInRequest("/admin/portal/"),
@@ -289,7 +286,7 @@ describe("applicant stage server-side access", () => {
     );
     expect(adminPage.status).toBe(302);
     expect(adminPage.headers.get("location")).toBe(
-      "https://admin.example/apply/",
+      "https://admin.example/applicant/",
     );
 
     const applicationPage = await worker.fetch(
@@ -322,6 +319,17 @@ describe("applicant stage server-side access", () => {
       stageEnv("accepted", false, true, true) as never,
     );
     expect(applicationPage.status).toBe(200);
+  });
+
+  it("routes an accepted member entering at the site root to the member portal", async () => {
+    const rootPage = await worker.fetch(
+      loggedInRequest("/"),
+      stageEnv("accepted", false, true, true) as never,
+    );
+    expect(rootPage.status).toBe(302);
+    expect(rootPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
   });
 
   it("keeps the application directory open for an administrator", async () => {

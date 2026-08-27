@@ -143,6 +143,26 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
+test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const writing = page.locator('[data-editor-pane="writing"]');
+  const preview = page.locator('[data-editor-pane="preview"]');
+  const review = page.locator('[data-editor-pane="review"]');
+  await writing.locator('[data-edge="top"]').click();
+
+  await expect(writing).toHaveCSS("grid-row-start", "1");
+  await expect(writing).toHaveCSS("grid-column-start", "1");
+  await expect(writing).toHaveCSS("grid-column-end", "-1");
+  await expect(preview).toHaveCSS("grid-row-start", "2");
+  await expect(preview).toHaveCSS("grid-column-start", "1");
+  await expect(review).toHaveCSS("grid-row-start", "2");
+  await expect(review).toHaveCSS("grid-column-start", "2");
+});
+
 test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示する", async ({
   page,
 }) => {
@@ -186,6 +206,21 @@ test("E-6: ダークモードでMarkdown本文を読める配色にする", asyn
   expect(colors.background).not.toBe("rgb(255, 255, 255)");
   expect(colors.text).not.toBe("rgba(0, 0, 0, 0)");
   expect(colors.caret).toBe("rgb(255, 255, 255)");
+
+  const lockedMarkColors = await page
+    .locator("[data-locked-range-markup]")
+    .evaluate((element) => {
+      element.innerHTML = '<mark class="locked-range-mark">ロック範囲</mark>';
+      const mark = element.querySelector("mark");
+      if (!mark) return null;
+      const style = getComputedStyle(mark);
+      return {
+        background: style.backgroundColor,
+        border: style.borderLeftColor,
+      };
+    });
+  expect(lockedMarkColors?.background).not.toBe("rgb(255, 255, 0)");
+  expect(lockedMarkColors?.border).toBe("rgb(255, 122, 135)");
 });
 
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
@@ -198,6 +233,17 @@ test("E-7: 未保存の変更があると戻る・離脱を警告する", async 
     return !window.dispatchEvent(event);
   });
   expect(prevented).toBe(true);
+});
+
+test("E-14: 編集画面から戻ると編集・フィードバック一覧へ移動する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/articles/");
+  await page.goto("./admin/editor/?new=1");
+  await expect(page.locator("[data-editor-workspace]")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin\/articles\/?(?:$|#)/);
 });
 
 test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", async ({ page }) => {
@@ -285,6 +331,50 @@ test("V-2: フィードバック担当者と依頼内容を選んで保存でき
     });
   await expect(page.locator("[data-save-message]")).toHaveText(
     "フィードバックを依頼しました。",
+  );
+});
+
+test("V-3: 依頼先未選択でもキャンセルできる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/review-requests", async (route) => {
+    await route.fulfill({
+      json: {
+        reviewers: [
+          {
+            email: "bob@example.com",
+            displayName: "Bob",
+            subjects: ["mathematics"],
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await page.getByRole("button", { name: "フィードバックを依頼する" }).click();
+  const dialog = page.locator("[data-review-request-dialog]");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "キャンセル" }).click();
+  await expect(dialog).not.toBeVisible();
+});
+
+test("V-4: 確認済み操作後も展開した返信を保持する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const thread = page.locator(".comment-thread").first();
+  await thread.locator("[data-toggle-replies]").click();
+  await expect(thread.locator("[data-replies]")).not.toHaveAttribute(
+    "hidden",
+    "",
+  );
+  await thread.locator("[data-comment-action=acknowledge]").first().click();
+  await expect(thread.locator("[data-replies]")).not.toHaveAttribute(
+    "hidden",
+    "",
+  );
+  await expect(thread.locator("[data-toggle-replies]")).toHaveText(
+    "返信を隠す",
   );
 });
 
@@ -403,19 +493,23 @@ test("CM-2: 本文の選択解除時に直前の選択内容を破棄する", as
     element.setSelectionRange(0, 4);
     element.dispatchEvent(new Event("select", { bubbles: true }));
   });
-  await expect(page.locator("[data-selection-action]")).toBeVisible();
+  await expect(page.locator("[data-selection-action]")).toBeHidden();
+  await expect(page.locator("[data-selected-ranges]")).toBeVisible();
+  await expect(page.locator("[data-comment-selection]")).toContainText(
+    "最初の選択範囲を自動で添付しました",
+  );
 
   await body.evaluate((element: HTMLTextAreaElement) => {
     element.setSelectionRange(0, 0);
     element.dispatchEvent(new Event("select", { bubbles: true }));
   });
   await expect(page.locator("[data-selection-action]")).toBeHidden();
-  await expect(page.locator("[data-comment-selection]")).toHaveText(
-    "範囲未選択：記事全体へのコメントとして送信します。",
+  await expect(page.locator("[data-comment-selection]")).toContainText(
+    "選択範囲を1件添付中",
   );
 
   await body.evaluate((element: HTMLTextAreaElement) => {
-    element.setSelectionRange(0, 4);
+    element.setSelectionRange(5, 9);
     element.dispatchEvent(new Event("select", { bubbles: true }));
   });
   await expect(page.locator("[data-selection-action]")).toBeVisible();
@@ -924,6 +1018,8 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   const popupPromise = page.waitForEvent("popup");
   await page.locator('[data-pane-popout="writing"]').click();
   const popup = await popupPromise;
+  await expect(writing).toBeVisible();
+  await expect(writing.locator("[data-body]")).toBeVisible();
   await popup.locator("[data-body]").fill("## 別窓\n\n同期された本文");
   await popup.close();
   await expect(page.locator("[data-body]")).toHaveValue(
@@ -945,7 +1041,7 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   await expect(thread.locator(".comment-action-count").nth(1)).toHaveText("1");
   await expect(thread.locator(".comment-action-actor-list")).toHaveCount(0);
 
-  await thread.click({ button: "right" });
+  await thread.locator(".thread-summary").click({ button: "right" });
   await expect(page.locator("[data-comment-context-menu]")).toContainText(
     "確認済み：Alice",
   );
@@ -954,9 +1050,24 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   );
   await page.keyboard.press("Escape");
 
+  await expect(thread.locator(".comment-action-history")).toHaveCount(0);
+  const acknowledge = thread.getByRole("button", { name: /確認済み/ });
+  await acknowledge.hover();
+  await expect(page.locator(".comment-action-history-tooltip")).toHaveText(
+    "確認済み：Alice",
+  );
+
+  await acknowledge.click({ button: "right" });
+  await expect(page.locator("[data-comment-context-menu]")).toHaveText(
+    "確認済みの操作履歴確認済み：Alice",
+  );
+  await page.keyboard.press("Escape");
+
   await thread.locator("[data-toggle-replies]").click();
   const replyContent = thread.locator(".comment-reply .comment-content");
   await expect(replyContent).toBeVisible();
+  await expect(thread.locator(".comment-replies")).toHaveCSS("display", "grid");
+  await expect(thread.locator(".comment-reply")).toHaveCSS("width", /px/);
   expect(
     await replyContent.evaluate((element) =>
       Number.parseFloat(getComputedStyle(element).fontSize),
