@@ -30,6 +30,26 @@ const tikzRenderPromises = new Map();
 
 const tikzAttribute = (value) => encodeURIComponent(String(value ?? ""));
 
+/**
+ * TikZJax puts Computer Modern font-family names in the generated SVG, but
+ * its font-face declarations live in the hidden renderer iframe. Once the
+ * SVG is moved into the editor preview, that stylesheet is gone. Embed the
+ * same declaration in the SVG so the preview does not fall back to Chrome's
+ * default serif font.
+ */
+function embedTikzFontCss(svg) {
+  const value = String(svg ?? "");
+  if (!/^<svg(?:\s|>)/i.test(value)) return value;
+  if (/data-atlasez-tikz-fonts/i.test(value)) return value;
+  const style =
+    '<style data-atlasez-tikz-fonts="true">@import url("' +
+    TIKZJAX_FONT_URL +
+    '");</style>';
+  if (/<defs(?:\s|>)/i.test(value))
+    return value.replace(/<defs(\s[^>]*)?>/i, (match) => `${match}${style}`);
+  return value.replace(/(<svg(?:\s[^>]*)?>)/i, `$1<defs>${style}</defs>`);
+}
+
 const EDITORIAL_ASSET_URL = /^asset:\/\/([0-9a-f-]{36})(?:\?[^)]*)?$/i;
 
 /** Preserve editor-only asset markers so the admin hydrator can load them. */
@@ -200,7 +220,7 @@ function renderWithFreeTikzJax(source) {
     const check = () => {
       const svg = frame.contentDocument?.querySelector("svg");
       if (!svg) return;
-      finish(() => resolve(svg.outerHTML));
+      finish(() => resolve(embedTikzFontCss(svg.outerHTML)));
     };
     const poll = window.setInterval(check, 100);
     const timeout = window.setTimeout(

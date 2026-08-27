@@ -14,6 +14,12 @@ const tex2svg =
 if (typeof tex2svg !== "function")
   throw new Error("node-tikzjaxのレンダラーを読み込めませんでした。");
 
+// TikZJax emits Computer Modern font-family names (cmr10, cmmi10, ...).
+// Keep the font-face declarations inside the SVG because an inline SVG no
+// longer has access to the stylesheet of the renderer that created it.
+const TIKZ_FONT_CSS_URL =
+  "https://cdn.jsdelivr.net/npm/node-tikzjax@1.0.5/css/fonts.css";
+
 // node-tikzjax uses a shared in-memory TeX filesystem and its own global
 // WASM state. Serialize renders so two requests cannot corrupt one another.
 let renderQueue = Promise.resolve();
@@ -99,6 +105,8 @@ export async function renderTikzSource(source, options = {}) {
     const svg = await tex2svg(tex, {
       texPackages,
       tikzLibraries: normalized.libraries.join(","),
+      embedFontCss: true,
+      fontCssUrl: TIKZ_FONT_CSS_URL,
       disableOptimize: false,
     });
     return {

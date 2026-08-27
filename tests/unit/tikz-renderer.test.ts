@@ -31,6 +31,9 @@ describe("TikZ server renderer policy", () => {
       { libraries: ["arrows.meta"] },
     );
     expect(result.svg).toMatch(/^<svg(?:\s|>)/);
+    expect(result.svg).toMatch(
+      /@import url\(https:\/\/cdn\.jsdelivr\.net\/npm\/node-tikzjax@1\.0\.5\/css\/fonts\.css\)/,
+    );
     expect(result.svg).not.toMatch(/<script|foreignObject/i);
     expect(result.hash).toHaveLength(64);
   });
