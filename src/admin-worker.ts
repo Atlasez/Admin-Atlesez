@@ -1057,7 +1057,6 @@ async function saveApplicationProfile(
     !validTimeZone(timezone) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(birthDate) ||
     !residenceCity ||
-    !referralSource ||
     (formLanguage === "ja" && (!familyNameKana || !givenNameKana))
   )
     return json({ error: "基本情報をすべて入力してください。" }, 400);
@@ -1087,7 +1086,8 @@ async function saveApplicationProfile(
        affiliation_email=excluded.affiliation_email,
        institution=excluded.institution,grade=excluded.grade,country=excluded.country,
        timezone=excluded.timezone,birth_date=excluded.birth_date,residence_city=excluded.residence_city,
-       current_organizations=excluded.current_organizations,referral_source=excluded.referral_source,
+       current_organizations=excluded.current_organizations,
+       referral_source=COALESCE(NULLIF(excluded.referral_source,''),atlasez_applicant_profiles.referral_source),
        updated_at=excluded.updated_at`,
   )
     .bind(
@@ -5253,6 +5253,7 @@ async function submitMemberApplication(
     middleName?: unknown;
     familyNameKana?: unknown;
     givenNameKana?: unknown;
+    nameOrder?: unknown;
     formLanguage?: unknown;
     email?: unknown;
     interests?: unknown;
@@ -5313,13 +5314,15 @@ async function submitMemberApplication(
         ? "en"
         : "ja";
   const legacyName = normalizedText(payload.name, 120),
+    requestedNameOrder = text(payload.nameOrder, 20),
+    nameOrder = requestedNameOrder === "given-family" || (requestedNameOrder === "" && formLanguage === "en")
+      ? "given-family"
+      : "family-given",
     name =
       familyName && givenName
-        ? [
-            formLanguage === "en" ? givenName : familyName,
-            formLanguage === "en" ? middleName : "",
-            formLanguage === "en" ? familyName : givenName,
-          ]
+        ? (nameOrder === "given-family"
+          ? [givenName, formLanguage === "en" ? middleName : "", familyName]
+          : [familyName, formLanguage === "en" ? middleName : "", givenName])
             .filter(Boolean)
             .join(" ")
         : legacyName,
@@ -5355,8 +5358,7 @@ async function submitMemberApplication(
       text(payload.currentOrganizations, 1_000) ||
       storedProfile?.current_organizations ||
       "",
-    referralSource =
-      text(payload.referralSource, 500) || storedProfile?.referral_source || "",
+    referralSource = text(payload.referralSource, 500),
     motivationReasons = text(payload.motivationReasons, 3_000),
     desiredRoles = text(payload.desiredRoles, 2_000),
     interviewAvailability = text(payload.interviewAvailability, 2_000),
