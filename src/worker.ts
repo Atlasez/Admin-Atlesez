@@ -489,6 +489,18 @@ async function listArticleAnalyticsRegions(
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
+    const visitorScheme = request.headers.get("cf-visitor");
+    let originalScheme = url.protocol;
+    try {
+      const parsedVisitor = visitorScheme ? JSON.parse(visitorScheme) : null;
+      if (parsedVisitor?.scheme === "http") originalScheme = "http:";
+    } catch {
+      // Cloudflareのヘッダーがない場合はURLのschemeを使う。
+    }
+    if (originalScheme === "http:") {
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
+    }
     if (url.pathname === "/api/article-reports") {
       if (request.method === "OPTIONS") {
         return withCors(new Response(null, { status: 204 }), request);
