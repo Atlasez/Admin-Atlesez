@@ -688,6 +688,7 @@ type ApplicantProfile = {
   family_name: string;
   given_name: string;
   middle_name: string;
+  nickname: string;
   family_name_kana: string;
   given_name_kana: string;
   form_language: "ja" | "en";
@@ -945,6 +946,7 @@ const applicantProfileFromRow = (
     family_name: String(row.family_name ?? ""),
     given_name: String(row.given_name ?? ""),
     middle_name: String(row.middle_name ?? ""),
+    nickname: String(row.nickname ?? ""),
     family_name_kana: String(row.family_name_kana ?? ""),
     given_name_kana: String(row.given_name_kana ?? ""),
     form_language: row.form_language === "en" ? "en" : "ja",
@@ -967,7 +969,7 @@ async function getApplicantProfile(
   email: string,
 ): Promise<ApplicantProfile | null> {
   const stored = await env.REPORTS.prepare(
-    `SELECT email,family_name,given_name,middle_name,family_name_kana,given_name_kana,
+    `SELECT email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,
             form_language,affiliation_email,affiliation_type,institution,grade,country,timezone,birth_date,
             residence_city,current_organizations,referral_source
      FROM atlasez_applicant_profiles WHERE lower(email)=lower(?)`,
@@ -976,7 +978,7 @@ async function getApplicantProfile(
     .first<ApplicantProfile>();
   if (stored) return applicantProfileFromRow(stored);
   const legacy = await env.REPORTS.prepare(
-    `SELECT email,family_name,given_name,middle_name,family_name_kana,given_name_kana,
+    `SELECT email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,
             form_language,affiliation_email,affiliation_type,institution,grade,country,timezone,birth_date,
             residence_city,current_organizations,referral_source
      FROM atlasez_member_applications
@@ -1031,6 +1033,7 @@ async function saveApplicationProfile(
   const familyName = normalizedText(payload.familyName, 80);
   const givenName = normalizedText(payload.givenName, 80);
   const middleName = normalizedText(payload.middleName, 80);
+  const nickname = normalizedText(payload.nickname, 120);
   const familyNameKana = normalizedText(payload.familyNameKana, 80);
   const givenNameKana = normalizedText(payload.givenNameKana, 80);
   const affiliationEmail = normalizedText(
@@ -1075,12 +1078,13 @@ async function saveApplicationProfile(
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO atlasez_applicant_profiles
-      (email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,
+      (email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,form_language,
        affiliation_email,affiliation_type,institution,grade,country,timezone,birth_date,residence_city,
        current_organizations,referral_source,created_at,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(email) DO UPDATE SET
        family_name=excluded.family_name,given_name=excluded.given_name,middle_name=excluded.middle_name,
+       nickname=excluded.nickname,
        family_name_kana=excluded.family_name_kana,given_name_kana=excluded.given_name_kana,
        form_language=excluded.form_language,affiliation_type=excluded.affiliation_type,
        affiliation_email=excluded.affiliation_email,
@@ -1095,6 +1099,7 @@ async function saveApplicationProfile(
       familyName,
       givenName,
       middleName,
+      nickname,
       familyNameKana,
       givenNameKana,
       formLanguage,
@@ -2398,8 +2403,10 @@ async function listEditorialDocuments(
   // 未作成の場合があるため、一覧取得自体は依頼情報なしでも継続する。
   const assignmentRows = documentRows.length
     ? await env.REPORTS.prepare(
-        `SELECT document_id, reviewer_email FROM editorial_review_assignments
-         WHERE document_id IN (${documentRows.map(() => "?").join(",")})`,
+        `SELECT r.document_id,
+                COALESCE(NULLIF((SELECT GROUP_CONCAT(rr.reviewer_email) FROM editorial_review_assignment_recipients rr WHERE rr.document_id = r.document_id), ''), r.reviewer_email) AS reviewer_email
+         FROM editorial_review_assignments r
+         WHERE r.document_id IN (${documentRows.map(() => "?").join(",")})`,
       )
         .bind(...documentRows.map((document) => document.id))
         .all<{ document_id: string; reviewer_email: string }>()
@@ -4314,7 +4321,7 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
-    `SELECT a.id,a.name,a.email,a.affiliation_email,a.family_name,a.given_name,a.middle_name,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.project_slug,a.project_answers,
+    `SELECT a.id,a.name,a.email,a.affiliation_email,a.family_name,a.given_name,a.middle_name,a.nickname,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.project_slug,a.project_answers,
       a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
       a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
       a.desired_subjects,a.article_ideas,a.availability_note,a.provisioning_status,a.provisioning_error,a.provisioned_at,a.accepted_by,
@@ -4355,12 +4362,13 @@ async function updateApplication(
   if (!["new", "reviewing", "accepted", "rejected"].includes(status))
     return json({ error: "状態を確認してください。" }, 400);
   const application = await env.REPORTS.prepare(
-    `SELECT name,email,status,project_slug,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note
+    `SELECT name,nickname,email,status,project_slug,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note
      FROM atlasez_member_applications WHERE id=?`,
   )
     .bind(id)
     .first<{
       name: string;
+      nickname: string;
       email: string;
       status: string;
       project_slug: string;
@@ -4429,7 +4437,7 @@ async function updateApplication(
   )
     .bind(application.email)
     .first<{ discord_user_id: string }>();
-  const displayName =
+  const legalDisplayName =
     [
       application.form_language === "en"
         ? application.given_name
@@ -4441,6 +4449,7 @@ async function updateApplication(
     ]
       .filter(Boolean)
       .join(" ") || application.name;
+  const displayName = application.nickname?.trim() || legalDisplayName;
   const statements: D1PreparedStatement[] = [
     env.REPORTS.prepare(
       "INSERT INTO atlasez_project_memberships (project_id,email,role,joined_at) VALUES (?,?,'member',?) ON CONFLICT(project_id,email) DO NOTHING",
@@ -5254,6 +5263,7 @@ async function submitMemberApplication(
     familyNameKana?: unknown;
     givenNameKana?: unknown;
     nameOrder?: unknown;
+    nickname?: unknown;
     formLanguage?: unknown;
     email?: unknown;
     interests?: unknown;
@@ -5313,6 +5323,8 @@ async function submitMemberApplication(
       (!text(payload.formLanguage, 2) && storedProfile?.form_language === "en")
         ? "en"
         : "ja";
+  const nickname =
+    normalizedText(payload.nickname, 120) || storedProfile?.nickname || "";
   const legacyName = normalizedText(payload.name, 120),
     requestedNameOrder = text(payload.nameOrder, 20),
     nameOrder =
@@ -5532,12 +5544,13 @@ async function submitMemberApplication(
   if (authenticatedEmail) {
     await env.REPORTS.prepare(
       `INSERT INTO atlasez_applicant_profiles
-        (email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,
+        (email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,form_language,
          affiliation_email,affiliation_type,institution,grade,country,timezone,birth_date,residence_city,
          current_organizations,referral_source,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(email) DO UPDATE SET
          family_name=excluded.family_name,given_name=excluded.given_name,middle_name=excluded.middle_name,
+         nickname=excluded.nickname,
          family_name_kana=excluded.family_name_kana,given_name_kana=excluded.given_name_kana,
          form_language=excluded.form_language,affiliation_type=excluded.affiliation_type,
          affiliation_email=excluded.affiliation_email,
@@ -5551,6 +5564,7 @@ async function submitMemberApplication(
         familyName,
         givenName,
         middleName,
+        nickname,
         familyNameKana,
         givenNameKana,
         formLanguage,
@@ -5571,8 +5585,8 @@ async function submitMemberApplication(
   }
   await env.REPORTS.prepare(
     `INSERT INTO atlasez_member_applications
-     (id,name,email,affiliation_email,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,project_slug,project_answers,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
+     (id,name,email,affiliation_email,family_name,given_name,middle_name,nickname,family_name_kana,given_name_kana,form_language,interests,message,status,created_at,updated_at,project_slug,project_answers,affiliation_type,institution,grade,country,timezone,desired_subjects,article_ideas,discord_user_id,availability_note,birth_date,residence_city,current_organizations,referral_source,motivation_reasons,desired_roles,interview_availability,applicant_questions)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?,?,?,?,?,?,?,?,?,?,'',?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       applicationId,
@@ -5582,6 +5596,7 @@ async function submitMemberApplication(
       familyName,
       givenName,
       middleName,
+      nickname,
       familyNameKana,
       givenNameKana,
       formLanguage,
@@ -6253,17 +6268,24 @@ async function getEditorialDocument(
     string,
     Map<string, "acknowledge" | "unacknowledge">
   >();
+  const latestResolution = new Map<string, Map<string, "resolve" | "reopen">>();
   for (const action of actionRows.results ?? []) {
     if (action.action === "acknowledge" || action.action === "unacknowledge") {
       const feedback = latestFeedback.get(action.comment_id) ?? new Map();
       feedback.set(action.actor_email.toLowerCase(), action.action);
       latestFeedback.set(action.comment_id, feedback);
-    } else if (action.action === "resolve" || action.action === "reopen")
-      addAction(action.comment_id, action.action, action.actor_email);
+    } else if (action.action === "resolve" || action.action === "reopen") {
+      const resolution = latestResolution.get(action.comment_id) ?? new Map();
+      resolution.set(action.actor_email.toLowerCase(), action.action);
+      latestResolution.set(action.comment_id, resolution);
+    }
   }
   for (const [commentId, feedback] of latestFeedback)
     for (const [actorEmail, action] of feedback)
       addAction(commentId, action, actorEmail);
+  for (const [commentId, resolution] of latestResolution)
+    for (const [actorEmail, action] of resolution)
+      if (action === "resolve") addAction(commentId, action, actorEmail);
   const authorEmails = [
     ...new Set(
       [
@@ -6360,12 +6382,18 @@ async function getEditorialDocument(
       );
     if (
       comment.resolved_by &&
-      !entry.actorCounts.resolve.has(comment.resolved_by)
+      !entry.actorCounts.resolve.has(comment.resolved_by.toLowerCase())
     )
       addAction(comment.id, "resolve", comment.resolved_by);
     const current = actionsByComment.get(comment.id) ?? entry;
+    const resolvedActors = new Set(current.actorCounts.resolve.keys());
+    const resolvedByBoth =
+      resolvedActors.has(comment.created_by.trim().toLowerCase()) &&
+      resolvedActors.size >= 2;
     return {
       ...comment,
+      resolved_at: resolvedByBoth ? comment.resolved_at : null,
+      resolved_by: resolvedByBoth ? comment.resolved_by : null,
       author_display_name:
         authorProfileByEmail
           .get(comment.created_by.toLowerCase())
@@ -6789,9 +6817,10 @@ async function listEditorialReviewRequests(
   const [result, reviewerResult] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
-         r.reviewer_email, r.request_note,
+         COALESCE(NULLIF((SELECT GROUP_CONCAT(rr.reviewer_email) FROM editorial_review_assignment_recipients rr WHERE rr.document_id = d.id), ''), r.reviewer_email) AS reviewer_email,
+         r.request_note,
          COALESCE(NULLIF(TRIM(requester.display_name), ''), '表示名未設定') AS requester_display_name,
-         COALESCE(NULLIF(TRIM(reviewer.display_name), ''), '') AS reviewer_display_name
+         COALESCE(NULLIF((SELECT GROUP_CONCAT(COALESCE(NULLIF(TRIM(rm.display_name), ''), rr.reviewer_email)) FROM editorial_review_assignment_recipients rr LEFT JOIN editorial_member_profiles rm ON lower(rm.email) = lower(rr.reviewer_email) WHERE rr.document_id = d.id), ''), COALESCE(NULLIF(TRIM(reviewer.display_name), ''), '')) AS reviewer_display_name
        FROM editorial_documents d
        LEFT JOIN editorial_review_assignments r ON r.document_id = d.id
        LEFT JOIN editorial_member_profiles requester ON requester.email = d.updated_by
@@ -6833,7 +6862,11 @@ async function listEditorialReviewRequests(
           ? "分野担当者全員"
           : item.reviewer_display_name || "表示名未設定",
       assignedToMe:
-        item.reviewer_email?.toLowerCase() === scope.email.toLowerCase(),
+        item.reviewer_email
+          ?.split(",")
+          .some(
+            (email) => email.trim().toLowerCase() === scope.email.toLowerCase(),
+          ) ?? false,
     })),
     reviewers: (reviewerResult.results ?? []).map((item) => ({
       email: item.email,
@@ -6852,7 +6885,11 @@ async function updateEditorialReviewAssignment(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  let payload: { reviewerEmail?: unknown; note?: unknown };
+  let payload: {
+    reviewerEmail?: unknown;
+    reviewerEmails?: unknown;
+    note?: unknown;
+  };
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -6868,44 +6905,77 @@ async function updateEditorialReviewAssignment(
     return json({ error: "査読中の原稿だけ担当者を設定できます。" }, 400);
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の査読権限がありません。" }, 403);
-  const reviewerEmail = text(payload.reviewerEmail, 320).toLowerCase();
+  const reviewerEmails = [
+    ...(Array.isArray(payload.reviewerEmails)
+      ? payload.reviewerEmails
+      : [payload.reviewerEmail]),
+  ]
+    .map((value) => text(value, 320).toLowerCase())
+    .filter(Boolean)
+    .filter((email, index, all) => all.indexOf(email) === index);
   const requestNote = text(payload.note, 2_000);
-  if (!reviewerEmail) {
-    await env.REPORTS.prepare(
-      "DELETE FROM editorial_review_assignments WHERE document_id = ?",
-    )
-      .bind(documentId)
-      .run();
-    return json({ ok: true, reviewerEmail: null });
+  if (!reviewerEmails.length) {
+    await env.REPORTS.batch([
+      env.REPORTS.prepare(
+        "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
+      ).bind(documentId),
+      env.REPORTS.prepare(
+        "DELETE FROM editorial_review_assignments WHERE document_id = ?",
+      ).bind(documentId),
+    ]);
+    return json({ ok: true, reviewerEmail: null, reviewerEmails: [] });
   }
-  if (reviewerEmail !== "*" && !EMAIL_PATTERN.test(reviewerEmail))
+  if (reviewerEmails.includes("*") && reviewerEmails.length > 1)
+    return json(
+      { error: "担当者全員と個別担当者は同時に選択できません。" },
+      400,
+    );
+  if (
+    reviewerEmails.some((email) => email !== "*" && !EMAIL_PATTERN.test(email))
+  )
     return json(
       { error: "査読担当者のメールアドレスを確認してください。" },
       400,
     );
-  const reviewer =
-    reviewerEmail === "*"
-      ? { found: 1 }
-      : await env.REPORTS.prepare(
-          "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
-        )
-          .bind(reviewerEmail, document.subject)
-          .first<{ found: number }>();
-  if (!reviewer)
+  const reviewers = reviewerEmails.includes("*")
+    ? [{ found: 1 }]
+    : await Promise.all(
+        reviewerEmails.map((email) =>
+          env.REPORTS.prepare(
+            "SELECT 1 AS found FROM report_admin_permissions WHERE lower(email) = lower(?) AND (subject = '*' OR subject = ?) LIMIT 1",
+          )
+            .bind(email, document.subject)
+            .first<{ found: number }>(),
+        ),
+      );
+  if (reviewers.some((reviewer) => !reviewer))
     return json(
-      { error: "この原稿の分野を担当できる運営者を選択してください。" },
+      {
+        error:
+          "選択した担当者の中に、この原稿の分野を担当できない運営者がいます。",
+      },
       400,
     );
   const now = new Date().toISOString();
-  await env.REPORTS.prepare(
-    `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
-       requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note`,
-  )
-    .bind(documentId, reviewerEmail, scope.email, now, now, requestNote)
-    .run();
-  return json({ ok: true, reviewerEmail });
+  await env.REPORTS.batch([
+    env.REPORTS.prepare(
+      `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
+         requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note`,
+    ).bind(documentId, reviewerEmails[0], scope.email, now, now, requestNote),
+    env.REPORTS.prepare(
+      "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
+    ).bind(documentId),
+    ...reviewerEmails
+      .filter((email) => email !== "*")
+      .map((email) =>
+        env.REPORTS.prepare(
+          "INSERT INTO editorial_review_assignment_recipients (document_id, reviewer_email, requested_at, updated_at) VALUES (?, ?, ?, ?)",
+        ).bind(documentId, email, now, now),
+      ),
+  ]);
+  return json({ ok: true, reviewerEmail: reviewerEmails[0], reviewerEmails });
 }
 
 async function createEditorialComment(
@@ -7007,11 +7077,16 @@ async function updateEditorialCommentStatus(
   )
     return json({ error: "操作を確認してください。" }, 400);
   const comment = await env.REPORTS.prepare(
-    `SELECT c.id, d.subject, d.status FROM editorial_comments c
+    `SELECT c.id, c.created_by, d.subject, d.status FROM editorial_comments c
      JOIN editorial_documents d ON d.id = c.document_id WHERE c.id = ? AND c.document_id = ?`,
   )
     .bind(commentId, documentId)
-    .first<{ id: string; subject: string; status: EditorialDocumentStatus }>();
+    .first<{
+      id: string;
+      created_by: string;
+      subject: string;
+      status: EditorialDocumentStatus;
+    }>();
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
@@ -7046,7 +7121,7 @@ async function updateEditorialCommentStatus(
     });
   }
   const now = new Date().toISOString();
-  const stateUpdate =
+  let stateUpdate =
     action === "acknowledge"
       ? env.REPORTS.prepare(
           "UPDATE editorial_comments SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ?",
@@ -7057,11 +7132,38 @@ async function updateEditorialCommentStatus(
           ).bind(commentId)
         : action === "resolve"
           ? env.REPORTS.prepare(
-              "UPDATE editorial_comments SET resolved_at = ?, resolved_by = ? WHERE id = ?",
-            ).bind(now, scope.email, commentId)
+              "UPDATE editorial_comments SET resolved_at = resolved_at, resolved_by = resolved_by WHERE id = ?",
+            ).bind(commentId)
           : env.REPORTS.prepare(
               "UPDATE editorial_comments SET resolved_at = NULL, resolved_by = NULL WHERE id = ?",
             ).bind(commentId);
+  if (action === "resolve" || action === "reopen") {
+    const resolutionRows = await env.REPORTS.prepare(
+      `SELECT actor_email, action FROM editorial_comment_actions
+       WHERE comment_id = ? AND action IN ('resolve', 'reopen') ORDER BY created_at ASC`,
+    )
+      .bind(commentId)
+      .all<{ actor_email: string; action: "resolve" | "reopen" }>();
+    const activeResolvers = new Map<string, string>();
+    for (const row of resolutionRows.results ?? []) {
+      const email = row.actor_email.trim().toLowerCase();
+      if (row.action === "resolve") activeResolvers.set(email, row.actor_email);
+      else activeResolvers.delete(email);
+    }
+    const actorEmail = scope.email.trim().toLowerCase();
+    if (action === "resolve") activeResolvers.set(actorEmail, scope.email);
+    else activeResolvers.delete(actorEmail);
+    const commentAuthor = comment.created_by.trim().toLowerCase();
+    const isResolved =
+      activeResolvers.has(commentAuthor) && activeResolvers.size >= 2;
+    stateUpdate = isResolved
+      ? env.REPORTS.prepare(
+          "UPDATE editorial_comments SET resolved_at = ?, resolved_by = ? WHERE id = ?",
+        ).bind(now, scope.email, commentId)
+      : env.REPORTS.prepare(
+          "UPDATE editorial_comments SET resolved_at = NULL, resolved_by = NULL WHERE id = ?",
+        ).bind(commentId);
+  }
   try {
     // 状態と監査履歴を同一D1 batchに入れ、片方だけ成功する状態を防ぐ。
     await env.REPORTS.batch([
