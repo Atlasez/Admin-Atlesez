@@ -1023,8 +1023,8 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   const popupPromise = page.waitForEvent("popup");
   await page.locator('[data-pane-popout="writing"]').click();
   const popup = await popupPromise;
-  await expect(writing).toBeVisible();
-  await expect(writing.locator("[data-body]")).toBeVisible();
+  await expect(writing).toBeHidden();
+  await expect(popup.locator("[data-body]")).toBeVisible();
   await popup.locator("[data-body]").fill("## 別窓\n\n同期された本文");
   await popup.close();
   await expect(page.locator("[data-body]")).toHaveValue(
