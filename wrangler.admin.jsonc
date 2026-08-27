@@ -16,7 +16,7 @@
   "vars": {
     "ADMIN_AUTH_MODE": "google-oauth",
     "ADMIN_PUBLIC_ORIGIN": "https://admin.atlasez.org",
-    "PUBLIC_ANALYTICS_ORIGIN": "https://atlasez-web-1.ukyoukay0.workers.dev",
+    "PUBLIC_ANALYTICS_ORIGIN": "https://atlasez.org",
     "EMAIL_FROM": "Atlasez運営 <apply@atlasez.org>",
   },
   "assets": {
