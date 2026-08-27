@@ -5315,14 +5315,17 @@ async function submitMemberApplication(
         : "ja";
   const legacyName = normalizedText(payload.name, 120),
     requestedNameOrder = text(payload.nameOrder, 20),
-    nameOrder = requestedNameOrder === "given-family" || (requestedNameOrder === "" && formLanguage === "en")
-      ? "given-family"
-      : "family-given",
+    nameOrder =
+      requestedNameOrder === "given-family" ||
+      (requestedNameOrder === "" && formLanguage === "en")
+        ? "given-family"
+        : "family-given",
     name =
       familyName && givenName
         ? (nameOrder === "given-family"
-          ? [givenName, formLanguage === "en" ? middleName : "", familyName]
-          : [familyName, formLanguage === "en" ? middleName : "", givenName])
+            ? [givenName, formLanguage === "en" ? middleName : "", familyName]
+            : [familyName, formLanguage === "en" ? middleName : "", givenName]
+          )
             .filter(Boolean)
             .join(" ")
         : legacyName,
