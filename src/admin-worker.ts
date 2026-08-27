@@ -4738,6 +4738,61 @@ async function operationsOverview(
   });
 }
 
+async function progressReportsOverview(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const projects = await accessibleOperationProjects(env, scope);
+  if (!projects.length)
+    return json({
+      scope: { email: scope.email, isManager: false },
+      projects: [],
+      progress: [],
+    });
+
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+  for (const project of projects) {
+    if (scope.isManager || project.role === "manager") {
+      conditions.push("r.project_id = ?");
+      values.push(project.id);
+      continue;
+    }
+    const subjectCondition = scope.subjects.length
+      ? ` OR r.subject IN (${scope.subjects.map(() => "?").join(",")})`
+      : "";
+    conditions.push(
+      `(r.project_id = ? AND (lower(r.email) = lower(?) OR r.subject IS NULL${subjectCondition}))`,
+    );
+    values.push(project.id, scope.email, ...scope.subjects);
+  }
+
+  const reports = await env.REPORTS.prepare(
+    `SELECT r.id,r.project_id,r.subject,r.document_id,r.body,r.created_at,r.email,
+      COALESCE(NULLIF(TRIM(profile.display_name),''),r.email) AS display_name,
+      COALESCE(p.name,r.project_id) AS project_name
+     FROM editorial_progress_reports r
+     LEFT JOIN editorial_member_profiles profile ON lower(profile.email)=lower(r.email)
+     LEFT JOIN atlasez_projects p ON p.id=r.project_id
+     WHERE ${conditions.join(" OR ")}
+     ORDER BY r.created_at DESC`,
+  )
+    .bind(...values)
+    .all<Record<string, unknown>>();
+  return json({
+    scope: {
+      email: scope.email,
+      subjects: scope.subjects,
+      isManager: scope.isManager,
+    },
+    projects,
+    progress: reports.results ?? [],
+  });
+}
+
 async function createOperation(
   request: Request,
   env: Env,
@@ -9019,6 +9074,8 @@ async function handleAdminRequest(
     return updateApplication(request, env, applicationMatch[1], ctx);
   if (url.pathname === "/api/admin/operations" && request.method === "GET")
     return operationsOverview(request, env);
+  if (url.pathname === "/api/admin/progress" && request.method === "GET")
+    return progressReportsOverview(request, env);
   if (
     url.pathname === "/api/admin/operations/tasks" &&
     request.method === "POST"
