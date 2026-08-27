@@ -2,7 +2,7 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
 import { getTimeZoneOptions } from "../../lib/timezones";
-const { memberMode = false, progressOnly = false } = Astro.props;
+const { memberMode = false, progressOnly = false, progressOverview = false } = Astro.props;
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
 const timezones = getTimeZoneOptions(new Date());
 const holidayCountries = [
@@ -25,7 +25,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 ---
 
 <AdminLayout title={initialPageTitle} description="運営作業を共有する場所">
-  <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined}>
+  <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined} data-progress-overview={progressOverview ? "true" : undefined}>
     <header>
       <h1 data-project-title>{initialPageTitle}</h1>
     </header>
@@ -37,13 +37,30 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           記録すると、設定済みの分野Discordチャンネルと全体進捗チャンネルへ自動転送されます。
         </p>
         <label class="field-label"
+          >対象分野<select data-progress-subject>
+            <option value="">全体</option>
+            {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
+          </select></label
+        ><label class="field-label"
           >進捗内容<textarea
             data-progress
             placeholder="例：群の定義を修正し、フィードバック3件に対応しました。"
           ></textarea></label
         ><button data-send-progress>進捗を記録してDiscordへ送る</button
         ><output data-progress-feedback aria-live="polite"></output>
-        <h3 class="subheading">自分が投げた進捗報告</h3>
+        <div class="progress-list-heading">
+          <h3 class="subheading">進捗報告一覧</h3>
+          <span data-progress-count aria-live="polite"></span>
+        </div>
+        <div class="progress-filters" role="group" aria-label="進捗報告の絞り込み">
+          <label class="field-label">プロジェクト<select data-progress-project-filter><option value="">すべてのプロジェクト</option></select></label>
+          <fieldset class="progress-subject-filters">
+            <legend>分野（複数選択可）</legend>
+            <label><input type="checkbox" data-progress-subject-filter="all" checked />すべて</label>
+            {subjects.map((subject) => <label><input type="checkbox" data-progress-subject-filter={subject.slug} />{subject.name}</label>)}
+            <label><input type="checkbox" data-progress-subject-filter="__none__" />全体報告（分野指定なし）</label>
+          </fieldset>
+        </div>
         <div data-progress-list></div>
       </section>
       <section class="task-workspace" hidden={calendarPage || progressOnly}>
@@ -408,6 +425,71 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .item small {
     color: var(--text-secondary);
   }
+  .progress-list-heading {
+    align-items: baseline;
+    display: flex;
+    gap: 0.7rem;
+    justify-content: space-between;
+    margin-top: 1.25rem;
+  }
+  .progress-list-heading .subheading { margin-bottom: 0; }
+  [data-progress-count] { color: var(--text-secondary); font-size: 0.78rem; }
+  .progress-filters {
+    background: color-mix(in srgb, var(--background-secondary) 72%, transparent);
+    border: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.85rem;
+    margin-top: 0.8rem;
+    padding: 0.8rem;
+  }
+  .progress-filters .field-label { margin: 0; }
+  .progress-subject-filters {
+    border: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.8rem;
+    margin: 0;
+    padding: 0;
+  }
+  .progress-subject-filters legend {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 800;
+    margin-bottom: 0.35rem;
+    width: 100%;
+  }
+  .progress-subject-filters label {
+    align-items: center;
+    color: var(--text-primary);
+    display: inline-flex;
+    font-size: 0.82rem;
+    gap: 0.3rem;
+  }
+  .progress-subject-filters input { margin: 0; width: auto; }
+  .progress-report {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: 0.35rem;
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 0.8rem;
+    padding: 0.85rem 1rem;
+  }
+  .progress-report-body { line-height: 1.7; white-space: pre-wrap; }
+  .progress-report-meta { color: var(--text-secondary); font-size: 0.78rem; }
+  .progress-report-meta strong { color: var(--text-primary); }
+  .progress-report-tag {
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 38%, transparent);
+    border-radius: 999px;
+    color: var(--text-primary);
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    margin-right: 0.35rem;
+    padding: 0.12rem 0.45rem;
+  }
   .task-row {
     align-items: center;
     display: flex;
@@ -461,6 +543,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       align-items: start;
       display: grid;
     }
+  }
+  @media (max-width: 560px) {
+    .progress-list-heading { align-items: start; display: grid; gap: 0.2rem; }
   }
   .calendar-head {
     align-items: center;
@@ -1086,7 +1171,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
   type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
-  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[] };
+  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[] };
   const initializeOperations = () => {
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -1096,6 +1181,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const tasks = get<HTMLElement>('[data-task-list]');
     const events = get<HTMLElement>('[data-event-list]');
     const reports = get<HTMLElement>('[data-progress-list]');
+    const progressSubject = get<HTMLSelectElement>('[data-progress-subject]');
+    const progressProjectFilter = get<HTMLSelectElement>('[data-progress-project-filter]');
+    const progressCount = get<HTMLElement>('[data-progress-count]');
+    const progressOverview = root.dataset.progressOverview === 'true';
+    const progressSubjectFilters = [...root.querySelectorAll<HTMLInputElement>('[data-progress-subject-filter]')];
+    const progressSubjectLabels = new Map(progressSubjectFilters.map((input) => [input.dataset.progressSubjectFilter || '', input.parentElement?.textContent?.trim() || input.dataset.progressSubjectFilter || '']));
     const assignee = get<HTMLSelectElement>('[data-task-assignee]');
     const calendar = get<HTMLElement>('[data-event-calendar]');
     const calendarTitle = get<HTMLElement>('[data-calendar-title]');
@@ -1177,6 +1268,30 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
     renderHolidayTags();
     const selected = (actual: string, expected: string) => actual === expected ? 'selected' : '';
+    const selectedProgressSubjects = () => {
+      const all = progressSubjectFilters.find((input) => input.dataset.progressSubjectFilter === 'all');
+      const selected = progressSubjectFilters.filter((input) => input.checked && input.dataset.progressSubjectFilter !== 'all').map((input) => input.dataset.progressSubjectFilter || '');
+      return { all: Boolean(all?.checked), selected };
+    };
+    const renderProgressReports = () => {
+      const allReports = data.progress ?? [];
+      const projectFilter = progressProjectFilter.value;
+      const subjectFilter = selectedProgressSubjects();
+      const visibleReports = allReports.filter((item) => {
+        if (projectFilter && String(item.project_id ?? '') !== projectFilter) return false;
+        if (!progressOverview || subjectFilter.all) return true;
+        return subjectFilter.selected.includes(String(item.subject || '__none__'));
+      });
+      progressCount.textContent = progressOverview ? `${visibleReports.length}件表示（全${allReports.length}件）` : `${allReports.length}件`;
+      reports.innerHTML = visibleReports.map((item) => {
+        const subject = String(item.subject || '__none__');
+        const subjectText = subject === '__none__' ? '全体報告' : progressSubjectLabels.get(subject) || subject;
+        const reporter = String(item.display_name || item.email || '投稿者不明');
+        const email = item.email && item.email !== reporter ? `（${String(item.email)}）` : '';
+        const projectName = String(item.project_name || item.project_id || 'プロジェクト不明');
+        return `<article class="progress-report"><div class="progress-report-body">${escapeHtml(String(item.body ?? ''))}</div><div class="progress-report-meta"><span class="progress-report-tag">${escapeHtml(subjectText)}</span><span class="progress-report-tag">${escapeHtml(projectName)}</span><strong>${escapeHtml(reporter)}</strong>${escapeHtml(email)} ・ ${escapeHtml(formatDate(String(item.created_at)))}</div></article>`;
+      }).join('') || `<p>${progressOverview ? '条件に一致する進捗報告はありません。' : '進捗報告はまだありません。'}</p>`;
+    };
     const reminderKind = (rule: ReminderRule) => rule.relative_kind === 'before' ? (rule.relative_unit === 'hours' ? 'before_hours' : 'before_days') : rule.relative_kind === 'due_day_hourly' ? 'due_day_hourly' : 'absolute';
     const reminderRowHtml = (rule: ReminderRule = {}) => {
       const kind = reminderKind(rule);
@@ -1309,7 +1424,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = memberPage || !data.scope.isManager;
       assignee.innerHTML = '<option value="">担当者を指定しない</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}">${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
-      reports.innerHTML = (data.progress ?? []).map((item) => `<article class="item"><span>${escapeHtml(String(item.body ?? ''))}</span><small>自分が投げた進捗報告 ・ ${formatDate(String(item.created_at))}</small></article>`).join('') || '<p>自分が投げた進捗報告はまだありません。</p>';
+      const currentProject = progressProjectFilter.value;
+      progressProjectFilter.innerHTML = '<option value="">すべてのプロジェクト</option>' + (data.projects ?? []).map((project) => `<option value="${escapeHtml(String(project.id))}">${escapeHtml(String(project.name || project.slug || project.id))}</option>`).join('');
+      if ([...(data.projects ?? [])].some((project) => String(project.id) === currentProject)) progressProjectFilter.value = currentProject;
+      renderProgressReports();
       const visibleTasks = (data.tasks ?? []).filter((item) => taskFilter === 'all' || (taskFilter === 'assigned' ? item.assignee_email === data.scope.email : item.created_by === data.scope.email));
       tasks.innerHTML = visibleTasks.map((item) => `<article class="item"><div class="task-row"><b>${escapeHtml(String(item.title ?? ''))}</b><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><small><span class="task-role">${item.assignee_email === data.scope.email ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span> ${escapeHtml(String(item.subject || '全体'))}${item.assignee_email ? ` ・担当：${escapeHtml(members.get(String(item.assignee_email)) || '表示名未設定')}` : ' ・担当未指定'}${item.created_by ? ` ・依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}` : ''}${item.due_at ? ` ・期限：${escapeHtml(String(item.due_at).replace('T',' '))}（${escapeHtml(String(item.due_timezone || 'Asia/Tokyo'))}）` : ''}</small>${item.details ? `<small>${escapeHtml(String(item.details))}</small>` : ''}${taskReminderEditor(item)}</article>`).join('') || '<p>この条件のタスクはありません。</p>';
       tasks.querySelectorAll('small').forEach((small) => {
@@ -1329,7 +1447,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLElement>('[data-block-list]').innerHTML = ownBlocks.length ? ownBlocks.map((item) => `<div class="item availability-block-item"><span><b>${item.kind === 'available' ? '動ける' : '動けない'}</b> ・ ${formatDate(item.starts_at)} 〜 ${formatDate(item.ends_at)}${item.label ? ` ・ ${escapeHtml(String(item.label))}` : ''}</span><button type="button" class="event-delete" data-delete-block="${escapeHtml(String(item.id))}">削除</button></div>`).join('') : '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { data = memberPage ? await api<OperationData>('/api/admin/member-calendar') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
+    const load = async () => { data = memberPage ? await api<OperationData>('/api/admin/member-calendar') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); };
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
     let activeAvailabilityTrigger: HTMLButtonElement | null = null;
     const closeAvailabilityPopover = (restoreFocus = false) => {
@@ -1380,7 +1498,15 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     get<HTMLButtonElement>('[data-close-task-create]').addEventListener('click', () => taskCreateDialog.close());
     taskCreateDialog.addEventListener('click', (event) => { if (event.target === taskCreateDialog) taskCreateDialog.close(); });
     taskCreateDialog.addEventListener('close', () => taskCreateOpen.focus());
-    get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
+    get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, subject: progressSubject.value, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
+    progressProjectFilter.addEventListener('change', renderProgressReports);
+    progressSubjectFilters.forEach((input) => input.addEventListener('change', () => {
+      const all = progressSubjectFilters.find((item) => item.dataset.progressSubjectFilter === 'all');
+      if (input.dataset.progressSubjectFilter === 'all' && input.checked) progressSubjectFilters.filter((item) => item !== input).forEach((item) => { item.checked = false; });
+      if (input.dataset.progressSubjectFilter !== 'all' && input.checked && all) all.checked = false;
+      if (!progressSubjectFilters.some((item) => item.checked)) { if (all) all.checked = true; }
+      renderProgressReports();
+    }));
     get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
     refreshReminderRows(taskReminderList);
