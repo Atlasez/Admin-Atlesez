@@ -33,7 +33,7 @@ const projectApprovalHref = isAtlas ? "/admin/profile-requests/?section=atlas" :
         <ul data-assignments><li>確認中…</li></ul>
       </section>
       <form class="project-profile-editor" data-project-profile-form>
-        <label>運営内自己紹介<textarea name="internalBio" rows="7" maxlength="4000" placeholder="プロジェクト内のメンバーに向けて、担当・関心・作業可能なことなどを入力してください。"></textarea></label>
+        <label>運営内自己紹介<textarea name="internalBio" rows="7" maxlength="4000" placeholder="担当・関心・作業可能なことなど。リンクは [表示名](https://example.com/) の形式で入力できます。"></textarea></label>
         <div class="form-actions">
           <button type="submit" class="primary-action">変更を承認申請</button>
           <a class="quiet-action" href={`/admin/introductions/?project=${project}`}>自己紹介一覧を見る</a>
