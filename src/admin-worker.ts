@@ -5692,22 +5692,22 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   const profile = await getApplicantProfile(env, current.email);
   const basicProfileComplete = Boolean(
     profile &&
-      [
-        profile.family_name,
-        profile.given_name,
-        ...(profile.form_language === "en"
-          ? []
-          : [profile.family_name_kana, profile.given_name_kana]),
-        profile.affiliation_email,
-        profile.affiliation_type,
-        profile.institution,
-        profile.grade,
-        profile.country,
-        profile.timezone,
-        profile.birth_date,
-        profile.residence_city,
-        profile.referral_source,
-      ].every((value) => value.trim()),
+    [
+      profile.family_name,
+      profile.given_name,
+      ...(profile.form_language === "en"
+        ? []
+        : [profile.family_name_kana, profile.given_name_kana]),
+      profile.affiliation_email,
+      profile.affiliation_type,
+      profile.institution,
+      profile.grade,
+      profile.country,
+      profile.timezone,
+      profile.birth_date,
+      profile.residence_city,
+      profile.referral_source,
+    ].every((value) => value.trim()),
   );
   const application = await env.REPORTS.prepare(
     `SELECT project_slug, created_at, status
