@@ -6,7 +6,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
   <section class="applicant-page" data-applicant-page>
     <p class="eyebrow">ATLASEZ</p>
     <h1>Atlasezスタートページ</h1>
-    <p class="intro">参加中のプロジェクトがない方は、ここから基本情報の登録や参加応募を進められます。</p>
+    <p class="intro">基本情報の登録、複数プロジェクトへの応募、応募状況の確認をここから進められます。</p>
 
     <section class="start-card" aria-live="polite">
       <p class="start-status" data-start-status>状態を確認しています…</p>
@@ -14,7 +14,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       <p data-start-message>ログイン情報と参加状況を読み込んでいます。</p>
       <div class="start-actions">
         <a class="primary-action" data-basic-link href="/apply/?step=basic" hidden>基本情報を入力する</a>
-        <a class="primary-action" data-project-link href="/apply/?project=atlas" hidden>参加するプロジェクトを選ぶ</a>
+        <a class="primary-action" data-project-link href="/apply/" hidden>参加するプロジェクトを選ぶ</a>
       </div>
     </section>
 
@@ -22,8 +22,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       <div class="section-heading"><div><p class="eyebrow">APPLICATION</p><h2>応募状況</h2></div><span class="badge badge-accent" data-application-status>確認中…</span></div>
       <dl class="application-details" aria-live="polite">
       <div><dt>ログイン中のGoogleアカウント</dt><dd data-application-email>読み込み中…</dd></div>
-      <div><dt>応募したプロジェクト</dt><dd data-application-project>読み込み中…</dd></div>
-      <div><dt>応募日時</dt><dd data-application-submitted>読み込み中…</dd></div>
+      <div><dt>応募したプロジェクト</dt><dd><ul class="application-list" data-application-list><li>読み込み中…</li></ul></dd></div>
       </dl>
       <p class="notice" data-application-message>応募状況を読み込んでいます。</p>
     </section>
@@ -50,6 +49,8 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
   .section-heading .eyebrow { margin: 0; }
   .application-details { border-top: 2px solid var(--accent-primary); display: grid; margin: 1.1rem 0 1rem; }
   .application-details div { border-bottom: 1px solid var(--border-default); display: grid; gap: .65rem; grid-template-columns: minmax(12rem, .9fr) minmax(0, 1.4fr); padding: 1rem .2rem; }
+  .application-list { display: grid; gap: .45rem; list-style: none; margin: 0; padding: 0; }
+  .application-list li { background: var(--background-secondary); border-left: 3px solid var(--accent-primary); line-height: 1.55; padding: .55rem .65rem; }
   dt { color: var(--text-secondary); font-size: .82rem; font-weight: 700; }
   dd { margin: 0; overflow-wrap: anywhere; }
   @media (max-width: 560px) { .applicant-page { padding: 2rem 1rem 4rem; } .application-details div { grid-template-columns: 1fr; } .section-heading { align-items: flex-start; display: grid; } }
@@ -88,22 +89,31 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         stage?: string;
         basicProfileComplete?: boolean;
         application?: { project: string; submittedAt: string; status: string };
+        applications?: { project: string; submittedAt: string; status: string }[];
       } }))
       .then(({ response, data }) => {
         if (!response.ok) throw new Error(data.error ?? "参加状況を読み込めませんでした。");
-        const application = data.application;
+        const applications = data.applications?.length ? data.applications : data.application ? [data.application] : [];
         const profileComplete = data.basicProfileComplete === true;
         startStatus.textContent = stageLabels[data.stage ?? "NEW_USER"] ?? "参加準備中";
-        if (application) {
+        if (applications.length) {
           startHeading.textContent = "応募状況を確認できます";
-          startMessage.textContent = "選考に関するご連絡は、Googleログイン中のメールアドレスへお送りします。";
+          startMessage.textContent = "複数のプロジェクトへ応募できます。追加で応募する場合は、下のボタンからプロジェクトを選択してください。";
           applicationCard.hidden = false;
           basicLink.hidden = true;
-          projectLink.hidden = true;
+          projectLink.hidden = false;
+          projectLink.textContent = "別のプロジェクトに応募する";
+          projectLink.href = "/apply/";
           setText("[data-application-email]", data.email ?? "");
-          setText("[data-application-project]", application.project);
-          setText("[data-application-submitted]", formatSubmittedAt(application.submittedAt));
-          setText("[data-application-status]", statusLabels[application.status] ?? application.status);
+          const applicationList = root.querySelector<HTMLElement>("[data-application-list]");
+          if (applicationList) {
+            applicationList.replaceChildren(...applications.map((item) => {
+              const entry = document.createElement("li");
+              entry.textContent = `${item.project}：${statusLabels[item.status] ?? item.status}（${formatSubmittedAt(item.submittedAt)}）`;
+              return entry;
+            }));
+          }
+          setText("[data-application-status]", applications.some((item) => item.status === "reviewing") ? "確認中" : "応募済み");
           setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
           return;
         }
@@ -113,6 +123,8 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           startMessage.textContent = "基本情報は登録済みです。参加したいプロジェクトを選んで、必要な項目を入力してください。";
           basicLink.hidden = true;
           projectLink.hidden = false;
+          projectLink.textContent = "参加するプロジェクトを選ぶ";
+          projectLink.href = "/apply/";
         } else {
           startHeading.textContent = "まず基本情報を登録してください";
           startMessage.textContent = "基本情報は複数のプロジェクトへの応募で共通して使います。登録後に参加先を選べます。";
