@@ -2653,6 +2653,25 @@ async function savePersonalWorkspace(
 
 const taskStatus = new Set(["open", "doing", "done"]);
 const availabilityStatus = new Set(["available", "maybe", "unavailable"]);
+const taskKindLabel = (kind: unknown) =>
+  String(kind ?? "task") === "feedback" ? "フィードバック依頼" : "タスク依頼";
+const taskAssignedTo = (
+  assignee: unknown,
+  email: string,
+  kind: unknown = "task",
+) => {
+  const value = String(assignee ?? "").trim().toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!value || !normalizedEmail) return false;
+  if (String(kind ?? "task") !== "feedback") return value === normalizedEmail;
+  return (
+    value === "*" ||
+    value
+      .split(",")
+      .map((item) => item.trim())
+      .includes(normalizedEmail)
+  );
+};
 
 type OperationProject = {
   id: string;
@@ -3455,14 +3474,15 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
   const todos = projectIds.length
     ? await env.REPORTS.prepare(
-        `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
+        `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
            p.name AS project_name
          FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
          WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
-           AND t.assignee_email=? AND t.status != 'done'
+           AND (lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)))
+           AND t.status != 'done'
          ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
       )
-        .bind(...projectIds, scope.email)
+        .bind(...projectIds, scope.email, scope.email)
         .all()
     : { results: [] };
   const rangeStart = new Date();
@@ -3507,12 +3527,12 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            FROM editorial_tasks t
            JOIN atlasez_projects p ON p.id = t.project_id
            WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
-             AND t.assignee_email = ? AND t.status != 'done'
+             AND (lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0))) AND t.status != 'done'
              AND t.due_at IS NOT NULL
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
            ORDER BY t.due_at ASC LIMIT 300`,
         )
-          .bind(...projectIds, scope.email, rangeStartKey, rangeEndKey)
+          .bind(...projectIds, scope.email, scope.email, rangeStartKey, rangeEndKey)
           .all<{
             id: string;
             project_id: string;
@@ -3574,7 +3594,7 @@ async function memberTasksOverview(
   const placeholders = projectIds.map(() => "?").join(",");
   const [tasks, members] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,
+      `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
         created_by,created_at,updated_at FROM editorial_tasks
        WHERE project_id IN (${placeholders})
        ORDER BY status='done',CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,
@@ -3601,7 +3621,7 @@ async function memberTasksOverview(
   const visibleTasks = (tasks.results ?? []).filter(
     (task) =>
       managerProjects.has(String(task.project_id)) ||
-      task.assignee_email === scope.email ||
+      taskAssignedTo(task.assignee_email, scope.email, task.task_kind) ||
       task.created_by === scope.email ||
       task.subject === null ||
       scope.subjects.includes(String(task.subject ?? "")),
@@ -4624,7 +4644,7 @@ async function operationsOverview(
   const filters = canSeeAllProjectOperations
     ? ["project_id = ?"]
     : [
-        "project_id = ? AND (assignee_email = ? OR created_by = ? OR subject IS NULL" +
+        "project_id = ? AND (assignee_email = ? OR (task_kind = 'feedback' AND (assignee_email = '*' OR instr(',' || lower(COALESCE(assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)) OR created_by = ? OR subject IS NULL" +
           (scope.subjects.length
             ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
             : "") +
@@ -4632,7 +4652,7 @@ async function operationsOverview(
       ];
   const values: unknown[] = canSeeAllProjectOperations
     ? [project.id]
-    : [project.id, scope.email, scope.email, ...scope.subjects];
+    : [project.id, scope.email, scope.email, scope.email, ...scope.subjects];
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const memberWhere = canSeeAllProjectOperations
     ? ""
@@ -4643,7 +4663,7 @@ async function operationsOverview(
   const [tasks, events, progress, members, availability, availabilityBlocks] =
     await Promise.all([
       env.REPORTS.prepare(
-        `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+        `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
       )
         .bind(...values)
         .all(),
@@ -5090,13 +5110,14 @@ async function updateTask(
   if (requestedStatus === null && !reminderAction)
     return json({ error: "更新内容を指定してください。" }, 400);
   const task = await env.REPORTS.prepare(
-    "SELECT project_id,subject,assignee_email,created_by,due_at,due_timezone FROM editorial_tasks WHERE id=?",
+    "SELECT project_id,subject,assignee_email,task_kind,created_by,due_at,due_timezone FROM editorial_tasks WHERE id=?",
   )
     .bind(taskId)
     .first<{
       project_id: string;
       subject: string | null;
       assignee_email: string | null;
+      task_kind: string;
       created_by: string;
       due_at: string | null;
       due_timezone: string;
@@ -5106,7 +5127,7 @@ async function updateTask(
   if (isResponse(project)) return project;
   if (
     !scope.isManager &&
-    task.assignee_email !== scope.email &&
+    !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) &&
     task.created_by !== scope.email
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
@@ -7039,15 +7060,20 @@ async function updateEditorialReviewAssignment(
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, created_by FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string; status: EditorialDocumentStatus }>();
+    .first<{
+      subject: string;
+      status: EditorialDocumentStatus;
+      title: string;
+      created_by: string;
+    }>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (document.status !== "in-review")
-    return json({ error: "査読中の原稿だけ担当者を設定できます。" }, 400);
+    return json({ error: "フィードバック中の原稿だけ担当者を設定できます。" }, 400);
   if (!canReviewDocument(scope, document.subject, document.status))
-    return json({ error: "この分野の査読権限がありません。" }, 403);
+    return json({ error: "この分野のフィードバック権限がありません。" }, 403);
   const reviewerEmails = [
     ...(Array.isArray(payload.reviewerEmails)
       ? payload.reviewerEmails
@@ -7057,15 +7083,28 @@ async function updateEditorialReviewAssignment(
     .filter(Boolean)
     .filter((email, index, all) => all.indexOf(email) === index);
   const requestNote = text(payload.note, 2_000);
+  const existingAssignment = await env.REPORTS.prepare(
+    "SELECT task_id FROM editorial_review_assignments WHERE document_id = ?",
+  )
+    .bind(documentId)
+    .first<{ task_id: string | null }>();
   if (!reviewerEmails.length) {
-    await env.REPORTS.batch([
+    const statements = [
+      ...(existingAssignment?.task_id
+        ? [
+            env.REPORTS.prepare(
+              "UPDATE editorial_tasks SET status='done',updated_at=? WHERE id=? AND task_kind='feedback'",
+            ).bind(new Date().toISOString(), existingAssignment.task_id),
+          ]
+        : []),
       env.REPORTS.prepare(
         "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
       ).bind(documentId),
       env.REPORTS.prepare(
         "DELETE FROM editorial_review_assignments WHERE document_id = ?",
       ).bind(documentId),
-    ]);
+    ];
+    await env.REPORTS.batch(statements);
     return json({ ok: true, reviewerEmail: null, reviewerEmails: [] });
   }
   if (reviewerEmails.includes("*") && reviewerEmails.length > 1)
@@ -7077,7 +7116,7 @@ async function updateEditorialReviewAssignment(
     reviewerEmails.some((email) => email !== "*" && !EMAIL_PATTERN.test(email))
   )
     return json(
-      { error: "査読担当者のメールアドレスを確認してください。" },
+      { error: "フィードバック担当者のメールアドレスを確認してください。" },
       400,
     );
   const reviewers = reviewerEmails.includes("*")
@@ -7100,13 +7139,44 @@ async function updateEditorialReviewAssignment(
       400,
     );
   const now = new Date().toISOString();
+  const taskId = existingAssignment?.task_id || crypto.randomUUID();
+  const taskAssignee = reviewerEmails.includes("*")
+    ? "*"
+    : reviewerEmails.join(",");
+  const taskDetails = requestNote
+    ? `${requestNote}\n\n記事編集画面: /admin/editor/?document=${documentId}`
+    : `記事のフィードバックをお願いします。\n\n記事編集画面: /admin/editor/?document=${documentId}`;
   await env.REPORTS.batch([
     env.REPORTS.prepare(
-      `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note, task_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
-         requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note`,
-    ).bind(documentId, reviewerEmails[0], scope.email, now, now, requestNote),
+         requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note, task_id = excluded.task_id`,
+    ).bind(
+      documentId,
+      reviewerEmails[0],
+      scope.email,
+      now,
+      now,
+      requestNote,
+      taskId,
+    ),
+    env.REPORTS.prepare(
+      `INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,created_by,created_at,updated_at,task_kind)
+       VALUES (?, 'atlas', ?, ?, ?, ?, 'open', ?, ?, ?, 'feedback')
+       ON CONFLICT(id) DO UPDATE SET subject=excluded.subject, assignee_email=excluded.assignee_email,
+         title=excluded.title, details=excluded.details, status='open', updated_at=excluded.updated_at,
+         task_kind='feedback'`,
+    ).bind(
+      taskId,
+      document.subject,
+      taskAssignee,
+      document.title,
+      taskDetails,
+      scope.email,
+      now,
+      now,
+    ),
     env.REPORTS.prepare(
       "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
     ).bind(documentId),
@@ -7118,7 +7188,13 @@ async function updateEditorialReviewAssignment(
         ).bind(documentId, email, now, now),
       ),
   ]);
-  return json({ ok: true, reviewerEmail: reviewerEmails[0], reviewerEmails });
+  return json({
+    ok: true,
+    reviewerEmail: reviewerEmails[0],
+    reviewerEmails,
+    taskId,
+    taskKind: "feedback",
+  });
 }
 
 async function createEditorialComment(
@@ -8698,6 +8774,7 @@ async function adminNotifications(
     reviewRows,
     applicationRows,
     taskReminderRows,
+    taskRows,
   ] = await Promise.all([
     env.REPORTS.prepare(
       "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
@@ -8746,7 +8823,7 @@ async function adminNotifications(
       .all<{ id: string; title: string; published_at: string }>(),
     scope.isManager
       ? env.REPORTS.prepare(
-          "SELECT id, subject, title, updated_by, updated_at FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 30",
+          "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC LIMIT 30",
         ).all<{
           id: string;
           subject: string;
@@ -8789,11 +8866,11 @@ async function adminNotifications(
       `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
-         WHERE t.status != 'done' AND (t.assignee_email=? OR t.created_by=?)
+         WHERE t.status != 'done' AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)))
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
          ORDER BY r.remind_at ASC LIMIT 50`,
     )
-      .bind(scope.email, scope.email, scope.email)
+      .bind(scope.email, scope.email, scope.email, scope.email)
       .all<{
         reminder_id: string;
         remind_at: string;
@@ -8803,6 +8880,41 @@ async function adminNotifications(
         title: string;
         project_id: string;
         project_slug: string;
+      }>(),
+    env.REPORTS.prepare(
+      `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.updated_at,
+         COALESCE(p.slug,t.project_id) AS project_slug
+       FROM editorial_tasks t
+       LEFT JOIN atlasez_projects p ON p.id=t.project_id
+       WHERE t.status != 'done' AND ${
+         scope.isManager
+           ? "1=1"
+           : `(lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)))${
+               scope.allSubjects
+                 ? ""
+                 : ` AND (t.subject IS NULL OR t.subject='*' OR t.subject IN (${scope.subjects.map(() => "?").join(",")}))`
+             }`
+       }
+       ORDER BY t.updated_at DESC LIMIT 40`,
+    )
+      .bind(
+        ...(scope.isManager
+          ? []
+          : [
+              scope.email,
+              scope.email,
+              scope.email,
+              ...(!scope.allSubjects ? scope.subjects : []),
+            ]),
+      )
+      .all<{
+        id: string;
+        title: string;
+        task_kind: string;
+        details: string;
+        project_id: string;
+        project_slug: string;
+        updated_at: string;
       }>(),
   ]);
   const notifications = [
@@ -8825,7 +8937,7 @@ async function adminNotifications(
     ...(approvedRows.results ?? []).map((item) => ({
       id: `approved-${item.id}`,
       kind: "approved",
-      title: `査読完了：${item.title}`,
+      title: `フィードバック完了：${item.title}`,
       detail: "公開前の原稿を確認してください。",
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.updated_at,
@@ -8842,12 +8954,20 @@ async function adminNotifications(
       ? (reviewRows.results ?? []).map((item) => ({
           id: `review-${item.id}`,
           kind: "review",
-          title: `査読依頼：${item.title}`,
+          title: `フィードバック依頼：${item.title}`,
           detail: `担当分野：${item.subject} ／ 依頼者：${item.updated_by}`,
           href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
           updatedAt: item.updated_at,
         }))
       : []),
+    ...(taskRows.results ?? []).map((item) => ({
+      id: `${item.task_kind === "feedback" ? "feedback-request" : "task-request"}-${item.id}`,
+      kind: item.task_kind === "feedback" ? "feedback-request" : "task-request",
+      title: `${taskKindLabel(item.task_kind)}：${item.title}`,
+      detail: item.details?.split("\n")[0] || "依頼内容を確認してください。",
+      href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+      updatedAt: item.updated_at,
+    })),
     ...(applicationRows.results ?? []).map((item) => ({
       id: `application-${item.id}`,
       kind: "application",
@@ -8907,7 +9027,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|mention|approved|published|review|application|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
+                /^(comment|mention|approved|published|review|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
