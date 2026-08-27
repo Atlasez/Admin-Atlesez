@@ -415,6 +415,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   @media (max-width: 700px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .7rem; }.workflow-guide ol { gap: .2rem; }.workflow-guide li { flex-direction: column; gap: .2rem; text-align: center; }.workflow-guide li:not(:last-child)::after { margin: 0 .2rem; position: absolute; right: -.45rem; top: .62rem; width: .5rem; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions, .document-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; }.editor-tabs{display:flex;border-bottom:1px solid var(--border);gap:.3rem;margin:.5rem 0}.editor-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;padding:.5rem .75rem}.editor-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}.editor-split{grid-template-columns:1fr!important}.media-studio-actions{grid-template-columns:1fr}.heading-outline{display:block;background:var(--surface-alt);border:1px solid var(--border);font-size:.78rem;margin:.5rem 0;padding:.4rem .6rem}.document-statuses{font-size:.68rem}.personal-notebook-actions{align-items:stretch;display:grid}.personal-notebook-actions small{margin-left:0}.personal-notebook-actions .quiet-action{width:100%} }
 </style>
 
+<style>
+  /* 記事設定は入力項目をひとつの密度のあるフォームカードにまとめる。 */
+  .metadata { padding: .55rem .7rem .7rem; }
+  .metadata-grid { gap: .55rem .65rem; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: .6rem; }
+  .metadata label { background: color-mix(in srgb, var(--surface), var(--surface-alt) 42%); border: 1px solid color-mix(in srgb, var(--border), transparent 12%); border-radius: .42rem; gap: .25rem; min-width: 0; padding: .46rem .55rem; }
+  .metadata label:nth-child(1), .metadata label:nth-child(2), .metadata label:nth-child(3), .metadata label:nth-child(4), .metadata label:nth-child(5), .metadata label:nth-child(6) { grid-column: span 3; }
+  .metadata label:nth-child(7), .metadata label:nth-child(8), .metadata label:nth-child(9) { grid-column: span 2; }
+  .metadata .field-heading { color: var(--text); font-size: .74rem; }
+  .metadata label small { margin-top: .1rem; }
+  @media (max-width: 1080px) {
+    .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metadata label:nth-child(1), .metadata label:nth-child(2), .metadata label:nth-child(3), .metadata label:nth-child(4), .metadata label:nth-child(5), .metadata label:nth-child(6), .metadata label:nth-child(7), .metadata label:nth-child(8), .metadata label:nth-child(9) { grid-column: span 1; }
+    .metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
+  }
+  @media (max-width: 700px) {
+    .metadata-grid { grid-template-columns: 1fr; }
+    .metadata label:nth-child(1), .metadata label:nth-child(2), .metadata label:nth-child(3), .metadata label:nth-child(4), .metadata label:nth-child(5), .metadata label:nth-child(6), .metadata label:nth-child(7), .metadata label:nth-child(8), .metadata label:nth-child(9) { grid-column: auto; }
+  }
+</style>
+
 <style is:global>
   /* 公開数学記事の定義・命題枠と同じ見た目を、動的プレビューにも適用する。 */
   .article-preview .defi,
