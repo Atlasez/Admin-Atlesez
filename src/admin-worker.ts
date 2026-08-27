@@ -3942,7 +3942,8 @@ async function listProfileChangeRequests(
     return json({ error: "申請状態を確認してください。" }, 400);
   const where = requestedStatus === "all" ? "" : "WHERE r.status=?";
   const statement = env.REPORTS.prepare(
-    `SELECT r.*,p.display_name AS current_display_name,p.university AS current_university,
+    `SELECT r.*,COALESCE(p.avatar_url,'') AS avatar_url,
+      p.display_name AS current_display_name,p.university AS current_university,
       p.year AS current_year,p.affiliation_type AS current_affiliation_type,
       p.country AS current_country,p.timezone AS current_timezone,p.bio AS current_bio
      FROM editorial_member_profile_change_requests r
