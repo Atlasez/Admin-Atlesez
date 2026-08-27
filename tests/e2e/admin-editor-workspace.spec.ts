@@ -210,7 +210,7 @@ test("E-6: ダークモードでMarkdown本文を読める配色にする", asyn
   const lockedMarkColors = await page
     .locator("[data-locked-range-markup]")
     .evaluate((element) => {
-      element.innerHTML = "<mark>ロック範囲</mark>";
+      element.innerHTML = '<mark class="locked-range-mark">ロック範囲</mark>';
       const mark = element.querySelector("mark");
       if (!mark) return null;
       const style = getComputedStyle(mark);
