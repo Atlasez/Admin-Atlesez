@@ -275,7 +275,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
           </section>
           <section class="review-panel" aria-labelledby="review-heading">
             <div class="pane-heading"><h3 id="review-heading">フィードバック</h3><div class="pane-controls"><button type="button" data-pane-popout="review">別窓</button></div></div>
-            <details class="review-help"><summary>コメントの使い方</summary><p>本文またはプレビューで文章を選択してコメントすると、その文章に紐づきます。執筆担当者は確認したら「確認済み」、修正を反映したら「反映済み」にしてください。</p></details>
+            <details class="review-help"><summary>コメントの使い方</summary><p>本文またはプレビューで文章を選択してコメントすると、その文章に紐づきます。コメント投稿者が修正を反映したら「反映済み」にしてください。他の人のコメントは、投稿者と対応者の双方が「反映済み」にすると解決済みになります。</p></details>
             <div class="comment-list-toolbar"><h4 class="comment-list-heading">コメント</h4><div class="comment-list-filters"><label>コメントを検索<input type="search" data-comment-search placeholder="本文・投稿者・タグを検索" autocomplete="off" /></label><label>タグで絞り込む<select data-comment-tag-filter><option value="">すべて</option>{commentTags.map((tag) => <option value={tag}>{tag}</option>)}</select></label><label>確認状態<select data-comment-status-filter><option value="">すべて</option><option value="pending">未確認</option><option value="acknowledged">確認済み</option><option value="resolved">反映済み</option></select></label></div></div>
             <div class="comment-list" data-comment-list></div>
             <div class="selection-action" data-selection-action hidden><span data-selection-action-text></span><button type="button" class="quiet-action" data-use-selection>選択範囲を追加</button></div>
@@ -395,7 +395,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
-  .editor-split { align-items:stretch; display:grid; gap:1rem; grid-template-columns:repeat(3,minmax(0,1fr)); min-height:0; padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel, .memo-area { border:1px solid var(--border); min-width:0; overflow:visible; position:relative; }.preview-area { display:flex; flex-direction:column; min-height:0; }.memo-area { background:var(--surface); }.memo-content { display:grid; gap:.65rem; padding:.85rem; }.memo-content p { color:var(--muted); font-size:.78rem; line-height:1.55; margin:0; }.memo-content textarea { background:var(--surface-alt); border:1px solid var(--border); box-sizing:border-box; color:var(--text); font:inherit; line-height:1.6; min-height:24rem; padding:.7rem; resize:vertical; width:100%; }.pane-heading { background:var(--surface-alt); border-bottom:1px solid var(--border); padding:.75rem .9rem; }.pane-heading h3 { font-size:.95rem; margin:0; }.pane-heading p { color:var(--muted); font-size:.77rem; margin:.22rem 0 0; }.pane-heading code { background:var(--surface); border:1px solid var(--border); border-radius:0; padding:.03rem .2rem; }.pane-heading > span { color:var(--muted); flex:0 0 auto; font-size:.76rem; }.live-badge { color:var(--success) !important; font-weight:800; }
+  .editor-split { align-items:stretch; display:grid; gap:1rem; grid-template-columns:repeat(3,minmax(0,1fr)); min-height:0; padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel, .memo-area { border:1px solid var(--border); min-width:0; overflow:visible; position:relative; }.preview-area { display:flex; flex-direction:column; min-height:0; }.memo-area { background:var(--surface); display:flex; flex-direction:column; min-height:clamp(38rem,72vh,60rem); }.memo-content { display:grid; flex:1 1 auto; gap:.65rem; grid-template-rows:auto minmax(0,1fr); min-height:0; padding:.85rem; }.memo-content p { color:var(--muted); font-size:.78rem; line-height:1.55; margin:0; }.memo-content textarea { background:var(--surface-alt); border:1px solid var(--border); box-sizing:border-box; color:var(--text); font:inherit; height:100%; line-height:1.6; min-height:0; padding:.7rem; resize:vertical; width:100%; }.pane-heading { background:var(--surface-alt); border-bottom:1px solid var(--border); padding:.75rem .9rem; }.pane-heading h3 { font-size:.95rem; margin:0; }.pane-heading p { color:var(--muted); font-size:.77rem; margin:.22rem 0 0; }.pane-heading code { background:var(--surface); border:1px solid var(--border); border-radius:0; padding:.03rem .2rem; }.pane-heading > span { color:var(--muted); flex:0 0 auto; font-size:.76rem; }.live-badge { color:var(--success) !important; font-weight:800; }
   /* 本文欄と同じく、通常は枠内でスクロールして編集画面を圧迫しない。 */
   .preview-area > .article-preview, .preview-area > .published-article-preview { flex:1 1 auto; height:auto !important; max-height:none !important; min-height:clamp(32rem,66vh,52rem); overflow-x:hidden !important; overflow-y:auto !important; overflow-wrap:anywhere; scrollbar-gutter:stable; scrollbar-width:thin; }
   .preview-area.is-expanded { align-self: start; }
@@ -1111,6 +1111,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const activePopouts = new Map<PaneKey, Window>();
     const openPaneWindow = (key: PaneKey) => {
       const panel = paneElements[key];
+      const visibleBeforePopout = [...requestedPaneKeys];
+      const rowsBeforePopout = paneRows.map((row) => [...row]);
       const existing = activePopouts.get(key);
       if (existing && !existing.closed) { existing.focus(); return; }
       const popup = window.open("", `atlasez-editor-${key}`, "popup,width=980,height=820,resizable=yes,scrollbars=yes");
@@ -1136,6 +1138,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       popupPanel.querySelector<HTMLButtonElement>("[data-pane-popout]")?.remove();
       if (popoutButton) { popoutButton.disabled = true; popoutButton.textContent = "別窓表示中"; }
       shell.append(toolbar, popupPanel);
+      // 別窓へ移した枠は本体から外し、残った枠だけでレイアウトを詰め直す。
+      // この変更は一時的なものなので、別窓を閉じたときに元の配置へ戻す。
+      setPaneKeys(visibleBeforePopout.filter((paneKey) => paneKey !== key), false);
       updatePaneLayout();
 
       type FormField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -1192,8 +1197,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         popupPanel.removeEventListener("input", forwardPopupInput);
         popupPanel.removeEventListener("change", forwardPopupInput);
         if (key === "review" && typeof mentionSuggestions !== "undefined") document.body.append(mentionSuggestions);
+        const otherOpenPopouts = new Set(
+          [...activePopouts.entries()]
+            .filter(([paneKey, paneWindow]) => paneKey !== key && !paneWindow.closed)
+            .map(([paneKey]) => paneKey),
+        );
         activePopouts.delete(key);
         if (popoutButton) { popoutButton.disabled = false; popoutButton.textContent = "別窓"; }
+        requestedPaneKeys = [...new Set([...requestedPaneKeys, key])].filter((paneKey) => !otherOpenPopouts.has(paneKey));
+        paneRows = rowsBeforePopout
+          .map((row) => row.filter((paneKey) => paneKey === key || !otherOpenPopouts.has(paneKey)))
+          .filter((row) => row.length);
+        paneRows = normalizePaneRows(paneRows);
+        paneKeys.forEach((paneKey) => { paneElements[paneKey].hidden = !requestedPaneKeys.includes(paneKey); });
+        placePanes();
         updatePaneLayout();
         try { if (!popup.closed) popup.close(); } catch { /* noop */ }
       };
@@ -1943,9 +1960,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       const unacknowledgedByMe = actedOnByMe(unacknowledgedActors);
       const resolvedByMe = resolvedActors.some((entry) => entry.actor_email.toLowerCase() === currentUserEmail.toLowerCase());
       const resolveAction = resolvedByMe ? "reopen" : "resolve";
+      const ownComment = item.created_by.trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
       const resolveTitle = resolvedByMe
         ? "再度押すと、自分の反映済み操作を取り消します。ホバーまたは右クリックで履歴を表示"
-        : "修正を本文へ反映したら押してください。投稿者と対応者の両方が押すと解決済みになります。";
+        : ownComment
+          ? "自分のコメントの修正を本文へ反映したら押してください。このコメントは解決済みになります。"
+          : "修正を本文へ反映したら押してください。投稿者と対応者の両方が押すと解決済みになります。";
       return `<article class="comment${isReply ? " comment-reply" : ""}" data-comment-history="${item.id}"><div class="comment-row"><span class="comment-avatar" role="img" aria-label="${esc(displayName)}のアイコン"><span class="comment-avatar-fallback">${esc(avatar)}</span>${avatarImage}</span><div class="comment-main"><header class="comment-header"><b>${esc(displayName)}</b><time>${isReply ? "返信・" : ""}${date(item.created_at)}</time></header>${tags ? `<div class="comment-tag-list" aria-label="コメントタグ">${tags}</div>` : ""}<div class="comment-content">${quotes}<p>${renderCommentBody(item.body)}</p></div><div class="comment-actions"><button type="button" class="comment-action-acknowledge${acknowledgedByMe ? " is-acted-by-me" : ""}" data-comment-action="acknowledge" data-comment-id="${item.id}" title="再度押すと取り消し。ホバーまたは右クリックで、確認済みを押したメンバーを表示">✓ 確認済み <span class="comment-action-count">${acknowledgedActors.length}</span></button><button type="button" class="comment-action-unacknowledge${unacknowledgedByMe ? " is-acted-by-me" : ""}" data-comment-action="unacknowledge" data-comment-id="${item.id}" title="再度押すと取り消し。ホバーまたは右クリックで、未反映を押したメンバーを表示">↩ 未反映 <span class="comment-action-count">${unacknowledgedActors.length}</span></button><button type="button" class="comment-action-resolve${resolvedByMe ? " is-acted-by-me" : ""}" data-comment-action="${resolveAction}" data-comment-id="${item.id}" title="${resolveTitle}">✓ 反映済み <span class="comment-action-count">${resolvedActors.length}</span></button>${edit}</div></div></div>${canChange ? `<label class="comment-edit-entry" data-comment-edit-entry="${item.id}" hidden><span>コメントを編集</span>${editTags}<textarea data-edit-comment-body="${item.id}" list="comment-mention-members" maxlength="8000">${esc(item.body)}</textarea><div><button type="button" class="quiet-action" data-cancel-edit="${item.id}">キャンセル</button><button type="button" class="primary-action" data-save-edit="${item.id}">保存</button></div></label>` : ""}</article>`;
     };
     const commentStatus = (item: Comment): "pending" | "acknowledged" | "resolved" => item.resolved_at ? "resolved" : actionActorCounts(item, "acknowledge").length > 0 ? "acknowledged" : "pending";

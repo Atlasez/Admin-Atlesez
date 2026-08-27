@@ -46,6 +46,18 @@ const stageEnv = (
           return {
             results: globalManager ? ([{ subject: "*" }] as T[]) : ([] as T[]),
           };
+        if (query.includes("FROM atlasez_member_applications"))
+          return applicationStatus
+            ? {
+                results: [
+                  {
+                    project_slug: "atlas",
+                    created_at: "2026-08-24T12:00:00.000Z",
+                    status: applicationStatus,
+                  },
+                ] as T[],
+              }
+            : { results: [] as T[] };
         return { results: [] as T[] };
       };
       statement.first = async <T>() => {

@@ -911,7 +911,11 @@ async function getMemberProfileScope(
 ): Promise<AdminScope | Response> {
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
-  if (current.applicationStatus === "accepted" && current.baseProfileComplete)
+  const applicantProfile = await getApplicantProfile(env, current.email);
+  if (
+    (current.applicationStatus === "accepted" && current.baseProfileComplete) ||
+    applicantBasicProfileComplete(applicantProfile)
+  )
     return {
       email: current.email,
       subjects: [],
@@ -962,6 +966,27 @@ const applicantProfileFromRow = (
     referral_source: String(row.referral_source ?? ""),
   };
 };
+
+/** 応募フォームの基本情報が揃っているか。紹介元はプロジェクトごとの項目なので含めない。 */
+const applicantBasicProfileComplete = (profile: ApplicantProfile | null) =>
+  Boolean(
+    profile &&
+    [
+      profile.family_name,
+      profile.given_name,
+      ...(profile.form_language === "en"
+        ? []
+        : [profile.family_name_kana, profile.given_name_kana]),
+      profile.affiliation_email,
+      profile.affiliation_type,
+      profile.institution,
+      profile.grade,
+      profile.country,
+      profile.timezone,
+      profile.birth_date,
+      profile.residence_city,
+    ].every((value) => value.trim()),
+  );
 
 /** 保存済みの基本情報。旧応募しかない参加者は、最新の応募から後方互換で復元する。 */
 async function getApplicantProfile(
@@ -5244,6 +5269,7 @@ async function submitMemberApplication(
       localDevelopmentEnabled(request, env),
     );
     const canSubmitForAnotherProject = [
+      "APPLICANT",
       "ONBOARDING",
       "TUTORIAL",
       "MEMBER",
@@ -5528,9 +5554,9 @@ async function submitMemberApplication(
       );
   }
   const duplicate = await env.REPORTS.prepare(
-    "SELECT id FROM atlasez_member_applications WHERE email=? AND status IN ('new','reviewing') LIMIT 1",
+    "SELECT id FROM atlasez_member_applications WHERE lower(email)=lower(?) AND project_slug=? AND status IN ('new','reviewing') LIMIT 1",
   )
-    .bind(email)
+    .bind(email, projectSlug)
     .first<{ id: string }>();
   if (duplicate)
     return json(
@@ -5710,50 +5736,28 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   if (!canAccess(current.stage, "applicant"))
     return json({ error: "応募状況を閲覧できる段階ではありません。" }, 403);
   const profile = await getApplicantProfile(env, current.email);
-  const basicProfileComplete = Boolean(
-    profile &&
-    [
-      profile.family_name,
-      profile.given_name,
-      ...(profile.form_language === "en"
-        ? []
-        : [profile.family_name_kana, profile.given_name_kana]),
-      profile.affiliation_email,
-      profile.affiliation_type,
-      profile.institution,
-      profile.grade,
-      profile.country,
-      profile.timezone,
-      profile.birth_date,
-      profile.residence_city,
-      profile.referral_source,
-    ].every((value) => value.trim()),
-  );
-  const application = await env.REPORTS.prepare(
+  const basicProfileComplete = Boolean(applicantBasicProfileComplete(profile));
+  const applicationRows = await env.REPORTS.prepare(
     `SELECT project_slug, created_at, status
      FROM atlasez_member_applications
-     WHERE lower(email) = lower(?) ORDER BY created_at DESC LIMIT 1`,
+     WHERE lower(email) = lower(?) ORDER BY created_at DESC LIMIT 20`,
   )
     .bind(current.email)
-    .first<{ project_slug: string; created_at: string; status: string }>();
-  if (!application)
-    return json({
-      email: current.email,
-      stage: current.stage,
-      basicProfileComplete,
-      application: null,
-    });
+    .all<{ project_slug: string; created_at: string; status: string }>();
+  const applications = (applicationRows.results ?? []).map((application) => ({
+    project:
+      APPLICATION_FORM_LABELS[application.project_slug] ??
+      application.project_slug,
+    submittedAt: application.created_at,
+    status: application.status,
+  }));
   return json({
     email: current.email,
     stage: current.stage,
     basicProfileComplete,
-    application: {
-      project:
-        APPLICATION_FORM_LABELS[application.project_slug] ??
-        application.project_slug,
-      submittedAt: application.created_at,
-      status: application.status,
-    },
+    applications,
+    // 旧クライアントとの互換性を保つため、最新応募も残す。
+    application: applications[0] ?? null,
   });
 }
 
@@ -6387,13 +6391,15 @@ async function getEditorialDocument(
       addAction(comment.id, "resolve", comment.resolved_by);
     const current = actionsByComment.get(comment.id) ?? entry;
     const resolvedActors = new Set(current.actorCounts.resolve.keys());
-    const resolvedByBoth =
-      resolvedActors.has(comment.created_by.trim().toLowerCase()) &&
-      resolvedActors.size >= 2;
+    // 自分が付けたコメントは、自分で反映済みにした時点で解決とする。
+    // 他人のコメントは、従来どおり投稿者の反映済み操作を必須にする。
+    const resolvedByAuthor = resolvedActors.has(
+      comment.created_by.trim().toLowerCase(),
+    );
     return {
       ...comment,
-      resolved_at: resolvedByBoth ? comment.resolved_at : null,
-      resolved_by: resolvedByBoth ? comment.resolved_by : null,
+      resolved_at: resolvedByAuthor ? comment.resolved_at : null,
+      resolved_by: resolvedByAuthor ? comment.resolved_by : null,
       author_display_name:
         authorProfileByEmail
           .get(comment.created_by.toLowerCase())
@@ -7154,8 +7160,9 @@ async function updateEditorialCommentStatus(
     if (action === "resolve") activeResolvers.set(actorEmail, scope.email);
     else activeResolvers.delete(actorEmail);
     const commentAuthor = comment.created_by.trim().toLowerCase();
-    const isResolved =
-      activeResolvers.has(commentAuthor) && activeResolvers.size >= 2;
+    // 自分のコメントは自分の反映済み操作だけで解決。他人のコメントは
+    // 投稿者本人の反映済み操作が必要で、対応者だけでは解決しない。
+    const isResolved = activeResolvers.has(commentAuthor);
     stateUpdate = isResolved
       ? env.REPORTS.prepare(
           "UPDATE editorial_comments SET resolved_at = ?, resolved_by = ? WHERE id = ?",
@@ -7824,6 +7831,8 @@ const adminReturnPath = (value: string | null) => {
   const keepProject =
     (parsed.pathname === "/admin/operations" ||
       parsed.pathname === "/admin/operations/" ||
+      parsed.pathname === "/admin/progress" ||
+      parsed.pathname === "/admin/progress/" ||
       parsed.pathname === "/admin/calendar" ||
       parsed.pathname === "/admin/calendar/" ||
       parsed.pathname === "/admin/manage" ||
@@ -7954,6 +7963,12 @@ async function authorizeUserPage(
     pathname === "/admin/member-profile/"
   ) {
     if (current.applicationStatus === "accepted" && current.baseProfileComplete)
+      return current;
+    if (
+      applicantBasicProfileComplete(
+        await getApplicantProfile(env, current.email),
+      )
+    )
       return current;
   }
   if (
