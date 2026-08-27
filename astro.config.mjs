@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from "astro/config";
+import { readFile } from "node:fs/promises";
 import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
 import "katex/contrib/mhchem";
@@ -20,6 +21,45 @@ const SITE_URL =
   process.env.SITE_URL ?? process.env.CF_PAGES_URL ?? "http://localhost:4321";
 const BASE_PATH = process.env.BASE_PATH ?? "/";
 
+// noindex ページを sitemap に混ぜると、Search Console で「sitemap 内なのに
+// noindex」と報告される。各ページの最終HTMLを確認してから sitemap integration
+// の filter に渡すことで、空カテゴリなどの意図した noindex を自動的に除外する。
+const noindexPaths = new Set();
+const normalizePathname = (value) => {
+  const pathname = value.startsWith("http")
+    ? new URL(value).pathname
+    : value;
+  if (pathname === "/") return "/";
+  return `/${pathname.replace(/^\/+|\/+$/g, "")}/`;
+};
+const collectNoindexPages = () => ({
+  name: "collect-noindex-pages-for-sitemap",
+  hooks: {
+    "astro:build:done": async ({ dir, pages }) => {
+      noindexPaths.clear();
+      await Promise.all(
+        pages.map(async (page) => {
+          const relativePath = page.pathname === "/"
+            ? "index.html"
+            : `${page.pathname.replace(/^\/+|\/+$/g, "")}/index.html`;
+          try {
+            const html = await readFile(new URL(relativePath, dir), "utf8");
+            if (
+              /<meta\s+name=["']robots["'][^>]*content=["'][^"']*\bnoindex\b/i.test(
+                html,
+              )
+            ) {
+              noindexPaths.add(normalizePathname(page.pathname));
+            }
+          } catch {
+            // 読めないページは sitemap から推測で除外せず、通常どおり扱う。
+          }
+        }),
+      );
+    },
+  },
+});
+
 export default defineConfig({
   site: SITE_URL,
   base: BASE_PATH,
@@ -31,7 +71,12 @@ export default defineConfig({
     "/atlas/ja/bookmarks/": "/atlas/ja/list/",
     "/atlas/ja/history/": "/atlas/ja/list/",
   },
-  integrations: [sitemap()],
+  integrations: [
+    collectNoindexPages(),
+    sitemap({
+      filter: (page) => !noindexPaths.has(normalizePathname(page)),
+    }),
+  ],
   markdown: {
     processor: unified(ARTICLE_MARKDOWN_PROCESSOR_OPTIONS),
     shikiConfig: ARTICLE_SHIKI_CONFIG,

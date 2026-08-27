@@ -489,6 +489,10 @@ async function listArticleAnalyticsRegions(
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
+    if (url.protocol === "http:") {
+      url.protocol = "https:";
+      return Response.redirect(url.toString(), 301);
+    }
     if (url.pathname === "/api/article-reports") {
       if (request.method === "OPTIONS") {
         return withCors(new Response(null, { status: 204 }), request);
