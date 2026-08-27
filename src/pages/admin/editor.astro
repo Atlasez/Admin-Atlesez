@@ -604,6 +604,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .writing-tools-controls .math-preset-control { flex:1 1 14rem; }
   .writing-tools-controls button { min-height:2.1rem; }
   .editor-split > section[hidden] { display:none !important; }
+  .editor-split[data-visible-panes="0"] { align-items:center; min-height:8rem; }
+  .editor-split[data-visible-panes="0"]::after { color:var(--muted); content:"表示する枠を上のボタンから選択してください"; font-size:.8rem; font-weight:800; }
   .pane-only { max-width:none; padding:0 clamp(1rem, 3vw, 2.5rem) 3rem; }
   .pane-only .document-sidebar,.pane-only .editor-quick-actions,.pane-only .pane-layout-controls { display:none!important; }
   .pane-only .workspace-grid { border:0; display:block; min-height:0; }
@@ -1019,6 +1021,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const normalizePaneRows = (rows: PaneKey[][]) => {
       const used = new Set<PaneKey>();
       const normalized = rows.slice(0, 3).map((row) => row.filter((key) => requestedPaneKeys.includes(key) && !used.has(key) && (used.add(key), true)).slice(0, 3)).filter((row) => row.length);
+      if (!requestedPaneKeys.length) return [];
       const missing = requestedPaneKeys.filter((key) => !used.has(key));
       for (const key of missing) {
         const row = normalized.find((candidate) => candidate.length < 3);
@@ -1030,7 +1033,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const getVisiblePanes = () => paneRows.flat().filter((key) => requestedPaneKeys.includes(key) && paneElements[key].parentElement === editorSplit);
     const updatePaneLayout = () => {
       const visibleCount = getVisiblePanes().length;
-      editorSplit.dataset.visiblePanes = String(Math.max(1, visibleCount));
+      editorSplit.dataset.visiblePanes = String(visibleCount);
       const narrow = window.matchMedia("(max-width: 700px)").matches;
       paneRows = normalizePaneRows(paneRows);
       const columns = Math.max(1, ...paneRows.map((row) => row.length));
@@ -1038,7 +1041,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       // これで3+2枠の配置でも、2枠の段が横幅いっぱいに広がる。
       const gridUnits = columns >= 3 ? 6 : columns === 2 ? 2 : 1;
       editorSplit.style.gridTemplateColumns = narrow ? "1fr" : `repeat(${gridUnits}, minmax(0, 1fr))`;
-      editorSplit.style.gridTemplateRows = narrow ? "" : `repeat(${paneRows.length}, minmax(28rem, auto))`;
+      editorSplit.style.gridTemplateRows = narrow ? "" : paneRows.length ? `repeat(${paneRows.length}, minmax(28rem, auto))` : "minmax(8rem, auto)";
       paneRows.forEach((row, rowIndex) => row.forEach((key, columnIndex) => {
         paneElements[key].style.gridRow = narrow ? "" : String(rowIndex + 1);
         if (narrow) {
@@ -1068,7 +1071,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const savePaneState = () => localStorage.setItem("atlasez-editor-pane-layout", JSON.stringify({ visible: requestedPaneKeys, rows: paneRows }));
     const setPaneKeys = (keys: PaneKey[], persist = true) => {
       const unique = [...new Set(keys)].filter((key): key is PaneKey => paneKeys.includes(key));
-      requestedPaneKeys = unique.length ? unique : ["writing"];
+      requestedPaneKeys = unique;
       paneRows = normalizePaneRows(paneRows);
       paneKeys.forEach((key) => { paneElements[key].hidden = !requestedPaneKeys.includes(key); });
       placePanes();
@@ -1248,7 +1251,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => button.addEventListener("click", () => {
         const key = button.dataset.paneTab as PaneKey;
         const next = requestedPaneKeys.includes(key) ? requestedPaneKeys.filter((item) => item !== key) : [...requestedPaneKeys, key];
-        if (next.length) setPaneKeys(next);
+        setPaneKeys(next);
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-popout]").forEach((button) => button.addEventListener("click", () => openPaneWindow(button.dataset.panePopout as PaneKey)));
       setPaneKeys(requestedPaneKeys, false);
