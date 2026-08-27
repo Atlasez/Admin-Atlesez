@@ -1035,11 +1035,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       const narrow = window.matchMedia("(max-width: 700px)").matches;
       paneRows = normalizePaneRows(paneRows);
       const columns = Math.max(1, ...paneRows.map((row) => row.length));
-      editorSplit.style.gridTemplateColumns = narrow ? "1fr" : `repeat(${columns}, minmax(0, 1fr))`;
+      // 3枠の段と2枠の段を同じ幅で揃えるため、6分割を基準に各枠を段ごとに割り当てる。
+      // これで3+2枠の配置でも、2枠の段が横幅いっぱいに広がる。
+      const gridUnits = columns >= 3 ? 6 : columns === 2 ? 2 : 1;
+      editorSplit.style.gridTemplateColumns = narrow ? "1fr" : `repeat(${gridUnits}, minmax(0, 1fr))`;
       editorSplit.style.gridTemplateRows = narrow ? "" : `repeat(${paneRows.length}, minmax(28rem, auto))`;
       paneRows.forEach((row, rowIndex) => row.forEach((key, columnIndex) => {
         paneElements[key].style.gridRow = narrow ? "" : String(rowIndex + 1);
-        paneElements[key].style.gridColumn = narrow ? "" : row.length === 1 && columns > 1 ? "1 / -1" : String(columnIndex + 1);
+        if (narrow) {
+          paneElements[key].style.gridColumn = "";
+          return;
+        }
+        const span = Math.max(1, gridUnits / row.length);
+        paneElements[key].style.gridColumn = `${columnIndex * span + 1} / span ${span}`;
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => {
         const key = button.dataset.paneTab as PaneKey;
