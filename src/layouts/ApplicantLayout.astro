@@ -43,7 +43,7 @@ const { title, description, showMemberProfile = false } = Astro.props;
         profile.family_name, profile.given_name,
         ...(profile.form_language === "en" ? [] : [profile.family_name_kana, profile.given_name_kana]),
         profile.affiliation_email, profile.affiliation_type, profile.institution, profile.grade,
-        profile.country, profile.timezone, profile.birth_date, profile.residence_city, profile.referral_source,
+        profile.country, profile.timezone, profile.birth_date, profile.residence_city,
       ].every((value) => value?.trim()));
       const statusPromise = fetch("/api/user/status", { credentials: "same-origin", cache: "no-store" })
         .then(async (response) => ({ response, data: await response.json() as { email?: string } }));

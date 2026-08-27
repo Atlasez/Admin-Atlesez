@@ -346,9 +346,12 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       projectFieldset.hidden = true;
       setFieldsetDisabled(projectFieldset, true);
       submitButton.hidden = true;
-      if (existingMember) {
+      const profileComplete = Boolean(profile && !profileNeedsCompletion(profile));
+      if (existingMember || profileComplete) {
         projectTitle.textContent = "応募するプロジェクトを選択";
-        projectIntro.textContent = "応募するプロジェクトを上から選択してください。基本情報の入力は不要です。";
+        projectIntro.textContent = existingMember
+          ? "応募するプロジェクトを上から選択してください。基本情報の入力は不要です。"
+          : "基本情報は登録済みです。応募するプロジェクトを上から選択してください。";
         formDirectory.hidden = false;
         basicFieldset.hidden = true;
         basicNext.hidden = true;

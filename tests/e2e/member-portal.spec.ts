@@ -123,7 +123,9 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
   await expect(page.getByText("名簿を更新する")).toBeVisible();
   const firstTask = page.locator(".task").filter({ hasText: "記事を査読する" });
   await firstTask.locator("select").selectOption("done");
+  const updateRequest = page.waitForRequest("**/api/admin/operations/tasks/*");
   await firstTask.getByRole("button", { name: "状態を保存" }).click();
+  await updateRequest;
   expect(updatedStatus).toBe("done");
 });
 

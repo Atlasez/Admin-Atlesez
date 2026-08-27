@@ -2,7 +2,7 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
 import { getTimeZoneOptions } from "../../lib/timezones";
-const { memberMode = false } = Astro.props;
+const { memberMode = false, progressOnly = false } = Astro.props;
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
 const timezones = getTimeZoneOptions(new Date());
 const holidayCountries = [
@@ -10,16 +10,27 @@ const holidayCountries = [
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
 const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
+const projectSlug = Astro.url.searchParams.get("project") === "secretariat"
+  ? "secretariat"
+  : Astro.url.searchParams.get("project") === "seminar-platform"
+    ? "seminar-platform"
+    : "atlas";
+const projectLabel = projectSlug === "secretariat"
+  ? "運営事務局"
+  : projectSlug === "seminar-platform"
+    ? "ゼミプラットフォーム"
+    : "アトラス";
+const pageLabel = calendarPage ? "カレンダー" : progressOnly ? "進捗報告" : "タスク管理";
+const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${pageLabel}`;
 ---
 
-<AdminLayout title={calendarPage ? "カレンダー" : "タスク管理"} description="運営作業を共有する場所">
-  <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined}>
+<AdminLayout title={initialPageTitle} description="運営作業を共有する場所">
+  <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined}>
     <header>
-      <h1 data-project-title>{calendarPage ? "カレンダー" : "タスク管理"}</h1>
-      {!memberMode && <nav class="operations-tabs" aria-label="タスクとカレンダー"><a href={`/admin/operations/${Astro.url.search}`} aria-current={!calendarPage ? "page" : undefined}>タスク管理</a><a href={`/admin/calendar/${Astro.url.search}`} aria-current={calendarPage ? "page" : undefined}>カレンダー</a></nav>}
+      <h1 data-project-title>{initialPageTitle}</h1>
     </header>
     <div class="grid">
-      <section hidden={calendarPage}>
+      <section hidden={calendarPage || !progressOnly}>
         <h2>進捗を報告</h2>
         <p>編集・フィードバックの完了後に、ここへ短く記録できます。</p>
         <p class="discord-notice">
@@ -35,7 +46,7 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
         <h3 class="subheading">自分が投げた進捗報告</h3>
         <div data-progress-list></div>
       </section>
-      <section class="task-workspace" hidden={calendarPage}>
+      <section class="task-workspace" hidden={calendarPage || progressOnly}>
         <div class="task-list-heading">
           <div>
             <h2>タスク一覧</h2>
@@ -333,9 +344,6 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
     color: var(--text-secondary);
     line-height: 1.6;
   }
-  .operations-tabs { display:flex; gap:.35rem; margin-top:.75rem; }
-  .operations-tabs a { border:1px solid var(--border-default); color:var(--text-primary); font-size:.76rem; font-weight:800; padding:.4rem .65rem; text-decoration:none; }
-  .operations-tabs a[aria-current="page"] { background:var(--accent-primary); border-color:var(--accent-primary); color:#fff; }
   .calendar-actions { display:flex; justify-content:flex-end; margin:.75rem 0; }
   .calendar-actions button { margin:0; }
   .calendar-settings-dialog { background:var(--background-primary); border:1px solid var(--border-default); color:var(--text-primary); max-width:44rem; padding:1rem; width:calc(100% - 2rem); }
@@ -1120,6 +1128,7 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
     const projectTitle = get<HTMLElement>('[data-project-title]');
     const availabilityPopover = get<HTMLElement>('[data-availability-popover]');
     const memberPage = root.dataset.memberMode === 'true';
+    const progressOnly = root.dataset.progressOnly === 'true';
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
     const calendarPage = location.pathname.replace(/\/$/, '') === '/admin/calendar';
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
@@ -1297,7 +1306,7 @@ const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/a
     const render = () => {
       renderTimezoneOffset();
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
-      projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : 'タスク管理'}`;
+      projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = memberPage || !data.scope.isManager;
       assignee.innerHTML = '<option value="">担当者を指定しない</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}">${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
       reports.innerHTML = (data.progress ?? []).map((item) => `<article class="item"><span>${escapeHtml(String(item.body ?? ''))}</span><small>自分が投げた進捗報告 ・ ${formatDate(String(item.created_at))}</small></article>`).join('') || '<p>自分が投げた進捗報告はまだありません。</p>';
