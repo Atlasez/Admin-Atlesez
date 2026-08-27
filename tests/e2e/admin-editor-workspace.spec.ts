@@ -326,7 +326,7 @@ test("V-2: フィードバック担当者と依頼内容を選んで保存でき
   await expect
     .poll(() => assignment)
     .toEqual({
-      reviewerEmail: "bob@example.com",
+      reviewerEmails: ["bob@example.com"],
       note: "定義と例を重点確認してください",
     });
   await expect(page.locator("[data-save-message]")).toHaveText(
@@ -718,7 +718,11 @@ test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する"
 
   const thread = page.locator('[data-comment-context="new-comment"]');
   await expect(thread.locator(".thread-status")).toHaveText("対応待ち");
-  await expect(thread.locator(".comment-action-count")).toHaveText(["0", "0"]);
+  await expect(thread.locator(".comment-action-count")).toHaveText([
+    "0",
+    "0",
+    "0",
+  ]);
   await expect(
     thread.getByRole("button", { name: /確認済み/ }),
   ).not.toHaveClass(/is-acted-by-me/);
@@ -995,8 +999,9 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
       page.locator(`[data-editor-pane="${pane}"] [data-pane-edge]`),
     ).toHaveCount(4);
   }
-  await expect(page.locator('[data-pane-tab="memo"]')).toHaveCount(0);
-  await expect(page.locator(".memo-area")).toHaveCount(0);
+  await expect(page.locator('[data-pane-tab="memo"]')).toHaveCount(1);
+  await expect(page.locator(".memo-area")).toHaveCount(1);
+  await expect(page.locator(".memo-area")).toBeHidden();
 
   const writing = page.locator('[data-editor-pane="writing"]');
   const preview = page.locator('[data-editor-pane="preview"]');
