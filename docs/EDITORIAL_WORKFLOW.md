@@ -42,8 +42,9 @@ draft / in-review はビルドから除外されるため、**mainにマージ�
 
 ## 4. 公開
 
-mainへのマージでCloudflare Pagesが自動ビルド・デプロイする。手作業は不要。
-GitHub Actionsは検証専用で、デプロイはしない（[DEPLOYMENT.md](DEPLOYMENT.md)）。
+CI成功後、正規のnpmコマンドでCloudflare Workersへデプロイする。公開サイトは
+`npm run deploy:public`、運営用サイトは`npm run deploy:admin`を使用する
+（[DEPLOYMENT.md](DEPLOYMENT.md)）。
 
 ## 5. 修正・報告対応
 
