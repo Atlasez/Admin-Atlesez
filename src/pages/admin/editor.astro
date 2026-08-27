@@ -134,7 +134,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     <header class="workspace-header">
       <div>
         <h1>記事編集ワークスペース</h1>
-        <p>原稿を書く、数式を確かめる、コメントでフィードバックする。公開まで、この画面で完結します。</p>
       </div>
       <nav aria-label="運営メニュー">
         <a href="/admin/articles/">編集・フィードバックへ戻る</a>
@@ -355,7 +354,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .editor-workspace[data-editor-starting] .editor-panel::after { color: var(--muted); content: "編集スペースを読み込んでいます…"; font-size: .9rem; left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); visibility: visible; white-space: nowrap; }
   .workspace-header { align-items: start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; padding-bottom: 1.25rem; }
   .eyebrow { color: var(--accent); font-size: .76rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .4rem; }
-  h1 { font-size: clamp(1.75rem, 3vw, 2.4rem); letter-spacing: -.03em; margin: 0; }
+  .workspace-header h1 { font-size: clamp(1.5rem, 2.2vw, 2rem); letter-spacing: -.03em; line-height: 1.25; margin: 0; }
   .workspace-header > div > p:last-child { color: var(--muted); margin: .55rem 0 0; max-width: 48rem; }
   .workspace-header nav { align-items: center; display: flex; flex: 0 0 auto; gap: .55rem; }
   .workspace-header nav a, .workspace-header nav button { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); cursor: pointer; font: inherit; font-size: .84rem; padding: .55rem .7rem; text-decoration: none; }
