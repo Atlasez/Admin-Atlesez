@@ -392,6 +392,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const esc = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character));
     const labels = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" };
     const isTest = (article: Article) => /(^|[\\s_-])test($|[\\s_-])|テスト/i.test(article.title);
+    const assignedToScope = (article: Article) => article.reviewer_email?.split(",").some((email) => email.trim().toLowerCase() === scopeEmail.toLowerCase()) ?? false;
     const currentWorkflow = () => workflow.value as "all" | "revise" | "review" | "request";
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const render = () => {
@@ -399,8 +400,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       const normalizedQuery = query.value.toLowerCase();
       const filtered = items.filter((article) => (mode !== "review" || article.status !== "approved") && (mode !== "request" || ([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) && (status.value === "all" || article.status === status.value) && (publication.value === "all" || (publication.value === "published" ? Boolean(article.published_at) : !article.published_at)) && (test.value === "all" || (test.value === "only" ? isTest(article) : !isTest(article))) && `${article.title} ${article.subject} ${article.category}`.toLowerCase().includes(normalizedQuery));
       const sorted = [...filtered].sort((left, right) => {
-        const leftPriority = (mode === "revise" || mode === "request") && [left.created_by, left.updated_by].includes(scopeEmail) ? 0 : mode === "review" && left.reviewer_email === scopeEmail ? 0 : 1;
-        const rightPriority = (mode === "revise" || mode === "request") && [right.created_by, right.updated_by].includes(scopeEmail) ? 0 : mode === "review" && right.reviewer_email === scopeEmail ? 0 : 1;
+        const leftPriority = (mode === "revise" || mode === "request") && [left.created_by, left.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(left) ? 0 : 1;
+        const rightPriority = (mode === "revise" || mode === "request") && [right.created_by, right.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(right) ? 0 : 1;
         return leftPriority - rightPriority || new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
       });
       // 公開記事由来の原稿だけは source_article_id でまとめる。
@@ -408,7 +409,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       // 原稿自身のIDをキーにする（以前は新規原稿同士が一覧から消えていた）。
       const shown = [...new Map(sorted.map((article) => [article.source_article_id || article.id, article])).values()];
       count.textContent = `${shown.length}件`;
-      list.innerHTML = shown.length ? shown.map((article) => `<article class="article" role="link" tabindex="0" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && article.reviewer_email === scopeEmail ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
+      list.innerHTML = shown.length ? shown.map((article) => `<article class="article" role="link" tabindex="0" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
       updateWorkflowButtons();
     };
     const load = async () => {
