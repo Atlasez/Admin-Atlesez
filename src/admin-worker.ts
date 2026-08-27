@@ -5689,6 +5689,26 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   if (isResponse(current)) return current;
   if (!canAccess(current.stage, "applicant"))
     return json({ error: "応募状況を閲覧できる段階ではありません。" }, 403);
+  const profile = await getApplicantProfile(env, current.email);
+  const basicProfileComplete = Boolean(
+    profile &&
+      [
+        profile.family_name,
+        profile.given_name,
+        ...(profile.form_language === "en"
+          ? []
+          : [profile.family_name_kana, profile.given_name_kana]),
+        profile.affiliation_email,
+        profile.affiliation_type,
+        profile.institution,
+        profile.grade,
+        profile.country,
+        profile.timezone,
+        profile.birth_date,
+        profile.residence_city,
+        profile.referral_source,
+      ].every((value) => value.trim()),
+  );
   const application = await env.REPORTS.prepare(
     `SELECT project_slug, created_at, status
      FROM atlasez_member_applications
@@ -5696,9 +5716,17 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   )
     .bind(current.email)
     .first<{ project_slug: string; created_at: string; status: string }>();
-  if (!application) return json({ error: "応募が見つかりません。" }, 404);
+  if (!application)
+    return json({
+      email: current.email,
+      stage: current.stage,
+      basicProfileComplete,
+      application: null,
+    });
   return json({
     email: current.email,
+    stage: current.stage,
+    basicProfileComplete,
     application: {
       project:
         APPLICATION_FORM_LABELS[application.project_slug] ??
@@ -8643,7 +8671,7 @@ async function handleAdminRequest(
     const current = await getCurrentUserStage(request, env);
     if (isResponse(current)) {
       if (current.status === 401)
-        return Response.redirect(`${url.origin}/apply/`, 302);
+        return Response.redirect(`${url.origin}/applicant/`, 302);
       return current;
     }
     return Response.redirect(

@@ -15,10 +15,10 @@ describe("user stages", () => {
     expect(applicant).toBe("APPLICANT");
     expect(canAccess(applicant, "applicant")).toBe(true);
     expect(canAccess(applicant, "admin")).toBe(false);
-    expect(canAccess("NEW_USER", "applicant")).toBe(false);
+    expect(canAccess("NEW_USER", "applicant")).toBe(true);
     expect(canAccess("MEMBER", "application")).toBe(true);
     expect(canAccess("ADMIN", "application")).toBe(true);
-    expect(stageHome("NEW_USER")).toBe("/apply/");
+    expect(stageHome("NEW_USER")).toBe("/applicant/");
     expect(stageHome("MEMBER", "secretariat")).toBe("/admin/portal/");
   });
 

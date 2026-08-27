@@ -133,7 +133,10 @@ const editorTheme = EditorView.theme({
     color: "var(--text)",
   },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
-    backgroundColor: "color-mix(in srgb, var(--accent), transparent 78%)",
+    // Keep an active text selection visually distinct from the pale-red
+    // locked-range overlay. The old accent-based mix inherited the site's
+    // purple accent in some themes, which made selection look muddy.
+    backgroundColor: "rgb(147 197 253 / 0.42)",
   },
 });
 

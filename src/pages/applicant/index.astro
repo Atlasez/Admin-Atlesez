@@ -2,34 +2,62 @@
 import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
 ---
 
-<ApplicantLayout title="応募状況" description="Atlasezへの応募状況を確認します。" showMemberProfile={true}>
+<ApplicantLayout title="Atlasezスタートページ" description="Atlasezで参加準備や応募状況を確認します。" showMemberProfile={false}>
   <section class="applicant-page" data-applicant-page>
-    <h1>応募状況</h1>
-    <p class="intro">応募内容を確認しています。選考に関するご連絡は、Googleログイン中のメールアドレスへお送りします。</p>
+    <p class="eyebrow">ATLASEZ</p>
+    <h1>Atlasezスタートページ</h1>
+    <p class="intro">参加中のプロジェクトがない方は、ここから基本情報の登録や参加応募を進められます。</p>
 
-    <dl class="application-details" aria-live="polite">
+    <section class="start-card" aria-live="polite">
+      <p class="start-status" data-start-status>状態を確認しています…</p>
+      <h2 data-start-heading>準備しています</h2>
+      <p data-start-message>ログイン情報と参加状況を読み込んでいます。</p>
+      <div class="start-actions">
+        <a class="primary-action" data-basic-link href="/apply/?step=basic" hidden>基本情報を入力する</a>
+        <a class="primary-action" data-project-link href="/apply/?project=atlas" hidden>参加するプロジェクトを選ぶ</a>
+      </div>
+    </section>
+
+    <section class="application-status-card" data-application-card hidden>
+      <div class="section-heading"><div><p class="eyebrow">APPLICATION</p><h2>応募状況</h2></div><span class="badge badge-accent" data-application-status>確認中…</span></div>
+      <dl class="application-details" aria-live="polite">
       <div><dt>ログイン中のGoogleアカウント</dt><dd data-application-email>読み込み中…</dd></div>
       <div><dt>応募したプロジェクト</dt><dd data-application-project>読み込み中…</dd></div>
       <div><dt>応募日時</dt><dd data-application-submitted>読み込み中…</dd></div>
-      <div><dt>現在の応募ステータス</dt><dd><span class="badge badge-accent" data-application-status>読み込み中…</span></dd></div>
-    </dl>
-    <p class="notice" data-application-message>応募状況を読み込んでいます。</p>
+      </dl>
+      <p class="notice" data-application-message>応募状況を読み込んでいます。</p>
+    </section>
   </section>
 </ApplicantLayout>
 
 <style>
-  .applicant-page { margin: 0 auto; max-width: 720px; padding: 3rem 1.25rem 5rem; }
-  h1 { margin: .4rem 0 .6rem; }
-  .intro, .notice { color: var(--text-secondary); line-height: 1.7; }
-  .application-details { border-top: 2px solid var(--accent-primary); display: grid; margin: 2rem 0 1rem; }
+  .applicant-page { margin: 0 auto; max-width: 820px; padding: 3rem 1.25rem 5rem; }
+  .eyebrow { color: var(--accent-primary); font-size: .7rem; font-weight: 900; letter-spacing: .12em; margin: 0; }
+  h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); margin: .35rem 0 .6rem; }
+  .intro, .notice, .start-card > p, .application-status-card > p { color: var(--text-secondary); line-height: 1.7; }
+  .start-card, .application-status-card { border: 1px solid var(--border-default); border-top: 3px solid var(--accent-primary); margin-top: 1.7rem; padding: 1.25rem; }
+  .start-status { color: var(--accent-primary)!important; font-size: .72rem; font-weight: 800; margin: 0 0 .3rem; }
+  .start-card h2 { font-size: 1.25rem; margin: 0 0 .45rem; }
+  .start-card > p:not(.start-status) { margin: 0; }
+  .start-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+  .primary-action, .secondary-action { border: 1px solid var(--accent-primary); font-size: .8rem; font-weight: 800; padding: .65rem .8rem; text-decoration: none; }
+  .primary-action { background: var(--accent-primary); color: #fff; }
+  .secondary-action { color: var(--accent-primary); }
+  .primary-action:hover, .secondary-action:hover { filter: brightness(.95); transform: translateY(-1px); }
+  .application-status-card[hidden], .start-actions [hidden] { display: none; }
+  .section-heading { align-items: start; display: flex; gap: .8rem; justify-content: space-between; }
+  .section-heading h2 { margin: .25rem 0 0; }
+  .section-heading .eyebrow { margin: 0; }
+  .application-details { border-top: 2px solid var(--accent-primary); display: grid; margin: 1.1rem 0 1rem; }
   .application-details div { border-bottom: 1px solid var(--border-default); display: grid; gap: .65rem; grid-template-columns: minmax(12rem, .9fr) minmax(0, 1.4fr); padding: 1rem .2rem; }
   dt { color: var(--text-secondary); font-size: .82rem; font-weight: 700; }
   dd { margin: 0; overflow-wrap: anywhere; }
-  @media (max-width: 560px) { .applicant-page { padding: 2rem 1rem 4rem; } .application-details div { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .applicant-page { padding: 2rem 1rem 4rem; } .application-details div { grid-template-columns: 1fr; } .section-heading { align-items: flex-start; display: grid; } }
 </style>
 
 <script>
   const root = document.querySelector<HTMLElement>("[data-applicant-page]");
+  const stageLabels: Record<string, string> = { NEW_USER: "新規アカウント", APPLICATION_STARTED: "基本情報の登録中", APPLICANT: "応募済み", MEMBER: "参加メンバー" };
   const statusLabels: Record<string, string> = {
     new: "応募を受け付けました",
     reviewing: "確認中",
@@ -47,23 +75,59 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       const target = root.querySelector<HTMLElement>(selector);
       if (target) target.textContent = value;
     };
+    const startStatus = root.querySelector<HTMLElement>("[data-start-status]")!;
+    const startHeading = root.querySelector<HTMLElement>("[data-start-heading]")!;
+    const startMessage = root.querySelector<HTMLElement>("[data-start-message]")!;
+    const basicLink = root.querySelector<HTMLAnchorElement>("[data-basic-link]")!;
+    const projectLink = root.querySelector<HTMLAnchorElement>("[data-project-link]")!;
+    const applicationCard = root.querySelector<HTMLElement>("[data-application-card]")!;
     fetch("/api/applicant/me", { credentials: "same-origin", cache: "no-store" })
       .then(async (response) => ({ response, data: await response.json() as {
         email?: string;
         error?: string;
+        stage?: string;
+        basicProfileComplete?: boolean;
         application?: { project: string; submittedAt: string; status: string };
       } }))
       .then(({ response, data }) => {
-        if (!response.ok || !data.application) throw new Error(data.error ?? "応募状況を読み込めませんでした。");
-        setText("[data-application-email]", data.email ?? "");
-        setText("[data-application-project]", data.application.project);
-        setText("[data-application-submitted]", formatSubmittedAt(data.application.submittedAt));
-        setText("[data-application-status]", statusLabels[data.application.status] ?? data.application.status);
-        setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
+        if (!response.ok) throw new Error(data.error ?? "参加状況を読み込めませんでした。");
+        const application = data.application;
+        const profileComplete = data.basicProfileComplete === true;
+        startStatus.textContent = stageLabels[data.stage ?? "NEW_USER"] ?? "参加準備中";
+        if (application) {
+          startHeading.textContent = "応募状況を確認できます";
+          startMessage.textContent = "選考に関するご連絡は、Googleログイン中のメールアドレスへお送りします。";
+          applicationCard.hidden = false;
+          basicLink.hidden = true;
+          projectLink.hidden = true;
+          setText("[data-application-email]", data.email ?? "");
+          setText("[data-application-project]", application.project);
+          setText("[data-application-submitted]", formatSubmittedAt(application.submittedAt));
+          setText("[data-application-status]", statusLabels[application.status] ?? application.status);
+          setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
+          return;
+        }
+        applicationCard.hidden = true;
+        if (profileComplete) {
+          startHeading.textContent = "参加するプロジェクトを選べます";
+          startMessage.textContent = "基本情報は登録済みです。参加したいプロジェクトを選んで、必要な項目を入力してください。";
+          basicLink.hidden = true;
+          projectLink.hidden = false;
+        } else {
+          startHeading.textContent = "まず基本情報を登録してください";
+          startMessage.textContent = "基本情報は複数のプロジェクトへの応募で共通して使います。登録後に参加先を選べます。";
+          basicLink.hidden = false;
+          projectLink.hidden = true;
+        }
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "応募状況を読み込めませんでした。";
-        setText("[data-application-message]", message);
+        startStatus.textContent = "読み込みエラー";
+        startHeading.textContent = "参加状況を確認できませんでした";
+        startMessage.textContent = message;
+        basicLink.hidden = false;
+        projectLink.hidden = true;
+        applicationCard.hidden = true;
       });
   }
 </script>

@@ -2884,6 +2884,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .collaboration-status [data-collaboration-participants] { display:flex; flex-wrap:wrap; gap:.25rem; }
   .collaboration-status [data-collaboration-participants] span { background:var(--accent-subtle); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border)); border-radius:999px; color:var(--accent); font-size:.66rem; font-weight:800; padding:.16rem .38rem; }
   .editor-workspace .writing-area .locked-range-markup mark.locked-range-mark { background-color:#fee2e2 !important; border-left:3px solid #ef4444 !important; border-radius:.16em; box-shadow:inset 0 0 0 1px rgb(239 68 68 / .2); color:inherit; padding:.03em .1em; }
+  .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-selectionBackground,
+  .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-line::selection,
+  .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-line ::selection { background-color:rgb(147 197 253 / .42) !important; }
+  [data-pref-bg="dark"] .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-selectionBackground,
+  [data-pref-bg="dark"] .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-line::selection,
+  [data-pref-bg="dark"] .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-line ::selection { background-color:rgb(59 130 246 / .48) !important; }
   [data-pref-bg="dark"] .editor-workspace .writing-area .locked-range-markup { background: var(--background-primary); color: var(--text-primary); }
   [data-pref-bg="dark"] .editor-workspace .writing-area .locked-range-markup mark.locked-range-mark { background-color:rgb(255 92 108 / .28) !important; border-left-color:#ff7a87 !important; box-shadow:inset 0 0 0 1px rgb(255 122 135 / .34), 0 0 .2rem rgb(255 92 108 / .14); color:inherit; }
   [data-pref-bg="dark"] .editor-workspace .writing-area textarea { background: transparent; color: transparent; caret-color: var(--text-primary); }

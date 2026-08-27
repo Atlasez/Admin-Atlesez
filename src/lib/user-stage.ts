@@ -81,7 +81,13 @@ export function canAccess(stage: UserStage, area: UserArea): boolean {
       stage === "MEMBER" ||
       stage === "ADMIN"
     );
-  if (area === "applicant") return stage === "APPLICANT" || stage === "MEMBER";
+  if (area === "applicant")
+    return (
+      stage === "NEW_USER" ||
+      stage === "APPLICATION_STARTED" ||
+      stage === "APPLICANT" ||
+      stage === "MEMBER"
+    );
   if (area === "onboarding")
     return (
       stage === "ACCEPTED" || stage === "ONBOARDING" || stage === "TUTORIAL"
@@ -94,7 +100,12 @@ export function stageHome(
   stage: UserStage,
   _projectSlug?: string | null,
 ): string {
-  if (stage === "NEW_USER" || stage === "APPLICATION_STARTED") return "/apply/";
+  if (
+    stage === "NEW_USER" ||
+    stage === "APPLICATION_STARTED" ||
+    stage === "APPLICANT"
+  )
+    return "/applicant/";
   if (stage === "ACCEPTED" || stage === "ONBOARDING") return "/onboarding/";
   if (stage === "TUTORIAL") return "/onboarding/tutorial/";
   if (stage === "ADMIN") return "/admin/portal/";
