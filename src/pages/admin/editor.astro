@@ -529,6 +529,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 </style>
 
 <style is:global>
+  .article-preview .proof-details { margin:1.2rem 0; }
+  .article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
+  .article-preview .proof-details > summary::-webkit-details-marker { display:none; }
+  .article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(45deg); transition:transform .15s ease; width:.45rem; }
+  .article-preview .proof-details[open] > summary::before { transform:rotate(225deg); }
+  .article-preview .proof-details > summary:hover { border-color:var(--accent); }
   .editor-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pane-controls { align-items:center; display:flex; flex:0 0 auto; flex-wrap:wrap; gap:.35rem; }
   .math-preset-control { align-items:center; color:var(--muted); display:flex; flex:1 1 10rem; font-size:.68rem; font-weight:800; gap:.35rem; justify-content:space-between; min-width:0; }
