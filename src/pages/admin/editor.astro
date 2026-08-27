@@ -2404,6 +2404,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
           try {
             const payload = JSON.parse(event.data) as { type?: string; participants?: CollaborationParticipant[] };
             if (payload.type === "presence") renderCollaborationParticipants(payload.participants ?? []);
+            if (payload.type === "comments-changed") {
+              const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+              if (currentDocumentId === documentId) void reloadComments(documentId).catch(() => undefined);
+            }
           } catch { /* malformed presence messages are ignored */ }
         });
         socket.addEventListener("close", () => {

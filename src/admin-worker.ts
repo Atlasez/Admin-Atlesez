@@ -7192,6 +7192,7 @@ async function createEditorialComment(
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
   await replaceEditorialCommentTags(env, commentId, tags ?? []);
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true }, 201);
 }
 
@@ -7247,6 +7248,7 @@ async function updateEditorialCommentStatus(
       )
         .bind(existing.id)
         .run();
+      await notifyEditorialCommentChange(env, documentId);
       return json({
         ok: true,
         action,
@@ -7267,6 +7269,7 @@ async function updateEditorialCommentStatus(
         new Date().toISOString(),
       )
       .run();
+    await notifyEditorialCommentChange(env, documentId);
     return json({
       ok: true,
       action,
@@ -7297,6 +7300,7 @@ async function updateEditorialCommentStatus(
         ).bind(commentId, scope.email),
       );
     await env.REPORTS.batch(statements);
+    await notifyEditorialCommentChange(env, documentId);
     return json({
       ok: true,
       action,
@@ -7366,6 +7370,7 @@ async function updateEditorialCommentStatus(
       500,
     );
   }
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true, action, actorEmail: scope.email, recordedAt: now });
 }
 
@@ -7426,6 +7431,7 @@ async function editEditorialComment(
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
   if (tags) await replaceEditorialCommentTags(env, commentId, tags);
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true });
 }
 
@@ -7483,6 +7489,7 @@ async function deleteEditorialComment(
   )
     .bind(commentId, commentId)
     .run();
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true });
 }
 
@@ -8959,6 +8966,29 @@ async function connectEditorialCollaboration(
   );
   const id = namespace.idFromName(documentId);
   return namespace.get(id).fetch(new Request(request, { headers }));
+}
+
+async function notifyEditorialCommentChange(
+  env: Env,
+  documentId: string,
+): Promise<void> {
+  const namespace = env.EDITORIAL_COLLABORATION;
+  if (!namespace) return;
+  try {
+    const id = namespace.idFromName(documentId);
+    await namespace.get(id).fetch(
+      new Request("https://atlasez-editorial-collaboration.internal/events", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-atlasez-document-id": documentId,
+        },
+        body: JSON.stringify({ type: "comments-changed" }),
+      }),
+    );
+  } catch {
+    // コメント自体の保存を失敗させず、接続中の画面は再読込で回復できるようにする。
+  }
 }
 
 async function handleAdminRequest(
