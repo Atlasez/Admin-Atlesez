@@ -3941,7 +3941,7 @@ async function listProfileChangeRequests(
   if (!new Set(["pending", "approved", "rejected", "all"]).has(requestedStatus))
     return json({ error: "申請状態を確認してください。" }, 400);
   const where = requestedStatus === "all" ? "" : "WHERE r.status=?";
-  const statement = env.REPORTS.prepare(
+  const profileStatement = env.REPORTS.prepare(
     `SELECT r.*,COALESCE(p.avatar_url,'') AS avatar_url,
       p.display_name AS current_display_name,p.university AS current_university,
       p.year AS current_year,p.affiliation_type AS current_affiliation_type,
@@ -3951,11 +3951,29 @@ async function listProfileChangeRequests(
      ${where}
      ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC LIMIT 300`,
   );
-  const result =
+  const atlasStatement = env.REPORTS.prepare(
+    `SELECT r.*,COALESCE(NULLIF(TRIM(p.display_name),''),r.email) AS display_name,
+      COALESCE(p.avatar_url,'') AS avatar_url,COALESCE(pp.internal_bio,'') AS current_internal_bio
+     FROM editorial_project_profile_change_requests r
+     LEFT JOIN editorial_member_profiles p ON p.email=r.email
+     LEFT JOIN editorial_project_member_profiles pp
+       ON pp.project_id=r.project_id AND pp.email=r.email
+     WHERE r.project_id='atlas' ${requestedStatus === "all" ? "" : "AND r.status=?"}
+     ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC LIMIT 300`,
+  );
+  const [result, atlasResult] = await Promise.all([
     requestedStatus === "all"
-      ? await statement.all<Record<string, unknown>>()
-      : await statement.bind(requestedStatus).all<Record<string, unknown>>();
-  return json({ requests: result.results ?? [], reviewer: scope.email });
+      ? profileStatement.all<Record<string, unknown>>()
+      : profileStatement.bind(requestedStatus).all<Record<string, unknown>>(),
+    requestedStatus === "all"
+      ? atlasStatement.all<Record<string, unknown>>()
+      : atlasStatement.bind(requestedStatus).all<Record<string, unknown>>(),
+  ]);
+  return json({
+    requests: result.results ?? [],
+    atlasInternalBioRequests: atlasResult.results ?? [],
+    reviewer: scope.email,
+  });
 }
 
 async function reviewProfileChangeRequest(
@@ -4070,10 +4088,14 @@ async function getProjectMemberProfile(
     scope.email,
     role,
   );
+  const canReview =
+    project.id === "atlas"
+      ? (await operationProjectRole(env, scope, "secretariat")) === "manager"
+      : role === "manager";
   return json({
     email: scope.email,
     project: { ...project, role },
-    canReview: role === "manager",
+    canReview,
     assignments,
     memberProfile: memberProfile ?? {
       display_name: "",
@@ -4138,7 +4160,9 @@ async function saveProjectMemberProfile(
   const taskDetails = [
     `申請者: ${scope.email}`,
     `プロジェクト: ${project.name}`,
-    "プロジェクト管理の「運営内自己紹介の承認」から内容を確認してください。",
+    project.id === "atlas"
+      ? "運営事務局の「メンバー情報の承認」から内容を確認してください。"
+      : "プロジェクト管理の「運営内自己紹介の承認」から内容を確認してください。",
   ].join("\n");
   const statements = pending
     ? [
@@ -4286,18 +4310,32 @@ async function reviewProjectProfileChangeRequest(
     .bind(requestId)
     .first<Record<string, unknown>>();
   if (!row) return json({ error: "変更申請が見つかりません。" }, 404);
-  const project = await resolveOperationProject(
-    env,
-    scope,
-    String(row.project_id ?? ""),
-  );
-  if (isResponse(project)) return project;
-  const role = await operationProjectRole(env, scope, project.id);
-  if (role !== "manager")
-    return json(
-      { error: "このプロジェクトの運営内運営のみ利用できます。" },
-      403,
+  let project: OperationProject;
+  const isAtlasSecretariatReviewer =
+    String(row.project_id ?? "") === "atlas" &&
+    (await operationProjectRole(env, scope, "secretariat")) === "manager";
+  if (isAtlasSecretariatReviewer) {
+    const atlasProject = await env.REPORTS.prepare(
+      "SELECT id,slug,name,description FROM atlasez_projects WHERE id='atlas' OR slug='atlas' LIMIT 1",
+    ).first<OperationProject>();
+    if (!atlasProject)
+      return json({ error: "指定したプロジェクトが見つかりません。" }, 404);
+    project = atlasProject;
+  } else {
+    const resolvedProject = await resolveOperationProject(
+      env,
+      scope,
+      String(row.project_id ?? ""),
     );
+    if (isResponse(resolvedProject)) return resolvedProject;
+    const role = await operationProjectRole(env, scope, resolvedProject.id);
+    if (role !== "manager")
+      return json(
+        { error: "このプロジェクトの運営内運営のみ利用できます。" },
+        403,
+      );
+    project = resolvedProject;
+  }
   if (row.status !== "pending")
     return json({ error: "この変更申請は既に処理済みです。" }, 409);
   let payload: { action?: unknown; reviewNote?: unknown };
