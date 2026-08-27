@@ -143,10 +143,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     <section class="workflow-guide" data-status-workflow aria-label="開いている原稿の進捗">
       <p>現在の状態：<strong data-workflow-current>原稿を選択してください</strong><small data-workflow-help>原稿を書いたら、まず「下書きを保存」します。</small></p>
       <ol aria-label="原稿の公開までの進捗">
-        <li data-workflow-step="draft"><b>1</b><span>下書きを保存</span></li>
-        <li data-workflow-step="in-review"><b>2</b><span>フィードバックを依頼</span></li>
-        <li data-workflow-step="approved"><b>3</b><span>フィードバック完了</span></li>
-        <li data-workflow-step="published"><b>4</b><span>公開する</span></li>
+        <li data-workflow-step="draft"><b>1</b><span>執筆・保存</span></li>
+        <li data-workflow-step="in-review"><b>2</b><span>フィードバック</span></li>
+        <li data-workflow-step="publication-subject"><b>3</b><span>分野統括</span></li>
+        <li data-workflow-step="publication-leader"><b>4</b><span>プロジェクトリーダー</span></li>
+        <li data-workflow-step="approved"><b>5</b><span>公開準備完了</span></li>
+        <li data-workflow-step="published"><b>6</b><span>公開</span></li>
       </ol>
     </section>
 
@@ -204,7 +206,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
               </div>
               <div class="document-actions">
                 <button type="button" class="quiet-action" data-request-review hidden>フィードバックを依頼する</button>
+                <button type="button" class="quiet-action" data-complete-writing hidden>執筆完了（公開審査へ）</button>
+                <button type="button" class="quiet-action" data-publication-review hidden>公開審査を処理</button>
                 <button type="button" class="primary-action" data-publish-document hidden>公開する</button>
+                <button type="button" class="quiet-action" data-schedule-document hidden>公開予約</button>
                 <button type="button" class="withdraw-action" data-unpublish-document hidden>公開を取り消す</button>
                 <button type="submit" class="primary-action" data-save-document>保存する</button>
               </div>
@@ -304,6 +309,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         </div>
       </form>
     </dialog>
+    <dialog class="approval-dialog" data-publication-review-dialog aria-labelledby="publication-review-dialog-title">
+      <form method="dialog" data-publication-review-form>
+        <p class="eyebrow">公開審査</p>
+        <h2 id="publication-review-dialog-title">公開審査を処理しますか？</h2>
+        <p data-publication-review-description>承認すると次の審査担当へ通知されます。差し戻すとフィードバック中へ戻ります。</p>
+        <label>審査メモ（任意）<textarea data-publication-review-note maxlength="2000" rows="4" placeholder="確認内容や差し戻し理由"></textarea></label>
+        <output data-publication-review-message aria-live="polite"></output>
+        <div class="approval-actions">
+          <button type="button" value="no" class="quiet-action" data-publication-review-cancel>キャンセル</button>
+          <button type="submit" value="reject" class="withdraw-action">差し戻す</button>
+          <button type="submit" value="approve" class="primary-action">承認する</button>
+        </div>
+      </form>
+    </dialog>
     <dialog class="approval-dialog" data-unpublish-dialog aria-labelledby="unpublish-dialog-title">
       <form method="dialog">
         <p class="eyebrow">公開取り消しの確認</p>
@@ -313,6 +332,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
           <button type="submit" value="no" class="quiet-action">いいえ（取り消さない）</button>
           <button type="submit" value="yes" class="withdraw-action">はい（下書きへ戻す）</button>
         </div>
+      </form>
+    </dialog>
+    <dialog class="approval-dialog" data-schedule-dialog aria-labelledby="schedule-dialog-title">
+      <form method="dialog" data-schedule-form>
+        <p class="eyebrow">公開予約</p>
+        <h2 id="schedule-dialog-title">公開日時を設定</h2>
+        <p>公開審査完了済みの記事だけ予約できます。指定時刻になると自動で公開されます。</p>
+        <label>公開日時<input type="datetime-local" data-schedule-at required /></label>
+        <output data-schedule-message aria-live="polite"></output>
+        <div class="approval-actions"><button type="button" class="quiet-action" data-schedule-cancel>キャンセル</button><button type="submit" value="save" class="primary-action">予約する</button></div>
       </form>
     </dialog>
     <dialog class="approval-dialog progress-dialog" data-progress-dialog aria-labelledby="progress-dialog-title">
@@ -865,7 +894,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   type LockedRange = { start: number; end: number; text: string };
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
   type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
-  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; locked_ranges?: string | LockedRange[] };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; locked_ranges?: string | LockedRange[] };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
@@ -996,6 +1025,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
     const unpublishButton = root.querySelector<HTMLButtonElement>("[data-unpublish-document]")!;
     const reviewButton = root.querySelector<HTMLButtonElement>("[data-request-review]")!;
+    const completeWritingButton = root.querySelector<HTMLButtonElement>("[data-complete-writing]")!;
+    const publicationReviewButton = root.querySelector<HTMLButtonElement>("[data-publication-review]")!;
+    const scheduleButton = root.querySelector<HTMLButtonElement>("[data-schedule-document]")!;
     const reviewRequestDialog = root.querySelector<HTMLDialogElement>("[data-review-request-dialog]")!;
     const reviewRequestForm = root.querySelector<HTMLFormElement>("[data-review-request-form]")!;
     const reviewRequestAssignee = root.querySelector<HTMLSelectElement>("[data-review-request-assignee]")!;
@@ -1005,6 +1037,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const headingOutline = root.querySelector<HTMLElement>("[data-heading-outline]")!;
     const previewExpandButton = root.querySelector<HTMLButtonElement>("[data-preview-expand]")!;
     const approvalDialog = root.querySelector<HTMLDialogElement>("[data-approval-dialog]")!;
+    const publicationReviewDialog = root.querySelector<HTMLDialogElement>("[data-publication-review-dialog]")!;
+    const publicationReviewForm = root.querySelector<HTMLFormElement>("[data-publication-review-form]")!;
+    const publicationReviewNote = root.querySelector<HTMLTextAreaElement>("[data-publication-review-note]")!;
+    const publicationReviewDescription = root.querySelector<HTMLElement>("[data-publication-review-description]")!;
+    const publicationReviewCancel = root.querySelector<HTMLButtonElement>("[data-publication-review-cancel]")!;
+    const scheduleDialog = root.querySelector<HTMLDialogElement>("[data-schedule-dialog]")!;
+    const scheduleForm = root.querySelector<HTMLFormElement>("[data-schedule-form]")!;
+    const scheduleAt = root.querySelector<HTMLInputElement>("[data-schedule-at]")!;
+    const scheduleCancel = root.querySelector<HTMLButtonElement>("[data-schedule-cancel]")!;
     const unpublishDialog = root.querySelector<HTMLDialogElement>("[data-unpublish-dialog]")!;
     const progressDialog = root.querySelector<HTMLDialogElement>("[data-progress-dialog]")!;
     const progressBody = root.querySelector<HTMLTextAreaElement>("[data-progress-body]")!;
@@ -1327,7 +1368,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     let mathJaxLoading: Promise<void> | undefined;
     let hasUnsavedChanges = false;
     let persistedWritingMemo = "";
-    const statusLabel = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" } as const;
+    const statusLabel = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "公開準備完了" } as const;
     const setUnsavedChanges = (dirty: boolean) => {
       hasUnsavedChanges = dirty;
     };
@@ -1349,15 +1390,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       sidebarCollapseButton.title = collapsed ? "原稿一覧を開く" : "原稿一覧を閉じる";
       if (persist) localStorage.setItem("atlasez-editor-sidebar-collapsed", String(collapsed));
     };
-    const workflowSteps = ["draft", "in-review", "approved", "published"] as const;
-    const updateWorkflow = (documentStatus: keyof typeof statusLabel, isPublished = false) => {
-      const current = isPublished ? "published" : documentStatus;
+    const workflowSteps = ["draft", "in-review", "publication-subject", "publication-leader", "approved", "published"] as const;
+    const updateWorkflow = (documentStatus: keyof typeof statusLabel, isPublished = false, publicationStage: Document["publication_review_stage"] = null) => {
+      const current = isPublished ? "published" : publicationStage === "subject-coordinator" ? "publication-subject" : publicationStage === "project-leader" ? "publication-leader" : documentStatus;
       const currentIndex = workflowSteps.indexOf(current as typeof workflowSteps[number]);
       workflow.classList.toggle("is-on-hold", current === "on-hold");
-      workflowCurrent.textContent = current === "published" ? "公開済み" : statusLabel[documentStatus];
+      workflowCurrent.textContent = current === "published" ? "公開済み" : current === "publication-subject" ? "公開審査中（分野統括）" : current === "publication-leader" ? "公開審査中（プロジェクトリーダー）" : statusLabel[documentStatus];
       const help = isPublished
         ? "公開済みです。修正する場合は内容を保存し、必要に応じて公開を取り消して下書きへ戻します。"
-        : ({ draft: "原稿を書いたら「下書きを保存」します。保存後にフィードバック依頼へ進めます。", "in-review": "コメントで確認を進めます。修正した場合は再度保存してください。", approved: "運営管理者の確認が完了しています。内容を確認して「フィードバック済み原稿を公開」を押します。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
+        : current === "publication-subject" ? "分野統括の承認を待っています。" : current === "publication-leader" ? "プロジェクトリーダー（釜口さん）の承認を待っています。" : ({ draft: "原稿を書いたら保存し、フィードバックを依頼します。", "in-review": "フィードバックを反映したら「執筆完了（公開審査へ）」を押します。", approved: "公開審査が完了しています。公開または公開予約へ進めます。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
       const saveLabel = ({ draft: "保存する", "in-review": "変更を保存", approved: "変更を保存", "on-hold": "変更を保存" } as const)[documentStatus];
       workflowHelp.textContent = help;
       saveButton.textContent = saveLabel;
@@ -1366,6 +1407,22 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         step.classList.toggle("is-complete", currentIndex >= 0 && stepIndex < currentIndex);
         step.classList.toggle("is-current", currentIndex >= 0 && stepIndex === currentIndex);
       });
+    };
+    const loadPublicationReview = async (documentId: string, item?: Document) => {
+      const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/publication-review`, { credentials: "same-origin", cache: "no-store" });
+      const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; error?: string }>(response);
+      if (!response.ok) throw new Error(stateData.error ?? "公開審査状態を読み込めませんでした。");
+      const stage = stateData.stage ?? null;
+      if (item) {
+        state.textContent = stage === "subject-coordinator" ? "公開審査中（分野統括）" : stage === "project-leader" ? "公開審査中（プロジェクトリーダー）" : item.published_at ? "公開済み" : statusLabel[item.status];
+        updateWorkflow(item.status, Boolean(item.published_at), stage);
+      }
+      completeWritingButton.hidden = !Boolean(stateData.canCompleteWriting);
+      publicationReviewButton.hidden = !Boolean(stateData.canDecide);
+      scheduleButton.hidden = !(isManager && Boolean(item?.id) && item?.status === "approved" && !item?.published_at);
+      if (item?.scheduled_publish_at) scheduleAt.value = item.scheduled_publish_at.slice(0, 16);
+      publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : "プロジェクトリーダーとして審査する";
+      publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダー（釜口さん）へ通知されます。差し戻すとフィードバック中へ戻ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
     };
     const renderHeadingOutline = () => {
       const lines = body.value.split("\\n"); let offset = 0;
@@ -2433,7 +2490,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       status.value = item.status; body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
-      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; publicationState.textContent = item.published_at ? "公開済み" : "未公開"; updateWorkflow(item.status, Boolean(item.published_at)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at); unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at)); reviewButton.hidden = !Boolean(item.id); reviewButton.disabled = Boolean(item.published_at); reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。"; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id);
+      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; publicationState.textContent = item.published_at ? "公開済み" : "未公開"; updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at); scheduleButton.hidden = true; unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at)); reviewButton.hidden = !Boolean(item.id); reviewButton.disabled = Boolean(item.published_at); reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。"; completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
       const available = availableEditorSubjects();
@@ -2991,6 +3048,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       setUnsavedChanges(false);
       saveMessage.value = status.value === "approved" ? "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
       await loadDocuments();
+      await loadPublicationReview(savedId);
       await loadRevisions(savedId);
       closeAllPanePopouts();
       progressDialog.showModal();
@@ -3010,6 +3068,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     comments.addEventListener("focusin", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-action]"); if (button) showActionHistoryTooltip(button); });
     comments.addEventListener("focusout", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-action]"); if (button && actionHistoryTooltipTarget === button) hideActionHistoryTooltip(); });
     comments.addEventListener("contextmenu", (event) => { const eventTarget = event.target as HTMLElement; const actionTarget = eventTarget.closest<HTMLButtonElement>("[data-comment-action]"); const target = actionTarget?.closest<HTMLElement>("[data-comment-history]") ?? eventTarget.closest<HTMLElement>("[data-comment-history]") ?? eventTarget.closest<HTMLElement>("[data-comment-context]"); if (!target) return; event.preventDefault(); hideActionHistoryTooltip(); const item = currentComments.find((comment) => comment.id === (target.dataset.commentHistory ?? target.dataset.commentContext)); if (!item) return; openCommentHistoryMenu(item, actionTarget?.dataset.commentAction as CommentHistoryAction | undefined, event.clientX, event.clientY); });
+    scheduleButton.addEventListener("click", () => { if (!scheduleDialog.open) scheduleDialog.showModal(); });
+    scheduleCancel.addEventListener("click", () => scheduleDialog.close());
+    scheduleForm.addEventListener("submit", async (event) => { event.preventDefault(); const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; try { const response = await fetch(`/api/admin/editor/documents/${id}/schedule`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ scheduledPublishAt: scheduleAt.value }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "公開予約を設定できませんでした。"); scheduleDialog.close(); await openDocument(id); saveMessage.value = "公開予約を設定しました。指定時刻に自動公開されます。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開予約を設定できませんでした。"; } });
+    completeWritingButton.addEventListener("click", async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id || !window.confirm("執筆完了として公開審査へ進めますか？保存済みの内容が審査担当へ通知されます。")) return; completeWritingButton.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/publication-review`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "公開審査を開始できませんでした。"); await openDocument(id); saveMessage.value = "執筆完了として公開審査を開始しました。担当者へ通知しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開審査を開始できませんでした。"; } finally { completeWritingButton.disabled = false; } });
+    publicationReviewButton.addEventListener("click", () => { publicationReviewNote.value = ""; if (!publicationReviewDialog.open) publicationReviewDialog.showModal(); });
+    publicationReviewCancel.addEventListener("click", () => publicationReviewDialog.close());
+    publicationReviewForm.addEventListener("submit", async (event) => { event.preventDefault(); const submitter = (event.submitter as HTMLButtonElement | null)?.value; if (submitter !== "approve" && submitter !== "reject") return; const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; const button = event.submitter as HTMLButtonElement; button.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/publication-review`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: submitter === "approve" ? "approved" : "rejected", note: publicationReviewNote.value }) }); const data = await read<{ error?: string; status?: string }>(response); if (!response.ok) throw new Error(data.error ?? "公開審査を処理できませんでした。"); publicationReviewDialog.close(); await openDocument(id); saveMessage.value = submitter === "approve" ? (data.status === "approved" ? "公開審査が完了しました。公開または公開予約へ進めます。" : "承認しました。次の審査担当へ通知しました。") : "差し戻しました。フィードバック中へ戻しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開審査を処理できませんでした。"; } finally { button.disabled = false; } });
     const publishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開できませんでした。"); await openDocument(id); saveMessage.value = data.commitUrl ? "公開しました。Cloudflareの自動ビルド完了後に学習サイトへ反映されます。" : "公開しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開できませんでした。"; } };
     const unpublishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { const response = await fetch(`/api/admin/editor/documents/${id}/unpublish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; commitUrl?: string | null }>(response); if (!response.ok) throw new Error(data.error ?? "公開を取り消せませんでした。"); await openDocument(id); await loadDocuments(); saveMessage.value = data.commitUrl ? "公開を取り消し、下書きへ戻しました。学習サイトへの反映には数十秒から数分かかります。" : "公開を取り消し、下書きへ戻しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開を取り消せませんでした。"; } };
     publishButton.addEventListener("click", () => approvalDialog.showModal());
