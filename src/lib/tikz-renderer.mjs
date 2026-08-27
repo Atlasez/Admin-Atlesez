@@ -3,8 +3,10 @@ import tikzjax from "node-tikzjax";
 import {
   TIKZ_MAX_RENDERED_SVG_LENGTH,
   assertSafeTikzSource,
+  normalizeTikzMathSlashes,
   normalizeTikzLibraries,
   normalizeTikzPackages,
+  normalizeTikzSvgFonts,
 } from "./tikz-policy.mjs";
 
 const tex2svg =
@@ -61,7 +63,7 @@ function extractDeclarations(source) {
 }
 
 function normalizeSource(source, packages, libraries) {
-  const checked = assertSafeTikzSource(source);
+  const checked = normalizeTikzMathSlashes(assertSafeTikzSource(source));
   const declarations = extractDeclarations(checked);
   const packageList = normalizeTikzPackages([
     ...declarations.packages,
@@ -119,7 +121,9 @@ export async function renderTikzSource(source, options = {}) {
       disableOptimize: false,
     });
     return {
-      svg: sanitizeRenderedSvg(normalizeTikzSvgColors(svg)),
+      svg: sanitizeRenderedSvg(
+        normalizeTikzSvgFonts(normalizeTikzSvgColors(svg)),
+      ),
       hash: createHash("sha256")
         .update(
           JSON.stringify({

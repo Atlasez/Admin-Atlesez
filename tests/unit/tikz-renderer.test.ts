@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   assertSafeTikzSource,
+  normalizeTikzMathSlashes,
   normalizeTikzLibraries,
   normalizeTikzPackages,
+  normalizeTikzSvgFonts,
 } from "../../src/lib/tikz-policy.mjs";
 import { renderTikzSource } from "../../src/lib/tikz-renderer.mjs";
+import { renderArticleMarkdown } from "../../src/lib/article-browser-markdown.mjs";
 
 describe("TikZ server renderer policy", () => {
   it("accepts bundled packages and libraries only", () => {
@@ -38,5 +41,34 @@ describe("TikZ server renderer policy", () => {
     expect(result.svg).not.toMatch(/(?:fill|stroke)="#(?:000|000000)"/i);
     expect(result.svg).not.toMatch(/<script|foreignObject/i);
     expect(result.hash).toHaveLength(64);
+  });
+
+  it("preserves math slashes and aligns TikZ label fonts", async () => {
+    const source = String.raw`\begin{tikzpicture}
+\node (a) at (0,0) {$G_1/N$};
+\node (b) at (4,0) {$G_2$};
+\draw[->] (a) -- node[above] {$\varphi$} (b);
+\end{tikzpicture}`;
+    expect(normalizeTikzMathSlashes(source)).toContain(
+      String.raw`G_1\left/\right.N`,
+    );
+    const result = await renderTikzSource(source);
+    expect(result.svg).toContain(">/</text>");
+    expect(result.svg).toContain('font-family="KaTeX_Math, cmmi10"');
+    expect(normalizeTikzSvgFonts('font-family="cmmi10"')).toContain(
+      "KaTeX_Math",
+    );
+  });
+
+  it("does not expose top-level macro declarations as article prose", async () => {
+    const html = await renderArticleMarkdown(
+      String.raw`\newcommand{\Inn}{\operatorname{Inn}}
+
+## 準同型定理
+
+本文 $\Inn(G)$。`,
+    );
+    expect(html).not.toMatch(/newcommand|operatorname/);
+    expect(html).toContain("準同型定理");
   });
 });
