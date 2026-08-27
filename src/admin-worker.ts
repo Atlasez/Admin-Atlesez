@@ -2737,6 +2737,12 @@ const taskStatus = new Set(["open", "doing", "done"]);
 const availabilityStatus = new Set(["available", "maybe", "unavailable"]);
 const taskKindLabel = (kind: unknown) =>
   String(kind ?? "task") === "feedback" ? "フィードバック依頼" : "タスク依頼";
+const normalizedTaskAssignees = (value: unknown, fallback?: unknown) =>
+  [...(Array.isArray(value) ? value : [value ?? fallback])]
+    .flatMap((item) => (typeof item === "string" ? item.split(",") : [item]))
+    .map((item) => text(item, 320).toLowerCase())
+    .filter(Boolean)
+    .filter((email, index, all) => all.indexOf(email) === index);
 const taskAssignedTo = (
   assignee: unknown,
   email: string,
@@ -2745,9 +2751,8 @@ const taskAssignedTo = (
   const value = String(assignee ?? "").trim().toLowerCase();
   const normalizedEmail = email.trim().toLowerCase();
   if (!value || !normalizedEmail) return false;
-  if (String(kind ?? "task") !== "feedback") return value === normalizedEmail;
   return (
-    value === "*" ||
+    (String(kind ?? "task") === "feedback" && value === "*") ||
     value
       .split(",")
       .map((item) => item.trim())
@@ -3560,7 +3565,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            p.name AS project_name
          FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
          WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
-           AND (lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)))
+           AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
            AND t.status != 'done'
          ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
       )
@@ -3609,7 +3614,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            FROM editorial_tasks t
            JOIN atlasez_projects p ON p.id = t.project_id
            WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
-             AND (lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0))) AND t.status != 'done'
+             AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done'
              AND t.due_at IS NOT NULL
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
            ORDER BY t.due_at ASC LIMIT 300`,
@@ -4726,7 +4731,7 @@ async function operationsOverview(
   const filters = canSeeAllProjectOperations
     ? ["project_id = ?"]
     : [
-        "project_id = ? AND (assignee_email = ? OR (task_kind = 'feedback' AND (assignee_email = '*' OR instr(',' || lower(COALESCE(assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)) OR created_by = ? OR subject IS NULL" +
+        "project_id = ? AND (lower(assignee_email) = lower(?) OR instr(',' || lower(COALESCE(assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (task_kind = 'feedback' AND assignee_email = '*') OR created_by = ? OR subject IS NULL" +
           (scope.subjects.length
             ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
             : "") +
@@ -4835,8 +4840,7 @@ async function operationsOverview(
         scope.isManager ||
         String(task.created_by ?? "").toLowerCase() ===
           scope.email.toLowerCase() ||
-        String(task.assignee_email ?? "").toLowerCase() ===
-          scope.email.toLowerCase()
+        taskAssignedTo(task.assignee_email, scope.email, task.task_kind)
           ? task.reminder_email
           : null,
       reminders: remindersByTask.get(String(task.id)) ?? [],
@@ -4990,12 +4994,22 @@ async function createOperation(
   if (type === "task") {
     const title = text(payload.title, 200);
     if (!title) return json({ error: "タスク名を入力してください。" }, 400);
-    const assignee = text(payload.assigneeEmail, 320) || null;
-    if (assignee && !scope.isManager && assignee !== scope.email)
+    const assignees = normalizedTaskAssignees(
+      payload.assigneeEmails,
+      payload.assigneeEmail,
+    );
+    if (assignees.some((email) => !EMAIL_PATTERN.test(email)))
+      return json({ error: "担当者のメールアドレスを確認してください。" }, 400);
+    if (
+      assignees.length &&
+      !scope.isManager &&
+      assignees.some((email) => email !== scope.email.toLowerCase())
+    )
       return json(
         { error: "他の運営者への依頼は運営内運営のみ作成できます。" },
         403,
       );
+    const assignee = assignees.length ? assignees.join(",") : null;
     const dueAt = text(payload.dueAt, 32);
     const dueTimezone = text(payload.dueTimezone, 80) || "Asia/Tokyo";
     const legacyReminderAt = text(payload.reminderAt, 32);
@@ -5047,7 +5061,7 @@ async function createOperation(
     if (
       reminderEmail &&
       reminderEmail !== scope.email &&
-      reminderEmail !== (assignee ?? "").toLowerCase()
+      !assignees.includes(reminderEmail)
     )
       return json(
         {
@@ -5221,7 +5235,7 @@ async function updateTask(
     if (
       reminderEmail &&
       reminderEmail !== scope.email &&
-      reminderEmail !== (task.assignee_email ?? "").toLowerCase()
+      !normalizedTaskAssignees(task.assignee_email).includes(reminderEmail)
     )
       return json(
         {
@@ -7043,7 +7057,33 @@ async function listEditorialRevisions(
   )
     .bind(documentId)
     .all();
-  return json({ revisions: result.results });
+  const feedbackRequests = await env.REPORTS.prepare(
+    `SELECT t.id AS task_id, t.title, t.details, t.status, t.assignee_email,
+            t.created_by, t.created_at, t.updated_at,
+            COALESCE(NULLIF(TRIM(profile.display_name), ''), t.created_by) AS requester_display_name
+       FROM editorial_feedback_task_links link
+       JOIN editorial_tasks t ON t.id = link.task_id AND t.task_kind = 'feedback'
+       LEFT JOIN editorial_member_profiles profile ON lower(profile.email) = lower(t.created_by)
+      WHERE link.document_id = ?
+      ORDER BY link.created_at DESC, t.created_at DESC
+      LIMIT 100`,
+  )
+    .bind(documentId)
+    .all<{
+      task_id: string;
+      title: string;
+      details: string;
+      status: string;
+      assignee_email: string | null;
+      created_by: string;
+      created_at: string;
+      updated_at: string;
+      requester_display_name: string;
+    }>();
+  return json({
+    revisions: result.results,
+    feedbackRequests: feedbackRequests.results ?? [],
+  });
 }
 
 async function editorialBoard(request: Request, env: Env): Promise<Response> {
@@ -7238,7 +7278,9 @@ async function updateEditorialReviewAssignment(
       400,
     );
   const now = new Date().toISOString();
-  const taskId = existingAssignment?.task_id || crypto.randomUUID();
+  // 各フィードバック依頼は、記事に紐づく独立した共通タスクとして残す。
+  // 最新の依頼だけは既存の assignment テーブルにも保持し、旧一覧との互換を維持する。
+  const taskId = crypto.randomUUID();
   const taskAssignee = reviewerEmails.includes("*")
     ? "*"
     : reviewerEmails.join(",");
@@ -7263,19 +7305,20 @@ async function updateEditorialReviewAssignment(
     env.REPORTS.prepare(
       `INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,created_by,created_at,updated_at,task_kind)
        VALUES (?, 'atlas', ?, ?, ?, ?, 'open', ?, ?, ?, 'feedback')
-       ON CONFLICT(id) DO UPDATE SET subject=excluded.subject, assignee_email=excluded.assignee_email,
-         title=excluded.title, details=excluded.details, status='open', updated_at=excluded.updated_at,
-         task_kind='feedback'`,
+      `,
     ).bind(
       taskId,
       document.subject,
       taskAssignee,
-      document.title,
+      `フィードバック依頼：${document.title}`,
       taskDetails,
       scope.email,
       now,
       now,
     ),
+    env.REPORTS.prepare(
+      "INSERT INTO editorial_feedback_task_links (task_id, document_id, created_at) VALUES (?, ?, ?)",
+    ).bind(taskId, documentId, now),
     env.REPORTS.prepare(
       "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
     ).bind(documentId),
@@ -9154,7 +9197,7 @@ async function adminNotifications(
       `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
-         WHERE t.status != 'done' AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)))
+         WHERE t.status != 'done' AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
          ORDER BY r.remind_at ASC LIMIT 50`,
     )
@@ -9177,7 +9220,7 @@ async function adminNotifications(
        WHERE t.status != 'done' AND ${
          scope.isManager
            ? "1=1"
-           : `(lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR (t.task_kind='feedback' AND (t.assignee_email='*' OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)))${
+           : `(lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))${
                scope.allSubjects
                  ? ""
                  : ` AND (t.subject IS NULL OR t.subject='*' OR t.subject IN (${scope.subjects.map(() => "?").join(",")}))`

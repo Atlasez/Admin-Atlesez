@@ -294,6 +294,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
             <h3 id="revision-heading">版履歴・差分確認</h3>
             <p>保存した版を独立して確認できます。</p>
             <div data-revision-list>原稿を保存すると履歴が残ります。</div>
+            <section class="feedback-request-history" aria-labelledby="feedback-request-history-heading">
+              <h4 id="feedback-request-history-heading">フィードバック依頼の履歴</h4>
+              <p>記事に紐づく「フィードバック依頼」タスクを、新しい依頼順に表示します。</p>
+              <div data-feedback-request-history>原稿を選ぶと、依頼履歴を確認できます。</div>
+            </section>
           </section>
         </form>
       </section>
@@ -1050,6 +1055,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const progressDialog = root.querySelector<HTMLDialogElement>("[data-progress-dialog]")!;
     const progressBody = root.querySelector<HTMLTextAreaElement>("[data-progress-body]")!;
     const revisions = root.querySelector<HTMLElement>("[data-revision-list]")!;
+    const feedbackRequestHistory = root.querySelector<HTMLElement>("[data-feedback-request-history]")!;
     const referenceDialog = root.querySelector<HTMLDialogElement>("[data-reference-dialog]")!;
     const referenceTitle = root.querySelector<HTMLElement>("[data-reference-title]")!;
     const referenceMeta = root.querySelector<HTMLElement>("[data-reference-meta]")!;
@@ -2554,6 +2560,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       renderComments();
     };
     type Revision = { id: string; title: string; summary: string; body: string; status: string; saved_by: string; saved_at: string };
+    type FeedbackRequestHistory = { task_id: string; details: string; status: "open" | "doing" | "done"; assignee_email: string | null; created_at: string; requester_display_name?: string; created_by: string };
     type RevisionDiffLine = { kind: "unchanged" | "added" | "removed"; text: string };
     const revisionLineDiff = (before: string, after: string): RevisionDiffLine[] => {
       const left = before.split("\n"), right = after.split("\n"), output: RevisionDiffLine[] = [];
@@ -2566,21 +2573,32 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const loadRevisions = async (id:string) => {
       if(!id) return;
       const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"});
-      const data=await read<{revisions?:Revision[];error?:string}>(response);
-      if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; return; }
+      const data=await read<{revisions?:Revision[];feedbackRequests?:FeedbackRequestHistory[];error?:string}>(response);
+      if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; feedbackRequestHistory.textContent = "フィードバック依頼の履歴を読み込めませんでした。"; return; }
       const history = data.revisions ?? [];
-      if (!history.length) { revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。"; return; }
-      const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by)}・${esc(item.status)}</option>`).join("");
-      revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label></div><pre class="revision-diff" data-revision-diff></pre>`;
-      const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
-      const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;
-      const output = revisions.querySelector<HTMLElement>("[data-revision-diff]")!;
-      const renderDiff = () => {
-        const beforeBody = history[Number(before.value)]?.body ?? "";
-        const afterBody = after.value === "current" ? body.value : history[Number(after.value)]?.body ?? "";
-        output.innerHTML = revisionLineDiff(beforeBody, afterBody).map((line) => `<span class="revision-diff-line is-${line.kind}">${line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}${esc(line.text)}</span>`).join("\n");
-      };
-      before.addEventListener("change", renderDiff); after.addEventListener("change", renderDiff); renderDiff();
+      if (!history.length) revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。";
+      else {
+        const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by)}・${esc(item.status)}</option>`).join("");
+        revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label></div><pre class="revision-diff" data-revision-diff></pre>`;
+        const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
+        const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;
+        const output = revisions.querySelector<HTMLElement>("[data-revision-diff]")!;
+        const renderDiff = () => {
+          const beforeBody = history[Number(before.value)]?.body ?? "";
+          const afterBody = after.value === "current" ? body.value : history[Number(after.value)]?.body ?? "";
+          output.innerHTML = revisionLineDiff(beforeBody, afterBody).map((line) => `<span class="revision-diff-line is-${line.kind}">${line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}${esc(line.text)}</span>`).join("\n");
+        };
+        before.addEventListener("change", renderDiff); after.addEventListener("change", renderDiff); renderDiff();
+      }
+      const requestStatus = { open: "未着手", doing: "進行中", done: "完了" } as const;
+      const requests = data.feedbackRequests ?? [];
+      feedbackRequestHistory.innerHTML = requests.length
+        ? requests.map((item) => {
+            const recipients = item.assignee_email === "*" ? "この分野の担当者全員" : (item.assignee_email ?? "").split(",").map((email) => email.trim()).filter(Boolean).join("、") || "担当者未指定";
+            const note = String(item.details ?? "").replace(/\n*記事編集画面:\s*\/admin\/editor\/\?document=[0-9a-f-]+\s*$/i, "").trim();
+            return `<article class="feedback-request-history-item"><div><strong>フィードバック依頼</strong><span class="feedback-request-status is-${esc(item.status)}">${requestStatus[item.status] ?? esc(item.status)}</span></div><small>${date(item.created_at)} ・ ${esc(item.requester_display_name || item.created_by)} から ${esc(recipients)} へ</small>${note ? `<p>${esc(note)}</p>` : ""}</article>`;
+          }).join("")
+        : "<p class=\"feedback-request-history-empty\">この原稿には、まだフィードバック依頼はありません。</p>";
     };
     subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
     outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
@@ -2695,6 +2713,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         reviewRequestNote.value = "";
         await openDocument(id);
         await loadDocuments();
+        await loadRevisions(id);
         saveMessage.value = "フィードバックを依頼しました。";
       })().catch((error:unknown) => { reviewRequestMessage.value = error instanceof Error ? error.message : "フィードバックを依頼できませんでした。"; }).finally(() => { submitter.disabled = false; });
     });
@@ -3124,6 +3143,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .revision-workspace { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--accent); margin: 1rem .8rem; padding: 1rem; }
   .revision-workspace h3 { margin: 0; }
   .revision-workspace > p { color: var(--muted); margin: .35rem 0 .75rem; }
+  .feedback-request-history { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
+  .feedback-request-history h4 { font-size: .9rem; margin: 0; }
+  .feedback-request-history > p { color: var(--muted); font-size: .78rem; margin: .3rem 0 .65rem; }
+  .feedback-request-history-item { background: var(--background-inset); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: .45rem; display: grid; gap: .3rem; margin-top: .5rem; padding: .6rem .7rem; }
+  .feedback-request-history-item > div { align-items: center; display: flex; gap: .45rem; }
+  .feedback-request-history-item small, .feedback-request-history-item p { color: var(--muted); font-size: .76rem; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+  .feedback-request-status { border: 1px solid var(--border); border-radius: 999px; font-size: .68rem; font-weight: 800; padding: .12rem .38rem; }
+  .feedback-request-status.is-open { background: #fff2cc; border-color: #d9a429; color: #714f00; }
+  .feedback-request-status.is-doing { background: #e8f3fb; border-color: #72add3; color: #185c86; }
+  .feedback-request-status.is-done { background: #e5f4ea; border-color: #74a888; color: #21623b; }
+  .feedback-request-history-empty { color: var(--muted); font-size: .8rem; margin: 0; }
   .revision-compare-controls { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .revision-compare-controls label { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .25rem; }
   .revision-diff { background: var(--background-inset); border: 1px solid var(--border); color: var(--text); line-height: 1.55; margin: .75rem 0 0; max-height: 28rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }.revision-diff-line { display:block; margin-inline:-.3rem; min-height:1.55em; padding:0 .3rem; }.revision-diff-line.is-added { background:#e0f4e6; box-shadow:inset 3px 0 #27834b; color:#155d32; }.revision-diff-line.is-removed { background:#fde6e6; box-shadow:inset 3px 0 #c74343; color:#8b2525; }[data-pref-bg="dark"] .revision-diff-line.is-added { background:#133d2a; box-shadow:inset 3px 0 #65c98c; color:#d5f7e4; }[data-pref-bg="dark"] .revision-diff-line.is-removed { background:#4b2226; box-shadow:inset 3px 0 #f08080; color:#ffd8dc; }

@@ -104,9 +104,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
             {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
           </select></label
         ><label class="field-label"
-          >担当者<select data-task-assignee>
-            <option value="">担当者を指定しない</option>
-          </select></label
+          >担当者<select data-task-assignee multiple size="6" aria-describedby="task-assignee-help">
+            <option value="" disabled>担当者を選択</option>
+          </select><small id="task-assignee-help">複数人を選ぶには Ctrl（Windows）または⌘（Mac）を押しながら選択してください。</small></label
         >
         <div class="task-deadline">
           <label class="field-label"
@@ -1424,12 +1424,13 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       const members = new Map((data.members ?? []).map((member) => [member.email, member.display_name || '表示名未設定']));
       projectTitle.textContent = memberPage ? 'カレンダー' : `${data.project?.name || 'プロジェクト'}：${calendarPage ? 'カレンダー' : progressOnly ? '進捗報告' : 'タスク管理'}`;
       get<HTMLElement>('[data-event-create]').hidden = memberPage || !data.scope.isManager;
-      assignee.innerHTML = '<option value="">担当者を指定しない</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}">${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
+      const selectedAssignees = new Set([...assignee.selectedOptions].map((option) => option.value));
+      assignee.innerHTML = '<option value="" disabled>担当者を選択</option>' + (data.members ?? []).map((member) => `<option value="${escapeHtml(member.email)}" ${selectedAssignees.has(member.email) ? 'selected' : ''}>${escapeHtml(member.display_name || '表示名未設定')}</option>`).join('');
       const currentProject = progressProjectFilter.value;
       progressProjectFilter.innerHTML = '<option value="">すべてのプロジェクト</option>' + (data.projects ?? []).map((project) => `<option value="${escapeHtml(String(project.id))}">${escapeHtml(String(project.name || project.slug || project.id))}</option>`).join('');
       if ([...(data.projects ?? [])].some((project) => String(project.id) === currentProject)) progressProjectFilter.value = currentProject;
       renderProgressReports();
-      const taskAssignedTo = (item: Record<string, any>) => { const assignee = String(item.assignee_email ?? '').trim().toLowerCase(), email = String(data.scope.email ?? '').toLowerCase(); return item.task_kind === 'feedback' ? (assignee === '*' || assignee.split(',').map((value: string) => value.trim()).includes(email)) : assignee === email; };
+      const taskAssignedTo = (item: Record<string, any>) => { const assignee = String(item.assignee_email ?? '').trim().toLowerCase(), email = String(data.scope.email ?? '').toLowerCase(); return (item.task_kind === 'feedback' && assignee === '*') || assignee.split(',').map((value: string) => value.trim()).includes(email); };
       const taskKindLabel = (item: Record<string, any>) => item.task_kind === 'feedback' ? 'フィードバック依頼' : 'タスク依頼';
       const visibleTasks = (data.tasks ?? []).filter((item) => taskFilter === 'all' || (taskFilter === 'assigned' ? taskAssignedTo(item) : item.created_by === data.scope.email));
       tasks.innerHTML = visibleTasks.map((item) => { const assigned = taskAssignedTo(item); const assignee = String(item.assignee_email ?? '').trim(); const assigneeLabel = assignee === '*' ? '分野担当者全員' : assignee ? assignee.split(',').map((value: string) => members.get(value.trim()) || value.trim()).filter(Boolean).join('、') : '担当未指定'; return `<article class="item"><div class="task-row"><b><span class="task-kind-label">${taskKindLabel(item)}</span>${escapeHtml(String(item.title ?? ''))}</b><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><small><span class="task-role">${assigned ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span> ${escapeHtml(String(item.subject || '全体'))} ・担当：${escapeHtml(assigneeLabel)}${item.created_by ? ` ・依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}` : ''}${item.due_at ? ` ・期限：${escapeHtml(String(item.due_at).replace('T',' '))}（${escapeHtml(String(item.due_timezone || 'Asia/Tokyo'))}）` : ''}</small>${item.details ? `<small>${escapeHtml(String(item.details))}</small>` : ''}${taskReminderEditor(item)}</article>`; }).join('') || '<p>この条件のタスクはありません。</p>';
@@ -1510,7 +1511,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       if (!progressSubjectFilters.some((item) => item.checked)) { if (all) all.checked = true; }
       renderProgressReports();
     }));
-    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmail: assignee.value, dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
+    get<HTMLButtonElement>('[data-create-task]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, taskFeedback, async () => { await api('/api/admin/operations/tasks', 'POST', { projectId, title: taskTitle.value, subject: get<HTMLSelectElement>('[data-task-subject]').value, assigneeEmails: [...assignee.selectedOptions].map((option) => option.value).filter(Boolean), dueAt: taskDue.value, dueTimezone: taskDueTimezone.value, details: taskDetails.value, reminders: collectReminderRows(taskReminderList, taskReminderRepeat.value), reminderRepeat: taskReminderRepeat.value, reminderEmail: taskReminderEmail.value }); }, 'タスクを追加しました。').then((created) => { if (!created) return; taskTitle.value = ''; taskDetails.value = ''; taskDue.value = ''; [...assignee.options].forEach((option) => { option.selected = false; }); taskFeedback.value = ''; taskListFeedback.value = 'タスクを追加しました。'; taskCreateDialog.close(); }); });
     get<HTMLButtonElement>('[data-add-task-reminder]').addEventListener('click', () => { taskReminderList.insertAdjacentHTML('beforeend', reminderRowHtml()); refreshReminderRows(taskReminderList); });
     refreshReminderRows(taskReminderList);
     root.addEventListener('change', (event) => { const row = (event.target as HTMLElement).closest<HTMLElement>('[data-task-reminder-row]'); if (row) refreshReminderRow(row); });
