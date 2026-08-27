@@ -233,7 +233,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
             <textarea data-personal-note maxlength="20000" placeholder="確認したいこと、次回やること、調査メモなどを自由に書けます。"></textarea>
             <div class="personal-notebook-actions"><button type="button" class="quiet-action" data-save-personal-note>メモを保存</button><output data-personal-note-message aria-live="polite"></output><small data-personal-note-updated>読み込み中…</small></div>
           </details>
-          <div class="pane-layout-controls" role="group" aria-label="表示する枠"><span>表示枠</span><button type="button" data-pane-tab="writing" aria-pressed="true">本文</button><button type="button" data-pane-tab="preview" aria-pressed="true">プレビュー</button><button type="button" data-pane-tab="review" aria-pressed="true">コメント</button><button type="button" data-pane-tab="media" aria-pressed="false">図・画像</button><button type="button" data-pane-tab="memo" aria-pressed="false">執筆メモ</button></div>
+          <div class="pane-layout-controls" role="group" aria-label="表示する枠"><span>表示枠</span>{([['writing', '本文'], ['preview', 'プレビュー'], ['review', 'コメント'], ['media', '図・画像'], ['memo', '執筆メモ']] as const).map(([key, label]) => <span class="pane-layout-control" data-pane-control={key}><button type="button" data-pane-tab={key} aria-pressed={key === 'writing' || key === 'preview' || key === 'review' ? 'true' : 'false'}>{label}</button><button type="button" class="pane-popout-toggle" data-pane-popout={key} aria-pressed="false" aria-label={`${label}を別窓で表示`} title={`${label}を別窓で表示`}>↗</button></span>)}</div>
           <details class="heading-outline"><summary>見出し一覧</summary><nav data-heading-outline>本文の見出しがここに表示されます。</nav></details>
           <div class="editor-split" aria-label="原稿とプレビュー">
             <section class="writing-area">
@@ -390,7 +390,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .editor-panel { background: var(--surface); display:flex; flex-direction:column; min-width:0; padding:clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 5rem auto; max-width: 38rem; text-align: center; }.empty-state h2 { color: var(--text); }.editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
   .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
-  .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span{color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);border-radius:.35rem;color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}
+  .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
@@ -1007,6 +1007,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     type PaneKey = typeof paneKeys[number];
     type PaneEdge = "top" | "right" | "bottom" | "left";
     const paneLabels: Record<PaneKey, string> = { writing: "本文", preview: "プレビュー", media: "図・画像", review: "コメント", memo: "執筆メモ" };
+    const activePopouts = new Map<PaneKey, Window>();
+    const isPanePoppedOut = (key: PaneKey) => {
+      const popup = activePopouts.get(key);
+      return Boolean(popup && !popup.closed);
+    };
     previewExpandButton.setAttribute("aria-pressed", "false");
     previewExpandButton.textContent = "全文表示";
     previewExpandButton.addEventListener("click", () => {
@@ -1053,9 +1058,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => {
         const key = button.dataset.paneTab as PaneKey;
-        const selected = requestedPaneKeys.includes(key);
+        const selected = requestedPaneKeys.includes(key) || isPanePoppedOut(key);
         button.setAttribute("aria-pressed", String(selected));
         button.classList.toggle("is-selected", selected);
+        const control = root.querySelector<HTMLElement>(`[data-pane-control="${key}"]`);
+        const popoutButton = control?.querySelector<HTMLButtonElement>("[data-pane-popout]");
+        const poppedOut = isPanePoppedOut(key);
+        control?.classList.toggle("is-popped-out", poppedOut);
+        popoutButton?.setAttribute("aria-pressed", String(poppedOut));
+        if (popoutButton) {
+          popoutButton.textContent = poppedOut ? "↙" : "↗";
+          popoutButton.setAttribute("aria-label", poppedOut ? `${paneLabels[key]}を元の画面に戻す` : `${paneLabels[key]}を別窓で表示`);
+          popoutButton.title = poppedOut ? `${paneLabels[key]}を元の画面に戻す` : `${paneLabels[key]}を別窓で表示`;
+        }
       });
       root.querySelectorAll<HTMLButtonElement>("[data-pane-edge]").forEach((button) => {
         const key = button.dataset.paneEdge as PaneKey;
@@ -1126,7 +1141,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       paneElements[key].append(controls);
     };
     paneKeys.forEach(addPaneEdgeControls);
-    const activePopouts = new Map<PaneKey, Window>();
     const openPaneWindow = (key: PaneKey) => {
       const panel = paneElements[key];
       const visibleBeforePopout = [...requestedPaneKeys];
@@ -1221,7 +1235,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
             .map(([paneKey]) => paneKey),
         );
         activePopouts.delete(key);
-        if (popoutButton) { popoutButton.disabled = false; popoutButton.textContent = "別窓"; }
+        if (popoutButton) { popoutButton.disabled = false; }
         requestedPaneKeys = [...new Set([...requestedPaneKeys, key])].filter((paneKey) => !otherOpenPopouts.has(paneKey));
         paneRows = rowsBeforePopout
           .map((row) => row.filter((paneKey) => paneKey === key || !otherOpenPopouts.has(paneKey)))
@@ -1230,12 +1244,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         paneKeys.forEach((paneKey) => { paneElements[paneKey].hidden = !requestedPaneKeys.includes(paneKey); });
         placePanes();
         updatePaneLayout();
-        try { if (!popup.closed) popup.close(); } catch { /* noop */ }
+      try { if (!popup.closed) popup.close(); } catch { /* noop */ }
       };
       toolbar.querySelector<HTMLButtonElement>("[data-reattach-pane]")?.addEventListener("click", restore);
       watcher = window.setInterval(() => { if (popup.closed) restore(); }, 400);
       popup.addEventListener("beforeunload", restore, { once: true });
       popup.focus();
+    };
+    const closeAllPanePopouts = () => {
+      [...activePopouts.values()].forEach((popup) => {
+        try { if (!popup.closed) popup.close(); } catch { /* noop */ }
+      });
     };
     const setupPanes = () => {
       paneKeys.forEach((key) => { if (paneElements[key].parentElement !== editorSplit) editorSplit.append(paneElements[key]); });
@@ -1253,11 +1272,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
         const next = requestedPaneKeys.includes(key) ? requestedPaneKeys.filter((item) => item !== key) : [...requestedPaneKeys, key];
         setPaneKeys(next);
       }));
-      root.querySelectorAll<HTMLButtonElement>("[data-pane-popout]").forEach((button) => button.addEventListener("click", () => openPaneWindow(button.dataset.panePopout as PaneKey)));
+      root.querySelectorAll<HTMLButtonElement>("[data-pane-popout]").forEach((button) => button.addEventListener("click", () => {
+        const key = button.dataset.panePopout as PaneKey;
+        const popup = activePopouts.get(key);
+        if (popup && !popup.closed) popup.close();
+        else openPaneWindow(key);
+      }));
       setPaneKeys(requestedPaneKeys, false);
       window.matchMedia("(max-width: 700px)").addEventListener("change", updatePaneLayout);
     };
     setupPanes();
+    root.querySelector<HTMLAnchorElement>(".workspace-header nav a")?.addEventListener("click", closeAllPanePopouts);
+    window.addEventListener("pagehide", closeAllPanePopouts);
     let documents: Omit<Document, "body">[] = [];
     let currentComments: Comment[] = [];
     const pendingCommentReactions = new Set<string>();
@@ -1290,6 +1316,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       setUnsavedChanges(true);
     });
     window.addEventListener("beforeunload", (event) => {
+      closeAllPanePopouts();
       if (!hasUnsavedChanges) return;
       event.preventDefault();
       event.returnValue = "";
@@ -2941,6 +2968,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       saveMessage.value = status.value === "approved" ? "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
       await loadDocuments();
       await loadRevisions(savedId);
+      closeAllPanePopouts();
       progressDialog.showModal();
     })().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-panel > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
