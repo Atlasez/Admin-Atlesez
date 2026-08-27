@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from "astro/config";
+import { readFile } from "node:fs/promises";
 import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
 import "katex/contrib/mhchem";
@@ -20,6 +21,39 @@ const SITE_URL =
   process.env.SITE_URL ?? process.env.CF_PAGES_URL ?? "http://localhost:4321";
 const BASE_PATH = process.env.BASE_PATH ?? "/";
 
+// noindex ページを sitemap に含めると Search Console が「サイトマップ内なのに
+// noindex」と報告する。最終HTMLを確認してから sitemap の対象を確定する。
+const noindexPaths = new Set();
+const normalizePathname = (pathname) => {
+  const normalized = pathname.replace(/^\//, "").replace(/index\.html$/, "");
+  return `/${normalized}`.replace(/\/+/g, "/");
+};
+
+const collectNoindexPages = () => ({
+  name: "collect-noindex-pages-for-sitemap",
+  hooks: {
+    "astro:build:done": async ({ dir, pages }) => {
+      noindexPaths.clear();
+      await Promise.all(
+        pages.map(async (page) => {
+          try {
+            const html = await readFile(new URL(page.pathname, dir), "utf8");
+            if (
+              /<meta\s+name=["']robots["'][^>]*content=["'][^"']*\bnoindex\b/i.test(
+                html,
+              )
+            ) {
+              noindexPaths.add(normalizePathname(page.pathname));
+            }
+          } catch {
+            // 読めないページは推測で除外せず、通常どおり扱う。
+          }
+        }),
+      );
+    },
+  },
+});
+
 export default defineConfig({
   site: SITE_URL,
   base: BASE_PATH,
@@ -31,7 +65,12 @@ export default defineConfig({
     "/atlas/ja/bookmarks/": "/atlas/ja/list/",
     "/atlas/ja/history/": "/atlas/ja/list/",
   },
-  integrations: [sitemap()],
+  integrations: [
+    collectNoindexPages(),
+    sitemap({
+      filter: (page) => !noindexPaths.has(normalizePathname(page)),
+    }),
+  ],
   markdown: {
     processor: unified(ARTICLE_MARKDOWN_PROCESSOR_OPTIONS),
     shikiConfig: ARTICLE_SHIKI_CONFIG,
