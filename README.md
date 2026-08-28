@@ -1,7 +1,7 @@
 # Atlasez01 (atlasez-web)
 
 学生団体 **Atlasez** の公式サイトと、学習サイト **「アトラス」** のソースコード。
-Astro で純粋な静的 HTML を生成し、Cloudflare Pages で公開しています。
+Astro で静的HTMLを生成し、公開サイトと運営用サイトをCloudflare Workersで配信しています。
 
 - 公式サイト: `/`（団体紹介・プロジェクト・お知らせ・運営募集）
 - 学習サイト: `/atlas/ja/`（記事・学習地図・検索・表示設定・運営紹介）

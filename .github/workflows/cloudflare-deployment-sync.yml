@@ -1,0 +1,82 @@
+name: Cloudflare deployment sync PR
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: cloudflare-deployment-sync
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Fetch sync branch when it exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="ops/cloudflare-deployment-sync"
+          if git fetch origin "${branch}"; then
+            git switch --create "${branch}" --track "origin/${branch}"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git merge --no-edit origin/main
+          else
+            git switch --create "${branch}"
+          fi
+
+      - name: Record Cloudflare production status (read-only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npm run audit:cloudflare-deployments
+
+      - name: Commit and push changed record
+        id: update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/deployments/cloudflare-latest.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/deployments/cloudflare-latest.json
+          git commit -m "ops: record Cloudflare deployment status"
+          git push --force-with-lease origin HEAD:ops/cloudflare-deployment-sync
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update synchronization PR
+        if: steps.update.outputs.changed == 'true'
+        env:
+          # The organization policy blocks GITHUB_TOKEN from creating PRs.
+          # GH_SYNC_TOKEN is fine-grained and scoped only to Admin-Atlesez.
+          GH_TOKEN: ${{ secrets.GH_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch="ops/cloudflare-deployment-sync"
+          if ! gh pr list --base main --head "${branch}" --state open --json number --jq 'length == 1' | grep -qx true; then
+            gh pr create \
+              --base main \
+              --head "${branch}" \
+              --title "ops: sync Cloudflare deployment status" \
+              --body "このPRはCloudflare本番のDeployment/Versionと公開build-info.jsonの監査記録を定期同期します。コードの正本はGitHub mainです。SHA不一致、Source不明、build-info欠落、100%配信先不一致がある場合は自動Mergeせず、手動確認してください。Cloudflareへの変更は行っていません。"
+          fi

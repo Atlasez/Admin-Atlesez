@@ -10369,6 +10369,7 @@ async function handleAdminRequest(
     }
     return fetchAdminAsset(request, env);
   }
+  if (url.pathname === "/build-info.json") return fetchAdminAsset(request, env);
   // Permit only the static support files used by the admin UI.  All learning
   // site pages remain unreachable from this Worker.
   if (

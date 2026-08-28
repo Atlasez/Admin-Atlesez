@@ -23,6 +23,10 @@
 /favicon.svg
   Cache-Control: public, max-age=604800
 
+# デプロイ成果物のcommit照合用。古い値を再利用させない。
+/build-info.json
+  Cache-Control: no-store, max-age=0, must-revalidate
+
 # HTML には Cache-Control を書いていない。Cloudflare Pages は既定で
 # must-revalidate を付けるため、記事を更新すれば次のアクセスで反映される。
 # （このサイトは末尾スラッシュ運用なので `/*.html` のような指定は当たらない）

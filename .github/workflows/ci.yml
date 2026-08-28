@@ -39,9 +39,11 @@ jobs:
       - name: 単体テスト
         run: npm test
       - name: ビルド（下書きは除外される）
-        run: npx astro build
+        run: npm run build:ci
       - name: 検索インデックス生成
         run: npx pagefind --site dist
+      - name: ビルド成果物のcommit SHA検証
+        run: npm run verify:build-info
       - name: 内部リンク検証
         run: node scripts/check-links.mjs dist "$BASE_PATH"
       - name: Playwrightブラウザ導入
