@@ -153,6 +153,8 @@ type EditorialDocument = {
   publication_review_round: number;
   locked_ranges: string;
   article_references: string;
+  archived_at: string | null;
+  archived_by: string | null;
 };
 type EditorialAsset = {
   id: string;
@@ -1961,7 +1963,7 @@ async function deleteReportAdminPermission(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references
+  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references, archived_at, archived_by
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -2483,6 +2485,8 @@ async function listEditorialDocuments(
   if (isResponse(scope)) return scope;
   const filters: string[] = [];
   const values: unknown[] = [];
+  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+  if (!includeArchived) filters.push("archived_at IS NULL");
   if (!scope.allSubjects) {
     const coordinatorSubjects = (scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*");
     if (!scope.subjects.length && !coordinatorSubjects.length && !scope.isProjectLeader)
@@ -2499,7 +2503,7 @@ async function listEditorialDocuments(
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, publication_review_stage
+      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, publication_review_stage, archived_at, archived_by
      FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
   )
     .bind(...values)
@@ -6930,7 +6934,7 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT subject, status, title, summary, concept_id, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, summary, concept_id, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references, archived_at FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
@@ -6954,9 +6958,12 @@ async function updateEditorialDocument(
         | "publication_review_round"
         | "locked_ranges"
         | "article_references"
+        | "archived_at"
       >
     >();
   if (!existing) return json({ error: "原稿が見つかりません。" }, 404);
+  if (existing.archived_at && values.status !== "draft")
+    return json({ error: "アーカイブ中の原稿は、復元してから公開審査へ進めてください。" }, 409);
   if (existing.publication_review_stage)
     return json({ error: "公開審査中は原稿を編集できません。審査担当の判断を待つか、差し戻してください。" }, 409);
   const isReviewOnly =
@@ -7070,6 +7077,53 @@ async function updateEditorialDocument(
     )
     .run();
   return json({ ok: true });
+}
+
+async function setEditorialDocumentArchive(
+  request: Request,
+  env: Env,
+  documentId: string,
+  archived: boolean,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const document = await env.REPORTS.prepare(
+    "SELECT id, subject, status, published_at, publication_review_stage, created_by, archived_at FROM editorial_documents WHERE id = ?",
+  )
+    .bind(documentId)
+    .first<
+      Pick<
+        EditorialDocument,
+        | "id"
+        | "subject"
+        | "status"
+        | "published_at"
+        | "publication_review_stage"
+        | "created_by"
+        | "archived_at"
+      >
+    >();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (
+    !canEditSubject(scope, document.subject) &&
+    document.created_by !== scope.email
+  )
+    return json({ error: "この原稿をアーカイブする権限がありません。" }, 403);
+  if (
+    document.status !== "draft" ||
+    document.published_at ||
+    document.publication_review_stage
+  )
+    return json({ error: "アーカイブできるのは公開前の下書きだけです。" }, 400);
+  if (archived === Boolean(document.archived_at))
+    return json({ ok: true, archivedAt: document.archived_at });
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    "UPDATE editorial_documents SET archived_at = ?, archived_by = ?, updated_at = ?, updated_by = ? WHERE id = ?",
+  ).bind(archived ? now : null, archived ? scope.email : null, now, scope.email, documentId).run();
+  return json({ ok: true, archivedAt: archived ? now : null });
 }
 
 async function listEditorialRevisions(
@@ -8279,6 +8333,7 @@ async function getPublicationReviewState(
     round: document.publication_review_round,
     canCompleteWriting:
       !document.published_at &&
+      !document.archived_at &&
       !document.publication_review_stage &&
       (document.status === "in-review" || document.status === "draft") &&
       (canEditSubject(scope, document.subject) || document.created_by === scope.email),
@@ -8306,6 +8361,8 @@ async function startPublicationReview(
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (!canEditSubject(scope, document.subject) && document.created_by !== scope.email)
     return json({ error: "執筆担当者だけが執筆完了にできます。" }, 403);
+  if (document.archived_at)
+    return json({ error: "アーカイブ中の原稿は、復元してから公開審査を開始してください。" }, 409);
   if (document.published_at) return json({ error: "公開済みの記事です。" }, 400);
   if (document.publication_review_stage)
     return json({ error: "すでに公開審査中です。" }, 409);
@@ -9868,6 +9925,16 @@ async function handleAdminRequest(
     if (request.method === "POST") return createEditorialDocument(request, env);
     return json({ error: "GET、POSTのみ利用できます。" }, 405);
   }
+  const editorialArchiveMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/(archive|restore)$/i,
+  );
+  if (editorialArchiveMatch && request.method === "POST")
+    return setEditorialDocumentArchive(
+      request,
+      env,
+      editorialArchiveMatch[1],
+      editorialArchiveMatch[2].toLowerCase() === "archive",
+    );
   if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
     return editorialBoard(request, env);
   if (
