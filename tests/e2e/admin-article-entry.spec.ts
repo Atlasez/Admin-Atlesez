@@ -1,6 +1,27 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("A/D 原稿一覧の作業導線", () => {
+  test("運営トップに規則を追加し、プロジェクト側マイページを表示しない", async ({ page }) => {
+    await page.goto("admin/atlas/");
+
+    await expect(page.getByRole("link", { name: /規則を開く/ })).toHaveAttribute(
+      "href",
+      "/admin/rules/",
+    );
+    await expect(page.locator(".project-links")).not.toContainText("マイページ");
+  });
+
+  test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({ page }) => {
+    await page.goto("admin/rules/");
+
+    await expect(page.getByRole("heading", { name: "規則", exact: true })).toBeVisible();
+    await expect(page.locator(".rule-section")).toHaveCount(6);
+    await expect(page.getByRole("link", { name: /作業の進め方を確認する/ })).toHaveAttribute(
+      "href",
+      "/admin/guide/",
+    );
+  });
+
   test("プロジェクトHomeでは原稿一覧だけを入口にする", async ({ page }) => {
     await page.goto("admin/atlas/");
 

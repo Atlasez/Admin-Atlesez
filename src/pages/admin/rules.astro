@@ -1,0 +1,83 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+---
+
+<AdminLayout title="規則" description="アトラス学習サイト運営の基本ルール">
+  <main class="rules-page" id="main">
+    <header class="rules-heading">
+      <p class="eyebrow">ATLAS OPERATIONS</p>
+      <h1>規則</h1>
+      <p class="intro">学習サイト「アトラス」を安心して運営するための基本ルールです。迷ったときは、作業の進め方とあわせて確認してください。</p>
+    </header>
+
+    <div class="rules-grid">
+      <aside class="rules-index" aria-label="規則の目次">
+        <strong>目次</strong>
+        <a href="#principles">1. 基本姿勢</a>
+        <a href="#articles">2. 原稿の扱い</a>
+        <a href="#feedback">3. フィードバック</a>
+        <a href="#publication">4. 公開と確認</a>
+        <a href="#collaboration">5. 共同作業</a>
+        <a href="#security">6. 情報管理</a>
+      </aside>
+
+      <article class="rules-content">
+        <section id="principles" class="rule-section">
+          <div class="rule-number">01</div>
+          <div><h2>基本姿勢</h2><ul><li>読者が正確に、分かりやすく学べることを最優先にします。</li><li>分からない点や判断に迷う点は一人で抱えず、コメントやDiscordで共有します。</li><li>参加者同士を尊重し、個人ではなく原稿や提案に対して意見を伝えます。</li></ul></div>
+        </section>
+
+        <section id="articles" class="rule-section">
+          <div class="rule-number">02</div>
+          <div><h2>原稿の扱い</h2><ul><li>原稿の作成・修正・保存は記事編集ワークスペースで行います。</li><li>事実や引用を確認し、必要に応じて参考資料や出典を記録します。</li><li>保存前にタイトル、分野、カテゴリ、本文を確認し、作業状態を実際の進捗に合わせます。</li><li>他の人が編集中の原稿は、表示されている編集者を確認してから同じ箇所を変更します。</li></ul></div>
+        </section>
+
+        <section id="feedback" class="rule-section">
+          <div class="rule-number">03</div>
+          <div><h2>フィードバック</h2><ul><li>修正してほしい箇所と、その理由が分かる具体的なコメントを残します。</li><li>コメントには原稿の改善に必要な内容を書き、人格や能力への評価は書きません。</li><li>対応したコメントは返信や解決操作で状況を共有し、未対応の指摘を残したまま公開しません。</li></ul></div>
+        </section>
+
+        <section id="publication" class="rule-section">
+          <div class="rule-number">04</div>
+          <div><h2>公開と確認</h2><ul><li>フィードバックを反映し、公開前に本文プレビューと記事設定を確認します。</li><li>公開操作は、確認が完了した原稿に対して運営管理者が行います。</li><li>公開後は実際の学習サイトで表示を確認し、誤りや表示崩れがあれば問題報告・コメントで共有します。</li></ul></div>
+        </section>
+
+        <section id="collaboration" class="rule-section">
+          <div class="rule-number">05</div>
+          <div><h2>共同作業</h2><ul><li>同じ原稿や箇所を同時に編集する場合は、編集室の表示と作業会・Discordで担当を確認します。</li><li>大きな構成変更を行う前に、関係する担当者へ意図と影響を共有します。</li><li>作業を中断するときは、保存し、次に行うことや未確認点をコメントに残します。</li></ul></div>
+        </section>
+
+        <section id="security" class="rule-section">
+          <div class="rule-number">06</div>
+          <div><h2>情報管理</h2><ul><li>参加者の個人情報、ログイン情報、非公開資料を記事や外部サービスへ転載しません。</li><li>権限が必要な資料や画面を見られない場合は、権限を迂回せず運営管理者へ依頼します。</li><li>不正アクセス、誤公開、データ消失などの疑いがある場合は、操作を止めて直ちに運営管理者へ連絡します。</li></ul></div>
+        </section>
+
+        <p class="rules-note"><a href="/admin/guide/">作業の進め方を確認する →</a><span>運用上の判断や最新の連絡は、現在の運営画面とDiscordの案内を優先してください。</span></p>
+      </article>
+    </div>
+  </main>
+</AdminLayout>
+
+<style>
+  .rules-page { color: var(--text-primary); margin: 0 auto; max-width: 1100px; padding: 0 1.25rem 4rem; }
+  .rules-heading { border-bottom: 1px solid var(--border-default); padding: 2rem 0 1.5rem; }
+  .eyebrow { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .12em; margin: 0; }
+  .rules-heading h1 { font-size: clamp(2rem, 4vw, 3rem); margin: .35rem 0 .65rem; }
+  .intro { color: var(--text-secondary); line-height: 1.8; margin: 0; max-width: 48rem; }
+  .rules-grid { display: grid; gap: 2.5rem; grid-template-columns: 13rem minmax(0, 1fr); padding-top: 1.8rem; }
+  .rules-index { align-self: start; border-top: 2px solid var(--accent-primary); display: grid; gap: .18rem; padding-top: .65rem; position: sticky; top: 1rem; }
+  .rules-index strong { margin-bottom: .35rem; }
+  .rules-index a { color: var(--text-secondary); font-size: .88rem; padding: .32rem 0; text-decoration: none; }
+  .rules-index a:hover { color: var(--accent-primary); }
+  .rules-content { display: grid; gap: 1.1rem; }
+  .rule-section { background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; gap: 1rem; grid-template-columns: 2.8rem minmax(0, 1fr); padding: 1.25rem 1.35rem; scroll-margin-top: 1rem; }
+  .rule-number { color: var(--accent-primary); font-size: .78rem; font-weight: 800; letter-spacing: .08em; padding-top: .25rem; }
+  .rule-section h2 { font-size: 1.15rem; margin: 0 0 .65rem; }
+  .rule-section ul { display: grid; gap: .45rem; margin: 0; padding-left: 1.25rem; }
+  .rule-section li { line-height: 1.75; }
+  .rules-note { border-left: 3px solid var(--accent-primary); display: grid; gap: .35rem; margin: .35rem 0 0; padding: .75rem 1rem; }
+  .rules-note a { color: var(--accent-primary); font-weight: 800; }
+  .rules-note span { color: var(--text-secondary); font-size: .88rem; line-height: 1.7; }
+  @media (max-width: 760px) { .rules-page { padding: 0 .8rem 3rem; } .rules-grid { grid-template-columns: 1fr; } .rules-index { position: static; } }
+  @media (max-width: 480px) { .rule-section { grid-template-columns: 1fr; gap: .35rem; padding: 1rem; } }
+</style>

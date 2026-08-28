@@ -18,6 +18,7 @@ const adminPageNames = [
   "analytics",
   "editor",
   "guide",
+  "rules",
   "introductions",
   "profile-requests",
   "project-profile-requests",
