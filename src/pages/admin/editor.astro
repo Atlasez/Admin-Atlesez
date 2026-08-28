@@ -917,6 +917,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     root.dataset.editorInitialized = "true";
     const routeQuery = new URLSearchParams(window.location.search);
     if (routeQuery.has("new") || routeQuery.has("document")) root.setAttribute("data-editor-starting", "");
+    if (routeQuery.has("new") || routeQuery.has("document")) {
+      // Chrome can restore the previous position after the async editor data
+      // arrives. The editor owns its initial position, so avoid that race.
+      history.scrollRestoration = "manual";
+    }
     const { subjects, articles, plannedArticles, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; commentTags: string[] };
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
