@@ -81,11 +81,6 @@ main にマージされていても公開されません。
 検査する `npm run verify:deploy-config` を通してから、`npm run deploy:public` または
 `npm run deploy:admin` を使ってください。詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
-運営用サイトの本番運用では、先に [AGENTS.md](AGENTS.md) と
-[docs/ADMIN_DEPLOYMENT_POLICY.md](docs/ADMIN_DEPLOYMENT_POLICY.md) を必ず確認してください。
-ADMIN本番は `admin.atlasez.org` の `atlasez-admin` Workerだけです。Workers.dev URL、
-Dashboard Editorの手動Upload、未コミット変更からのデプロイは行いません。
-
 ## 多言語について
 
 英語版は翻訳が 4 記事しかなく日本語版との差が大きすぎたため、一旦取り下げました。

@@ -5,32 +5,181 @@ const timezones = getTimeZoneOptions(new Date());
 ---
 <AdminLayout title="タスク管理" description="参加中のプロジェクトのタスクを横断管理します">
   <main class="member-tasks" data-member-tasks>
-    <header><h1>タスク管理</h1></header>
-    <section class="create-task">
-      <h2>タスクを追加</h2>
-      <div class="create-grid"><label>プロジェクト<select data-project></select></label><label>タスク名<input data-title maxlength="200" /></label><label>担当者<select data-assignee><option value="">担当者を指定しない</option></select></label><label>期限<input data-due type="datetime-local" /></label><label>期限のタイムゾーン<select data-timezone>{timezones.map(({value,label})=><option value={value} selected={value==="Asia/Tokyo"}>{label}</option>)}</select></label></div>
-      <label>補足・依頼内容<textarea data-details maxlength="10000"></textarea></label>
-      <div class="actions"><output data-message aria-live="polite"></output><button type="button" data-create>タスクを追加</button></div>
+    <header class="task-page-header">
+      <div><p class="eyebrow">MEMBER TASKS</p><h1>タスク管理</h1><p>参加中のプロジェクトを横断して、担当・期限・進捗を確認できます。</p></div>
+      <button class="primary-cta" type="button" data-scroll-create><span aria-hidden="true">＋</span>タスクを追加</button>
+    </header>
+
+    <section class="task-summary" aria-label="タスクの概要">
+      <div class="summary-card"><span>表示中</span><strong data-summary-total>0</strong><small>件</small></div>
+      <div class="summary-card"><span>未着手</span><strong data-summary-open>0</strong><small>件</small></div>
+      <div class="summary-card"><span>進行中</span><strong data-summary-doing>0</strong><small>件</small></div>
+      <div class="summary-card"><span>完了</span><strong data-summary-done>0</strong><small>件</small></div>
     </section>
+
+    <section class="create-task" id="task-create" data-create-panel>
+      <div class="create-heading"><div><span class="section-kicker">NEW REQUEST</span><h2>タスクを追加</h2><p>依頼内容と期限を入力して、担当者へ共有します。</p></div><span class="required-note">すべて任意</span></div>
+      <div class="create-grid"><label><span>プロジェクト</span><select data-project></select></label><label><span>タスク名</span><input data-title maxlength="200" placeholder="例：記事を確認する" /></label><label><span>担当者</span><select data-assignee multiple size="6" aria-describedby="member-task-assignee-help"><option value="" disabled>担当者を選択</option></select><small id="member-task-assignee-help">複数人は Ctrl（Windows）または⌘（Mac）で選択</small></label><label><span>期限</span><input data-due type="datetime-local" /></label><label><span>期限のタイムゾーン</span><select data-timezone>{timezones.map(({value,label})=><option value={value} selected={value==="Asia/Tokyo"}>{label}</option>)}</select></label></div>
+      <label class="details-field"><span>補足・依頼内容</span><textarea data-details maxlength="10000" placeholder="目的、確認してほしい点、完了条件など"></textarea></label>
+      <div class="actions"><output data-message aria-live="polite"></output><button class="create-cta" type="button" data-create>タスクを追加<span aria-hidden="true">→</span></button></div>
+    </section>
+
     <section class="task-section">
-      <div class="section-head"><h2>参加中のプロジェクトのタスク</h2><div class="filters" role="group" aria-label="タスクの表示対象"><button type="button" class="is-selected" data-filter="assigned">自分がこなす</button><button type="button" data-filter="created">自分が依頼</button><button type="button" data-filter="all">すべて</button></div></div>
-      <div class="project-filters" data-project-filters></div>
+      <div class="section-head"><div><span class="section-kicker">TASK LIST</span><h2>参加中のプロジェクトのタスク</h2><p class="result-summary" data-result-count>0件</p></div><div class="filters" role="group" aria-label="タスクの表示対象"><button type="button" class="is-selected" aria-pressed="true" data-filter="assigned">自分がこなす</button><button type="button" aria-pressed="false" data-filter="created">自分が依頼</button><button type="button" aria-pressed="false" data-filter="all">すべて</button></div></div>
+      <div class="project-filter-panel"><div class="filter-panel-heading"><strong>プロジェクトで絞り込む</strong><span data-project-filter-count>0件選択中</span></div><div class="project-filters" data-project-filters></div></div>
       <div data-list>読み込み中…</div>
     </section>
   </main>
 </AdminLayout>
 <style>
   .member-tasks{margin:0 auto;max-width:1150px;padding:0 1.25rem 4rem}.member-tasks>header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.25rem}.member-tasks h1{font-size:clamp(1.8rem,4vw,2.35rem);margin:0}.member-tasks section{border:1px solid var(--border-default);margin-top:1rem;padding:1rem}.member-tasks h2{font-size:1.08rem;margin:0 0 .8rem}.create-grid{display:grid;gap:.65rem;grid-template-columns:1fr 1.5fr 1fr 1fr 1.2fr}.member-tasks label{display:grid;font-size:.78rem;font-weight:800;gap:.3rem}.member-tasks input,.member-tasks select,.member-tasks textarea{background:var(--background-primary);border:1px solid var(--border-default);box-sizing:border-box;color:var(--text-primary);font:inherit;padding:.5rem;width:100%}.member-tasks textarea{min-height:5rem;resize:vertical}.actions,.section-head{align-items:center;display:flex;gap:1rem;justify-content:space-between}.actions{margin-top:.7rem}.actions output{color:var(--text-secondary)}button{cursor:pointer;font:inherit}.actions button,.status-button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;font-weight:800;padding:.5rem .7rem}.filters,.project-filters{display:flex;flex-wrap:wrap;gap:.4rem}.filters button,.project-filters label{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);padding:.38rem .58rem}.filters button.is-selected{background:var(--accent-primary);color:#fff}.project-filters{margin-bottom:.8rem}.project-filters label{align-items:center;display:flex;font-size:.74rem}.task{align-items:start;border-top:1px solid var(--border-default);display:grid;gap:1rem;grid-template-columns:minmax(0,1fr) auto;padding:.85rem 0}.task:first-child{border-top:0}.task h3{font-size:.95rem;margin:0 0 .25rem}.task p{color:var(--text-secondary);font-size:.78rem;margin:.25rem 0;white-space:pre-wrap}.task-meta{display:flex;flex-wrap:wrap;gap:.35rem}.badge{background:var(--background-secondary);border:1px solid var(--border-default);font-size:.7rem;padding:.18rem .38rem}.task-actions{align-items:end;display:grid;gap:.4rem;min-width:9rem}.task-actions select{font-size:.78rem}.approval-link{color:var(--accent-primary);font-size:.76rem;font-weight:800}.empty{color:var(--text-secondary)}@media(max-width:850px){.create-grid{grid-template-columns:1fr 1fr}.section-head{align-items:start;flex-direction:column}.task{grid-template-columns:1fr}.task-actions{align-items:stretch}}@media(max-width:540px){.member-tasks{padding:0 .8rem 3rem}.create-grid{grid-template-columns:1fr}.actions{align-items:stretch;flex-direction:column}.actions button{width:100%}}
+  .member-tasks label small{color:var(--text-secondary);font-weight:400;line-height:1.4}
+</style>
+<style is:global>
+  .member-tasks {
+    --task-blue: #1769aa;
+    --task-blue-dark: #0e4f84;
+    --task-navy: #17324d;
+    --task-border: #cbd9e6;
+    --task-soft: #f4f8fc;
+    background: #fff;
+    color: var(--task-navy);
+    max-width: 1180px;
+  }
+  .member-tasks > header.task-page-header { align-items: end; border-bottom: 1px solid var(--task-border); display: flex; gap: 1.5rem; justify-content: space-between; padding: 2rem 0 1.35rem; }
+  .member-tasks .eyebrow, .member-tasks .section-kicker { color: var(--task-blue); font-size: .7rem; font-weight: 900; letter-spacing: .12em; margin: 0; }
+  .member-tasks .task-page-header h1 { color: var(--task-navy); font-size: clamp(2rem, 4vw, 2.75rem); letter-spacing: -.02em; margin: .35rem 0 .4rem; }
+  .member-tasks .task-page-header p:not(.eyebrow) { color: #526b80; font-size: .9rem; line-height: 1.65; margin: 0; }
+  .member-tasks .primary-cta, .member-tasks .create-cta { align-items: center; background: var(--task-blue); border: 1px solid var(--task-blue); border-radius: .5rem; color: #fff; display: inline-flex; font-weight: 900; justify-content: center; min-height: 3.2rem; padding: .7rem 1.25rem; transition: background .15s ease, transform .15s ease; }
+  .member-tasks .primary-cta { font-size: .95rem; gap: .45rem; white-space: nowrap; }
+  .member-tasks .primary-cta span { font-size: 1.25rem; line-height: 1; }
+  .member-tasks .primary-cta:hover, .member-tasks .create-cta:hover { background: var(--task-blue-dark); transform: translateY(-1px); }
+  .member-tasks .task-summary { background: transparent; border: 0; box-shadow: none; display: grid; gap: .7rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 1rem; padding: 0; }
+  .member-tasks .summary-card { align-items: baseline; background: var(--task-soft); border: 1px solid var(--task-border); border-radius: .55rem; display: flex; gap: .35rem; padding: .85rem 1rem; }
+  .member-tasks .summary-card span { color: #526b80; font-size: .78rem; font-weight: 800; margin-right: auto; }
+  .member-tasks .summary-card strong { color: var(--task-blue); font-size: 1.65rem; line-height: 1; }
+  .member-tasks .summary-card small { color: #526b80; font-size: .72rem; }
+  .member-tasks section.create-task, .member-tasks section.task-section { background: #fff; border: 1px solid var(--task-border); border-radius: .65rem; box-shadow: 0 .35rem 1.2rem rgb(23 50 77 / .07); margin-top: 1.2rem; padding: 1.25rem; }
+  .member-tasks section.create-task { background: #f8fbff; border-top: 4px solid var(--task-blue); }
+  .member-tasks .create-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
+  .member-tasks .create-heading h2, .member-tasks .section-head h2 { color: var(--task-navy); font-size: 1.2rem; margin: .25rem 0 .2rem; }
+  .member-tasks .create-heading p { color: #526b80; font-size: .82rem; margin: 0; }
+  .member-tasks .required-note { background: #fff; border: 1px solid var(--task-border); border-radius: 999px; color: #526b80; font-size: .72rem; padding: .35rem .6rem; white-space: nowrap; }
+  .member-tasks .create-grid { gap: .85rem; grid-template-columns: 1.05fr 1.55fr 1.2fr 1fr 1.2fr; }
+  .member-tasks label { color: var(--task-navy); font-size: .78rem; gap: .35rem; }
+  .member-tasks label > span { font-weight: 900; }
+  .member-tasks input, .member-tasks select, .member-tasks textarea { background: #fff; border: 1px solid #b9ccdc; border-radius: .4rem; color: var(--task-navy); min-height: 2.6rem; outline: 0; padding: .6rem .65rem; }
+  .member-tasks input:focus, .member-tasks select:focus, .member-tasks textarea:focus { border-color: var(--task-blue); box-shadow: 0 0 0 3px rgb(23 105 170 / .14); }
+  .member-tasks select[multiple] { min-height: 8.7rem; padding: .35rem; }
+  .member-tasks select[multiple] option { border-radius: .25rem; padding: .35rem .45rem; }
+  .member-tasks select[multiple] option:checked { background: var(--task-blue); color: #fff; }
+  .member-tasks .details-field { margin-top: .9rem; }
+  .member-tasks .details-field textarea { min-height: 5.25rem; }
+  .member-tasks .actions { align-items: center; margin-top: .9rem; }
+  .member-tasks .actions output { color: #526b80; font-size: .82rem; }
+  .member-tasks .create-cta { gap: .8rem; min-width: 10rem; }
+  .member-tasks .create-cta span { font-size: 1.1rem; }
+  .member-tasks .task-section { padding: 1.25rem; }
+  .member-tasks .section-head { align-items: end; border-bottom: 1px solid var(--task-border); padding-bottom: 1rem; }
+  .member-tasks .section-head h2 { margin-top: .25rem; }
+  .member-tasks .result-summary { color: #526b80; font-size: .8rem; margin: .25rem 0 0; }
+  .member-tasks .filters { background: var(--task-soft); border: 1px solid var(--task-border); border-radius: .5rem; gap: .25rem; padding: .25rem; }
+  .member-tasks .filters button { background: transparent; border: 0; border-radius: .35rem; color: #526b80; font-size: .8rem; font-weight: 900; min-height: 2.35rem; padding: .5rem .8rem; }
+  .member-tasks .filters button:hover { color: var(--task-blue); }
+  .member-tasks .filters button.is-selected { background: var(--task-blue); box-shadow: 0 .15rem .35rem rgb(23 105 170 / .18); color: #fff; }
+  .member-tasks .project-filter-panel { background: var(--task-soft); border: 1px solid var(--task-border); border-radius: .5rem; margin: 1rem 0; padding: .75rem; }
+  .member-tasks .filter-panel-heading { align-items: baseline; display: flex; gap: .7rem; justify-content: space-between; margin-bottom: .55rem; }
+  .member-tasks .filter-panel-heading strong { font-size: .78rem; }
+  .member-tasks .filter-panel-heading span { color: #526b80; font-size: .72rem; }
+  .member-tasks .project-filters { gap: .45rem; margin: 0; padding: 0; }
+  .member-tasks .project-filters label { background: #fff; border: 1px solid #b9ccdc; border-radius: 999px; color: #526b80; cursor: pointer; display: inline-flex; font-size: .76rem; gap: .4rem; padding: .45rem .7rem; }
+  .member-tasks .project-filters label:hover, .member-tasks .project-filters label:has(input:checked) { border-color: var(--task-blue); color: var(--task-blue); }
+  .member-tasks .project-filters label:has(input:checked) { background: #eaf4fc; font-weight: 900; }
+  .member-tasks .project-filters input { accent-color: var(--task-blue); min-height: 0; padding: 0; width: auto; }
+  .member-tasks [data-list] { display: grid; gap: .7rem; }
+  .member-tasks .task { background: #fff; border: 1px solid var(--task-border); border-left: 4px solid var(--task-blue); border-radius: .55rem; box-shadow: 0 .15rem .5rem rgb(23 50 77 / .04); padding: 1rem 1.05rem; }
+  .member-tasks .task-title { align-items: baseline; display: flex; gap: .55rem; }
+  .member-tasks .task-title h3 { color: var(--task-navy); font-size: 1rem; margin: 0; }
+  .member-tasks .status-dot { background: var(--task-blue); border-radius: 50%; flex: 0 0 auto; height: .55rem; width: .55rem; }
+  .member-tasks .task.status-done { border-left-color: #5d8c70; }
+  .member-tasks .task.status-done .status-dot { background: #5d8c70; }
+  .member-tasks .task.status-doing { border-left-color: #d0861d; }
+  .member-tasks .task.status-doing .status-dot { background: #d0861d; }
+  .member-tasks .task-meta { margin-top: .55rem; }
+  .member-tasks .badge { background: #f4f8fc; border: 1px solid var(--task-border); color: #526b80; }
+  .member-tasks .badge-status { font-weight: 900; }
+  .member-tasks .task-actions { gap: .55rem; min-width: 10.5rem; }
+  .member-tasks .status-control { gap: .25rem; }
+  .member-tasks .status-control > span { color: #526b80; font-size: .7rem; }
+  .member-tasks .task-actions select { min-height: 2.45rem; }
+  .member-tasks .status-button { background: var(--task-blue); border-color: var(--task-blue); border-radius: .4rem; min-height: 2.45rem; padding: .55rem .7rem; }
+  .member-tasks .status-button:hover { background: var(--task-blue-dark); }
+  .member-tasks .empty { background: var(--task-soft); border: 1px dashed var(--task-border); color: #526b80; }
+  @media (max-width: 980px) { .member-tasks .create-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 850px) { .member-tasks > header.task-page-header { align-items: start; } .member-tasks .task-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .member-tasks .create-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 540px) { .member-tasks > header.task-page-header { gap: 1rem; } .member-tasks .primary-cta { width: 100%; } .member-tasks .task-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .member-tasks .create-grid { grid-template-columns: 1fr; } .member-tasks .create-heading { display: grid; } .member-tasks .section-head { align-items: stretch; } .member-tasks .filters { display: grid; grid-template-columns: repeat(3, 1fr); } .member-tasks .filters button { padding-left: .35rem; padding-right: .35rem; } .member-tasks .actions { align-items: stretch; } .member-tasks .create-cta { width: 100%; } }
+</style>
+<style is:global>
+  .member-tasks { --task-card-bg: color-mix(in srgb, var(--background-primary) 92%, var(--accent-primary) 8%); }
+  .member-tasks > header { align-items: end; display: flex; gap: 1.5rem; justify-content: space-between; }
+  .member-tasks > header p { color: var(--text-secondary); line-height: 1.6; margin: .45rem 0 0; max-width: 42rem; }
+  .member-tasks section { background: var(--background-primary); border-radius: .85rem; box-shadow: 0 .45rem 1.5rem rgb(19 49 76 / .06); }
+  .member-tasks .create-task { background: linear-gradient(135deg, color-mix(in srgb, var(--accent-primary) 6%, var(--background-primary)), var(--background-primary)); }
+  .member-tasks .task-section { padding: 1.15rem; }
+  .member-tasks .section-head { align-items: end; border-bottom: 1px solid var(--border-default); padding-bottom: .85rem; }
+  .member-tasks .section-head h2 { margin: 0; }
+  .member-tasks .filters { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; gap: .2rem; padding: .2rem; }
+  .member-tasks .filters button { background: transparent; border: 0; border-radius: 999px; font-size: .76rem; font-weight: 800; padding: .48rem .7rem; }
+  .member-tasks .filters button:hover { color: var(--accent-primary); }
+  .member-tasks .filters button.is-selected { background: var(--background-primary); box-shadow: 0 .1rem .35rem rgb(19 49 76 / .12); color: var(--accent-primary); }
+  .member-tasks .project-filters { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .7rem; gap: .45rem; margin: .95rem 0 1rem; padding: .55rem; }
+  .member-tasks .project-filters label { align-items: center; border: 1px solid transparent; border-radius: 999px; cursor: pointer; display: inline-flex; font-size: .74rem; gap: .35rem; padding: .45rem .65rem; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+  .member-tasks .project-filters label:hover { background: var(--background-primary); border-color: var(--border-default); }
+  .member-tasks .project-filters label:has(input:checked) { background: color-mix(in srgb, var(--accent-primary) 10%, var(--background-primary)); border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-default)); color: var(--accent-primary); font-weight: 800; }
+  .member-tasks .project-filters input { accent-color: var(--accent-primary); margin: 0; width: auto; }
+  .member-tasks [data-list] { display: grid; gap: .7rem; }
+  .member-tasks .task { background: var(--task-card-bg); border: 1px solid var(--border-default); border-left: 4px solid var(--accent-primary); border-radius: .7rem; box-shadow: 0 .2rem .8rem rgb(19 49 76 / .04); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; padding: 1rem; }
+  .member-tasks .task + .task { margin-top: 0; }
+  .member-tasks .task h3 { font-size: 1rem; line-height: 1.45; }
+  .member-tasks .task p { line-height: 1.55; }
+  .member-tasks .task-meta { margin-top: .5rem; }
+  .member-tasks .badge { border-radius: 999px; font-size: .68rem; padding: .22rem .5rem; }
+  .member-tasks .task-actions { align-items: stretch; display: grid; gap: .45rem; min-width: 9.5rem; }
+  .member-tasks .task-actions select { border-radius: .45rem; }
+  .member-tasks .status-button { border-radius: .45rem; cursor: pointer; }
+  .member-tasks .status-button:hover, .member-tasks .actions button:hover { filter: brightness(.94); }
+  .member-tasks .approval-link { display: inline-flex; margin-top: .45rem; }
+  .member-tasks .empty { align-items: center; background: var(--background-secondary); border: 1px dashed var(--border-default); border-radius: .7rem; display: grid; gap: .35rem; justify-items: center; margin: 0; padding: 2rem 1rem; text-align: center; }
+  .member-tasks .empty::before { align-items: center; background: color-mix(in srgb, var(--accent-primary) 12%, transparent); border-radius: 50%; color: var(--accent-primary); content: "✓"; display: flex; font-size: 1.25rem; font-weight: 900; height: 2.25rem; justify-content: center; width: 2.25rem; }
+  @media (max-width: 850px) {
+    .member-tasks > header { align-items: start; flex-direction: column; }
+    .member-tasks .task { grid-template-columns: 1fr; }
+    .member-tasks .task-actions { min-width: 0; }
+  }
+</style>
+<style is:global>
+  /* Keep the transaction controls crisp even when the shell theme changes. */
+  .member-tasks .filters { background: var(--task-soft); border: 1px solid var(--task-border); border-radius: .5rem; gap: .25rem; padding: .25rem; }
+  .member-tasks .filters button { background: transparent; border: 0; border-radius: .35rem; color: #526b80; font-size: .8rem; font-weight: 900; min-height: 2.35rem; padding: .5rem .8rem; }
+  .member-tasks .filters button.is-selected { background: var(--task-blue); color: #fff; }
+  .member-tasks .project-filters { gap: .45rem; margin: 0; padding: 0; }
+  .member-tasks .project-filters label { background: #fff; border: 1px solid #b9ccdc; border-radius: 999px; color: #526b80; padding: .45rem .7rem; }
+  .member-tasks .project-filters label:has(input:checked) { background: #eaf4fc; border-color: var(--task-blue); color: var(--task-blue); font-weight: 900; }
+  .member-tasks .project-filters input { accent-color: var(--task-blue); }
+  .member-tasks .task { background: #fff; border: 1px solid var(--task-border); border-left: 4px solid var(--task-blue); border-radius: .55rem; padding: 1rem 1.05rem; }
+  .member-tasks .task-actions { min-width: 10.5rem; }
+  .member-tasks .task-actions select { min-height: 2.45rem; }
+  .member-tasks .status-button { background: var(--task-blue); border-color: var(--task-blue); min-height: 2.45rem; }
 </style>
 <script>
-  type Project={id:string;name:string;role:string};type Member={project_id:string;email:string;display_name:string};type Task={id:string;project_id:string;subject?:string|null;assignee_email?:string|null;title:string;details?:string;status:string;due_at?:string|null;due_timezone?:string;created_by:string};type Data={scope?:{email:string};projects?:Project[];members?:Member[];tasks?:Task[];error?:string};
-  const initialize=()=>{const root=document.querySelector<HTMLElement>('[data-member-tasks]');if(!root||root.dataset.ready)return;root.dataset.ready='true';const get=<T extends Element>(selector:string)=>root.querySelector<T>(selector)!;const list=get<HTMLElement>('[data-list]'),projectSelect=get<HTMLSelectElement>('[data-project]'),assigneeSelect=get<HTMLSelectElement>('[data-assignee]'),message=get<HTMLOutputElement>('[data-message]');let data:Data={},filter='assigned';
-    const escape=(value:unknown)=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]??character));const projectMap=()=>new Map((data.projects??[]).map(project=>[project.id,project]));const visibleProjects=()=>new Set([...root.querySelectorAll<HTMLInputElement>('[data-project-filter]:checked')].map(input=>input.value));
-    const updateAssignees=()=>{const members=(data.members??[]).filter(member=>member.project_id===projectSelect.value);assigneeSelect.innerHTML='<option value="">担当者を指定しない</option>'+members.map(member=>`<option value="${escape(member.email)}">${escape(member.display_name)}</option>`).join('')};
-    const render=()=>{const email=data.scope?.email??'',projects=projectMap(),allowed=visibleProjects();const rows=(data.tasks??[]).filter(task=>allowed.has(task.project_id)&&(filter==='all'||filter==='assigned'&&task.assignee_email===email||filter==='created'&&task.created_by===email));list.innerHTML=rows.length?rows.map(task=>`<article class="task"><div><h3>${escape(task.title)}</h3><div class="task-meta"><span class="badge">${escape(projects.get(task.project_id)?.name??task.project_id)}</span><span class="badge">${task.status==='open'?'未着手':task.status==='doing'?'進行中':'完了'}</span>${task.assignee_email?`<span class="badge">担当: ${escape((data.members??[]).find(member=>member.email===task.assignee_email&&member.project_id===task.project_id)?.display_name??task.assignee_email)}</span>`:''}</div>${task.details?`<p>${escape(task.details)}</p>`:''}${task.due_at?`<p>期限: ${escape(new Date(task.due_at).toLocaleString('ja-JP'))} (${escape(task.due_timezone)})</p>`:''}${task.subject==='member-profile-change'&&projects.get(task.project_id)?.role==='manager'?'<a class="approval-link" href="/admin/profile-requests/" aria-label="メンバー情報の承認を開く">→</a>':''}</div><div class="task-actions"><select data-task-status="${escape(task.id)}"><option value="open" ${task.status==='open'?'selected':''}>未着手</option><option value="doing" ${task.status==='doing'?'selected':''}>進行中</option><option value="done" ${task.status==='done'?'selected':''}>完了</option></select><button type="button" class="status-button" data-save-status="${escape(task.id)}">状態を保存</button></div></article>`).join(''):'<p class="empty">対象のタスクはありません。</p>'};
+  type Project={id:string;name:string;role:string};type Member={project_id:string;email:string;display_name:string};type Task={id:string;project_id:string;subject?:string|null;assignee_email?:string|null;task_kind?:string;title:string;details?:string;status:string;due_at?:string|null;due_timezone?:string;created_by:string};type Data={scope?:{email:string};projects?:Project[];members?:Member[];tasks?:Task[];error?:string};
+  const initialize=()=>{const root=document.querySelector<HTMLElement>('[data-member-tasks]');if(!root||root.dataset.ready)return;root.dataset.ready='true';const get=<T extends Element>(selector:string)=>root.querySelector<T>(selector)!;const list=get<HTMLElement>('[data-list]'),projectSelect=get<HTMLSelectElement>('[data-project]'),assigneeSelect=get<HTMLSelectElement>('[data-assignee]'),message=get<HTMLOutputElement>('[data-message]'),summaryTotal=get<HTMLElement>('[data-summary-total]'),summaryOpen=get<HTMLElement>('[data-summary-open]'),summaryDoing=get<HTMLElement>('[data-summary-doing]'),summaryDone=get<HTMLElement>('[data-summary-done]'),resultCount=get<HTMLElement>('[data-result-count]'),projectFilterCount=get<HTMLElement>('[data-project-filter-count]'),createPanel=get<HTMLElement>('[data-create-panel]');let data:Data={},filter='assigned';
+    const escape=(value:unknown)=>String(value??'').replace(/[&<>"']/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]??character));const projectMap=()=>new Map((data.projects??[]).map(project=>[project.id,project]));const visibleProjects=()=>new Set([...root.querySelectorAll<HTMLInputElement>('[data-project-filter]:checked')].map(input=>input.value));const taskKindLabel=(task:Task)=>task.task_kind==='feedback'?'フィードバック依頼':'タスク依頼';const assignedTo=(task:Task,email:string)=>{const value=(task.assignee_email??'').toLowerCase();return (task.task_kind==='feedback'&&value==='*')||value.split(',').map(item=>item.trim()).includes(email.toLowerCase())};
+    const updateAssignees=()=>{const selected=new Set([...assigneeSelect.selectedOptions].map(option=>option.value)),members=(data.members??[]).filter(member=>member.project_id===projectSelect.value);assigneeSelect.innerHTML='<option value="" disabled>担当者を選択</option>'+members.map(member=>`<option value="${escape(member.email)}" ${selected.has(member.email)?'selected':''}>${escape(member.display_name)}</option>`).join('')};
+    const render=()=>{const email=data.scope?.email??'',projects=projectMap(),allowed=visibleProjects();const rows=(data.tasks??[]).filter(task=>allowed.has(task.project_id)&&(filter==='all'||filter==='assigned'&&assignedTo(task,email)||filter==='created'&&task.created_by===email));summaryTotal.textContent=String(rows.length);summaryOpen.textContent=String(rows.filter(task=>task.status==='open').length);summaryDoing.textContent=String(rows.filter(task=>task.status==='doing').length);summaryDone.textContent=String(rows.filter(task=>task.status==='done').length);resultCount.textContent=`${rows.length}件`;projectFilterCount.textContent=`${allowed.size}/${data.projects?.length??0}プロジェクト選択中`;list.innerHTML=rows.length?rows.map(task=>{const project=projects.get(task.project_id),statusLabel=task.status==='open'?'未着手':task.status==='doing'?'進行中':'完了';let approvalLink='';if(task.subject==='project-profile-change'&&project?.role==='manager'){approvalLink=task.project_id==='atlas'?'<a class="approval-link" href="/admin/profile-requests/?section=atlas" aria-label="メンバー情報の承認を開く">メンバー情報の承認 →</a>':`<a class="approval-link" href="/admin/project-profile-requests/?project=${encodeURIComponent(task.project_id)}" aria-label="運営内自己紹介の承認を開く">運営内自己紹介の承認 →</a>`}else if(task.subject==='member-profile-change'&&project?.role==='manager'){approvalLink='<a class="approval-link" href="/admin/profile-requests/" aria-label="メンバー情報の承認を開く">メンバー情報の承認 →</a>'}const assigneeLabel=task.assignee_email==='*'?'分野担当者全員':(task.assignee_email??'').split(',').map(item=>(data.members??[]).find(member=>member.email===item.trim()&&member.project_id===task.project_id)?.display_name??item.trim()).filter(Boolean).join('、');return `<article class="task status-${escape(task.status)}"><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3></div><div class="task-meta"><span class="badge">${escape(taskKindLabel(task))}</span><span class="badge">${escape(project?.name??task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assigneeLabel?`<span class="badge">担当: ${escape(assigneeLabel)}</span>`:''}</div>${task.details?`<p>${escape(task.details)}</p>`:''}${task.due_at?`<p>期限: ${escape(new Date(task.due_at).toLocaleString('ja-JP'))} (${escape(task.due_timezone)})</p>`:''}${approvalLink}</div><div class="task-actions"><label class="status-control"><span>進捗</span><select aria-label="${escape(task.title)}の状態" data-task-status="${escape(task.id)}"><option value="open" ${task.status==='open'?'selected':''}>未着手</option><option value="doing" ${task.status==='doing'?'selected':''}>進行中</option><option value="done" ${task.status==='done'?'selected':''}>完了</option></select></label><button type="button" class="status-button" data-save-status="${escape(task.id)}">状態を保存</button></div></article>`}).join(''):'<p class="empty">表示対象のタスクはありません。上の表示対象やプロジェクトの絞り込みを確認してください。</p>'};
     const load=async()=>{const response=await fetch('/api/admin/member-tasks',{credentials:'same-origin',cache:'no-store'}),loaded=await response.json() as Data;if(!response.ok)throw new Error(loaded.error??'タスクを読み込めませんでした。');data=loaded;projectSelect.innerHTML=(data.projects??[]).map(project=>`<option value="${escape(project.id)}">${escape(project.name)}</option>`).join('');get<HTMLElement>('[data-project-filters]').innerHTML=(data.projects??[]).map(project=>`<label><input type="checkbox" data-project-filter value="${escape(project.id)}" checked />${escape(project.name)}</label>`).join('');updateAssignees();render()};
-    projectSelect.addEventListener('change',updateAssignees);get<HTMLElement>('[data-project-filters]').addEventListener('change',render);root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(button=>button.addEventListener('click',()=>{filter=button.dataset.filter??'assigned';root.querySelectorAll('[data-filter]').forEach(item=>item.classList.toggle('is-selected',item===button));render()}));
-    get<HTMLButtonElement>('[data-create]').addEventListener('click',async()=>{message.value='追加中…';const response=await fetch('/api/admin/operations/tasks',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({projectId:projectSelect.value,title:get<HTMLInputElement>('[data-title]').value,assigneeEmail:assigneeSelect.value,dueAt:get<HTMLInputElement>('[data-due]').value,dueTimezone:get<HTMLSelectElement>('[data-timezone]').value,details:get<HTMLTextAreaElement>('[data-details]').value})}),result=await response.json() as {error?:string};message.value=response.ok?'タスクを追加しました。':result.error??'追加できませんでした。';if(response.ok){get<HTMLInputElement>('[data-title]').value='';get<HTMLTextAreaElement>('[data-details]').value='';await load()}});
+    projectSelect.addEventListener('change',updateAssignees);get<HTMLElement>('[data-project-filters]').addEventListener('change',render);root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(button=>button.addEventListener('click',()=>{filter=button.dataset.filter??'assigned';root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(item=>{const selected=item===button;item.classList.toggle('is-selected',selected);item.setAttribute('aria-pressed',String(selected))});render()}));root.querySelector<HTMLButtonElement>('[data-scroll-create]')?.addEventListener('click',()=>{createPanel.scrollIntoView({behavior:'smooth',block:'start'});window.setTimeout(()=>get<HTMLInputElement>('[data-title]').focus(),250)});
+    get<HTMLButtonElement>('[data-create]').addEventListener('click',async()=>{message.value='追加中…';const response=await fetch('/api/admin/operations/tasks',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({projectId:projectSelect.value,title:get<HTMLInputElement>('[data-title]').value,assigneeEmails:[...assigneeSelect.selectedOptions].map(option=>option.value).filter(Boolean),dueAt:get<HTMLInputElement>('[data-due]').value,dueTimezone:get<HTMLSelectElement>('[data-timezone]').value,details:get<HTMLTextAreaElement>('[data-details]').value})}),result=await response.json() as {error?:string};message.value=response.ok?'タスクを追加しました。':result.error??'追加できませんでした。';if(response.ok){get<HTMLInputElement>('[data-title]').value='';get<HTMLTextAreaElement>('[data-details]').value='';[...assigneeSelect.options].forEach(option=>{option.selected=false});await load()}});
     list.addEventListener('click',async event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-save-status]');if(!button)return;const id=button.dataset.saveStatus??'',status=list.querySelector<HTMLSelectElement>(`[data-task-status="${CSS.escape(id)}"]`)?.value;button.disabled=true;const response=await fetch(`/api/admin/operations/tasks/${encodeURIComponent(id)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})}),result=await response.json() as {error?:string};message.value=response.ok?'状態を更新しました。':result.error??'更新できませんでした。';button.disabled=false;if(response.ok)await load()});
     void load().catch(error=>message.value=error instanceof Error?error.message:'読み込めませんでした。')};document.addEventListener('astro:page-load',initialize);initialize();
 </script>

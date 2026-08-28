@@ -12,7 +12,11 @@ import {
   rehypeArticleKatex,
   remarkArticleMathMacros,
 } from "./article-math.mjs";
-import { assertSafeTikzSource } from "./tikz-policy.mjs";
+import {
+  assertSafeTikzSource,
+  normalizeTikzMathSlashes,
+  normalizeTikzSvgFonts,
+} from "./tikz-policy.mjs";
 import {
   editorialImageStyle,
   editorialImageWidthFromUrl,
@@ -29,6 +33,33 @@ const tikzSvgCache = new Map();
 const tikzRenderPromises = new Map();
 
 const tikzAttribute = (value) => encodeURIComponent(String(value ?? ""));
+
+/**
+ * TikZJax puts Computer Modern font-family names in the generated SVG, but
+ * its font-face declarations live in the hidden renderer iframe. Once the
+ * SVG is moved into the editor preview, that stylesheet is gone. Embed the
+ * same declaration in the SVG so the preview does not fall back to Chrome's
+ * default serif font.
+ */
+function embedTikzFontCss(svg) {
+  const value = normalizeTikzSvgFonts(
+    String(svg ?? "")
+      .replace(
+        /\b(fill|stroke)=(['"])#(?:000|000000)\2/gi,
+        "$1=$2currentColor$2",
+      )
+      .replace(/\b(fill|stroke)\s*:\s*#(?:000|000000)\b/gi, "$1: currentColor"),
+  );
+  if (!/^<svg(?:\s|>)/i.test(value)) return value;
+  if (/data-atlasez-tikz-fonts/i.test(value)) return value;
+  const style =
+    '<style data-atlasez-tikz-fonts="true">@import url("' +
+    TIKZJAX_FONT_URL +
+    '");</style>';
+  if (/<defs(?:\s|>)/i.test(value))
+    return value.replace(/<defs(\s[^>]*)?>/i, (match) => `${match}${style}`);
+  return value.replace(/(<svg(?:\s[^>]*)?>)/i, `$1<defs>${style}</defs>`);
+}
 
 const EDITORIAL_ASSET_URL = /^asset:\/\/([0-9a-f-]{36})(?:\?[^)]*)?$/i;
 
@@ -149,7 +180,9 @@ async function renderTikzPreviewSvg(source, endpoint) {
       let fallbackError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const svg = await renderWithFreeTikzJax(source);
+          const svg = await renderWithFreeTikzJax(
+            normalizeTikzMathSlashes(source),
+          );
           tikzSvgCache.set(key, svg);
           return svg;
         } catch (error) {
@@ -200,7 +233,7 @@ function renderWithFreeTikzJax(source) {
     const check = () => {
       const svg = frame.contentDocument?.querySelector("svg");
       if (!svg) return;
-      finish(() => resolve(svg.outerHTML));
+      finish(() => resolve(embedTikzFontCss(svg.outerHTML)));
     };
     const poll = window.setInterval(check, 100);
     const timeout = window.setTimeout(

@@ -3,8 +3,10 @@ import tikzjax from "node-tikzjax";
 import {
   TIKZ_MAX_RENDERED_SVG_LENGTH,
   assertSafeTikzSource,
+  normalizeTikzMathSlashes,
   normalizeTikzLibraries,
   normalizeTikzPackages,
+  normalizeTikzSvgFonts,
 } from "./tikz-policy.mjs";
 
 const tex2svg =
@@ -13,6 +15,21 @@ const tex2svg =
     : (tikzjax?.default ?? tikzjax?.default?.default);
 if (typeof tex2svg !== "function")
   throw new Error("node-tikzjaxのレンダラーを読み込めませんでした。");
+
+// TikZJax emits Computer Modern font-family names (cmr10, cmmi10, ...).
+// Keep the font-face declarations inside the SVG because an inline SVG no
+// longer has access to the stylesheet of the renderer that created it.
+const TIKZ_FONT_CSS_URL =
+  "https://cdn.jsdelivr.net/npm/node-tikzjax@1.0.5/css/fonts.css";
+
+// TikZ's default black is emitted as a literal SVG color. Use the surrounding
+// article color for that default only, so light/dark themes remain readable
+// while explicitly colored paths and labels keep their original colors.
+function normalizeTikzSvgColors(svg) {
+  return String(svg ?? "")
+    .replace(/\b(fill|stroke)=(['"])#(?:000|000000)\2/gi, "$1=$2currentColor$2")
+    .replace(/\b(fill|stroke)\s*:\s*#(?:000|000000)\b/gi, "$1: currentColor");
+}
 
 // node-tikzjax uses a shared in-memory TeX filesystem and its own global
 // WASM state. Serialize renders so two requests cannot corrupt one another.
@@ -46,7 +63,7 @@ function extractDeclarations(source) {
 }
 
 function normalizeSource(source, packages, libraries) {
-  const checked = assertSafeTikzSource(source);
+  const checked = normalizeTikzMathSlashes(assertSafeTikzSource(source));
   const declarations = extractDeclarations(checked);
   const packageList = normalizeTikzPackages([
     ...declarations.packages,
@@ -99,10 +116,14 @@ export async function renderTikzSource(source, options = {}) {
     const svg = await tex2svg(tex, {
       texPackages,
       tikzLibraries: normalized.libraries.join(","),
+      embedFontCss: true,
+      fontCssUrl: TIKZ_FONT_CSS_URL,
       disableOptimize: false,
     });
     return {
-      svg: sanitizeRenderedSvg(svg),
+      svg: sanitizeRenderedSvg(
+        normalizeTikzSvgFonts(normalizeTikzSvgColors(svg)),
+      ),
       hash: createHash("sha256")
         .update(
           JSON.stringify({

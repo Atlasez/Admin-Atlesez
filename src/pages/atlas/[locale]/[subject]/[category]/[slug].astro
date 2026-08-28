@@ -295,6 +295,26 @@ const structuredData = {
             <span data-bookmark-label>{t(locale, "saveForLater")}</span>
           </button>
           <HistoryStageControl locale={locale} />
+          <button
+            type="button"
+            class="article-share-button"
+            data-article-share
+            data-label-share={locale === "ja" ? "SNSで共有" : "Share"}
+            data-label-share-failed={locale === "ja" ? "共有を開けませんでした" : "Could not open sharing"}
+          >
+            {locale === "ja" ? "SNSで共有" : "Share"}
+          </button>
+          <button
+            type="button"
+            class="article-copy-button"
+            data-article-copy
+            data-label-copy={locale === "ja" ? "リンクをコピー" : "Copy link"}
+            data-label-copied={locale === "ja" ? "コピーしました" : "Copied"}
+            data-label-copy-failed={locale === "ja" ? "コピーできませんでした" : "Could not copy"}
+          >
+            {locale === "ja" ? "リンクをコピー" : "Copy link"}
+          </button>
+          <span class="article-share-status" data-article-share-status role="status" aria-live="polite"></span>
         </div>
         {
           [...translations.entries()].length > 0 && (
@@ -677,6 +697,29 @@ const structuredData = {
     flex-wrap: wrap;
     gap: var(--space-2);
     margin-top: var(--space-2);
+  }
+  .article-share-button,
+  .article-copy-button {
+    min-height: var(--touch-target);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--background-primary);
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+  }
+  .article-share-button:hover,
+  .article-copy-button:hover,
+  .article-share-button:focus-visible,
+  .article-copy-button:focus-visible {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .article-share-status {
+    align-self: center;
+    color: var(--text-secondary);
+    font-size: calc(0.85rem * var(--text-scale));
   }
   .bookmark-btn {
     display: inline-flex;
@@ -1262,6 +1305,63 @@ const structuredData = {
           moveTo(states.length - 1);
         }
       });
+    });
+
+    const shareButton = actions.querySelector<HTMLButtonElement>(
+      "[data-article-share]",
+    );
+    const copyButton = actions.querySelector<HTMLButtonElement>(
+      "[data-article-copy]",
+    );
+    const shareStatus = actions.querySelector<HTMLElement>(
+      "[data-article-share-status]",
+    );
+    const articleUrl = new URL(entry.href || location.pathname, location.href).href;
+    const setShareStatus = (message: string) => {
+      if (shareStatus) shareStatus.textContent = message;
+    };
+
+    shareButton?.addEventListener("click", async () => {
+      const shareData = {
+        title: entry.title,
+        text: entry.title,
+        url: articleUrl,
+      };
+      try {
+        if (navigator.share) {
+          await navigator.share(shareData);
+          return;
+        }
+        const xUrl = new URL("https://twitter.com/intent/tweet");
+        xUrl.searchParams.set("text", entry.title);
+        xUrl.searchParams.set("url", articleUrl);
+        window.open(xUrl.href, "_blank", "noopener,noreferrer");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setShareStatus(shareButton.dataset.labelShareFailed ?? "Could not share");
+      }
+    });
+
+    copyButton?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(articleUrl);
+        setShareStatus(copyButton.dataset.labelCopied ?? "Copied");
+      } catch {
+        const field = document.createElement("textarea");
+        field.value = articleUrl;
+        field.setAttribute("readonly", "true");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.append(field);
+        field.select();
+        const copied = document.execCommand("copy");
+        field.remove();
+        setShareStatus(
+          copied
+            ? (copyButton.dataset.labelCopied ?? "Copied")
+            : (copyButton.dataset.labelCopyFailed ?? "Could not copy"),
+        );
+      }
     });
 
   }

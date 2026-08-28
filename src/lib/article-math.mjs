@@ -47,7 +47,35 @@ export function remarkArticleMathMacros(customPresets = {}) {
             parent.children = parent.children.filter((child) => child !== node);
         }
       }
+      // Macro declarations are configuration, not article prose.  Markdown
+      // parses declarations placed before the first heading as an ordinary
+      // paragraph, so they used to leak into both the editor preview and the
+      // published article.  Keep the declarations in `file.data` for KaTeX,
+      // but remove them from text nodes.  Code blocks are intentionally left
+      // untouched so documentation can still show a literal declaration.
+      if (
+        node.type !== "code" &&
+        (node.type === "text" || node.type === "html") &&
+        typeof node.value === "string"
+      ) {
+        const { ranges } = parseTexMacroDefinitions(node.value);
+        if (ranges.length) {
+          let value = node.value;
+          for (const [from, to] of [...ranges].reverse())
+            value = value.slice(0, from) + value.slice(to);
+          node.value = value;
+          if (!node.value.trim() && parent?.children)
+            parent.children = parent.children.filter((child) => child !== node);
+        }
+      }
       for (const child of [...(node.children ?? [])]) visit(child, node);
+      if (
+        node.type !== "root" &&
+        Array.isArray(node.children) &&
+        node.children.length === 0 &&
+        parent?.children
+      )
+        parent.children = parent.children.filter((child) => child !== node);
     };
     visit(tree, null);
   };

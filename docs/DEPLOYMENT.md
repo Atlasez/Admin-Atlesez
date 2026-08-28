@@ -1,7 +1,5 @@
 # デプロイ（DEPLOYMENT）
 
-ADMIN本番の詳細な運用契約は [ADMIN_DEPLOYMENT_POLICY.md](ADMIN_DEPLOYMENT_POLICY.md) を正本とする。Agentは作業前にこの文書と`AGENTS.md`を読む。
-
 本番はCloudflare Workersで配信しています。Cloudflare Pagesや別アカウントのWorkerへはデプロイしません。
 
 | 対象                   | Worker          | URL                                               | D1                |
@@ -13,19 +11,9 @@ ADMIN本番の詳細な運用契約は [ADMIN_DEPLOYMENT_POLICY.md](ADMIN_DEPLOY
 
 1. `main`へマージする前にCIを通す
 2. ローカルで `npm run verify:deploy-config` を実行する
-3. ADMINはCloudflare Workers BuildsがGitHub `main`のマージを検知してビルド・デプロイする
-4. `build-info.json`、Cloudflare Version、100%配信を確認する
-5. Chromeで`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`などを確認する
-
-`npm run deploy:admin`は、Workers Buildsが利用できない緊急時に、固定SHA・明示承認・事後記録の条件を満たす場合だけ使用する。feature branch、未コミット変更、Dashboard Editorからの本番Uploadには使用しない。
-
-手動経路は`DEPLOY_MAIN_SHA=$(git rev-parse HEAD) npm run deploy:admin`の形式で実行する。SHA省略、main以外のbranch、未コミット変更は自動的に停止する。
-
-ADMINのCloudflare Workers Buildsは、GitHub `Atlasez/Admin-Atlesez` の`main`だけをProduction branchとして使用する。Dashboard Editorからの手動Upload、Workers.dev URLの確認、ローカルfeature branchからの直接デプロイは本番手順ではない。Build cacheは無効のまま維持する。
-
-各ビルドは`/build-info.json`へcommit SHAを埋め込む。デプロイ後に対象SHAと一致しない場合は、本番完了とみなさず停止する。Cloudflare Git連携が内部エラーで未接続の場合、マージだけでは本番反映済みとみなさない。
-
-CloudflareのProduction Deploymentと公開`build-info.json`は、15分ごとにGitHub Actionsが読み取り、差分がある場合だけ[定期同期PR](DEPLOYMENT_SYNC.md)へ記録する。同期PRは監査証跡であり、CloudflareへのDeployや自動Mergeは行わない。
+3. 公開サイトは `npm run deploy:public`
+4. 運営用サイトは `npm run deploy:admin`
+5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
 デプロイコマンドには本番ターゲット検証が組み込まれているため、Worker名・アカウント・ルート・D1が違う設定では停止します。CIでも同じ検証を実行します。
 

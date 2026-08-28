@@ -9,7 +9,9 @@ const baseAdminMocks = async (page: Page) => {
   );
 };
 
-test("大元マイページは基本情報を承認申請として送る", async ({ page }) => {
+test("マイページは基本情報を表示し、編集画面から公開プロフィールを承認申請する", async ({
+  page,
+}) => {
   await baseAdminMocks(page);
   let submitted: Record<string, unknown> | null = null;
   await page.route("**/api/admin/profile", async (route) => {
@@ -20,11 +22,11 @@ test("大元マイページは基本情報を承認申請として送る", async
     }
     await route.fulfill({
       json: {
-        email: "member@example.com",
+        email: "hanako@school.example",
         profile: {
           display_name: "山田 花子",
           university: "Atlasez大学",
-          year: "2年",
+          year: "B2",
           affiliation_type: "student",
           country: "日本",
           timezone: "Asia/Tokyo",
@@ -36,22 +38,24 @@ test("大元マイページは基本情報を承認申請として送る", async
   });
 
   await page.goto("admin/member-profile/");
-  await expect(page.getByLabel("運営外自己紹介")).toHaveValue(
+  await expect(page.getByRole("heading", { name: "山田 花子" })).toBeVisible();
+  await expect(page.locator("[data-email]")).toHaveText(
+    "hanako@school.example",
+  );
+  await expect(page.locator("[data-university]")).toHaveValue("Atlasez大学");
+  await expect(page.locator("[data-year]")).toHaveValue("B2");
+  await expect(page.locator("[data-bio]")).toHaveValue(
     "運営外向けプロフィール",
   );
-  await expect(page.getByText("担当原稿")).toHaveCount(0);
-  await expect(page.getByText("個人メモ")).toHaveCount(0);
-  await page.getByLabel("国・地域").fill("ネパール");
-  await page.getByLabel("タイムゾーン").fill("Asia/Kathmandu");
+  await expect(page.locator("[data-display-name]")).toHaveValue("山田 花子");
+  await page.locator("[data-bio]").fill("更新した公開プロフィール");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-message]")).toContainText(
     "運営事務局へ送りました",
   );
   expect(submitted).toMatchObject({
     displayName: "山田 花子",
-    country: "ネパール",
-    timezone: "Asia/Kathmandu",
-    bio: "運営外向けプロフィール",
+    bio: "更新した公開プロフィール",
   });
 });
 
@@ -119,9 +123,26 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
   );
 
   await page.goto("admin/member-tasks/");
+  await expect(page.locator("[data-scroll-create]")).toBeVisible();
+  await page.locator("[data-scroll-create]").click();
+  await expect(page.locator("[data-title]")).toBeFocused();
+  await expect(page.locator("[data-summary-total]")).toHaveText("2");
+  await expect(page.locator("[data-summary-open]")).toHaveText("1");
+  await expect(page.locator("[data-summary-doing]")).toHaveText("1");
+  await expect(page.locator("[data-summary-done]")).toHaveText("0");
+  await expect(page.locator('[data-filter="assigned"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await expect(page.getByText("記事を査読する")).toBeVisible();
   await expect(page.getByText("名簿を更新する")).toBeVisible();
+  await expect(page.locator(".project-filters label").first()).toHaveCSS(
+    "border-radius",
+    "999px",
+  );
   const firstTask = page.locator(".task").filter({ hasText: "記事を査読する" });
+  await expect(firstTask).toHaveCSS("display", "grid");
+  await expect(firstTask.locator(".task-actions")).toHaveCSS("display", "grid");
   await firstTask.locator("select").selectOption("done");
   const updateRequest = page.waitForRequest("**/api/admin/operations/tasks/*");
   await firstTask.getByRole("button", { name: "状態を保存" }).click();
@@ -208,7 +229,7 @@ test("運営事務局でプロフィール変更を承認できる", async ({ pa
 
   await page.goto("admin/profile-requests/");
   await expect(page.getByRole("heading", { name: "山田 花子" })).toBeVisible();
-  await page.getByRole("button", { name: "承認", exact: true }).click();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
   expect(action).toBe("approve");
 });
 
@@ -239,7 +260,47 @@ test("運営事務局でプロフィール変更を却下できる", async ({ pa
   );
 
   await page.goto("admin/profile-requests/");
-  await page.getByLabel("承認・却下メモ").fill("所属情報を再確認してください");
-  await page.getByRole("button", { name: "却下", exact: true }).click();
+  await page
+    .getByLabel("処理メモ（任意）")
+    .fill("所属情報を再確認してください");
+  await page.getByRole("button", { name: "却下する", exact: true }).click();
   expect(action).toBe("reject");
+});
+
+test("統合された学習サイトの運営内自己紹介を承認できる", async ({ page }) => {
+  await baseAdminMocks(page);
+  let action = "";
+  let reviewUrl = "";
+  await page.route(
+    "**/api/admin/project-profile-change-requests/*",
+    async (route) => {
+      action = (route.request().postDataJSON() as { action: string }).action;
+      reviewUrl = route.request().url();
+      await route.fulfill({ json: { ok: true, status: "approved" } });
+    },
+  );
+  await page.route("**/api/admin/profile-change-requests?**", (route) =>
+    route.fulfill({
+      json: {
+        requests: [],
+        atlasInternalBioRequests: [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            email: "member@example.com",
+            display_name: "申請メンバー",
+            current_internal_bio: "変更前",
+            proposed_internal_bio: "変更後",
+            status: "pending",
+            submitted_at: "2026-08-22T10:00:00.000Z",
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("admin/profile-requests/?section=atlas");
+  await expect(page.getByText("変更後", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
+  expect(action).toBe("approve");
+  expect(reviewUrl).toContain("/api/admin/project-profile-change-requests/");
 });

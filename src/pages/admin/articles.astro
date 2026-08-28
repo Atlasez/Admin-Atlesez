@@ -1,5 +1,34 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import { getCollection } from "astro:content";
+
+const subjects = (await getCollection("subjects"))
+  .sort((left, right) => left.data.order - right.data.order)
+  .map((subject) => ({
+    slug: subject.data.slug,
+    name: subject.data.name.ja,
+    categories: subject.data.categories
+      .slice()
+      .sort((left, right) => left.order - right.order),
+  }));
+const categoryMap = new Map<string, { slug: string; name: string; subjects: string[] }>();
+for (const subject of subjects) {
+  for (const category of subject.categories) {
+    const existing = categoryMap.get(category.slug);
+    if (existing) {
+      if (!existing.subjects.includes(subject.slug)) existing.subjects.push(subject.slug);
+    } else {
+      categoryMap.set(category.slug, {
+        slug: category.slug,
+        name: category.name.ja,
+        subjects: [subject.slug],
+      });
+    }
+  }
+}
+const categories = [...categoryMap.values()].sort((left, right) =>
+  left.name.localeCompare(right.name, "ja"),
+);
 ---
 
 <AdminLayout title="編集・フィードバック" description="原稿の編集・フィードバックと状態管理">
@@ -12,31 +41,63 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <nav class="workflow-actions" aria-label="編集・フィードバックの作業入口">
       <a href="/admin/editor/?new=1&from=articles"><strong>新規記事作成</strong></a>
       <button type="button" data-workflow-action="revise"><strong>加筆・修正</strong></button>
-      <button type="button" data-workflow-action="review"><strong>査読</strong></button>
+      <button type="button" data-workflow-action="review"><strong>フィードバック</strong></button>
     </nav>
-    <section class="filters" id="article-list">
-      <input data-query placeholder="タイトル・分野・カテゴリで検索" /><select
-        data-status
-      >
-        <option value="all">すべての状態</option>
-        <option value="draft">下書き</option>
-        <option value="in-review">フィードバック中</option>
-        <option value="on-hold">保留</option>
-        <option value="approved">フィードバック済み</option></select
-      ><select data-public>
-        <option value="all">公開状況：すべて</option>
-        <option value="published">公開済み</option>
-        <option value="unpublished">未公開</option></select
-      ><select data-test>
-        <option value="exclude">テスト原稿を除く</option>
-        <option value="all">テスト原稿を含む</option>
-        <option value="only">テスト原稿のみ</option></select
-      ><select data-workflow-filter aria-label="作業対象">
-        <option value="all">作業対象：すべて</option>
-        <option value="revise">作業対象：自分が加筆・修正する記事</option>
-        <option value="review">作業対象：フィードバック対象</option>
-        <option value="request">作業対象：フィードバックを依頼する記事</option></select
-      ><output data-count></output>
+    <section class="filters" id="article-list" aria-label="原稿一覧の絞り込み">
+      <label class="filter-control filter-control-search">
+        <span>キーワード</span>
+        <input data-query placeholder="タイトル・分野・カテゴリで検索" />
+      </label>
+      <label class="filter-control">
+        <span>分野</span>
+        <select data-subject>
+          <option value="all">すべての分野</option>
+          {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>カテゴリ</span>
+        <select data-category>
+          <option value="all">すべてのカテゴリ</option>
+          {categories.map((category) => <option value={category.slug} data-subjects={category.subjects.join(",")}>{category.name}</option>)}
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>状態</span>
+        <select data-status>
+          <option value="all">すべての状態</option>
+          <option value="draft">下書き</option>
+          <option value="in-review">フィードバック中</option>
+          <option value="on-hold">保留</option>
+          <option value="approved">フィードバック済み</option>
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>公開状況</span>
+        <select data-public>
+          <option value="all">公開状況：すべて</option>
+          <option value="published">公開済み</option>
+          <option value="unpublished">未公開</option>
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>テスト原稿</span>
+        <select data-test>
+          <option value="exclude">テスト原稿を除く</option>
+          <option value="all">テスト原稿を含む</option>
+          <option value="only">テスト原稿のみ</option>
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>作業対象</span>
+        <select data-workflow-filter aria-label="作業対象">
+          <option value="all">作業対象：すべて</option>
+          <option value="revise">作業対象：自分が加筆・修正する記事</option>
+          <option value="review">作業対象：フィードバック対象</option>
+          <option value="request">作業対象：フィードバックを依頼する記事</option>
+        </select>
+      </label>
+      <output data-count></output>
     </section>
     <section class="list" data-list>原稿一覧を取得しています…</section>
   </main>
@@ -123,6 +184,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     color: var(--accent-primary);
   }
   .filters {
+    align-items: end;
     display: flex;
     flex-wrap: wrap;
     gap: 0.6rem;
@@ -137,6 +199,24 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   }
   .filters input {
     flex: 1 1 18rem;
+  }
+  .filter-control {
+    display: grid;
+    flex: 1 1 10rem;
+    gap: 0.3rem;
+    min-width: 9rem;
+  }
+  .filter-control-search {
+    flex-basis: 18rem;
+  }
+  .filter-control > span {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+  .filter-control input,
+  .filter-control select {
+    width: 100%;
   }
   .filters output {
     align-self: center;
@@ -240,6 +320,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     padding: 0.75rem 1rem;
   }
   .filters {
+    align-items: end;
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
     border-radius: 1rem;
@@ -279,8 +360,13 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       padding: 2.5rem 0 1.35rem;
     }
     .filters {
+      align-items: stretch;
       border-radius: 0.75rem;
       padding: 0.8rem;
+    }
+    .filter-control,
+    .filter-control-search {
+      flex-basis: 100%;
     }
     .admin-page > header:not(.admin-nav),
     .article {
@@ -324,12 +410,34 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     font-size: 0.72rem;
     margin-top: 0.18rem;
   }
+  .article-presence {
+    align-items: center;
+    color: #167346;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 800;
+    gap: 0.28rem;
+    margin-left: 0.45rem;
+  }
+  .presence-dot {
+    background: #22a45a;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0.18rem #22a45a24;
+    display: inline-block;
+    height: 0.48rem;
+    width: 0.48rem;
+  }
   .badges {
     gap: 0.25rem;
   }
   .badge {
     font-size: 0.64rem;
     padding: 0.14rem 0.32rem;
+  }
+  .badge.editing {
+    background: #e3f6ea;
+    border-color: #9ad5ae;
+    color: #167346;
   }
   .article {
     color: var(--text);
@@ -372,13 +480,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   }
 </style>
 <script>
-  type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null};
+  type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
     root.dataset.ready = "true";
     const list = root.querySelector<HTMLElement>("[data-list]")!;
     const query = root.querySelector<HTMLInputElement>("[data-query]")!;
+    const subject = root.querySelector<HTMLSelectElement>("[data-subject]")!;
+    const category = root.querySelector<HTMLSelectElement>("[data-category]")!;
     const status = root.querySelector<HTMLSelectElement>("[data-status]")!;
     const publication = root.querySelector<HTMLSelectElement>("[data-public]")!;
     const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
@@ -393,12 +503,39 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const labels = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" };
     const isTest = (article: Article) => /(^|[\\s_-])test($|[\\s_-])|テスト/i.test(article.title);
     const assignedToScope = (article: Article) => article.reviewer_email?.split(",").some((email) => email.trim().toLowerCase() === scopeEmail.toLowerCase()) ?? false;
+    const activeEditorFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
+    const activeEditorsFor = (article: Article) => (article.active_editors ?? []).filter((editor) => editor && typeof editor.displayName === "string");
+    const activeEditorLabel = (editor: { displayName: string; email: string; field: string }) => {
+      const name = editor.displayName.trim() || editor.email.split("@")[0] || "メンバー";
+      const field = activeEditorFieldLabels[editor.field];
+      return `${name}${field ? `（${field}）` : ""}`;
+    };
+    const activeEditorSummary = (article: Article) => {
+      const editors = activeEditorsFor(article);
+      if (!editors.length) return "";
+      const labels = editors.slice(0, 3).map(activeEditorLabel);
+      if (editors.length > labels.length) labels.push(`ほか${editors.length - labels.length}人`);
+      return `編集中：${labels.join("、")}`;
+    };
     const currentWorkflow = () => workflow.value as "all" | "revise" | "review" | "request";
+    const updateCategoryOptions = () => {
+      const selectedSubject = subject.value;
+      const selectedCategory = category.value;
+      for (const option of category.options) {
+        if (option.value === "all") {
+          option.hidden = false;
+          continue;
+        }
+        const subjectsForCategory = option.dataset.subjects?.split(",") ?? [];
+        option.hidden = selectedSubject !== "all" && !subjectsForCategory.includes(selectedSubject);
+      }
+      if (selectedCategory !== "all" && category.selectedOptions[0]?.hidden) category.value = "all";
+    };
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const render = () => {
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
-      const filtered = items.filter((article) => (mode !== "review" || article.status !== "approved") && (mode !== "request" || ([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) && (status.value === "all" || article.status === status.value) && (publication.value === "all" || (publication.value === "published" ? Boolean(article.published_at) : !article.published_at)) && (test.value === "all" || (test.value === "only" ? isTest(article) : !isTest(article))) && `${article.title} ${article.subject} ${article.category}`.toLowerCase().includes(normalizedQuery));
+      const filtered = items.filter((article) => (mode !== "review" || article.status !== "approved") && (mode !== "request" || ([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) && (subject.value === "all" || article.subject === subject.value) && (category.value === "all" || article.category === category.value) && (status.value === "all" || article.status === status.value) && (publication.value === "all" || (publication.value === "published" ? Boolean(article.published_at) : !article.published_at)) && (test.value === "all" || (test.value === "only" ? isTest(article) : !isTest(article))) && `${article.title} ${article.subject} ${article.category}`.toLowerCase().includes(normalizedQuery));
       const sorted = [...filtered].sort((left, right) => {
         const leftPriority = (mode === "revise" || mode === "request") && [left.created_by, left.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(left) ? 0 : 1;
         const rightPriority = (mode === "revise" || mode === "request") && [right.created_by, right.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(right) ? 0 : 1;
@@ -409,7 +546,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       // 原稿自身のIDをキーにする（以前は新規原稿同士が一覧から消えていた）。
       const shown = [...new Map(sorted.map((article) => [article.source_article_id || article.id, article])).values()];
       count.textContent = `${shown.length}件`;
-      list.innerHTML = shown.length ? shown.map((article) => `<article class="article" role="link" tabindex="0" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
+      list.innerHTML = shown.length ? shown.map((article) => {
+        const editing = activeEditorsFor(article);
+        const editingSummary = activeEditorSummary(article);
+        const editingBadge = editing.length ? `<span class="badge editing" aria-label="${editing.length}人が編集中">● ${editing.length}人が編集中</span>` : "";
+        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`;
+      }).join("") : "<p>条件に一致する原稿はありません。</p>";
       updateWorkflowButtons();
     };
     const load = async () => {
@@ -426,15 +568,20 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       }
     };
     window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
-    [query, status, publication, test, workflow].forEach((element) => element.addEventListener("input", render));
+    subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
+    [query, category, status, publication, test, workflow].forEach((element) => element.addEventListener("input", render));
     root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.addEventListener("click", () => {
       workflow.value = button.dataset.workflowAction ?? "all";
       history.replaceState({}, "", `${location.pathname}?mode=${encodeURIComponent(workflow.value)}#article-list`);
       render();
       root.querySelector("#article-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
+    updateCategoryOptions();
     void load();
     window.addEventListener("pageshow", () => { void load(); });
+    const refreshPresence = () => { if (document.visibilityState === "visible") void load(); };
+    window.setInterval(refreshPresence, 15_000);
+    document.addEventListener("visibilitychange", refreshPresence);
   };
   document.addEventListener("astro:page-load", initializeArticleIndex);
   initializeArticleIndex();

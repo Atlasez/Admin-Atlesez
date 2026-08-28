@@ -96,7 +96,7 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   await page.getByLabel("運営内自己紹介").fill("更新後の運営内自己紹介");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-profile-message]")).toContainText(
-    "承認タスクを送りました",
+    "運営事務局へ承認申請を送りました",
   );
   expect(getSavedProjectProfile()).toMatchObject({
     projectId: "atlas",
@@ -184,11 +184,11 @@ test("プロジェクト運営は運営内自己紹介を承認・却下でき�
       await route.fulfill({ json: { ok: true, status: action } });
     },
   );
-  await page.route("**/api/admin/project-profile-change-requests?**", (route) =>
+  await page.route("**/api/admin/profile-change-requests?**", (route) =>
     route.fulfill({
       json: {
-        project: { id: "atlas", name: "アトラス" },
-        requests: [
+        requests: [],
+        atlasInternalBioRequests: [
           {
             id: "77777777-7777-4777-8777-777777777777",
             email: "member@example.com",
@@ -203,9 +203,9 @@ test("プロジェクト運営は運営内自己紹介を承認・却下でき�
     }),
   );
 
-  await page.goto("admin/project-profile-requests/?project=atlas");
+  await page.goto("admin/profile-requests/?section=atlas");
   await expect(page.getByText("変更後", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "承認", exact: true }).click();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
   expect(action).toBe("approve");
 });
 

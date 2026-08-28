@@ -1,6 +1,42 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("A/D 原稿一覧の作業導線", () => {
+  test("運営トップを指定どおり4グループに分け、プロジェクト側マイページを表示しない", async ({
+    page,
+  }) => {
+    await page.goto("admin/atlas/");
+
+    const groups = page.locator("[data-menu-group]");
+    await expect(groups).toHaveCount(4);
+    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
+    await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
+    await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(3);
+    await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(1);
+    await expect(
+      groups.nth(2).getByRole("link", { name: /規則を開く/ }),
+    ).toHaveAttribute("href", "/admin/rules/");
+    await expect(
+      page.locator("[data-admin-atlas-menu] .menu-groups"),
+    ).not.toContainText("マイページ");
+    await expect(
+      page.getByRole("link", { name: /閲覧統計を開く/ }),
+    ).toHaveAttribute("href", "/admin/analytics/");
+  });
+
+  test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
+    page,
+  }) => {
+    await page.goto("admin/rules/");
+
+    await expect(
+      page.getByRole("heading", { name: "規則", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".rule-section")).toHaveCount(6);
+    await expect(
+      page.getByRole("link", { name: /作業の進め方を確認する/ }),
+    ).toHaveAttribute("href", "/admin/guide/");
+  });
+
   test("プロジェクトHomeでは原稿一覧だけを入口にする", async ({ page }) => {
     await page.goto("admin/atlas/");
 
@@ -26,7 +62,9 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("button", { name: /加筆・修正/ }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /^査読/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /フィードバック/ }),
+    ).toBeVisible();
     await expect(page.locator("[data-workflow-action]")).toHaveCount(2);
     await expect(page.locator("[data-workflow-filter]")).toHaveValue("all");
     await expect(page.locator(".article-view-tabs")).toHaveCount(0);
@@ -34,6 +72,106 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
+  });
+
+  test("D-2: 原稿一覧で現在編集中のメンバーと項目を確認できる", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "presence-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "編集中の記事",
+              status: "draft",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+              active_editors: [
+                {
+                  sessionId: "session-1",
+                  email: "bob@example.com",
+                  displayName: "山田花子",
+                  field: "body",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=presence");
+
+    const card = page.locator('[data-document-id="presence-doc"]');
+    await expect(card).toContainText("編集中：山田花子（本文）");
+    await expect(card.locator(".badge.editing")).toHaveText(/1人が編集中/);
+    await expect(card).toHaveAttribute("aria-label", /編集中/);
+  });
+
+  test("D-3: 原稿一覧を分野とカテゴリで絞り込める", async ({ page }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "ring-doc",
+              subject: "mathematics",
+              category: "ring-theory",
+              title: "環論の記事",
+              status: "draft",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "group-doc",
+              subject: "mathematics",
+              category: "group-theory",
+              title: "群論の記事",
+              status: "draft",
+              updated_at: "2026-08-27T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "physics-doc",
+              subject: "physics",
+              category: "newtonian-mechanics",
+              title: "力学の記事",
+              status: "draft",
+              updated_at: "2026-08-26T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=taxonomy-filter");
+
+    await expect(page.locator("[data-subject] option")).toHaveCount(24);
+    await expect(page.locator("[data-category] option")).toContainText([
+      "すべてのカテゴリ",
+      "環論",
+    ]);
+    await page.locator("[data-subject]").selectOption("mathematics");
+    await expect(page.locator("[data-list] .article")).toHaveCount(2);
+    await expect(page.locator("[data-list]")).toContainText("環論の記事");
+    await expect(page.locator("[data-list]")).toContainText("群論の記事");
+    await expect(page.locator("[data-list]")).not.toContainText("力学の記事");
+
+    await page.locator("[data-category]").selectOption("ring-theory");
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
+    await expect(page.locator("[data-list]")).toContainText("環論の記事");
+    await expect(page.locator("[data-list]")).not.toContainText("群論の記事");
+    await expect(page.locator("[data-count]")).toHaveText("1件");
+
+    await page.locator("[data-subject]").selectOption("all");
+    await expect(page.locator("[data-category]")).toHaveValue("ring-theory");
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
   });
 
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
