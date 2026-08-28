@@ -239,7 +239,9 @@ test("運営事務局でプロフィール変更を却下できる", async ({ pa
   );
 
   await page.goto("admin/profile-requests/");
-  await page.getByLabel("処理メモ（任意）").fill("所属情報を再確認してください");
+  await page
+    .getByLabel("処理メモ（任意）")
+    .fill("所属情報を再確認してください");
   await page.getByRole("button", { name: "却下する", exact: true }).click();
   expect(action).toBe("reject");
 });
@@ -248,11 +250,14 @@ test("統合された学習サイトの運営内自己紹介を承認できる",
   await baseAdminMocks(page);
   let action = "";
   let reviewUrl = "";
-  await page.route("**/api/admin/project-profile-change-requests/*", async (route) => {
-    action = (route.request().postDataJSON() as { action: string }).action;
-    reviewUrl = route.request().url();
-    await route.fulfill({ json: { ok: true, status: "approved" } });
-  });
+  await page.route(
+    "**/api/admin/project-profile-change-requests/*",
+    async (route) => {
+      action = (route.request().postDataJSON() as { action: string }).action;
+      reviewUrl = route.request().url();
+      await route.fulfill({ json: { ok: true, status: "approved" } });
+    },
+  );
   await page.route("**/api/admin/profile-change-requests?**", (route) =>
     route.fulfill({
       json: {

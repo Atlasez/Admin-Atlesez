@@ -1,8 +1,10 @@
 const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (character) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
-      character
-    ] ?? character),
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ] ?? character,
   );
 
 const splitTrailingPunctuation = (value: string) => {
@@ -18,12 +20,14 @@ const isSafeLink = (value: string) => /^https?:\/\//i.test(value);
 export const renderSafeLinks = (value: string) => {
   const tokens: string[] = [];
   const addLink = (label: string, destination: string, trailing = "") => {
-    const { clean, trailing: punctuation } = splitTrailingPunctuation(destination);
+    const { clean, trailing: punctuation } =
+      splitTrailingPunctuation(destination);
     if (!isSafeLink(clean)) return escapeHtml(`[${label}](${destination})`);
     const displayedLabel = label === destination ? clean : label;
-    const index = tokens.push(
-      `<a href="${escapeHtml(clean)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedLabel)}</a>`,
-    ) - 1;
+    const index =
+      tokens.push(
+        `<a href="${escapeHtml(clean)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedLabel)}</a>`,
+      ) - 1;
     return `\u0000${index}\u0000${escapeHtml(trailing || punctuation)}`;
   };
 
@@ -34,7 +38,8 @@ export const renderSafeLinks = (value: string) => {
   text = text.replace(/https?:\/\/[^\s<\u0000]+/gi, (destination) =>
     addLink(destination, destination),
   );
-  return escapeHtml(text).replace(/\u0000(\d+)\u0000/g, (_match, index: string) =>
-    tokens[Number(index)] ?? "",
+  return escapeHtml(text).replace(
+    /\u0000(\d+)\u0000/g,
+    (_match, index: string) => tokens[Number(index)] ?? "",
   );
 };
