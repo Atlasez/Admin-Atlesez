@@ -491,6 +491,7 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 // separate report_admin_permissions check below.
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
+const GOOGLE_LINK_STATE_COOKIE = "atlasez_google_account_link_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
 const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1_000;
 const json = (body: unknown, status = 200) =>
@@ -755,6 +756,133 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
   );
 };
 
+class GoogleIdentityConflictError extends Error {}
+
+async function accountById(
+  env: Env,
+  accountId: string,
+): Promise<{ id: string; canonical_email: string } | null> {
+  return env.REPORTS.prepare(
+    "SELECT id,canonical_email FROM atlasez_accounts WHERE id = ?",
+  )
+    .bind(accountId)
+    .first();
+}
+
+async function accountByEmail(
+  env: Env,
+  email: string,
+): Promise<{ id: string; canonical_email: string } | null> {
+  return env.REPORTS.prepare(
+    `SELECT a.id,a.canonical_email
+     FROM atlasez_accounts a
+     LEFT JOIN atlasez_google_identities g ON g.account_id=a.id
+     WHERE lower(a.canonical_email)=lower(?) OR lower(g.email)=lower(?)
+     LIMIT 1`,
+  )
+    .bind(email, email)
+    .first();
+}
+
+async function ensureAtlasezAccount(
+  env: Env,
+  email: string,
+): Promise<{ id: string; canonical_email: string }> {
+  const existing = await accountByEmail(env, email);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT OR IGNORE INTO atlasez_accounts (id,canonical_email,created_at,updated_at)
+     VALUES (?,?,?,?)`,
+  )
+    .bind(crypto.randomUUID(), email.toLowerCase(), now, now)
+    .run();
+  const created = await accountByEmail(env, email);
+  if (!created) throw new Error("Atlasezアカウントを作成できませんでした。");
+  return created;
+}
+
+async function googleIdentityBySubject(
+  env: Env,
+  subject: string,
+): Promise<{
+  google_subject: string;
+  account_id: string;
+  email: string;
+} | null> {
+  return env.REPORTS.prepare(
+    "SELECT google_subject,account_id,email FROM atlasez_google_identities WHERE google_subject=?",
+  )
+    .bind(subject)
+    .first();
+}
+
+async function googleIdentityByEmail(
+  env: Env,
+  email: string,
+): Promise<{
+  google_subject: string;
+  account_id: string;
+  email: string;
+} | null> {
+  return env.REPORTS.prepare(
+    "SELECT google_subject,account_id,email FROM atlasez_google_identities WHERE lower(email)=lower(?)",
+  )
+    .bind(email)
+    .first();
+}
+
+async function resolveGoogleAccount(
+  env: Env,
+  subject: string,
+  email: string,
+  expectedAccountId?: string,
+): Promise<{ id: string; canonical_email: string }> {
+  const [bySubject, byEmail] = await Promise.all([
+    googleIdentityBySubject(env, subject),
+    googleIdentityByEmail(env, email),
+  ]);
+  if (bySubject && byEmail && bySubject.account_id !== byEmail.account_id)
+    throw new GoogleIdentityConflictError("Google IDが別アカウントに属しています。");
+  if (
+    expectedAccountId &&
+    (bySubject?.account_id !== undefined && bySubject.account_id !== expectedAccountId ||
+      byEmail?.account_id !== undefined && byEmail.account_id !== expectedAccountId)
+  )
+    throw new GoogleIdentityConflictError(
+      "このGoogleアカウントは別のAtlasezアカウントに連携済みです。",
+    );
+  if (expectedAccountId && (bySubject || byEmail))
+    throw new GoogleIdentityConflictError("このGoogleアカウントはすでに連携されています。");
+  if (!expectedAccountId && byEmail && !bySubject)
+    throw new GoogleIdentityConflictError(
+      "このGoogleメールアドレスは別のGoogle IDに連携済みです。",
+    );
+  const account = expectedAccountId
+    ? await accountById(env, expectedAccountId)
+    : bySubject
+      ? await accountById(env, bySubject.account_id)
+      : await ensureAtlasezAccount(env, email);
+  if (!account) throw new Error("Atlasezアカウントが見つかりません。");
+  const now = new Date().toISOString();
+  if (bySubject) {
+    await env.REPORTS.prepare(
+      "UPDATE atlasez_google_identities SET email=?,last_login_at=? WHERE google_subject=?",
+    )
+      .bind(email, now, subject)
+      .run();
+    return account;
+  }
+  await env.REPORTS.prepare(
+    `INSERT INTO atlasez_google_identities
+       (google_subject,account_id,email,created_at,last_login_at)
+     VALUES (?,?,?,?,?)`,
+  )
+    .bind(subject, account.id, email, now, now)
+    .run();
+  return account;
+}
+
 /**
  * 認証方式の境界。現在はCloudflare Access、将来は同じ権限表のまま
  * Google OAuthのセッションへ切り替えられる。
@@ -778,11 +906,14 @@ async function getAuthenticatedEmail(
     const token = cookieValue(request, ADMIN_SESSION_COOKIE);
     if (token) {
       const session = await env.REPORTS.prepare(
-        "SELECT email FROM admin_auth_sessions WHERE session_hash = ? AND expires_at > ?",
+        `SELECT s.email,a.canonical_email
+         FROM admin_auth_sessions s
+         LEFT JOIN atlasez_accounts a ON a.id=s.account_id
+         WHERE s.session_hash = ? AND s.expires_at > ?`,
       )
         .bind(await hash(token), new Date().toISOString())
-        .first<{ email: string }>();
-      if (session?.email) return session.email;
+        .first<{ email: string; canonical_email: string | null }>();
+      if (session?.email) return session.canonical_email ?? session.email;
     }
   }
 
@@ -802,6 +933,19 @@ async function getAuthenticatedEmail(
     },
     401,
   );
+}
+
+async function getAuthenticatedAtlasezAccount(
+  request: Request,
+  env: Env,
+): Promise<{ id: string; canonical_email: string } | Response> {
+  const identity = await getAuthenticatedEmail(request, env);
+  if (isResponse(identity)) return identity;
+  try {
+    return await ensureAtlasezAccount(env, identity);
+  } catch {
+    return json({ error: "Atlasezアカウントを確認できませんでした。" }, 500);
+  }
 }
 
 async function getAdminScope(
@@ -8842,6 +8986,151 @@ async function completeSearchConsoleImport(
   );
 }
 
+async function listGoogleAccounts(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const account = await getAuthenticatedAtlasezAccount(request, env);
+  if (isResponse(account)) return account;
+  const result = await env.REPORTS.prepare(
+    `SELECT email,created_at,last_login_at
+     FROM atlasez_google_identities
+     WHERE account_id=?
+     ORDER BY created_at ASC, email ASC`,
+  )
+    .bind(account.id)
+    .all<{ email: string; created_at: string; last_login_at: string | null }>();
+  return json({
+    canonicalEmail: account.canonical_email,
+    identities: result.results ?? [],
+  });
+}
+
+async function startGoogleAccountLink(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
+    return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
+  const account = await getAuthenticatedAtlasezAccount(request, env);
+  if (isResponse(account)) return account;
+  const requestUrl = new URL(request.url);
+  const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authorization.search = new URLSearchParams({
+    client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+    redirect_uri: googleCallbackUrl(request, env),
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    prompt: "select_account",
+    access_type: "online",
+  }).toString();
+  const headers = new Headers({ location: authorization.toString() });
+  headers.append(
+    "set-cookie",
+    cookie(
+      GOOGLE_LINK_STATE_COOKIE,
+      JSON.stringify({
+        state,
+        accountId: account.id,
+        returnTo: adminReturnPath(requestUrl.searchParams.get("returnTo")),
+      }),
+      10 * 60,
+      "/auth/google",
+    ),
+  );
+  return new Response(null, { status: 302, headers });
+}
+
+const accountLinkResultUrl = (
+  request: Request,
+  returnTo: string | undefined,
+  result: string,
+) => {
+  const target = new URL(adminReturnPath(returnTo ?? null), request.url);
+  target.searchParams.set("accountLink", result);
+  return target.toString();
+};
+
+async function completeGoogleAccountLink(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
+    return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
+  let savedState: {
+    state?: string;
+    accountId?: string;
+    returnTo?: string;
+  } = {};
+  try {
+    savedState = JSON.parse(cookieValue(request, GOOGLE_LINK_STATE_COOKIE)) as typeof savedState;
+  } catch {
+    // 不正なCookieは連携失敗として扱う。
+  }
+  const fail = () =>
+    Response.redirect(
+      accountLinkResultUrl(request, savedState.returnTo, "error"),
+      302,
+    );
+  const code = new URL(request.url).searchParams.get("code") ?? "";
+  const state = new URL(request.url).searchParams.get("state") ?? "";
+  if (!code || !state || state !== savedState.state || !savedState.accountId)
+    return fail();
+  const currentAccount = await getAuthenticatedAtlasezAccount(request, env);
+  if (isResponse(currentAccount) || currentAccount.id !== savedState.accountId)
+    return fail();
+  let token: { access_token?: string };
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID ?? "",
+        client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET ?? "",
+        redirect_uri: googleCallbackUrl(request, env),
+        grant_type: "authorization_code",
+      }),
+    });
+    if (!tokenResponse.ok) throw new Error("token exchange failed");
+    token = (await tokenResponse.json()) as { access_token?: string };
+  } catch {
+    return fail();
+  }
+  if (!token.access_token) return fail();
+  let user: {
+    email?: string;
+    email_verified?: boolean;
+    sub?: string;
+  };
+  try {
+    const userResponse = await fetch(
+      "https://openidconnect.googleapis.com/v1/userinfo",
+      { headers: { authorization: `Bearer ${token.access_token}` } },
+    );
+    if (!userResponse.ok) throw new Error("userinfo failed");
+    user = (await userResponse.json()) as typeof user;
+  } catch {
+    return fail();
+  }
+  const email = user.email?.trim().toLowerCase() ?? "";
+  const subject = user.sub?.trim() ?? "";
+  if (!user.email_verified || !subject || !EMAIL_PATTERN.test(email))
+    return fail();
+  try {
+    await resolveGoogleAccount(env, subject, email, savedState.accountId);
+  } catch (error) {
+    if (error instanceof GoogleIdentityConflictError) return fail();
+    return fail();
+  }
+  return Response.redirect(
+    accountLinkResultUrl(request, savedState.returnTo, "linked"),
+    302,
+  );
+}
+
 async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
   if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
     return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
@@ -8896,6 +9185,16 @@ async function completeGoogleLogin(
       env,
       googleCallbackUrl(request, env),
     );
+  let linkState: { state?: string } = {};
+  try {
+    linkState = JSON.parse(
+      cookieValue(request, GOOGLE_LINK_STATE_COOKIE),
+    ) as typeof linkState;
+  } catch {
+    // Googleアカウント連携用Cookieがない通常ログインとして続行する。
+  }
+  if (code && state && state === linkState.state)
+    return completeGoogleAccountLink(request, env);
   let savedState: { state?: string; returnTo?: string } = {};
   try {
     savedState = JSON.parse(cookieValue(request, GOOGLE_STATE_COOKIE)) as {
@@ -8932,23 +9231,30 @@ async function completeGoogleLogin(
   if (!token.access_token)
     return json({ error: "Googleログインを完了できませんでした。" }, 502);
 
-  let user: { email?: string; email_verified?: boolean };
+  let user: { email?: string; email_verified?: boolean; sub?: string };
   try {
     const userResponse = await fetch(
       "https://openidconnect.googleapis.com/v1/userinfo",
       { headers: { authorization: `Bearer ${token.access_token}` } },
     );
     if (!userResponse.ok) throw new Error("userinfo failed");
-    user = (await userResponse.json()) as {
-      email?: string;
-      email_verified?: boolean;
-    };
+    user = (await userResponse.json()) as typeof user;
   } catch {
     return json({ error: "Googleアカウントを確認できませんでした。" }, 502);
   }
   const email = user.email?.trim().toLowerCase() ?? "";
-  if (!user.email_verified || !EMAIL_PATTERN.test(email))
+  const subject = user.sub?.trim() ?? "";
+  if (!user.email_verified || !subject || !EMAIL_PATTERN.test(email))
     return json({ error: "確認済みのGoogleメールアドレスが必要です。" }, 403);
+
+  let account: { id: string; canonical_email: string };
+  try {
+    account = await resolveGoogleAccount(env, subject, email);
+  } catch (error) {
+    if (error instanceof GoogleIdentityConflictError)
+      return json({ error: error.message }, 409);
+    return json({ error: "Atlasezアカウントを作成できませんでした。" }, 500);
+  }
 
   const sessionToken = `${crypto.randomUUID()}${crypto.randomUUID()}`;
   const now = new Date();
@@ -8959,11 +9265,13 @@ async function completeGoogleLogin(
     .bind(now.toISOString())
     .run();
   await env.REPORTS.prepare(
-    "INSERT INTO admin_auth_sessions (session_hash, email, expires_at, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO admin_auth_sessions (session_hash, email, account_id, google_subject, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   )
     .bind(
       await hash(sessionToken),
       email,
+      account.id,
+      subject,
       expiresAt.toISOString(),
       now.toISOString(),
     )
@@ -8972,7 +9280,7 @@ async function completeGoogleLogin(
   const requestedArea = userAreaForPath(
     new URL(requestedReturnTo, "https://admin.local").pathname,
   );
-  const stage = await getUserStageForEmail(email, env);
+  const stage = await getUserStageForEmail(account.canonical_email, env);
   const location =
     requestedArea && canAccess(stage.stage, requestedArea)
       ? requestedReturnTo
@@ -9099,17 +9407,17 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   const token = cookieValue(request, ADMIN_SESSION_COOKIE);
   const googleSession = token
     ? await env.REPORTS.prepare(
-        "SELECT email FROM admin_auth_sessions WHERE session_hash = ? AND expires_at > ?",
+        "SELECT email,account_id,google_subject FROM admin_auth_sessions WHERE session_hash = ? AND expires_at > ?",
       )
         .bind(await hash(token), new Date().toISOString())
-        .first<{ email: string }>()
+        .first<{ email: string; account_id: string | null; google_subject: string | null }>()
     : null;
   return json({
     email: identity,
     isManager: scope.isManager,
     managerProjects: (managerProjects.results ?? []).map((row) => row.id),
     googlePreviewEnabled: googleOAuthEnabled(env) && googleOAuthConfigured(env),
-    googleAuthenticated: googleSession?.email === identity,
+    googleAuthenticated: Boolean(googleSession?.email),
     authMode: authMode(env),
   });
 }
@@ -9595,6 +9903,8 @@ async function handleAdminRequest(
   }
   if (url.pathname === "/auth/google/login" && request.method === "GET")
     return startGoogleLogin(request, env);
+  if (url.pathname === "/auth/google/link" && request.method === "GET")
+    return startGoogleAccountLink(request, env);
   if (url.pathname === "/auth/google/callback" && request.method === "GET")
     return completeGoogleLogin(request, env);
   if (
@@ -9761,6 +10071,8 @@ async function handleAdminRequest(
     if (request.method === "PUT") return saveMyProfile(request, env);
     return json({ error: "GET、PUTのみ利用できます。" }, 405);
   }
+  if (url.pathname === "/api/admin/google-accounts" && request.method === "GET")
+    return listGoogleAccounts(request, env);
   if (url.pathname === "/api/admin/project-profile") {
     if (request.method === "GET") return getProjectMemberProfile(request, env);
     if (request.method === "PUT") return saveProjectMemberProfile(request, env);
