@@ -143,6 +143,7 @@ describe("admin worker editor APIs", () => {
 
   it("stores approved comment tags independently from the comment body", async () => {
     const executed: { query: string; values: unknown[] }[] = [];
+    const collaborationNotifications: Request[] = [];
     class RecordingStatement extends EmptyStatement {
       private values: unknown[] = [];
 
@@ -171,6 +172,15 @@ describe("admin worker editor APIs", () => {
     }
     const env = {
       ...emptyEnv,
+      EDITORIAL_COLLABORATION: {
+        idFromName: () => ({}),
+        get: () => ({
+          fetch: async (request: Request) => {
+            collaborationNotifications.push(request);
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          },
+        }),
+      },
       REPORTS: {
         ...emptyEnv.REPORTS,
         prepare: (query: string) => new RecordingStatement(query),
@@ -208,6 +218,11 @@ describe("admin worker editor APIs", () => {
     );
     expect(commentInsert?.values).toContain("定義を補足してください。");
     expect(commentInsert?.values).not.toContain("[定義不足]");
+    expect(collaborationNotifications).toHaveLength(1);
+    expect(collaborationNotifications[0]?.method).toBe("POST");
+    await expect(collaborationNotifications[0]?.json()).resolves.toEqual({
+      type: "comments-changed",
+    });
   });
 
   it("accepts a tag-only comment while rejecting a completely empty comment", async () => {

@@ -3,6 +3,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 
 const requestedProject = Astro.url.searchParams.get("project") ?? "atlas";
 const project = requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "seminar-platform" : "atlas";
+if (project === "atlas") return Astro.redirect("/admin/profile-requests/?section=atlas", 302);
 ---
 
 <AdminLayout title="運営内自己紹介の承認" description="プロジェクト内プロフィールの変更申請を処理します">

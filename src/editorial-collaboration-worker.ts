@@ -184,10 +184,25 @@ export class EditorialCollaborationRoom {
     }
   }
 
+  private broadcastCommentChange() {
+    const message = JSON.stringify({ type: "comments-changed" });
+    for (const socket of this.state.getWebSockets()) {
+      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     await this.initialize(request.headers.get("x-atlasez-document-id") ?? "");
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-      return json({ error: "WebSocket接続が必要です。" }, 426);
+      if (request.method !== "POST")
+        return json({ error: "WebSocket接続または通知POSTが必要です。" }, 426);
+      const payload = (await request.json().catch(() => null)) as {
+        type?: unknown;
+      } | null;
+      if (payload?.type !== "comments-changed")
+        return json({ error: "未知の通知です。" }, 400);
+      this.broadcastCommentChange();
+      return json({ ok: true });
     }
     const Pair = (
       globalThis as unknown as {
