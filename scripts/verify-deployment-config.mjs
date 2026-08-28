@@ -17,6 +17,8 @@ const targets = [
       '"account_id": "812021e62fa20465950b61be55dfe064"',
       '"name": "atlasez-admin"',
       '"pattern": "admin.atlasez.org"',
+      '"preview_urls": false',
+      '"workers_dev": false',
       '"PUBLIC_ANALYTICS_ORIGIN": "https://atlasez.org"',
       '"database_id": "d5112a62-7ed6-49c8-b6a2-18ee2dbab678"',
     ],

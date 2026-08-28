@@ -1,5 +1,7 @@
 # デプロイ（DEPLOYMENT）
 
+ADMIN本番の詳細な運用契約は [ADMIN_DEPLOYMENT_POLICY.md](ADMIN_DEPLOYMENT_POLICY.md) を正本とする。Agentは作業前にこの文書と`AGENTS.md`を読む。
+
 本番はCloudflare Workersで配信しています。Cloudflare Pagesや別アカウントのWorkerへはデプロイしません。
 
 | 対象                   | Worker          | URL                                               | D1                |
@@ -14,6 +16,10 @@
 3. 公開サイトは `npm run deploy:public`
 4. 運営用サイトは `npm run deploy:admin`
 5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
+
+ADMINのCloudflare Workers Buildsは、GitHub `Atlasez/Admin-Atlesez` の`main`だけをProduction branchとして使用する。Dashboard Editorからの手動Upload、Workers.dev URLの確認、ローカルfeature branchからの直接デプロイは本番手順ではない。Build cacheは無効のまま維持する。
+
+各ビルドは`/build-info.json`へcommit SHAを埋め込む。デプロイ後に対象SHAと一致しない場合は、本番完了とみなさず停止する。
 
 デプロイコマンドには本番ターゲット検証が組み込まれているため、Worker名・アカウント・ルート・D1が違う設定では停止します。CIでも同じ検証を実行します。
 
