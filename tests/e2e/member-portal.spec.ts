@@ -208,7 +208,7 @@ test("運営事務局でプロフィール変更を承認できる", async ({ pa
 
   await page.goto("admin/profile-requests/");
   await expect(page.getByRole("heading", { name: "山田 花子" })).toBeVisible();
-  await page.getByRole("button", { name: "承認", exact: true }).click();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
   expect(action).toBe("approve");
 });
 
@@ -239,7 +239,42 @@ test("運営事務局でプロフィール変更を却下できる", async ({ pa
   );
 
   await page.goto("admin/profile-requests/");
-  await page.getByLabel("承認・却下メモ").fill("所属情報を再確認してください");
-  await page.getByRole("button", { name: "却下", exact: true }).click();
+  await page.getByLabel("処理メモ（任意）").fill("所属情報を再確認してください");
+  await page.getByRole("button", { name: "却下する", exact: true }).click();
   expect(action).toBe("reject");
+});
+
+test("統合された学習サイトの運営内自己紹介を承認できる", async ({ page }) => {
+  await baseAdminMocks(page);
+  let action = "";
+  let reviewUrl = "";
+  await page.route("**/api/admin/project-profile-change-requests/*", async (route) => {
+    action = (route.request().postDataJSON() as { action: string }).action;
+    reviewUrl = route.request().url();
+    await route.fulfill({ json: { ok: true, status: "approved" } });
+  });
+  await page.route("**/api/admin/profile-change-requests?**", (route) =>
+    route.fulfill({
+      json: {
+        requests: [],
+        atlasInternalBioRequests: [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            email: "member@example.com",
+            display_name: "申請メンバー",
+            current_internal_bio: "変更前",
+            proposed_internal_bio: "変更後",
+            status: "pending",
+            submitted_at: "2026-08-22T10:00:00.000Z",
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("admin/profile-requests/?section=atlas");
+  await expect(page.getByText("変更後", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
+  expect(action).toBe("approve");
+  expect(reviewUrl).toContain("/api/admin/project-profile-change-requests/");
 });

@@ -90,6 +90,8 @@ const editorTheme = EditorView.theme({
     fontFamily: "var(--font-mono)",
     lineHeight: "1.7",
     overflow: "auto",
+    scrollbarGutter: "stable",
+    scrollbarWidth: "thin",
   },
   ".cm-content": {
     caretColor: "var(--editor-caret-color, var(--accent))",
@@ -180,13 +182,14 @@ const enhanceBodyEditor = (textarea) => {
     if (heightFrame) cancelAnimationFrame(heightFrame);
     heightFrame = requestAnimationFrame(() => {
       heightFrame = 0;
-      const contentHeight = Math.max(0, view.scrollDOM.scrollHeight);
-      const minHeight = 512;
-      const nextHeight = Math.max(minHeight, contentHeight + 32);
-      host.style.height = `${nextHeight}px`;
-      view.dom.style.height = `${nextHeight}px`;
-      view.scrollDOM.style.height = "auto";
-      view.scrollDOM.style.overflowY = "hidden";
+      // Keep the editor viewport fixed and let CodeMirror scroll internally.
+      // Expanding to the full document height made long articles push the
+      // workspace out of view and hid the only useful scrollbar.
+      host.style.height = "clamp(32rem, 66vh, 52rem)";
+      view.dom.style.height = "100%";
+      view.scrollDOM.style.height = "100%";
+      view.scrollDOM.style.overflowY = "auto";
+      view.scrollDOM.style.scrollbarGutter = "stable";
     });
   };
 
