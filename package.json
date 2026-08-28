@@ -10,6 +10,7 @@
     "dev:admin": "npx --yes wrangler dev --config wrangler.admin.local.jsonc --local --port 8787",
     "deploy:admin:collaboration": "wrangler deploy --config wrangler.editorial-collaboration.jsonc",
     "verify:deploy-config": "node scripts/verify-deployment-config.mjs",
+    "audit:cloudflare-deployments": "node scripts/record-cloudflare-deployments.mjs",
     "deploy:public": "npm run verify:deploy-config && node scripts/verify-deploy-context.mjs public && ATLASEZ_BUILD_TARGET=public SITE_URL=https://atlasez.org BASE_PATH=/ npm run build && wrangler deploy --config wrangler.jsonc --keep-vars",
     "deploy:admin": "npm run verify:deploy-config && node scripts/verify-deploy-context.mjs admin && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://atlasez.org BASE_PATH=/ npm run build && wrangler deploy --config wrangler.admin.jsonc --keep-vars",
     "db:reports:local": "npx --yes wrangler d1 migrations apply atlasez-reports-local --local --config wrangler.local.jsonc",

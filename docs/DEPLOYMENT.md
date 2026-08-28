@@ -25,6 +25,8 @@ ADMINのCloudflare Workers Buildsは、GitHub `Atlasez/Admin-Atlesez` の`main`�
 
 各ビルドは`/build-info.json`へcommit SHAを埋め込む。デプロイ後に対象SHAと一致しない場合は、本番完了とみなさず停止する。Cloudflare Git連携が内部エラーで未接続の場合、マージだけでは本番反映済みとみなさない。
 
+CloudflareのProduction Deploymentと公開`build-info.json`は、15分ごとにGitHub Actionsが読み取り、差分がある場合だけ[定期同期PR](DEPLOYMENT_SYNC.md)へ記録する。同期PRは監査証跡であり、CloudflareへのDeployや自動Mergeは行わない。
+
 デプロイコマンドには本番ターゲット検証が組み込まれているため、Worker名・アカウント・ルート・D1が違う設定では停止します。CIでも同じ検証を実行します。
 
 ## ビルド設定
