@@ -21,6 +21,8 @@ Cloudflare本番がGitHub `main`と一致しているかを、定期的にGitHub
 
 GitHub Actions Secret `CLOUDFLARE_API_TOKEN`を設定する。Tokenは対象AccountのWorkers Scripts Readだけを持つ読み取り専用Tokenとし、Deploy、Versions Upload、Versions Deploy、Routes、D1、Secretsの権限を付与しない。
 
+同期PRを作成するため、`GH_SYNC_TOKEN`も設定する。これは`Admin-Atlesez`だけを対象にしたFine-grained Tokenで、ContentsとPull requestsのRead and writeだけを持つ。組織全体のActions権限を変更する代替として使用し、他のリポジトリやCloudflare APIにはアクセスできない。有効期限は必ず設定し、期限前に同じ最小権限でローテーションする。
+
 Secretが未設定、API取得失敗、Source不明、`build-info.json`欠落の場合も、記録にはその状態を残す。コードの自動復元、自動Merge、自動Rollback、自動Promoteは行わない。
 
 ## PRの扱い
