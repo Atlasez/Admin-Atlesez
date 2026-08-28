@@ -118,6 +118,15 @@ const mergeParticipants = (items: CollaborationAttachment[]) => {
   return [...merged.values()];
 };
 
+const activeParticipants = (state: DurableObjectState) =>
+  mergeParticipants(
+    state
+      .getWebSockets()
+      .filter((socket) => socket.readyState === WebSocket.OPEN)
+      .map(collaborationAttachment)
+      .filter((item) => item.sessionId),
+  );
+
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -171,13 +180,7 @@ export class EditorialCollaborationRoom {
   }
 
   private broadcastPresence() {
-    const participants = mergeParticipants(
-      this.state
-        .getWebSockets()
-        .filter((socket) => socket.readyState === WebSocket.OPEN)
-        .map(collaborationAttachment)
-        .filter((item) => item.sessionId),
-    );
+    const participants = activeParticipants(this.state);
     const message = JSON.stringify({ type: "presence", participants });
     for (const socket of this.state.getWebSockets()) {
       if (socket.readyState === WebSocket.OPEN) socket.send(message);
@@ -192,6 +195,13 @@ export class EditorialCollaborationRoom {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // 一覧画面から現在接続中のメンバーだけを取得する。GETでは原稿本文を
+    // 初期化せず、接続中のWebSocketがない原稿のDOを不必要に読み込まない。
+    if (
+      request.method === "GET" &&
+      request.headers.get("upgrade")?.toLowerCase() !== "websocket"
+    )
+      return json({ participants: activeParticipants(this.state) });
     await this.initialize(request.headers.get("x-atlasez-document-id") ?? "");
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       if (request.method !== "POST")

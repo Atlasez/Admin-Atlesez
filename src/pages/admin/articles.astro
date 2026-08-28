@@ -324,12 +324,34 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     font-size: 0.72rem;
     margin-top: 0.18rem;
   }
+  .article-presence {
+    align-items: center;
+    color: #167346;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 800;
+    gap: 0.28rem;
+    margin-left: 0.45rem;
+  }
+  .presence-dot {
+    background: #22a45a;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0.18rem #22a45a24;
+    display: inline-block;
+    height: 0.48rem;
+    width: 0.48rem;
+  }
   .badges {
     gap: 0.25rem;
   }
   .badge {
     font-size: 0.64rem;
     padding: 0.14rem 0.32rem;
+  }
+  .badge.editing {
+    background: #e3f6ea;
+    border-color: #9ad5ae;
+    color: #167346;
   }
   .article {
     color: var(--text);
@@ -372,7 +394,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   }
 </style>
 <script>
-  type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null};
+  type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
@@ -393,6 +415,20 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const labels = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" };
     const isTest = (article: Article) => /(^|[\\s_-])test($|[\\s_-])|テスト/i.test(article.title);
     const assignedToScope = (article: Article) => article.reviewer_email?.split(",").some((email) => email.trim().toLowerCase() === scopeEmail.toLowerCase()) ?? false;
+    const activeEditorFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
+    const activeEditorsFor = (article: Article) => (article.active_editors ?? []).filter((editor) => editor && typeof editor.displayName === "string");
+    const activeEditorLabel = (editor: { displayName: string; email: string; field: string }) => {
+      const name = editor.displayName.trim() || editor.email.split("@")[0] || "メンバー";
+      const field = activeEditorFieldLabels[editor.field];
+      return `${name}${field ? `（${field}）` : ""}`;
+    };
+    const activeEditorSummary = (article: Article) => {
+      const editors = activeEditorsFor(article);
+      if (!editors.length) return "";
+      const labels = editors.slice(0, 3).map(activeEditorLabel);
+      if (editors.length > labels.length) labels.push(`ほか${editors.length - labels.length}人`);
+      return `編集中：${labels.join("、")}`;
+    };
     const currentWorkflow = () => workflow.value as "all" | "revise" | "review" | "request";
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const render = () => {
@@ -409,7 +445,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       // 原稿自身のIDをキーにする（以前は新規原稿同士が一覧から消えていた）。
       const shown = [...new Map(sorted.map((article) => [article.source_article_id || article.id, article])).values()];
       count.textContent = `${shown.length}件`;
-      list.innerHTML = shown.length ? shown.map((article) => `<article class="article" role="link" tabindex="0" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}</p></div><div class="badges"><span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`).join("") : "<p>条件に一致する原稿はありません。</p>";
+      list.innerHTML = shown.length ? shown.map((article) => {
+        const editing = activeEditorsFor(article);
+        const editingSummary = activeEditorSummary(article);
+        const editingBadge = editing.length ? `<span class="badge editing" aria-label="${editing.length}人が編集中">● ${editing.length}人が編集中</span>` : "";
+        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`;
+      }).join("") : "<p>条件に一致する原稿はありません。</p>";
       updateWorkflowButtons();
     };
     const load = async () => {
@@ -435,6 +476,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     }));
     void load();
     window.addEventListener("pageshow", () => { void load(); });
+    const refreshPresence = () => { if (document.visibilityState === "visible") void load(); };
+    window.setInterval(refreshPresence, 15_000);
+    document.addEventListener("visibilitychange", refreshPresence);
   };
   document.addEventListener("astro:page-load", initializeArticleIndex);
   initializeArticleIndex();

@@ -2505,19 +2505,27 @@ async function listEditorialDocuments(
   const documentRows = result.results ?? [];
   // 査読依頼テーブルは先行環境にも存在するが、古いローカルD1では
   // 未作成の場合があるため、一覧取得自体は依頼情報なしでも継続する。
-  const assignmentRows = documentRows.length
-    ? await env.REPORTS.prepare(
-        `SELECT r.document_id,
-                COALESCE(NULLIF((SELECT GROUP_CONCAT(rr.reviewer_email) FROM editorial_review_assignment_recipients rr WHERE rr.document_id = r.document_id), ''), r.reviewer_email) AS reviewer_email
-         FROM editorial_review_assignments r
-         WHERE r.document_id IN (${documentRows.map(() => "?").join(",")})`,
-      )
-        .bind(...documentRows.map((document) => document.id))
-        .all<{ document_id: string; reviewer_email: string }>()
-        .catch(() => ({
+  const [activeEditorsByDocument, assignmentRows] = await Promise.all([
+    listEditorialActiveEditors(
+      env,
+      documentRows.map((document) => document.id),
+    ),
+    documentRows.length
+      ? env.REPORTS.prepare(
+          `SELECT r.document_id,
+                  COALESCE(NULLIF((SELECT GROUP_CONCAT(rr.reviewer_email) FROM editorial_review_assignment_recipients rr WHERE rr.document_id = r.document_id), ''), r.reviewer_email) AS reviewer_email
+           FROM editorial_review_assignments r
+           WHERE r.document_id IN (${documentRows.map(() => "?").join(",")})`,
+        )
+          .bind(...documentRows.map((document) => document.id))
+          .all<{ document_id: string; reviewer_email: string }>()
+          .catch(() => ({
+            results: [] as { document_id: string; reviewer_email: string }[],
+          }))
+      : Promise.resolve({
           results: [] as { document_id: string; reviewer_email: string }[],
-        }))
-    : { results: [] as { document_id: string; reviewer_email: string }[] };
+        }),
+  ]);
   const reviewerByDocument = new Map(
     (assignmentRows.results ?? []).map((assignment) => [
       assignment.document_id,
@@ -2537,6 +2545,7 @@ async function listEditorialDocuments(
     documents: documentRows.map((document) => ({
       ...document,
       reviewer_email: reviewerByDocument.get(document.id) ?? null,
+      active_editors: activeEditorsByDocument.get(document.id) ?? [],
     })),
     mentionNames: (memberRows.results ?? []).map(
       (member) => member.display_name.trim() || member.email.split("@")[0],
@@ -9466,6 +9475,57 @@ async function connectEditorialCollaboration(
   const id = namespace.idFromName(documentId);
   return namespace.get(id).fetch(new Request(request, { headers }));
 }
+
+type EditorialActiveEditor = {
+  sessionId: string;
+  email: string;
+  displayName: string;
+  field: string;
+};
+
+const listEditorialActiveEditors = async (
+  env: Env,
+  documentIds: string[],
+): Promise<Map<string, EditorialActiveEditor[]>> => {
+  const namespace = env.EDITORIAL_COLLABORATION;
+  if (!namespace || !documentIds.length) return new Map();
+  const entries = await Promise.all(
+    documentIds.map(async (documentId) => {
+      try {
+        const response = await namespace
+          .get(namespace.idFromName(documentId))
+          .fetch(
+            new Request("https://atlasez-editorial-collaboration.internal/presence", {
+              method: "GET",
+              headers: { "x-atlasez-document-id": documentId },
+            }),
+          );
+        if (!response.ok)
+          return [documentId, [] as EditorialActiveEditor[]] as const;
+        const payload = (await response.json()) as {
+          participants?: EditorialActiveEditor[];
+        };
+        const participants = Array.isArray(payload.participants)
+          ? payload.participants.filter(
+              (participant): participant is EditorialActiveEditor =>
+                Boolean(
+                  participant &&
+                    typeof participant.sessionId === "string" &&
+                    typeof participant.email === "string" &&
+                    typeof participant.displayName === "string" &&
+                    typeof participant.field === "string",
+                ),
+            )
+          : [];
+        return [documentId, participants] as const;
+      } catch {
+        // 同時編集サービスが一時的に利用できなくても、原稿一覧は表示する。
+        return [documentId, [] as EditorialActiveEditor[]] as const;
+      }
+    }),
+  );
+  return new Map(entries);
+};
 
 async function notifyEditorialCommentChange(
   env: Env,

@@ -26,7 +26,9 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("button", { name: /加筆・修正/ }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: /^査読/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /フィードバック/ }),
+    ).toBeVisible();
     await expect(page.locator("[data-workflow-action]")).toHaveCount(2);
     await expect(page.locator("[data-workflow-filter]")).toHaveValue("all");
     await expect(page.locator(".article-view-tabs")).toHaveCount(0);
@@ -34,6 +36,46 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
+  });
+
+  test("D-2: 原稿一覧で現在編集中のメンバーと項目を確認できる", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "presence-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "編集中の記事",
+              status: "draft",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+              active_editors: [
+                {
+                  sessionId: "session-1",
+                  email: "bob@example.com",
+                  displayName: "山田花子",
+                  field: "body",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=presence");
+
+    const card = page.locator('[data-document-id="presence-doc"]');
+    await expect(card).toContainText("編集中：山田花子（本文）");
+    await expect(card.locator(".badge.editing")).toHaveText(
+      /1人が編集中/,
+    );
+    await expect(card).toHaveAttribute("aria-label", /編集中/);
   });
 
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
