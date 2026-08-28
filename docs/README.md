@@ -9,6 +9,7 @@
 | **[SITE_ADMINISTRATION.md](SITE_ADMINISTRATION.md)**         | **サイト全体の管理・引き継ぎマニュアル。管理担当者は最初に読むこと** |
 | **[ADMIN_KNOWLEDGE_BASE.md](ADMIN_KNOWLEDGE_BASE.md)**       | **本番構成・障害履歴・復旧手順・管理画面の現状**                     |
 | **[ADMIN_DEPLOYMENT_POLICY.md](ADMIN_DEPLOYMENT_POLICY.md)** | **ADMIN本番の正本・Git連携・SHA照合・Chrome確認・停止基準**          |
+| **[ADMIN_CHANGE_WORKFLOW.md](ADMIN_CHANGE_WORKFLOW.md)**     | **Agent向けの修正開始・検証・PR・マージ・デプロイ・障害時手順**      |
 
 ## 記事を書く・直す
 

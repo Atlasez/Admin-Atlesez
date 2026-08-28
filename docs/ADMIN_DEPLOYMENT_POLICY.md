@@ -2,6 +2,8 @@
 
 この文書は、ADMINサイトで「GitHubにあるコード」と「Cloudflareが配信する成果物」が再び別物になることを防ぐための、Agent・開発者共通の運用契約である。
 
+変更の具体的な進め方は[`ADMIN_CHANGE_WORKFLOW.md`](ADMIN_CHANGE_WORKFLOW.md)を読む。Agentはルートの`AGENTS.md`からこの2文書を必ず辿る。
+
 ## 1. 対象と正本
 
 | 項目               | 固定値                                                     |
@@ -39,6 +41,8 @@ Cloudflare Dashboardで次を設定・維持する。
 7. Production Worker URLとPreview URLは本番確認先として使わない。設定ファイルでも`workers_dev`と`preview_urls`を無効にする。
 
 GitHub ActionsにADMIN本番デプロイを追加しない。Cloudflare Workers BuildsとGitHub Actionsが異なるSHAを後からデプロイする二重経路を作らない。
+
+なお、Cloudflare DashboardのGit repository接続が内部エラーで未成立の間は、この正規経路は「復旧待ち」であり、本番自動デプロイ済みとはみなさない。接続復旧前に手動Uploadやfeature branchからのdeployで代替しない。
 
 ## 3. ビルド成果物の身元確認
 
