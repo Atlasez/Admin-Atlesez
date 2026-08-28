@@ -165,6 +165,10 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     };
     const searchParams = new URLSearchParams(location.search);
     const forceBasicStep = searchParams.get("step") === "basic";
+    const requestedReturnTo = searchParams.get("returnTo") ?? "";
+    const returnTo = requestedReturnTo === "/admin/member-profile" || requestedReturnTo.startsWith("/admin/member-profile/")
+      ? requestedReturnTo
+      : "";
     const projectSlug = resolveApplicationProjectSlug(location.pathname, location.search);
     const directProjectScreen = !forceBasicStep && (/^\/apply\/[^/]+\/?$/.test(location.pathname) || Boolean(searchParams.get("project")));
     const projectConfig = projectForms[projectSlug];
@@ -301,8 +305,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         form.setAttribute("aria-busy", "false");
       };
       const showBasicMode = (message = "") => {
-        projectTitle.textContent = "運営参加応募 / 基本情報";
-        projectIntro.textContent = "まず基本情報を登録し、その後に応募するプロジェクト固有の項目を入力します。基本情報は次回以降の応募でも再利用できます。";
+        projectTitle.textContent = returnTo ? "基本情報を変更" : "運営参加応募 / 基本情報";
+        projectIntro.textContent = returnTo ? "マイページで確認する基本情報を変更できます。保存後はマイページへ戻ります。" : "まず基本情報を登録し、その後に応募するプロジェクト固有の項目を入力します。基本情報は次回以降の応募でも再利用できます。";
         formDirectory.hidden = true;
         basicFieldset.hidden = false;
         projectFieldset.hidden = true;
@@ -311,6 +315,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         setFieldsetDisabled(basicFieldset, false);
         setFieldsetDisabled(projectFieldset, true);
         submitButton.hidden = true;
+        nextProjectButton.textContent = returnTo ? "変更を保存してマイページへ戻る" : "基本情報を保存して次へ";
         refreshRequiredMarkers();
         if (message) profileMessage.value = message;
         markReady();
@@ -341,6 +346,11 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         submitButton.hidden = false;
         refreshRequiredMarkers();
         markReady();
+        return;
+      }
+      if (forceBasicStep) {
+        if (profile) fillProfile(profile);
+        showBasicMode();
         return;
       }
       projectFieldset.hidden = true;
@@ -409,7 +419,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         const response = await fetch("/api/application-profile", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(fields) });
         const data = await response.json().catch(() => ({})) as { error?: string };
         if (!response.ok) throw new Error(data.error ?? "基本情報を保存できませんでした。");
-        location.assign(`/apply/${encodeURIComponent(projectSlug)}/?nameOrder=${encodeURIComponent(nameOrder.value)}`);
+        location.assign(returnTo || `/apply/${encodeURIComponent(projectSlug)}/?nameOrder=${encodeURIComponent(nameOrder.value)}`);
       } catch (error) {
         profileMessage.value = error instanceof Error ? error.message : "基本情報を保存できませんでした。";
         nextProjectButton.disabled = false;

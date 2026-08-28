@@ -383,7 +383,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 </AdminLayout>
 
 <style>
-  .editor-workspace { --surface: var(--background-primary); --surface-alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); box-sizing: border-box; margin: 0 auto; max-width: 1500px; padding: 0 clamp(1rem, 3vw, 2.5rem) 4rem; }
+  .editor-workspace { --surface: var(--background-primary); --surface-alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); box-sizing: border-box; margin: 0 auto; max-width: 1500px; overflow-anchor: none; padding: 0 clamp(1rem, 3vw, 2.5rem) 4rem; }
   .editor-workspace[data-editor-starting] .editor-panel { min-height: 32rem; position: relative; visibility: hidden; }
   .editor-workspace[data-editor-starting] .editor-panel::after { color: var(--muted); content: "編集スペースを読み込んでいます…"; font-size: .9rem; left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); visibility: visible; white-space: nowrap; }
   .workspace-header { align-items: start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; padding-bottom: 1.25rem; }
@@ -1374,6 +1374,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     let mathJaxLoading: Promise<void> | undefined;
     let hasUnsavedChanges = false;
     let persistedWritingMemo = "";
+    let initialScrollRestoreUntil = 0;
+    const restoreInitialEditorScroll = () => {
+      if (performance.now() > initialScrollRestoreUntil || window.location.hash) return;
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    };
     const statusLabel = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "公開準備完了" } as const;
     const setUnsavedChanges = (dirty: boolean) => {
       hasUnsavedChanges = dirty;
@@ -1976,7 +1981,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       const value = body.value;
       const isCurrent = () => renderId === previewRenderId;
       await renderPreviewInto(preview, value, documentReferences, isCurrent);
-      if (isCurrent()) wordCount.textContent = `${value.length.toLocaleString()}文字`;
+      if (isCurrent()) {
+        wordCount.textContent = `${value.length.toLocaleString()}文字`;
+        restoreInitialEditorScroll();
+      }
     };
     const renderDiagnostics = () => {
       const items = diagnoseArticleSource(body.value, {
@@ -3101,7 +3109,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
     const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const isNewDocument = query.get("new") === "1";
-    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); root.removeAttribute("data-editor-starting"); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    if ((reviewDocumentId || isNewDocument) && !window.location.hash) {
+      initialScrollRestoreUntil = performance.now() + 3_500;
+      [0, 50, 250, 750, 1_500, 3_000].forEach((delay) => window.setTimeout(restoreInitialEditorScroll, delay));
+    }
+    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); root.removeAttribute("data-editor-starting"); restoreInitialEditorScroll(); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); restoreInitialEditorScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);
