@@ -239,7 +239,9 @@ test("メンバー用サイトの未完了タスクは参加中プロジェク�
     }
     if (url.pathname === "/api/admin/portal") {
       await route.fulfill({
-        json: {
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
           projects: [
             { id: "atlas", name: "学習サイト「アトラス」運営", role: "member" },
             { id: "secretariat", name: "Atlasez運営事務局", role: "member" },
@@ -259,7 +261,7 @@ test("メンバー用サイトの未完了タスクは参加中プロジェク�
             },
           ],
           calendar: { events: [] },
-        },
+        }),
       });
       return;
     }
@@ -267,8 +269,12 @@ test("メンバー用サイトの未完了タスクは参加中プロジェク�
   });
 
   await page.goto("admin/portal/");
-  await expect(page.getByText("数学記事の確認", { exact: true })).toBeVisible();
-  await expect(page.getByText("応募管理の確認", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-todos] .todo").nth(0)).toContainText(
+    "数学記事の確認",
+  );
+  await expect(page.locator("[data-todos] .todo").nth(1)).toContainText(
+    "応募管理の確認",
+  );
   await expect(page.locator("[data-todos] .todo")).toHaveCount(2);
   await expect(page.locator("[data-todos] .todo").nth(0)).toContainText(
     "学習サイト「アトラス」運営",

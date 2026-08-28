@@ -156,7 +156,7 @@ test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する"
 
   await expect(writing).toHaveCSS("grid-row-start", "1");
   await expect(writing).toHaveCSS("grid-column-start", "1");
-  await expect(writing).toHaveCSS("grid-column-end", "-1");
+  await expect(writing).toHaveCSS("grid-column-end", "span 2");
   await expect(preview).toHaveCSS("grid-row-start", "2");
   await expect(preview).toHaveCSS("grid-column-start", "1");
   await expect(review).toHaveCSS("grid-row-start", "2");
@@ -722,6 +722,7 @@ test("CK-3: 新規コメントは確認済み0件の対応待ちで表示する"
     "0",
     "0",
     "0",
+    "0",
   ]);
   await expect(
     thread.getByRole("button", { name: /確認済み/ }),
@@ -890,6 +891,10 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
       await route.fulfill({ json: { revisions: [] } });
       return;
     }
+    if (url.pathname.endsWith("/publication-review")) {
+      await route.fulfill({ json: {} });
+      return;
+    }
     await route.fulfill({ status: 404, json: { error: "Not found" } });
   });
 
@@ -1021,7 +1026,7 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   await expect(preview).toHaveCSS("grid-column-start", "1");
 
   const popupPromise = page.waitForEvent("popup");
-  await page.locator('[data-pane-popout="writing"]').click();
+  await writing.locator('[data-pane-popout="writing"]').click();
   const popup = await popupPromise;
   await expect(writing).toBeHidden();
   await expect(popup.locator("[data-body]")).toBeVisible();
@@ -1042,8 +1047,16 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   await expect(
     thread.getByRole("button", { name: "✓ 確認済み" }),
   ).toBeEnabled();
-  await expect(thread.locator(".comment-action-count").first()).toHaveText("1");
-  await expect(thread.locator(".comment-action-count").nth(1)).toHaveText("1");
+  await expect(
+    thread.locator(
+      'article[data-comment-history="comment-1"] .comment-action-acknowledge .comment-action-count',
+    ),
+  ).toHaveText("1");
+  await expect(
+    thread.locator(
+      'article[data-comment-history="comment-1"] .comment-action-unacknowledge .comment-action-count',
+    ),
+  ).toHaveText("1");
   await expect(thread.locator(".comment-action-actor-list")).toHaveCount(0);
 
   await thread.locator(".thread-summary").click({ button: "right" });

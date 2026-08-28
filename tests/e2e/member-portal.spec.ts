@@ -22,56 +22,33 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
     }
     await route.fulfill({
       json: {
-        email: "member@example.com",
+        email: "hanako@school.example",
         profile: {
           display_name: "山田 花子",
-          bio: "運営外向けプロフィール",
-        },
-        basicProfile: {
-          family_name: "山田",
-          given_name: "花子",
-          family_name_kana: "やまだ",
-          given_name_kana: "はなこ",
-          nickname: "はなこ",
-          affiliation_email: "hanako@school.example",
-          affiliation_type: "大学",
-          institution: "Atlasez大学",
-          grade: "B2",
+          university: "Atlasez大学",
+          year: "B2",
+          affiliation_type: "student",
           country: "日本",
           timezone: "Asia/Tokyo",
-          birth_date: "2000-01-02",
-          residence_city: "東京都",
-          current_organizations: "Atlasez学生会",
+          bio: "運営外向けプロフィール",
         },
-        roles: ["数学", "全体運営"],
         profileChangeRequest: null,
       },
     });
   });
 
   await page.goto("admin/member-profile/");
-  await expect(
-    page
-      .locator("[data-profile-summary]")
-      .getByRole("heading", { name: "山田 花子" }),
-  ).toBeVisible();
-  await expect(page.getByText("Atlasez大学", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("hanako@school.example", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("数学・全体運営", { exact: true })).toBeVisible();
-  await expect(page.locator("[data-profile-editor]")).toBeHidden();
-  await expect(
-    page.getByRole("link", { name: "基本情報を変更" }),
-  ).toHaveAttribute(
-    "href",
-    "/apply/?step=basic&returnTo=%2Fadmin%2Fmember-profile%2F",
+  await expect(page.getByRole("heading", { name: "山田 花子" })).toBeVisible();
+  await expect(page.locator("[data-email]")).toHaveText(
+    "hanako@school.example",
   );
-
-  await page.goto("admin/member-profile/?mode=edit");
-  await expect(page.locator("[data-profile-summary]")).toBeHidden();
-  await expect(page.getByLabel("公開表示名")).toHaveValue("山田 花子");
-  await page.getByLabel("運営外自己紹介").fill("更新した公開プロフィール");
+  await expect(page.locator("[data-university]")).toHaveValue("Atlasez大学");
+  await expect(page.locator("[data-year]")).toHaveValue("B2");
+  await expect(page.locator("[data-bio]")).toHaveValue(
+    "運営外向けプロフィール",
+  );
+  await expect(page.locator("[data-display-name]")).toHaveValue("山田 花子");
+  await page.locator("[data-bio]").fill("更新した公開プロフィール");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-message]")).toContainText(
     "運営事務局へ送りました",
@@ -95,10 +72,10 @@ test("APIがHTMLエラーを返してもJSON解析例外を画面へ表示しな
   );
 
   await page.goto("admin/member-profile/");
-  await expect(page.locator("[data-summary-message]")).toContainText(
+  await expect(page.locator("[data-message]")).toContainText(
     "プロフィール情報を読み込めませんでした。（HTTP 500）",
   );
-  await expect(page.locator("[data-summary-message]")).not.toContainText(
+  await expect(page.locator("[data-message]")).not.toContainText(
     "Unexpected token",
   );
 });
