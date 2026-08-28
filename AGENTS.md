@@ -37,6 +37,12 @@
 6. Cloudflare Workers Buildsが正常接続されている場合だけ、`main`のマージをトリガーに本番ビルドする。
 7. デプロイ後に`build-info.json`のSHA、Cloudflare Version、100%配信、Chromeの主要画面を確認する。
 
+## Cloudflare展開監査
+
+- `.github/workflows/cloudflare-deployment-sync.yml`が15分ごとにCloudflareのDeployment/Versionと公開`build-info.json`を読み取り、差分がある場合だけGitHubへ同期PRを作る。
+- 同期PRは本番コードの正本ではなく監査証跡である。`Source: Unknown`、SHA不一致、`build-info.json`欠落は自動Mergeせず、インシデントとして調査する。
+- 同期WorkflowはCloudflareへ書き込まない。Cloudflare API TokenはWorkers Scripts Readだけを持つ読み取り専用Tokenにする。
+
 Workers Buildsが未接続・内部エラー・CI失敗・SHA不一致のいずれかなら、変更を本番へ出さず、PRまたはIssueに停止理由を記録する。
 
 ## 作業完了条件
