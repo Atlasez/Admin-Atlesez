@@ -216,15 +216,21 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   ).toBeVisible();
 });
 
-test("メンバー用サイトの未完了タスクは参加中プロジェクトを横断して表示する", async ({ page }) => {
+test("メンバー用サイトの未完了タスクは参加中プロジェクトを横断して表示する", async ({
+  page,
+}) => {
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/admin/auth-status") {
-      await route.fulfill({ json: { email: "alice@example.com", isManager: false } });
+      await route.fulfill({
+        json: { email: "alice@example.com", isManager: false },
+      });
       return;
     }
     if (url.pathname === "/api/admin/profile") {
-      await route.fulfill({ json: { profile: { display_name: "Alice", avatar_url: "" } } });
+      await route.fulfill({
+        json: { profile: { display_name: "Alice", avatar_url: "" } },
+      });
       return;
     }
     if (url.pathname === "/api/admin/notifications") {
@@ -239,8 +245,18 @@ test("メンバー用サイトの未完了タスクは参加中プロジェク�
             { id: "secretariat", name: "Atlasez運営事務局", role: "member" },
           ],
           todos: [
-            { project_id: "atlas", project_name: "学習サイト「アトラス」運営", title: "数学記事の確認", status: "open" },
-            { project_id: "secretariat", project_name: "Atlasez運営事務局", title: "応募管理の確認", status: "doing" },
+            {
+              project_id: "atlas",
+              project_name: "学習サイト「アトラス」運営",
+              title: "数学記事の確認",
+              status: "open",
+            },
+            {
+              project_id: "secretariat",
+              project_name: "Atlasez運営事務局",
+              title: "応募管理の確認",
+              status: "doing",
+            },
           ],
           calendar: { events: [] },
         },
@@ -254,6 +270,10 @@ test("メンバー用サイトの未完了タスクは参加中プロジェク�
   await expect(page.getByText("数学記事の確認", { exact: true })).toBeVisible();
   await expect(page.getByText("応募管理の確認", { exact: true })).toBeVisible();
   await expect(page.locator("[data-todos] .todo")).toHaveCount(2);
-  await expect(page.locator("[data-todos] .todo").nth(0)).toContainText("学習サイト「アトラス」運営");
-  await expect(page.locator("[data-todos] .todo").nth(1)).toContainText("Atlasez運営事務局");
+  await expect(page.locator("[data-todos] .todo").nth(0)).toContainText(
+    "学習サイト「アトラス」運営",
+  );
+  await expect(page.locator("[data-todos] .todo").nth(1)).toContainText(
+    "Atlasez運営事務局",
+  );
 });

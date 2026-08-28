@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("A/D 原稿一覧の作業導線", () => {
-  test("運営トップを指定どおり4グループに分け、プロジェクト側マイページを表示しない", async ({ page }) => {
+  test("運営トップを指定どおり4グループに分け、プロジェクト側マイページを表示しない", async ({
+    page,
+  }) => {
     await page.goto("admin/atlas/");
 
     const groups = page.locator("[data-menu-group]");
@@ -10,26 +12,29 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(3);
     await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(1);
-    await expect(groups.nth(2).getByRole("link", { name: /規則を開く/ })).toHaveAttribute(
-      "href",
-      "/admin/rules/",
-    );
-    await expect(page.locator("[data-admin-atlas-menu] .menu-groups")).not.toContainText("マイページ");
-    await expect(page.getByRole("link", { name: /閲覧統計を開く/ })).toHaveAttribute(
-      "href",
-      "/admin/analytics/",
-    );
+    await expect(
+      groups.nth(2).getByRole("link", { name: /規則を開く/ }),
+    ).toHaveAttribute("href", "/admin/rules/");
+    await expect(
+      page.locator("[data-admin-atlas-menu] .menu-groups"),
+    ).not.toContainText("マイページ");
+    await expect(
+      page.getByRole("link", { name: /閲覧統計を開く/ }),
+    ).toHaveAttribute("href", "/admin/analytics/");
   });
 
-  test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({ page }) => {
+  test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
+    page,
+  }) => {
     await page.goto("admin/rules/");
 
-    await expect(page.getByRole("heading", { name: "規則", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "規則", exact: true }),
+    ).toBeVisible();
     await expect(page.locator(".rule-section")).toHaveCount(6);
-    await expect(page.getByRole("link", { name: /作業の進め方を確認する/ })).toHaveAttribute(
-      "href",
-      "/admin/guide/",
-    );
+    await expect(
+      page.getByRole("link", { name: /作業の進め方を確認する/ }),
+    ).toHaveAttribute("href", "/admin/guide/");
   });
 
   test("プロジェクトHomeでは原稿一覧だけを入口にする", async ({ page }) => {
@@ -103,9 +108,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     const card = page.locator('[data-document-id="presence-doc"]');
     await expect(card).toContainText("編集中：山田花子（本文）");
-    await expect(card.locator(".badge.editing")).toHaveText(
-      /1人が編集中/,
-    );
+    await expect(card.locator(".badge.editing")).toHaveText(/1人が編集中/);
     await expect(card).toHaveAttribute("aria-label", /編集中/);
   });
 

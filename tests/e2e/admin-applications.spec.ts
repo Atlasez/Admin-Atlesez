@@ -62,7 +62,9 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
   });
 
   await page.goto("./admin/applications/?project=atlas");
-  await expect(page.getByRole("heading", { name: "学習サイト「アトラス」：応募管理" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "学習サイト「アトラス」：応募管理" }),
+  ).toBeVisible();
   await expect(page.locator(".flow-steps > li")).toHaveCount(4);
   await expect(page.locator("[data-total-count]")).toHaveText("2件");
   await expect(page.locator("[data-summary-new]")).toHaveText("1");
@@ -80,8 +82,10 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
 
 test("応募管理の導線は現在のプロジェクトに引き継がれる", async ({ page }) => {
   await page.goto("./admin/manage/?project=seminar-platform");
-  await expect(page.locator("main header p")).toHaveText("ゼミプラットフォーム");
-  await expect(page.locator('a[data-project-manager-only]')).toHaveAttribute(
+  await expect(page.locator("main header p")).toHaveText(
+    "ゼミプラットフォーム",
+  );
+  await expect(page.locator("a[data-project-manager-only]")).toHaveAttribute(
     "href",
     "/admin/applications/?project=seminar-platform",
   );
