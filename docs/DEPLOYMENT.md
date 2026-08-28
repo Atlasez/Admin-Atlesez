@@ -19,6 +19,8 @@ ADMIN本番の詳細な運用契約は [ADMIN_DEPLOYMENT_POLICY.md](ADMIN_DEPLOY
 
 `npm run deploy:admin`は、Workers Buildsが利用できない緊急時に、固定SHA・明示承認・事後記録の条件を満たす場合だけ使用する。feature branch、未コミット変更、Dashboard Editorからの本番Uploadには使用しない。
 
+手動経路は`DEPLOY_MAIN_SHA=$(git rev-parse HEAD) npm run deploy:admin`の形式で実行する。SHA省略、main以外のbranch、未コミット変更は自動的に停止する。
+
 ADMINのCloudflare Workers Buildsは、GitHub `Atlasez/Admin-Atlesez` の`main`だけをProduction branchとして使用する。Dashboard Editorからの手動Upload、Workers.dev URLの確認、ローカルfeature branchからの直接デプロイは本番手順ではない。Build cacheは無効のまま維持する。
 
 各ビルドは`/build-info.json`へcommit SHAを埋め込む。デプロイ後に対象SHAと一致しない場合は、本番完了とみなさず停止する。Cloudflare Git連携が内部エラーで未接続の場合、マージだけでは本番反映済みとみなさない。

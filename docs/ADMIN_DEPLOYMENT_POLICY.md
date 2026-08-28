@@ -104,6 +104,14 @@ Workers Buildsが利用できない緊急時だけ、次の条件を満たす場
 5. 実施者、理由、SHA、Version ID、時刻、Chrome確認結果を記録する。
 6. 終了後、Workers Buildsを復旧し、手動経路を常用しない。
 
+ローカルの手動コマンドは、誤った作業ツリーからのDeployを防ぐため、mainの固定SHAを明示する。SHAを省略した場合、feature branchの場合、または未コミット変更がある場合は停止する。
+
+```bash
+DEPLOY_MAIN_SHA=$(git rev-parse HEAD) npm run deploy:admin
+```
+
+このコマンドは、事前に`main`へマージ済みであること、`git status --porcelain`が空であること、対象SHAをレビューで承認済みであることを確認した後だけ実行する。Cloudflare Workers Buildsが復旧した後は、手動コマンドを使わず、GitHub `main`のマージを唯一のDeployトリガーとする。
+
 Dashboard Editorで直接コードを修正して本番Versionを作ること、過去Versionを根拠なくpromote/rollbackすることは禁止する。
 
 ## 6. 不一致時の停止手順

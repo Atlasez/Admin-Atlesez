@@ -22,6 +22,7 @@
 - 本番経路は、GitHub `main`をProduction branchに固定したCloudflare Workers Buildsだけにする。
 - Dashboard Editorからの手動Upload、`wrangler versions upload`、ローカルfeature branchからの直接deployを通常運用で行わない。
 - `npm run verify:deploy-config` と `npm run build` を通し、`dist/build-info.json` のSHAを検証してからデプロイする。
+- 手動の緊急デプロイでは、cleanなmain固定SHAから `DEPLOY_MAIN_SHA=$(git rev-parse HEAD) npm run deploy:admin` のように明示承認SHAを渡す。feature branch、未コミット変更、SHA省略のDeployはスクリプトで停止する。
 - デプロイ後はCloudflare Version/DeploymentのWorker名・100%配信・時刻を確認し、認証済みChromeで主要ADMIN画面を確認する。
 - SHA不一致、Worker名不一致、想定外のVersion、古い画面、CI失敗を見つけたら停止する。rollback、promote、cache purge、Route変更を推測で実行しない。
 - 既存の未コミット変更を破棄、reset、上書きしない。
