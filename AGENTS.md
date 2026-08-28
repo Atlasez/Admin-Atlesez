@@ -6,6 +6,7 @@
 2. [`docs/ADMIN_DEPLOYMENT_POLICY.md`](docs/ADMIN_DEPLOYMENT_POLICY.md)
 3. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 4. [`docs/ADMIN_KNOWLEDGE_BASE.md`](docs/ADMIN_KNOWLEDGE_BASE.md)
+5. [`docs/ADMIN_CHANGE_WORKFLOW.md`](docs/ADMIN_CHANGE_WORKFLOW.md)
 
 ## 本番の固定事項
 
@@ -24,6 +25,18 @@
 - デプロイ後はCloudflare Version/DeploymentのWorker名・100%配信・時刻を確認し、認証済みChromeで主要ADMIN画面を確認する。
 - SHA不一致、Worker名不一致、想定外のVersion、古い画面、CI失敗を見つけたら停止する。rollback、promote、cache purge、Route変更を推測で実行しない。
 - 既存の未コミット変更を破棄、reset、上書きしない。
+
+## 通常の変更フロー
+
+1. `main`を最新化し、作業開始時の`git status`を記録する。
+2. `codex/`または目的が分かるfeature branchを`main`から作る。既存の作業ツリーを流用しない。
+3. 変更対象に対応するテストを先に確認し、実装後にCI相当の検証を実行する。
+4. PR本文に、変更内容、対象URL、データ／Worker影響、検証結果、ロールバック方法を記載する。
+5. CI成功とレビュー完了後にだけ`main`へマージする。マージ前のbranch、ローカル`dist/`、Dashboard Editorの成果物を本番へ出さない。
+6. Cloudflare Workers Buildsが正常接続されている場合だけ、`main`のマージをトリガーに本番ビルドする。
+7. デプロイ後に`build-info.json`のSHA、Cloudflare Version、100%配信、Chromeの主要画面を確認する。
+
+Workers Buildsが未接続・内部エラー・CI失敗・SHA不一致のいずれかなら、変更を本番へ出さず、PRまたはIssueに停止理由を記録する。
 
 ## 作業完了条件
 
