@@ -65,7 +65,9 @@ jobs:
       - name: Create or update synchronization PR
         if: steps.update.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          # The organization policy blocks GITHUB_TOKEN from creating PRs.
+          # GH_SYNC_TOKEN is fine-grained and scoped only to Admin-Atlesez.
+          GH_TOKEN: ${{ secrets.GH_SYNC_TOKEN }}
         run: |
           set -euo pipefail
           branch="ops/cloudflare-deployment-sync"
