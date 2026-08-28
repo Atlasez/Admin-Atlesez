@@ -36,6 +36,8 @@ jobs:
           branch="ops/cloudflare-deployment-sync"
           if git fetch origin "${branch}"; then
             git switch --create "${branch}" --track "origin/${branch}"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git merge --no-edit origin/main
           else
             git switch --create "${branch}"
