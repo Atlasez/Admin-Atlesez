@@ -13,7 +13,7 @@ export interface SearchResultItem {
 }
 
 export interface SearchFilters {
-  [name: string]: string | undefined;
+  [name: string]: string | string[] | undefined;
 }
 
 export interface SearchAdapter {
@@ -25,7 +25,7 @@ export interface SearchAdapter {
 interface PagefindModule {
   search(
     query: string,
-    options?: { filters?: Record<string, string> },
+    options?: { filters?: Record<string, string[]> },
   ): Promise<{
     results: {
       data: () => Promise<{
@@ -50,16 +50,37 @@ export async function createPagefindAdapter(
   pagefind.init();
   return {
     async search(query, filters) {
-      const activeFilters: Record<string, string> = {};
+      const activeFilters: Record<string, string[]> = {};
       for (const [k, v] of Object.entries(filters)) {
-        if (v) activeFilters[k] = v;
+        if (Array.isArray(v) && v.length > 0) activeFilters[k] = v;
+        else if (typeof v === "string" && v) activeFilters[k] = [v];
       }
-      const res = await pagefind.search(query, {
-        filters:
-          Object.keys(activeFilters).length > 0 ? activeFilters : undefined,
-      });
+      const multiFilter = Object.entries(activeFilters).find(
+        ([, values]) => values.length > 1,
+      );
+      const resultRefs = multiFilter
+        ? (
+            await Promise.all(
+              multiFilter[1].map((value) =>
+                pagefind.search(query, {
+                  filters: {
+                    ...activeFilters,
+                    [multiFilter[0]]: [value],
+                  },
+                }),
+              ),
+            )
+          ).flatMap((res) => res.results)
+        : (
+            await pagefind.search(query, {
+              filters:
+                Object.keys(activeFilters).length > 0
+                  ? activeFilters
+                  : undefined,
+            })
+          ).results;
       const items = await Promise.all(
-        res.results.slice(0, 30).map(async (r) => {
+        resultRefs.map(async (r) => {
           const d = await r.data();
           return {
             title: d.meta["title"] ?? d.url,
@@ -69,7 +90,12 @@ export async function createPagefindAdapter(
           };
         }),
       );
-      return items;
+      return items
+        .filter(
+          (item, index, all) =>
+            all.findIndex((candidate) => candidate.url === item.url) === index,
+        )
+        .slice(0, 30);
     },
     filters() {
       return pagefind.filters();

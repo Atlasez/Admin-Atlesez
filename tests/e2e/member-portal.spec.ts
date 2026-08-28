@@ -9,7 +9,9 @@ const baseAdminMocks = async (page: Page) => {
   );
 };
 
-test("大元マイページは基本情報を承認申請として送る", async ({ page }) => {
+test("マイページは基本情報を表示し、編集画面から公開プロフィールを承認申請する", async ({
+  page,
+}) => {
   await baseAdminMocks(page);
   let submitted: Record<string, unknown> | null = null;
   await page.route("**/api/admin/profile", async (route) => {
@@ -23,35 +25,60 @@ test("大元マイページは基本情報を承認申請として送る", async
         email: "member@example.com",
         profile: {
           display_name: "山田 花子",
-          university: "Atlasez大学",
-          year: "2年",
-          affiliation_type: "student",
-          country: "日本",
-          timezone: "Asia/Tokyo",
           bio: "運営外向けプロフィール",
         },
+        basicProfile: {
+          family_name: "山田",
+          given_name: "花子",
+          family_name_kana: "やまだ",
+          given_name_kana: "はなこ",
+          nickname: "はなこ",
+          affiliation_email: "hanako@school.example",
+          affiliation_type: "大学",
+          institution: "Atlasez大学",
+          grade: "B2",
+          country: "日本",
+          timezone: "Asia/Tokyo",
+          birth_date: "2000-01-02",
+          residence_city: "東京都",
+          current_organizations: "Atlasez学生会",
+        },
+        roles: ["数学", "全体運営"],
         profileChangeRequest: null,
       },
     });
   });
 
   await page.goto("admin/member-profile/");
-  await expect(page.getByLabel("運営外自己紹介")).toHaveValue(
-    "運営外向けプロフィール",
+  await expect(
+    page
+      .locator("[data-profile-summary]")
+      .getByRole("heading", { name: "山田 花子" }),
+  ).toBeVisible();
+  await expect(page.getByText("Atlasez大学", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("hanako@school.example", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("数学・全体運営", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-profile-editor]")).toBeHidden();
+  await expect(
+    page.getByRole("link", { name: "基本情報を変更" }),
+  ).toHaveAttribute(
+    "href",
+    "/apply/?step=basic&returnTo=%2Fadmin%2Fmember-profile%2F",
   );
-  await expect(page.getByText("担当原稿")).toHaveCount(0);
-  await expect(page.getByText("個人メモ")).toHaveCount(0);
-  await page.getByLabel("国・地域").fill("ネパール");
-  await page.getByLabel("タイムゾーン").fill("Asia/Kathmandu");
+
+  await page.goto("admin/member-profile/?mode=edit");
+  await expect(page.locator("[data-profile-summary]")).toBeHidden();
+  await expect(page.getByLabel("公開表示名")).toHaveValue("山田 花子");
+  await page.getByLabel("運営外自己紹介").fill("更新した公開プロフィール");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-message]")).toContainText(
     "運営事務局へ送りました",
   );
   expect(submitted).toMatchObject({
     displayName: "山田 花子",
-    country: "ネパール",
-    timezone: "Asia/Kathmandu",
-    bio: "運営外向けプロフィール",
+    bio: "更新した公開プロフィール",
   });
 });
 
@@ -68,10 +95,10 @@ test("APIがHTMLエラーを返してもJSON解析例外を画面へ表示しな
   );
 
   await page.goto("admin/member-profile/");
-  await expect(page.locator("[data-message]")).toContainText(
+  await expect(page.locator("[data-summary-message]")).toContainText(
     "プロフィール情報を読み込めませんでした。（HTTP 500）",
   );
-  await expect(page.locator("[data-message]")).not.toContainText(
+  await expect(page.locator("[data-summary-message]")).not.toContainText(
     "Unexpected token",
   );
 });
@@ -208,7 +235,7 @@ test("運営事務局でプロフィール変更を承認できる", async ({ pa
 
   await page.goto("admin/profile-requests/");
   await expect(page.getByRole("heading", { name: "山田 花子" })).toBeVisible();
-  await page.getByRole("button", { name: "承認", exact: true }).click();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
   expect(action).toBe("approve");
 });
 
@@ -239,7 +266,47 @@ test("運営事務局でプロフィール変更を却下できる", async ({ pa
   );
 
   await page.goto("admin/profile-requests/");
-  await page.getByLabel("承認・却下メモ").fill("所属情報を再確認してください");
-  await page.getByRole("button", { name: "却下", exact: true }).click();
+  await page
+    .getByLabel("処理メモ（任意）")
+    .fill("所属情報を再確認してください");
+  await page.getByRole("button", { name: "却下する", exact: true }).click();
   expect(action).toBe("reject");
+});
+
+test("統合された学習サイトの運営内自己紹介を承認できる", async ({ page }) => {
+  await baseAdminMocks(page);
+  let action = "";
+  let reviewUrl = "";
+  await page.route(
+    "**/api/admin/project-profile-change-requests/*",
+    async (route) => {
+      action = (route.request().postDataJSON() as { action: string }).action;
+      reviewUrl = route.request().url();
+      await route.fulfill({ json: { ok: true, status: "approved" } });
+    },
+  );
+  await page.route("**/api/admin/profile-change-requests?**", (route) =>
+    route.fulfill({
+      json: {
+        requests: [],
+        atlasInternalBioRequests: [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            email: "member@example.com",
+            display_name: "申請メンバー",
+            current_internal_bio: "変更前",
+            proposed_internal_bio: "変更後",
+            status: "pending",
+            submitted_at: "2026-08-22T10:00:00.000Z",
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.goto("admin/profile-requests/?section=atlas");
+  await expect(page.getByText("変更後", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
+  expect(action).toBe("approve");
+  expect(reviewUrl).toContain("/api/admin/project-profile-change-requests/");
 });

@@ -107,6 +107,8 @@ type ReportStatus = "new" | "reviewing" | "resolved";
 type AdminUpdatePayload = { status?: unknown; adminNote?: unknown };
 type PermissionPayload = { email?: unknown; subject?: unknown };
 type EditorialDocumentStatus = "draft" | "in-review" | "on-hold" | "approved";
+type EditorialPublicationReviewStage = "subject-coordinator" | "project-leader";
+type EditorialWorkflowRole = EditorialPublicationReviewStage;
 type EditorialLockedRange = { start: number; end: number; text: string };
 type PersonalMathPreset = {
   id: string;
@@ -145,6 +147,10 @@ type EditorialDocument = {
   updated_at: string;
   reviewed_at: string | null;
   published_at: string | null;
+  scheduled_publish_at: string | null;
+  scheduled_publish_claimed_at: string | null;
+  publication_review_stage: EditorialPublicationReviewStage | null;
+  publication_review_round: number;
   locked_ranges: string;
   article_references: string;
 };
@@ -669,6 +675,8 @@ type AdminScope = {
   subjects: string[];
   allSubjects: boolean;
   isManager: boolean;
+  coordinatorSubjects?: string[];
+  isProjectLeader?: boolean;
 };
 
 type CurrentUserStage = {
@@ -803,22 +811,47 @@ async function getAdminScope(
   const email = identity;
   // ローカル開発では本番D1の権限表をコピーしなくても動作確認できる。
   if (localDevelopmentEnabled(request, env))
-    return { email, subjects: ["*"], allSubjects: true, isManager: true };
-  const result = await env.REPORTS.prepare(
-    "SELECT subject FROM report_admin_permissions WHERE email = ?",
-  )
-    .bind(email)
-    .all<{ subject: string }>();
+    return {
+      email,
+      subjects: ["*"],
+      allSubjects: true,
+      isManager: true,
+      coordinatorSubjects: ["*"],
+      isProjectLeader: true,
+    };
+  const [result, workflowRoles] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT subject FROM report_admin_permissions WHERE email = ?",
+    )
+      .bind(email)
+      .all<{ subject: string }>(),
+    env.REPORTS.prepare(
+      "SELECT role, subject FROM editorial_workflow_roles WHERE lower(email) = lower(?)",
+    )
+      .bind(email)
+      .all<{ role: EditorialWorkflowRole; subject: string }>(),
+  ]);
   const grantedSubjects = result.results
     .map((permission) => permission.subject)
     .filter(Boolean);
-  if (!grantedSubjects.length)
+  if (!grantedSubjects.length && !(workflowRoles.results ?? []).length)
     return json({ error: "この管理画面の閲覧権限が設定されていません。" }, 403);
   const allSubjects = grantedSubjects.includes("*");
   // `*` は全分野管理者の権限であって、その人自身の執筆担当分野ではない。
   // 通常の原稿一覧・作業状況は担当分野だけに限定する。
   const subjects = grantedSubjects.filter((subject) => subject !== "*");
-  return { email, subjects, allSubjects, isManager: allSubjects };
+  return {
+    email,
+    subjects,
+    allSubjects,
+    isManager: allSubjects,
+    coordinatorSubjects: (workflowRoles.results ?? [])
+      .filter((role) => role.role === "subject-coordinator")
+      .map((role) => role.subject),
+    isProjectLeader: (workflowRoles.results ?? []).some(
+      (role) => role.role === "project-leader",
+    ),
+  };
 }
 
 const isResponse = <T>(value: T | Response): value is Response =>
@@ -1411,7 +1444,82 @@ async function listReportAdminPermissions(
     avatar_url: string;
     discord_user_id: string;
   }>();
-  return json({ permissions: result.results });
+  const workflowRoles = await env.REPORTS.prepare(
+    `SELECT r.email, r.role, r.subject,
+       COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name
+     FROM editorial_workflow_roles r
+     LEFT JOIN editorial_member_profiles m ON lower(m.email)=lower(r.email)
+     ORDER BY r.role, r.subject, display_name, r.email`,
+  ).all<{
+    email: string;
+    role: EditorialWorkflowRole;
+    subject: string;
+    display_name: string;
+  }>();
+  return json({
+    permissions: result.results,
+    workflowRoles: workflowRoles.results,
+  });
+}
+
+async function createEditorialWorkflowRole(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    email?: unknown;
+    role?: unknown;
+    subject?: unknown;
+  } | null;
+  const email = text(payload?.email, 320).toLowerCase();
+  const role = text(payload?.role, 40) as EditorialWorkflowRole;
+  const subject = text(payload?.subject, 80);
+  if (
+    !EMAIL_PATTERN.test(email) ||
+    role !== "subject-coordinator" ||
+    !SUBJECT_SLUG.test(subject)
+  )
+    return json(
+      { error: "メールアドレス・統括する分野を確認してください。" },
+      400,
+    );
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    "INSERT OR IGNORE INTO editorial_workflow_roles (email,role,subject,created_at,created_by) VALUES (?,?,?,?,?)",
+  )
+    .bind(email, role, subject, now, scope.email)
+    .run();
+  return json({ ok: true }, 201);
+}
+
+async function deleteEditorialWorkflowRole(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const url = new URL(request.url);
+  const email = url.searchParams.get("email")?.trim().toLowerCase() ?? "";
+  const role = url.searchParams.get("role")?.trim() ?? "";
+  const subject = url.searchParams.get("subject")?.trim() ?? "";
+  if (
+    !EMAIL_PATTERN.test(email) ||
+    role !== "subject-coordinator" ||
+    !SUBJECT_SLUG.test(subject)
+  )
+    return json({ error: "削除対象を確認してください。" }, 400);
+  await env.REPORTS.prepare(
+    "DELETE FROM editorial_workflow_roles WHERE lower(email)=lower(?) AND role=? AND subject=?",
+  )
+    .bind(email, role, subject)
+    .run();
+  return json({ ok: true });
 }
 
 async function updateMemberDiscordUserId(
@@ -1886,7 +1994,7 @@ async function deleteReportAdminPermission(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, locked_ranges, article_references
+  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -1897,7 +2005,17 @@ const canReviewDocument = (
   subject: string,
   status: EditorialDocumentStatus,
 ) =>
-  canEditSubject(scope, subject) || (scope.isManager && status === "in-review");
+  canEditSubject(scope, subject) ||
+  canCoordinateSubject(scope, subject) ||
+  (scope.isProjectLeader && status === "in-review") ||
+  (scope.isManager && status === "in-review");
+
+const canCoordinateSubject = (scope: AdminScope, subject: string) =>
+  Boolean(
+    scope.allSubjects ||
+    scope.coordinatorSubjects?.includes("*") ||
+    scope.coordinatorSubjects?.includes(subject),
+  );
 
 async function tikzRendererPackages(
   request: Request,
@@ -2406,19 +2524,38 @@ async function listEditorialDocuments(
   const filters: string[] = [];
   const values: unknown[] = [];
   if (!scope.allSubjects) {
-    if (!scope.subjects.length)
+    const coordinatorSubjects = (scope.coordinatorSubjects ?? []).filter(
+      (subject) => subject !== "*",
+    );
+    if (
+      !scope.subjects.length &&
+      !coordinatorSubjects.length &&
+      !scope.isProjectLeader
+    )
       return json({
         documents: [],
         mentionNames: [],
         scope: { email: scope.email, subjects: [], isManager: scope.isManager },
       });
-    filters.push(`subject IN (${scope.subjects.map(() => "?").join(", ")})`);
-    values.push(...scope.subjects);
+    const subjectValues = [
+      ...new Set([...scope.subjects, ...coordinatorSubjects]),
+    ];
+    const subjectFilter = subjectValues.length
+      ? `subject IN (${subjectValues.map(() => "?").join(", ")})`
+      : "0";
+    filters.push(
+      `(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1) OR (publication_review_stage='subject-coordinator' AND ? = 1))`,
+    );
+    values.push(
+      ...subjectValues,
+      scope.isProjectLeader ? 1 : 0,
+      coordinatorSubjects.length ? 1 : 0,
+    );
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at
+      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, publication_review_stage
      FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
   )
     .bind(...values)
@@ -2466,6 +2603,8 @@ async function listEditorialDocuments(
       email: scope.email,
       subjects: scope.subjects,
       isManager: scope.isManager,
+      isProjectLeader: scope.isProjectLeader,
+      coordinatorSubjects: scope.coordinatorSubjects,
     },
   });
 }
@@ -2545,7 +2684,7 @@ async function getPersonalWorkspace(
   if (isResponse(scope)) return scope;
   const [documents, workspace] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT id, subject, category, title, status, updated_at, published_at
+      `SELECT id, subject, category, title, status, updated_at, published_at, scheduled_publish_at
        FROM editorial_documents WHERE created_by = ? ORDER BY updated_at DESC LIMIT 100`,
     )
       .bind(scope.email)
@@ -2559,6 +2698,7 @@ async function getPersonalWorkspace(
           | "status"
           | "updated_at"
           | "published_at"
+          | "scheduled_publish_at"
         >
       >(),
     env.REPORTS.prepare(
@@ -2653,6 +2793,32 @@ async function savePersonalWorkspace(
 
 const taskStatus = new Set(["open", "doing", "done"]);
 const availabilityStatus = new Set(["available", "maybe", "unavailable"]);
+const taskKindLabel = (kind: unknown) =>
+  String(kind ?? "task") === "feedback" ? "フィードバック依頼" : "タスク依頼";
+const normalizedTaskAssignees = (value: unknown, fallback?: unknown) =>
+  [...(Array.isArray(value) ? value : [value ?? fallback])]
+    .flatMap((item) => (typeof item === "string" ? item.split(",") : [item]))
+    .map((item) => text(item, 320).toLowerCase())
+    .filter(Boolean)
+    .filter((email, index, all) => all.indexOf(email) === index);
+const taskAssignedTo = (
+  assignee: unknown,
+  email: string,
+  kind: unknown = "task",
+) => {
+  const value = String(assignee ?? "")
+    .trim()
+    .toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!value || !normalizedEmail) return false;
+  return (
+    (String(kind ?? "task") === "feedback" && value === "*") ||
+    value
+      .split(",")
+      .map((item) => item.trim())
+      .includes(normalizedEmail)
+  );
+};
 
 type OperationProject = {
   id: string;
@@ -3372,45 +3538,75 @@ async function provisionApplicationDiscordRoles(
 async function getMyProfile(request: Request, env: Env): Promise<Response> {
   const scope = await getMemberProfileScope(request, env);
   if (isResponse(scope)) return scope;
-  const [profile, discord, pendingRequest] = await Promise.all([
-    env.REPORTS.prepare(
-      "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, affiliation_type, country, timezone, updated_at FROM editorial_member_profiles WHERE email = ?",
-    )
-      .bind(scope.email)
-      .first<{
-        display_name: string;
-        bio: string;
-        availability_note: string;
-        avatar_url: string;
-        university: string;
-        year: string;
-        interests: string;
-        affiliation_type: string;
-        country: string;
-        timezone: string;
-        updated_at: string;
-      }>(),
-    env.REPORTS.prepare(
-      "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
-    )
-      .bind(scope.email)
-      .first<{ discord_user_id: string }>(),
-    env.REPORTS.prepare(
-      `SELECT id,proposed_display_name,proposed_university,proposed_year,
+  const [memberProfile, applicantProfile, discord, pendingRequest] =
+    await Promise.all([
+      env.REPORTS.prepare(
+        "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, affiliation_type, country, timezone, updated_at FROM editorial_member_profiles WHERE lower(email)=lower(?)",
+      )
+        .bind(scope.email)
+        .first<{
+          display_name: string;
+          bio: string;
+          availability_note: string;
+          avatar_url: string;
+          university: string;
+          year: string;
+          interests: string;
+          affiliation_type: string;
+          country: string;
+          timezone: string;
+          updated_at: string;
+        }>(),
+      getApplicantProfile(env, scope.email),
+      env.REPORTS.prepare(
+        "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
+      )
+        .bind(scope.email)
+        .first<{ discord_user_id: string }>(),
+      env.REPORTS.prepare(
+        `SELECT id,proposed_display_name,proposed_university,proposed_year,
         proposed_affiliation_type,proposed_country,proposed_timezone,proposed_bio,
         status,submitted_at,reviewed_at,review_note
        FROM editorial_member_profile_change_requests
-       WHERE email=? ORDER BY submitted_at DESC LIMIT 1`,
-    )
-      .bind(scope.email)
-      .first<Record<string, unknown>>(),
-  ]);
+       WHERE lower(email)=lower(?) ORDER BY submitted_at DESC LIMIT 1`,
+      )
+        .bind(scope.email)
+        .first<Record<string, unknown>>(),
+    ]);
   const roles = [
     ...(scope.isManager ? ["全分野管理者"] : []),
     ...scope.subjects.map(
       (subject) => APPLICATION_SUBJECT_LABELS[subject] ?? subject,
     ),
   ];
+  const applicantDisplayName = applicantProfile
+    ? applicantProfile.nickname.trim() ||
+      [applicantProfile.family_name, applicantProfile.given_name]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  // 基本情報は応募者プロフィールを正としてマイページへ渡す。運営者プロフィールが
+  // まだ作られていない応募者でも、保存済みの基本情報を空にせず確認できるようにする。
+  const profile = {
+    display_name: memberProfile?.display_name?.trim() || applicantDisplayName,
+    bio: memberProfile?.bio ?? "",
+    availability_note: memberProfile?.availability_note ?? "",
+    avatar_url: memberProfile?.avatar_url ?? "",
+    university:
+      memberProfile?.university?.trim() || applicantProfile?.institution || "",
+    year: memberProfile?.year?.trim() || applicantProfile?.grade || "",
+    interests: memberProfile?.interests ?? "",
+    affiliation_type:
+      memberProfile?.affiliation_type?.trim() ||
+      applicantProfile?.affiliation_type ||
+      "",
+    country: memberProfile?.country?.trim() || applicantProfile?.country || "",
+    timezone:
+      memberProfile?.timezone?.trim() ||
+      applicantProfile?.timezone ||
+      "Asia/Tokyo",
+    updated_at: memberProfile?.updated_at ?? null,
+  };
   return json({
     email: scope.email,
     subjects: scope.subjects,
@@ -3418,19 +3614,8 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
     isManager: scope.isManager,
     discordUserId: discord?.discord_user_id ?? "",
     profileChangeRequest: pendingRequest ?? null,
-    profile: profile ?? {
-      display_name: "",
-      bio: "",
-      availability_note: "",
-      avatar_url: "",
-      university: "",
-      year: "",
-      interests: "",
-      affiliation_type: "",
-      country: "",
-      timezone: "Asia/Tokyo",
-      updated_at: null,
-    },
+    profile,
+    basicProfile: applicantProfile,
   });
 }
 
@@ -3438,30 +3623,34 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   await ensureAtlasMembership(env, scope);
-  const [projects, todos] = await Promise.all([
-    scope.isManager
-      ? env.REPORTS.prepare(
-          `SELECT p.id,p.slug,p.name,p.description,'manager' AS role FROM atlasez_projects p ORDER BY p.name`,
-        ).all()
-      : env.REPORTS.prepare(
-          `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
-        )
-          .bind(scope.email)
-          .all(),
-    env.REPORTS.prepare(
-      `SELECT id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,updated_at
-       FROM editorial_tasks WHERE assignee_email=? AND status != 'done'
-       ORDER BY CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,due_at,updated_at DESC LIMIT 100`,
-    )
-      .bind(scope.email)
-      .all(),
-  ]);
+  const projects = scope.isManager
+    ? await env.REPORTS.prepare(
+        `SELECT p.id,p.slug,p.name,p.description,'manager' AS role FROM atlasez_projects p ORDER BY p.name`,
+      ).all()
+    : await env.REPORTS.prepare(
+        `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
+      )
+        .bind(scope.email)
+        .all();
   const projectRows = projects.results as Array<{
     id: string;
     slug: string;
     name: string;
   }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
+  const todos = projectIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
+           p.name AS project_name
+         FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
+         WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
+           AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
+           AND t.status != 'done'
+         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+      )
+        .bind(...projectIds, scope.email, scope.email)
+        .all()
+    : { results: [] };
   const rangeStart = new Date();
   rangeStart.setMonth(rangeStart.getMonth() - 2, 1);
   rangeStart.setHours(0, 0, 0, 0);
@@ -3504,12 +3693,18 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            FROM editorial_tasks t
            JOIN atlasez_projects p ON p.id = t.project_id
            WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
-             AND t.assignee_email = ? AND t.status != 'done'
+             AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done'
              AND t.due_at IS NOT NULL
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
            ORDER BY t.due_at ASC LIMIT 300`,
         )
-          .bind(...projectIds, scope.email, rangeStartKey, rangeEndKey)
+          .bind(
+            ...projectIds,
+            scope.email,
+            scope.email,
+            rangeStartKey,
+            rangeEndKey,
+          )
           .all<{
             id: string;
             project_id: string;
@@ -3571,7 +3766,7 @@ async function memberTasksOverview(
   const placeholders = projectIds.map(() => "?").join(",");
   const [tasks, members] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT id,project_id,subject,assignee_email,title,details,status,due_at,due_timezone,
+      `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
         created_by,created_at,updated_at FROM editorial_tasks
        WHERE project_id IN (${placeholders})
        ORDER BY status='done',CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,
@@ -3598,7 +3793,7 @@ async function memberTasksOverview(
   const visibleTasks = (tasks.results ?? []).filter(
     (task) =>
       managerProjects.has(String(task.project_id)) ||
-      task.assignee_email === scope.email ||
+      taskAssignedTo(task.assignee_email, scope.email, task.task_kind) ||
       task.created_by === scope.email ||
       task.subject === null ||
       scope.subjects.includes(String(task.subject ?? "")),
@@ -3782,7 +3977,25 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const avatarUrl = text(payload.avatarUrl, 3_000_000);
+  const currentProfile = await env.REPORTS.prepare(
+    `SELECT display_name,bio,avatar_url,university,year,affiliation_type,country,timezone
+     FROM editorial_member_profiles WHERE lower(email)=lower(?)`,
+  )
+    .bind(scope.email)
+    .first<{
+      display_name: string;
+      bio: string;
+      avatar_url: string;
+      university: string;
+      year: string;
+      affiliation_type: string;
+      country: string;
+      timezone: string;
+    }>();
+  const avatarUrl =
+    payload.avatarUrl === undefined
+      ? (currentProfile?.avatar_url ?? "")
+      : text(payload.avatarUrl, 3_000_000);
   const displayName =
     payload.displayName === undefined ? null : text(payload.displayName, 120);
   const university =
@@ -3797,6 +4010,14 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   const timezone =
     payload.timezone === undefined ? null : text(payload.timezone, 80);
   const bio = payload.bio === undefined ? null : text(payload.bio, 4_000);
+  const proposedDisplayName = displayName ?? currentProfile?.display_name ?? "";
+  const proposedUniversity = university ?? currentProfile?.university ?? "";
+  const proposedYear = year ?? currentProfile?.year ?? "";
+  const proposedAffiliationType =
+    affiliationType ?? currentProfile?.affiliation_type ?? "";
+  const proposedCountry = country ?? currentProfile?.country ?? "";
+  const proposedTimezone = timezone ?? currentProfile?.timezone ?? "Asia/Tokyo";
+  const proposedBio = bio ?? currentProfile?.bio ?? "";
   if (
     avatarUrl &&
     ((!/^https:\/\//i.test(avatarUrl) &&
@@ -3823,8 +4044,8 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
     timezone,
     bio,
   ].some((value) => value !== null);
-  if (requestsProfileChange && !displayName)
-    return json({ error: "氏名を入力してください。" }, 400);
+  if (requestsProfileChange && !proposedDisplayName)
+    return json({ error: "公開表示名を入力してください。" }, 400);
   const updatedAt = new Date().toISOString();
   const avatarStatement = env.REPORTS.prepare(
     `INSERT INTO editorial_member_profiles (email, avatar_url, updated_at) VALUES (?, ?, ?)
@@ -3841,22 +4062,21 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
 
   const requestId = crypto.randomUUID();
   const taskId = crypto.randomUUID();
-  const proposedTimezone = timezone || "Asia/Tokyo";
   const existing = await env.REPORTS.prepare(
-    "SELECT id,task_id FROM editorial_member_profile_change_requests WHERE email=? AND status='pending' ORDER BY submitted_at DESC LIMIT 1",
+    "SELECT id,task_id FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' ORDER BY submitted_at DESC LIMIT 1",
   )
     .bind(scope.email)
     .first<{ id: string; task_id: string | null }>();
   const actualRequestId = existing?.id ?? requestId;
   const actualTaskId = existing?.task_id ?? taskId;
-  const taskTitle = `メンバー情報変更の承認：${displayName}`;
+  const taskTitle = `メンバー情報変更の承認：${proposedDisplayName}`;
   const taskDetails = [
     `申請者: ${scope.email}`,
-    `氏名: ${displayName}`,
-    `所属: ${university ?? ""}`,
-    `学年等: ${year ?? ""}`,
-    `所属区分: ${affiliationType ?? ""}`,
-    `国・地域: ${country ?? ""}`,
+    `公開表示名: ${proposedDisplayName}`,
+    `所属: ${proposedUniversity}`,
+    `学年等: ${proposedYear}`,
+    `所属区分: ${proposedAffiliationType}`,
+    `国・地域: ${proposedCountry}`,
     `タイムゾーン: ${proposedTimezone}`,
     "運営事務局の「メンバー情報の承認」から内容を確認してください。",
   ].join("\n");
@@ -3869,13 +4089,13 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
              proposed_bio=?,submitted_at=?,review_note=''
            WHERE id=? AND status='pending'`,
         ).bind(
-          displayName,
-          university ?? "",
-          year ?? "",
-          affiliationType ?? "",
-          country ?? "",
+          proposedDisplayName,
+          proposedUniversity,
+          proposedYear,
+          proposedAffiliationType,
+          proposedCountry,
           proposedTimezone,
-          bio ?? "",
+          proposedBio,
           updatedAt,
           actualRequestId,
         ),
@@ -3893,13 +4113,13 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
         ).bind(
           actualRequestId,
           scope.email,
-          displayName,
-          university ?? "",
-          year ?? "",
-          affiliationType ?? "",
-          country ?? "",
+          proposedDisplayName,
+          proposedUniversity,
+          proposedYear,
+          proposedAffiliationType,
+          proposedCountry,
           proposedTimezone,
-          bio ?? "",
+          proposedBio,
           actualTaskId,
           updatedAt,
         ),
@@ -3941,8 +4161,9 @@ async function listProfileChangeRequests(
   if (!new Set(["pending", "approved", "rejected", "all"]).has(requestedStatus))
     return json({ error: "申請状態を確認してください。" }, 400);
   const where = requestedStatus === "all" ? "" : "WHERE r.status=?";
-  const statement = env.REPORTS.prepare(
-    `SELECT r.*,p.display_name AS current_display_name,p.university AS current_university,
+  const profileStatement = env.REPORTS.prepare(
+    `SELECT r.*,COALESCE(p.avatar_url,'') AS avatar_url,
+      p.display_name AS current_display_name,p.university AS current_university,
       p.year AS current_year,p.affiliation_type AS current_affiliation_type,
       p.country AS current_country,p.timezone AS current_timezone,p.bio AS current_bio
      FROM editorial_member_profile_change_requests r
@@ -3950,11 +4171,29 @@ async function listProfileChangeRequests(
      ${where}
      ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC LIMIT 300`,
   );
-  const result =
+  const atlasStatement = env.REPORTS.prepare(
+    `SELECT r.*,COALESCE(NULLIF(TRIM(p.display_name),''),r.email) AS display_name,
+      COALESCE(p.avatar_url,'') AS avatar_url,COALESCE(pp.internal_bio,'') AS current_internal_bio
+     FROM editorial_project_profile_change_requests r
+     LEFT JOIN editorial_member_profiles p ON p.email=r.email
+     LEFT JOIN editorial_project_member_profiles pp
+       ON pp.project_id=r.project_id AND pp.email=r.email
+     WHERE r.project_id='atlas' ${requestedStatus === "all" ? "" : "AND r.status=?"}
+     ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC LIMIT 300`,
+  );
+  const [result, atlasResult] = await Promise.all([
     requestedStatus === "all"
-      ? await statement.all<Record<string, unknown>>()
-      : await statement.bind(requestedStatus).all<Record<string, unknown>>();
-  return json({ requests: result.results ?? [], reviewer: scope.email });
+      ? profileStatement.all<Record<string, unknown>>()
+      : profileStatement.bind(requestedStatus).all<Record<string, unknown>>(),
+    requestedStatus === "all"
+      ? atlasStatement.all<Record<string, unknown>>()
+      : atlasStatement.bind(requestedStatus).all<Record<string, unknown>>(),
+  ]);
+  return json({
+    requests: result.results ?? [],
+    atlasInternalBioRequests: atlasResult.results ?? [],
+    reviewer: scope.email,
+  });
 }
 
 async function reviewProfileChangeRequest(
@@ -4069,10 +4308,14 @@ async function getProjectMemberProfile(
     scope.email,
     role,
   );
+  const canReview =
+    project.id === "atlas"
+      ? (await operationProjectRole(env, scope, "secretariat")) === "manager"
+      : role === "manager";
   return json({
     email: scope.email,
     project: { ...project, role },
-    canReview: role === "manager",
+    canReview,
     assignments,
     memberProfile: memberProfile ?? {
       display_name: "",
@@ -4137,7 +4380,9 @@ async function saveProjectMemberProfile(
   const taskDetails = [
     `申請者: ${scope.email}`,
     `プロジェクト: ${project.name}`,
-    "プロジェクト管理の「運営内自己紹介の承認」から内容を確認してください。",
+    project.id === "atlas"
+      ? "運営事務局の「メンバー情報の承認」から内容を確認してください。"
+      : "プロジェクト管理の「運営内自己紹介の承認」から内容を確認してください。",
   ].join("\n");
   const statements = pending
     ? [
@@ -4285,18 +4530,32 @@ async function reviewProjectProfileChangeRequest(
     .bind(requestId)
     .first<Record<string, unknown>>();
   if (!row) return json({ error: "変更申請が見つかりません。" }, 404);
-  const project = await resolveOperationProject(
-    env,
-    scope,
-    String(row.project_id ?? ""),
-  );
-  if (isResponse(project)) return project;
-  const role = await operationProjectRole(env, scope, project.id);
-  if (role !== "manager")
-    return json(
-      { error: "このプロジェクトの運営内運営のみ利用できます。" },
-      403,
+  let project: OperationProject;
+  const isAtlasSecretariatReviewer =
+    String(row.project_id ?? "") === "atlas" &&
+    (await operationProjectRole(env, scope, "secretariat")) === "manager";
+  if (isAtlasSecretariatReviewer) {
+    const atlasProject = await env.REPORTS.prepare(
+      "SELECT id,slug,name,description FROM atlasez_projects WHERE id='atlas' OR slug='atlas' LIMIT 1",
+    ).first<OperationProject>();
+    if (!atlasProject)
+      return json({ error: "指定したプロジェクトが見つかりません。" }, 404);
+    project = atlasProject;
+  } else {
+    const resolvedProject = await resolveOperationProject(
+      env,
+      scope,
+      String(row.project_id ?? ""),
     );
+    if (isResponse(resolvedProject)) return resolvedProject;
+    const role = await operationProjectRole(env, scope, resolvedProject.id);
+    if (role !== "manager")
+      return json(
+        { error: "このプロジェクトの運営内運営のみ利用できます。" },
+        403,
+      );
+    project = resolvedProject;
+  }
   if (row.status !== "pending")
     return json({ error: "この変更申請は既に処理済みです。" }, 409);
   let payload: { action?: unknown; reviewNote?: unknown };
@@ -4582,7 +4841,7 @@ async function operationsOverview(
   const filters = canSeeAllProjectOperations
     ? ["project_id = ?"]
     : [
-        "project_id = ? AND (assignee_email = ? OR created_by = ? OR subject IS NULL" +
+        "project_id = ? AND (lower(assignee_email) = lower(?) OR instr(',' || lower(COALESCE(assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (task_kind = 'feedback' AND assignee_email = '*') OR created_by = ? OR subject IS NULL" +
           (scope.subjects.length
             ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
             : "") +
@@ -4590,7 +4849,7 @@ async function operationsOverview(
       ];
   const values: unknown[] = canSeeAllProjectOperations
     ? [project.id]
-    : [project.id, scope.email, scope.email, ...scope.subjects];
+    : [project.id, scope.email, scope.email, scope.email, ...scope.subjects];
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const memberWhere = canSeeAllProjectOperations
     ? ""
@@ -4601,7 +4860,7 @@ async function operationsOverview(
   const [tasks, events, progress, members, availability, availabilityBlocks] =
     await Promise.all([
       env.REPORTS.prepare(
-        `SELECT id, project_id, subject, assignee_email, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+        `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
       )
         .bind(...values)
         .all(),
@@ -4691,8 +4950,7 @@ async function operationsOverview(
         scope.isManager ||
         String(task.created_by ?? "").toLowerCase() ===
           scope.email.toLowerCase() ||
-        String(task.assignee_email ?? "").toLowerCase() ===
-          scope.email.toLowerCase()
+        taskAssignedTo(task.assignee_email, scope.email, task.task_kind)
           ? task.reminder_email
           : null,
       reminders: remindersByTask.get(String(task.id)) ?? [],
@@ -4846,12 +5104,22 @@ async function createOperation(
   if (type === "task") {
     const title = text(payload.title, 200);
     if (!title) return json({ error: "タスク名を入力してください。" }, 400);
-    const assignee = text(payload.assigneeEmail, 320) || null;
-    if (assignee && !scope.isManager && assignee !== scope.email)
+    const assignees = normalizedTaskAssignees(
+      payload.assigneeEmails,
+      payload.assigneeEmail,
+    );
+    if (assignees.some((email) => !EMAIL_PATTERN.test(email)))
+      return json({ error: "担当者のメールアドレスを確認してください。" }, 400);
+    if (
+      assignees.length &&
+      !scope.isManager &&
+      assignees.some((email) => email !== scope.email.toLowerCase())
+    )
       return json(
         { error: "他の運営者への依頼は運営内運営のみ作成できます。" },
         403,
       );
+    const assignee = assignees.length ? assignees.join(",") : null;
     const dueAt = text(payload.dueAt, 32);
     const dueTimezone = text(payload.dueTimezone, 80) || "Asia/Tokyo";
     const legacyReminderAt = text(payload.reminderAt, 32);
@@ -4903,7 +5171,7 @@ async function createOperation(
     if (
       reminderEmail &&
       reminderEmail !== scope.email &&
-      reminderEmail !== (assignee ?? "").toLowerCase()
+      !assignees.includes(reminderEmail)
     )
       return json(
         {
@@ -5048,13 +5316,14 @@ async function updateTask(
   if (requestedStatus === null && !reminderAction)
     return json({ error: "更新内容を指定してください。" }, 400);
   const task = await env.REPORTS.prepare(
-    "SELECT project_id,subject,assignee_email,created_by,due_at,due_timezone FROM editorial_tasks WHERE id=?",
+    "SELECT project_id,subject,assignee_email,task_kind,created_by,due_at,due_timezone FROM editorial_tasks WHERE id=?",
   )
     .bind(taskId)
     .first<{
       project_id: string;
       subject: string | null;
       assignee_email: string | null;
+      task_kind: string;
       created_by: string;
       due_at: string | null;
       due_timezone: string;
@@ -5064,7 +5333,7 @@ async function updateTask(
   if (isResponse(project)) return project;
   if (
     !scope.isManager &&
-    task.assignee_email !== scope.email &&
+    !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) &&
     task.created_by !== scope.email
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
@@ -5076,7 +5345,7 @@ async function updateTask(
     if (
       reminderEmail &&
       reminderEmail !== scope.email &&
-      reminderEmail !== (task.assignee_email ?? "").toLowerCase()
+      !normalizedTaskAssignees(task.assignee_email).includes(reminderEmail)
     )
       return json(
         {
@@ -6258,6 +6527,36 @@ async function getEditorialDocument(
           created_at: string;
         }[],
       };
+  const reactionRows = commentIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT comment_id, actor_email, reaction, created_at
+         FROM editorial_comment_reactions
+         WHERE comment_id IN (${commentIds.map(() => "?").join(",")})
+         ORDER BY created_at ASC`,
+      )
+        .bind(...commentIds)
+        .all<{
+          comment_id: string;
+          actor_email: string;
+          reaction: string;
+          created_at: string;
+        }>()
+    : {
+        results: [] as {
+          comment_id: string;
+          actor_email: string;
+          reaction: string;
+          created_at: string;
+        }[],
+      };
+  const reactionsByComment = new Map<string, Map<string, number>>();
+  for (const reaction of reactionRows.results ?? []) {
+    if (reaction.reaction !== "smile") continue;
+    const actors = reactionsByComment.get(reaction.comment_id) ?? new Map();
+    const actor = reaction.actor_email.trim().toLowerCase();
+    if (actor) actors.set(actor, (actors.get(actor) ?? 0) + 1);
+    reactionsByComment.set(reaction.comment_id, actors);
+  }
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
   type CommentActionCounts = Record<CommentAction, number>;
   type CommentActionActors = Record<CommentAction, Map<string, number>>;
@@ -6350,6 +6649,7 @@ async function getEditorialDocument(
       [
         ...commentRows.map((comment) => comment.created_by),
         ...(actionRows.results ?? []).map((action) => action.actor_email),
+        ...(reactionRows.results ?? []).map((reaction) => reaction.actor_email),
       ].filter(Boolean),
     ),
   ];
@@ -6474,6 +6774,15 @@ async function getEditorialDocument(
         reopen: actorCountList(current.actorCounts.reopen),
       },
       tags: tagsByComment.get(comment.id) ?? [],
+      like_actor_counts: [
+        ...(reactionsByComment.get(comment.id) ?? new Map()),
+      ].map(([actor_email, count]) => ({
+        actor_email,
+        actor_display_name:
+          authorProfileByEmail.get(actor_email)?.display_name?.trim() ||
+          actor_email,
+        count,
+      })),
       selections:
         selectionsByComment.get(comment.id) ??
         (comment.selection_text
@@ -6646,8 +6955,8 @@ async function createEditorialDocument(
   await env.REPORTS.prepare(
     `INSERT INTO editorial_documents
       (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
-       status, created_by, updated_by, created_at, updated_at, reviewed_at, locked_ranges, article_references)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -6668,6 +6977,10 @@ async function createEditorialDocument(
       now,
       now,
       values.status === "approved" ? now : null,
+      null,
+      null,
+      null,
+      0,
       JSON.stringify(values.lockedRanges ?? []),
       JSON.stringify(values.references ?? []),
     )
@@ -6693,7 +7006,7 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT subject, status, title, summary, concept_id, body, writing_memo, category, locale, slug, latex_engine, published_at, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, summary, concept_id, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
@@ -6711,11 +7024,23 @@ async function updateEditorialDocument(
         | "slug"
         | "latex_engine"
         | "published_at"
+        | "scheduled_publish_at"
+        | "scheduled_publish_claimed_at"
+        | "publication_review_stage"
+        | "publication_review_round"
         | "locked_ranges"
         | "article_references"
       >
     >();
   if (!existing) return json({ error: "原稿が見つかりません。" }, 404);
+  if (existing.publication_review_stage)
+    return json(
+      {
+        error:
+          "公開審査中は原稿を編集できません。審査担当の判断を待つか、差し戻してください。",
+      },
+      409,
+    );
   const isReviewOnly =
     scope.isManager && !canEditSubject(scope, existing.subject);
   if (
@@ -6741,6 +7066,8 @@ async function updateEditorialDocument(
           (existing.article_references ?? "[]")) ||
       values.writingMemo !== existing.writing_memo ||
       values.latexEngine !== existing.latex_engine ||
+      (values.status !== "approved" &&
+        existing.scheduled_publish_at !== null) ||
       (values.lockedRanges !== undefined &&
         JSON.stringify(values.lockedRanges) !==
           JSON.stringify(
@@ -6788,7 +7115,10 @@ async function updateEditorialDocument(
   await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
       slug = ?, title = ?, summary = ?, concept_id = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
-      updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END
+      updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END,
+      scheduled_publish_at = CASE WHEN ? = 'approved' THEN scheduled_publish_at ELSE NULL END,
+      scheduled_publish_claimed_at = CASE WHEN ? = 'approved' THEN scheduled_publish_claimed_at ELSE NULL END,
+      publication_review_stage = CASE WHEN ? = 'approved' THEN publication_review_stage ELSE NULL END
      WHERE id = ?`,
   )
     .bind(
@@ -6816,6 +7146,9 @@ async function updateEditorialDocument(
       now,
       values.status,
       now,
+      values.status,
+      values.status,
+      values.status,
       documentId,
     )
     .run();
@@ -6841,7 +7174,33 @@ async function listEditorialRevisions(
   )
     .bind(documentId)
     .all();
-  return json({ revisions: result.results });
+  const feedbackRequests = await env.REPORTS.prepare(
+    `SELECT t.id AS task_id, t.title, t.details, t.status, t.assignee_email,
+            t.created_by, t.created_at, t.updated_at,
+            COALESCE(NULLIF(TRIM(profile.display_name), ''), t.created_by) AS requester_display_name
+       FROM editorial_feedback_task_links link
+       JOIN editorial_tasks t ON t.id = link.task_id AND t.task_kind = 'feedback'
+       LEFT JOIN editorial_member_profiles profile ON lower(profile.email) = lower(t.created_by)
+      WHERE link.document_id = ?
+      ORDER BY link.created_at DESC, t.created_at DESC
+      LIMIT 100`,
+  )
+    .bind(documentId)
+    .all<{
+      task_id: string;
+      title: string;
+      details: string;
+      status: string;
+      assignee_email: string | null;
+      created_by: string;
+      created_at: string;
+      updated_at: string;
+      requester_display_name: string;
+    }>();
+  return json({
+    revisions: result.results,
+    feedbackRequests: feedbackRequests.results ?? [],
+  });
 }
 
 async function editorialBoard(request: Request, env: Env): Promise<Response> {
@@ -6957,15 +7316,23 @@ async function updateEditorialReviewAssignment(
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, created_by FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string; status: EditorialDocumentStatus }>();
+    .first<{
+      subject: string;
+      status: EditorialDocumentStatus;
+      title: string;
+      created_by: string;
+    }>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (document.status !== "in-review")
-    return json({ error: "査読中の原稿だけ担当者を設定できます。" }, 400);
+    return json(
+      { error: "フィードバック中の原稿だけ担当者を設定できます。" },
+      400,
+    );
   if (!canReviewDocument(scope, document.subject, document.status))
-    return json({ error: "この分野の査読権限がありません。" }, 403);
+    return json({ error: "この分野のフィードバック権限がありません。" }, 403);
   const reviewerEmails = [
     ...(Array.isArray(payload.reviewerEmails)
       ? payload.reviewerEmails
@@ -6975,15 +7342,28 @@ async function updateEditorialReviewAssignment(
     .filter(Boolean)
     .filter((email, index, all) => all.indexOf(email) === index);
   const requestNote = text(payload.note, 2_000);
+  const existingAssignment = await env.REPORTS.prepare(
+    "SELECT task_id FROM editorial_review_assignments WHERE document_id = ?",
+  )
+    .bind(documentId)
+    .first<{ task_id: string | null }>();
   if (!reviewerEmails.length) {
-    await env.REPORTS.batch([
+    const statements = [
+      ...(existingAssignment?.task_id
+        ? [
+            env.REPORTS.prepare(
+              "UPDATE editorial_tasks SET status='done',updated_at=? WHERE id=? AND task_kind='feedback'",
+            ).bind(new Date().toISOString(), existingAssignment.task_id),
+          ]
+        : []),
       env.REPORTS.prepare(
         "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
       ).bind(documentId),
       env.REPORTS.prepare(
         "DELETE FROM editorial_review_assignments WHERE document_id = ?",
       ).bind(documentId),
-    ]);
+    ];
+    await env.REPORTS.batch(statements);
     return json({ ok: true, reviewerEmail: null, reviewerEmails: [] });
   }
   if (reviewerEmails.includes("*") && reviewerEmails.length > 1)
@@ -6995,7 +7375,7 @@ async function updateEditorialReviewAssignment(
     reviewerEmails.some((email) => email !== "*" && !EMAIL_PATTERN.test(email))
   )
     return json(
-      { error: "査読担当者のメールアドレスを確認してください。" },
+      { error: "フィードバック担当者のメールアドレスを確認してください。" },
       400,
     );
   const reviewers = reviewerEmails.includes("*")
@@ -7018,13 +7398,47 @@ async function updateEditorialReviewAssignment(
       400,
     );
   const now = new Date().toISOString();
+  // 各フィードバック依頼は、記事に紐づく独立した共通タスクとして残す。
+  // 最新の依頼だけは既存の assignment テーブルにも保持し、旧一覧との互換を維持する。
+  const taskId = crypto.randomUUID();
+  const taskAssignee = reviewerEmails.includes("*")
+    ? "*"
+    : reviewerEmails.join(",");
+  const taskDetails = requestNote
+    ? `${requestNote}\n\n記事編集画面: /admin/editor/?document=${documentId}`
+    : `記事のフィードバックをお願いします。\n\n記事編集画面: /admin/editor/?document=${documentId}`;
   await env.REPORTS.batch([
     env.REPORTS.prepare(
-      `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO editorial_review_assignments (document_id, reviewer_email, requested_by, requested_at, updated_at, request_note, task_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(document_id) DO UPDATE SET reviewer_email = excluded.reviewer_email,
-         requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note`,
-    ).bind(documentId, reviewerEmails[0], scope.email, now, now, requestNote),
+         requested_by = excluded.requested_by, updated_at = excluded.updated_at, request_note = excluded.request_note, task_id = excluded.task_id`,
+    ).bind(
+      documentId,
+      reviewerEmails[0],
+      scope.email,
+      now,
+      now,
+      requestNote,
+      taskId,
+    ),
+    env.REPORTS.prepare(
+      `INSERT INTO editorial_tasks (id,project_id,subject,assignee_email,title,details,status,created_by,created_at,updated_at,task_kind)
+       VALUES (?, 'atlas', ?, ?, ?, ?, 'open', ?, ?, ?, 'feedback')
+      `,
+    ).bind(
+      taskId,
+      document.subject,
+      taskAssignee,
+      `フィードバック依頼：${document.title}`,
+      taskDetails,
+      scope.email,
+      now,
+      now,
+    ),
+    env.REPORTS.prepare(
+      "INSERT INTO editorial_feedback_task_links (task_id, document_id, created_at) VALUES (?, ?, ?)",
+    ).bind(taskId, documentId, now),
     env.REPORTS.prepare(
       "DELETE FROM editorial_review_assignment_recipients WHERE document_id = ?",
     ).bind(documentId),
@@ -7036,7 +7450,13 @@ async function updateEditorialReviewAssignment(
         ).bind(documentId, email, now, now),
       ),
   ]);
-  return json({ ok: true, reviewerEmail: reviewerEmails[0], reviewerEmails });
+  return json({
+    ok: true,
+    reviewerEmail: reviewerEmails[0],
+    reviewerEmails,
+    taskId,
+    taskKind: "feedback",
+  });
 }
 
 async function createEditorialComment(
@@ -7110,6 +7530,7 @@ async function createEditorialComment(
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
   await replaceEditorialCommentTags(env, commentId, tags ?? []);
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true }, 201);
 }
 
@@ -7134,7 +7555,8 @@ async function updateEditorialCommentStatus(
     action !== "acknowledge" &&
     action !== "unacknowledge" &&
     action !== "resolve" &&
-    action !== "reopen"
+    action !== "reopen" &&
+    action !== "like"
   )
     return json({ error: "操作を確認してください。" }, 400);
   const comment = await env.REPORTS.prepare(
@@ -7151,6 +7573,48 @@ async function updateEditorialCommentStatus(
   if (!comment) return json({ error: "コメントが見つかりません。" }, 404);
   if (!canReviewDocument(scope, comment.subject, comment.status))
     return json({ error: "このコメントを操作する権限がありません。" }, 403);
+  if (action === "like") {
+    const existing = await env.REPORTS.prepare(
+      `SELECT id FROM editorial_comment_reactions
+       WHERE comment_id = ? AND lower(actor_email) = lower(?) AND reaction = 'smile'`,
+    )
+      .bind(commentId, scope.email)
+      .first<{ id: string }>();
+    if (existing) {
+      await env.REPORTS.prepare(
+        "DELETE FROM editorial_comment_reactions WHERE id = ?",
+      )
+        .bind(existing.id)
+        .run();
+      await notifyEditorialCommentChange(env, documentId);
+      return json({
+        ok: true,
+        action,
+        reaction: "smile",
+        actorEmail: scope.email,
+        toggledOff: true,
+      });
+    }
+    await env.REPORTS.prepare(
+      `INSERT INTO editorial_comment_reactions
+       (id, comment_id, actor_email, reaction, created_at)
+       VALUES (?, ?, ?, 'smile', ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        commentId,
+        scope.email,
+        new Date().toISOString(),
+      )
+      .run();
+    await notifyEditorialCommentChange(env, documentId);
+    return json({
+      ok: true,
+      action,
+      reaction: "smile",
+      actorEmail: scope.email,
+    });
+  }
   const latestAction = await env.REPORTS.prepare(
     `SELECT action FROM editorial_comment_actions
      WHERE comment_id = ? AND lower(actor_email) = lower(?) AND action IN ('acknowledge','unacknowledge')
@@ -7174,6 +7638,7 @@ async function updateEditorialCommentStatus(
         ).bind(commentId, scope.email),
       );
     await env.REPORTS.batch(statements);
+    await notifyEditorialCommentChange(env, documentId);
     return json({
       ok: true,
       action,
@@ -7243,6 +7708,7 @@ async function updateEditorialCommentStatus(
       500,
     );
   }
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true, action, actorEmail: scope.email, recordedAt: now });
 }
 
@@ -7303,6 +7769,7 @@ async function editEditorialComment(
     .run();
   await replaceEditorialCommentSelections(env, commentId, selections);
   if (tags) await replaceEditorialCommentTags(env, commentId, tags);
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true });
 }
 
@@ -7360,6 +7827,7 @@ async function deleteEditorialComment(
   )
     .bind(commentId, commentId)
     .run();
+  await notifyEditorialCommentChange(env, documentId);
   return json({ ok: true });
 }
 
@@ -7810,6 +8278,316 @@ async function publishEditorialDocument(
     )
     .run();
   return json({ ok: true, commitUrl: result.commitUrl });
+}
+
+async function publicationReviewRoleEmails(
+  env: Env,
+  role: EditorialWorkflowRole,
+  subject: string,
+) {
+  const result = await env.REPORTS.prepare(
+    role === "project-leader"
+      ? "SELECT lower(email) AS email FROM editorial_workflow_roles WHERE role = 'project-leader'"
+      : "SELECT lower(email) AS email FROM editorial_workflow_roles WHERE role = 'subject-coordinator' AND (subject = ? OR subject = '*')",
+  )
+    .bind(...(role === "project-leader" ? [] : [subject]))
+    .all<{ email: string }>();
+  return [
+    ...new Set((result.results ?? []).map((row) => row.email).filter(Boolean)),
+  ];
+}
+
+async function scheduleEditorialPublication(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    scheduledPublishAt?: unknown;
+  } | null;
+  const raw = text(payload?.scheduledPublishAt, 80);
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id=?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (document.status !== "approved" || document.publication_review_stage)
+    return json({ error: "公開審査が完了した原稿だけ公開予約できます。" }, 400);
+  if (document.published_at)
+    return json({ error: "公開済みの記事です。" }, 400);
+  if (!raw) {
+    await env.REPORTS.prepare(
+      "UPDATE editorial_documents SET scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+    )
+      .bind(new Date().toISOString(), scope.email, documentId)
+      .run();
+    return json({ ok: true, scheduledPublishAt: null });
+  }
+  const timestamp = new Date(raw);
+  if (
+    !Number.isFinite(timestamp.getTime()) ||
+    timestamp.getTime() <= Date.now()
+  )
+    return json({ error: "公開日時は現在より後に設定してください。" }, 400);
+  const scheduledPublishAt = timestamp.toISOString();
+  await env.REPORTS.prepare(
+    "UPDATE editorial_documents SET scheduled_publish_at=?, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+  )
+    .bind(scheduledPublishAt, new Date().toISOString(), scope.email, documentId)
+    .run();
+  return json({ ok: true, scheduledPublishAt });
+}
+
+async function dispatchScheduledEditorialPublications(env: Env) {
+  const now = new Date().toISOString();
+  const due = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE status='approved' AND published_at IS NULL AND scheduled_publish_at IS NOT NULL AND scheduled_publish_at <= ? AND scheduled_publish_claimed_at IS NULL LIMIT 20`,
+  )
+    .bind(now)
+    .all<EditorialDocument>();
+  let published = 0;
+  for (const document of due.results ?? []) {
+    const claim = (await env.REPORTS.prepare(
+      "UPDATE editorial_documents SET scheduled_publish_claimed_at=? WHERE id=? AND published_at IS NULL AND scheduled_publish_claimed_at IS NULL",
+    )
+      .bind(now, document.id)
+      .run()) as { meta?: { changes?: number } };
+    if (!claim.meta?.changes) continue;
+    try {
+      const result = await writeEditorialDocumentToGitHub(
+        document,
+        env,
+        "published",
+        `Publish scheduled article: ${document.title}`,
+      );
+      if (result instanceof Response)
+        throw new Error("GitHubへの公開に失敗しました。");
+      await env.REPORTS.prepare(
+        "UPDATE editorial_documents SET published_at=?, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+      )
+        .bind(now, now, "scheduled-publisher", document.id)
+        .run();
+      published += 1;
+    } catch (error) {
+      console.error("scheduled editorial publication failed", {
+        documentId: document.id,
+        error,
+      });
+      await env.REPORTS.prepare(
+        "UPDATE editorial_documents SET scheduled_publish_claimed_at=NULL WHERE id=?",
+      )
+        .bind(document.id)
+        .run();
+    }
+  }
+  return { published, due: due.results?.length ?? 0 };
+}
+
+async function getPublicationReviewState(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id = ?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
+  if (!document || !canReviewDocument(scope, document.subject, document.status))
+    return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
+  const [coordinators, leaders] = await Promise.all([
+    publicationReviewRoleEmails(env, "subject-coordinator", document.subject),
+    publicationReviewRoleEmails(env, "project-leader", document.subject),
+  ]);
+  return json({
+    stage: document.publication_review_stage,
+    round: document.publication_review_round,
+    canCompleteWriting:
+      !document.published_at &&
+      !document.publication_review_stage &&
+      (document.status === "in-review" || document.status === "draft") &&
+      (canEditSubject(scope, document.subject) ||
+        document.created_by === scope.email),
+    canDecide:
+      (document.publication_review_stage === "subject-coordinator" &&
+        canCoordinateSubject(scope, document.subject)) ||
+      (document.publication_review_stage === "project-leader" &&
+        Boolean(scope.isProjectLeader)),
+    coordinatorCount: coordinators.length,
+    leaderCount: leaders.length,
+  });
+}
+
+async function startPublicationReview(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id = ?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (
+    !canEditSubject(scope, document.subject) &&
+    document.created_by !== scope.email
+  )
+    return json({ error: "執筆担当者だけが執筆完了にできます。" }, 403);
+  if (document.published_at)
+    return json({ error: "公開済みの記事です。" }, 400);
+  if (document.publication_review_stage)
+    return json({ error: "すでに公開審査中です。" }, 409);
+  if (document.status !== "in-review" && document.status !== "draft")
+    return json({ error: "先に原稿を保存してください。" }, 400);
+  const coordinators = await publicationReviewRoleEmails(
+    env,
+    "subject-coordinator",
+    document.subject,
+  );
+  const leaders = await publicationReviewRoleEmails(
+    env,
+    "project-leader",
+    document.subject,
+  );
+  const stage: EditorialPublicationReviewStage = coordinators.length
+    ? "subject-coordinator"
+    : "project-leader";
+  if (stage === "project-leader" && !leaders.length)
+    return json(
+      {
+        error:
+          "プロジェクトリーダーが設定されていないため、公開審査を開始できません。",
+      },
+      503,
+    );
+  const now = new Date().toISOString();
+  const round = (document.publication_review_round ?? 0) + 1;
+  await env.REPORTS.prepare(
+    `UPDATE editorial_documents SET status='in-review', publication_review_stage=?, publication_review_round=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+  )
+    .bind(stage, round, now, scope.email, documentId)
+    .run();
+  const recipients = stage === "subject-coordinator" ? coordinators : leaders;
+  const recipientLabel =
+    stage === "subject-coordinator" ? "分野統括" : "プロジェクトリーダー";
+  await postDiscordWebhook(
+    env.DISCORD_ATLAS_WEBHOOK_URL,
+    `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
+  );
+  return json({ ok: true, stage, round, recipients, recipientLabel });
+}
+
+async function decidePublicationReview(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    decision?: unknown;
+    note?: unknown;
+  } | null;
+  const decision = text(payload?.decision, 20);
+  const note = text(payload?.note, 2_000);
+  if (decision !== "approved" && decision !== "rejected")
+    return json({ error: "審査結果を選択してください。" }, 400);
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id = ?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  const stage = document.publication_review_stage;
+  if (!stage)
+    return json({ error: "この原稿は公開審査中ではありません。" }, 409);
+  const authorized =
+    stage === "subject-coordinator"
+      ? canCoordinateSubject(scope, document.subject)
+      : Boolean(scope.isProjectLeader);
+  if (!authorized)
+    return json({ error: "この審査を処理する権限がありません。" }, 403);
+  const already = await env.REPORTS.prepare(
+    "SELECT id FROM editorial_publication_reviews WHERE document_id=? AND review_round=? AND stage=? LIMIT 1",
+  )
+    .bind(documentId, document.publication_review_round, stage)
+    .first<{ id: string }>();
+  if (already)
+    return json({ error: "この段階の審査はすでに処理されています。" }, 409);
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    "INSERT INTO editorial_publication_reviews (id,document_id,review_round,stage,decision,actor_email,note,created_at) VALUES (?,?,?,?,?,?,?,?)",
+  )
+    .bind(
+      crypto.randomUUID(),
+      documentId,
+      document.publication_review_round,
+      stage,
+      decision,
+      scope.email,
+      note,
+      now,
+    )
+    .run();
+  if (decision === "rejected") {
+    await env.REPORTS.prepare(
+      "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+    )
+      .bind(now, scope.email, documentId)
+      .run();
+    await postDiscordWebhook(
+      env.DISCORD_ATLAS_WEBHOOK_URL,
+      `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`,
+    );
+    return json({
+      ok: true,
+      status: "in-review",
+      stage: null,
+      returnedToFeedback: true,
+    });
+  }
+  const leaders = await publicationReviewRoleEmails(
+    env,
+    "project-leader",
+    document.subject,
+  );
+  if (stage === "subject-coordinator" && leaders.length) {
+    await env.REPORTS.prepare(
+      "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
+    )
+      .bind(now, scope.email, documentId)
+      .run();
+    await postDiscordWebhook(
+      env.DISCORD_ATLAS_WEBHOOK_URL,
+      `公開審査依頼（プロジェクトリーダー）：${document.title}`,
+    );
+    return json({ ok: true, status: "in-review", stage: "project-leader" });
+  }
+  await env.REPORTS.prepare(
+    "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
+  )
+    .bind(now, now, scope.email, documentId)
+    .run();
+  return json({
+    ok: true,
+    status: "approved",
+    stage: null,
+    approvedForPublication: true,
+  });
 }
 
 async function unpublishEditorialDocument(
@@ -8568,6 +9346,7 @@ async function adminNotifications(
     reviewRows,
     applicationRows,
     taskReminderRows,
+    taskRows,
   ] = await Promise.all([
     env.REPORTS.prepare(
       "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
@@ -8616,7 +9395,7 @@ async function adminNotifications(
       .all<{ id: string; title: string; published_at: string }>(),
     scope.isManager
       ? env.REPORTS.prepare(
-          "SELECT id, subject, title, updated_by, updated_at FROM editorial_documents WHERE status = 'in-review' ORDER BY updated_at ASC LIMIT 30",
+          "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC LIMIT 30",
         ).all<{
           id: string;
           subject: string;
@@ -8659,11 +9438,11 @@ async function adminNotifications(
       `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
-         WHERE t.status != 'done' AND (t.assignee_email=? OR t.created_by=?)
+         WHERE t.status != 'done' AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
          ORDER BY r.remind_at ASC LIMIT 50`,
     )
-      .bind(scope.email, scope.email, scope.email)
+      .bind(scope.email, scope.email, scope.email, scope.email)
       .all<{
         reminder_id: string;
         remind_at: string;
@@ -8673,6 +9452,82 @@ async function adminNotifications(
         title: string;
         project_id: string;
         project_slug: string;
+      }>(),
+    env.REPORTS.prepare(
+      `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.updated_at,
+         COALESCE(p.slug,t.project_id) AS project_slug
+       FROM editorial_tasks t
+       LEFT JOIN atlasez_projects p ON p.id=t.project_id
+       WHERE t.status != 'done' AND ${
+         scope.isManager
+           ? "1=1"
+           : `(lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))${
+               scope.allSubjects
+                 ? ""
+                 : ` AND (t.subject IS NULL OR t.subject='*' OR t.subject IN (${scope.subjects.map(() => "?").join(",")}))`
+             }`
+       }
+       ORDER BY t.updated_at DESC LIMIT 40`,
+    )
+      .bind(
+        ...(scope.isManager
+          ? []
+          : [
+              scope.email,
+              scope.email,
+              scope.email,
+              ...(!scope.allSubjects ? scope.subjects : []),
+            ]),
+      )
+      .all<{
+        id: string;
+        title: string;
+        task_kind: string;
+        details: string;
+        project_id: string;
+        project_slug: string;
+        updated_at: string;
+      }>(),
+  ]);
+  const [publicationReviewRows, publicationReturnedRows] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT d.id, d.title, d.subject, d.publication_review_stage, d.updated_at
+       FROM editorial_documents d
+       WHERE d.published_at IS NULL AND (
+         (d.publication_review_stage='subject-coordinator' AND EXISTS (
+           SELECT 1 FROM editorial_workflow_roles r
+           WHERE r.role='subject-coordinator' AND (r.subject=d.subject OR r.subject='*') AND lower(r.email)=lower(?)
+         )) OR
+         (d.publication_review_stage='project-leader' AND EXISTS (
+           SELECT 1 FROM editorial_workflow_roles r
+           WHERE r.role='project-leader' AND lower(r.email)=lower(?)
+         ))
+       )
+       ORDER BY d.updated_at DESC LIMIT 20`,
+    )
+      .bind(scope.email, scope.email)
+      .all<{
+        id: string;
+        title: string;
+        subject: string;
+        publication_review_stage: EditorialPublicationReviewStage;
+        updated_at: string;
+      }>(),
+    env.REPORTS.prepare(
+      `SELECT d.id, d.title, r.stage, r.note, r.created_at
+       FROM editorial_publication_reviews r
+       JOIN editorial_documents d ON d.id=r.document_id
+       WHERE r.decision='rejected' AND lower(d.created_by)=lower(?)
+         AND r.created_at=(SELECT MAX(r2.created_at) FROM editorial_publication_reviews r2 WHERE r2.document_id=r.document_id)
+       ORDER BY r.created_at DESC LIMIT 20`,
+    )
+      .bind(scope.email)
+      .all<{
+        id: string;
+        title: string;
+        stage: EditorialPublicationReviewStage;
+        note: string;
+        created_at: string;
       }>(),
   ]);
   const notifications = [
@@ -8695,7 +9550,7 @@ async function adminNotifications(
     ...(approvedRows.results ?? []).map((item) => ({
       id: `approved-${item.id}`,
       kind: "approved",
-      title: `査読完了：${item.title}`,
+      title: `フィードバック完了：${item.title}`,
       detail: "公開前の原稿を確認してください。",
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.updated_at,
@@ -8708,16 +9563,41 @@ async function adminNotifications(
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.published_at,
     })),
+    ...(publicationReviewRows.results ?? []).map((item) => ({
+      id: `publication-review-${item.id}-${item.publication_review_stage}`,
+      kind: "publication-review",
+      title: `${item.publication_review_stage === "subject-coordinator" ? "公開審査（分野統括）" : "公開審査（プロジェクトリーダー）"}：${item.title}`,
+      detail: `担当分野：${item.subject} ／ 審査をお願いします。`,
+      href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
+      updatedAt: item.updated_at,
+    })),
+    ...(publicationReturnedRows.results ?? []).map((item) => ({
+      id: `publication-review-returned-${item.id}-${item.created_at}`,
+      kind: "publication-review-returned",
+      title: `公開審査から差し戻し：${item.title}`,
+      detail:
+        item.note || "フィードバック中へ戻されました。内容を確認してください。",
+      href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
+      updatedAt: item.created_at,
+    })),
     ...(scope.isManager
       ? (reviewRows.results ?? []).map((item) => ({
           id: `review-${item.id}`,
           kind: "review",
-          title: `査読依頼：${item.title}`,
+          title: `フィードバック依頼：${item.title}`,
           detail: `担当分野：${item.subject} ／ 依頼者：${item.updated_by}`,
           href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
           updatedAt: item.updated_at,
         }))
       : []),
+    ...(taskRows.results ?? []).map((item) => ({
+      id: `${item.task_kind === "feedback" ? "feedback-request" : "task-request"}-${item.id}`,
+      kind: item.task_kind === "feedback" ? "feedback-request" : "task-request",
+      title: `${taskKindLabel(item.task_kind)}：${item.title}`,
+      detail: item.details?.split("\n")[0] || "依頼内容を確認してください。",
+      href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+      updatedAt: item.updated_at,
+    })),
     ...(applicationRows.results ?? []).map((item) => ({
       id: `application-${item.id}`,
       kind: "application",
@@ -8777,7 +9657,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|mention|approved|published|review|application|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
+                /^(comment|mention|approved|published|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
@@ -8836,6 +9716,29 @@ async function connectEditorialCollaboration(
   );
   const id = namespace.idFromName(documentId);
   return namespace.get(id).fetch(new Request(request, { headers }));
+}
+
+async function notifyEditorialCommentChange(
+  env: Env,
+  documentId: string,
+): Promise<void> {
+  const namespace = env.EDITORIAL_COLLABORATION;
+  if (!namespace) return;
+  try {
+    const id = namespace.idFromName(documentId);
+    await namespace.get(id).fetch(
+      new Request("https://atlasez-editorial-collaboration.internal/events", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-atlasez-document-id": documentId,
+        },
+        body: JSON.stringify({ type: "comments-changed" }),
+      }),
+    );
+  } catch {
+    // コメント自体の保存を失敗させず、接続中の画面は再読込で回復できるようにする。
+  }
 }
 
 async function handleAdminRequest(
@@ -8943,6 +9846,13 @@ async function handleAdminRequest(
     if (request.method === "DELETE")
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
+  }
+  if (url.pathname === "/api/admin/editorial-workflow-roles") {
+    if (request.method === "POST")
+      return createEditorialWorkflowRole(request, env);
+    if (request.method === "DELETE")
+      return deleteEditorialWorkflowRole(request, env);
+    return json({ error: "POST、DELETEのみ利用できます。" }, 405);
   }
   if (
     url.pathname === "/api/admin/discord-member-roles" &&
@@ -9231,6 +10141,37 @@ async function handleAdminRequest(
             editorialCommentStatusMatch[2],
           )
         : json({ error: "PATCH、DELETEのみ利用できます。" }, 405);
+  const editorialPublicationReviewMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/publication-review$/i,
+  );
+  if (editorialPublicationReviewMatch) {
+    if (request.method === "GET")
+      return getPublicationReviewState(
+        request,
+        env,
+        editorialPublicationReviewMatch[1],
+      );
+    if (request.method === "POST")
+      return startPublicationReview(
+        request,
+        env,
+        editorialPublicationReviewMatch[1],
+      );
+    if (request.method === "PATCH")
+      return decidePublicationReview(
+        request,
+        env,
+        editorialPublicationReviewMatch[1],
+      );
+    return json({ error: "GET、POST、PATCHのみ利用できます。" }, 405);
+  }
+  const editorialScheduleMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/schedule$/i,
+  );
+  if (editorialScheduleMatch)
+    return request.method === "POST"
+      ? scheduleEditorialPublication(request, env, editorialScheduleMatch[1])
+      : json({ error: "POSTのみ利用できます。" }, 405);
   const editorialPublishMatch = url.pathname.match(
     /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/publish$/i,
   );
@@ -9345,6 +10286,7 @@ export default {
         Promise.all([
           dispatchDueTaskReminders(env),
           dispatchApplicationEmails(env),
+          dispatchScheduledEditorialPublications(env),
         ]),
       );
       return;
@@ -9356,6 +10298,7 @@ export default {
         purgeExpiredPersonalData(env),
         dispatchDueTaskReminders(env),
         dispatchApplicationEmails(env),
+        dispatchScheduledEditorialPublications(env),
       ]),
     );
   },

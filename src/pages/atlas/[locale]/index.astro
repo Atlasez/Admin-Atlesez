@@ -110,8 +110,8 @@ const summary =
 /** トップ内で切り替える3つの表示 */
 const views = [
   { id: "tiles", label: t(locale, "tileView") },
-  { id: "map", label: t(locale, "map") },
   { id: "list", label: t(locale, "listViewTab") },
+  { id: "map", label: t(locale, "map") },
 ] as const;
 ---
 
@@ -240,17 +240,6 @@ const views = [
           }
         </div>
 
-        {/* --- 学習地図 --- */}
-        <div
-          id="view-panel-map"
-          role="tabpanel"
-          aria-labelledby="view-tab-map"
-          class="view-panel"
-          data-view-panel="map"
-        >
-          <LearningMap locale={locale} />
-        </div>
-
         {/* --- リスト表示 --- */}
         <div
           id="view-panel-list"
@@ -369,6 +358,17 @@ const views = [
               </details>
             ))
           }
+        </div>
+
+        {/* --- 学習地図 --- */}
+        <div
+          id="view-panel-map"
+          role="tabpanel"
+          aria-labelledby="view-tab-map"
+          class="view-panel"
+          data-view-panel="map"
+        >
+          <LearningMap locale={locale} />
         </div>
       </section>
 
