@@ -1,7 +1,7 @@
 # Atlasez01 (atlasez-web)
 
 学生団体 **Atlasez** の公式サイトと、学習サイト **「アトラス」** のソースコード。
-Astro で純粋な静的 HTML を生成し、Cloudflare Pages で公開しています。
+Astro で静的HTMLを生成し、公開サイトと運営用サイトをCloudflare Workersで配信しています。
 
 - 公式サイト: `/`（団体紹介・プロジェクト・お知らせ・運営募集）
 - 学習サイト: `/atlas/ja/`（記事・学習地図・検索・表示設定・運営紹介）
@@ -80,6 +80,11 @@ main にマージされていても公開されません。
 `atlasez-admin`（運営用サイト）へ配信します。正しいアカウント・Worker・ルート・D1を
 検査する `npm run verify:deploy-config` を通してから、`npm run deploy:public` または
 `npm run deploy:admin` を使ってください。詳細は [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+
+運営用サイトの本番運用では、先に [AGENTS.md](AGENTS.md) と
+[docs/ADMIN_DEPLOYMENT_POLICY.md](docs/ADMIN_DEPLOYMENT_POLICY.md) を必ず確認してください。
+ADMIN本番は `admin.atlasez.org` の `atlasez-admin` Workerだけです。Workers.dev URL、
+Dashboard Editorの手動Upload、未コミット変更からのデプロイは行いません。
 
 ## 多言語について
 

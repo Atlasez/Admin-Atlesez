@@ -5,6 +5,7 @@ node_modules/
 .dev.vars
 *.log
 dist/
+public/build-info.json
 .astro/
 .wrangler/
 test-results/
