@@ -95,6 +95,8 @@ interface Env {
   PUBLIC_TURNSTILE_SITE_KEY?: string;
   /** Atlasez.com の公開Workerから応募を受け取るための共有Secret。 */
   PUBLIC_APPLICATION_INGEST_TOKEN?: string;
+  /** 学習サイトの問題報告を受け取るための共有Secret。 */
+  ARTICLE_REPORT_INGEST_TOKEN?: string;
   /** 公開Workerが持つ匿名の都道府県集計を管理画面から読む。 */
   PUBLIC_ANALYTICS_ORIGIN?: string;
   /** Node/WASM TikZ組版サービスのURL。管理Workerからのみ呼び出す。 */
@@ -105,6 +107,12 @@ interface Env {
 
 type ReportStatus = "new" | "reviewing" | "resolved";
 type AdminUpdatePayload = { status?: unknown; adminNote?: unknown };
+const ALLOWED_REPORT_TYPES = new Set([
+  "error",
+  "suggestion",
+  "reference",
+  "other",
+]);
 type PermissionPayload = { email?: unknown; subject?: unknown };
 type EditorialDocumentStatus = "draft" | "in-review" | "on-hold" | "approved";
 type EditorialPublicationReviewStage = "subject-coordinator" | "project-leader";
@@ -233,6 +241,21 @@ type ArticleReport = {
   admin_note: string;
   created_at: string;
   updated_at: string;
+};
+type ArticleReportIngestPayload = {
+  reportId?: unknown;
+  articleTitle?: unknown;
+  articleUrl?: unknown;
+  articleId?: unknown;
+  subject?: unknown;
+  category?: unknown;
+  reportType?: unknown;
+  details?: unknown;
+  contact?: unknown;
+  locale?: unknown;
+  reporterHash?: unknown;
+  contentHash?: unknown;
+  createdAt?: unknown;
 };
 type ArticleAnalytics = {
   article_id: string;
@@ -1342,6 +1365,110 @@ const isSameOrigin = (request: Request) => {
   const origin = request.headers.get("origin");
   return !origin || origin === new URL(request.url).origin;
 };
+
+const hasArticleReportIngestToken = (request: Request, env: Env) => {
+  const expected = env.ARTICLE_REPORT_INGEST_TOKEN?.trim();
+  const received = request.headers
+    .get("x-atlasez-article-report-token")
+    ?.trim();
+  return Boolean(
+    expected &&
+    received &&
+    expected.length === received.length &&
+    [...expected].every((character, index) => character === received[index]),
+  );
+};
+
+const isTrustedArticleUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    const trustedHost =
+      (url.protocol === "https:" &&
+        (url.hostname === "atlasez.org" ||
+          url.hostname === "www.atlasez.org")) ||
+      (url.protocol === "http:" &&
+        (url.hostname === "localhost" || url.hostname === "127.0.0.1"));
+    return trustedHost && url.pathname.startsWith("/atlas/");
+  } catch {
+    return false;
+  }
+};
+
+async function ingestArticleReport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "POST" || !hasArticleReportIngestToken(request, env))
+    return json({ error: "Not found" }, 404);
+  if (
+    request.headers.get("content-type")?.includes("application/json") !== true
+  )
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  let payload: ArticleReportIngestPayload;
+  try {
+    payload = (await request.json()) as ArticleReportIngestPayload;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const reportId = text(payload.reportId, 36);
+  const articleTitle = text(payload.articleTitle, 200);
+  const articleUrl = text(payload.articleUrl, 2_000);
+  const articleId = text(payload.articleId, 200);
+  const subject = text(payload.subject, 80);
+  const category = text(payload.category, 80);
+  const reportType = text(payload.reportType, 40);
+  const details = text(payload.details, 6_000);
+  const contact = text(payload.contact, 320);
+  const locale = text(payload.locale, 16);
+  const reporterHash = text(payload.reporterHash, 128);
+  const contentHash = text(payload.contentHash, 128);
+  if (
+    !/^[0-9a-f-]{36}$/i.test(reportId) ||
+    !articleTitle ||
+    !isTrustedArticleUrl(articleUrl) ||
+    !/^[a-z0-9-]+$/.test(subject) ||
+    !/^[a-z0-9-]+$/.test(category) ||
+    !ALLOWED_REPORT_TYPES.has(reportType) ||
+    !details ||
+    !/^[a-z]{3}$/.test(locale) ||
+    !/^[a-f0-9]{64}$/.test(reporterHash) ||
+    !/^[a-f0-9]{64}$/.test(contentHash)
+  )
+    return json({ error: "問題報告の内容を確認してください。" }, 400);
+  if (contact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact))
+    return json({ error: "連絡先メールアドレスを確認してください。" }, 400);
+
+  const duplicate = await env.REPORTS.prepare(
+    "SELECT id FROM article_reports WHERE id = ? OR content_hash = ? LIMIT 1",
+  )
+    .bind(reportId, contentHash)
+    .first<{ id: string }>();
+  if (duplicate) return json({ ok: true, duplicate: true }, 200);
+
+  await env.REPORTS.prepare(
+    `INSERT INTO article_reports
+      (id, article_title, article_url, article_id, subject, category, report_type, details, contact, locale, reporter_hash, content_hash, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      reportId,
+      articleTitle,
+      articleUrl,
+      articleId || null,
+      subject,
+      category,
+      reportType,
+      details,
+      contact || null,
+      locale,
+      reporterHash,
+      contentHash,
+      new Date().toISOString(),
+    )
+    .run();
+  return json({ ok: true }, 201);
+}
 
 async function listArticleReports(
   request: Request,
@@ -9889,6 +10016,8 @@ async function handleAdminRequest(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/internal/article-reports")
+    return ingestArticleReport(request, env);
   if (url.pathname === "/") {
     const current = await getCurrentUserStage(request, env);
     if (isResponse(current)) {
