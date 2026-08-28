@@ -1,12 +1,32 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+const applicationProjects = [
+  ["atlas", "学習サイト「アトラス」"],
+  ["thinking-cafe", "考えるカフェ"],
+  ["seminar-platform", "ゼミプラットフォーム"],
+  ["student-council-exchange", "日本生徒会協会"],
+  ["secretariat", "運営事務局"],
+] as const;
+const requestedProject = Astro.url.searchParams.get("project")?.trim().toLowerCase() ?? "";
+const selectedProject = applicationProjects.find(([slug]) => slug === requestedProject);
+const projectLabel = selectedProject?.[1] ?? "";
 ---
-<AdminLayout title="運営参加応募" description="運営参加応募の確認">
-  <main class="applications" data-applications>
+<AdminLayout title={selectedProject ? `${projectLabel}：応募管理` : "応募管理"} description="プロジェクト別の運営参加応募を確認">
+  <main class="applications" data-applications data-project={selectedProject?.[0] ?? ""}>
     <header>
-      <h1>運営参加応募</h1>
+      <p>運営参加応募</p>
+      <h1>{selectedProject ? `${projectLabel}：応募管理` : "応募管理"}</h1>
+      <span>{selectedProject ? "このプロジェクトに届いた応募だけを表示しています。" : "応募管理を表示するプロジェクトを選択してください。"}</span>
     </header>
-    <section class="application-flow" aria-labelledby="application-flow-title">
+    <nav class="project-switcher" aria-label="応募管理のプロジェクト切り替え">
+      {applicationProjects.map(([slug, label]) => <a href={`/admin/applications/?project=${slug}`} aria-current={selectedProject?.[0] === slug ? "page" : undefined}>{label}</a>)}
+    </nav>
+    <section class="project-picker" hidden={Boolean(selectedProject)} aria-labelledby="project-picker-title">
+      <p>プロジェクトを選択</p>
+      <h2 id="project-picker-title">確認する応募先を選んでください</h2>
+      <span>プロジェクトをまたいだ一括表示は行わず、各運営ページから個別に確認します。</span>
+    </section>
+    <section class="application-flow" aria-labelledby="application-flow-title" hidden={!selectedProject}>
       <div class="flow-heading"><div><p>参加手続き</p><h2 id="application-flow-title">応募から参加までの流れ</h2></div><span>各段階の確認内容を見ながら対応できます。</span></div>
       <ol class="flow-steps">
         <li><span class="flow-step-number">1</span><div><strong>応募内容を確認</strong><small>希望分野、書きたい記事、参加理由を確認します。</small></div></li>
@@ -15,7 +35,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         <li><span class="flow-step-number">4</span><div><strong>参加環境を整える</strong><small>Discord連携を確認し、必要なら同期を再試行します。</small></div></li>
       </ol>
     </section>
-    <section class="application-overview" aria-labelledby="application-list-title">
+    <section class="application-overview" aria-labelledby="application-list-title" hidden={!selectedProject}>
       <div class="section-heading"><div><p>応募状況</p><h2 id="application-list-title">応募一覧</h2></div><span data-total-count>—</span></div>
       <div class="summary-grid" aria-label="応募状況">
         <div class="summary-card summary-card--new"><strong data-summary-new>0</strong><span>新規</span></div>
@@ -29,15 +49,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         <button type="button" class="button button--quiet" data-clear-filter>絞り込みを解除</button>
       </div>
     </section>
-    <output class="notice" data-notice aria-live="polite"></output>
+    <output class="notice" data-notice aria-live="polite" hidden={!selectedProject}></output>
     <section class="application-navigator" data-application-navigator aria-label="応募者の切り替え" hidden>
       <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
       <label class="application-picker">表示する応募者<select data-application-select aria-label="表示する応募者"></select></label>
       <span class="application-position" data-application-position aria-live="polite"></span>
       <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
     </section>
-    <div class="application-list" data-list>読み込み中…</div>
-    <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title">
+    <div class="application-list" data-list hidden={!selectedProject}>読み込み中…</div>
+    <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title" hidden={!selectedProject}>
       <h2 id="accept-dialog-title">受入を確定しますか？</h2>
       <p>「はい」を押すと、プロジェクト参加を登録し、応募者本人へ受入承認メールを送信します。本人にはプロフィール入力も案内されます。管理権限は別途「運営者・担当管理」から付与してください。</p>
       <div class="accept-dialog__actions">
@@ -80,6 +100,20 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   const root=document.querySelector<HTMLElement>('[data-applications]');
   if(root){
     const esc=(value:unknown)=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]??char));
+    const projectLabels:Record<string,string>={atlas:'学習サイト「アトラス」','thinking-cafe':'考えるカフェ','seminar-platform':'ゼミプラットフォーム','student-council-exchange':'日本生徒会協会',secretariat:'運営事務局'};
+    const projectSlugFromUrl=new URLSearchParams(window.location.search).get('project')?.trim().toLowerCase()??'';
+    const projectSlug=projectLabels[projectSlugFromUrl]?projectSlugFromUrl:'';
+    root.dataset.project=projectSlug;
+    if(projectSlug){
+      const label=projectLabels[projectSlug];
+      const heading=root.querySelector<HTMLElement>('header h1');
+      const description=root.querySelector<HTMLElement>('header>span');
+      if(heading)heading.textContent=`${label}：応募管理`;
+      if(description)description.textContent='このプロジェクトに届いた応募だけを表示しています。';
+      root.querySelector<HTMLElement>('.project-picker')?.setAttribute('hidden','');
+      root.querySelectorAll<HTMLElement>('.application-flow,.application-overview,[data-notice],[data-list],[data-accept-dialog]').forEach(element=>element.removeAttribute('hidden'));
+      root.querySelectorAll<HTMLAnchorElement>('.project-switcher a').forEach(link=>link.setAttribute('aria-current',new URL(link.href).searchParams.get('project')===projectSlug?'page':'false'));
+    }
     const notice=root.querySelector<HTMLOutputElement>('[data-notice]')!;
     const list=root.querySelector<HTMLElement>('[data-list]')!;
     const navigator=root.querySelector<HTMLElement>('[data-application-navigator]')!;
@@ -117,16 +151,16 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const render=(items:any[])=>{visibleApplications=items.filter(matches);if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
     const refresh=()=>render(applications);
     const resetSelectionAndRefresh=()=>{selectedApplicationId='';refresh()};
-    const load=async()=>{try{const response=await fetch('/api/admin/applications',{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};formLabels=data.formLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch(error){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};
+    const load=async()=>{try{const response=await fetch(`/api/admin/applications?project=${encodeURIComponent(projectSlug)}`,{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};formLabels=data.formLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch(error){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};
     search.addEventListener('input',resetSelectionAndRefresh);statusFilter.addEventListener('change',resetSelectionAndRefresh);clearFilter?.addEventListener('click',()=>{search.value='';statusFilter.value='all';resetSelectionAndRefresh()});
     applicationSelect.addEventListener('change',()=>{selectedApplicationId=applicationSelect.value;refresh()});
     previousApplication.addEventListener('click',()=>{const index=visibleApplications.findIndex(application=>application.id===selectedApplicationId);if(index>0){selectedApplicationId=visibleApplications[index-1].id;refresh()}});
     nextApplication.addEventListener('click',()=>{const index=visibleApplications.findIndex(application=>application.id===selectedApplicationId);if(index>=0&&index<visibleApplications.length-1){selectedApplicationId=visibleApplications[index+1].id;refresh()}});
-    const update=async(id:string,status:string,button?:HTMLButtonElement)=>{button?.setAttribute('disabled','');setNotice(status==='accepted'?'受入を確定し、承認メールを送信する準備中…':'状態を更新中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'更新できませんでした。');const warning=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';const emailMessage=status==='accepted'?(data.acceptanceEmailQueued?'応募者への受入承認メールを送信キューに追加しました。':'受入は完了しましたが、承認メールを送信キューに追加できませんでした。'):'';setNotice(warning?`受入は完了しました。${emailMessage} ${warning}`:status==='accepted'?`受入が完了しました。${emailMessage}`:'状態を更新しました。',Boolean(warning||status==='accepted'&&!data.acceptanceEmailQueued));await load()}catch(error){setNotice(error instanceof Error?error.message:'更新できませんでした。',true);await load()}finally{button?.removeAttribute('disabled')}};
+    const update=async(id:string,status:string,button?:HTMLButtonElement)=>{button?.setAttribute('disabled','');setNotice(status==='accepted'?'受入を確定し、承認メールを送信する準備中…':'状態を更新中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}?project=${encodeURIComponent(projectSlug)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'更新できませんでした。');const warning=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';const emailMessage=status==='accepted'?(data.acceptanceEmailQueued?'応募者への受入承認メールを送信キューに追加しました。':'受入は完了しましたが、承認メールを送信キューに追加できませんでした。'):'';setNotice(warning?`受入は完了しました。${emailMessage} ${warning}`:status==='accepted'?`受入が完了しました。${emailMessage}`:'状態を更新しました。',Boolean(warning||status==='accepted'&&!data.acceptanceEmailQueued));await load()}catch(error){setNotice(error instanceof Error?error.message:'更新できませんでした。',true);await load()}finally{button?.removeAttribute('disabled')}};
     root.addEventListener('change',event=>{const select=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-id]');if(!select)return;if(select.value==='accepted'){pendingAcceptanceId=select.dataset.id??'';acceptDialog.showModal();return}void update(select.dataset.id??'',select.value)});
     acceptCancel.addEventListener('click',()=>{pendingAcceptanceId='';acceptDialog.close();void load()});
     acceptConfirm.addEventListener('click',()=>{const id=pendingAcceptanceId;pendingAcceptanceId='';acceptDialog.close();if(id)void update(id,'accepted',acceptConfirm)});
     root.addEventListener('click',event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-retry]');if(button)void update(button.dataset.retry??'','accepted',button)});
-    void load();
+    if(projectSlug) void load();
   }
 </script>

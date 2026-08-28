@@ -435,6 +435,8 @@ const APPLICATION_FORM_LABELS: Record<string, string> = {
   secretariat: "運営事務局",
 };
 const APPLICATION_FORM_SLUGS = new Set(Object.keys(APPLICATION_FORM_LABELS));
+const canonicalApplicationProjectSlug = (value: string) =>
+  value === "semi-platform" ? "seminar-platform" : value;
 // 同じ学校・職場のネットワークから応募が集中しても、正当な応募を止めない。
 // 公開取込は共有トークン経由のため控えめにし、ログイン済みの応募は認証と
 // メールアドレス単位の重複確認を前提に、まとまった応募を受け付ける。
@@ -4501,8 +4503,16 @@ async function reviewProjectProfileChangeRequest(
 }
 
 async function listApplications(request: Request, env: Env): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
-  if (isResponse(scope)) return scope;
+  const requestedProject =
+    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ?? "";
+  if (!APPLICATION_FORM_SLUGS.has(requestedProject))
+    return json(
+      { error: "応募管理を表示するプロジェクトを指定してください。" },
+      400,
+    );
+  const access = await getProjectReviewerScope(request, env, requestedProject);
+  if (isResponse(access)) return access;
+  const projectSlug = canonicalApplicationProjectSlug(access.project.slug);
   const rows = await env.REPORTS.prepare(
     `SELECT a.id,a.name,a.email,a.affiliation_email,a.family_name,a.given_name,a.middle_name,a.nickname,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.project_slug,a.project_answers,
       a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
@@ -4511,9 +4521,13 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
       COALESCE(d.discord_user_id, '') AS verified_discord_user_id
      FROM atlasez_member_applications a
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = a.email
+     WHERE a.project_slug = ?
      ORDER BY CASE a.status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END,a.created_at DESC LIMIT 300`,
-  ).all<Record<string, unknown>>();
+  )
+    .bind(projectSlug)
+    .all<Record<string, unknown>>();
   return json({
+    project: { slug: projectSlug, name: access.project.name },
     applications: rows.results,
     subjectLabels: APPLICATION_SUBJECT_LABELS,
     formLabels: APPLICATION_FORM_LABELS,
@@ -4526,8 +4540,19 @@ async function updateApplication(
   id: string,
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
-  if (isResponse(scope)) return scope;
+  const requestedProject =
+    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ?? "";
+  if (!APPLICATION_FORM_SLUGS.has(requestedProject))
+    return json(
+      { error: "応募管理を表示するプロジェクトを指定してください。" },
+      400,
+    );
+  const access = await getProjectReviewerScope(request, env, requestedProject);
+  if (isResponse(access)) return access;
+  const scope = access.scope;
+  const applicationProjectSlug = canonicalApplicationProjectSlug(
+    access.project.slug,
+  );
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   let payload: {
@@ -4546,9 +4571,9 @@ async function updateApplication(
     return json({ error: "状態を確認してください。" }, 400);
   const application = await env.REPORTS.prepare(
     `SELECT name,nickname,email,status,project_slug,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note
-     FROM atlasez_member_applications WHERE id=?`,
+     FROM atlasez_member_applications WHERE id=? AND project_slug=?`,
   )
-    .bind(id)
+    .bind(id, applicationProjectSlug)
     .first<{
       name: string;
       nickname: string;
@@ -10017,7 +10042,17 @@ async function handleAdminRequest(
       "/admin/onboarding-demo/",
     ]);
     if (managerPages.has(url.pathname)) {
-      const managerScope = await getGlobalAdminScope(request, env);
+      const managerScope =
+        url.pathname === "/admin/applications" ||
+        url.pathname === "/admin/applications/"
+          ? url.searchParams.has("project")
+            ? await getProjectReviewerScope(
+                request,
+                env,
+                url.searchParams.get("project") ?? "",
+              )
+            : await getGlobalAdminScope(request, env)
+          : await getGlobalAdminScope(request, env);
       if (isResponse(managerScope)) return managerScope;
     }
     return fetchAdminAsset(request, env);
