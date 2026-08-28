@@ -3,7 +3,14 @@
 import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../components/Breadcrumb.astro";
 import { atlasPath, withBase } from "../../../../lib/site";
-import { t, LOCALES, localeNames, type Locale } from "../../../../lib/i18n";
+import {
+  localizedName,
+  t,
+  LOCALES,
+  localeNames,
+  type Locale,
+} from "../../../../lib/i18n";
+import { getPublishedSubjects } from "../../../../lib/content";
 
 export function getStaticPaths() {
   return LOCALES.map((locale) => ({ params: { locale } }));
@@ -17,6 +24,17 @@ const filterLabels: Record<string, string> = {
   category: t(locale, "category"),
   locale: t(locale, "languages"),
 };
+
+const subjectCategoryMap = Object.fromEntries(
+  (await getPublishedSubjects())
+    .filter((subject) => subject.data.status === "published")
+    .map((subject) => [
+      localizedName(subject.data.name, locale),
+      [...subject.data.categories]
+        .sort((a, b) => a.order - b.order)
+        .map((category) => localizedName(category.name, locale)),
+    ]),
+);
 ---
 
 <AtlasLayout
@@ -45,6 +63,7 @@ const filterLabels: Record<string, string> = {
       data-locale-name={localeNames[locale]}
       data-all-label={t(locale, "all")}
       data-filter-labels={JSON.stringify(filterLabels)}
+      data-subject-categories={JSON.stringify(subjectCategoryMap)}
     >
       <label for="search-input">{t(locale, "searchPlaceholder")}</label>
       <div class="search-row">
@@ -58,7 +77,7 @@ const filterLabels: Record<string, string> = {
         <button type="submit" class="button">{t(locale, "search")}</button>
       </div>
       <div class="search-filters" data-search-filters>
-        {/* フィルタはPagefindのインデックスから動的生成される */}
+        {/* 選択肢と件数はPagefindから取得し、分野→カテゴリの順で描画する */}
       </div>
     </form>
     <p class="search-note" data-search-note>
@@ -90,6 +109,25 @@ const filterLabels: Record<string, string> = {
     gap: var(--space-3);
     flex-wrap: wrap;
     margin-top: var(--space-2);
+  }
+  .search-filters :global(.search-filter) {
+    display: grid;
+    gap: 0.35rem;
+    min-width: min(100%, 13rem);
+  }
+  .search-filters :global(.search-filter.is-multiple) {
+    min-width: min(100%, 16rem);
+  }
+  .search-filters :global(.search-filter select) {
+    min-width: 13rem;
+  }
+  .search-filters :global(.search-filter select[multiple]) {
+    min-height: 8.5rem;
+  }
+  .search-filters :global(.search-filter-hint) {
+    color: var(--text-secondary);
+    font-size: calc(0.78rem * var(--text-scale));
+    margin: 0.2rem 0 0;
   }
   .search-filters :global(label) {
     font-weight: 400;
@@ -158,41 +196,137 @@ const filterLabels: Record<string, string> = {
     filterLabels = {};
   }
 
+  let subjectCategoryMap: Record<string, string[]> = {};
+  try {
+    subjectCategoryMap = JSON.parse(form?.dataset.subjectCategories ?? "{}");
+  } catch {
+    subjectCategoryMap = {};
+  }
+
+  const filterControls = new Map<string, HTMLSelectElement>();
+  let availableFilters: Record<string, Record<string, number>> = {};
+
+  function selectedSubjectNames(): string[] {
+    const select = filterControls.get("subject");
+    if (!select) return [];
+    return [...select.selectedOptions]
+      .map((option) => option.value)
+      .filter(Boolean);
+  }
+
+  function refreshCategoryOptions(): void {
+    const select = filterControls.get("category");
+    if (!select) return;
+    const selectedSubjects = selectedSubjectNames();
+    const allowed = new Set(
+      selectedSubjects.length === 0
+        ? Object.keys(availableFilters.category ?? {})
+        : selectedSubjects.flatMap((subject) => subjectCategoryMap[subject] ?? []),
+    );
+    const current = select.value;
+    const entries = Object.entries(availableFilters.category ?? {}).filter(([value]) =>
+      allowed.has(value),
+    );
+    select.replaceChildren();
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = allLabel;
+    select.append(all);
+    for (const [value, articleCount] of entries) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = `${value} (${articleCount})`;
+      select.append(option);
+    }
+    select.value = entries.some(([value]) => value === current) ? current : "";
+  }
+
+  function normalizeMultipleSelect(select: HTMLSelectElement): void {
+    if (!select.multiple) return;
+    const selected = [...select.selectedOptions];
+    const all = selected.find((option) => option.value === "");
+    if (all) {
+      for (const option of select.options) option.selected = option === all;
+    } else if (selected.length === 0 && select.options[0]) {
+      select.options[0].selected = true;
+    }
+  }
+
+  function createFilterControl(
+    name: string,
+    values: Record<string, number>,
+    multiple = false,
+  ): HTMLSelectElement {
+    const wrap = document.createElement("span");
+    wrap.className = `search-filter${multiple ? " is-multiple" : ""}`;
+    const label = document.createElement("label");
+    const id = `filter-${name}`;
+    label.htmlFor = id;
+    label.textContent = filterLabels[name] ?? name;
+    const select = document.createElement("select");
+    select.id = id;
+    select.dataset.filterName = name;
+    select.multiple = multiple;
+    if (multiple) {
+      select.size = Math.min(6, Math.max(3, Object.keys(values).length + 1));
+      select.setAttribute("aria-describedby", "search-subject-hint");
+    }
+    const all = document.createElement("option");
+    all.value = "";
+    all.textContent = allLabel;
+    all.selected = true;
+    select.append(all);
+    for (const [value, articleCount] of Object.entries(values)) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = `${value} (${articleCount})`;
+      select.append(option);
+    }
+    select.addEventListener("change", () => {
+      normalizeMultipleSelect(select);
+      if (name === "subject") refreshCategoryOptions();
+      void run();
+    });
+    wrap.append(label, select);
+    if (multiple) {
+      const hint = document.createElement("small");
+      hint.id = "search-subject-hint";
+      hint.className = "search-filter-hint";
+      hint.textContent =
+        document.documentElement.lang === "ja"
+          ? "Ctrl / ⌘ を押しながら複数選択"
+          : "Hold Ctrl / ⌘ to select multiple";
+      wrap.append(hint);
+    }
+    filtersEl?.append(wrap);
+    filterControls.set(name, select);
+    return select;
+  }
+
   async function init(): Promise<void> {
     if (!form) return;
     try {
       adapter = await createPagefindAdapter(form.dataset.base ?? "/");
       note?.remove();
-      // フィルタUIを動的生成
-      const available = await adapter.filters();
+      availableFilters = await adapter.filters();
       if (filtersEl) {
-        for (const [name, values] of Object.entries(available)) {
-          const id = `filter-${name}`;
-          const wrap = document.createElement("span");
-          const label = document.createElement("label");
-          label.htmlFor = id;
-          label.textContent = filterLabels[name] ?? name;
-          const select = document.createElement("select");
-          select.id = id;
-          select.dataset.filterName = name;
-          const all = document.createElement("option");
-          all.value = "";
-          all.textContent = allLabel;
-          select.append(all);
-          for (const [v, count] of Object.entries(values)) {
-            const opt = document.createElement("option");
-            opt.value = v;
-            opt.textContent = `${v} (${count})`;
-            select.append(opt);
-          }
-          // 言語フィルタは現在ページのロケールを初期選択にする
-          if (name === "locale" && localeName && values[localeName]) {
-            select.value = localeName;
-          }
-          select.addEventListener("change", run);
-          wrap.append(label, select);
-          filtersEl.append(wrap);
+        filtersEl.replaceChildren();
+        const subjectSelect = createFilterControl(
+          "subject",
+          availableFilters.subject ?? {},
+          true,
+        );
+        createFilterControl("category", availableFilters.category ?? {});
+        const localeSelect = createFilterControl(
+          "locale",
+          availableFilters.locale ?? {},
+        );
+        // 言語フィルタは現在ページのロケールを初期選択にする
+        if (localeName && availableFilters.locale?.[localeName]) {
+          localeSelect.value = localeName;
         }
+        normalizeMultipleSelect(subjectSelect);
+        refreshCategoryOptions();
       }
     } catch {
       /* 開発サーバーではインデックスがないため案内文を残す */
@@ -213,10 +347,18 @@ const filterLabels: Record<string, string> = {
       }
       return;
     }
-    const filters: Record<string, string | undefined> = {};
+    const filters: Record<string, string | string[] | undefined> = {};
     filtersEl
       ?.querySelectorAll<HTMLSelectElement>("select")
-      .forEach((s) => (filters[s.dataset.filterName ?? ""] = s.value));
+      .forEach((select) => {
+        const name = select.dataset.filterName ?? "";
+        const values = [...select.selectedOptions]
+          .map((option) => option.value)
+          .filter(Boolean);
+        if (values.length > 0) {
+          filters[name] = select.multiple ? values : values[0];
+        }
+      });
     const items = await adapter.search(q, filters);
     resultsEl.innerHTML = "";
     for (const item of items) {

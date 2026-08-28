@@ -163,6 +163,17 @@ test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する"
   await expect(review).toHaveCSS("grid-column-start", "2");
 });
 
+test("E-15: 既存原稿を開いたときはページ先頭から編集を始める", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-document-heading]")).toHaveText("群の定義");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(10);
+  await expect(page.locator(".document-toolbar")).toBeVisible();
+});
+
 test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示する", async ({
   page,
 }) => {
@@ -1094,4 +1105,139 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   );
   await page.keyboard.press("Enter");
   await expect(reply).toHaveValue("@Alice ");
+});
+
+test("CM-RT: コメント変更通知を受けると一覧をリアルタイム更新する", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    class TestSocket extends EventTarget {
+      static readonly OPEN = 1;
+      readonly readyState = 0;
+      binaryType = "arraybuffer";
+      constructor() {
+        super();
+        (window as Window & { __testSockets?: TestSocket[] }).__testSockets ??=
+          [];
+        (
+          window as unknown as { __testSockets: TestSocket[] }
+        ).__testSockets.push(this);
+        queueMicrotask(() => {
+          Object.defineProperty(this, "readyState", { value: TestSocket.OPEN });
+          this.dispatchEvent(new Event("open"));
+        });
+      }
+      send() {}
+      close() {
+        Object.defineProperty(this, "readyState", { value: 3 });
+        this.dispatchEvent(new Event("close"));
+      }
+    }
+    Object.defineProperty(window, "WebSocket", {
+      configurable: true,
+      writable: true,
+      value: TestSocket,
+    });
+  });
+  let documentReads = 0;
+  const newComment = {
+    id: "comment-realtime",
+    parent_comment_id: null,
+    body: "別画面から追加されたコメントです。",
+    created_by: "bob@example.com",
+    author_display_name: "Bob",
+    created_at: "2026-08-20T02:00:00.000Z",
+    selection_start: null,
+    selection_end: null,
+    selection_text: null,
+    selections: [],
+    tags: [],
+    acknowledged_at: null,
+    acknowledged_by: null,
+    acknowledged_by_emails: [],
+    unacknowledged_by_emails: [],
+    resolved_at: null,
+    resolved_by: null,
+    action_actor_counts: { acknowledge: [], unacknowledge: [] },
+  };
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/auth-status") {
+      await route.fulfill({
+        json: { email: "alice@example.com", isManager: true },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/profile") {
+      await route.fulfill({
+        json: { profile: { display_name: "Alice", avatar_url: "" } },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/notifications") {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents") {
+      await route.fulfill({
+        json: {
+          documents: [documentItem],
+          mentionNames: ["Alice", "Bob"],
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            isManager: true,
+          },
+        },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents/doc-1") {
+      documentReads += 1;
+      await route.fulfill({
+        json: {
+          document: documentItem,
+          comments: documentReads > 1 ? [...comments, newComment] : comments,
+        },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/assets")) {
+      await route.fulfill({ json: { assets: [] } });
+      return;
+    }
+    if (url.pathname.endsWith("/revisions")) {
+      await route.fulfill({ json: { revisions: [] } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: "not found" } });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(
+    page.locator('[data-comment-context="comment-1"]'),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __testSockets?: unknown[] }).__testSockets
+            ?.length ?? 0,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await page.evaluate(() => {
+    const sockets =
+      (window as Window & { __testSockets?: EventTarget[] }).__testSockets ??
+      [];
+    sockets.forEach((socket) =>
+      socket.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ type: "comments-changed" }),
+        }),
+      ),
+    );
+  });
+  await expect(
+    page.locator('[data-comment-context="comment-realtime"]'),
+  ).toBeVisible();
 });
