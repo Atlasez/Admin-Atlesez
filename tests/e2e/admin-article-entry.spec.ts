@@ -109,6 +109,68 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(card).toHaveAttribute("aria-label", /編集中/);
   });
 
+  test("D-3: 原稿一覧を分野とカテゴリで絞り込める", async ({ page }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "ring-doc",
+              subject: "mathematics",
+              category: "ring-theory",
+              title: "環論の記事",
+              status: "draft",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "group-doc",
+              subject: "mathematics",
+              category: "group-theory",
+              title: "群論の記事",
+              status: "draft",
+              updated_at: "2026-08-27T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "physics-doc",
+              subject: "physics",
+              category: "newtonian-mechanics",
+              title: "力学の記事",
+              status: "draft",
+              updated_at: "2026-08-26T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=taxonomy-filter");
+
+    await expect(page.locator("[data-subject] option")).toHaveCount(24);
+    await expect(page.locator("[data-category] option")).toContainText([
+      "すべてのカテゴリ",
+      "環論",
+    ]);
+    await page.locator("[data-subject]").selectOption("mathematics");
+    await expect(page.locator("[data-list] .article")).toHaveCount(2);
+    await expect(page.locator("[data-list]")).toContainText("環論の記事");
+    await expect(page.locator("[data-list]")).toContainText("群論の記事");
+    await expect(page.locator("[data-list]")).not.toContainText("力学の記事");
+
+    await page.locator("[data-category]").selectOption("ring-theory");
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
+    await expect(page.locator("[data-list]")).toContainText("環論の記事");
+    await expect(page.locator("[data-list]")).not.toContainText("群論の記事");
+    await expect(page.locator("[data-count]")).toHaveText("1件");
+
+    await page.locator("[data-subject]").selectOption("all");
+    await expect(page.locator("[data-category]")).toHaveValue("ring-theory");
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
+  });
+
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
     page,
   }) => {
