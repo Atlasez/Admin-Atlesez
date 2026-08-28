@@ -1,14 +1,24 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("A/D 原稿一覧の作業導線", () => {
-  test("運営トップに規則を追加し、プロジェクト側マイページを表示しない", async ({ page }) => {
+  test("運営トップを指定どおり4グループに分け、プロジェクト側マイページを表示しない", async ({ page }) => {
     await page.goto("admin/atlas/");
 
-    await expect(page.getByRole("link", { name: /規則を開く/ })).toHaveAttribute(
+    const groups = page.locator("[data-menu-group]");
+    await expect(groups).toHaveCount(4);
+    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
+    await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
+    await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(3);
+    await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(1);
+    await expect(groups.nth(2).getByRole("link", { name: /規則を開く/ })).toHaveAttribute(
       "href",
       "/admin/rules/",
     );
-    await expect(page.locator(".project-links")).not.toContainText("マイページ");
+    await expect(page.locator("[data-admin-atlas-menu] .menu-groups")).not.toContainText("マイページ");
+    await expect(page.getByRole("link", { name: /閲覧統計を開く/ })).toHaveAttribute(
+      "href",
+      "/admin/analytics/",
+    );
   });
 
   test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({ page }) => {
