@@ -137,14 +137,14 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           const failed = applications.some((item) => item.provisioningStatus === "failed");
           discordLink.href = `/auth/discord/start?returnTo=${encodeURIComponent("/applicant/")}`;
           discordLink.hidden = connected;
-          discordStatus.textContent = synced ? "参加・設定済み" : connected ? "連携済み" : "未連携";
+          discordStatus.textContent = synced ? "参加・確認済み" : connected ? "連携済み" : "未連携";
           discordStatus.dataset.state = synced ? "synced" : failed ? "failed" : "";
           discordMessage.textContent = synced
-            ? "Discordサーバーへの参加とロール設定が完了しています。"
+            ? "Discordサーバーへの参加と既存ロールの照合が完了しています。"
             : failed
-              ? "Discordへの参加またはロール設定に失敗しました。システムが自動で再試行します。"
+              ? "Discordへの参加または既存ロールの確認に失敗しました。システムが自動で再試行します。"
               : connected
-                ? "Discordの同意は確認済みです。運営承認後にサーバー参加とロール設定を自動で行います。"
+                ? "Discordの同意は確認済みです。運営承認後にサーバー参加と既存ロールの確認を行います。"
                 : "「Discordと連携」を1回実行し、Discordの同意画面で許可してください。運営承認後に自動でサーバーへ追加します。";
           return;
         }
