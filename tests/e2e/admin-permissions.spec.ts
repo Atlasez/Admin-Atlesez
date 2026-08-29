@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("参加者カードの権限操作は主CTAと補助操作を整理して表示する", async ({
   page,
 }) => {
+  let catalogLoaded = false;
   await page.route("**/api/admin/report-admin-permissions", async (route) => {
     await route.fulfill({
       status: 200,
@@ -19,7 +20,25 @@ test("参加者カードの権限操作は主CTAと補助操作を整理して�
           },
         ],
         workflowRoles: [],
+        discordRoles: catalogLoaded
+          ? [
+              {
+                discord_role_id: "role-mathematics",
+                name: "数学運営",
+                position: 10,
+                is_managed: 0,
+              },
+            ]
+          : [],
       }),
+    });
+  });
+  await page.route("**/api/admin/discord-provision-roles", async (route) => {
+    catalogLoaded = true;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
     });
   });
 
@@ -41,4 +60,7 @@ test("参加者カードの権限操作は主CTAと補助操作を整理して�
   expect(buttonMetrics[0]?.height).toBeLessThanOrEqual(40);
   expect(buttonMetrics[2]?.height).toBeLessThanOrEqual(40);
   expect(buttonMetrics[1]?.gridColumn).toBe("1 / -1");
+  await expect(card.locator("[data-discord-roles] option")).toHaveText(
+    "数学運営",
+  );
 });
