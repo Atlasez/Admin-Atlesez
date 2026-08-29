@@ -1018,7 +1018,8 @@ async function getAuthenticatedEmail(
       )
         .bind(await hash(token), new Date().toISOString())
         .first<{ email: string; canonical_email: string | null }>();
-      if (session?.email) return session.canonical_email ?? session.email;
+      if (session?.email)
+        return (session.canonical_email ?? session.email).trim().toLowerCase();
     }
   }
 
@@ -2173,9 +2174,11 @@ async function provisionDiscordAttributeRoles(
   const matched: string[] = [];
   const missing: string[] = [];
   for (const definition of definitions) {
-    const current = existing.find(
-      (role) => role.name.trim() === definition.value.trim(),
-    );
+  const current = existing.find(
+      (role) =>
+        isAssignableDiscordRole(role, env.DISCORD_GUILD_ID ?? "") &&
+        role.name.trim() === definition.value.trim(),
+  );
     const roleId = current?.id;
     if (!roleId) {
       missing.push(definition.value);
@@ -3992,7 +3995,11 @@ async function provisionApplicationDiscordRoles(
   const guildRoles = (await rolesResponse.json()) as Array<{
     id: string;
     name: string;
+    managed?: boolean;
   }>;
+  const assignableGuildRoles = guildRoles.filter((role) =>
+    isAssignableDiscordRole(role, env.DISCORD_GUILD_ID ?? ""),
+  );
   const [subjectMappings, attributeMappings] = await Promise.all([
     env.REPORTS.prepare(
       "SELECT discord_role_id FROM atlasez_discord_role_mappings WHERE project_id = 'atlas'",
@@ -4009,12 +4016,16 @@ async function provisionApplicationDiscordRoles(
   const managedRoleIds = new Set(
     [...(subjectMappings.results ?? []), ...(attributeMappings.results ?? [])]
       .map((mapping) => mapping.discord_role_id)
-      .filter((roleId) => guildRoles.some((role) => role.id === roleId)),
+      .filter((roleId) =>
+        assignableGuildRoles.some((role) => role.id === roleId),
+      ),
   );
   const desired = new Set<string>();
   const warnings: string[] = [];
   for (const assignment of manualAssignments.results ?? []) {
-    if (guildRoles.some((role) => role.id === assignment.discord_role_id))
+    if (
+      assignableGuildRoles.some((role) => role.id === assignment.discord_role_id)
+    )
       managedRoleIds.add(assignment.discord_role_id);
     if (assignment.is_active)
       desired.add(assignment.discord_role_id);
@@ -4043,9 +4054,14 @@ async function provisionApplicationDiscordRoles(
         .first<{ discord_role_id: string }>();
       roleId = mapping?.discord_role_id ?? "";
     }
-    if (!roleId || !guildRoles.some((role) => role.id === roleId))
+    if (
+      !roleId ||
+      !assignableGuildRoles.some((role) => role.id === roleId)
+    )
       roleId =
-        guildRoles.find((role) => role.name.trim() === label.trim())?.id ?? "";
+        assignableGuildRoles.find(
+          (role) => role.name.trim() === label.trim(),
+        )?.id ?? "";
     if (!roleId) {
       warnings.push(`Discordに「${label}」ロールが存在しません。運営サイト側の対応表だけを確認しました。`);
       return;
@@ -4160,6 +4176,11 @@ async function provisionMemberDiscordRolesForEmail(
     },
   );
 }
+
+const isAssignableDiscordRole = (
+  role: { id: string; managed?: boolean },
+  guildId: string,
+) => !role.managed && role.id !== guildId;
 
 const discordProvisionRetryDelay = (attempt: number) => {
   const delays = [5, 30, 120, 720, 1_440, 2_880];
