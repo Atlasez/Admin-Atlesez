@@ -133,16 +133,21 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
           discordCard.hidden = false;
           const connected = data.discord?.connected === true;
+          const accepted = applications.some((item) => item.status === "accepted");
           const synced = applications.some((item) => item.provisioningStatus === "synced");
           const failed = applications.some((item) => item.provisioningStatus === "failed");
           discordLink.href = `/auth/discord/start?returnTo=${encodeURIComponent("/applicant/")}`;
-          discordLink.hidden = connected;
-          discordStatus.textContent = synced ? "参加・確認済み" : connected ? "連携済み" : "未連携";
+          discordLink.hidden = connected || !accepted;
+          discordStatus.textContent = synced ? "参加・確認済み" : connected ? "連携済み" : accepted ? "未連携" : "承認待ち";
           discordStatus.dataset.state = synced ? "synced" : failed ? "failed" : "";
           discordMessage.textContent = synced
             ? "Discordサーバーへの参加と既存ロールの照合が完了しています。"
             : failed
               ? "Discordへの参加または既存ロールの確認に失敗しました。システムが自動で再試行します。"
+              : !accepted
+                ? connected
+                  ? "Discordの同意は確認済みです。応募が承認されるとサーバー参加と既存ロールの確認を行います。"
+                  : "応募が承認された後に、ここからDiscordと連携できます。"
               : connected
                 ? "Discordの同意は確認済みです。運営承認後にサーバー参加と既存ロールの確認を行います。"
                 : "「Discordと連携」を1回実行し、Discordの同意画面で許可してください。運営承認後に自動でサーバーへ追加します。";
