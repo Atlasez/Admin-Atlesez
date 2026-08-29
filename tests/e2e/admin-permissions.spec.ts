@@ -41,6 +41,26 @@ test("参加者カードの権限操作は主CTAと補助操作を整理して�
       body: JSON.stringify({ ok: true }),
     });
   });
+  await page.route("**/api/admin/discord-readiness", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ready: false,
+        configured: { emailDelivery: false },
+        checks: {
+          botApi: false,
+          guildApi: false,
+          rolesApi: false,
+          botMember: false,
+          manageRoles: false,
+          roleHierarchy: false,
+          roleMappings: false,
+        },
+        warnings: ["テスト用の未設定"],
+      }),
+    });
+  });
 
   await page.goto("./admin/permissions/?project=atlas");
 
@@ -66,4 +86,10 @@ test("参加者カードの権限操作は主CTAと補助操作を整理して�
   await expect(page.locator("[data-member-filter]")).toBeVisible();
   await expect(card.locator("[data-discord-role]")).toHaveCount(1);
   await expect(card.locator(".member-role-option span")).toHaveText("数学運営");
+  const readinessButton = page.locator("[data-discord-readiness]");
+  await expect(readinessButton).toHaveText("運用事前チェック");
+  await readinessButton.click();
+  await expect(page.locator("[data-discord-readiness-message]")).toContainText(
+    "未完了の項目があります",
+  );
 });

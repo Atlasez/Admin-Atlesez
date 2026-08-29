@@ -22,8 +22,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         <label>担当権限（複数選択可）<select name="subject" multiple required size="4"><option value="*">全分野管理者</option>{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}（担当）</option>)}</select></label>
         <button type="submit" class="button-primary">運営者を追加</button>
       </form>
-      <div class="member-admin__sync"><div><strong>Discordロール対応表</strong><small>Discord側の既存ロールを読み取り、運営サイトと照合します。</small></div><button type="button" class="member-provision" data-provision-roles>既存ロールを読み込む</button></div>
+      <div class="member-admin__sync"><div><strong>Discordロール対応表</strong><small>Discord側の既存ロールを読み取り、運営サイトと照合します。</small></div><div class="member-admin__sync-actions"><button type="button" class="member-provision" data-provision-roles>既存ロールを読み込む</button><button type="button" class="member-provision member-provision--secondary" data-discord-readiness>運用事前チェック</button></div></div>
       <output data-message aria-live="polite"></output>
+      <output class="discord-readiness-message" data-discord-readiness-message aria-live="polite"></output>
     </section>
 
     <section class="member-admin__add action-card discord-role-catalog" aria-labelledby="discord-role-catalog-title">
@@ -141,12 +142,16 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-admin .button-primary { box-shadow: 0 2px 4px rgb(7 90 145 / 18%); white-space: nowrap; }
   .member-admin .button-primary:hover, .member-admin .member-action--sync:hover { background: #064b78 !important; }
   .member-admin__sync { align-items: center; border-top: 1px solid #dbe7ef; display: flex; gap: 1rem; grid-column: 1 / -1; justify-content: space-between; padding-top: .9rem; }
-  .member-admin__sync div { display: grid; gap: .15rem; }
+  .member-admin__sync > div:first-child { display: grid; gap: .15rem; }
+  .member-admin__sync-actions { align-items: center; display: flex !important; flex-wrap: wrap; gap: .45rem; justify-content: flex-end; }
   .member-admin__sync strong { color: #17324d; font-size: .78rem; }
   .member-admin__sync small { color: #526779; font-size: .68rem; line-height: 1.45; }
   .member-admin .member-provision { background: #fff !important; border: 1px solid #075a91 !important; color: #075a91 !important; font-size: .72rem !important; white-space: nowrap; }
+  .member-admin .member-provision--secondary { border-color: #7894aa !important; color: #526779 !important; }
   .member-admin .member-provision:hover { background: #e4f1f9 !important; }
+  .member-admin .member-provision--secondary:hover { border-color: #075a91 !important; color: #075a91 !important; }
   .member-admin__workspace .action-card output { color: #526779; font-size: .72rem; grid-column: 1 / -1; min-height: 1.1em; }
+  .member-admin__workspace .discord-readiness-message { background: #f3f7fb; border-left: 3px solid #7894aa; padding: .5rem .6rem; }
   .member-admin__workspace .workflow-role-list { border-top: 1px solid #dbe7ef; display: flex; flex-wrap: wrap; gap: .45rem; grid-column: 1 / -1; padding-top: .85rem; }
   .workflow-role-chip { background: #f3f7fb !important; border: 1px solid #b9ccda !important; border-radius: 3px; color: #17324d; padding: .38rem .55rem !important; }
   .workflow-role-chip small { color: #526779 !important; }
@@ -216,6 +221,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     .member-admin__workspace .action-card { padding: .9rem; }
     .member-admin__workspace .action-card form { grid-template-columns: 1fr; }
     .member-admin__sync { align-items: flex-start; display: grid; }
+    .member-admin__sync-actions { justify-content: flex-start; }
     .member-admin__section-heading { align-items: start; display: grid; gap: .5rem; }
     .member-admin__count { justify-self: start; }
     .member-card__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -506,12 +512,36 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       if (!response.ok) provisionMessage.value = `HTTP ${response.status}: ${data.error ?? "Discordロールを読み込めませんでした。"}`;
       else {
         const missing = Array.isArray(data.missing) ? data.missing.length : 0;
+        const ambiguous = Array.isArray(data.ambiguous) ? data.ambiguous.length : 0;
         const unknown = Array.isArray(data.unknownDiscordRoles) ? data.unknownDiscordRoles.length : 0;
-        provisionMessage.value = `Discord「${data.guildName}」の既存ロール${data.discordRoles?.length ?? 0}件を読み込みました（対応${data.matched ?? 0}件${missing ? `、定義なし${missing}件` : ""}${unknown ? `、追加選択可${unknown}件` : ""}）。Discord側は変更していません。`;
+        provisionMessage.value = `Discord「${data.guildName}」の既存ロール${data.discordRoles?.length ?? 0}件を読み込みました（対応${data.matched ?? 0}件${missing ? `、定義なし${missing}件` : ""}${ambiguous ? `、同名のためID指定が必要${ambiguous}件` : ""}${unknown ? `、追加選択可${unknown}件` : ""}）。Discord側は変更していません。`;
         provisionButton.dispatchEvent(new CustomEvent("discord-roles-updated"));
       }
     }
     provisionButton.disabled = false;
+  });
+  const readinessButton = document.querySelector<HTMLButtonElement>("[data-discord-readiness]");
+  const readinessMessage = document.querySelector<HTMLOutputElement>("[data-discord-readiness-message]");
+  readinessButton?.addEventListener("click", async () => {
+    readinessButton.disabled = true;
+    readinessButton.textContent = "確認中…";
+    if (readinessMessage) readinessMessage.value = "Discord、対応表、メール設定を読み取り確認しています。";
+    try {
+      const response = await fetch("/api/admin/discord-readiness", { credentials: "same-origin", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+      const checks = data.checks ?? {};
+      const configured = data.configured ?? {};
+      const warningText = Array.isArray(data.warnings) && data.warnings.length ? ` 注意: ${data.warnings.join(" ")}` : "";
+      const status = data.ready ? "本番運用の前提条件を確認できました。" : "未完了の項目があります。";
+      const detail = `Bot API ${checks.botApi ? "OK" : "未確認"} / サーバー ${checks.guildApi ? "OK" : "未確認"} / ロール ${checks.rolesApi ? "OK" : "未確認"} / Botメンバー ${checks.botMember ? "OK" : "未確認"} / ロール管理権限 ${checks.manageRoles ? "OK" : "不足"} / 階層 ${checks.roleHierarchy ? "OK" : "要確認"} / 対応表 ${checks.roleMappings ? "OK" : "未設定"} / メール設定 ${configured.emailDelivery ? "あり（送信自体は未実行）" : "不足"}`;
+      if (readinessMessage) readinessMessage.value = `${status} ${detail}.${warningText}`;
+    } catch (error) {
+      if (readinessMessage) readinessMessage.value = error instanceof Error ? error.message : "事前チェックに失敗しました。";
+    } finally {
+      readinessButton.disabled = false;
+      readinessButton.textContent = "運用事前チェック";
+    }
   });
 </script>
 
