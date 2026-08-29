@@ -60,7 +60,10 @@ test("参加者カードの権限操作は主CTAと補助操作を整理して�
   expect(buttonMetrics[0]?.height).toBeLessThanOrEqual(40);
   expect(buttonMetrics[2]?.height).toBeLessThanOrEqual(40);
   expect(buttonMetrics[1]?.gridColumn).toBe("1 / -1");
-  await expect(card.locator("[data-discord-roles] option")).toHaveText(
-    "数学運営",
-  );
+  await expect(
+    page.getByPlaceholder("名前・メールアドレスで検索"),
+  ).toBeVisible();
+  await expect(page.locator("[data-member-filter]")).toBeVisible();
+  await expect(card.locator("[data-discord-role]")).toHaveCount(1);
+  await expect(card.locator(".member-role-option span")).toHaveText("数学運営");
 });
