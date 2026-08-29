@@ -457,6 +457,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 </style>
 
 <style>
+  /* ペインを手動で拡張したときもCodeMirrorを本文欄いっぱいに広げ、末尾の空白を残さない。 */
+  .body-editor-surface { display: flex; flex-direction: column; }
+  .body-editor-surface :global(.body-codemirror) { flex: 1 1 auto; height: 100% !important; min-height: 0; }
+</style>
+
+<style>
   /* 記事設定は入力項目をひとつの密度のあるフォームカードにまとめる。 */
   .metadata { padding: .55rem .7rem .7rem; }
   .metadata-grid { gap: .55rem .65rem; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: .6rem; }

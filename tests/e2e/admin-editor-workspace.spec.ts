@@ -203,6 +203,27 @@ test("長文のDirective境界でも本文の重ね合わせ表示が行順を�
   ).toHaveCount(1);
 });
 
+test("本文欄を拡張してもCodeMirrorが欄全体を使う", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const handle = page.locator('[data-pane-resize="writing"]');
+  await handle.press("End");
+  await expect(page.locator('[data-editor-pane="writing"]')).toHaveClass(
+    /is-pane-resized/,
+  );
+
+  const heights = await page
+    .locator("[data-body-surface]")
+    .evaluate((surface) => ({
+      surface: surface.clientHeight,
+      codemirror:
+        surface.querySelector<HTMLElement>(".body-codemirror")?.clientHeight ??
+        0,
+    }));
+  expect(Math.abs(heights.surface - heights.codemirror)).toBeLessThanOrEqual(1);
+});
+
 test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する", async ({
   page,
 }) => {
