@@ -1489,6 +1489,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       });
     };
     const loadPublicationReview = async (documentId: string, item?: Document) => {
+      if (!documentId) return;
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/publication-review`, { credentials: "same-origin", cache: "no-store" });
       const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; error?: string }>(response);
       if (!response.ok) throw new Error(stateData.error ?? "公開審査状態を読み込めませんでした。");
