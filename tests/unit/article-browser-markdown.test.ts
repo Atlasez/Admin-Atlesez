@@ -31,4 +31,29 @@ describe("browser article Markdown renderer", () => {
     );
     expect(html).not.toContain("**Euclid整域");
   });
+
+  it("renders folding directives as collapsible details and typesets math in titles", async () => {
+    const html = await renderArticleMarkdown(
+      [
+        ":::prop $G$ の群 {#group}",
+        "",
+        "本文",
+        "",
+        ":::folding 補足 $x$",
+        "",
+        "中身 $x$",
+        "",
+        ":::",
+        "",
+        ":::",
+      ].join("\n"),
+    );
+
+    expect(html).toContain(
+      '<details class="folding" data-directive="folding">',
+    );
+    expect(html).toContain("<summary>補足");
+    expect(html).toContain('class="folding-content"');
+    expect(html.match(/class="katex"/g)?.length).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -121,4 +121,47 @@ describe("admin editor subject preview", () => {
       )?.textContent,
     ).toBe("注意事項");
   });
+
+  it("keeps math in authored directive titles while numbering statements", async () => {
+    const rendered = await renderArticleMarkdown(
+      [":::prop $G$ の群", "", "本文", "", ":::"].join("\n"),
+    );
+    const preview = mountPreview(rendered.code)!;
+
+    applySubjectPreviewProfile(preview, "mathematics");
+
+    const title = preview.querySelector<HTMLElement>(".prop .thmtitle");
+    expect(title?.querySelector(".katex")).not.toBeNull();
+    expect(title?.textContent).toContain("命題1");
+    expect(title?.textContent).toContain("の群");
+  });
+
+  it("keeps a folding directive collapsible inside a mathematics box", async () => {
+    const rendered = await renderArticleMarkdown(
+      [
+        ":::prop 命題",
+        "",
+        "本文",
+        "",
+        ":::folding 補足",
+        "",
+        "補足本文",
+        "",
+        ":::",
+        "",
+        ":::",
+      ].join("\n"),
+    );
+    const preview = mountPreview(rendered.code)!;
+
+    applySubjectPreviewProfile(preview, "mathematics");
+
+    expect(preview.querySelector("details.folding")).not.toBeNull();
+    expect(
+      preview.querySelector("details.folding > summary")?.textContent,
+    ).toBe("補足");
+    expect(preview.querySelector(".folding-content")?.textContent).toContain(
+      "補足本文",
+    );
+  });
 });

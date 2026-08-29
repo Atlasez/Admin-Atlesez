@@ -177,9 +177,8 @@ function statementLabel(wrapper: HTMLElement): string | null {
 }
 
 function authoredStatementTitle(title: HTMLElement, label: string): string {
-  if (title.dataset.authoredStatementTitle !== undefined)
-    return title.dataset.authoredStatementTitle;
-  const source = title.textContent?.trim() ?? "";
+  const source =
+    title.dataset.authoredStatementTitle ?? title.textContent?.trim() ?? "";
   const withoutNumber = source
     .replace(new RegExp(`^${label}\\s*\\d*\\s*[.．。:：]?\\s*`, "u"), "")
     .trim();
@@ -187,8 +186,32 @@ function authoredStatementTitle(title: HTMLElement, label: string): string {
     .replace(/[.．。:：]\s*$/u, "")
     .replace(/^[（(]\s*(.*?)\s*[）)]$/u, "$1")
     .trim();
-  title.dataset.authoredStatementTitle = authored;
+  if (title.dataset.authoredStatementTitle === undefined)
+    title.dataset.authoredStatementTitle = authored;
   return authored;
+}
+
+function preserveNumberedStatementTitle(
+  title: HTMLElement,
+  label: string,
+  number: number,
+  authored: string,
+): void {
+  const ownerDocument = title.ownerDocument;
+  const authoredSource = title.dataset.authoredStatementTitle ?? "";
+  const hasMathTitle =
+    Boolean(title.querySelector(".katex")) ||
+    /\$[^$\r\n]+\$/.test(authoredSource);
+  const authoredNodes = hasMathTitle
+    ? [...title.childNodes].map((node) => node.cloneNode(true))
+    : [ownerDocument.createTextNode(authored)];
+  title.replaceChildren(ownerDocument.createTextNode(`${label}${number}`));
+  if (!authored) return;
+  title.append(
+    ownerDocument.createTextNode("("),
+    ...authoredNodes,
+    ownerDocument.createTextNode(")"),
+  );
 }
 
 /** Number definitions, propositions, theorems, lemmas, corollaries and examples in reading order. */
@@ -208,6 +231,13 @@ export function numberMathStatements(
     ".defi,.prop,.thm,.lemma,.cor,.example",
   );
   for (const wrapper of statements) {
+    if (wrapper.dataset.statementNumber) {
+      statementNumber = Math.max(
+        statementNumber,
+        Number(wrapper.dataset.statementNumber) || 0,
+      );
+      continue;
+    }
     const label = statementLabel(wrapper);
     const title = wrapper.querySelector<HTMLElement>(
       ":scope > .thmtitle, :scope > p > .thmtitle",
@@ -215,8 +245,7 @@ export function numberMathStatements(
     if (!label || !title) continue;
     const number = ++statementNumber;
     const authored = authoredStatementTitle(title, label);
-    const visible = `${label}${number}${authored ? `(${authored})` : ""}`;
-    title.textContent = visible;
+    preserveNumberedStatementTitle(title, label, number, authored);
     wrapper.dataset.statementNumber = String(number);
     wrapper.dataset.statementLabel = label;
   }
