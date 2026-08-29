@@ -44,7 +44,7 @@ Cloudflare Workers Buildsが正常に接続されている間は、GitHub Action
 
 なお、Cloudflare DashboardのGit repository接続が内部エラーで未成立の間は、自動経路は「復旧待ち」であり、本番自動デプロイ済みとはみなさない。接続復旧前に手動Uploadやfeature branchからのdeployで代替しない。
 
-Workers Builds未接続時の暫定経路として、GitHub Actionsの`Deploy admin from GitHub`を使用できる。このWorkflowは`main`を対象にした手動実行だけを受け付け、確認チェック、ビルド、D1 migration、Workerデプロイ、公開build-infoのSHA確認を順番に行う。`main`へのpushでは起動しないため、PRのMergeだけでCloudflareを変更しない。migrationまたはデプロイが失敗した場合は後続処理を停止し、既存のWorker Versionを維持する。利用にはGitHub Secretsの`CLOUDFLARE_API_TOKEN`と、`production` Environmentの承認設定が必要である。
+Workers Builds未接続時の暫定経路として、GitHub Actionsの`Deploy admin from GitHub`を使用できる。このWorkflowは`main`を対象にした手動実行だけを受け付け、確認チェック、ビルド、D1 migration、Workerデプロイ、公開build-infoのSHA確認を順番に行う。`main`へのpushでは起動しないため、PRのMergeだけでCloudflareを変更しない。migrationまたはデプロイが失敗した場合は後続処理を停止し、既存のWorker Versionを維持する。利用にはGitHub Secretsの`CLOUDFLARE_DEPLOY_API_TOKEN`と、`production` Environmentの承認設定が必要である。既存の読み取り用`CLOUDFLARE_API_TOKEN`とは分離する。
 
 ## 3. ビルド成果物の身元確認
 
