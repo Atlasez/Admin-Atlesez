@@ -80,7 +80,7 @@ interface Env {
   /** 分野別・全体進捗の通知用。値はCloudflare Secretにのみ保存する。 */
   DISCORD_ATLAS_WEBHOOK_URL?: string;
   DISCORD_PROGRESS_WEBHOOK_URL?: string;
-  /** 担当変更をDiscordロールへ反映するBot。 */
+  /** Discordの既存ロールを読み取り、運営サイト側の対応表を更新するBot。 */
   DISCORD_BOT_TOKEN?: string;
   DISCORD_GUILD_ID?: string;
   DISCORD_GUILD_NAME?: string;
@@ -2089,7 +2089,7 @@ async function provisionDiscordAttributeRoles(
     return json(
       {
         error:
-          "Discordロール一覧を取得できません。Botにサーバーのロール管理権限を付与してください。",
+          "Discordロール一覧を取得できません。Botが対象サーバーのロール一覧を読み取れることを確認してください。",
       },
       502,
     );
@@ -2107,42 +2107,18 @@ async function provisionDiscordAttributeRoles(
     ...MEMBER_YEARS.map((value) => ({ type: "year", value })),
     ...MEMBER_INTERESTS.map((value) => ({ type: "interest", value })),
   ];
-  let created = 0;
-  let reused = 0;
+  const matched: string[] = [];
+  const missing: string[] = [];
   for (const definition of definitions) {
     const current = existing.find(
       (role) => role.name.trim() === definition.value.trim(),
     );
-    let roleId = current?.id;
-    if (roleId) reused++;
-    else {
-      const response = await fetch(
-        `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            name: definition.value,
-            color: 0x2f6fa8,
-            hoist: false,
-            mentionable: false,
-          }),
-        },
-      );
-      if (!response.ok)
-        return json(
-          {
-            error: `「${definition.value}」ロールの作成に失敗しました。Botにロール管理権限があるか確認してください。`,
-            created,
-            reused,
-          },
-          502,
-        );
-      const role = (await response.json()) as { id: string; name: string };
-      roleId = role.id;
-      existing.push(role);
-      created++;
+    const roleId = current?.id;
+    if (!roleId) {
+      missing.push(definition.value);
+      continue;
     }
+    matched.push(definition.value);
     if (definition.type === "manager")
       await env.REPORTS.prepare(
         "INSERT INTO atlasez_discord_role_mappings (project_id,subject,discord_role_id) VALUES ('atlas','__manager__',?) ON CONFLICT(project_id,subject) DO UPDATE SET discord_role_id=excluded.discord_role_id",
@@ -2166,8 +2142,11 @@ async function provisionDiscordAttributeRoles(
     ok: true,
     guildName:
       guildTarget.name || env.DISCORD_GUILD_NAME || "設定対象サーバー",
-    created,
-    reused,
+    matched: matched.length,
+    missing,
+    unknownDiscordRoles: existing
+      .map((role) => role.name.trim())
+      .filter((name) => name && !definitions.some((definition) => definition.value === name)),
     total: definitions.length,
   });
 }
@@ -2219,7 +2198,6 @@ async function updateMemberAttributes(
   )
     .bind(email, university, year, interests.join(","), now)
     .run();
-  await syncDiscordAttributeRoles(env, email, { university, year, interests });
   return json({ ok: true });
 }
 
@@ -2259,7 +2237,6 @@ async function createReportAdminPermission(
     allSubjects: subject === "*",
     isManager: subject === "*",
   });
-  await syncDiscordSubjectRole(env, email, subject, true);
   return json({ ok: true }, 201);
 }
 
@@ -2286,7 +2263,6 @@ async function deleteReportAdminPermission(
   )
     .bind(email, subject)
     .run();
-  await syncDiscordSubjectRole(env, email, subject, false);
   return json({ ok: true });
 }
 
@@ -3496,13 +3472,13 @@ async function queueApplicationDiscordEmail(
     : `Atlasez｜Discord連携${success ? "が完了しました" : "を確認してください"}`;
   const textBody = english
     ? success
-      ? `Your Discord account has been connected to ${projectLabel} and the server roles were applied.\n\nOpen your application status: https://admin.atlasez.org/applicant/`
+      ? `Your Discord account has been connected to ${projectLabel}, and your existing server roles were checked.\n\nOpen your application status: https://admin.atlasez.org/applicant/`
       : `We could not finish connecting your Discord account to ${projectLabel}. We will retry automatically.\n\n${error}\n\nCheck your application status: https://admin.atlasez.org/applicant/`
     : success
-      ? `${projectLabel}のDiscord連携が完了し、サーバーへの参加とロール設定が完了しました。\n\n応募状況：https://admin.atlasez.org/applicant/`
+      ? `${projectLabel}のDiscord連携が完了し、既存ロールとの照合が完了しました。\n\n応募状況：https://admin.atlasez.org/applicant/`
       : `${projectLabel}のDiscord連携を完了できませんでした。システムが自動で再試行します。\n\n${error}\n\n応募状況：https://admin.atlasez.org/applicant/`;
   const htmlBody = success
-    ? `<h2>Discord連携が完了しました</h2><p>${emailSafe(projectLabel)}のDiscordサーバー参加とロール設定が完了しました。</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を確認する</a></p>`
+    ? `<h2>Discord連携が完了しました</h2><p>${emailSafe(projectLabel)}のDiscordサーバー参加と既存ロールの照合が完了しました。</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を確認する</a></p>`
     : `<h2>Discord連携を確認してください</h2><p>${emailSafe(projectLabel)}のDiscord連携を完了できませんでした。自動で再試行します。</p><p>${emailSafe(error)}</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を確認する</a></p>`;
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
@@ -3654,111 +3630,6 @@ async function verifyDiscordGuildTarget(
   return { ok: true, name };
 }
 
-async function syncDiscordSubjectRole(
-  env: Env,
-  email: string,
-  subject: string,
-  add: boolean,
-) {
-  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !subject) return;
-  const mappingSubject = subject === "*" ? "__manager__" : subject;
-  const account = await env.REPORTS.prepare(
-    "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
-  )
-    .bind(email)
-    .first<{ discord_user_id: string }>();
-  const mapping = await env.REPORTS.prepare(
-    "SELECT discord_role_id FROM atlasez_discord_role_mappings WHERE project_id = 'atlas' AND subject = ?",
-  )
-    .bind(mappingSubject)
-    .first<{ discord_role_id: string }>();
-  if (!account || !mapping) return;
-  const endpoint = `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${mapping.discord_role_id}`;
-  try {
-    await fetch(endpoint, {
-      method: add ? "PUT" : "DELETE",
-      headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
-    });
-  } catch {
-    /* 権限・Bot設定は管理画面のDB変更を止めない。 */
-  }
-}
-
-async function syncDiscordAttributeRoles(
-  env: Env,
-  email: string,
-  attrs: {
-    university: string;
-    year: string;
-    interests: string[];
-    affiliationType?: string;
-  },
-) {
-  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID) return;
-  const account = await env.REPORTS.prepare(
-    "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
-  )
-    .bind(email)
-    .first<{ discord_user_id: string }>();
-  if (!account) return;
-  const desired = new Set<string>();
-  let guildRoles: Array<{ id: string; name: string }> = [];
-  try {
-    const response = await fetch(
-      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`,
-      { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
-    );
-    if (response.ok)
-      guildRoles = (await response.json()) as Array<{
-        id: string;
-        name: string;
-      }>;
-  } catch {
-    /* 対応表を優先し、取得失敗は後段で通知する。 */
-  }
-  const values: Array<[string, string]> = [];
-  if (attrs.university) values.push(["university", attrs.university]);
-  if (attrs.affiliationType)
-    values.push(["affiliation", attrs.affiliationType]);
-  if (attrs.year) values.push(["year", attrs.year]);
-  for (const interest of attrs.interests)
-    if (interest) values.push(["interest", interest]);
-  for (const [type, value] of values) {
-    if (type === "affiliation") {
-      const mapping = await env.REPORTS.prepare(
-        "SELECT discord_role_id FROM atlasez_discord_role_mappings WHERE project_id='atlas' AND subject=?",
-      )
-        .bind(`__affiliation__${value}`)
-        .first<{ discord_role_id: string }>();
-      if (mapping) desired.add(mapping.discord_role_id);
-      continue;
-    }
-    const mapping = await env.REPORTS.prepare(
-      "SELECT discord_role_id FROM atlasez_discord_attribute_role_mappings WHERE attribute_type = ? AND attribute_value = ?",
-    )
-      .bind(type, value)
-      .first<{ discord_role_id: string }>();
-    if (mapping) desired.add(mapping.discord_role_id);
-    else {
-      const role = guildRoles.find((item) => item.name.trim() === value.trim());
-      if (role) desired.add(role.id);
-    }
-  }
-  // 必要なロールだけを付与する。全ロールの削除確認まで行うと、属性数が増えた際に
-  // Workerのサブリクエスト上限を超えて同期ボタンが失敗するため、不要ロールの整理は行わない。
-  for (const roleId of desired) {
-    const endpoint = `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`;
-    try {
-      await fetch(endpoint, {
-        method: "PUT",
-        headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
-      });
-    } catch {
-      /* Discordの設定不備でプロフィール保存を止めない。 */
-    }
-  }
-}
-
 type DiscordProvisioningResult = {
   status: "synced" | "skipped" | "failed";
   applied: number;
@@ -3821,9 +3692,8 @@ async function discordAccessToken(
 }
 
 /**
- * 応募承認用のDiscord同期。必要なロールが未作成なら、管理者による承認を
- * 起点として作成・対応表登録まで行う。各操作は冪等なので、通信失敗後も
- * 「受入・再同期」を実行すれば未完了分だけを安全に再試行できる。
+ * 応募承認用のDiscord確認。既存ロールを読み取り、運営サイト側の対応表と
+ * 応募者の現在の付与状況を確認する。Discordのロールは作成・変更しない。
  */
 async function provisionApplicationDiscordRoles(
   env: Env,
@@ -3944,30 +3814,12 @@ async function provisionApplicationDiscordRoles(
         .first<{ discord_role_id: string }>();
       roleId = mapping?.discord_role_id ?? "";
     }
-    if (!roleId)
+    if (!roleId || !guildRoles.some((role) => role.id === roleId))
       roleId =
         guildRoles.find((role) => role.name.trim() === label.trim())?.id ?? "";
     if (!roleId) {
-      const create = await fetch(
-        `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            name: label.slice(0, 100),
-            color: 0x2f6fa8,
-            hoist: false,
-            mentionable: false,
-          }),
-        },
-      );
-      if (!create.ok) {
-        warnings.push(`「${label}」ロールを作成できませんでした。`);
-        return;
-      }
-      const role = (await create.json()) as { id: string; name: string };
-      roleId = role.id;
-      guildRoles.push(role);
+      warnings.push(`Discordに「${label}」ロールが存在しません。運営サイト側の対応表だけを確認しました。`);
+      return;
     }
     if (kind === "attribute") {
       const attributeType = key.split(":", 1)[0];
@@ -4018,18 +3870,16 @@ async function provisionApplicationDiscordRoles(
       await ensureMappedRole("attribute", `interest:${interest}`, interest);
 
   const current = new Set(member.roles ?? []);
-  let applied = 0;
-  for (const roleId of desired) {
-    if (current.has(roleId)) continue;
-    const response = await fetch(
-      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
-      { method: "PUT", headers },
+  const missingOnMember = [...desired].filter((roleId) => !current.has(roleId));
+  if (missingOnMember.length)
+    warnings.push(
+      `Discord側で未付与の既存ロールが${missingOnMember.length}件あります。運営サイトからDiscordのロールは変更しません。`,
     );
-    if (response.ok) applied++;
-    else
-      warnings.push(`Discordロール（ID: ${roleId}）を付与できませんでした。`);
-  }
-  return { status: warnings.length ? "failed" : "synced", applied, warnings };
+  return {
+    status: warnings.length ? "skipped" : "synced",
+    applied: 0,
+    warnings,
+  };
 }
 
 const discordProvisionRetryDelay = (attempt: number) => {
@@ -5418,7 +5268,7 @@ async function retryApplicationDiscordProvisioning(
   if (!application || application.project_slug !== canonicalApplicationProjectSlug(access.project.slug))
     return json({ error: "応募が見つかりません。" }, 404);
   if (application.status !== "accepted")
-    return json({ error: "受入済みの応募だけDiscord同期を再試行できます。" }, 409);
+    return json({ error: "受入済みの応募だけDiscord情報の確認を再試行できます。" }, 409);
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `UPDATE atlasez_member_applications
@@ -11033,7 +10883,7 @@ async function handleAdminRequest(
     } catch (error) {
       return json(
         {
-          error: `Discordロール同期中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
+          error: `Discord情報確認中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`,
         },
         500,
       );

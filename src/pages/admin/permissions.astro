@@ -16,7 +16,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         <label>担当権限<select name="subject" required><option value="*">全分野管理者</option>{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}（担当）</option>)}</select></label>
         <button type="submit">追加する</button>
       </form>
-      <button type="button" class="member-provision" data-provision-roles>Discord対象サーバーのロールを準備</button>
+      <button type="button" class="member-provision" data-provision-roles>Discordの既存ロールを読み込む</button>
       <output data-message aria-live="polite"></output>
     </section>
 
@@ -50,7 +50,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <style is:global>
-  /* 保存操作はカード上部のDiscord同期ボタンに統合。編集欄は閉じるだけにする。 */
+  /* 保存操作はカード上部の保存ボタンに統合。編集欄は閉じるだけにする。 */
   .member-edit-form__close {
     background: transparent !important;
     border: 1px solid var(--border-default) !important;
@@ -90,7 +90,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         const roles = memberSubjects.map((id: string) => subjectLabels.get(id) ?? id);
         const interests = String(member.interests ?? "").split(",").filter(Boolean);
         const institutionOptions = member.university && !universities.includes(member.university) ? [...universities, member.university] : universities;
-        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><div class="member-card__name">${esc(member.display_name || "表示名未設定")}</div><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>変更を保存してDiscordロールを同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div><details><summary>登録情報を編集</summary><div class="member-edit-form"><label>所属機関<select data-university><option value="">未登録</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-year><option value="">未登録</option>${opts(years, member.year ?? "")}</select></label><label class="member-edit-form__subjects">担当・関心分野<select data-interests multiple>${opts(fields, String(member.interests ?? ""), true)}</select><small>変更内容はカード上部の同期ボタンで保存・Discordへ反映されます。</small></label><button type="button" class="member-edit-form__close" data-close-editor>閉じる</button></div></details></article>`;
+        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><div class="member-card__name">${esc(member.display_name || "表示名未設定")}</div><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>変更を保存（Discordは変更しない）</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div><details><summary>登録情報を編集</summary><div class="member-edit-form"><label>所属機関<select data-university><option value="">未登録</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-year><option value="">未登録</option>${opts(years, member.year ?? "")}</select></label><label class="member-edit-form__subjects">担当・関心分野<select data-interests multiple>${opts(fields, String(member.interests ?? ""), true)}</select><small>変更内容を運営サイトに保存します。Discord側のロールは変更しません。</small></label><button type="button" class="member-edit-form__close" data-close-editor>閉じる</button></div></details></article>`;
       }).join("") : '<p class="member-empty">登録されている参加者はいません。</p>';
     };
     const load = async () => { const response = await fetch("/api/admin/report-admin-permissions", {credentials:"same-origin", cache:"no-store"}); const data = await response.json().catch(() => ({})); if (response.status === 403) { list.textContent = "このページは全分野管理者のみ利用できます。"; form.hidden = true; workflowRoleForm.hidden = true; return; } if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。"); render(data.permissions ?? []); renderWorkflowRoles(data.workflowRoles ?? []); };
@@ -120,16 +120,14 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         return;
       }
       if (sync) {
-        sync.disabled = true; sync.textContent = "保存・同期中…";
+        sync.disabled = true; sync.textContent = "保存中…";
         const interests = Array.from(card.querySelector<HTMLSelectElement>("[data-interests]")!.selectedOptions).map(option => option.value);
         try {
           const attributes = await fetch("/api/admin/member-attributes", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email,university:card.querySelector<HTMLSelectElement>("[data-university]")!.value,year:card.querySelector<HTMLSelectElement>("[data-year]")!.value,interests})});
           const attributeResult = await attributes.json().catch(() => ({})); if (!attributes.ok) throw new Error(attributeResult.error ?? "登録情報を保存できませんでした。");
-          const response = await fetch("/api/admin/discord-member-roles", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email})});
-          const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result.error ?? "Discordロールを同期できませんでした。");
-          message.value = `登録情報を保存し、Discordロールを同期しました（${result.roleCount ?? 0}件）。`; await load();
+          message.value = "登録情報を運営サイトに保存しました。Discord側は変更していません。"; await load();
         } catch (error) { message.value = error instanceof Error ? error.message : "保存・同期できませんでした。"; }
-        finally { sync.disabled = false; sync.textContent = "変更を保存してDiscordロールを同期"; }
+        finally { sync.disabled = false; sync.textContent = "変更を保存（Discordは変更しない）"; }
         return;
       }
       if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); message.value = response.ok ? "権限を削除しました。" : "削除できませんでした。"; if (response.ok) await load(); }
@@ -165,11 +163,17 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   const provisionButton = document.querySelector<HTMLButtonElement>("[data-provision-roles]");
   const provisionMessage = document.querySelector<HTMLOutputElement>("[data-message]");
   provisionButton?.addEventListener("click", async () => {
-    if (!confirm("Discord対象サーバーに大学・学年・関心分野のロールを追加しますか？")) return;
+    if (!confirm("Discord対象サーバーの既存ロールを読み込み、運営サイト側の対応表を更新しますか？Discord側は変更しません。")) return;
     provisionButton.disabled = true;
     const response = await fetch("/api/admin/discord-provision-roles", { method: "POST", credentials: "same-origin" });
     const data = await response.json().catch(() => ({}));
-    if (provisionMessage) provisionMessage.value = response.ok ? `Discord「${data.guildName}」にロールを準備しました（新規${data.created ?? 0}件、既存${data.reused ?? 0}件）。` : `HTTP ${response.status}: ${data.error ?? "ロールを準備できませんでした。"}`;
+    if (provisionMessage) {
+      if (!response.ok) provisionMessage.value = `HTTP ${response.status}: ${data.error ?? "Discordロールを読み込めませんでした。"}`;
+      else {
+        const missing = Array.isArray(data.missing) ? data.missing.length : 0;
+        provisionMessage.value = `Discord「${data.guildName}」の既存ロールを読み込みました（対応${data.matched ?? 0}件${missing ? `、未対応${missing}件` : ""}）。Discord側は変更していません。`;
+      }
+    }
     provisionButton.disabled = false;
   });
 </script>
