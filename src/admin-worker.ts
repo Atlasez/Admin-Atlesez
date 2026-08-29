@@ -1919,7 +1919,7 @@ async function updateMemberDiscordUserId(
     return json({
       ok: true,
       discordUserId,
-      provisioning: { status: "skipped", applied: 0, warnings: [] },
+      provisioning: { status: "skipped", applied: 0, removed: 0, warnings: [] },
     });
   const [profile, permissions] = await Promise.all([
     env.REPORTS.prepare(
@@ -2198,7 +2198,8 @@ async function updateMemberAttributes(
   )
     .bind(email, university, year, interests.join(","), now)
     .run();
-  return json({ ok: true });
+  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
+  return json({ ok: true, provisioning });
 }
 
 async function createReportAdminPermission(
@@ -2237,7 +2238,8 @@ async function createReportAdminPermission(
     allSubjects: subject === "*",
     isManager: subject === "*",
   });
-  return json({ ok: true }, 201);
+  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
+  return json({ ok: true, provisioning }, 201);
 }
 
 async function deleteReportAdminPermission(
@@ -2263,7 +2265,8 @@ async function deleteReportAdminPermission(
   )
     .bind(email, subject)
     .run();
-  return json({ ok: true });
+  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
+  return json({ ok: true, provisioning });
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
@@ -3633,6 +3636,7 @@ async function verifyDiscordGuildTarget(
 type DiscordProvisioningResult = {
   status: "synced" | "skipped" | "failed";
   applied: number;
+  removed: number;
   warnings: string[];
 };
 
@@ -3710,6 +3714,7 @@ async function provisionApplicationDiscordRoles(
     return {
       status: "skipped",
       applied: 0,
+      removed: 0,
       warnings: ["Discord Botが未設定です。"],
     };
   const account = await env.REPORTS.prepare(
@@ -3723,6 +3728,7 @@ async function provisionApplicationDiscordRoles(
     return {
       status: "skipped",
       applied: 0,
+      removed: 0,
       warnings: ["Discord連携が未完了です。応募者に応募状況画面からDiscord連携を依頼してください。"],
     };
 
@@ -3735,6 +3741,7 @@ async function provisionApplicationDiscordRoles(
     return {
       status: "failed",
       applied: 0,
+      removed: 0,
       warnings: [guildTarget.message],
     };
   let memberResponse = await fetch(
@@ -3767,6 +3774,7 @@ async function provisionApplicationDiscordRoles(
     return {
       status: "failed",
       applied: 0,
+      removed: 0,
       warnings: [
         account.access_token_ciphertext
           ? "Discordサーバーへ対象ユーザーを追加できませんでした。Bot権限・OAuth同意・サーバーIDを確認してください。"
@@ -3781,6 +3789,7 @@ async function provisionApplicationDiscordRoles(
     return {
       status: "failed",
       applied: 0,
+      removed: 0,
       warnings: ["Discordのロール一覧を取得できません。"],
     };
   const member = (await memberResponse.json()) as { roles?: string[] };
@@ -3788,6 +3797,19 @@ async function provisionApplicationDiscordRoles(
     id: string;
     name: string;
   }>;
+  const [subjectMappings, attributeMappings] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT discord_role_id FROM atlasez_discord_role_mappings WHERE project_id = 'atlas'",
+    ).all<{ discord_role_id: string }>(),
+    env.REPORTS.prepare(
+      "SELECT discord_role_id FROM atlasez_discord_attribute_role_mappings",
+    ).all<{ discord_role_id: string }>(),
+  ]);
+  const managedRoleIds = new Set(
+    [...(subjectMappings.results ?? []), ...(attributeMappings.results ?? [])]
+      .map((mapping) => mapping.discord_role_id)
+      .filter((roleId) => guildRoles.some((role) => role.id === roleId)),
+  );
   const desired = new Set<string>();
   const warnings: string[] = [];
 
@@ -3880,7 +3902,56 @@ async function provisionApplicationDiscordRoles(
     if (response.ok) applied++;
     else warnings.push(`Discordロール（ID: ${roleId}）を付与できませんでした。`);
   }
-  return { status: warnings.length ? "failed" : "synced", applied, warnings };
+  let removed = 0;
+  for (const roleId of current) {
+    if (!managedRoleIds.has(roleId) || desired.has(roleId)) continue;
+    const response = await fetch(
+      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
+      { method: "DELETE", headers },
+    );
+    if (response.ok) removed++;
+    else warnings.push(`Discordロール（ID: ${roleId}）を削除できませんでした。`);
+  }
+  return { status: warnings.length ? "failed" : "synced", applied, removed, warnings };
+}
+
+async function provisionMemberDiscordRolesForEmail(
+  env: Env,
+  email: string,
+): Promise<DiscordProvisioningResult> {
+  const [profile, permissions] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT university, year, interests, affiliation_type FROM editorial_member_profiles WHERE email = ?",
+    )
+      .bind(email)
+      .first<{
+        university: string;
+        year: string;
+        interests: string;
+        affiliation_type: string;
+      }>(),
+    env.REPORTS.prepare(
+      "SELECT subject FROM report_admin_permissions WHERE email = ?",
+    )
+      .bind(email)
+      .all<{ subject: string }>(),
+  ]);
+  // 権限を最後に削除した場合も、空の希望ロール集合として同期し、
+  // 既存の管理対象ロールをDiscordから取り除けるようにする。
+  return provisionApplicationDiscordRoles(
+    env,
+    email,
+    (permissions.results ?? []).map((item) => item.subject),
+    {
+      institution: profile?.university ?? "",
+      year: profile?.year ?? "",
+      affiliationType: profile?.affiliation_type ?? "",
+      interests: (profile?.interests ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    },
+  );
 }
 
 const discordProvisionRetryDelay = (attempt: number) => {
@@ -3911,7 +3982,7 @@ async function provisionAcceptedApplication(
       provisioning_attempt_count: number;
     }>();
   if (!application || application.status !== "accepted")
-    return { status: "skipped", applied: 0, warnings: ["受入済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
+    return { status: "skipped", applied: 0, removed: 0, warnings: ["受入済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
   const subjects = application.desired_subjects
     .split(",")
     .map((value) => value.trim())
@@ -3930,6 +4001,7 @@ async function provisionAcceptedApplication(
     result = {
       status: "failed",
       applied: 0,
+      removed: 0,
       warnings: ["Discord連携処理で一時的なエラーが発生しました。"],
     };
   }
