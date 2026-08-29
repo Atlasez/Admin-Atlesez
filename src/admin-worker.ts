@@ -83,6 +83,7 @@ interface Env {
   /** 担当変更をDiscordロールへ反映するBot。 */
   DISCORD_BOT_TOKEN?: string;
   DISCORD_GUILD_ID?: string;
+  DISCORD_GUILD_NAME?: string;
   /** 応募者本人のDiscord OAuth2連携。client secretと暗号化鍵はSecretに保存する。 */
   DISCORD_OAUTH_CLIENT_ID?: string;
   DISCORD_OAUTH_CLIENT_SECRET?: string;
@@ -1896,7 +1897,7 @@ async function updateMemberDiscordUserId(
       return json(
         {
           error:
-            "Bot test serverで対象ユーザーを確認できません。サーバー参加とユーザーIDを確認してください。",
+            `Discord「${env.DISCORD_GUILD_NAME?.trim() || "設定対象サーバー"}」で対象ユーザーを確認できません。サーバー参加とユーザーIDを確認してください。`,
         },
         400,
       );
@@ -2078,28 +2079,8 @@ async function provisionDiscordAttributeRoles(
     authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
     "content-type": "application/json",
   };
-  const guildResponse = await fetch(
-    `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}`,
-    { headers },
-  );
-  if (!guildResponse.ok)
-    return json(
-      {
-        error:
-          "Botが指定サーバーを確認できません。BotがBot test serverに参加しているか確認してください。",
-      },
-      502,
-    );
-  const guild = (await guildResponse.json()) as { name?: string };
-  const guildName = (guild.name ?? "").trim();
-  if (guildName.toLowerCase() !== "bot test server") {
-    return json(
-      {
-        error: `接続先サーバーは「${guildName || "名称不明"}」です。Bot test serverではないため、ロール追加を中止しました。`,
-      },
-      409,
-    );
-  }
+  const guildTarget = await verifyDiscordGuildTarget(env, headers);
+  if (!guildTarget.ok) return json({ error: guildTarget.message }, 502);
   const rolesResponse = await fetch(
     `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`,
     { headers },
@@ -2183,7 +2164,8 @@ async function provisionDiscordAttributeRoles(
   }
   return json({
     ok: true,
-    guildName: guildName || "Bot test server",
+    guildName:
+      guildTarget.name || env.DISCORD_GUILD_NAME || "設定対象サーバー",
     created,
     reused,
     total: definitions.length,
@@ -3637,6 +3619,41 @@ async function postDiscordChannel(
   }
 }
 
+type DiscordGuildTargetResult =
+  | { ok: true; name: string }
+  | { ok: false; message: string };
+
+async function verifyDiscordGuildTarget(
+  env: Env,
+  headers: Record<string, string>,
+): Promise<DiscordGuildTargetResult> {
+  if (!env.DISCORD_GUILD_ID)
+    return { ok: false, message: "DiscordサーバーIDが未設定です。" };
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}`,
+      { headers },
+    );
+  } catch {
+    return { ok: false, message: "Discordサーバーへ接続できません。" };
+  }
+  if (!response.ok)
+    return {
+      ok: false,
+      message: "Botが設定されたDiscordサーバーを確認できません。",
+    };
+  const guild = (await response.json()) as { name?: string };
+  const name = guild.name?.trim() ?? "";
+  const expected = env.DISCORD_GUILD_NAME?.trim();
+  if (expected && name.toLocaleLowerCase() !== expected.toLocaleLowerCase())
+    return {
+      ok: false,
+      message: `接続先Discordサーバーが想定と異なります（${name || "名称不明"}）。設定値を確認してください。`,
+    };
+  return { ok: true, name };
+}
+
 async function syncDiscordSubjectRole(
   env: Env,
   email: string,
@@ -3843,6 +3860,13 @@ async function provisionApplicationDiscordRoles(
     authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
     "content-type": "application/json",
   };
+  const guildTarget = await verifyDiscordGuildTarget(env, headers);
+  if (!guildTarget.ok)
+    return {
+      status: "failed",
+      applied: 0,
+      warnings: [guildTarget.message],
+    };
   let memberResponse = await fetch(
     `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
     { headers },
