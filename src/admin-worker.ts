@@ -155,6 +155,8 @@ type EditorialDocument = {
   updated_at: string;
   reviewed_at: string | null;
   published_at: string | null;
+  archived_at: string | null;
+  archive_expires_at: string | null;
   scheduled_publish_at: string | null;
   scheduled_publish_claimed_at: string | null;
   publication_review_stage: EditorialPublicationReviewStage | null;
@@ -2237,7 +2239,7 @@ async function deleteReportAdminPermission(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
+  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -2775,7 +2777,7 @@ async function listEditorialDocuments(
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, scheduled_publish_at, publication_review_stage,
+      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archive_expires_at, scheduled_publish_at, publication_review_stage,
       publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at
      FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
   )
@@ -2837,6 +2839,59 @@ async function listEditorialDocuments(
       coordinatorSubjects: scope.coordinatorSubjects,
     },
   });
+}
+
+const EDITORIAL_ARCHIVE_DAYS = 30;
+const editorialArchiveExpiry = (now: Date) =>
+  new Date(now.getTime() + EDITORIAL_ARCHIVE_DAYS * 24 * 60 * 60 * 1_000).toISOString();
+
+async function updateEditorialDocumentArchive(
+  request: Request,
+  env: Env,
+  documentId: string,
+  archive: boolean,
+): Promise<Response> {
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const document = await env.REPORTS.prepare(
+    "SELECT id, subject, status, created_by, published_at, archived_at, archive_expires_at FROM editorial_documents WHERE id = ?",
+  )
+    .bind(documentId)
+    .first<Pick<EditorialDocument, "id" | "subject" | "status" | "created_by" | "published_at" | "archived_at" | "archive_expires_at">>();
+  if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  if (document.status !== "draft" || document.published_at)
+    return json({ error: "アーカイブできるのは未公開の下書きだけです。" }, 400);
+  if (!scope.isManager && document.created_by.toLowerCase() !== scope.email.toLowerCase() && !canEditSubject(scope, document.subject))
+    return json({ error: "この原稿をアーカイブする権限がありません。" }, 403);
+
+  if (!archive) {
+    if (!document.archived_at) return json({ ok: true, archived: false });
+    if (document.archive_expires_at && Date.parse(document.archive_expires_at) <= Date.now())
+      return json({ error: `アーカイブ期限（${EDITORIAL_ARCHIVE_DAYS}日）を過ぎたため復元できません。` }, 410);
+    const now = new Date().toISOString();
+    await env.REPORTS.prepare(
+      "UPDATE editorial_documents SET archived_at = NULL, archive_expires_at = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND status = 'draft' AND published_at IS NULL",
+    )
+      .bind(now, scope.email, documentId)
+      .run();
+    return json({ ok: true, archived: false, archived_at: null, archive_expires_at: null });
+  }
+
+  if (document.archived_at && document.archive_expires_at && Date.parse(document.archive_expires_at) > Date.now())
+    return json({ ok: true, archived: true, archived_at: document.archived_at, archive_expires_at: document.archive_expires_at });
+  if (document.archived_at)
+    return json({ error: `アーカイブ期限（${EDITORIAL_ARCHIVE_DAYS}日）を過ぎたため再アーカイブできません。` }, 410);
+  const now = new Date();
+  const archivedAt = now.toISOString();
+  const archiveExpiresAt = editorialArchiveExpiry(now);
+  await env.REPORTS.prepare(
+    "UPDATE editorial_documents SET archived_at = ?, archive_expires_at = ?, updated_at = ?, updated_by = ? WHERE id = ? AND status = 'draft' AND published_at IS NULL",
+  )
+    .bind(archivedAt, archiveExpiresAt, archivedAt, scope.email, documentId)
+    .run();
+  return json({ ok: true, archived: true, archived_at: archivedAt, archive_expires_at: archiveExpiresAt });
 }
 
 const normalizePersonalMathPresets = (raw: unknown): PersonalMathPreset[] => {
@@ -2915,7 +2970,7 @@ async function getPersonalWorkspace(
   const [documents, workspace] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id, subject, category, title, status, updated_at, published_at, scheduled_publish_at
-       FROM editorial_documents WHERE created_by = ? ORDER BY updated_at DESC LIMIT 100`,
+       FROM editorial_documents WHERE created_by = ? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 100`,
     )
       .bind(scope.email)
       .all<
@@ -10592,6 +10647,16 @@ async function handleAdminRequest(
     if (request.method === "POST") return createEditorialDocument(request, env);
     return json({ error: "GET、POSTのみ利用できます。" }, 405);
   }
+  const editorialArchiveMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/(archive|unarchive)$/i,
+  );
+  if (editorialArchiveMatch && request.method === "POST")
+    return updateEditorialDocumentArchive(
+      request,
+      env,
+      editorialArchiveMatch[1],
+      editorialArchiveMatch[2].toLowerCase() === "archive",
+    );
   if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
     return editorialBoard(request, env);
   if (

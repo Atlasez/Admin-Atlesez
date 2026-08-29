@@ -97,6 +97,14 @@ const categories = [...categoryMap.values()].sort((left, right) =>
           <option value="request">作業対象：フィードバックを依頼する記事</option>
         </select>
       </label>
+      <label class="filter-control">
+        <span>アーカイブ</span>
+        <select data-archive aria-label="アーカイブ表示">
+          <option value="active">未アーカイブ</option>
+          <option value="archived">アーカイブ済み</option>
+          <option value="all">すべて</option>
+        </select>
+      </label>
       <output data-count></output>
     </section>
     <section class="list" data-list>原稿一覧を取得しています…</section>
@@ -439,6 +447,34 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     border-color: #9ad5ae;
     color: #167346;
   }
+  .badge.archived {
+    background: #f2e8d6;
+    color: #79551c;
+  }
+  .article-actions {
+    align-items: end;
+    display: grid;
+    gap: 0.35rem;
+    justify-items: end;
+  }
+  .article-action {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.45rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.72rem;
+    padding: 0.35rem 0.5rem;
+  }
+  .article-action:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+  .article-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
   .article {
     color: var(--text);
     cursor: pointer;
@@ -480,7 +516,7 @@ const categories = [...categoryMap.values()].sort((left, right) =>
   }
 </style>
 <script>
-  type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
+  type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
@@ -493,6 +529,7 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     const publication = root.querySelector<HTMLSelectElement>("[data-public]")!;
     const test = root.querySelector<HTMLSelectElement>("[data-test]")!;
     const workflow = root.querySelector<HTMLSelectElement>("[data-workflow-filter]")!;
+    const archive = root.querySelector<HTMLSelectElement>("[data-archive]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
     let items: Article[] = [];
     let scopeEmail = "";
@@ -518,6 +555,8 @@ const categories = [...categoryMap.values()].sort((left, right) =>
       return `編集中：${labels.join("、")}`;
     };
     const currentWorkflow = () => workflow.value as "all" | "revise" | "review" | "request";
+    const isArchived = (article: Article) => Boolean(article.archived_at);
+    const archiveExpired = (article: Article) => Boolean(article.archive_expires_at && Date.parse(article.archive_expires_at) <= Date.now());
     const updateCategoryOptions = () => {
       const selectedSubject = subject.value;
       const selectedCategory = category.value;
@@ -535,7 +574,7 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     const render = () => {
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
-      const filtered = items.filter((article) => (mode !== "review" || article.status !== "approved") && (mode !== "request" || ([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) && (subject.value === "all" || article.subject === subject.value) && (category.value === "all" || article.category === category.value) && (status.value === "all" || article.status === status.value) && (publication.value === "all" || (publication.value === "published" ? Boolean(article.published_at) : !article.published_at)) && (test.value === "all" || (test.value === "only" ? isTest(article) : !isTest(article))) && `${article.title} ${article.subject} ${article.category}`.toLowerCase().includes(normalizedQuery));
+      const filtered = items.filter((article) => (mode !== "review" || article.status !== "approved") && (mode !== "request" || ([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) && (archive.value === "all" || (archive.value === "archived" ? isArchived(article) : !isArchived(article))) && (subject.value === "all" || article.subject === subject.value) && (category.value === "all" || article.category === category.value) && (status.value === "all" || article.status === status.value) && (publication.value === "all" || (publication.value === "published" ? Boolean(article.published_at) : !article.published_at)) && (test.value === "all" || (test.value === "only" ? isTest(article) : !isTest(article))) && `${article.title} ${article.subject} ${article.category}`.toLowerCase().includes(normalizedQuery));
       const sorted = [...filtered].sort((left, right) => {
         const leftPriority = (mode === "revise" || mode === "request") && [left.created_by, left.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(left) ? 0 : 1;
         const rightPriority = (mode === "revise" || mode === "request") && [right.created_by, right.updated_by].includes(scopeEmail) ? 0 : mode === "review" && assignedToScope(right) ? 0 : 1;
@@ -550,7 +589,10 @@ const categories = [...categoryMap.values()].sort((left, right) =>
         const editing = activeEditorsFor(article);
         const editingSummary = activeEditorSummary(article);
         const editingBadge = editing.length ? `<span class="badge editing" aria-label="${editing.length}人が編集中">● ${editing.length}人が編集中</span>` : "";
-        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div></article>`;
+        const archiveBadge = isArchived(article) ? `<span class="badge archived">アーカイブ済み</span>` : "";
+        const archiveSummary = isArchived(article) && article.archive_expires_at ? ` ・ 復元期限 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.archive_expires_at))}` : "";
+        const archiveAction = article.status === "draft" && !article.published_at ? (isArchived(article) ? (archiveExpired(article) ? '<button type="button" class="article-action" disabled title="アーカイブ期限を過ぎています">期限切れ</button>' : `<button type="button" class="article-action" data-archive-action="unarchive" data-archive-document-id="${esc(article.id)}">復元</button>`) : `<button type="button" class="article-action" data-archive-action="archive" data-archive-document-id="${esc(article.id)}">アーカイブ</button>`) : "";
+        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.updated_at))}${archiveSummary}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="article-actions"><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${archiveBadge}${isTest(article) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み</span>' : ""}</div>${archiveAction}</div></article>`;
       }).join("") : "<p>条件に一致する原稿はありません。</p>";
       updateWorkflowButtons();
     };
@@ -569,7 +611,30 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     };
     window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
-    [query, category, status, publication, test, workflow].forEach((element) => element.addEventListener("input", render));
+    [query, category, status, publication, test, workflow, archive].forEach((element) => element.addEventListener("input", render));
+    list.addEventListener("click", async (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-archive-action]");
+      if (!button) return;
+      event.preventDefault();
+      const documentId = button.dataset.archiveDocumentId;
+      const action = button.dataset.archiveAction;
+      if (!documentId || (action !== "archive" && action !== "unarchive")) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/${action}`, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw Error(data.error ?? "アーカイブ操作に失敗しました。");
+        const article = items.find((item) => item.id === documentId);
+        if (article) {
+          article.archived_at = data.archived_at ?? null;
+          article.archive_expires_at = data.archive_expires_at ?? null;
+        }
+        render();
+      } catch (error) {
+        button.disabled = false;
+        window.alert(error instanceof Error ? error.message : "アーカイブ操作に失敗しました。");
+      }
+    });
     root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.addEventListener("click", () => {
       workflow.value = button.dataset.workflowAction ?? "all";
       history.replaceState({}, "", `${location.pathname}?mode=${encodeURIComponent(workflow.value)}#article-list`);
@@ -596,6 +661,7 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     const openCard = (card: HTMLElement | null) => { if (card?.dataset.href) void navigate(card.dataset.href); };
     list.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
+      if (target.closest('[data-archive-action]')) return;
       const card = target.closest<HTMLElement>('.article');
       openCard(card);
     });
