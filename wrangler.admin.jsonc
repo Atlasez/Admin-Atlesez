@@ -18,6 +18,9 @@
     "ADMIN_PUBLIC_ORIGIN": "https://admin.atlasez.org",
     "PUBLIC_ANALYTICS_ORIGIN": "https://atlasez.org",
     "EMAIL_FROM": "Atlasez運営 <apply@atlasez.org>",
+    "DISCORD_GUILD_ID": "1359062450028282017",
+    "DISCORD_GUILD_NAME": "Atlasez学習サイト運営",
+    "DISCORD_OAUTH_CLIENT_ID": "1537142952210464868",
   },
   "assets": {
     "directory": "./dist",

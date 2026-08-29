@@ -90,3 +90,69 @@ test("応募管理の導線は現在のプロジェクトに引き継がれる",
     "/admin/applications/?project=seminar-platform",
   );
 });
+
+test("OAuth連携済みの受入応募はDiscord同期を再試行できる", async ({ page }) => {
+  let provisioningStatus = "failed";
+  let retryCalled = false;
+  await page.route("**/api/admin/applications/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/discord-retry")) {
+      retryCalled = route.request().method() === "POST";
+      provisioningStatus = "synced";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          provisioning: { status: "synced", warnings: [] },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/admin/applications?project=atlas", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        project: { slug: "atlas", name: "学習サイト「アトラス」" },
+        subjectLabels: { mathematics: "数学" },
+        formLabels: { atlas: "学習サイト「アトラス」" },
+        applications: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            form_language: "ja",
+            family_name: "山田",
+            given_name: "太郎",
+            email: "taro@example.com",
+            affiliation_type: "大学",
+            institution: "東京大学",
+            grade: "B1",
+            country: "JP",
+            timezone: "Asia/Tokyo",
+            desired_subjects: "mathematics",
+            project_slug: "atlas",
+            status: "accepted",
+            provisioning_status: provisioningStatus,
+            provisioning_attempt_count: 1,
+            provisioning_next_attempt_at: "2026-08-29T12:00:00.000Z",
+            discord_oauth_connected_at: "2026-08-29T11:00:00.000Z",
+            verified_discord_user_id: "123456789012345678",
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("./admin/applications/?project=atlas");
+  await expect(page.locator(".application-list")).toContainText(
+    "OAuth同意済み・連携済み",
+  );
+  await expect(page.locator("[data-retry]")).toBeVisible();
+  await page.locator("[data-retry]").click();
+  await expect.poll(() => retryCalled).toBe(true);
+  await expect(page.locator(".application-list")).toContainText(
+    "Discord同期済み",
+  );
+});

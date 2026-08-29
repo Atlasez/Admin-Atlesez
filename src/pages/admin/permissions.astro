@@ -16,7 +16,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         <label>担当権限<select name="subject" required><option value="*">全分野管理者</option>{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}（担当）</option>)}</select></label>
         <button type="submit">追加する</button>
       </form>
-      <button type="button" class="member-provision" data-provision-roles>Bot test serverのロールを準備</button>
+      <button type="button" class="member-provision" data-provision-roles>Discord対象サーバーのロールを準備</button>
       <output data-message aria-live="polite"></output>
     </section>
 
@@ -165,7 +165,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   const provisionButton = document.querySelector<HTMLButtonElement>("[data-provision-roles]");
   const provisionMessage = document.querySelector<HTMLOutputElement>("[data-message]");
   provisionButton?.addEventListener("click", async () => {
-    if (!confirm("Bot test serverに大学・学年・関心分野のロールを追加しますか？")) return;
+    if (!confirm("Discord対象サーバーに大学・学年・関心分野のロールを追加しますか？")) return;
     provisionButton.disabled = true;
     const response = await fetch("/api/admin/discord-provision-roles", { method: "POST", credentials: "same-origin" });
     const data = await response.json().catch(() => ({}));

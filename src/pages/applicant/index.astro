@@ -26,6 +26,12 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       </dl>
       <p class="notice" data-application-message>応募状況を読み込んでいます。</p>
     </section>
+
+    <section class="discord-card" data-discord-card hidden>
+      <div class="section-heading"><div><p class="eyebrow">DISCORD</p><h2>Discord連携</h2></div><span class="badge" data-discord-status>未連携</span></div>
+      <p class="notice" data-discord-message>Discordサーバー参加に必要な本人同意を行えます。</p>
+      <a class="primary-action" data-discord-link href="/auth/discord/start?returnTo=%2Fapplicant%2F">Discordと連携</a>
+    </section>
   </section>
 </ApplicantLayout>
 
@@ -35,6 +41,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
   h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); margin: .35rem 0 .6rem; }
   .intro, .notice, .start-card > p, .application-status-card > p { color: var(--text-secondary); line-height: 1.7; }
   .start-card, .application-status-card { border: 1px solid var(--border-default); border-top: 3px solid var(--accent-primary); margin-top: 1.7rem; padding: 1.25rem; }
+  .discord-card { border: 1px solid var(--border-default); border-top: 3px solid #5865f2; margin-top: 1.2rem; padding: 1.25rem; }
   .start-status { color: var(--accent-primary)!important; font-size: .72rem; font-weight: 800; margin: 0 0 .3rem; }
   .start-card h2 { font-size: 1.25rem; margin: 0 0 .45rem; }
   .start-card > p:not(.start-status) { margin: 0; }
@@ -44,6 +51,10 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
   .secondary-action { color: var(--accent-primary); }
   .primary-action:hover, .secondary-action:hover { filter: brightness(.95); transform: translateY(-1px); }
   .application-status-card[hidden], .start-actions [hidden] { display: none; }
+  .discord-card[hidden] { display: none; }
+  .discord-card .badge { border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); font-size: .75rem; font-weight: 800; padding: .25rem .55rem; }
+  .discord-card .badge[data-state="synced"] { background: #e8f7ed; border-color: #78bd8b; color: #176b32; }
+  .discord-card .badge[data-state="failed"] { background: #fff1f0; border-color: #f2a6a0; color: #9f211b; }
   .section-heading { align-items: start; display: flex; gap: .8rem; justify-content: space-between; }
   .section-heading h2 { margin: .25rem 0 0; }
   .section-heading .eyebrow { margin: 0; }
@@ -82,14 +93,19 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
     const basicLink = root.querySelector<HTMLAnchorElement>("[data-basic-link]")!;
     const projectLink = root.querySelector<HTMLAnchorElement>("[data-project-link]")!;
     const applicationCard = root.querySelector<HTMLElement>("[data-application-card]")!;
+    const discordCard = root.querySelector<HTMLElement>("[data-discord-card]")!;
+    const discordStatus = root.querySelector<HTMLElement>("[data-discord-status]")!;
+    const discordMessage = root.querySelector<HTMLElement>("[data-discord-message]")!;
+    const discordLink = root.querySelector<HTMLAnchorElement>("[data-discord-link]")!;
     fetch("/api/applicant/me", { credentials: "same-origin", cache: "no-store" })
       .then(async (response) => ({ response, data: await response.json() as {
         email?: string;
         error?: string;
         stage?: string;
         basicProfileComplete?: boolean;
-        application?: { project: string; submittedAt: string; status: string };
-        applications?: { project: string; submittedAt: string; status: string }[];
+        application?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean };
+        applications?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean }[];
+        discord?: { connected?: boolean; oauthConnected?: boolean };
       } }))
       .then(({ response, data }) => {
         if (!response.ok) throw new Error(data.error ?? "参加状況を読み込めませんでした。");
@@ -115,9 +131,25 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
           }
           setText("[data-application-status]", applications.some((item) => item.status === "reviewing") ? "確認中" : "応募済み");
           setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
+          discordCard.hidden = false;
+          const connected = data.discord?.connected === true;
+          const synced = applications.some((item) => item.provisioningStatus === "synced");
+          const failed = applications.some((item) => item.provisioningStatus === "failed");
+          discordLink.href = `/auth/discord/start?returnTo=${encodeURIComponent("/applicant/")}`;
+          discordLink.hidden = connected;
+          discordStatus.textContent = synced ? "参加・設定済み" : connected ? "連携済み" : "未連携";
+          discordStatus.dataset.state = synced ? "synced" : failed ? "failed" : "";
+          discordMessage.textContent = synced
+            ? "Discordサーバーへの参加とロール設定が完了しています。"
+            : failed
+              ? "Discordへの参加またはロール設定に失敗しました。システムが自動で再試行します。"
+              : connected
+                ? "Discordの同意は確認済みです。運営承認後にサーバー参加とロール設定を自動で行います。"
+                : "「Discordと連携」を1回実行し、Discordの同意画面で許可してください。運営承認後に自動でサーバーへ追加します。";
           return;
         }
         applicationCard.hidden = true;
+        discordCard.hidden = true;
         if (profileComplete) {
           startHeading.textContent = "参加するプロジェクトを選べます";
           startMessage.textContent = "基本情報は登録済みです。参加したいプロジェクトを選んで、必要な項目を入力してください。";
@@ -140,6 +172,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         basicLink.hidden = false;
         projectLink.hidden = true;
         applicationCard.hidden = true;
+        discordCard.hidden = true;
       });
   }
 </script>
