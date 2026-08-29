@@ -18,7 +18,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       <label>プロジェクト内自己紹介<textarea name="internalBio" maxlength="4000" required placeholder="担当・関心・作業可能なことなどを入力してください。"></textarea><small>参加プロジェクトの運営メンバーに表示される自己紹介です。</small></label>
       <div class="actions">
         <a class="secondary" href="/onboarding/">基本情報に戻る</a>
-        <button type="submit">保存して案内へ進む</button>
+        <button type="submit">保存して活動を始める</button>
       </div>
       <output data-message aria-live="polite"></output>
     </form>
@@ -68,7 +68,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         const response = await fetch("/api/onboarding/project", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ internalBio }) });
         const data = await response.json().catch(() => ({})) as { error?: string; next?: string };
         if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
-        location.assign(data.next ?? "/onboarding/tutorial/");
+        location.assign(data.next ?? "/applicant/");
       } catch (error) { message.value = error instanceof Error ? error.message : "保存できませんでした。"; }
     });
   }
