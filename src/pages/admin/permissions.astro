@@ -231,6 +231,12 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-role-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .member-role-option input { accent-color: #075a91; flex: 0 0 auto; min-height: auto !important; width: auto !important; }
   .member-role-option--managed { cursor: not-allowed; opacity: .58; }
+  .member-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
+  .member-edit-form select[data-permission-subjects] { height: 5rem !important; min-height: 5rem !important; }
+  .member-interest-picker { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); max-height: 7.2rem; overflow: auto; }
+  .member-interest-picker label { font-size: .62rem !important; justify-content: flex-start; min-height: 1.8rem; padding: .22rem .3rem !important; }
+  .member-role-options { max-height: 8.5rem; }
+  .member-role-option { font-size: .64rem; padding: .3rem .35rem; }
   .member-card details[open] { background: #fbfdff; margin: 0 -.2rem; padding: .65rem .2rem 0; }
   .member-card details[open] summary { background: #e4f1f9; padding: .45rem .55rem; }
   @media (max-width: 720px) {
