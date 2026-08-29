@@ -38,7 +38,7 @@ test("基本情報とプロジェクト情報を別ページで入力し、マ�
   await page.route("**/api/onboarding/project", async (route) => {
     if (route.request().method() === "POST") {
       await route.fulfill({
-        json: { ok: true, next: "/onboarding/tutorial/" },
+        json: { ok: true, next: "/applicant/" },
       });
       return;
     }

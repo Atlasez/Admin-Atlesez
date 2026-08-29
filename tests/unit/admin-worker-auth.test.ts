@@ -369,28 +369,32 @@ describe("applicant stage server-side access", () => {
     expect(onboardingPage.status).toBe(200);
   });
 
-  it("forces the tutorial after profile setup and before member features", async () => {
-    const profilePage = await worker.fetch(
+  it("starts member features after profile setup without showing the tutorial", async () => {
+    const onboardingPage = await worker.fetch(
       loggedInRequest("/onboarding/"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(profilePage.status).toBe(302);
-    expect(profilePage.headers.get("location")).toBe(
-      "https://admin.example/onboarding/tutorial/",
+    expect(onboardingPage.status).toBe(302);
+    expect(onboardingPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
     );
 
     const tutorialPage = await worker.fetch(
       loggedInRequest("/onboarding/tutorial/"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(tutorialPage.status).toBe(200);
+    expect(tutorialPage.status).toBe(302);
+    expect(tutorialPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
 
     const memberPage = await worker.fetch(
       loggedInRequest("/admin/portal/"),
       stageEnv("accepted", false, true) as never,
     );
+    expect(memberPage.status).toBe(302);
     expect(memberPage.headers.get("location")).toBe(
-      "https://admin.example/onboarding/tutorial/",
+      "https://admin.example/admin/portal/",
     );
   });
 
@@ -427,100 +431,22 @@ describe("applicant stage server-side access", () => {
     expect(profile.status).toBe(200);
   });
 
-  it("returns the current project context for the tutorial content", async () => {
+  it("keeps tutorial APIs out of the acceptance flow", async () => {
     const response = await worker.fetch(
       loggedInRequest("/api/onboarding/tutorial"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      project: "学習サイト「アトラス」",
-      projectSlug: "atlas",
-      atlasWritingPracticeComplete: false,
-      step: 0,
-      totalSteps: 4,
-    });
-  });
+    expect(response.status).toBe(403);
 
-  it("requires a real Atlas writing exercise before tutorial completion", async () => {
-    const incomplete = await worker.fetch(
+    const practice = await worker.fetch(
       loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
         action: "save-draft",
         title: "練習記事",
-        body: "## 見出し\n\n太字を使わない本文です。$x^2$ を含めても保存できません。",
+        body: "## 見出し\n\n**本文**と $x^2$ を含みます。",
       }),
       stageEnv("accepted", false, true) as never,
     );
-    expect(incomplete.status).toBe(400);
-
-    const completed = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "save-draft",
-        title: "集合の練習記事",
-        body: "## はじめに\n\n集合は要素をまとめたものです。$x^2$ と **大切な語句**を太字にして、読みやすい説明にします。",
-      }),
-      stageEnv("accepted", false, true) as never,
-    );
-    expect(completed.status).toBe(200);
-    await expect(completed.json()).resolves.toMatchObject({
-      ok: true,
-      step: 1,
-      complete: false,
-    });
-
-    const skipped = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "resolve-feedback",
-      }),
-      stageEnv("accepted", false, true) as never,
-    );
-    expect(skipped.status).toBe(409);
-
-    const feedback = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "request-feedback",
-      }),
-      stageEnv("accepted", false, true, false, false, 1) as never,
-    );
-    await expect(feedback.json()).resolves.toMatchObject({
-      ok: true,
-      step: 2,
-      complete: false,
-    });
-
-    const resolved = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "resolve-feedback",
-      }),
-      stageEnv("accepted", false, true, false, false, 2) as never,
-    );
-    await expect(resolved.json()).resolves.toMatchObject({
-      ok: true,
-      step: 3,
-      complete: false,
-    });
-
-    const scheduled = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "check-schedule",
-      }),
-      stageEnv("accepted", false, true, false, false, 3) as never,
-    );
-    await expect(scheduled.json()).resolves.toMatchObject({
-      ok: true,
-      step: 4,
-      complete: true,
-      next: "/onboarding/tutorial/",
-    });
-
-    const resumed = await worker.fetch(
-      loggedInRequest("/api/onboarding/tutorial"),
-      stageEnv("accepted", false, true, false, false, 3) as never,
-    );
-    await expect(resumed.json()).resolves.toMatchObject({
-      atlasWritingPracticeStep: 3,
-      atlasWritingPracticeComplete: false,
-    });
+    expect(practice.status).toBe(403);
   });
 
   it("limits the onboarding demo to global internal-operations managers", async () => {

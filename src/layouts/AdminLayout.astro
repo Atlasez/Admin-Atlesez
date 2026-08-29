@@ -7,15 +7,17 @@ import "../styles/article-content.css";
 interface Props {
   title: string;
   description: string;
+  darkReaderLock?: boolean;
 }
-const { title, description } = Astro.props;
+const { title, description, darkReaderLock = false } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="ja" data-site="atlas">
-  <head>
-    <BaseHead title={title} description={description} noindex={true} />
-  </head>
+    <head>
+      <BaseHead title={title} description={description} noindex={true} />
+      {darkReaderLock && <meta name="darkreader-lock" />}
+    </head>
   <body>
     <ClientRouter />
     <AdminNav />

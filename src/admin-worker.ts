@@ -6965,8 +6965,8 @@ async function completeOnboarding(
   await env.REPORTS.batch(statements);
   return json({
     ok: true,
-    stage: internalBio ? "TUTORIAL" : "ONBOARDING",
-    next: internalBio ? "/onboarding/tutorial/" : "/onboarding/project/",
+    stage: internalBio ? "MEMBER" : "ONBOARDING",
+    next: internalBio ? "/applicant/" : "/onboarding/project/",
   });
 }
 
@@ -7043,7 +7043,7 @@ async function completeOnboardingProject(
        updated_at=excluded.updated_at`,
     ).bind(projectId, current.email, now, now),
   ]);
-  return json({ ok: true, stage: "TUTORIAL", next: "/onboarding/tutorial/" });
+  return json({ ok: true, stage: "MEMBER", next: "/applicant/" });
 }
 
 async function getOnboardingTutorial(
