@@ -71,7 +71,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
 </style>
 
-<style is="global">
+<style is:global>
   /* 運営者管理は、操作の確実性を優先した白背景のトランザクションUIに統一する。 */
   html:has(.member-admin) {
     --text-primary: #17324d !important;
@@ -140,8 +140,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-card__role { background: #e4f1f9 !important; border: 1px solid #9fc5dd !important; border-radius: 3px !important; color: #075a91; font-weight: 800; }
   .member-fact { background: #f3f7fb !important; border: 1px solid #d3e0e9 !important; border-radius: 3px !important; color: #526779 !important; }
   .member-fact b { color: #075a91 !important; }
-  .member-card__actions { border-top: 1px solid #dbe7ef; display: grid; grid-template-columns: 1fr 1fr; padding-top: .75rem; }
+  .member-card__actions { border-top: 1px solid #dbe7ef; display: grid; gap: .45rem; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: .75rem; }
   .member-card__actions .member-action--sync { grid-column: 1 / -1; }
+  .member-card__actions .member-action--promote, .member-card__actions .member-action--remove { font-size: .7rem !important; min-height: 2.15rem !important; padding: .36rem .5rem !important; white-space: nowrap; }
   .member-admin .member-action--remove, .member-admin .member-action--promote { background: #fff !important; border: 1px solid #b9ccda !important; color: #526779 !important; }
   .member-admin .member-action--promote { color: #075a91 !important; }
   .member-admin .member-action--remove:hover, .member-admin .member-action--promote:hover { background: #f3f7fb !important; border-color: #075a91 !important; }
@@ -165,8 +166,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     .member-admin__sync { align-items: flex-start; display: grid; }
     .member-admin__section-heading { align-items: start; display: grid; gap: .5rem; }
     .member-admin__count { justify-self: start; }
-    .member-card__actions { grid-template-columns: 1fr; }
-    .member-card__actions .member-action--sync { grid-column: auto; }
+    .member-card__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .member-card__actions .member-action--sync { grid-column: 1 / -1; }
   }
 </style>
 
