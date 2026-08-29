@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
 class EmptyStatement {
-  constructor(private readonly query: string) {}
+  constructor(protected readonly query: string) {}
 
   bind(...values: unknown[]) {
     const placeholders = (this.query.match(/\?/g) ?? []).length;
@@ -295,5 +295,146 @@ describe("admin worker editor APIs", () => {
     await expect(response.json()).resolves.toEqual({
       error: "選択できないコメントタグが含まれています。",
     });
+  });
+
+  it("creates an article publication PR without writing to main", async () => {
+    const documentId = "22222222-2222-4222-8222-222222222222";
+    const document = {
+      id: documentId,
+      source_article_id: null,
+      subject: "mathematics",
+      category: "overview",
+      locale: "ja",
+      slug: "test-article",
+      title: "テスト記事",
+      summary: "テスト用の要約",
+      concept_id: "mathematics.overview.test",
+      body: "本文です。",
+      writing_memo: "",
+      latex_engine: "katex",
+      status: "approved",
+      created_by: "local-editor@atlasez.test",
+      updated_by: "local-editor@atlasez.test",
+      created_at: "2026-08-28T00:00:00.000Z",
+      updated_at: "2026-08-28T00:00:00.000Z",
+      reviewed_at: "2026-08-28T00:00:00.000Z",
+      published_at: null,
+      scheduled_publish_at: null,
+      scheduled_publish_claimed_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+      publication_pr_number: null,
+      publication_pr_url: null,
+      publication_branch: null,
+      publication_action: null,
+      publication_requested_at: null,
+      locked_ranges: "[]",
+      article_references: "[]",
+    };
+    const executed: { query: string; values: unknown[] }[] = [];
+    class PublishStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.query, values: this.values });
+        return {};
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      GITHUB_PUBLISH_TOKEN: "test-token",
+      GITHUB_REPOSITORY: "Atlasez/Atlasez01",
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new PublishStatement(query),
+      },
+    };
+    const requests: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push({ url, init });
+        if (url.endsWith("/git/ref/heads/main"))
+          return new Response(JSON.stringify({ object: { sha: "base-sha" } }));
+        if (url.endsWith("/git/refs") && init?.method === "POST")
+          return new Response(JSON.stringify({ ref: "refs/heads/editorial" }), {
+            status: 201,
+          });
+        if (url.includes("/contents/") && !init?.method)
+          return new Response("Not found", { status: 404 });
+        if (url.includes("/contents/") && init?.method === "PUT")
+          return new Response(
+            JSON.stringify({ content: { sha: "article-sha" } }),
+            { status: 201 },
+          );
+        if (url.endsWith("/pulls") && init?.method === "POST")
+          return new Response(
+            JSON.stringify({
+              number: 321,
+              html_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+            }),
+            { status: 201 },
+          );
+        throw new Error(`Unexpected GitHub request: ${url}`);
+      },
+    );
+    try {
+      const response = await worker.fetch(
+        new Request(
+          `http://localhost/api/admin/editor/documents/${documentId}/publish`,
+          {
+            method: "POST",
+            headers: {
+              origin: "http://localhost",
+              "content-type": "application/json",
+            },
+            body: "{}",
+          },
+        ),
+        env as never,
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        ok: true,
+        pending: true,
+        pullRequestNumber: 321,
+        pullRequestUrl: "https://github.com/Atlasez/Atlasez01/pull/321",
+      });
+      const contentWrites = requests.filter(
+        (request) =>
+          request.url.includes("/contents/") && request.init?.method === "PUT",
+      );
+      expect(contentWrites).toHaveLength(1);
+      const articleWrite = JSON.parse(String(contentWrites[0]?.init?.body));
+      expect(articleWrite.branch).toMatch(/^editorial\/published-/);
+      expect(articleWrite.branch).not.toBe("main");
+      const pullRequest = requests.find((request) =>
+        request.url.endsWith("/pulls"),
+      );
+      const pullRequestBody = JSON.parse(String(pullRequest?.init?.body));
+      expect(pullRequestBody.base).toBe("main");
+      expect(pullRequestBody.head).toBe(articleWrite.branch);
+      expect(
+        executed.some((entry) =>
+          entry.query.includes("publication_action = 'publish'"),
+        ),
+      ).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
