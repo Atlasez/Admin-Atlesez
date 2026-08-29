@@ -2021,7 +2021,7 @@ async function syncDiscordMemberRoles(
     return json(
       {
         error:
-          "この参加者のDiscordユーザーIDが未登録です。運営者・担当管理で本人確認後に登録してください。",
+          "この参加者のDiscord連携が未完了です。応募者に応募状況画面からDiscord連携を依頼してください。",
       },
       400,
     );
@@ -3692,8 +3692,8 @@ async function discordAccessToken(
 }
 
 /**
- * 応募承認用のDiscord確認。既存ロールを読み取り、運営サイト側の対応表と
- * 応募者の現在の付与状況を確認する。Discordのロールは作成・変更しない。
+ * 応募承認後のDiscord同期。OAuth同意済みのユーザーを対象サーバーへ追加し、
+ * Discordに既に存在する対応ロールだけを付与する。ロール定義は変更しない。
  */
 async function provisionApplicationDiscordRoles(
   env: Env,
@@ -3723,7 +3723,7 @@ async function provisionApplicationDiscordRoles(
     return {
       status: "skipped",
       applied: 0,
-      warnings: ["DiscordユーザーIDが未登録です。"],
+      warnings: ["Discord連携が未完了です。応募者に応募状況画面からDiscord連携を依頼してください。"],
     };
 
   const headers = {
@@ -3870,16 +3870,17 @@ async function provisionApplicationDiscordRoles(
       await ensureMappedRole("attribute", `interest:${interest}`, interest);
 
   const current = new Set(member.roles ?? []);
-  const missingOnMember = [...desired].filter((roleId) => !current.has(roleId));
-  if (missingOnMember.length)
-    warnings.push(
-      `Discord側で未付与の既存ロールが${missingOnMember.length}件あります。運営サイトからDiscordのロールは変更しません。`,
+  let applied = 0;
+  for (const roleId of desired) {
+    if (current.has(roleId)) continue;
+    const response = await fetch(
+      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
+      { method: "PUT", headers },
     );
-  return {
-    status: warnings.length ? "skipped" : "synced",
-    applied: 0,
-    warnings,
-  };
+    if (response.ok) applied++;
+    else warnings.push(`Discordロール（ID: ${roleId}）を付与できませんでした。`);
+  }
+  return { status: warnings.length ? "failed" : "synced", applied, warnings };
 }
 
 const discordProvisionRetryDelay = (attempt: number) => {
@@ -3916,12 +3917,22 @@ async function provisionAcceptedApplication(
     .map((value) => value.trim())
     .filter((value) => APPLICATION_SUBJECT_LABELS[value]);
   const interests = subjects.map((subject) => APPLICATION_SUBJECT_LABELS[subject]).filter(Boolean);
-  const result = await provisionApplicationDiscordRoles(env, application.email, subjects, {
-    institution: application.institution,
-    year: application.grade,
-    affiliationType: application.affiliation_type,
-    interests,
-  });
+  let result: DiscordProvisioningResult;
+  try {
+    result = await provisionApplicationDiscordRoles(env, application.email, subjects, {
+      institution: application.institution,
+      year: application.grade,
+      affiliationType: application.affiliation_type,
+      interests,
+    });
+  } catch (error) {
+    console.error("application Discord provisioning failed", { applicationId, error });
+    result = {
+      status: "failed",
+      applied: 0,
+      warnings: ["Discord連携処理で一時的なエラーが発生しました。"],
+    };
+  }
   const attempt = Number(application.provisioning_attempt_count ?? 0) + 1;
   const nextAttemptAt =
     result.status === "failed" && attempt < DISCORD_PROVISION_MAX_ATTEMPTS
@@ -5272,7 +5283,8 @@ async function retryApplicationDiscordProvisioning(
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `UPDATE atlasez_member_applications
-        SET provisioning_status='pending',provisioning_error='',provisioning_next_attempt_at=NULL,updated_at=?
+        SET provisioning_status='pending',provisioning_error='',provisioning_attempt_count=0,
+            provisioning_next_attempt_at=NULL,provisioning_last_attempt_at=NULL,updated_at=?
       WHERE id=? AND status='accepted'`,
   )
     .bind(now, id)
@@ -9625,7 +9637,8 @@ async function completeDiscordOAuth(
   }
   const accepted = await env.REPORTS.prepare(
     `UPDATE atlasez_member_applications
-        SET provisioning_status='pending',provisioning_error='',provisioning_next_attempt_at=NULL,updated_at=?
+        SET provisioning_status='pending',provisioning_error='',provisioning_attempt_count=0,
+            provisioning_next_attempt_at=NULL,provisioning_last_attempt_at=NULL,updated_at=?
       WHERE lower(email)=lower(?) AND status='accepted'`,
   )
     .bind(new Date().toISOString(), identity)
