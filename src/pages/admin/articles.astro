@@ -598,7 +598,8 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     };
     const load = async () => {
       try {
-        const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin", cache: "no-store" });
+        const includeArchived = archive.value !== "active";
+        const response = await fetch(`/api/admin/editor/documents${includeArchived ? "?includeArchived=1" : ""}`, { credentials: "same-origin", cache: "no-store" });
         const contentType = response.headers.get("content-type") ?? "";
         const data = contentType.includes("application/json") ? await response.json() : {};
         if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
@@ -612,6 +613,7 @@ const categories = [...categoryMap.values()].sort((left, right) =>
     window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     [query, category, status, publication, test, workflow, archive].forEach((element) => element.addEventListener("input", render));
+    archive.addEventListener("change", () => { void load(); });
     list.addEventListener("click", async (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-archive-action]");
       if (!button) return;

@@ -156,6 +156,7 @@ type EditorialDocument = {
   reviewed_at: string | null;
   published_at: string | null;
   archived_at: string | null;
+  archived_by: string | null;
   archive_expires_at: string | null;
   scheduled_publish_at: string | null;
   scheduled_publish_claimed_at: string | null;
@@ -2239,7 +2240,7 @@ async function deleteReportAdminPermission(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
+  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -2774,10 +2775,12 @@ async function listEditorialDocuments(
     filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1) OR (publication_review_stage='subject-coordinator' AND ? = 1))`);
     values.push(...subjectValues, scope.isProjectLeader ? 1 : 0, coordinatorSubjects.length ? 1 : 0);
   }
+  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+  if (!includeArchived) filters.push("archived_at IS NULL");
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archive_expires_at, scheduled_publish_at, publication_review_stage,
+      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, publication_review_stage,
       publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at
      FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
   )
@@ -2856,10 +2859,10 @@ async function updateEditorialDocumentArchive(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const document = await env.REPORTS.prepare(
-    "SELECT id, subject, status, created_by, published_at, archived_at, archive_expires_at FROM editorial_documents WHERE id = ?",
+    "SELECT id, subject, status, created_by, published_at, archived_at, archived_by, archive_expires_at FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<Pick<EditorialDocument, "id" | "subject" | "status" | "created_by" | "published_at" | "archived_at" | "archive_expires_at">>();
+    .first<Pick<EditorialDocument, "id" | "subject" | "status" | "created_by" | "published_at" | "archived_at" | "archived_by" | "archive_expires_at">>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (document.status !== "draft" || document.published_at)
     return json({ error: "アーカイブできるのは未公開の下書きだけです。" }, 400);
@@ -2872,7 +2875,7 @@ async function updateEditorialDocumentArchive(
       return json({ error: `アーカイブ期限（${EDITORIAL_ARCHIVE_DAYS}日）を過ぎたため復元できません。` }, 410);
     const now = new Date().toISOString();
     await env.REPORTS.prepare(
-      "UPDATE editorial_documents SET archived_at = NULL, archive_expires_at = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND status = 'draft' AND published_at IS NULL",
+      "UPDATE editorial_documents SET archived_at = NULL, archived_by = NULL, archive_expires_at = NULL, updated_at = ?, updated_by = ? WHERE id = ? AND status = 'draft' AND published_at IS NULL",
     )
       .bind(now, scope.email, documentId)
       .run();
@@ -2887,9 +2890,9 @@ async function updateEditorialDocumentArchive(
   const archivedAt = now.toISOString();
   const archiveExpiresAt = editorialArchiveExpiry(now);
   await env.REPORTS.prepare(
-    "UPDATE editorial_documents SET archived_at = ?, archive_expires_at = ?, updated_at = ?, updated_by = ? WHERE id = ? AND status = 'draft' AND published_at IS NULL",
+    "UPDATE editorial_documents SET archived_at = ?, archived_by = ?, archive_expires_at = ?, updated_at = ?, updated_by = ? WHERE id = ? AND status = 'draft' AND published_at IS NULL",
   )
-    .bind(archivedAt, archiveExpiresAt, archivedAt, scope.email, documentId)
+    .bind(archivedAt, scope.email, archiveExpiresAt, archivedAt, scope.email, documentId)
     .run();
   return json({ ok: true, archived: true, archived_at: archivedAt, archive_expires_at: archiveExpiresAt });
 }

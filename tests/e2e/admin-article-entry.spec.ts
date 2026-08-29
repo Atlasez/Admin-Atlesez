@@ -179,7 +179,8 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   }) => {
     const activeId = "11111111-1111-4111-8111-111111111111";
     const archivedId = "22222222-2222-4222-8222-222222222222";
-    await page.route("**/api/admin/editor/documents", async (route) => {
+    let activeArchived = false;
+    await page.route("**/api/admin/editor/documents**", async (route) => {
       await route.fulfill({
         json: {
           scope: { email: "alice@example.com" },
@@ -193,6 +194,12 @@ test.describe("A/D 原稿一覧の作業導線", () => {
               created_by: "alice@example.com",
               updated_at: "2026-08-28T00:00:00.000Z",
               published_at: null,
+              ...(activeArchived
+                ? {
+                    archived_at: "2026-08-29T00:00:00.000Z",
+                    archive_expires_at: "2026-09-28T00:00:00.000Z",
+                  }
+                : {}),
             },
             {
               id: archivedId,
@@ -213,6 +220,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await page.route(
       `**/api/admin/editor/documents/${activeId}/archive`,
       async (route) => {
+        activeArchived = true;
         await route.fulfill({
           json: {
             ok: true,
@@ -226,6 +234,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await page.route(
       `**/api/admin/editor/documents/${activeId}/unarchive`,
       async (route) => {
+        activeArchived = false;
         await route.fulfill({
           json: {
             ok: true,
