@@ -174,6 +174,103 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
   });
 
+  test("D-4: 下書きをアーカイブし、30日以内なら一覧から復元できる", async ({
+    page,
+  }) => {
+    const activeId = "11111111-1111-4111-8111-111111111111";
+    const archivedId = "22222222-2222-4222-8222-222222222222";
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: activeId,
+              subject: "mathematics",
+              category: "algebra",
+              title: "整理前の下書き",
+              status: "draft",
+              created_by: "alice@example.com",
+              updated_at: "2026-08-28T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: archivedId,
+              subject: "mathematics",
+              category: "algebra",
+              title: "保管中の下書き",
+              status: "draft",
+              created_by: "alice@example.com",
+              updated_at: "2026-08-27T00:00:00.000Z",
+              published_at: null,
+              archived_at: "2026-08-28T00:00:00.000Z",
+              archive_expires_at: "2026-09-27T00:00:00.000Z",
+            },
+          ],
+        },
+      });
+    });
+    await page.route(
+      `**/api/admin/editor/documents/${activeId}/archive`,
+      async (route) => {
+        await route.fulfill({
+          json: {
+            ok: true,
+            archived: true,
+            archived_at: "2026-08-29T00:00:00.000Z",
+            archive_expires_at: "2026-09-28T00:00:00.000Z",
+          },
+        });
+      },
+    );
+    await page.route(
+      `**/api/admin/editor/documents/${activeId}/unarchive`,
+      async (route) => {
+        await route.fulfill({
+          json: {
+            ok: true,
+            archived: false,
+            archived_at: null,
+            archive_expires_at: null,
+          },
+        });
+      },
+    );
+
+    await page.goto("admin/articles/?verify=archive");
+    await expect(page.locator("[data-archive]")).toHaveValue("active");
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
+    await expect(page.locator("[data-list]")).toContainText("整理前の下書き");
+    await expect(page.locator("[data-list]")).not.toContainText(
+      "保管中の下書き",
+    );
+
+    await page
+      .locator(
+        `[data-document-id="${activeId}"] [data-archive-action="archive"]`,
+      )
+      .click();
+    await expect(page).toHaveURL(/admin\/articles\/\?verify=archive$/);
+    await expect(page.locator("[data-list]")).not.toContainText(
+      "整理前の下書き",
+    );
+
+    await page.locator("[data-archive]").selectOption("archived");
+    await expect(page.locator("[data-list] .article")).toHaveCount(2);
+    await expect(page.locator("[data-list]")).toContainText("整理前の下書き");
+    await expect(page.locator("[data-list]")).toContainText("保管中の下書き");
+    await page
+      .locator(
+        `[data-document-id="${activeId}"] [data-archive-action="unarchive"]`,
+      )
+      .click();
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
+    await expect(page.locator("[data-list]")).toContainText("保管中の下書き");
+    await expect(page.locator("[data-list]")).not.toContainText(
+      "整理前の下書き",
+    );
+  });
+
   test("V-1 フィードバックは原稿一覧で未確認に絞り、自分への依頼を優先する", async ({
     page,
   }) => {
