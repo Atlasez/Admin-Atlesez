@@ -5268,7 +5268,7 @@ async function retryApplicationDiscordProvisioning(
   if (!application || application.project_slug !== canonicalApplicationProjectSlug(access.project.slug))
     return json({ error: "応募が見つかりません。" }, 404);
   if (application.status !== "accepted")
-    return json({ error: "受入済みの応募だけDiscord同期を再試行できます。" }, 409);
+    return json({ error: "受入済みの応募だけDiscord情報の確認を再試行できます。" }, 409);
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `UPDATE atlasez_member_applications

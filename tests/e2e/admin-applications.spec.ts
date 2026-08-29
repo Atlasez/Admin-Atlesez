@@ -91,7 +91,9 @@ test("応募管理の導線は現在のプロジェクトに引き継がれる",
   );
 });
 
-test("OAuth連携済みの受入応募はDiscord同期を再試行できる", async ({ page }) => {
+test("OAuth連携済みの受入応募はDiscord情報の確認を再試行できる", async ({
+  page,
+}) => {
   let provisioningStatus = "failed";
   let retryCalled = false;
   await page.route("**/api/admin/applications/**", async (route) => {
@@ -153,6 +155,6 @@ test("OAuth連携済みの受入応募はDiscord同期を再試行できる", as
   await page.locator("[data-retry]").click();
   await expect.poll(() => retryCalled).toBe(true);
   await expect(page.locator(".application-list")).toContainText(
-    "Discord同期済み",
+    "Discord確認済み",
   );
 });

@@ -50,7 +50,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <style is:global>
-  /* 保存操作はカード上部のDiscord同期ボタンに統合。編集欄は閉じるだけにする。 */
+  /* 保存操作はカード上部の保存ボタンに統合。編集欄は閉じるだけにする。 */
   .member-edit-form__close {
     background: transparent !important;
     border: 1px solid var(--border-default) !important;
