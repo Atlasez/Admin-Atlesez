@@ -103,7 +103,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         error?: string;
         stage?: string;
         basicProfileComplete?: boolean;
-        application?: { project: string; submittedAt: string; status: string };
+        application?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean };
         applications?: { project: string; submittedAt: string; status: string; provisioningStatus?: string; provisioningError?: string; discordConnected?: boolean }[];
         discord?: { connected?: boolean; oauthConnected?: boolean };
       } }))
