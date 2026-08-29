@@ -143,6 +143,38 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
+test("新規原稿では存在しない公開審査URLを呼ばず、枠の高さを調整できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route(
+    "**/api/admin/editor/documents//publication-review",
+    async (route) => {
+      await route.fulfill({ status: 404, json: { error: "Not found" } });
+    },
+  );
+  await page.goto("./admin/editor/?new=1");
+
+  await expect(page.locator(".document-form")).toBeVisible();
+  await expect(page.locator("[data-save-message]")).not.toContainText(
+    "サーバーエラーが発生しました",
+  );
+
+  const handle = page.locator('[data-pane-resize="writing"]');
+  await expect(handle).toHaveAttribute("title", /ドラッグして本文枠/);
+  await handle.press("Home");
+  await expect(handle).toHaveAttribute("aria-valuenow", "240");
+  await expect(page.locator('[data-editor-pane="writing"]')).toHaveClass(
+    /is-pane-resized/,
+  );
+  await handle.press("ArrowDown");
+  await expect(handle).toHaveAttribute("aria-valuenow", "264");
+  await handle.dblclick();
+  await expect(page.locator('[data-editor-pane="writing"]')).not.toHaveClass(
+    /is-pane-resized/,
+  );
+});
+
 test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する", async ({
   page,
 }) => {

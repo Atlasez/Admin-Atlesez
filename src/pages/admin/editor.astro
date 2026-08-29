@@ -253,15 +253,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
                 <pre class="locked-range-markup" data-locked-range-markup aria-hidden="true"></pre>
                 <textarea name="body" data-body spellcheck="true" placeholder={"## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"}></textarea>
               </div>
+              <button type="button" class="pane-resize-handle" data-pane-resize="writing" aria-label="本文枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグして本文枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
             </section>
 
             <section class="preview-area" aria-labelledby="preview-heading">
               <div class="pane-heading"><h3 id="preview-heading">プレビュー</h3><span class="live-badge">自動更新</span><div class="pane-controls"><button type="button" data-preview-expand aria-pressed="false">全文表示</button><button type="button" data-pane-popout="preview">別窓</button></div></div>
               <article class="article-preview" data-preview></article>
+              <button type="button" class="pane-resize-handle" data-pane-resize="preview" aria-label="プレビュー枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグしてプレビュー枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
             </section>
             <section class="memo-area" aria-labelledby="memo-heading">
               <div class="pane-heading"><h3 id="memo-heading">執筆メモ</h3><span>記事ごとに保存・非公開</span><div class="pane-controls"><button type="button" data-pane-popout="memo">別窓</button></div></div>
               <div class="memo-content"><p>構成の意図、説明を採用した理由、将来公開したい補足などを記録できます。このメモは現在の記事編集メンバー向けで、公開記事には表示されません。</p><textarea data-writing-memo maxlength="30000" placeholder="なぜこの構成にしたのか、どの説明を採用したのか、今後追加したい内容などを書き留めます。"></textarea></div>
+              <button type="button" class="pane-resize-handle" data-pane-resize="memo" aria-label="執筆メモ枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグして執筆メモ枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
             </section>
           <section class="media-area" aria-labelledby="media-studio-heading">
             <div class="pane-heading"><h3 id="media-studio-heading">図・画像</h3><span data-media-status aria-live="polite">原稿を保存すると利用できます</span><div class="pane-controls"><button type="button" data-pane-popout="media">別窓</button></div></div>
@@ -276,6 +279,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
               <div class="media-hint">PNG・JPEG・WebP・GIF・SVG、1.5MB以下。アップロードした画像はこの原稿に紐づき、Previewにも反映されます。TikZは組版サービス未設定時、無料のブラウザ内TikZJaxでプレビューします。素材一覧の「画像幅」でプリセットまたは1〜100%の任意の幅を指定でき、既存参照にも適用できます。</div>
               <div class="media-list" data-media-list aria-live="polite"></div>
             </div>
+            <button type="button" class="pane-resize-handle" data-pane-resize="media" aria-label="図・画像枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグして図・画像枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
           </section>
           <section class="review-panel" aria-labelledby="review-heading">
             <div class="pane-heading"><h3 id="review-heading">フィードバック</h3><div class="pane-controls"><button type="button" data-pane-popout="review">別窓</button></div></div>
@@ -288,6 +292,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
             <label class="comment-entry"><span>新しいコメント</span><output class="selection-hint" data-comment-selection>範囲未選択：記事全体へのコメントとして送信します。</output><textarea data-comment-body maxlength="8000" placeholder="例：@表示名 定義の前に具体例を一つ入れると読みやすくなりそうです。"></textarea></label>
             <datalist id="comment-mention-members" data-comment-mention-members></datalist>
             <button type="button" class="primary-action review-submit" data-send-comment>この内容でコメントを追加</button>
+            <button type="button" class="pane-resize-handle" data-pane-resize="review" aria-label="フィードバック枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグしてフィードバック枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
           </section>
           </div>
           <section class="revision-workspace" aria-labelledby="revision-heading">
@@ -429,6 +434,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size: .76rem; font-weight: 800; gap: .4rem; letter-spacing: .02em; margin: 0; white-space: nowrap; }.engine-control select { font-size: .78rem; min-height: 2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
   .editor-split { align-items:start; display:grid; gap:1rem; grid-template-columns:repeat(3,minmax(0,1fr)); min-height:0; padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel, .memo-area { align-self:start; border:1px solid var(--border); min-width:0; overflow:visible; position:relative; }.preview-area { display:flex; flex-direction:column; height:clamp(32rem,66vh,52rem); max-height:clamp(32rem,66vh,52rem); min-height:0; }.memo-area { background:var(--surface); display:flex; flex-direction:column; min-height:clamp(38rem,72vh,60rem); }.memo-content { display:grid; flex:1 1 auto; gap:.65rem; grid-template-rows:auto minmax(0,1fr); min-height:0; padding:.85rem; }.memo-content p { color:var(--muted); font-size:.78rem; line-height:1.55; margin:0; }.memo-content textarea { background:var(--surface-alt); border:1px solid var(--border); box-sizing:border-box; color:var(--text); font:inherit; height:100%; line-height:1.6; min-height:0; padding:.7rem; resize:vertical; width:100%; }.pane-heading { background:var(--surface-alt); border-bottom:1px solid var(--border); padding:.75rem .9rem; }.pane-heading h3 { font-size:.95rem; margin:0; }.pane-heading p { color:var(--muted); font-size:.77rem; margin:.22rem 0 0; }.pane-heading code { background:var(--surface); border:1px solid var(--border); border-radius:0; padding:.03rem .2rem; }.pane-heading > span { color:var(--muted); flex:0 0 auto; font-size:.76rem; }.live-badge { color:var(--success) !important; font-weight:800; }
+  .pane-resize-handle { align-items:center; background:transparent; border:0; color:var(--muted); cursor:ns-resize; display:flex; height:1rem; justify-content:center; padding:0; touch-action:none; width:100%; }.pane-resize-handle span { border-top:2px solid currentColor; border-radius:999px; display:block; opacity:.65; transition:color .15s ease,opacity .15s ease,width .15s ease; width:3.2rem; }.pane-resize-handle:hover,.pane-resize-handle:focus-visible { color:var(--accent); outline:2px solid color-mix(in srgb,var(--accent),transparent 65%); outline-offset:-2px; }.pane-resize-handle:hover span,.pane-resize-handle:focus-visible span { opacity:1; width:4.5rem; }.is-resizing-pane,.is-resizing-pane * { cursor:ns-resize !important; user-select:none !important; }
+  .editor-split > section.is-pane-resized { display:flex; flex-direction:column; height:var(--editor-pane-height); max-height:none; min-height:var(--editor-pane-height); overflow:hidden; }.editor-split > .writing-area.is-pane-resized > .body-editor-surface,.editor-split > .media-area.is-pane-resized > .media-studio { flex:1 1 0; height:auto; max-height:none; min-height:0; }.editor-split > .review-panel.is-pane-resized { min-height:var(--editor-pane-height); }.review-panel.is-pane-resized .comment-list { flex:1 1 0; max-height:none; min-height:6rem; overflow:auto; }.editor-split > .memo-area.is-pane-resized .memo-content { min-height:0; }
   /* 見出しバーの高さを除いた残りだけをプレビューに割り当て、長文はこの領域内でスクロールさせる。 */
   .preview-area > .article-preview, .preview-area > .published-article-preview { flex:1 1 0; height:auto !important; max-height:none !important; min-height:0 !important; overflow-x:hidden !important; overflow-y:auto !important; overflow-wrap:anywhere; scrollbar-gutter:stable; scrollbar-width:thin; }
   .preview-area.is-expanded { align-self: start; height:auto; max-height:none; }
@@ -1080,6 +1087,66 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     type PaneKey = typeof paneKeys[number];
     type PaneEdge = "top" | "right" | "bottom" | "left";
     const paneLabels: Record<PaneKey, string> = { writing: "本文", preview: "プレビュー", media: "図・画像", review: "コメント", memo: "執筆メモ" };
+    const paneHeightBounds = { min: 240, max: 1400 } as const;
+    let savedPaneHeights: Partial<Record<PaneKey, number>> = {};
+    const clampPaneHeight = (height: number) => Math.min(paneHeightBounds.max, Math.max(paneHeightBounds.min, Math.round(height)));
+    const persistPaneHeights = () => localStorage.setItem("atlasez-editor-pane-heights", JSON.stringify(savedPaneHeights));
+    const setPaneHeight = (key: PaneKey, height: number, persist = true) => {
+      const pane = paneElements[key];
+      const normalized = clampPaneHeight(height);
+      savedPaneHeights[key] = normalized;
+      pane.classList.add("is-pane-resized");
+      pane.style.setProperty("--editor-pane-height", `${normalized}px`);
+      const handle = pane.querySelector<HTMLButtonElement>("[data-pane-resize]");
+      handle?.setAttribute("aria-valuenow", String(normalized));
+      if (persist) persistPaneHeights();
+    };
+    const resetPaneHeight = (key: PaneKey) => {
+      const pane = paneElements[key];
+      delete savedPaneHeights[key];
+      pane.classList.remove("is-pane-resized");
+      pane.style.removeProperty("--editor-pane-height");
+      const handle = pane.querySelector<HTMLButtonElement>("[data-pane-resize]");
+      handle?.setAttribute("aria-valuenow", String(clampPaneHeight(pane.getBoundingClientRect().height)));
+      persistPaneHeights();
+    };
+    const setupPaneResizing = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("atlasez-editor-pane-heights") ?? "{}") as Record<string, unknown>;
+        savedPaneHeights = Object.fromEntries(paneKeys.flatMap((key) => typeof saved[key] === "number" ? [[key, clampPaneHeight(saved[key])]] : []));
+      } catch { savedPaneHeights = {}; }
+      paneKeys.forEach((key) => {
+        const pane = paneElements[key];
+        const handle = pane.querySelector<HTMLButtonElement>("[data-pane-resize]");
+        if (!handle) return;
+        const savedHeight = savedPaneHeights[key];
+        if (savedHeight) setPaneHeight(key, savedHeight, false);
+        handle.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const startY = event.clientY;
+          const startHeight = pane.getBoundingClientRect().height;
+          const move = (moveEvent: PointerEvent) => setPaneHeight(key, startHeight + moveEvent.clientY - startY, false);
+          const stop = () => {
+            document.body.classList.remove("is-resizing-pane");
+            document.removeEventListener("pointermove", move);
+            document.removeEventListener("pointerup", stop);
+            persistPaneHeights();
+          };
+          document.body.classList.add("is-resizing-pane");
+          document.addEventListener("pointermove", move);
+          document.addEventListener("pointerup", stop, { once: true });
+        });
+        handle.addEventListener("dblclick", () => resetPaneHeight(key));
+        handle.addEventListener("keydown", (event) => {
+          const current = savedPaneHeights[key] ?? pane.getBoundingClientRect().height;
+          if (event.key === "ArrowUp") { event.preventDefault(); setPaneHeight(key, current - 24); }
+          else if (event.key === "ArrowDown") { event.preventDefault(); setPaneHeight(key, current + 24); }
+          else if (event.key === "Home") { event.preventDefault(); setPaneHeight(key, paneHeightBounds.min); }
+          else if (event.key === "End") { event.preventDefault(); setPaneHeight(key, paneHeightBounds.max); }
+        });
+      });
+    };
     const activePopouts = new Map<PaneKey, Window>();
     const isPanePoppedOut = (key: PaneKey) => {
       const popup = activePopouts.get(key);
@@ -1214,6 +1281,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       paneElements[key].append(controls);
     };
     paneKeys.forEach(addPaneEdgeControls);
+    setupPaneResizing();
     const openPaneWindow = (key: PaneKey) => {
       const panel = paneElements[key];
       const visibleBeforePopout = [...requestedPaneKeys];
@@ -2519,7 +2587,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       status.value = item.status; body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
-      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at && !item.publication_pr_url); scheduleButton.hidden = true; unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at) && item.publication_action !== "unpublish"); reviewButton.hidden = !Boolean(item.id); reviewButton.disabled = Boolean(item.published_at) || Boolean(item.publication_pr_url); reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。"; completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
+      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at && !item.publication_pr_url); scheduleButton.hidden = true; unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at) && item.publication_action !== "unpublish"); reviewButton.hidden = !Boolean(item.id); reviewButton.disabled = Boolean(item.published_at) || Boolean(item.publication_pr_url); reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。"; completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
       const available = availableEditorSubjects();
