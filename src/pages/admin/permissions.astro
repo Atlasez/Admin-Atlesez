@@ -44,6 +44,12 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 
     <section class="member-admin__members" aria-labelledby="member-list-title">
       <div class="member-admin__section-heading"><div><p class="member-admin__eyebrow">運営メンバー</p><h2 id="member-list-title">参加者一覧</h2><small>登録済みメンバーの担当権限とプロフィールを確認できます。</small></div><span class="member-admin__count" data-member-count></span></div>
+      <div class="member-toolbar" aria-label="参加者の検索と絞り込み">
+        <label class="member-toolbar__search">参加者を検索<input type="search" data-member-search placeholder="名前・メールアドレスで検索" autocomplete="off" /></label>
+        <label>表示を絞り込む<select data-member-filter><option value="all">すべての参加者</option><option value="unconnected">Discord未連携</option><option value="no-roles">Discord役職なし</option><option value="has-roles">Discord役職あり</option></select></label>
+        <button type="button" class="member-toolbar__reset" data-member-filter-reset>条件をクリア</button>
+        <span class="member-toolbar__summary" data-member-filter-summary aria-live="polite"></span>
+      </div>
       <div class="member-grid" data-member-list>読み込み中…</div>
     </section>
   </main>
@@ -177,6 +183,63 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
 </style>
 
+<style is:global>
+  /* 個人単位の管理を主役にした、検索可能なロール操作パネル。 */
+  .member-admin__workspace .workflow-role-admin { grid-column: 1 / -1; }
+  .member-toolbar {
+    align-items: end;
+    background: #f3f7fb;
+    border: 1px solid #d3e0e9;
+    display: grid;
+    gap: .7rem;
+    grid-template-columns: minmax(220px, 1.5fr) minmax(180px, .8fr) auto;
+    margin-bottom: 1rem;
+    padding: .8rem;
+  }
+  .member-toolbar label { display: grid; gap: .3rem; }
+  .member-toolbar__reset {
+    background: #fff !important;
+    border: 1px solid #b9ccda !important;
+    color: #526779 !important;
+    white-space: nowrap;
+  }
+  .member-toolbar__reset:hover { border-color: #075a91 !important; color: #075a91 !important; }
+  .member-toolbar__summary { color: #526779; font-size: .7rem; grid-column: 1 / -1; min-height: 1em; }
+  .member-card__discord {
+    background: #f3f7fb;
+    border: 1px solid #d3e0e9;
+    border-left: 3px solid #2d78a8;
+    display: grid;
+    gap: .45rem;
+    padding: .65rem .7rem;
+  }
+  .member-card__discord-heading { align-items: center; display: flex; justify-content: space-between; gap: .6rem; }
+  .member-card__discord-heading strong { color: #17324d; font-size: .76rem; }
+  .member-card__discord-state { border-radius: 999px; font-size: .64rem; font-weight: 900; padding: .2rem .42rem; }
+  .member-card__discord-state[data-state="connected"] { background: #e6f5ed; color: #17663d; }
+  .member-card__discord-state[data-state="unconnected"] { background: #fff4df; color: #8a5a00; }
+  .member-role-chips { display: flex; flex-wrap: wrap; gap: .28rem; }
+  .member-role-chip { background: #fff; border: 1px solid #b9ccda; border-radius: 999px; color: #075a91; font-size: .66rem; font-weight: 800; padding: .25rem .42rem; }
+  .member-role-chip--empty { color: #526779; font-weight: 700; }
+  .member-role-picker { background: #f3f7fb; border: 1px solid #b9ccda; border-radius: 4px; display: grid; gap: .55rem; grid-column: 1 / -1; padding: .65rem; }
+  .member-role-picker__tools { align-items: center; display: flex; gap: .55rem; }
+  .member-role-picker__tools input { flex: 1; min-width: 0; }
+  .member-role-picker__count { color: #526779; flex: 0 0 auto; font-size: .66rem; white-space: nowrap; }
+  .member-role-options { display: grid; gap: .3rem; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 13rem; overflow: auto; padding-right: .2rem; }
+  .member-role-option { align-items: center; background: #fff; border: 1px solid #d3e0e9; color: #526779; cursor: pointer; display: flex; font-size: .68rem; font-weight: 700; gap: .4rem; min-width: 0; padding: .42rem .45rem; }
+  .member-role-option:hover, .member-role-option:has(input:checked) { background: #e4f1f9; border-color: #2d78a8; color: #075a91; }
+  .member-role-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-role-option input { accent-color: #075a91; flex: 0 0 auto; min-height: auto !important; width: auto !important; }
+  .member-role-option--managed { cursor: not-allowed; opacity: .58; }
+  .member-card details[open] { background: #fbfdff; margin: 0 -.2rem; padding: .65rem .2rem 0; }
+  .member-card details[open] summary { background: #e4f1f9; padding: .45rem .55rem; }
+  @media (max-width: 720px) {
+    .member-toolbar { grid-template-columns: 1fr; }
+    .member-toolbar__summary { grid-column: auto; }
+    .member-role-options { grid-template-columns: 1fr; }
+  }
+</style>
+
 <script>
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root) {
@@ -184,10 +247,17 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const list = root.querySelector<HTMLElement>("[data-member-list]")!;
     const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
     const count = root.querySelector<HTMLElement>("[data-member-count]")!;
+    const memberSearch = root.querySelector<HTMLInputElement>("[data-member-search]")!;
+    const memberFilter = root.querySelector<HTMLSelectElement>("[data-member-filter]")!;
+    const memberFilterReset = root.querySelector<HTMLButtonElement>("[data-member-filter-reset]")!;
+    const memberFilterSummary = root.querySelector<HTMLElement>("[data-member-filter-summary]")!;
     const workflowRoleForm = root.querySelector<HTMLFormElement>("[data-add-workflow-role]")!;
     const workflowRoleList = root.querySelector<HTMLElement>("[data-workflow-role-list]")!;
     let discordRoles: Array<{ discord_role_id: string; name: string; position: number; is_managed: number }> = [];
     let discordRoleHydrationAttempted = false;
+    let memberRecords: any[] = [];
+    let memberQuery = "";
+    let memberViewFilter = "all";
     const discordRoleCount = root.querySelector<HTMLElement>("[data-discord-role-count]")!;
     const discordRoleList = root.querySelector<HTMLElement>("[data-discord-role-list]")!;
     const esc = (value: string) => value.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char] ?? char));
@@ -198,8 +268,19 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const opts = (items: string[], selected: string, multiple = false) => items.map(item => `<option value="${esc(item)}" ${multiple ? selected.split(",").includes(item) : selected === item ? "selected" : ""}>${esc(item)}</option>`).join("");
     const avatar = (member: any) => member.avatar_url ? `<img class="member-avatar" src="${esc(member.avatar_url)}" alt="" />` : `<span class="member-avatar member-avatar--fallback">${esc((member.display_name || "名").slice(0,1))}</span>`;
     const renderWorkflowRoles = (roles: any[]) => { workflowRoleList.innerHTML = roles.length ? roles.map(role => `<span class="workflow-role-chip"><b>${esc(role.display_name || role.email)}</b><small>${esc(role.role === "project-leader" ? "プロジェクトリーダー" : (subjectLabels.get(role.subject) ?? role.subject) + "統括")}</small>${role.role === "subject-coordinator" ? `<button type="button" data-remove-workflow-role data-email="${esc(role.email)}" data-subject="${esc(role.subject)}" aria-label="${esc(role.email)}の統括を削除">×</button>` : ""}</span>`).join("") : "<small>分野統括はまだ割り当てられていません。</small>"; };
+    const filteredMembers = () => {
+      const query = memberQuery.trim().toLocaleLowerCase();
+      return memberRecords.filter(member => {
+        const roleIds = String(member.discord_role_ids ?? "").split(",").filter(Boolean);
+        const searchable = `${member.display_name ?? ""} ${member.email ?? ""} ${member.discord_user_id ?? ""}`.toLocaleLowerCase();
+        const matchesQuery = !query || searchable.includes(query);
+        const matchesFilter = memberViewFilter === "all" || (memberViewFilter === "unconnected" && !member.discord_user_id) || (memberViewFilter === "no-roles" && roleIds.length === 0) || (memberViewFilter === "has-roles" && roleIds.length > 0);
+        return matchesQuery && matchesFilter;
+      });
+    };
     const render = (members: any[]) => {
       count.textContent = `${members.length} 名`;
+      memberFilterSummary.textContent = members.length === memberRecords.length ? `全${memberRecords.length}名を表示` : `${members.length}名を表示 / 全${memberRecords.length}名`;
       list.innerHTML = members.length ? members.map(member => {
         const memberSubjects = String(member.subjects ?? "").split(",").filter(Boolean);
         const isGlobalManager = memberSubjects.includes("*");
@@ -208,12 +289,17 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         const memberRoleIds = String(member.discord_role_ids ?? "").split(",").filter(Boolean);
         const institutionOptions = member.university && !universities.includes(member.university) ? [...universities, member.university] : universities;
         const permissionOptions = Array.from(subjectLabels.entries()).map(([value, label]) => `<option value="${esc(value)}" ${memberSubjects.includes(value) ? "selected" : ""}>${esc(label)}</option>`).join("");
-        const discordRoleOptions = discordRoles.map((role: any) => `<option value="${esc(role.discord_role_id)}" ${memberRoleIds.includes(role.discord_role_id) ? "selected" : ""} ${role.is_managed ? "disabled" : ""}>${esc(role.name)}${role.is_managed ? "（Discord管理）" : ""}</option>`).join("");
-        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><div class="member-card__name">${esc(member.display_name || "表示名未設定")}</div><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>変更を保存して既存ロールを同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div><details><summary>登録情報を編集</summary><div class="member-edit-form"><label>所属機関<select data-university><option value="">未登録</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-year><option value="">未登録</option>${opts(years, member.year ?? "")}</select></label><label class="member-edit-form__subjects">担当権限（複数選択可）<select data-permission-subjects multiple>${permissionOptions}</select></label><label class="member-edit-form__subjects">担当・関心分野<select data-interests multiple>${opts(fields, String(member.interests ?? ""), true)}</select></label><label class="member-edit-form__subjects">Discord役職（複数選択可）<select data-discord-roles multiple>${discordRoleOptions}</select><small>読み込んだ既存ロールだけを割り当てます。Discord側のロール定義は変更しません。</small></label><button type="button" class="member-edit-form__close" data-close-editor>閉じる</button></div></details></article>`;
+        const memberRoleLabels = memberRoleIds.map(id => discordRoles.find(role => role.discord_role_id === id)?.name ?? `役職ID ${id.slice(0, 8)}…`);
+        const roleChips = memberRoleLabels.length ? memberRoleLabels.map(name => `<span class="member-role-chip">${esc(name)}</span>`).join("") : `<span class="member-role-chip member-role-chip--empty">未付与</span>`;
+        const discordRoleOptions = discordRoles.map((role: any) => `<label class="member-role-option${role.is_managed ? " member-role-option--managed" : ""}" data-role-option data-role-name="${esc(role.name.toLocaleLowerCase())}"><input type="checkbox" data-discord-role value="${esc(role.discord_role_id)}" ${memberRoleIds.includes(role.discord_role_id) ? "checked" : ""} ${role.is_managed ? "disabled" : ""} /><span>${esc(role.name)}${role.is_managed ? "（管理対象外）" : ""}</span></label>`).join("");
+        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><div class="member-card__name">${esc(member.display_name || "表示名未設定")}</div><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord役職</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>変更を保存して既存ロールを同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div><details><summary>役職・プロフィールを編集</summary><div class="member-edit-form"><label>所属機関<select data-university><option value="">未登録</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-year><option value="">未登録</option>${opts(years, member.year ?? "")}</select></label><label class="member-edit-form__subjects">担当権限（複数選択可）<select data-permission-subjects multiple>${permissionOptions}</select></label><label class="member-edit-form__subjects">担当・関心分野<select data-interests multiple>${opts(fields, String(member.interests ?? ""), true)}</select></label><div class="member-role-picker"><strong>Discord役職（複数選択可）</strong><div class="member-role-picker__tools"><input type="search" data-role-search placeholder="役職名で検索" autocomplete="off" /><span class="member-role-picker__count" data-role-visible-count>${discordRoles.length}件</span></div><div class="member-role-options" data-role-options>${discordRoleOptions || "<small>読み込まれたロールはありません。</small>"}</div><small>既存ロールだけを割り当てます。Discord側のロール定義は変更しません。</small></div><button type="button" class="member-edit-form__close" data-close-editor>閉じる</button></div></details></article>`;
       }).join("") : '<p class="member-empty">登録されている参加者はいません。</p>';
     };
     const discordSyncMessage = (prefix: string, provisioning: any) => { const warnings = Array.isArray(provisioning?.warnings) ? provisioning.warnings.join(" ") : ""; const added = Number(provisioning?.applied ?? 0); const removed = Number(provisioning?.removed ?? 0); return `${prefix} Discord同期: 追加${added}件・削除${removed}件${warnings ? `。${warnings}` : ""}`; };
-    const load = async () => { const response = await fetch("/api/admin/report-admin-permissions", {credentials:"same-origin", cache:"no-store"}); const data = await response.json().catch(() => ({})); if (response.status === 403) { list.textContent = "このページは全分野管理者のみ利用できます。"; form.hidden = true; workflowRoleForm.hidden = true; return; } if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。"); discordRoles = Array.isArray(data.discordRoles) ? data.discordRoles : []; if (!discordRoles.length && !discordRoleHydrationAttempted) { discordRoleHydrationAttempted = true; discordRoleCount.textContent = "Discordから読み込み中…"; discordRoleList.textContent = "既存ロールを取得しています。"; const hydration = await fetch("/api/admin/discord-provision-roles", {method:"POST", credentials:"same-origin"}); if (hydration.ok) { await load(); return; } discordRoleCount.textContent = "未同期"; discordRoleList.textContent = "自動取得に失敗しました。「既存ロールを読み込む」から再試行できます。"; } discordRoleCount.textContent = discordRoles.length ? `現在 ${discordRoles.length} 件` : "未同期"; discordRoleList.textContent = discordRoles.length ? discordRoles.map(role => `${role.name}${role.is_managed ? "（管理対象外）" : ""}`).join("、") : "「Discordの既存ロールを読み込む」を押すと一覧を更新します。"; render(data.permissions ?? []); renderWorkflowRoles(data.workflowRoles ?? []); };
+    const load = async () => { const response = await fetch("/api/admin/report-admin-permissions", {credentials:"same-origin", cache:"no-store"}); const data = await response.json().catch(() => ({})); if (response.status === 403) { list.textContent = "このページは全分野管理者のみ利用できます。"; form.hidden = true; workflowRoleForm.hidden = true; return; } if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。"); discordRoles = Array.isArray(data.discordRoles) ? data.discordRoles : []; if (!discordRoles.length && !discordRoleHydrationAttempted) { discordRoleHydrationAttempted = true; discordRoleCount.textContent = "Discordから読み込み中…"; discordRoleList.textContent = "既存ロールを取得しています。"; const hydration = await fetch("/api/admin/discord-provision-roles", {method:"POST", credentials:"same-origin"}); if (hydration.ok) { await load(); return; } discordRoleCount.textContent = "未同期"; discordRoleList.textContent = "自動取得に失敗しました。「既存ロールを読み込む」から再試行できます。"; } discordRoleCount.textContent = discordRoles.length ? `現在 ${discordRoles.length} 件` : "未同期"; discordRoleList.textContent = discordRoles.length ? discordRoles.map(role => `${role.name}${role.is_managed ? "（管理対象外）" : ""}`).join("、") : "「Discordの既存ロールを読み込む」を押すと一覧を更新します。"; memberRecords = Array.isArray(data.permissions) ? data.permissions : []; render(filteredMembers()); renderWorkflowRoles(data.workflowRoles ?? []); };
+    memberSearch.addEventListener("input", () => { memberQuery = memberSearch.value; render(filteredMembers()); });
+    memberFilter.addEventListener("change", () => { memberViewFilter = memberFilter.value; render(filteredMembers()); });
+    memberFilterReset.addEventListener("click", () => { memberQuery = ""; memberViewFilter = "all"; memberSearch.value = ""; memberFilter.value = "all"; render(filteredMembers()); memberSearch.focus(); });
     root.addEventListener("discord-roles-updated", () => void load());
     workflowRoleForm.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(workflowRoleForm); const response = await fetch("/api/admin/editorial-workflow-roles", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),role:"subject-coordinator",subject:values.get("subject")})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? "分野統括を追加しました。" : (data.error ?? "分野統括を追加できませんでした。"); if (response.ok) { workflowRoleForm.reset(); await load(); } });
     form.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(form); const selectedSubjects = values.getAll("subject"); const response = await fetch("/api/admin/report-admin-permissions", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),subjects:selectedSubjects})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage(`${selectedSubjects.length}件の担当権限を追加しました。`, data.provisioning) : (data.error ?? "追加できませんでした。"); if (response.ok) { form.reset(); await load(); } });
@@ -244,7 +330,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         sync.disabled = true; sync.textContent = "保存中…";
         const interests = Array.from(card.querySelector<HTMLSelectElement>("[data-interests]")!.selectedOptions).map(option => option.value);
         const permissions = Array.from(card.querySelector<HTMLSelectElement>("[data-permission-subjects]")!.selectedOptions).map(option => option.value);
-        const discordRoleIds = Array.from(card.querySelector<HTMLSelectElement>("[data-discord-roles]")!.selectedOptions).map(option => option.value);
+        const discordRoleIds = Array.from(card.querySelectorAll<HTMLInputElement>("[data-discord-role]:checked")).map(input => input.value);
         try {
           const permissionResponse = await fetch("/api/admin/report-admin-permissions", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email,subjects:permissions})});
           const permissionResult = await permissionResponse.json().catch(() => ({})); if (!permissionResponse.ok) throw new Error(permissionResult.error ?? "担当権限を保存できませんでした。");
@@ -258,6 +344,18 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         return;
       }
       if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage("権限を削除しました。", data.provisioning) : (data.error ?? "削除できませんでした。"); if (response.ok) await load(); }
+    });
+    list.addEventListener("input", event => {
+      const target = event.target as HTMLInputElement;
+      if (!target.matches("[data-role-search]")) return;
+      const card = target.closest<HTMLElement>("[data-email]");
+      if (!card) return;
+      const query = target.value.trim().toLocaleLowerCase();
+      const options = Array.from(card.querySelectorAll<HTMLElement>("[data-role-option]"));
+      let visible = 0;
+      options.forEach(option => { const matches = !query || (option.dataset.roleName ?? "").includes(query); option.hidden = !matches; if (matches) visible += 1; });
+      const visibleCount = card.querySelector<HTMLElement>("[data-role-visible-count]");
+      if (visibleCount) visibleCount.textContent = `${visible}件`;
     });
     void load().catch(error => { list.textContent = error instanceof Error ? error.message : "参加者一覧を読み込めませんでした。"; });
   }
