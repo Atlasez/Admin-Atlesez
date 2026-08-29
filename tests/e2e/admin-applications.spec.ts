@@ -81,9 +81,19 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
 });
 
 test("応募管理の導線は現在のプロジェクトに引き継がれる", async ({ page }) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({
+      json: { email: "manager@example.com", isManager: true },
+    }),
+  );
   await page.goto("./admin/manage/?project=seminar-platform");
   await expect(page.locator("main header p")).toHaveText(
     "ゼミプラットフォーム",
+  );
+  await expect(page.locator("a[data-manager-only]")).toBeVisible();
+  await expect(page.locator("a[data-manager-only]")).toHaveAttribute(
+    "href",
+    "/admin/permissions/?project=seminar-platform",
   );
   await expect(page.locator("a[data-project-manager-only]")).toHaveAttribute(
     "href",
