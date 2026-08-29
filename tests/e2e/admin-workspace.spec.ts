@@ -206,7 +206,7 @@ test("プロジェクト運営は運営内自己紹介を承認・却下でき�
   await page.goto("admin/profile-requests/?section=atlas");
   await expect(page.getByText("変更後", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "承認する", exact: true }).click();
-  expect(action).toBe("approve");
+  await expect.poll(() => action).toBe("approve");
 });
 
 test("各ジャンル概要で現行の分野・カテゴリ情報を確認できる", async ({
