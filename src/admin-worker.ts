@@ -10263,8 +10263,13 @@ const loggedOutPage = () =>
   );
 
 async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
-  const scope = await getMemberProfileScope(request, env);
-  if (isResponse(scope)) return scope;
+  const memberScope = await getMemberProfileScope(request, env);
+  if (isResponse(memberScope)) return memberScope;
+  // 完了済みプロフィールのメンバー向け閲覧権限と、管理トップの表示判定を分離する。
+  // 管理者でもプロフィール入力済みだと getMemberProfileScope は通常メンバーとして
+  // 返るため、ここでは管理権限がある場合だけ管理スコープを優先する。
+  const adminScope = await getAdminScope(request, env);
+  const scope = isResponse(adminScope) ? memberScope : adminScope;
   const identity = scope.email;
   const managerProjects = scope.isManager
     ? await env.REPORTS.prepare(
