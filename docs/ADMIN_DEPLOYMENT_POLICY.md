@@ -40,9 +40,11 @@ Cloudflare Dashboardで次を設定・維持する。
 6. Custom Domainは `admin.atlasez.org` のProductionだけを本番入口にする。
 7. Production Worker URLとPreview URLは本番確認先として使わない。設定ファイルでも`workers_dev`と`preview_urls`を無効にする。
 
-GitHub ActionsにADMIN本番デプロイを追加しない。Cloudflare Workers BuildsとGitHub Actionsが異なるSHAを後からデプロイする二重経路を作らない。
+Cloudflare Workers Buildsが正常に接続されている間は、GitHub ActionsにADMIN本番デプロイを追加しない。二重経路を作らないためである。ただし、Workers Buildsの接続が未成立の場合は、下記のGitHub Actions暫定経路を使用できる。
 
-なお、Cloudflare DashboardのGit repository接続が内部エラーで未成立の間は、この正規経路は「復旧待ち」であり、本番自動デプロイ済みとはみなさない。接続復旧前に手動Uploadやfeature branchからのdeployで代替しない。
+なお、Cloudflare DashboardのGit repository接続が内部エラーで未成立の間は、自動経路は「復旧待ち」であり、本番自動デプロイ済みとはみなさない。接続復旧前に手動Uploadやfeature branchからのdeployで代替しない。
+
+Workers Builds未接続時の暫定経路として、GitHub Actionsの`Deploy admin from GitHub`を使用できる。このWorkflowは`main`を対象にした手動実行だけを受け付け、確認チェック、ビルド、D1 migration、Workerデプロイ、公開build-infoのSHA確認を順番に行う。`main`へのpushでは起動しないため、PRのMergeだけでCloudflareを変更しない。migrationまたはデプロイが失敗した場合は後続処理を停止し、既存のWorker Versionを維持する。利用にはGitHub Secretsの`CLOUDFLARE_API_TOKEN`と、`production` Environmentの承認設定が必要である。
 
 ## 3. ビルド成果物の身元確認
 
@@ -79,6 +81,8 @@ curl -fsS https://admin.atlasez.org/build-info.json
 - Build cacheが無効であることを確認する。
 - Build/Deployログのcommit SHA、Worker名、Version ID、時刻を記録する。
 - Versionが対象Workerへ100%配信されるまで本番完了とみなさない。
+
+Workers Builds未接続時にGitHub Actions経路を使う場合は、GitHub ActionsのProduction environment承認を経て、`main`を対象に`confirm_main=true`で手動実行する。D1 migrationの成功ログと`build-info.json.commit`の一致を確認できない場合は完了扱いにしない。
 
 ### デプロイ後
 
