@@ -158,6 +158,7 @@ const enhanceBodyEditor = (textarea) => {
   // from inverting the white caret into a low-contrast dark caret.
   host.setAttribute("data-darkreader-ignore", "true");
   textarea.insertAdjacentElement("afterend", host);
+  textarea.closest("[data-body-surface]")?.setAttribute("data-codemirror-ready", "true");
 
   textarea.dataset.bodyCodemirrorSource = "true";
   textarea.tabIndex = -1;

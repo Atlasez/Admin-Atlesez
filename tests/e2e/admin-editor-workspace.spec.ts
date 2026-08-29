@@ -175,6 +175,34 @@ test("新規原稿では存在しない公開審査URLを呼ばず、枠の高�
   );
 });
 
+test("長文のDirective境界でも本文の重ね合わせ表示が行順を崩さない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const source = [
+    ...Array.from({ length: 350 }, (_, index) => `本文 ${index + 1}`),
+    ":::",
+    "",
+    "",
+    "::: proof",
+    "",
+    "証明本文です。",
+    ":::",
+  ].join("\n");
+  await page.locator("textarea[data-body]").evaluate((element, value) => {
+    (element as HTMLTextAreaElement).value = value;
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }, source);
+
+  await expect(page.locator("[data-locked-range-markup]")).toBeHidden();
+  await expect(page.locator("[data-locked-range-markup]")).toHaveText("");
+  await expect(
+    page.locator(".cm-line").filter({ hasText: "::: proof" }),
+  ).toHaveCount(1);
+});
+
 test("E-12: 1段目の枠を上へ移動すると単独行を全面表示する", async ({
   page,
 }) => {
