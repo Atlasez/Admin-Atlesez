@@ -2173,12 +2173,22 @@ async function provisionDiscordAttributeRoles(
   ];
   const matched: string[] = [];
   const missing: string[] = [];
+  const ambiguous: string[] = [];
   for (const definition of definitions) {
-  const current = existing.find(
+    const current = uniqueAssignableDiscordRole(
+      existing,
+      env.DISCORD_GUILD_ID ?? "",
+      definition.value,
+    );
+    const hasDuplicate = existing.filter(
       (role) =>
         isAssignableDiscordRole(role, env.DISCORD_GUILD_ID ?? "") &&
         role.name.trim() === definition.value.trim(),
-  );
+    ).length > 1;
+    if (hasDuplicate) {
+      ambiguous.push(definition.value);
+      continue;
+    }
     const roleId = current?.id;
     if (!roleId) {
       missing.push(definition.value);
@@ -2210,6 +2220,7 @@ async function provisionDiscordAttributeRoles(
       guildTarget.name || env.DISCORD_GUILD_NAME || "設定対象サーバー",
     matched: matched.length,
     missing,
+    ambiguous,
     unknownDiscordRoles: existing
       .filter(
         (role) =>
@@ -3832,6 +3843,222 @@ async function verifyDiscordGuildTarget(
   return { ok: true, name };
 }
 
+type DiscordReadinessRole = {
+  id: string;
+  name: string;
+  position?: number;
+  permissions?: string;
+  managed?: boolean;
+  tags?: { bot_id?: string };
+};
+
+const discordReadinessApi = async <T>(
+  path: string,
+  headers: Record<string, string>,
+): Promise<{ ok: true; data: T } | { ok: false; status: number }> => {
+  try {
+    const response = await fetch(`https://discord.com/api/v10${path}`, {
+      headers,
+    });
+    if (!response.ok) return { ok: false, status: response.status };
+    return { ok: true, data: (await response.json()) as T };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+};
+
+async function checkDiscordReadiness(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+
+  const configured = {
+    botToken: Boolean(env.DISCORD_BOT_TOKEN?.trim()),
+    guildId: Boolean(env.DISCORD_GUILD_ID?.trim()),
+    discordOAuth: discordOAuthConfigured(env),
+    emailDelivery: Boolean(env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim()),
+  };
+  const warnings: string[] = [];
+  const guildId = env.DISCORD_GUILD_ID?.trim() ?? "";
+  if (!configured.botToken) warnings.push("DISCORD_BOT_TOKENが未設定です。");
+  if (!configured.guildId) warnings.push("DISCORD_GUILD_IDが未設定です。");
+  if (!configured.discordOAuth)
+    warnings.push("Discord OAuthのクライアント情報または暗号化鍵が未設定です。");
+  if (!configured.emailDelivery)
+    warnings.push("RESEND_API_KEYまたはEMAIL_FROMが未設定です。");
+
+  const checks = {
+    botApi: false,
+    guildApi: false,
+    rolesApi: false,
+    botMember: false,
+    manageRoles: false,
+    roleHierarchy: false,
+    roleMappings: false,
+  };
+  const base = {
+    ok: true,
+    ready: false,
+    configured,
+    checks,
+    guild: null as { id: string; name: string } | null,
+    bot: null as { id: string; name: string } | null,
+    botRolePosition: null as number | null,
+    mappedRoleCount: 0,
+    missingMappedRoleIds: [] as string[],
+    ambiguousRoleNames: [] as Array<{ name: string; count: number }>,
+    warnings,
+  };
+  if (!configured.botToken || !configured.guildId)
+    return json({ ...base, status: "not_ready" });
+
+  const headers = { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` };
+  const botResponse = await discordReadinessApi<{ id?: string; username?: string }>(
+    "/users/@me",
+    headers,
+  );
+  if (!botResponse.ok) {
+    warnings.push(
+      botResponse.status
+        ? `Discord Botを確認できません（HTTP ${botResponse.status}）。`
+        : "Discord Botへ接続できません。",
+    );
+    return json({ ...base, status: "not_ready" });
+  }
+  if (!botResponse.data.id) {
+    warnings.push("Discord BotのユーザーIDを取得できません。");
+    return json({ ...base, status: "not_ready" });
+  }
+  checks.botApi = true;
+  base.bot = {
+    id: botResponse.data.id,
+    name: botResponse.data.username?.trim() || "Discord Bot",
+  };
+
+  const guildResponse = await discordReadinessApi<{ id?: string; name?: string }>(
+    `/guilds/${encodeURIComponent(guildId)}`,
+    headers,
+  );
+  if (!guildResponse.ok || !guildResponse.data.id) {
+    warnings.push(
+      guildResponse.ok
+        ? "Discordサーバー情報が不完全です。"
+        : `Discordサーバーを確認できません${guildResponse.status ? `（HTTP ${guildResponse.status}）` : ""}。`,
+    );
+    return json({ ...base, status: "not_ready" });
+  }
+  checks.guildApi = true;
+  base.guild = {
+    id: guildResponse.data.id,
+    name: guildResponse.data.name?.trim() || env.DISCORD_GUILD_NAME?.trim() || "名称不明",
+  };
+
+  const rolesResponse = await discordReadinessApi<DiscordReadinessRole[]>(
+    `/guilds/${encodeURIComponent(guildId)}/roles`,
+    headers,
+  );
+  if (!rolesResponse.ok || !Array.isArray(rolesResponse.data)) {
+    warnings.push(
+      `Discordロール一覧を確認できません${rolesResponse.ok ? "" : `（HTTP ${rolesResponse.status || "接続エラー"}）`}。`,
+    );
+    return json({ ...base, status: "not_ready" });
+  }
+  checks.rolesApi = true;
+  const roles = rolesResponse.data;
+  const botMemberResponse = await discordReadinessApi<{ roles?: string[] }>(
+    `/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(botResponse.data.id)}`,
+    headers,
+  );
+  if (!botMemberResponse.ok) {
+    warnings.push(
+      `Botが対象サーバーのメンバーとして確認できません${botMemberResponse.status ? `（HTTP ${botMemberResponse.status}）` : ""}。`,
+    );
+    return json({ ...base, status: "not_ready" });
+  }
+  checks.botMember = true;
+  const botMemberRoleIds = new Set(botMemberResponse.data.roles ?? []);
+  const botMemberRoles = roles.filter((role) => botMemberRoleIds.has(role.id));
+  const botRolePosition = botMemberRoles.reduce(
+    (highest, role) => Math.max(highest, Number.isFinite(role.position) ? Number(role.position) : -1),
+    -1,
+  );
+  base.botRolePosition = botRolePosition;
+  const manageRolesPermission = 1n << 28n;
+  const canManageRoles = roles
+    .filter((role) => role.id === guildId || botMemberRoleIds.has(role.id))
+    .some((role) => {
+      try {
+        return (BigInt(role.permissions ?? "0") & manageRolesPermission) !== 0n;
+      } catch {
+        return false;
+      }
+    });
+  checks.manageRoles = canManageRoles;
+  if (!canManageRoles)
+    warnings.push("BotにDiscordの「ロールの管理」権限がありません。");
+
+  let mappedRoleIds: string[] = [];
+  try {
+    const [subjectMappings, attributeMappings, manualAssignments] = await Promise.all([
+      env.REPORTS.prepare(
+        "SELECT discord_role_id FROM atlasez_discord_role_mappings WHERE project_id = 'atlas'",
+      ).all<{ discord_role_id: string }>(),
+      env.REPORTS.prepare(
+        "SELECT discord_role_id FROM atlasez_discord_attribute_role_mappings",
+      ).all<{ discord_role_id: string }>(),
+      env.REPORTS.prepare(
+        "SELECT discord_role_id FROM atlasez_member_discord_role_assignments WHERE is_active = 1",
+      ).all<{ discord_role_id: string }>(),
+    ]);
+    mappedRoleIds = [
+      ...(subjectMappings.results ?? []),
+      ...(attributeMappings.results ?? []),
+      ...(manualAssignments.results ?? []),
+    ]
+      .map((row) => row.discord_role_id)
+      .filter(Boolean);
+  } catch {
+    warnings.push("運営サイト側のDiscordロール対応表を確認できません。");
+  }
+  const uniqueMappedRoleIds = [...new Set(mappedRoleIds)];
+  base.mappedRoleCount = uniqueMappedRoleIds.length;
+  const guildRoleIds = new Set(roles.map((role) => role.id));
+  base.missingMappedRoleIds = uniqueMappedRoleIds.filter((id) => !guildRoleIds.has(id));
+  checks.roleMappings = uniqueMappedRoleIds.length > 0 && base.missingMappedRoleIds.length === 0;
+  if (!uniqueMappedRoleIds.length)
+    warnings.push("運営サイト側にDiscordロール対応表がまだ設定されていません。");
+  if (base.missingMappedRoleIds.length)
+    warnings.push("対応表にあるDiscordロールの一部が対象サーバーに存在しません。");
+
+  const targetRoles = roles.filter(
+    (role) => uniqueMappedRoleIds.includes(role.id) && isAssignableDiscordRole(role, guildId),
+  );
+  const highestTargetRolePosition = targetRoles.reduce(
+    (highest, role) => Math.max(highest, Number.isFinite(role.position) ? Number(role.position) : -1),
+    -1,
+  );
+  checks.roleHierarchy = targetRoles.length > 0 && botRolePosition > highestTargetRolePosition;
+  if (targetRoles.length > 0 && !checks.roleHierarchy)
+    warnings.push("Botのロールが、付与対象ロールより上位にありません。");
+  const duplicateNames = new Map<string, number>();
+  for (const role of roles.filter((role) => isAssignableDiscordRole(role, guildId))) {
+    const name = role.name.trim();
+    if (name) duplicateNames.set(name, (duplicateNames.get(name) ?? 0) + 1);
+  }
+  base.ambiguousRoleNames = [...duplicateNames.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([name, count]) => ({ name, count }));
+  if (base.ambiguousRoleNames.length)
+    warnings.push("同名の付与可能ロールがあります。自動照合には運営サイト側のロールID対応表が必要です。");
+
+  const ready = Object.values(configured).every(Boolean) && Object.values(checks).every(Boolean);
+  return json({ ...base, ready, status: ready ? "ready" : "not_ready" });
+}
+
 type DiscordProvisioningResult = {
   status: "synced" | "skipped" | "failed";
   applied: number;
@@ -4057,11 +4284,18 @@ async function provisionApplicationDiscordRoles(
     if (
       !roleId ||
       !assignableGuildRoles.some((role) => role.id === roleId)
-    )
-      roleId =
-        assignableGuildRoles.find(
-          (role) => role.name.trim() === label.trim(),
-        )?.id ?? "";
+    ) {
+      const sameNameRoles = assignableGuildRoles.filter(
+        (role) => role.name.trim() === label.trim(),
+      );
+      if (sameNameRoles.length === 1) roleId = sameNameRoles[0].id;
+      else if (sameNameRoles.length > 1) {
+        warnings.push(
+          `Discordに「${label}」ロールが複数存在するため、自動付与を停止しました。運営サイト側でロールID対応表を設定してください。`,
+        );
+        return;
+      } else roleId = "";
+    }
     if (!roleId) {
       warnings.push(`Discordに「${label}」ロールが存在しません。運営サイト側の対応表だけを確認しました。`);
       return;
@@ -4181,6 +4415,19 @@ const isAssignableDiscordRole = (
   role: { id: string; managed?: boolean },
   guildId: string,
 ) => !role.managed && role.id !== guildId;
+
+const uniqueAssignableDiscordRole = <T extends { id: string; name: string; managed?: boolean }>(
+  roles: T[],
+  guildId: string,
+  label: string,
+) => {
+  const matches = roles.filter(
+    (role) =>
+      isAssignableDiscordRole(role, guildId) &&
+      role.name.trim() === label.trim(),
+  );
+  return matches.length === 1 ? matches[0] : null;
+};
 
 const discordProvisionRetryDelay = (attempt: number) => {
   const delays = [5, 30, 120, 720, 1_440, 2_880];
@@ -11219,6 +11466,20 @@ async function handleAdminRequest(
     request.method === "PUT"
   )
     return updateMemberDiscordRoles(request, env);
+  if (
+    url.pathname === "/api/admin/discord-readiness" &&
+    request.method === "GET"
+  ) {
+    try {
+      return await checkDiscordReadiness(request, env);
+    } catch (error) {
+      console.error("Discord readiness check failed", error);
+      return json(
+        { error: "Discord運用事前チェックに失敗しました。設定と接続を確認してください。" },
+        500,
+      );
+    }
+  }
   if (
     url.pathname === "/api/admin/discord-provision-roles" &&
     request.method === "POST"
