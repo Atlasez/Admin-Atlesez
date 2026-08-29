@@ -65,12 +65,18 @@ describe("Discord managed role synchronization", () => {
         return Response.json({ name: "Atlasez学習サイト運営" });
       if (url.endsWith("/members/123456789012345678"))
         return Response.json({
-          roles: ["@everyone", "role-mathematics", "role-stale"],
+          roles: [
+            "@everyone",
+            "role-mathematics",
+            "role-stale",
+            "role-managed",
+          ],
         });
       if (url.endsWith("/roles"))
         return Response.json([
           { id: "role-mathematics", name: "数学" },
           { id: "role-stale", name: "物理" },
+          { id: "role-managed", name: "外部連携", managed: true },
         ]);
       if (method === "DELETE") return new Response(null, { status: 204 });
       throw new Error(`Unexpected Discord request: ${method} ${url}`);
@@ -120,6 +126,104 @@ describe("Discord managed role synchronization", () => {
       requests.some(
         ({ url, method }) =>
           url.endsWith("/roles/role-mathematics") && method === "DELETE",
+      ),
+    ).toBe(false);
+    expect(
+      requests.some(({ url }) => url.endsWith("/roles/role-managed")),
+    ).toBe(false);
+  });
+
+  it("does not fall back to a managed role with the same display name", async () => {
+    class ManagedRoleStatement {
+      constructor(private readonly query: string) {}
+
+      bind(..._args: unknown[]) {
+        return this;
+      }
+
+      async run() {
+        return { meta: { changes: 1 } };
+      }
+
+      async first<T>() {
+        if (this.query.includes("editorial_member_profiles"))
+          return {
+            university: "",
+            year: "",
+            interests: "",
+            affiliation_type: "",
+          } as T;
+        if (this.query.includes("atlasez_member_discord_accounts"))
+          return {
+            discord_user_id: "123456789012345678",
+            access_token_ciphertext: "",
+            refresh_token_ciphertext: "",
+            token_expires_at: null,
+          } as T;
+        return null as T | null;
+      }
+
+      async all<T>() {
+        if (this.query.includes("report_admin_permissions"))
+          return { results: [{ subject: "mathematics" }] as T[] };
+        return { results: [] as T[] };
+      }
+    }
+
+    const requests: Array<{ url: string; method: string }> = [];
+    fetchSpy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method });
+      if (url.endsWith("/guilds/guild-1"))
+        return Response.json({ name: "Atlasez学習サイト運営" });
+      if (url.endsWith("/members/123456789012345678"))
+        return Response.json({ roles: ["@everyone"] });
+      if (url.endsWith("/roles"))
+        return Response.json([
+          { id: "role-mathematics", name: "数学", managed: true },
+        ]);
+      throw new Error(`Unexpected Discord request: ${method} ${url}`);
+    });
+
+    const env = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "manager@example.com",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      DISCORD_GUILD_NAME: "Atlasez学習サイト運営",
+      REPORTS: {
+        prepare: (query: string) => new ManagedRoleStatement(query),
+        batch: async () => [],
+      },
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/member-attributes", {
+        method: "PUT",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "member@example.com",
+          university: "",
+          year: "",
+          interests: [],
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      provisioning: { status: "failed", applied: 0 },
+    });
+    expect(
+      requests.some(
+        ({ url, method }) =>
+          url.endsWith("/roles/role-mathematics") && method === "PUT",
       ),
     ).toBe(false);
   });
