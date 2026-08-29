@@ -83,6 +83,11 @@ interface Env {
   /** 担当変更をDiscordロールへ反映するBot。 */
   DISCORD_BOT_TOKEN?: string;
   DISCORD_GUILD_ID?: string;
+  /** 応募者本人のDiscord OAuth2連携。client secretと暗号化鍵はSecretに保存する。 */
+  DISCORD_OAUTH_CLIENT_ID?: string;
+  DISCORD_OAUTH_CLIENT_SECRET?: string;
+  DISCORD_OAUTH_REDIRECT_URI?: string;
+  DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY?: string;
   /** 分野別通知を集約する、全体進捗チャンネルのID。 */
   DISCORD_PROGRESS_CHANNEL_ID?: string;
   /** 任意。設定された自分用メールリマインダーの配信に使う。 */
@@ -524,6 +529,9 @@ const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
 const GOOGLE_LINK_STATE_COOKIE = "atlasez_google_account_link_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
+const DISCORD_OAUTH_SCOPE = "identify guilds.join";
+const DISCORD_OAUTH_STATE_TTL_MS = 10 * 60 * 1_000;
+const DISCORD_PROVISION_MAX_ATTEMPTS = 6;
 const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1_000;
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
@@ -772,6 +780,67 @@ const hash = async (value: string) => {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+};
+
+const base64Encode = (bytes: Uint8Array) => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+const base64Decode = (value: string) => {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+};
+
+const discordOAuthConfigured = (env: Env) =>
+  Boolean(
+    env.DISCORD_OAUTH_CLIENT_ID?.trim() &&
+      env.DISCORD_OAUTH_CLIENT_SECRET?.trim() &&
+      env.DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY?.trim(),
+  );
+
+const discordOAuthCallbackUrl = (request: Request, env: Env) =>
+  (env.DISCORD_OAUTH_REDIRECT_URI?.trim() ||
+    `${adminPublicOrigin(request, env)}/auth/discord/callback`).replace(/\/$/, "");
+
+const discordEncryptionKey = async (env: Env) => {
+  const raw = env.DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY?.trim() ?? "";
+  if (!raw) throw new Error("Discord OAuth暗号化鍵が未設定です。");
+  let bytes: Uint8Array;
+  try {
+    bytes = /^[0-9a-f]{64}$/i.test(raw)
+      ? Uint8Array.from(raw.match(/.{2}/g) ?? [], (pair) => parseInt(pair, 16))
+      : base64Decode(raw);
+  } catch {
+    throw new Error("Discord OAuth暗号化鍵の形式が正しくありません。");
+  }
+  if (bytes.byteLength !== 32)
+    throw new Error("Discord OAuth暗号化鍵は32バイト必要です。");
+  return crypto.subtle.importKey("raw", bytes as unknown as BufferSource, "AES-GCM", false, ["encrypt", "decrypt"]);
+};
+
+const encryptDiscordSecret = async (env: Env, value: string) => {
+  if (!value) return "";
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce },
+    await discordEncryptionKey(env),
+    new TextEncoder().encode(value),
+  );
+  return `${base64Encode(nonce)}.${base64Encode(new Uint8Array(encrypted))}`;
+};
+
+const decryptDiscordSecret = async (env: Env, value: string) => {
+  if (!value) return "";
+  const [nonceValue, encryptedValue] = value.split(".");
+  if (!nonceValue || !encryptedValue) throw new Error("Discord OAuth token is invalid");
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64Decode(nonceValue) },
+    await discordEncryptionKey(env),
+    base64Decode(encryptedValue),
+  );
+  return new TextDecoder().decode(decrypted);
 };
 
 const authMode = (env: Env) => env.ADMIN_AUTH_MODE ?? "cloudflare-access";
@@ -3393,20 +3462,22 @@ async function queueApplicationAcceptanceEmail(
         "",
         `Your application to ${projectLabel} has been accepted.`,
         "Please sign in to the Atlasez management site and follow the onboarding instructions.",
+        "If you have not connected Discord yet, open the application status page and choose ‘Connect Discord’ once.",
         "",
-        "Onboarding: https://admin.atlasez.org/onboarding/",
+        "Application status: https://admin.atlasez.org/applicant/",
       ].join("\n")
     : [
         "Atlasez運営です。",
         "",
         `${projectLabel}への参加が承認されました。`,
         "管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。",
+        "Discord連携がまだの場合は、応募状況ページから「Discordと連携」を1回実行してください。",
         "",
-        "オンボーディング：https://admin.atlasez.org/onboarding/",
+        "応募状況：https://admin.atlasez.org/applicant/",
       ].join("\n");
   const htmlBody = english
-    ? `<h2>Application accepted</h2><p>Your application to ${emailSafe(projectLabel)} has been accepted.</p><p>Please sign in and follow the onboarding instructions.</p><p><a href="https://admin.atlasez.org/onboarding/">Open onboarding</a></p>`
-    : `<h2>参加が承認されました</h2><p>${emailSafe(projectLabel)}への参加が承認されました。</p><p>管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。</p><p><a href="https://admin.atlasez.org/onboarding/">オンボーディングを開く</a></p>`;
+    ? `<h2>Application accepted</h2><p>Your application to ${emailSafe(projectLabel)} has been accepted.</p><p>Please sign in and follow the onboarding instructions. If Discord is not connected yet, choose “Connect Discord” once on the application status page.</p><p><a href="https://admin.atlasez.org/applicant/">Open application status</a></p>`
+    : `<h2>参加が承認されました</h2><p>${emailSafe(projectLabel)}への参加が承認されました。</p><p>管理サイトへログインし、オンボーディングの案内に沿って参加手続きを進めてください。Discord連携がまだの場合は、応募状況ページから「Discordと連携」を1回実行してください。</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を開く</a></p>`;
   await env.REPORTS.prepare(
     `INSERT OR IGNORE INTO atlasez_application_email_deliveries
      (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
@@ -3424,6 +3495,40 @@ async function queueApplicationAcceptanceEmail(
       acceptedAt,
       acceptedAt,
     )
+    .run();
+}
+
+async function queueApplicationDiscordEmail(
+  env: Env,
+  application: { id: string; email: string; projectSlug: string; formLanguage: string },
+  status: "synced" | "failed",
+  error = "",
+) {
+  const projectLabel =
+    APPLICATION_FORM_LABELS[application.projectSlug] ?? application.projectSlug;
+  const english = application.formLanguage === "en";
+  const success = status === "synced";
+  const kind = success ? "applicant_discord_success" : "applicant_discord_failure";
+  const subject = english
+    ? `Atlasez | Discord connection ${success ? "completed" : "needs attention"}`
+    : `Atlasez｜Discord連携${success ? "が完了しました" : "を確認してください"}`;
+  const textBody = english
+    ? success
+      ? `Your Discord account has been connected to ${projectLabel} and the server roles were applied.\n\nOpen your application status: https://admin.atlasez.org/applicant/`
+      : `We could not finish connecting your Discord account to ${projectLabel}. We will retry automatically.\n\n${error}\n\nCheck your application status: https://admin.atlasez.org/applicant/`
+    : success
+      ? `${projectLabel}のDiscord連携が完了し、サーバーへの参加とロール設定が完了しました。\n\n応募状況：https://admin.atlasez.org/applicant/`
+      : `${projectLabel}のDiscord連携を完了できませんでした。システムが自動で再試行します。\n\n${error}\n\n応募状況：https://admin.atlasez.org/applicant/`;
+  const htmlBody = success
+    ? `<h2>Discord連携が完了しました</h2><p>${emailSafe(projectLabel)}のDiscordサーバー参加とロール設定が完了しました。</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を確認する</a></p>`
+    : `<h2>Discord連携を確認してください</h2><p>${emailSafe(projectLabel)}のDiscord連携を完了できませんでした。自動で再試行します。</p><p>${emailSafe(error)}</p><p><a href="https://admin.atlasez.org/applicant/">応募状況を確認する</a></p>`;
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT OR IGNORE INTO atlasez_application_email_deliveries
+     (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,'pending',0,?,?,?)`,
+  )
+    .bind(crypto.randomUUID(), application.id, application.email, kind, subject, textBody, htmlBody, now, now, now)
     .run();
 }
 
@@ -3643,6 +3748,61 @@ type DiscordProvisioningResult = {
   warnings: string[];
 };
 
+type DiscordAccountTokenRow = {
+  discord_user_id: string;
+  access_token_ciphertext: string;
+  refresh_token_ciphertext: string;
+  token_expires_at: string | null;
+};
+
+async function discordAccessToken(
+  env: Env,
+  account: DiscordAccountTokenRow,
+): Promise<string> {
+  if (!account.access_token_ciphertext) return "";
+  const expiresAt = account.token_expires_at
+    ? new Date(account.token_expires_at).getTime()
+    : 0;
+  if (expiresAt > Date.now() + 30_000)
+    return decryptDiscordSecret(env, account.access_token_ciphertext);
+  if (!account.refresh_token_ciphertext || !discordOAuthConfigured(env)) return "";
+  const refreshToken = await decryptDiscordSecret(env, account.refresh_token_ciphertext);
+  const response = await fetch("https://discord.com/api/oauth2/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: env.DISCORD_OAUTH_CLIENT_ID ?? "",
+      client_secret: env.DISCORD_OAUTH_CLIENT_SECRET ?? "",
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!response.ok) return "";
+  const token = (await response.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
+  if (!token.access_token) return "";
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `UPDATE atlasez_member_discord_accounts
+        SET access_token_ciphertext=?,refresh_token_ciphertext=?,token_expires_at=?,oauth_scope=?,updated_at=?
+      WHERE discord_user_id=?`,
+  )
+    .bind(
+      await encryptDiscordSecret(env, token.access_token),
+      await encryptDiscordSecret(env, token.refresh_token ?? refreshToken),
+      new Date(Date.now() + Math.max(0, Number(token.expires_in ?? 0) - 60) * 1_000).toISOString(),
+      token.scope ?? DISCORD_OAUTH_SCOPE,
+      now,
+      account.discord_user_id,
+    )
+    .run();
+  return token.access_token;
+}
+
 /**
  * 応募承認用のDiscord同期。必要なロールが未作成なら、管理者による承認を
  * 起点として作成・対応表登録まで行う。各操作は冪等なので、通信失敗後も
@@ -3666,10 +3826,12 @@ async function provisionApplicationDiscordRoles(
       warnings: ["Discord Botが未設定です。"],
     };
   const account = await env.REPORTS.prepare(
-    "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
+    `SELECT discord_user_id,access_token_ciphertext,refresh_token_ciphertext,
+            token_expires_at
+       FROM atlasez_member_discord_accounts WHERE email = ?`,
   )
     .bind(email)
-    .first<{ discord_user_id: string }>();
+    .first<DiscordAccountTokenRow>();
   if (!account?.discord_user_id)
     return {
       status: "skipped",
@@ -3681,21 +3843,46 @@ async function provisionApplicationDiscordRoles(
     authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
     "content-type": "application/json",
   };
-  const [memberResponse, rolesResponse] = await Promise.all([
-    fetch(
-      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
-      { headers },
-    ),
-    fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`, {
-      headers,
-    }),
-  ]);
+  let memberResponse = await fetch(
+    `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
+    { headers },
+  );
+  if (!memberResponse.ok && account.access_token_ciphertext) {
+    try {
+      const accessToken = await discordAccessToken(env, account);
+      if (accessToken) {
+        const joinResponse = await fetch(
+          `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
+          {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ access_token: accessToken }),
+          },
+        );
+        if (joinResponse.ok || joinResponse.status === 204 || joinResponse.status === 201)
+          memberResponse = await fetch(
+            `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
+            { headers },
+          );
+      }
+    } catch {
+      // 下の共通エラー表示で、状態を再試行可能な失敗として記録する。
+    }
+  }
   if (!memberResponse.ok)
     return {
       status: "failed",
       applied: 0,
-      warnings: ["Discordサーバー内に対象ユーザーが見つかりません。"],
+      warnings: [
+        account.access_token_ciphertext
+          ? "Discordサーバーへ対象ユーザーを追加できませんでした。Bot権限・OAuth同意・サーバーIDを確認してください。"
+          : "Discordサーバー内に対象ユーザーが見つかりません。応募者にDiscord連携を依頼してください。",
+      ],
     };
+  const rolesResponse = await fetch(
+    `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`,
+    { headers },
+  );
   if (!rolesResponse.ok)
     return {
       status: "failed",
@@ -3819,6 +4006,127 @@ async function provisionApplicationDiscordRoles(
       warnings.push(`Discordロール（ID: ${roleId}）を付与できませんでした。`);
   }
   return { status: warnings.length ? "failed" : "synced", applied, warnings };
+}
+
+const discordProvisionRetryDelay = (attempt: number) => {
+  const delays = [5, 30, 120, 720, 1_440, 2_880];
+  return delays[Math.min(Math.max(attempt - 1, 0), delays.length - 1)] * 60_000;
+};
+
+async function provisionAcceptedApplication(
+  env: Env,
+  applicationId: string,
+): Promise<DiscordProvisioningResult & { attempt: number; nextAttemptAt: string | null }> {
+  const application = await env.REPORTS.prepare(
+    `SELECT id,email,status,project_slug,form_language,institution,grade,affiliation_type,
+            desired_subjects,provisioning_attempt_count
+       FROM atlasez_member_applications WHERE id=?`,
+  )
+    .bind(applicationId)
+    .first<{
+      id: string;
+      email: string;
+      status: string;
+      project_slug: string;
+      form_language: string;
+      institution: string;
+      grade: string;
+      affiliation_type: string;
+      desired_subjects: string;
+      provisioning_attempt_count: number;
+    }>();
+  if (!application || application.status !== "accepted")
+    return { status: "skipped", applied: 0, warnings: ["受入済みの応募ではありません。"], attempt: 0, nextAttemptAt: null };
+  const subjects = application.desired_subjects
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => APPLICATION_SUBJECT_LABELS[value]);
+  const interests = subjects.map((subject) => APPLICATION_SUBJECT_LABELS[subject]).filter(Boolean);
+  const result = await provisionApplicationDiscordRoles(env, application.email, subjects, {
+    institution: application.institution,
+    year: application.grade,
+    affiliationType: application.affiliation_type,
+    interests,
+  });
+  const attempt = Number(application.provisioning_attempt_count ?? 0) + 1;
+  const nextAttemptAt =
+    result.status === "failed" && attempt < DISCORD_PROVISION_MAX_ATTEMPTS
+      ? new Date(Date.now() + discordProvisionRetryDelay(attempt)).toISOString()
+      : null;
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `UPDATE atlasez_member_applications
+        SET provisioning_status=?,provisioning_error=?,provisioned_at=?,
+            provisioning_attempt_count=?,provisioning_next_attempt_at=?,
+            provisioning_last_attempt_at=?,updated_at=?
+      WHERE id=? AND status='accepted'`,
+  )
+    .bind(
+      result.status,
+      result.warnings.join("\n").slice(0, 2_000),
+      result.status === "synced" ? now : null,
+      attempt,
+      nextAttemptAt,
+      now,
+      now,
+      application.id,
+    )
+    .run();
+  if (result.status === "synced" || (result.status === "failed" && attempt === 1)) {
+    try {
+      await queueApplicationDiscordEmail(
+        env,
+        {
+          id: application.id,
+          email: application.email,
+          projectSlug: application.project_slug,
+          formLanguage: application.form_language,
+        },
+        result.status,
+        result.warnings.join(" "),
+      );
+    } catch (error) {
+      console.error("application Discord status email queue failed", { applicationId, error });
+    }
+  }
+  return { ...result, attempt, nextAttemptAt };
+}
+
+async function provisionAcceptedApplicationsForEmail(env: Env, email: string) {
+  const rows = await env.REPORTS.prepare(
+    "SELECT id FROM atlasez_member_applications WHERE lower(email)=lower(?) AND status='accepted'",
+  )
+    .bind(email)
+    .all<{ id: string }>();
+  return Promise.all((rows.results ?? []).map((row) => provisionAcceptedApplication(env, row.id)));
+}
+
+async function dispatchPendingDiscordProvisioning(env: Env) {
+  const now = new Date().toISOString();
+  const rows = await env.REPORTS.prepare(
+    `SELECT id FROM atlasez_member_applications
+      WHERE status='accepted' AND provisioning_status='failed'
+        AND provisioning_next_attempt_at IS NOT NULL
+        AND provisioning_next_attempt_at<=?
+      ORDER BY provisioning_next_attempt_at ASC LIMIT 25`,
+  )
+    .bind(now)
+    .all<{ id: string }>();
+  let claimed = 0;
+  for (const row of rows.results ?? []) {
+    const claim = (await env.REPORTS.prepare(
+      `UPDATE atlasez_member_applications
+          SET provisioning_status='pending',provisioning_next_attempt_at=NULL,updated_at=?
+        WHERE id=? AND status='accepted' AND provisioning_status='failed'
+          AND provisioning_next_attempt_at IS NOT NULL AND provisioning_next_attempt_at<=?`,
+    )
+      .bind(now, row.id, now)
+      .run()) as { meta?: { changes?: number } };
+    if (claim.meta?.changes !== 1) continue;
+    claimed += 1;
+    await provisionAcceptedApplication(env, row.id);
+  }
+  return { claimed };
 }
 
 async function getMyProfile(request: Request, env: Env): Promise<Response> {
@@ -4853,7 +5161,10 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
       a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
       a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
       a.desired_subjects,a.article_ideas,a.availability_note,a.provisioning_status,a.provisioning_error,a.provisioned_at,a.accepted_by,
-      COALESCE(d.discord_user_id, '') AS verified_discord_user_id
+      a.provisioning_attempt_count,a.provisioning_next_attempt_at,a.provisioning_last_attempt_at,
+      COALESCE(d.discord_user_id, '') AS verified_discord_user_id,
+      COALESCE(d.oauth_connected_at, '') AS discord_oauth_connected_at,
+      COALESCE(d.oauth_scope, '') AS discord_oauth_scope
      FROM atlasez_member_applications a
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = a.email
      WHERE a.project_slug = ?
@@ -5032,29 +5343,7 @@ async function updateApplication(
     );
   }
 
-  const discord = await provisionApplicationDiscordRoles(
-    env,
-    application.email,
-    subjects,
-    {
-      institution,
-      year: grade,
-      affiliationType,
-      interests: interestLabels,
-    },
-  );
-  const error = discord.warnings.join("\n").slice(0, 2_000);
-  await env.REPORTS.prepare(
-    "UPDATE atlasez_member_applications SET provisioning_status=?,provisioning_error=?,provisioned_at=?,updated_at=? WHERE id=?",
-  )
-    .bind(
-      discord.status,
-      error,
-      discord.status === "synced" ? new Date().toISOString() : null,
-      new Date().toISOString(),
-      id,
-    )
-    .run();
+  const discord = await provisionAcceptedApplication(env, id);
   let acceptanceEmailQueued = false;
   try {
     await queueApplicationAcceptanceEmail(
@@ -5082,6 +5371,42 @@ async function updateApplication(
     legacyApplication: !subjects.length,
     acceptanceEmailQueued,
   });
+}
+
+async function retryApplicationDiscordProvisioning(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const requestedProject =
+    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ?? "";
+  if (!APPLICATION_FORM_SLUGS.has(requestedProject))
+    return json({ error: "応募管理を表示するプロジェクトを指定してください。" }, 400);
+  const access = await getProjectReviewerScope(request, env, requestedProject);
+  if (isResponse(access)) return access;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const application = await env.REPORTS.prepare(
+    "SELECT status,project_slug FROM atlasez_member_applications WHERE id=?",
+  )
+    .bind(id)
+    .first<{ status: string; project_slug: string }>();
+  if (!application || application.project_slug !== canonicalApplicationProjectSlug(access.project.slug))
+    return json({ error: "応募が見つかりません。" }, 404);
+  if (application.status !== "accepted")
+    return json({ error: "受入済みの応募だけDiscord同期を再試行できます。" }, 409);
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `UPDATE atlasez_member_applications
+        SET provisioning_status='pending',provisioning_error='',provisioning_next_attempt_at=NULL,updated_at=?
+      WHERE id=? AND status='accepted'`,
+  )
+    .bind(now, id)
+    .run();
+  const provisioning = await provisionAcceptedApplication(env, id);
+  if (provisioning.status === "synced") return json({ ok: true, provisioning });
+  if (provisioning.status === "skipped") return json({ ok: true, provisioning });
+  return json({ error: provisioning.warnings.join(" "), provisioning }, 502);
 }
 async function operationsOverview(
   request: Request,
@@ -6321,24 +6646,52 @@ async function applicantSummary(request: Request, env: Env): Promise<Response> {
   const profile = await getApplicantProfile(env, current.email);
   const basicProfileComplete = Boolean(applicantBasicProfileComplete(profile));
   const applicationRows = await env.REPORTS.prepare(
-    `SELECT project_slug, created_at, status
-     FROM atlasez_member_applications
-     WHERE lower(email) = lower(?) ORDER BY created_at DESC LIMIT 20`,
+    `SELECT a.project_slug, a.created_at, a.status, a.provisioning_status,
+            a.provisioning_error, a.provisioned_at,
+            COALESCE(d.discord_user_id, '') AS discord_user_id,
+            COALESCE(d.oauth_connected_at, '') AS oauth_connected_at
+     FROM atlasez_member_applications a
+     LEFT JOIN atlasez_member_discord_accounts d ON lower(d.email)=lower(a.email)
+     WHERE lower(a.email) = lower(?) ORDER BY a.created_at DESC LIMIT 20`,
   )
     .bind(current.email)
-    .all<{ project_slug: string; created_at: string; status: string }>();
+    .all<{
+      project_slug: string;
+      created_at: string;
+      status: string;
+      provisioning_status: string;
+      provisioning_error: string;
+      provisioned_at: string | null;
+      discord_user_id: string;
+      oauth_connected_at: string;
+    }>();
   const applications = (applicationRows.results ?? []).map((application) => ({
     project:
       APPLICATION_FORM_LABELS[application.project_slug] ??
       application.project_slug,
     submittedAt: application.created_at,
     status: application.status,
+    provisioningStatus: application.provisioning_status ?? "not_started",
+    provisioningError: application.provisioning_error ?? "",
+    provisionedAt: application.provisioned_at,
+    discordConnected: Boolean(application.oauth_connected_at || application.discord_user_id),
   }));
+  const discord = await env.REPORTS.prepare(
+    `SELECT discord_user_id,oauth_connected_at FROM atlasez_member_discord_accounts
+     WHERE lower(email)=lower(?)`,
+  )
+    .bind(current.email)
+    .first<{ discord_user_id: string; oauth_connected_at: string | null }>();
   return json({
     email: current.email,
     stage: current.stage,
     basicProfileComplete,
     applications,
+    discord: {
+      connected: Boolean(discord),
+      oauthConnected: Boolean(discord?.oauth_connected_at),
+      discordUserId: discord?.discord_user_id ?? "",
+    },
     // 旧クライアントとの互換性を保つため、最新応募も残す。
     application: applications[0] ?? null,
   });
@@ -9236,6 +9589,183 @@ function adminPublicOrigin(request: Request, env: Env) {
   );
 }
 
+const discordOAuthResultUrl = (
+  request: Request,
+  returnPath: string | undefined,
+  result: "connected" | "error",
+  message?: string,
+) => {
+  const target = new URL(userReturnPath(returnPath ?? "/applicant/"), request.url);
+  target.searchParams.set("discord", result);
+  if (message) target.searchParams.set("discordMessage", message.slice(0, 180));
+  return target.toString();
+};
+
+async function startDiscordOAuth(request: Request, env: Env): Promise<Response> {
+  if (!discordOAuthConfigured(env))
+    return json(
+      { error: "Discord OAuth2連携はまだ設定されていません。" },
+      503,
+    );
+  const identity = await getAuthenticatedEmail(request, env);
+  if (isResponse(identity)) return identity;
+  const applicant = await env.REPORTS.prepare(
+    `SELECT 1 AS found FROM atlasez_member_applications WHERE lower(email)=lower(?)
+     UNION SELECT 1 FROM atlasez_project_memberships WHERE lower(email)=lower(?) LIMIT 1`,
+  )
+    .bind(identity, identity)
+    .first<{ found: number }>();
+  if (!applicant)
+    return json({ error: "応募後にDiscord連携を開始してください。" }, 409);
+  const returnPath = userReturnPath(new URL(request.url).searchParams.get("returnTo"));
+  const state = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const now = new Date();
+  await env.REPORTS.prepare(
+    `INSERT INTO atlasez_discord_oauth_states
+       (state_hash,email,return_path,expires_at,created_at)
+     VALUES (?,?,?,?,?)`,
+  )
+    .bind(
+      await hash(state),
+      identity,
+      returnPath,
+      new Date(now.getTime() + DISCORD_OAUTH_STATE_TTL_MS).toISOString(),
+      now.toISOString(),
+    )
+    .run();
+  const authorization = new URL("https://discord.com/oauth2/authorize");
+  authorization.search = new URLSearchParams({
+    client_id: env.DISCORD_OAUTH_CLIENT_ID ?? "",
+    redirect_uri: discordOAuthCallbackUrl(request, env),
+    response_type: "code",
+    scope: DISCORD_OAUTH_SCOPE,
+    state,
+    prompt: "consent",
+  }).toString();
+  return Response.redirect(authorization.toString(), 302);
+}
+
+async function completeDiscordOAuth(
+  request: Request,
+  env: Env,
+  ctx?: WorkerExecutionContext,
+): Promise<Response> {
+  const requestUrl = new URL(request.url);
+  const state = requestUrl.searchParams.get("state") ?? "";
+  const code = requestUrl.searchParams.get("code") ?? "";
+  const stateRow = state
+    ? await env.REPORTS.prepare(
+        `SELECT email,return_path,expires_at FROM atlasez_discord_oauth_states
+         WHERE state_hash=? AND consumed_at IS NULL LIMIT 1`,
+      )
+        .bind(await hash(state))
+        .first<{ email: string; return_path: string; expires_at: string }>()
+    : null;
+  const fail = (message: string) =>
+    Response.redirect(
+      discordOAuthResultUrl(request, stateRow?.return_path, "error", message),
+      302,
+    );
+  if (!stateRow || !code || new Date(stateRow.expires_at).getTime() <= Date.now())
+    return fail("Discord連携の有効期限が切れています。もう一度お試しください。");
+  const identity = await getAuthenticatedEmail(request, env);
+  if (isResponse(identity) || identity.toLowerCase() !== stateRow.email.toLowerCase())
+    return fail("ログイン中のアカウントを確認できませんでした。");
+  const consumed = (await env.REPORTS.prepare(
+    "UPDATE atlasez_discord_oauth_states SET consumed_at=? WHERE state_hash=? AND consumed_at IS NULL",
+  )
+    .bind(new Date().toISOString(), await hash(state))
+    .run()) as { meta?: { changes?: number } };
+  if (consumed.meta?.changes !== 1) return fail("Discord連携を再度開始してください。");
+
+  let token: {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
+  try {
+    const response = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.DISCORD_OAUTH_CLIENT_ID ?? "",
+        client_secret: env.DISCORD_OAUTH_CLIENT_SECRET ?? "",
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: discordOAuthCallbackUrl(request, env),
+      }),
+    });
+    if (!response.ok) throw new Error("Discord token exchange failed");
+    token = (await response.json()) as typeof token;
+  } catch {
+    return fail("Discordとの連携を完了できませんでした。");
+  }
+  if (!token.access_token || !token.refresh_token) return fail("Discordから連携情報を取得できませんでした。");
+  let discordUser: { id?: string };
+  try {
+    const response = await fetch("https://discord.com/api/users/@me", {
+      headers: { authorization: `Bearer ${token.access_token}` },
+    });
+    if (!response.ok) throw new Error("Discord user lookup failed");
+    discordUser = (await response.json()) as typeof discordUser;
+  } catch {
+    return fail("Discordアカウントを確認できませんでした。");
+  }
+  const discordUserId = discordUser.id?.trim() ?? "";
+  if (!/^\d{15,22}$/.test(discordUserId)) return fail("DiscordユーザーIDを確認できませんでした。");
+  const duplicate = await env.REPORTS.prepare(
+    "SELECT email FROM atlasez_member_discord_accounts WHERE discord_user_id=? AND lower(email)!=lower(?)",
+  )
+    .bind(discordUserId, identity)
+    .first<{ email: string }>();
+  if (duplicate) return fail("このDiscordアカウントは別のAtlasezアカウントに連携済みです。");
+  try {
+    const accessToken = await encryptDiscordSecret(env, token.access_token);
+    const refreshToken = await encryptDiscordSecret(env, token.refresh_token);
+    const now = new Date().toISOString();
+    await env.REPORTS.prepare(
+      `INSERT INTO atlasez_member_discord_accounts
+         (email,discord_user_id,updated_at,access_token_ciphertext,refresh_token_ciphertext,token_expires_at,oauth_scope,oauth_connected_at)
+       VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(email) DO UPDATE SET
+         discord_user_id=excluded.discord_user_id,updated_at=excluded.updated_at,
+         access_token_ciphertext=excluded.access_token_ciphertext,
+         refresh_token_ciphertext=excluded.refresh_token_ciphertext,
+         token_expires_at=excluded.token_expires_at,oauth_scope=excluded.oauth_scope,
+         oauth_connected_at=excluded.oauth_connected_at`,
+    )
+      .bind(
+        identity.toLowerCase(),
+        discordUserId,
+        now,
+        accessToken,
+        refreshToken,
+        new Date(Date.now() + Math.max(0, Number(token.expires_in ?? 0) - 60) * 1_000).toISOString(),
+        token.scope ?? DISCORD_OAUTH_SCOPE,
+        now,
+      )
+      .run();
+  } catch {
+    return fail("Discord連携情報を安全に保存できませんでした。運営管理者へ連絡してください。");
+  }
+  const accepted = await env.REPORTS.prepare(
+    `UPDATE atlasez_member_applications
+        SET provisioning_status='pending',provisioning_error='',provisioning_next_attempt_at=NULL,updated_at=?
+      WHERE lower(email)=lower(?) AND status='accepted'`,
+  )
+    .bind(new Date().toISOString(), identity)
+    .run();
+  if ((accepted as { meta?: { changes?: number } }).meta?.changes) {
+    ctx?.waitUntil(provisionAcceptedApplicationsForEmail(env, identity));
+    ctx?.waitUntil(dispatchApplicationEmails(env));
+  }
+  return Response.redirect(
+    discordOAuthResultUrl(request, stateRow.return_path, "connected"),
+    302,
+  );
+}
+
 function googleCallbackUrl(request: Request, env: Env) {
   return `${adminPublicOrigin(request, env)}/auth/google/callback`;
 }
@@ -10377,6 +10907,10 @@ async function handleAdminRequest(
     return startGoogleAccountLink(request, env);
   if (url.pathname === "/auth/google/callback" && request.method === "GET")
     return completeGoogleLogin(request, env);
+  if (url.pathname === "/auth/discord/start" && request.method === "GET")
+    return startDiscordOAuth(request, env);
+  if (url.pathname === "/auth/discord/callback" && request.method === "GET")
+    return completeDiscordOAuth(request, env, ctx);
   if (
     url.pathname === "/auth/google/search-console" &&
     request.method === "GET"
@@ -10596,6 +11130,15 @@ async function handleAdminRequest(
   );
   if (applicationMatch && request.method === "PATCH")
     return updateApplication(request, env, applicationMatch[1], ctx);
+  const applicationDiscordRetryMatch = url.pathname.match(
+    /^\/api\/admin\/applications\/([0-9a-f-]{36})\/discord-retry$/i,
+  );
+  if (applicationDiscordRetryMatch && request.method === "POST")
+    return retryApplicationDiscordProvisioning(
+      request,
+      env,
+      applicationDiscordRetryMatch[1],
+    );
   if (url.pathname === "/api/admin/operations" && request.method === "GET")
     return operationsOverview(request, env);
   if (url.pathname === "/api/admin/progress" && request.method === "GET")
@@ -10908,6 +11451,7 @@ export default {
         Promise.all([
           dispatchDueTaskReminders(env),
           dispatchApplicationEmails(env),
+          dispatchPendingDiscordProvisioning(env),
           dispatchScheduledEditorialPublications(env),
         ]),
       );
@@ -10920,6 +11464,7 @@ export default {
         purgeExpiredPersonalData(env),
         dispatchDueTaskReminders(env),
         dispatchApplicationEmails(env),
+        dispatchPendingDiscordProvisioning(env),
         dispatchScheduledEditorialPublications(env),
       ]),
     );
