@@ -1859,17 +1859,20 @@ async function createEditorialWorkflowRole(request: Request, env: Env): Promise<
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
-  const payload = (await request.json().catch(() => null)) as { email?: unknown; role?: unknown; subject?: unknown } | null;
+  const payload = (await request.json().catch(() => null)) as { email?: unknown; role?: unknown; subject?: unknown; subjects?: unknown } | null;
   const email = text(payload?.email, 320).toLowerCase();
   const role = text(payload?.role, 40) as EditorialWorkflowRole;
-  const subject = text(payload?.subject, 80);
-  if (!EMAIL_PATTERN.test(email) || role !== "subject-coordinator" || !SUBJECT_SLUG.test(subject))
+  const rawSubjects = Array.isArray(payload?.subjects) ? payload.subjects : [payload?.subject];
+  const subjects = Array.from(new Set(rawSubjects.map(subject => text(subject, 80)).filter(Boolean)));
+  if (!EMAIL_PATTERN.test(email) || role !== "subject-coordinator" || !subjects.length || subjects.some(subject => !SUBJECT_SLUG.test(subject)))
     return json({ error: "メールアドレス・統括する分野を確認してください。" }, 400);
   const now = new Date().toISOString();
-  await env.REPORTS.prepare(
-    "INSERT OR IGNORE INTO editorial_workflow_roles (email,role,subject,created_at,created_by) VALUES (?,?,?,?,?)",
-  ).bind(email, role, subject, now, scope.email).run();
-  return json({ ok: true }, 201);
+  await env.REPORTS.batch(
+    subjects.map(subject => env.REPORTS.prepare(
+      "INSERT OR IGNORE INTO editorial_workflow_roles (email,role,subject,created_at,created_by) VALUES (?,?,?,?,?)",
+    ).bind(email, role, subject, now, scope.email)),
+  );
+  return json({ ok: true, added: subjects.length }, 201);
 }
 
 async function deleteEditorialWorkflowRole(request: Request, env: Env): Promise<Response> {

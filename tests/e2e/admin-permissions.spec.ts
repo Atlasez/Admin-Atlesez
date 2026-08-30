@@ -195,3 +195,128 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
     inputBackground: "rgb(25, 26, 28)",
   });
 });
+
+test("分野統括は同じ分野の共同担当と一人の兼任を表示・保存できる", async ({
+  page,
+}) => {
+  let workflowRoles = [
+    {
+      email: "alice@example.com",
+      role: "subject-coordinator",
+      subject: "mathematics",
+      display_name: "Alice",
+    },
+    {
+      email: "alice@example.com",
+      role: "subject-coordinator",
+      subject: "physics",
+      display_name: "Alice",
+    },
+    {
+      email: "bob@example.com",
+      role: "subject-coordinator",
+      subject: "mathematics",
+      display_name: "Bob",
+    },
+  ];
+  let posted: { email?: string; subjects?: string[] } | null = null;
+  await page.route("**/api/admin/report-admin-permissions", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        json: {
+          permissions: [
+            {
+              email: "alice@example.com",
+              display_name: "Alice",
+              subjects: "mathematics,physics",
+            },
+            {
+              email: "bob@example.com",
+              display_name: "Bob",
+              subjects: "mathematics",
+            },
+          ],
+          workflowRoles,
+          discordRoles: [
+            {
+              discord_role_id: "role-mathematics",
+              name: "数学運営",
+              position: 10,
+              is_managed: 0,
+            },
+          ],
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/api/admin/editorial-workflow-roles**", async (route) => {
+    const request = route.request();
+    if (request.method() === "POST") {
+      posted = JSON.parse(request.postData() ?? "{}") as typeof posted;
+      workflowRoles = [
+        ...workflowRoles,
+        ...(posted?.subjects ?? []).map((subject) => ({
+          email: posted?.email ?? "",
+          role: "subject-coordinator",
+          subject,
+          display_name: "Alice",
+        })),
+      ];
+      await route.fulfill({
+        status: 201,
+        json: { ok: true, added: posted?.subjects?.length ?? 0 },
+      });
+      return;
+    }
+    const url = new URL(request.url());
+    workflowRoles = workflowRoles.filter(
+      (role) =>
+        !(
+          role.email === url.searchParams.get("email") &&
+          role.subject === url.searchParams.get("subject")
+        ),
+    );
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/permissions/?project=atlas");
+
+  await expect(
+    page.locator('[data-workflow-subject-group="mathematics"]'),
+  ).toContainText("2人（共同担当）");
+  await expect(
+    page.locator('[data-workflow-subject-group="physics"]'),
+  ).toContainText("1人（共同担当）");
+  await expect(page.locator("[data-workflow-role-list]")).toContainText(
+    "1人が兼任",
+  );
+
+  await page
+    .locator('input[name="email"][list="workflow-coordinator-members"]')
+    .fill("alice@example.com");
+  await page
+    .locator('.workflow-role-admin select[name="subject"][multiple]')
+    .selectOption(["chemistry", "biology"]);
+  await expect(page.locator("[data-workflow-role-selection]")).toHaveText(
+    "2分野を選択中",
+  );
+  await page.getByRole("button", { name: "統括を追加" }).click();
+  await expect(page.locator("[data-message]")).toHaveText(
+    "2分野の分野統括を追加しました。",
+  );
+  expect(posted).toEqual({
+    email: "alice@example.com",
+    role: "subject-coordinator",
+    subjects: ["chemistry", "biology"],
+  });
+
+  await expect(
+    page.locator('[data-workflow-subject-group="chemistry"]'),
+  ).toContainText("Alice");
+  await page.getByRole("button", { name: "Aliceの数学統括を削除" }).click();
+  await expect(
+    page.locator('[data-workflow-subject-group="mathematics"]'),
+  ).toContainText("1人（共同担当）");
+});
