@@ -1485,7 +1485,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       workflowCurrent.textContent = current === "published" ? "公開済み" : current === "publication-subject" ? "公開審査中（分野統括）" : current === "publication-leader" ? "公開審査中（プロジェクトリーダー）" : statusLabel[documentStatus];
       const help = isPublished
         ? "公開済みです。修正する場合は内容を保存し、必要に応じて公開を取り消して下書きへ戻します。"
-        : current === "publication-subject" ? "分野統括の承認を待っています。" : current === "publication-leader" ? "プロジェクトリーダー（釜口さん）の承認を待っています。" : ({ draft: "原稿を書いたら保存し、フィードバックを依頼します。", "in-review": "フィードバックを反映したら「執筆完了（公開審査へ）」を押します。", approved: "公開審査が完了しています。公開または公開予約へ進めます。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
+        : current === "publication-subject" ? "分野統括の承認を待っています。" : current === "publication-leader" ? "プロジェクトリーダーの承認を待っています。" : ({ draft: "原稿を書いたら保存し、フィードバックを依頼します。", "in-review": "フィードバックを反映したら「執筆完了（公開審査へ）」を押します。", approved: "公開審査が完了しています。公開または公開予約へ進めます。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
       const saveLabel = ({ draft: "保存する", "in-review": "変更を保存", approved: "変更を保存", "on-hold": "変更を保存" } as const)[documentStatus];
       workflowHelp.textContent = help;
       saveButton.textContent = saveLabel;
@@ -1511,7 +1511,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       const feedbackTaskTotal = stateData.feedbackTaskTotal ?? 0;
       const feedbackTaskDone = stateData.feedbackTaskDone ?? 0;
       const feedbackComplete = Boolean(stateData.feedbackComplete);
-      if (currentItem?.status === "in-review") {
+      if (currentItem?.status === "in-review" || currentItem?.status === "draft") {
         completeWritingButton.disabled = !feedbackComplete;
         completeWritingButton.textContent = feedbackComplete
           ? "フィードバック完了・公開審査へ"
@@ -1535,7 +1535,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       scheduleButton.hidden = !(isManager && Boolean(currentItem?.id) && currentItem?.status === "approved" && !currentItem?.published_at && !currentItem?.publication_pr_url);
       if (currentItem?.scheduled_publish_at) scheduleAt.value = currentItem.scheduled_publish_at.slice(0, 16);
       publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : "プロジェクトリーダーとして審査する";
-      publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダー（釜口さん）へ通知されます。差し戻すとフィードバック中へ戻ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
+      publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダーへ通知されます。差し戻すとフィードバック中へ戻ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
     };
     const loadPublicationIntegration = async () => {
       if (!isManager) { publicationIntegration.hidden = true; return; }
