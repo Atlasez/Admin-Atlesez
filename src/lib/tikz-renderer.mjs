@@ -86,7 +86,7 @@ function sanitizeRenderedSvg(svg) {
     !/^<svg(?:\s|>)/i.test(value) ||
     value.length > TIKZ_MAX_RENDERED_SVG_LENGTH
   )
-    throw new Error("生成されたSVGが不正または大きすぎます。");
+    throw new Error("生成されたSVGが不正または4MBを超えています。");
   if (
     /<(?:script|foreignObject|iframe|object|embed)\b|\bon[a-z][a-z0-9_-]*\s*=|(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|javascript:)/i.test(
       value,

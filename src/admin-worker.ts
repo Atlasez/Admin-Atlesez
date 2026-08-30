@@ -10251,6 +10251,7 @@ async function createEditorialPublicationRunPullRequest(
     merge_sha: null,
     next_attempt_at: null,
     lease_until: null,
+    last_check_at: now,
     failure_kind: null,
     error_code: null,
     error_message: "公開用PRを作成しました。CIを自動確認しています。",

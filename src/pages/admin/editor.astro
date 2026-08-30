@@ -201,7 +201,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           <input type="hidden" name="documentId" />
           <section class="document-toolbar">
             <div>
-              <div class="document-statuses" aria-label="原稿と公開の状態"><span>原稿状態：<strong data-document-state>下書き</strong></span><span>公開状態：<strong data-publication-state>未公開</strong></span><span data-publication-run role="status" aria-live="polite" hidden></span><span data-publication-link hidden></span><span data-publication-integration hidden></span><details class="publication-diagnostic" data-publication-diagnostic hidden><summary>CI失敗の詳細を表示</summary><div class="publication-diagnostic-body"><dl><div><dt>失敗ステップ</dt><dd data-publication-failure-step></dd></div><div><dt>対象ファイル</dt><dd data-publication-failure-file></dd></div><div><dt>原因</dt><dd data-publication-failure-detail></dd></div><div><dt>対処方法</dt><dd data-publication-failure-suggestion></dd></div></dl></div></details></div>
+              <div class="document-statuses" aria-label="原稿と公開の状態"><span>原稿状態：<strong data-document-state>下書き</strong></span><span>公開状態：<strong data-publication-state>未公開</strong></span><span data-publication-run role="status" aria-live="polite" hidden><span class="publication-run-indicator" aria-hidden="true"></span><span data-publication-run-label></span><small data-publication-run-updated></small></span><span data-publication-link hidden></span><span data-publication-integration hidden></span><details class="publication-diagnostic" data-publication-diagnostic hidden><summary>CI失敗の詳細を表示</summary><div class="publication-diagnostic-body"><dl><div><dt>失敗ステップ</dt><dd data-publication-failure-step></dd></div><div><dt>対象ファイル</dt><dd data-publication-failure-file></dd></div><div><dt>原因</dt><dd data-publication-failure-detail></dd></div><div><dt>対処方法</dt><dd data-publication-failure-suggestion></dd></div></dl></div></details></div>
               <h2 data-document-heading>新規原稿</h2>
             </div>
             <div class="toolbar-actions">
@@ -440,7 +440,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
-  .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-statuses [data-publication-run]{border-color:#8aa8c8;color:#24527c;flex:1 1 100%;line-height:1.5;min-width:0;overflow-wrap:anywhere;white-space:normal}.document-statuses [data-publication-run][data-state="failed"],.document-statuses [data-publication-run][data-state="needs_operator"]{border-color:#d9a429;color:#805500}.document-statuses [data-publication-integration][data-state="ready"]{border-color:#83b995;color:#24643a}.document-statuses [data-publication-integration][data-state="error"]{border-color:#d9a429;color:#805500}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
+  .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses>span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-statuses [data-publication-run]{border-color:#8aa8c8;color:#24527c;flex:1 1 100%;line-height:1.5;min-width:0;overflow-wrap:anywhere;white-space:normal}.document-statuses [data-publication-run][data-state="failed"],.document-statuses [data-publication-run][data-state="needs_operator"]{border-color:#d9a429;color:#805500}.document-statuses [data-publication-integration][data-state="ready"]{border-color:#83b995;color:#24643a}.document-statuses [data-publication-integration][data-state="error"]{border-color:#d9a429;color:#805500}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
+  .document-statuses [data-publication-run]{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem .45rem}.publication-run-indicator{background:currentColor;border-radius:50%;display:inline-block;flex:0 0 .5rem;height:.5rem;width:.5rem}.document-statuses [data-publication-run][aria-busy="true"]{background:color-mix(in srgb,#e8f3fb 78%,var(--surface-alt));border-color:#72add3;box-shadow:0 0 0 2px color-mix(in srgb,#72add3 22%,transparent);}.document-statuses [data-publication-run][aria-busy="true"] .publication-run-indicator{animation:publication-run-spin .9s linear infinite;background:transparent;border:2px solid currentColor;border-top-color:transparent;box-sizing:border-box;height:.75rem;width:.75rem}.document-statuses [data-publication-run] small{color:inherit;font-size:.64rem;font-weight:700;margin-left:auto;opacity:.78}.document-statuses [data-publication-run][data-state="failed"] .publication-run-indicator,.document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-indicator{background:#c78500}.document-statuses [data-publication-run][data-state="published"] .publication-run-indicator,.document-statuses [data-publication-run][data-state="unpublished"] .publication-run-indicator{background:#31804a}@keyframes publication-run-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.document-statuses [data-publication-run][aria-busy="true"] .publication-run-indicator{animation:none}}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
   .editor-split { align-items:start; display:grid; gap:1rem; grid-template-columns:repeat(3,minmax(0,1fr)); min-height:0; padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel, .memo-area { align-self:start; border:1px solid var(--border); min-width:0; overflow:visible; position:relative; }.preview-area { display:flex; flex-direction:column; height:clamp(32rem,66vh,52rem); max-height:clamp(32rem,66vh,52rem); min-height:0; }.memo-area { background:var(--surface); display:flex; flex-direction:column; min-height:clamp(38rem,72vh,60rem); }.memo-content { display:grid; flex:1 1 auto; gap:.65rem; grid-template-rows:auto minmax(0,1fr); min-height:0; padding:.85rem; }.memo-content p { color:var(--muted); font-size:.78rem; line-height:1.55; margin:0; }.memo-content textarea { background:var(--surface-alt); border:1px solid var(--border); box-sizing:border-box; color:var(--text); font:inherit; height:100%; line-height:1.6; min-height:0; padding:.7rem; resize:vertical; width:100%; }.pane-heading { background:var(--surface-alt); border-bottom:1px solid var(--border); padding:.75rem .9rem; }.pane-heading h3 { font-size:.95rem; margin:0; }.pane-heading p { color:var(--muted); font-size:.77rem; margin:.22rem 0 0; }.pane-heading code { background:var(--surface); border:1px solid var(--border); border-radius:0; padding:.03rem .2rem; }.pane-heading > span { color:var(--muted); flex:0 0 auto; font-size:.76rem; }.live-badge { color:var(--success) !important; font-weight:800; }
   .pane-resize-handle { align-items:center; background:transparent; border:0; color:var(--muted); cursor:ns-resize; display:flex; height:1rem; justify-content:center; padding:0; touch-action:none; width:100%; }.pane-resize-handle span { border-top:2px solid currentColor; border-radius:999px; display:block; opacity:.65; transition:color .15s ease,opacity .15s ease,width .15s ease; width:3.2rem; }.pane-resize-handle:hover,.pane-resize-handle:focus-visible { color:var(--accent); outline:2px solid color-mix(in srgb,var(--accent),transparent 65%); outline-offset:-2px; }.pane-resize-handle:hover span,.pane-resize-handle:focus-visible span { opacity:1; width:4.5rem; }.is-resizing-pane,.is-resizing-pane * { cursor:ns-resize !important; user-select:none !important; }
@@ -1051,6 +1052,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const publicationLink = root.querySelector<HTMLElement>("[data-publication-link]")!;
     const publicationIntegration = root.querySelector<HTMLElement>("[data-publication-integration]")!;
     const publicationRun = root.querySelector<HTMLElement>("[data-publication-run]")!;
+    const publicationRunLabel = root.querySelector<HTMLElement>("[data-publication-run-label]")!;
+    const publicationRunUpdated = root.querySelector<HTMLElement>("[data-publication-run-updated]")!;
     const publicationDiagnostic = root.querySelector<HTMLDetailsElement>("[data-publication-diagnostic]")!;
     const publicationFailureStep = root.querySelector<HTMLElement>("[data-publication-failure-step]")!;
     const publicationFailureFile = root.querySelector<HTMLElement>("[data-publication-failure-file]")!;
@@ -1551,7 +1554,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; managerOverride?: boolean; feedbackTaskTotal?: number; feedbackTaskDone?: number; feedbackComplete?: boolean; error?: string }>(response);
       if (!response.ok) throw new Error(stateData.error ?? "公開審査状態を読み込めませんでした。");
       const stage = stateData.stage ?? null;
-      const currentItem = item ?? documents.find((document) => document.id === documentId);
+      const currentItem = documents.find((document) => document.id === documentId) ?? item;
       if (currentItem) {
         state.textContent = stage === "subject-coordinator" ? "公開審査中（分野統括）" : stage === "project-leader" ? "公開審査中（プロジェクトリーダー）" : statusLabel[currentItem.status];
         setPublicationState(currentItem);
@@ -1610,20 +1613,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const publicationRunActiveStates = new Set(["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"]);
+    const publicationRunTerminalStates = new Set(["published", "unpublished", "failed", "needs_operator"]);
     const setPublicationState = (item: Pick<Document, "status" | "publication_pr_url" | "publication_action" | "published_at" | "updated_at" | "publication_pr_number" | "publication_run">) => {
       const run = item.publication_run;
       const runLabels: Record<string, string> = { queued: "受付済み", checks_pending: "自動検証中", merge_pending: "公開処理中", deploy_pending: "学習サイト反映確認中", retry_wait: "自動再試行中", published: "公開済み", unpublished: "非公開化済み", failed: "自動公開失敗", needs_operator: "運営サイトで確認が必要" };
       const failureLabels: Record<string, string> = { configuration: "設定", validation: "入力・記事検証", github_api: "GitHub API", github_conflict: "GitHub競合", ci: "CI", deployment: "学習サイト反映", internal: "内部処理" };
       const pending = Boolean(item.publication_pr_url && item.publication_action);
+      const runIsActive = Boolean(run && publicationRunActiveStates.has(run.state));
       const publicationNeedsUpdate = hasUnpublishedPublicationChanges(item) || Boolean(run?.action === "publish" && ["failed", "needs_operator"].includes(run.state) && item.published_at);
       publicationState.textContent = run && !["published", "unpublished"].includes(run.state)
         ? run.action === "unpublish" && run.state === "failed" ? "自動非公開化失敗" : runLabels[run.state] ?? "公開処理中"
         : pending
         ? item.publication_action === "unpublish" ? "公開取り消しPR確認待ち" : "公開PR確認待ち"
         : item.published_at ? publicationNeedsUpdate ? "公開済み（変更未反映）" : "公開済み" : item.status === "approved" ? "公開準備完了（公開操作待ち）" : "未公開";
-      publicationRun.hidden = !run || ["published", "unpublished"].includes(run.state);
-      publicationRun.textContent = publicationRun.hidden ? "" : run ? `${run.error_message ?? "運営サイトが自動処理しています。"}${run.failure_kind ? `［原因：${failureLabels[run.failure_kind] ?? run.failure_kind}］` : ""}${run.error_code ? `（${run.error_code}）` : ""}` : "";
       publicationRun.dataset.state = run?.state ?? "";
+      publicationRun.hidden = !run || ["published", "unpublished"].includes(run.state);
+      publicationRun.setAttribute("aria-busy", String(runIsActive));
+      publicationRunLabel.textContent = publicationRun.hidden ? "" : run ? `${run.error_message ?? "運営サイトが自動処理しています。"}${run.failure_kind ? `［原因：${failureLabels[run.failure_kind] ?? run.failure_kind}］` : ""}${run.error_code ? `（${run.error_code}）` : ""}` : "";
+      const latestRunUpdate = run?.last_check_at ?? run?.updated_at;
+      publicationRunUpdated.textContent = publicationRun.hidden ? "" : latestRunUpdate ? `最終更新：${date(latestRunUpdate)}` : runIsActive ? "確認結果を待っています" : "";
       const hasPublicationDiagnostic = Boolean(run && (run.failure_detail || run.failure_step || run.failure_file || run.failure_suggestion));
       publicationDiagnostic.hidden = !hasPublicationDiagnostic || publicationRun.hidden;
       publicationFailureStep.textContent = run?.failure_step ?? "";
@@ -1675,26 +1684,47 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
     };
     let publicationRefreshTimer: number | null = null;
+    let publicationRefreshInFlight = false;
+    let publicationRefreshGeneration = 0;
     const monitorPublicationRun = (item: Pick<Document, "id" | "publication_run">) => {
+      const generation = ++publicationRefreshGeneration;
       if (publicationRefreshTimer !== null) window.clearInterval(publicationRefreshTimer);
       publicationRefreshTimer = null;
-      if (!item.id || !item.publication_run || ["published", "unpublished", "failed", "needs_operator"].includes(item.publication_run.state)) return;
-      publicationRefreshTimer = window.setInterval(async () => {
+      if (!item.id || !item.publication_run || publicationRunTerminalStates.has(item.publication_run.state)) return;
+      const refresh = async () => {
+        if (publicationRefreshInFlight) return;
         if (collaborationDocumentId === item.id && collaborationSocket?.readyState === WebSocket.OPEN) return;
+        publicationRefreshInFlight = true;
         try {
           const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(item.id)}`, { credentials: "same-origin", cache: "no-store" });
           const data = await read<{ document?: Document }>(response);
           if (!response.ok || !data.document) return;
-          setPublicationState(data.document);
-          if (data.document.publication_run && ["published", "unpublished", "failed", "needs_operator"].includes(data.document.publication_run.state)) {
+          if (generation !== publicationRefreshGeneration) return;
+          const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+          if (currentDocumentId !== item.id) return;
+          const refreshed = data.document;
+          const index = documents.findIndex((document) => document.id === item.id);
+          if (index >= 0) documents[index] = refreshed;
+          setPublicationState(refreshed);
+          updatePublicationActions(refreshed);
+          updateWorkflow(refreshed.status, Boolean(refreshed.published_at), refreshed.publication_review_stage ?? null, hasUnpublishedPublicationChanges(refreshed));
+          if (refreshed.publication_run && publicationRunTerminalStates.has(refreshed.publication_run.state)) {
             window.clearInterval(publicationRefreshTimer!);
             publicationRefreshTimer = null;
             void openDocument(item.id).catch(() => undefined);
           }
         } catch {
           // 次の周期で再確認する。
+        } finally {
+          publicationRefreshInFlight = false;
         }
-      }, 30_000);
+      };
+      const scheduleRefresh = () => {
+        if (publicationRefreshTimer !== null) window.clearInterval(publicationRefreshTimer);
+        publicationRefreshTimer = window.setInterval(() => { void refresh(); }, document.visibilityState === "visible" ? 3_000 : 15_000);
+      };
+      void refresh();
+      scheduleRefresh();
     };
     type CollaborationDocumentChange = {
       changeVersion?: unknown;
@@ -1756,6 +1786,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (stageChanged) void loadPublicationReview(documentId, next).catch(() => undefined);
       return true;
     };
+    document.addEventListener("visibilitychange", () => {
+      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      const current = documents.find((item) => item.id === id);
+      if (current?.publication_run && publicationRunActiveStates.has(current.publication_run.state)) monitorPublicationRun(current);
+    });
     let editorialAssets: EditorialAsset[] = [];
     const formatBytes = (bytes: number) => bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1_000))}KB`;
     const imageWidthOptions = ["", "25%", "40%", "60%", "80%", "100%"];
