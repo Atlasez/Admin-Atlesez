@@ -136,6 +136,7 @@ const json = (value: unknown, status = 200) =>
 export class EditorialCollaborationRoom {
   private readonly yDocument = new Y.Doc();
   private initializedDocumentId = "";
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(
     private readonly state: DurableObjectState,
@@ -158,25 +159,41 @@ export class EditorialCollaborationRoom {
 
   private async initialize(documentId: string) {
     if (this.initializedDocumentId === documentId) return;
-    const saved = await this.state.storage.get<ArrayBuffer | Uint8Array>(
-      "yjs-state",
-    );
-    if (saved) {
-      Y.applyUpdate(this.yDocument, new Uint8Array(saved));
-    } else {
-      const document = await this.env.REPORTS.prepare(
-        "SELECT title, summary, body FROM editorial_documents WHERE id = ?",
-      )
-        .bind(documentId)
-        .first<{ title: string; summary: string; body: string }>();
-      if (!document) throw new Error("原稿が見つかりません。");
-      this.yDocument.transact(() => {
-        this.yDocument.getText("title").insert(0, document.title);
-        this.yDocument.getText("summary").insert(0, document.summary);
-        this.yDocument.getText("body").insert(0, document.body);
-      }, "initial");
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      if (this.initializedDocumentId !== documentId)
+        throw new Error("別の原稿が同じ共同編集室を使用しています。");
+      return;
     }
-    this.initializedDocumentId = documentId;
+
+    const initialization = (async () => {
+      const saved = await this.state.storage.get<ArrayBuffer | Uint8Array>(
+        "yjs-state",
+      );
+      if (saved) {
+        Y.applyUpdate(this.yDocument, new Uint8Array(saved));
+      } else {
+        const document = await this.env.REPORTS.prepare(
+          "SELECT title, summary, body FROM editorial_documents WHERE id = ?",
+        )
+          .bind(documentId)
+          .first<{ title: string; summary: string; body: string }>();
+        if (!document) throw new Error("原稿が見つかりません。");
+        this.yDocument.transact(() => {
+          this.yDocument.getText("title").insert(0, document.title);
+          this.yDocument.getText("summary").insert(0, document.summary);
+          this.yDocument.getText("body").insert(0, document.body);
+        }, "initial");
+      }
+      this.initializedDocumentId = documentId;
+    })();
+    this.initializationPromise = initialization;
+    try {
+      await initialization;
+    } finally {
+      if (this.initializationPromise === initialization)
+        this.initializationPromise = null;
+    }
   }
 
   private broadcastPresence() {

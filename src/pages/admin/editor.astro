@@ -2553,29 +2553,46 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       return true;
     };
     const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
-    const saveCurrentDocument = async (showProgress = true) => {
-      saveMessage.value = "保存中…";
-      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
-      const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
-      const data = await read<{ id?: string; error?: string }>(response);
-      if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
-      const savedId = id || data.id || "";
-      if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
-      if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
-      await loadMediaAssets(savedId);
-      publishButton.hidden = !(isManager && Boolean(savedId) && status.value === "approved" && !publicationLink.querySelector("a"));
-      reviewButton.hidden = !Boolean(savedId);
-      const isPublished = publicationState.textContent === "公開済み";
-      reviewButton.disabled = isPublished;
-      reviewButton.title = isPublished ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
-      setUnsavedChanges(false);
-      saveMessage.value = status.value === "approved" ? "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
-      await loadDocuments();
-      await loadPublicationReview(savedId);
-      await loadRevisions(savedId);
-      if (showProgress) { closeAllPanePopouts(); progressDialog.showModal(); }
-      return savedId;
+    let documentSaveInFlight: Promise<unknown> | null = null;
+    const withDocumentSaveLock = <T,>(operation: () => Promise<T>): Promise<T> => {
+      if (documentSaveInFlight) return documentSaveInFlight as Promise<T>;
+      const operationPromise = operation();
+      documentSaveInFlight = operationPromise;
+      void operationPromise.then(
+        () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
+        () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
+      );
+      return operationPromise;
     };
+    const saveCurrentDocument = (showProgress = true) => withDocumentSaveLock(async () => {
+      window.clearTimeout(autosaveTimer);
+      saveButton.disabled = true;
+      try {
+        saveMessage.value = "保存中…";
+        const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+        const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
+        const data = await read<{ id?: string; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+        const savedId = id || data.id || "";
+        if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
+        if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
+        await loadMediaAssets(savedId);
+        publishButton.hidden = !(isManager && Boolean(savedId) && status.value === "approved" && !publicationLink.querySelector("a"));
+        reviewButton.hidden = !Boolean(savedId);
+        const isPublished = publicationState.textContent === "公開済み";
+        reviewButton.disabled = isPublished;
+        reviewButton.title = isPublished ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
+        setUnsavedChanges(false);
+        saveMessage.value = status.value === "approved" ? "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
+        await loadDocuments();
+        await loadPublicationReview(savedId);
+        await loadRevisions(savedId);
+        if (showProgress) { closeAllPanePopouts(); progressDialog.showModal(); }
+        return savedId;
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
     body.addEventListener("beforeinput", (event) => {
       const start = body.selectionStart ?? 0;
       const end = body.selectionEnd ?? start;
@@ -2634,13 +2651,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!id || status.value !== "draft" || autosaveInFlight) return;
       autosaveInFlight = true;
       try {
-        saveMessage.value = "下書きを自動保存中…";
-        const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
-        if (!response.ok) {
-          const data = await read<{ error?: string }>(response);
-          throw new Error(data.error ?? "自動保存に失敗しました。");
-        }
-        setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
+        await withDocumentSaveLock(async () => {
+          saveMessage.value = "下書きを自動保存中…";
+          const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
+          if (!response.ok) {
+            const data = await read<{ error?: string }>(response);
+            throw new Error(data.error ?? "自動保存に失敗しました。");
+          }
+          setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
+        });
       } catch { if (!authRedirecting) saveMessage.value = "自動保存に失敗しました。手動で保存してください。"; }
       finally { autosaveInFlight = false; }
     };

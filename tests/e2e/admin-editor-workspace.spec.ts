@@ -482,6 +482,26 @@ test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", 
   await expect(toggle).not.toBeChecked();
 });
 
+test("保存中の連打は同じ原稿を二重保存しない", async ({ page }) => {
+  await mockAdminApi(page);
+  let patchCount = 0;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    patchCount += 1;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await page.locator('[name="title"]').fill("保存連打のテスト");
+  await Promise.all([
+    page.locator("[data-document-form]").dispatchEvent("submit"),
+    page.locator("[data-document-form]").dispatchEvent("submit"),
+  ]);
+  await expect(page.locator("[data-progress-dialog]")).toBeVisible();
+  expect(patchCount).toBe(1);
+});
+
 test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
