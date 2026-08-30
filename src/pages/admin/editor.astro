@@ -205,11 +205,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <h2 data-document-heading>新規原稿</h2>
             </div>
             <div class="toolbar-actions">
-              <a class="quiet-action toolbar-guide-link" href="/admin/guide/?project=atlas" target="_blank" rel="noreferrer">作業の進め方 ↗</a>
+              <a class="quiet-action toolbar-guide-link" href="/admin/guide/?project=atlas" target="_blank" rel="noreferrer">手順 ↗</a>
               <label class="engine-control"><input type="checkbox" data-autosave-toggle />下書きを自動保存</label>
               <label class="engine-control">Webプレビュー組版<select data-preview-engine><option value="katex">KaTeX（高速）</option><option value="mathjax">MathJax（LaTeX互換）</option></select></label>
-              <div class="collaboration-status" data-collaboration-status hidden>
+              <div class="collaboration-status" data-collaboration-status data-state="connecting" hidden>
+                <span class="collaboration-indicator" aria-hidden="true"></span>
                 <span data-collaboration-state>同時編集に接続中…</span>
+                <small data-collaboration-latency hidden></small>
                 <div data-collaboration-participants aria-label="同時編集中のメンバー"></div>
               </div>
               <div class="document-actions">
@@ -225,19 +227,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             </div>
           </section>
 
-          <details class="metadata" open>
-            <summary>記事設定</summary>
+          <details class="metadata" data-metadata>
+            <summary><span class="metadata-summary-title">記事設定</span><span class="metadata-summary-value" data-metadata-summary>必須項目を確認</span><span class="metadata-summary-action">編集</span></summary>
             <div class="metadata-grid">
-              <label><span class="field-heading">タイトル<span class="required-mark" aria-hidden="true">*</span></span><input name="title" required maxlength="180" placeholder="例：群の定義" /></label>
-              <label><span class="field-heading">要約<span class="required-mark" aria-hidden="true">*</span></span><input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
-              <label><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
-              <label><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
-              <label><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-      <label class="concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>既存の概念はここから選びます。新しい概念は「新しい概念を作成」を選ぶと、記事と一緒に学習地図へ登録できます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
-      <details class="concept-id-advanced"><summary>概念IDを確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><label class="concept-registration-toggle"><input type="checkbox" data-register-concept /> 新しい概念として公開PRに追加する</label><div class="concept-registration-fields" data-concept-registration-fields hidden><label><span class="field-heading">概念名（日本語）<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptName" maxlength="180" placeholder="例：群の中心" /></label><label><span class="field-heading">概念名（英語・任意）</span><input name="conceptNameEn" maxlength="180" placeholder="例：The Center of a Group" /></label><small>チェックすると、この概念IDと概念名を記事の公開PRで concepts.yaml に追加します。学習地図に登録されるのはPRのCI成功後です。</small></div><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。既存概念を選ぶときは上の一覧を使ってください。</small></details>
-              <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
-              <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
-      <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">フィードバック中</option><option value="on-hold">保留</option><option value="approved" disabled>フィードバック済み（公開審査後のみ）</option></select><small data-status-help>「フィードバック済み」は、フィードバック完了後の公開審査で承認されたときに自動で設定されます。</small></label>
+              <label class="metadata-field metadata-title"><span class="field-heading">タイトル<span class="required-mark" aria-hidden="true">*</span></span><input name="title" required maxlength="180" placeholder="例：群の定義" /></label>
+              <label class="metadata-field metadata-abstract"><span class="field-heading">要約<span class="required-mark" aria-hidden="true">*</span></span><input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
+              <label class="metadata-field metadata-subject"><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
+              <label class="metadata-field metadata-category"><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
+              <label class="metadata-field metadata-slug"><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
+      <label class="metadata-field metadata-concept concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>既存の概念を選択。新規概念は「新しい概念を作成」から記事と一緒に登録できます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
+      <details class="concept-id-advanced"><summary>概念IDの確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><label class="concept-registration-toggle"><input type="checkbox" data-register-concept /> 新しい概念として公開PRに追加する</label><div class="concept-registration-fields" data-concept-registration-fields hidden><label><span class="field-heading">概念名（日本語）<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptName" maxlength="180" placeholder="例：群の中心" /></label><label><span class="field-heading">概念名（英語・任意）</span><input name="conceptNameEn" maxlength="180" placeholder="例：The Center of a Group" /></label><small>チェックすると、この概念IDと概念名を記事の公開PRで concepts.yaml に追加します。学習地図に登録されるのはPRのCI成功後です。</small></div><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。</small></details>
+              <label class="metadata-field metadata-locale">言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
+              <label class="metadata-field metadata-latex">LaTeX形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部LaTeX処理で使用。画面内プレビューはKaTeXです。</small></label>
+      <label class="metadata-field metadata-status">状態<select name="status"><option value="draft">下書き</option><option value="in-review">フィードバック中</option><option value="on-hold">保留</option><option value="approved" disabled>フィードバック済み（公開審査後のみ）</option></select><small data-status-help>公開審査で承認されたときに自動で変更されます。</small></label>
             </div>
           </details>
 
@@ -479,22 +481,64 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 </style>
 
 <style>
-  /* 記事設定は入力項目をひとつの密度のあるフォームカードにまとめる。 */
-  .metadata { padding: .55rem .7rem .7rem; }
-  .metadata-grid { gap: .55rem .65rem; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: .6rem; }
-  .metadata label { background: color-mix(in srgb, var(--surface), var(--surface-alt) 42%); border: 1px solid color-mix(in srgb, var(--border), transparent 12%); border-radius: .42rem; gap: .25rem; min-width: 0; padding: .46rem .55rem; }
-  .metadata label:nth-child(1), .metadata label:nth-child(2), .metadata label:nth-child(3), .metadata label:nth-child(4), .metadata label:nth-child(5), .metadata label:nth-child(6) { grid-column: span 3; }
-  .metadata label:nth-child(7), .metadata label:nth-child(8), .metadata label:nth-child(9) { grid-column: span 2; }
-  .metadata .field-heading { color: var(--text); font-size: .74rem; }
-  .metadata label small { margin-top: .1rem; }
+  /* 作業領域へすぐ到達できる、密度の高い編集ヘッダーと記事設定。 */
+  .document-form { gap: .65rem; }
+  .document-toolbar {
+    align-items: center;
+    background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+    border: 1px solid var(--border);
+    border-radius: .55rem;
+    display: grid;
+    gap: .45rem .7rem;
+    grid-template-columns: minmax(15rem, .72fr) minmax(32rem, 1.8fr);
+    padding: .45rem .55rem;
+    top: .35rem;
+  }
+  .document-toolbar > div:first-child { display: grid; gap: .2rem; min-width: 0; }
+  .document-toolbar h2 { font-size: 1.02rem; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .document-statuses { gap: .22rem .35rem; margin: 0; }
+  .document-statuses > span { padding: .1rem .34rem; }
+  .toolbar-actions { gap: .32rem; }
+  .toolbar-actions .quiet-action, .toolbar-actions .primary-action, .toolbar-actions .withdraw-action { font-size: .72rem; min-height: 2rem; padding: .3rem .5rem; }
+  .toolbar-guide-link { align-items: center; display: inline-flex; }
+  .engine-control { font-size: .7rem; gap: .28rem; }
+  .engine-control input { min-height: auto; width: auto; }
+  .engine-control select { font-size: .72rem; min-height: 2rem; padding-block: .2rem; width: 9.6rem; }
+  .save-status { font-size: .72rem !important; min-height: 2rem; padding: .34rem .48rem; position: static; }
+  .document-actions { gap: .32rem; }
+
+  .metadata { background: var(--surface); overflow: hidden; padding: 0; }
+  .metadata > summary { gap: .45rem; min-height: 2.25rem; padding: .34rem .55rem; }
+  .metadata[open] > summary { border-bottom: 1px solid var(--border); }
+  .metadata-summary-title { color: var(--text); flex: 0 0 auto; }
+  .metadata-summary-value { color: var(--muted); flex: 1 1 auto; font-size: .7rem; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .metadata-summary-action { background: var(--accent-subtle); border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius: 999px; color: var(--accent); flex: 0 0 auto; font-size: .66rem; padding: .12rem .4rem; }
+  .metadata[data-completion="incomplete"] .metadata-summary-value { color: var(--danger, #a03123); }
+  .metadata-grid { gap: .38rem; grid-auto-flow: row dense; grid-template-columns: repeat(12, minmax(0, 1fr)); margin: 0; padding: .5rem; }
+  .metadata label { background: color-mix(in srgb, var(--surface), var(--surface-alt) 45%); border: 1px solid color-mix(in srgb, var(--border), transparent 12%); border-radius: .36rem; gap: .18rem; min-width: 0; padding: .32rem .42rem; }
+  .metadata .field-heading, .metadata > .metadata-grid > label { color: var(--text); font-size: .69rem; }
+  .metadata input, .metadata select { font-size: .76rem; min-height: 2rem; padding: .25rem .42rem; }
+  .metadata label small { font-size: .63rem; line-height: 1.32; margin: 0; }
+  .metadata .metadata-title { grid-column: span 4; }
+  .metadata .metadata-abstract { grid-column: span 8; }
+  .metadata .metadata-subject, .metadata .metadata-category, .metadata .metadata-slug, .metadata .metadata-status { grid-column: span 3; }
+  .metadata .metadata-concept { grid-column: span 6; }
+  .metadata .metadata-locale { grid-column: span 2; }
+  .metadata .metadata-latex { grid-column: span 4; }
+  .metadata .concept-id-advanced { grid-column: 1 / -1; padding: .3rem .42rem .38rem; }
+  .metadata .concept-id-advanced summary { font-size: .67rem; min-height: 1.45rem; }
+  .metadata .concept-id-advanced label { margin-top: .35rem; }
+  .metadata .concept-id-preview { font-size: .62rem; }
   @media (max-width: 1080px) {
+    .document-toolbar { grid-template-columns: 1fr; }
     .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .metadata label:nth-child(1), .metadata label:nth-child(2), .metadata label:nth-child(3), .metadata label:nth-child(4), .metadata label:nth-child(5), .metadata label:nth-child(6), .metadata label:nth-child(7), .metadata label:nth-child(8), .metadata label:nth-child(9) { grid-column: span 1; }
-    .metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
+    .metadata .metadata-title, .metadata .metadata-abstract, .metadata .metadata-subject, .metadata .metadata-category, .metadata .metadata-slug, .metadata .metadata-status, .metadata .metadata-locale, .metadata .metadata-latex { grid-column: span 1; }
+    .metadata .metadata-concept, .metadata .concept-id-advanced { grid-column: span 2; }
   }
   @media (max-width: 700px) {
     .metadata-grid { grid-template-columns: 1fr; }
-    .metadata label:nth-child(1), .metadata label:nth-child(2), .metadata label:nth-child(3), .metadata label:nth-child(4), .metadata label:nth-child(5), .metadata label:nth-child(6), .metadata label:nth-child(7), .metadata label:nth-child(8), .metadata label:nth-child(9) { grid-column: auto; }
+    .metadata .metadata-title, .metadata .metadata-abstract, .metadata .metadata-subject, .metadata .metadata-category, .metadata .metadata-slug, .metadata .metadata-status, .metadata .metadata-locale, .metadata .metadata-latex, .metadata .metadata-concept, .metadata .concept-id-advanced { grid-column: auto; }
+    .metadata-summary-value { display: none; }
   }
 </style>
 
@@ -986,6 +1030,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const approvedStatusOption = status.querySelector<HTMLOptionElement>('option[value="approved"]')!;
     const statusHelp = root.querySelector<HTMLElement>("[data-status-help]")!;
     const conceptIdAdvanced = root.querySelector<HTMLDetailsElement>(".concept-id-advanced")!;
+    const metadata = root.querySelector<HTMLDetailsElement>("[data-metadata]")!;
+    const metadataSummary = root.querySelector<HTMLElement>("[data-metadata-summary]")!;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
     const diagnosticsPanel = root.querySelector<HTMLDialogElement>("[data-editor-diagnostics]")!;
     const diagnosticsTrigger = root.querySelector<HTMLButtonElement>("[data-open-diagnostics]")!;
@@ -1047,6 +1093,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const saveMessage = root.querySelector<HTMLOutputElement>("[data-save-message]")!;
     const collaborationStatus = root.querySelector<HTMLElement>("[data-collaboration-status]")!;
     const collaborationState = root.querySelector<HTMLElement>("[data-collaboration-state]")!;
+    const collaborationLatency = root.querySelector<HTMLElement>("[data-collaboration-latency]")!;
     const collaborationParticipants = root.querySelector<HTMLElement>("[data-collaboration-participants]")!;
     const heading = root.querySelector<HTMLElement>("[data-document-heading]")!;
     const state = root.querySelector<HTMLElement>("[data-document-state]")!;
@@ -1503,6 +1550,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let hasUnsavedChanges = false;
     let persistedWritingMemo = "";
     const statusLabel = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "公開準備完了" } as const;
+    const metadataRequiredFields = [...metadata.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input[required], select[required]")];
+    const metadataMissingCount = () => metadataRequiredFields.filter((field) => !field.value.trim() || !field.validity.valid).length;
+    const selectedOptionLabel = (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent?.trim() ?? "";
+    const syncMetadataSummary = () => {
+      const missing = metadataMissingCount();
+      metadata.dataset.completion = missing ? "incomplete" : "complete";
+      if (missing) {
+        metadataSummary.textContent = `未入力・要確認 ${missing}件`;
+        return;
+      }
+      const locale = form.elements.namedItem("locale") as HTMLSelectElement;
+      metadataSummary.textContent = [selectedOptionLabel(subject), selectedOptionLabel(category), selectedOptionLabel(locale), statusLabel[status.value as keyof typeof statusLabel] ?? selectedOptionLabel(status)].filter(Boolean).join(" / ");
+    };
     const setUnsavedChanges = (dirty: boolean) => {
       hasUnsavedChanges = dirty;
     };
@@ -2390,9 +2450,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const hasMediaSyntax = (source: string) => /asset:\/\/|\\includegraphics/i.test(source);
     const scheduleBodyRefresh = () => {
-      window.clearTimeout(bodyRefreshTimer);
-      const previewDelay = /```\s*tikz\b/i.test(body.value) ? 700 : 140;
+      wordCount.textContent = `${body.value.length.toLocaleString()}文字`;
+      if (bodyRefreshTimer !== undefined) return;
+      const previewDelay = /```\s*tikz\b/i.test(body.value) ? 280 : 60;
       bodyRefreshTimer = window.setTimeout(() => {
+        bodyRefreshTimer = undefined;
         renderHeadingOutline();
         renderDiagnostics();
         const nextHasMediaSyntax = hasMediaSyntax(body.value);
@@ -2822,21 +2884,39 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationAbort: AbortController | null = null;
     let collaborationDocumentId = "";
     let collaborationReconnectTimer: number | undefined;
+    let collaborationHeartbeatTimer: number | undefined;
+    let collaborationPongTimer: number | undefined;
+    let collaborationHeartbeatNow: (() => void) | null = null;
     let collaborationGeneration = 0;
+    let collaborationApplyingRemote = false;
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
+    const setCollaborationConnectionState = (connectionState: "connecting" | "connected" | "reconnecting" | "error", message: string) => {
+      collaborationStatus.dataset.state = connectionState;
+      collaborationState.textContent = message;
+      if (connectionState !== "connected") collaborationLatency.hidden = true;
+    };
     const renderCollaborationParticipants = (participants: CollaborationParticipant[]) => {
-      collaborationParticipants.replaceChildren(...participants.map((participant) => {
+      const ownEmail = currentUserEmail.trim().toLowerCase();
+      const others = participants.filter((participant) => !ownEmail || participant.email.trim().toLowerCase() !== ownEmail);
+      collaborationParticipants.replaceChildren(...others.map((participant) => {
         const chip = document.createElement("span");
         const field = collaborationFieldLabels[participant.field];
         chip.textContent = `${participant.displayName}${field ? `・${field}` : ""}`;
         chip.title = participant.email;
         return chip;
       }));
-      collaborationState.textContent = `同時編集：${participants.length}人が接続中`;
+      setCollaborationConnectionState("connected", others.length ? `リアルタイム同期・他${others.length}人` : "リアルタイム同期");
+    };
+    const stopCollaborationHeartbeat = () => {
+      window.clearTimeout(collaborationHeartbeatTimer);
+      window.clearTimeout(collaborationPongTimer);
+      collaborationHeartbeatTimer = undefined;
+      collaborationPongTimer = undefined;
     };
     const disconnectCollaboration = () => {
       collaborationGeneration += 1;
       window.clearTimeout(collaborationReconnectTimer);
+      stopCollaborationHeartbeat();
       collaborationAbort?.abort();
       collaborationAbort = null;
       collaborationSocket?.close();
@@ -2845,6 +2925,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationDocument = null;
       collaborationDocumentId = "";
       collaborationParticipants.replaceChildren();
+      collaborationLatency.hidden = true;
+      collaborationHeartbeatNow = null;
     };
     const replaceSharedText = (shared: Y.Text, next: string) => {
       const previous = shared.toString();
@@ -2884,7 +2966,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       disconnectCollaboration();
       if (!documentId) { collaborationStatus.hidden = true; return; }
       collaborationStatus.hidden = false;
-      collaborationState.textContent = "同時編集に接続中…";
+      setCollaborationConnectionState("connecting", "リアルタイム同期へ接続中…");
       collaborationDocumentId = documentId;
       const generation = ++collaborationGeneration;
       const yDocument = new Y.Doc();
@@ -2908,9 +2990,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             if (element.value === next) return;
             const start = element.selectionStart;
             const end = element.selectionEnd;
-            element.value = next;
-            if (start !== null && end !== null) element.setSelectionRange(Math.min(start, next.length), Math.min(end, next.length));
-            element.dispatchEvent(new Event("input", { bubbles: true }));
+            const scrollTop = element.scrollTop;
+            collaborationApplyingRemote = true;
+            try {
+              element.value = next;
+              if (start !== null && end !== null) element.setSelectionRange(Math.min(start, next.length), Math.min(end, next.length));
+              element.dispatchEvent(new Event("input", { bubbles: true }));
+              element.scrollTop = scrollTop;
+            } finally {
+              collaborationApplyingRemote = false;
+            }
+            saveMessage.value = "共同編集の変更をリアルタイム同期しました。";
           };
           shared.observe(applySharedValue);
           applySharedValue();
@@ -2939,10 +3029,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const socket = new WebSocket(`${protocol}//${location.host}/api/admin/editor/documents/${encodeURIComponent(documentId)}/collaboration`);
         collaborationSocket = socket;
         socket.binaryType = "arraybuffer";
+        const sendHeartbeat = () => {
+          if (generation !== collaborationGeneration || collaborationSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
+          const sentAt = Date.now();
+          socket.send(JSON.stringify({ type: "ping", sentAt }));
+          window.clearTimeout(collaborationPongTimer);
+          collaborationPongTimer = window.setTimeout(() => {
+            if (generation !== collaborationGeneration || collaborationSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
+            setCollaborationConnectionState("reconnecting", "同期応答を確認中…");
+            socket.close();
+          }, 6_000);
+          window.clearTimeout(collaborationHeartbeatTimer);
+          collaborationHeartbeatTimer = window.setTimeout(sendHeartbeat, document.hidden ? 20_000 : 10_000);
+        };
+        collaborationHeartbeatNow = sendHeartbeat;
         socket.addEventListener("open", () => {
           reconnectAttempt = 0;
-          collaborationState.textContent = "同時編集に接続しました";
+          setCollaborationConnectionState("connected", "リアルタイム同期");
           if (fieldsBound) socket.send(Y.encodeStateAsUpdate(yDocument));
+          window.clearTimeout(collaborationHeartbeatTimer);
+          collaborationHeartbeatTimer = window.setTimeout(sendHeartbeat, 250);
         });
         socket.addEventListener("message", (event) => {
           if (typeof event.data !== "string") {
@@ -2951,7 +3057,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             return;
           }
           try {
-            const payload = JSON.parse(event.data) as CollaborationDocumentChange & { type?: string; participants?: CollaborationParticipant[] };
+            const payload = JSON.parse(event.data) as CollaborationDocumentChange & { type?: string; participants?: CollaborationParticipant[]; sentAt?: number };
+            if (payload.type === "pong") {
+              window.clearTimeout(collaborationPongTimer);
+              collaborationPongTimer = undefined;
+              if (typeof payload.sentAt === "number") {
+                collaborationLatency.textContent = `${Math.max(1, Date.now() - payload.sentAt)}ms`;
+                collaborationLatency.hidden = false;
+              }
+              return;
+            }
             if (payload.type === "presence") renderCollaborationParticipants(payload.participants ?? []);
             if (payload.type === "comments-changed") {
               const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
@@ -2965,13 +3080,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         });
         socket.addEventListener("close", () => {
           if (generation !== collaborationGeneration || collaborationSocket !== socket) return;
-          collaborationState.textContent = "同時編集を再接続中（通常の保存は利用できます）";
-          const delay = Math.min(8_000, 500 * 2 ** reconnectAttempt);
+          stopCollaborationHeartbeat();
+          collaborationHeartbeatNow = null;
+          setCollaborationConnectionState("reconnecting", "リアルタイム同期を再接続中…");
+          const delay = Math.min(4_000, 250 * 2 ** reconnectAttempt);
           reconnectAttempt += 1;
           collaborationReconnectTimer = window.setTimeout(openSocket, delay);
         });
-        socket.addEventListener("error", () => { collaborationState.textContent = "同時編集に接続できません（通常の保存は利用できます）"; });
+        socket.addEventListener("error", () => { setCollaborationConnectionState("error", "同期接続を確認中（保存は利用可能）"); });
       };
+      const reconnectNow = () => {
+        if (generation !== collaborationGeneration || collaborationSocket?.readyState === WebSocket.OPEN || collaborationSocket?.readyState === WebSocket.CONNECTING) return;
+        window.clearTimeout(collaborationReconnectTimer);
+        openSocket();
+      };
+      window.addEventListener("online", reconnectNow, { signal: collaborationAbort.signal });
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) return;
+        if (collaborationSocket?.readyState === WebSocket.OPEN) collaborationHeartbeatNow?.();
+        else reconnectNow();
+      }, { signal: collaborationAbort.signal });
       openSocket();
     };
     const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
@@ -2994,6 +3122,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
+      syncMetadataSummary(); metadata.open = !item.id || metadataMissingCount() > 0;
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null, hasUnpublishedPublicationChanges(item)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); updatePublicationActions(item); completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
@@ -3008,6 +3137,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       defaultConceptId = source?.conceptId ? "" : defaultId;
       conceptId.value = defaultId;
       fillConceptOptions(defaultId);
+      syncMetadataSummary();
+      metadata.open = true;
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
@@ -3367,7 +3498,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const capturePreviewSelection = () => { const selection = window.getSelection(); const selected = selection?.toString().trim() ?? ""; if (!selected || !selection?.anchorNode || !preview.contains(selection.anchorNode)) { setCommentSelection(null); return; } setCommentSelection({ start: null, end: null, text: selected.slice(0, 2_000), source: "プレビュー" }); };
     body.addEventListener("input", () => {
-      const helpCommand = /(^|[\s])\/help(?=$|[\s])/.exec(body.value);
+      const helpCommand = collaborationApplyingRemote ? null : /(^|[\s])\/help(?=$|[\s])/.exec(body.value);
       if (helpCommand) {
         const commandStart = helpCommand.index + helpCommand[1].length;
         body.value = `${body.value.slice(0, commandStart)}${body.value.slice(commandStart + 5)}`;
@@ -3633,9 +3764,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) || !documentFieldNames.has(target.name)) return;
       if (target.name === "slug") refreshDefaultConceptId();
       heading.textContent = formValue("title") || "新規原稿";
+      syncMetadataSummary();
+      if (collaborationApplyingRemote) return;
       setUnsavedChanges(true);
       scheduleAutosave();
     });
+    form.addEventListener("invalid", (event) => {
+      if (event.target instanceof HTMLElement && metadata.contains(event.target)) metadata.open = true;
+    }, true);
     root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "既存の原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
@@ -3754,11 +3890,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-workspace .concept-registration-toggle input { accent-color: var(--accent); }
   .editor-workspace .concept-registration-fields { display: grid; gap: .5rem; margin-top: .5rem; }
   .editor-workspace .concept-registration-fields[hidden] { display: none; }
-  .collaboration-status { align-items:center; background:var(--surface-alt); border:1px solid var(--border); border-radius:.5rem; display:flex; flex-wrap:wrap; gap:.35rem .55rem; max-width:30rem; padding:.38rem .5rem; }
+  .collaboration-status { align-items:center; background:var(--surface-alt); border:1px solid var(--border); border-radius:999px; display:flex; flex-wrap:nowrap; gap:.25rem; max-width:22rem; min-height:2rem; overflow:hidden; padding:.2rem .42rem; }
   .collaboration-status[hidden] { display:none; }
-  .collaboration-status > span { color:var(--muted); font-size:.7rem; font-weight:800; }
-  .collaboration-status [data-collaboration-participants] { display:flex; flex-wrap:wrap; gap:.25rem; }
-  .collaboration-status [data-collaboration-participants] span { background:var(--accent-subtle); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border)); border-radius:999px; color:var(--accent); font-size:.66rem; font-weight:800; padding:.16rem .38rem; }
+  .collaboration-status > span:not(.collaboration-indicator) { color:var(--muted); font-size:.66rem; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .collaboration-indicator { background:#5795c4; border-radius:50%; flex:0 0 .45rem; height:.45rem; width:.45rem; }
+  .collaboration-status[data-state="connecting"] .collaboration-indicator { animation:collaboration-pulse 1s ease-in-out infinite alternate; }
+  .collaboration-status[data-state="connected"] .collaboration-indicator { background:#2e8b57; }
+  .collaboration-status[data-state="reconnecting"] .collaboration-indicator { background:#c78500; animation:collaboration-pulse .8s ease-in-out infinite alternate; }
+  .collaboration-status[data-state="error"] .collaboration-indicator { background:#c74343; }
+  .collaboration-status [data-collaboration-latency] { color:var(--muted); flex:0 0 auto; font-size:.6rem; font-weight:700; }
+  .collaboration-status [data-collaboration-participants] { display:flex; flex:0 1 auto; gap:.2rem; min-width:0; }
+  .collaboration-status [data-collaboration-participants]:empty { display:none; }
+  .collaboration-status [data-collaboration-participants] span { background:var(--accent-subtle); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border)); border-radius:999px; color:var(--accent); font-size:.61rem; font-weight:800; max-width:8rem; overflow:hidden; padding:.1rem .3rem; text-overflow:ellipsis; white-space:nowrap; }
+  @keyframes collaboration-pulse { from { opacity:.35; transform:scale(.78); } to { opacity:1; transform:scale(1); } }
+  @media (prefers-reduced-motion:reduce) { .collaboration-status .collaboration-indicator { animation:none!important; } }
   .editor-workspace .writing-area .locked-range-markup mark.locked-range-mark { background-color:#fee2e2 !important; border-left:3px solid #ef4444 !important; border-radius:.16em; box-shadow:inset 0 0 0 1px rgb(239 68 68 / .2); color:inherit; padding:.03em .1em; }
   .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-selectionBackground,
   .editor-workspace .writing-area .body-editor-surface .body-codemirror .cm-line::selection,

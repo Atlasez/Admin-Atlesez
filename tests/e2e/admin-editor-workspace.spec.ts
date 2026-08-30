@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import * as Y from "yjs";
 
 const documentItem = {
   id: "doc-1",
@@ -137,12 +138,41 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
 
   const settings = page.locator("details.metadata");
   const personalNotebook = page.locator("details.personal-notebook");
-  await expect(settings.locator(":scope > summary")).toHaveText("記事設定");
+  await expect(settings.locator(":scope > summary")).toContainText("記事設定");
   await expect(personalNotebook.locator("summary")).toHaveText("自分用メモ帳");
   await settings.locator(":scope > summary").click();
   await expect(settings).not.toHaveAttribute("open", "");
   await personalNotebook.locator("summary").click();
   await expect(personalNotebook).toHaveAttribute("open", "");
+});
+
+test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1367, height: 768 });
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const settings = page.locator("details.metadata");
+  await expect(settings).not.toHaveAttribute("open", "");
+  await expect(page.locator("[data-metadata-summary]")).toContainText("数学");
+  const collapsed = await page.evaluate(() => ({
+    toolbar: document
+      .querySelector(".document-toolbar")
+      ?.getBoundingClientRect().height,
+    settings: document.querySelector(".metadata")?.getBoundingClientRect()
+      .height,
+  }));
+  expect(collapsed.toolbar).toBeLessThan(115);
+  expect(collapsed.settings).toBeLessThan(55);
+
+  await settings.locator(":scope > summary").click();
+  await expect(settings).toHaveAttribute("open", "");
+  expect(
+    await settings.evaluate(
+      (element) => element.getBoundingClientRect().height,
+    ),
+  ).toBeLessThan(390);
 });
 
 test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚えなくてよい", async ({
@@ -633,6 +663,7 @@ test("保存中の連打は同じ原稿を二重保存しない", async ({ page 
   });
   await page.goto("./admin/editor/?document=doc-1");
 
+  await page.locator("details.metadata > summary").click();
   await page.locator('[name="title"]').fill("保存連打のテスト");
   await Promise.all([
     page.locator("[data-document-form]").dispatchEvent("submit"),
@@ -646,7 +677,7 @@ test("E-1: 固定ツールバーから作業ガイドを別タブで開ける", 
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  const guide = page.getByRole("link", { name: "作業の進め方 ↗" });
+  const guide = page.getByRole("link", { name: "手順 ↗" });
   await expect(guide).toHaveAttribute("href", "/admin/guide/?project=atlas");
   await expect(guide).toHaveAttribute("target", "_blank");
   await expect(guide).toBeVisible();
@@ -1100,8 +1131,9 @@ test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存�
   await page.goto("./admin/editor/?document=doc-1");
 
   const body = page.locator("[data-body]");
+  const bodyEditor = page.locator(".body-codemirror .cm-content");
   const unsavedBody = `${documentItem.body}\n\n未保存の追記です。`;
-  await body.fill(unsavedBody);
+  await bodyEditor.fill(unsavedBody);
   await page
     .locator('[data-comment-context="comment-1"]')
     .getByRole("button", { name: /確認済み/ })
@@ -1662,6 +1694,93 @@ test("CM-RT: コメント変更通知を受けると一覧をリアルタイム�
   await expect(
     page.locator('[data-comment-context="comment-realtime"]'),
   ).toBeVisible();
+});
+
+test("共同編集の本文を低遅延で反映し、受信側から重複自動保存しない", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    class TestSocket extends EventTarget {
+      static readonly OPEN = 1;
+      static readonly CONNECTING = 0;
+      readonly readyState = TestSocket.CONNECTING;
+      binaryType = "arraybuffer";
+      constructor() {
+        super();
+        (window as Window & { __testSockets?: TestSocket[] }).__testSockets ??=
+          [];
+        (
+          window as unknown as { __testSockets: TestSocket[] }
+        ).__testSockets.push(this);
+        queueMicrotask(() => {
+          Object.defineProperty(this, "readyState", { value: TestSocket.OPEN });
+          this.dispatchEvent(new Event("open"));
+        });
+      }
+      send() {}
+      close() {
+        Object.defineProperty(this, "readyState", { value: 3 });
+        this.dispatchEvent(new Event("close"));
+      }
+    }
+    Object.defineProperty(window, "WebSocket", {
+      configurable: true,
+      writable: true,
+      value: TestSocket,
+    });
+  });
+  await mockAdminApi(page);
+  let patchCount = 0;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    patchCount += 1;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __testSockets?: unknown[] }).__testSockets
+            ?.length ?? 0,
+      ),
+    )
+    .toBeGreaterThan(0);
+
+  const source = new Y.Doc();
+  source.getText("title").insert(0, documentItem.title);
+  source.getText("summary").insert(0, documentItem.summary);
+  source.getText("body").insert(0, documentItem.body);
+  const initialUpdate = [...Y.encodeStateAsUpdate(source)];
+  source
+    .getText("body")
+    .insert(source.getText("body").length, "\n\n同期テスト");
+  const changedUpdate = [...Y.encodeStateAsUpdate(source)];
+  await page.evaluate(
+    (updates) => {
+      const sockets =
+        (window as Window & { __testSockets?: EventTarget[] }).__testSockets ??
+        [];
+      for (const update of updates) {
+        const data = new Uint8Array(update).buffer;
+        sockets.forEach((socket) =>
+          socket.dispatchEvent(new MessageEvent("message", { data })),
+        );
+      }
+    },
+    [initialUpdate, changedUpdate],
+  );
+
+  await expect(page.locator("[data-body]")).toHaveValue(/同期テスト/);
+  await expect(page.locator("[data-preview]")).toContainText("同期テスト", {
+    timeout: 800,
+  });
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "リアルタイム同期",
+  );
+  await page.waitForTimeout(2_200);
+  expect(patchCount).toBe(0);
+  source.destroy();
 });
 
 test("公開Runの状態・CI失敗詳細を再読込なしでリアルタイム反映する", async ({

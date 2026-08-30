@@ -153,6 +153,31 @@ describe("editorial collaboration initialization", () => {
     vi.unstubAllGlobals();
   });
 
+  it("responds to the browser heartbeat so stalled realtime links are detected", () => {
+    const socket = { send: vi.fn() } as unknown as WebSocket;
+    const state = {
+      storage: {
+        get: vi.fn(async () => undefined),
+        put: vi.fn(async () => undefined),
+      },
+      acceptWebSocket: vi.fn(),
+      getWebSockets: vi.fn(() => []),
+      waitUntil: vi.fn(),
+    };
+    const room = new EditorialCollaborationRoom(state, {
+      REPORTS: {} as never,
+    } as never);
+
+    room.webSocketMessage(
+      socket,
+      JSON.stringify({ type: "ping", sentAt: 1_777_777_777_777 }),
+    );
+
+    expect(socket.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: "pong", sentAt: 1_777_777_777_777 }),
+    );
+  });
+
   it("sends the current publication state immediately when a tab reconnects", async () => {
     const send = vi.fn();
     const socket = {

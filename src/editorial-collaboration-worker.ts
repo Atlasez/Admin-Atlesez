@@ -501,12 +501,26 @@ export class EditorialCollaborationRoom {
     try {
       const payload = JSON.parse(message) as {
         type?: string;
+        sentAt?: unknown;
         field?: unknown;
         cursorStart?: unknown;
         cursorEnd?: unknown;
         cursorAnchor?: unknown;
         cursorHead?: unknown;
       };
+      if (payload.type === "ping") {
+        socket.send(
+          JSON.stringify({
+            type: "pong",
+            sentAt:
+              typeof payload.sentAt === "number" &&
+              Number.isFinite(payload.sentAt)
+                ? payload.sentAt
+                : null,
+          }),
+        );
+        return;
+      }
       if (payload.type !== "presence") return;
       const attachment = collaborationAttachment(socket);
       attachment.mode = attachment.mode === "presence" ? "presence" : "document";
