@@ -301,6 +301,38 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   ).toBeVisible();
 });
 
+test("公開PRのCI確認中を視覚表示し、最終更新時刻を示す", async ({ page }) => {
+  const pendingDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    publication_pr_number: 321,
+    publication_pr_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+    publication_action: "publish" as const,
+    publication_run: {
+      id: "run-pending-1",
+      state: "checks_pending",
+      action: "publish" as const,
+      attempt: 1,
+      error_message: "公開用PRを作成しました。CIを自動確認しています。",
+      last_check_at: "2026-08-31T01:23:00.000Z",
+    },
+  };
+  await mockAdminApi(page, undefined, pendingDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const publicationRun = page.locator("[data-publication-run]");
+  await expect(publicationRun).toHaveAttribute("aria-busy", "true");
+  await expect(
+    publicationRun.locator("[data-publication-run-label]"),
+  ).toContainText("CIを自動確認しています");
+  await expect(
+    publicationRun.locator("[data-publication-run-updated]"),
+  ).toContainText("最終更新：");
+  await expect(
+    publicationRun.locator(".publication-run-indicator"),
+  ).toBeVisible();
+});
+
 test("公開済み記事の未反映変更は運営サイトから再公開できる", async ({
   page,
 }) => {
