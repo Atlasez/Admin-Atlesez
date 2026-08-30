@@ -233,9 +233,13 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   await mockAdminApi(page, undefined, failedDocument);
   await page.goto("./admin/editor/?document=doc-1");
 
-  await expect(page.locator("[data-publication-run]")).toContainText(
+  const publicationRun = page.locator("[data-publication-run]");
+  await expect(publicationRun).toContainText(
     "CIが失敗しました（content-check）。［原因：CI］（ci_failed）",
   );
+  await expect(publicationRun).toHaveCSS("white-space", "normal");
+  await expect(publicationRun).toHaveCSS("overflow-wrap", "anywhere");
+  await expect(publicationRun).toHaveCSS("overflow", "visible");
   await expect(page.locator("[data-publication-link] a")).toHaveCount(2);
   await expect(page.locator("[data-publication-link] a").nth(0)).toHaveText(
     "公開PRを確認",
