@@ -9730,7 +9730,11 @@ async function getPublicationReviewState(
     feedbackComplete,
     canDecide:
       (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
-      (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
+      (document.publication_review_stage === "project-leader" && (Boolean(scope.isProjectLeader) || scope.isManager)),
+    managerOverride:
+      document.publication_review_stage === "project-leader" &&
+      scope.isManager &&
+      !scope.isProjectLeader,
     coordinatorCount: coordinators.length,
     leaderCount: leaders.length,
   });
@@ -9809,9 +9813,11 @@ async function decidePublicationReview(
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   const stage = document.publication_review_stage;
   if (!stage) return json({ error: "この原稿は公開審査中ではありません。" }, 409);
+  const managerOverride =
+    stage === "project-leader" && scope.isManager && !scope.isProjectLeader;
   const authorized = stage === "subject-coordinator"
     ? canCoordinateSubject(scope, document.subject)
-    : Boolean(scope.isProjectLeader);
+    : Boolean(scope.isProjectLeader) || managerOverride;
   if (!authorized) return json({ error: "この審査を処理する権限がありません。" }, 403);
   const leaders = stage === "subject-coordinator"
     ? await publicationReviewRoleEmails(env, "project-leader", document.subject)
@@ -9823,9 +9829,14 @@ async function decidePublicationReview(
   ).bind(documentId, document.publication_review_round, stage).first<{ id: string }>();
   if (already) return json({ error: "この段階の審査はすでに処理されています。" }, 409);
   const now = new Date().toISOString();
+  const reviewNote = managerOverride
+    ? ["[運営管理者によるプロジェクトリーダー承認の代理実行]", note]
+        .filter(Boolean)
+        .join("\n")
+    : note;
   await env.REPORTS.prepare(
     "INSERT INTO editorial_publication_reviews (id,document_id,review_round,stage,decision,actor_email,note,created_at) VALUES (?,?,?,?,?,?,?,?)",
-  ).bind(crypto.randomUUID(), documentId, document.publication_review_round, stage, decision, scope.email, note, now).run();
+  ).bind(crypto.randomUUID(), documentId, document.publication_review_round, stage, decision, scope.email, reviewNote, now).run();
   if (decision === "rejected") {
     await env.REPORTS.prepare(
       "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",

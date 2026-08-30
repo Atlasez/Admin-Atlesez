@@ -1498,7 +1498,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const loadPublicationReview = async (documentId: string, item?: Document) => {
       if (!documentId) return;
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/publication-review`, { credentials: "same-origin", cache: "no-store" });
-      const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; feedbackTaskTotal?: number; feedbackTaskDone?: number; feedbackComplete?: boolean; error?: string }>(response);
+      const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; managerOverride?: boolean; feedbackTaskTotal?: number; feedbackTaskDone?: number; feedbackComplete?: boolean; error?: string }>(response);
       if (!response.ok) throw new Error(stateData.error ?? "公開審査状態を読み込めませんでした。");
       const stage = stateData.stage ?? null;
       const currentItem = item ?? documents.find((document) => document.id === documentId);
@@ -1534,8 +1534,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       publicationReviewButton.hidden = !Boolean(stateData.canDecide);
       scheduleButton.hidden = !(isManager && Boolean(currentItem?.id) && currentItem?.status === "approved" && !currentItem?.published_at && !currentItem?.publication_pr_url);
       if (currentItem?.scheduled_publish_at) scheduleAt.value = currentItem.scheduled_publish_at.slice(0, 16);
-      publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : "プロジェクトリーダーとして審査する";
-      publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダーへ通知されます。差し戻すとフィードバック中へ戻ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
+      publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : stateData.managerOverride ? "プロジェクトリーダー承認を代行する" : "プロジェクトリーダーとして審査する";
+      publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダーへ通知されます。差し戻すとフィードバック中へ戻ります。" : stateData.managerOverride ? "運営管理者としてプロジェクトリーダー承認を代行します。実行内容は監査記録に残ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
     };
     const loadPublicationIntegration = async () => {
       if (!isManager) { publicationIntegration.hidden = true; return; }
