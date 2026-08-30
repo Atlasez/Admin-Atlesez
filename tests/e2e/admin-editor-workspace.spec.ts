@@ -135,12 +135,35 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
 
   const settings = page.locator("details.metadata");
   const personalNotebook = page.locator("details.personal-notebook");
-  await expect(settings.locator("summary")).toHaveText("記事設定");
+  await expect(settings.locator(":scope > summary")).toHaveText("記事設定");
   await expect(personalNotebook.locator("summary")).toHaveText("自分用メモ帳");
-  await settings.locator("summary").click();
+  await settings.locator(":scope > summary").click();
   await expect(settings).not.toHaveAttribute("open", "");
   await personalNotebook.locator("summary").click();
   await expect(personalNotebook).toHaveAttribute("open", "");
+});
+
+test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚えなくてよい", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  await page.locator('select[name="category"]').selectOption("group-theory");
+  const picker = page.locator("[data-concept-picker]");
+  await expect(
+    picker.locator('option[value="math.group-theory.group-definition"]'),
+  ).toHaveCount(1);
+  await picker.selectOption("math.group-theory.group-definition");
+  await expect(page.locator('[name="conceptId"]')).toHaveValue(
+    "math.group-theory.group-definition",
+  );
+  await expect(page.locator("[data-concept-id-preview]")).toContainText(
+    "内部ID：math.group-theory.group-definition",
+  );
+  await expect(page.locator(".concept-id-advanced")).not.toHaveAttribute(
+    "open",
+  );
 });
 
 test("新規原稿では存在しない公開審査URLを呼ばず、枠の高さを調整できる", async ({
@@ -983,6 +1006,7 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
   await page.locator('[name="title"]').fill("画像フローのテスト");
   await page.locator('[name="summary"]').fill("画像の一連操作を確認します。");
   await page.locator('[name="slug"]').fill("image-flow-test");
+  await page.locator(".concept-id-advanced summary").click();
   await page
     .locator('[name="conceptId"]')
     .fill("math.group-theory.image-flow-test");
