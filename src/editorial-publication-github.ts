@@ -84,7 +84,11 @@ const githubAppJwt = async (appId: string, privateKey: string) => {
  */
 export const githubToken = async (
   env: GitHubAppEnvironment,
-): Promise<{ token: string; app: boolean } | null> => {
+): Promise<{
+  token: string;
+  app: boolean;
+  permissions?: Record<string, string>;
+} | null> => {
   const appConfigured = Boolean(
     env.GITHUB_APP_ID &&
     env.GITHUB_APP_INSTALLATION_ID &&
@@ -110,10 +114,13 @@ export const githubToken = async (
     );
     if (!response.ok)
       throw new Error("GitHub AppのInstallation tokenを取得できませんでした。");
-    const data = (await response.json()) as { token?: string };
+    const data = (await response.json()) as {
+      token?: string;
+      permissions?: Record<string, string>;
+    };
     if (!data.token)
       throw new Error("GitHub AppのInstallation tokenが空です。");
-    return { token: data.token, app: true };
+    return { token: data.token, app: true, permissions: data.permissions };
   }
   return env.GITHUB_PUBLISH_TOKEN
     ? { token: env.GITHUB_PUBLISH_TOKEN, app: false }
