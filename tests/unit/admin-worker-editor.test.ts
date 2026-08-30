@@ -102,6 +102,53 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("creates multiple subject coordinator assignments in one request", async () => {
+    class CapturedStatement extends EmptyStatement {
+      values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        this.values = values;
+        return this;
+      }
+    }
+    let batched: CapturedStatement[] = [];
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new CapturedStatement(query),
+        batch: async (statements: unknown[]) => {
+          batched = statements as CapturedStatement[];
+          return [];
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editorial-workflow-roles", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "coordinator@example.com",
+          role: "subject-coordinator",
+          subjects: ["mathematics", "physics", "mathematics"],
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({ ok: true, added: 2 });
+    expect(batched).toHaveLength(2);
+    expect(batched.map((statement) => statement.values[2])).toEqual([
+      "mathematics",
+      "physics",
+    ]);
+  });
+
   it("reports an unconfigured GitHub publication integration before publishing", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/api/admin/editor/publication-integration"),
