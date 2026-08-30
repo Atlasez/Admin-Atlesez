@@ -1288,14 +1288,29 @@ describe("admin worker editor APIs", () => {
           JSON.stringify({
             check_runs: [
               {
+                id: 654,
                 name: "content-check",
                 status: "completed",
                 conclusion: "timed_out",
                 html_url:
                   "https://github.com/Atlasez/Atlasez01/actions/runs/654",
+                details_url:
+                  "https://github.com/Atlasez/Atlasez01/actions/runs/654/job/765",
               },
             ],
           }),
+        );
+      if (url.endsWith("/check-runs/654"))
+        return new Response(
+          JSON.stringify({ output: { summary: "CI verify" } }),
+        );
+      if (url.endsWith("/check-runs/654/annotations?per_page=50"))
+        return new Response(JSON.stringify([]));
+      if (url.endsWith("/actions/jobs/765/logs"))
+        return new Response(
+          "2026-08-30T00:00:00.000Z ##[group]Run node scripts/validate-content.mjs\n" +
+            "2026-08-30T00:00:01.000Z コンテンツ検証エラー: 1件\n" +
+            "2026-08-30T00:00:01.000Z  - /home/runner/work/Atlasez01/Atlasez01/src/content/articles/jpn/mathematics/test.md: 存在しない概念 example.category.concept を参照\n",
         );
       throw new Error(`Unexpected GitHub request: ${url}`);
     });
@@ -1325,7 +1340,14 @@ describe("admin worker editor APIs", () => {
             entry.values.includes("ci") &&
             entry.values.includes("ci_transient_failure") &&
             entry.values.includes(
-              "https://github.com/Atlasez/Atlasez01/actions/runs/654",
+              "https://github.com/Atlasez/Atlasez01/actions/runs/654/job/765",
+            ) &&
+            entry.values.includes(
+              "src/content/articles/jpn/mathematics/test.md",
+            ) &&
+            entry.values.includes("node scripts/validate-content.mjs") &&
+            entry.values.includes(
+              "記事の概念IDを、運営サイトで登録済みの概念IDへ修正して保存し、公開処理を再試行してください。",
             ),
         ),
       ).toBe(true);

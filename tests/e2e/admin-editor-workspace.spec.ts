@@ -241,14 +241,26 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
       check_name: "content-check",
       check_url: "https://github.com/Atlasez/Atlasez01/actions/runs/123",
       diagnostic_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+      failure_detail: "存在しない概念 example.category.concept を参照",
+      failure_step: "node scripts/validate-content.mjs",
+      failure_file:
+        "src/content/articles/jpn/mathematics/overview/test-mathematics.md",
+      failure_line: 8,
+      failure_column: null,
+      failure_suggestion:
+        "記事の概念IDを、運営サイトで登録済みの概念IDへ修正して保存し、公開処理を再試行してください。",
     },
   };
   await mockAdminApi(page, undefined, failedDocument);
   await page.goto("./admin/editor/?document=doc-1");
 
-  await expect(page.locator("[data-publication-run]")).toContainText(
+  const publicationRun = page.locator("[data-publication-run]");
+  await expect(publicationRun).toContainText(
     "CIが失敗しました（content-check）。［原因：CI］（ci_failed）",
   );
+  await expect(publicationRun).toHaveCSS("white-space", "normal");
+  await expect(publicationRun).toHaveCSS("overflow-wrap", "anywhere");
+  await expect(publicationRun).toHaveCSS("overflow", "visible");
   await expect(page.locator("[data-publication-link] a")).toHaveCount(2);
   await expect(page.locator("[data-publication-link] a").nth(0)).toHaveText(
     "公開PRを確認",
@@ -262,6 +274,25 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
     "href",
     "https://github.com/Atlasez/Atlasez01/actions/runs/123",
   );
+  const publicationDiagnostic = page.locator("[data-publication-diagnostic]");
+  await expect(publicationDiagnostic).toBeVisible();
+  await expect(publicationDiagnostic).toHaveCSS("position", "absolute");
+  const documentActions = page.locator(".document-actions");
+  const beforeOpen = await documentActions.boundingBox();
+  await publicationDiagnostic.locator("summary").click();
+  const afterOpen = await documentActions.boundingBox();
+  expect(afterOpen?.x).toBe(beforeOpen?.x);
+  expect(afterOpen?.y).toBe(beforeOpen?.y);
+  await expect(publicationDiagnostic).toContainText(
+    "node scripts/validate-content.mjs",
+  );
+  await expect(publicationDiagnostic).toContainText(
+    "src/content/articles/jpn/mathematics/overview/test-mathematics.md:8",
+  );
+  await expect(publicationDiagnostic).toContainText(
+    "存在しない概念 example.category.concept を参照",
+  );
+  await expect(publicationDiagnostic).toContainText("登録済みの概念IDへ修正");
   await expect(
     page.getByRole("button", { name: "公開処理を再試行" }),
   ).toBeVisible();

@@ -7892,7 +7892,10 @@ async function getEditorialDocument(
     actorCountList(counts).sort(
       (a, b) => b.count - a.count || a.actor_email.localeCompare(b.actor_email),
     );
-  const publicationRun = await getLatestEditorialPublicationRun(env, documentId);
+  const publicationRun = await hydrateEditorialPublicationDiagnostic(
+    env,
+    await getLatestEditorialPublicationRun(env, documentId),
+  );
   return json({
     document: { ...document, publication_run: publicationRun },
     publicationRun,
@@ -9506,6 +9509,12 @@ type EditorialPublicationRun = {
   check_name: string | null;
   check_url: string | null;
   diagnostic_url: string | null;
+  failure_detail?: string | null;
+  failure_step?: string | null;
+  failure_file?: string | null;
+  failure_line?: number | null;
+  failure_column?: number | null;
+  failure_suggestion?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -9514,7 +9523,9 @@ type EditorialPublicationRun = {
 const publicationRunSelect = `SELECT id, document_id, action, state, attempt,
   pull_request_number, pull_request_url, branch, head_sha, merge_sha,
   last_check_at, next_attempt_at, error_code, error_message, idempotency_key,
-  lease_until, failure_kind, check_name, check_url, diagnostic_url, created_by,
+  lease_until, failure_kind, check_name, check_url, diagnostic_url,
+  failure_detail, failure_step, failure_file, failure_line, failure_column, failure_suggestion,
+  created_by,
   created_at, updated_at FROM editorial_publication_runs`;
 
 const githubApiHeaders = (token: string, userAgent: string) => ({
@@ -9667,6 +9678,12 @@ const updateEditorialPublicationRun = async (
       | "check_name"
       | "check_url"
       | "diagnostic_url"
+      | "failure_detail"
+      | "failure_step"
+      | "failure_file"
+      | "failure_line"
+      | "failure_column"
+      | "failure_suggestion"
     >
   >,
 ) => {
@@ -9688,6 +9705,12 @@ const updateEditorialPublicationRun = async (
     "check_name",
     "check_url",
     "diagnostic_url",
+    "failure_detail",
+    "failure_step",
+    "failure_file",
+    "failure_line",
+    "failure_column",
+    "failure_suggestion",
   ]);
   const entries = Object.entries(values).filter(([key]) => allowed.has(key));
   if (!entries.length) return;
@@ -9767,10 +9790,17 @@ const ensureEditorialPublicationRun = async (
 };
 
 type EditorialCheckRun = {
+  id?: number;
   name?: string;
   status?: string;
   conclusion?: string | null;
   html_url?: string | null;
+  details_url?: string | null;
+  output?: {
+    title?: string | null;
+    summary?: string | null;
+    text?: string | null;
+  } | null;
 };
 
 async function getEditorialCheckRuns(env: Env, headSha: string) {
@@ -9799,6 +9829,193 @@ async function getEditorialCheckRuns(env: Env, headSha: string) {
   );
   return { checks, pending, pendingCheck, failed };
 }
+
+type EditorialPublicationDiagnostic = {
+  detail: string | null;
+  step: string | null;
+  file: string | null;
+  line: number | null;
+  column: number | null;
+  suggestion: string | null;
+};
+
+const cleanGithubLogLine = (value: string) =>
+  value
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/^\d{4}-\d{2}-\d{2}T[^ ]+Z\s?/, "")
+    .replace(/^##\[(?:group|endgroup|error|warning)\]\s?/, "")
+    .trim();
+
+const normalizeGithubLogPath = (value: string) =>
+  value
+    .replace(/^\/home\/runner\/work\/[^/\s]+\/[^/\s]+\//, "")
+    .replace(/^\/workspace\//, "")
+    .replace(/^\.\//, "");
+
+const extractGithubFileReference = (lines: string[]) => {
+  for (const line of lines) {
+    const match = /((?:\/home\/runner\/work\/[^/\s]+\/[^/\s]+\/)?(?:src|content|public|scripts|tests|\.github)\/[^\s:]+)(?::(\d+))?(?::(\d+))?\s*(?:[-:]\s+)(.+)$/i.exec(line);
+    if (!match) continue;
+    return {
+      file: normalizeGithubLogPath(match[1]),
+      line: match[2] ? Number(match[2]) : null,
+      column: match[3] ? Number(match[3]) : null,
+      message: match[4].trim(),
+    };
+  }
+  return null;
+};
+
+const publicationSuggestionFor = (detail: string) => {
+  if (/未対応.*directive|unknown directive|unsupported directive|directive/i.test(detail))
+    return "記事本文のdirective名を、運営サイトが対応しているdefi・prop・thmなどへ修正し、保存してから再試行してください。";
+  if (/存在しない概念|concept(?:\s+id)?|概念.?id/i.test(detail))
+    return "記事の概念IDを、運営サイトで登録済みの概念IDへ修正して保存し、公開処理を再試行してください。";
+  if (/内部リンク|broken link|リンク.*(?:見つか|存在しない)|not found/i.test(detail))
+    return "リンク先のパスまたは記事のslugを確認し、運営サイトで修正してから再試行してください。";
+  if (/katex|mathjax|latex|数式|数式.*(?:描画|検証)/i.test(detail))
+    return "数式の区切り記号とLaTeXコマンドを確認し、記事プレビューで表示できる状態にしてから再試行してください。";
+  if (/typescript|type.?check|型検査/i.test(detail))
+    return "型エラーのファイルと行番号を確認し、該当箇所を修正してから再試行してください。";
+  if (/eslint|lint/i.test(detail))
+    return "Lintが指摘したファイルと行番号を修正し、保存後に再試行してください。";
+  if (/prettier|format/i.test(detail))
+    return "フォーマット検査の対象ファイルを整形して保存し、再試行してください。";
+  if (/duplicate|重複|循環|cycle/i.test(detail))
+    return "重複IDまたは参照の循環を解消し、記事の内容を保存してから再試行してください。";
+  return "失敗ステップと対象ファイルを確認し、記事を修正してから運営サイトの再試行を実行してください。";
+};
+
+const getEditorialPublicationDiagnostic = async (
+  env: Env,
+  check: EditorialCheckRun,
+): Promise<EditorialPublicationDiagnostic | null> => {
+  const auth = await githubToken(env);
+  if (!auth) return null;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const headers = githubApiHeaders(auth.token, "atlasez-editorial-publication-diagnostics");
+  const diagnosticLines: string[] = [];
+  let logLines: string[] = [];
+  let outputLines: string[] = [];
+
+  if (check.id) {
+    const detailResponse = await fetch(
+      `https://api.github.com/repos/${repository}/check-runs/${check.id}`,
+      { headers },
+    ).catch(() => null);
+    if (detailResponse?.ok) {
+      const data = (await detailResponse.json().catch(() => ({}))) as {
+        output?: { title?: string | null; summary?: string | null; text?: string | null };
+      };
+      outputLines = [data.output?.title, data.output?.summary, data.output?.text]
+        .filter((line): line is string => Boolean(line?.trim()))
+        .flatMap((line) => line.split(/\r?\n/).map(cleanGithubLogLine));
+    }
+    const annotationsResponse = await fetch(
+      `https://api.github.com/repos/${repository}/check-runs/${check.id}/annotations?per_page=50`,
+      { headers },
+    ).catch(() => null);
+    if (annotationsResponse?.ok) {
+      const annotations = (await annotationsResponse.json().catch(() => [])) as Array<{
+        path?: string;
+        start_line?: number | null;
+        start_column?: number | null;
+        message?: string;
+        title?: string;
+        annotation_level?: string;
+      }>;
+      for (const annotation of annotations) {
+        const message = [annotation.title, annotation.message]
+          .filter((part): part is string => Boolean(part?.trim()))
+          .join("：");
+        if (!message) continue;
+        diagnosticLines.push(
+          `${annotation.path ?? "CI"}${annotation.start_line ? `:${annotation.start_line}` : ""}${annotation.start_column ? `:${annotation.start_column}` : ""}: ${message}`,
+        );
+      }
+    }
+  }
+
+  const jobId = check.details_url?.match(/\/job\/(\d+)(?:[/?]|$)/)?.[1];
+  if (jobId) {
+    const logResponse = await fetch(
+      `https://api.github.com/repos/${repository}/actions/jobs/${jobId}/logs`,
+      { headers },
+    ).catch(() => null);
+    if (logResponse?.ok) {
+      const raw = await logResponse.text().catch(() => "");
+      logLines = raw
+        .split(/\r?\n/)
+        .map(cleanGithubLogLine)
+        .filter(Boolean);
+    }
+  }
+
+  const allLines = [...diagnosticLines, ...outputLines, ...logLines];
+  if (!allLines.length) return null;
+  const noise = /node(?:\.js)?\s+20\s+is\s+deprecated|actions\/(?:checkout|setup-node)@|github\.blog\/changelog|process completed with exit code|^\[command\]|^Run\s+/i;
+  const meaningfulLines = allLines.filter((line) => !noise.test(line));
+  const fileReference = extractGithubFileReference(meaningfulLines) ?? extractGithubFileReference(allLines);
+  const relevant = meaningfulLines.filter((line) =>
+    /error|failed|failure|invalid|not found|存在しない|未対応|unsupported|directive|検証エラー|検証.*失敗|重複|循環|katex|mathjax|latex|typescript|eslint|lint|format/i.test(line),
+  );
+  const detailLines = [...new Set([
+    ...(fileReference ? [fileReference.message] : []),
+    ...relevant.filter((line) => !/^Process completed with exit code \d+\.?$/i.test(line)),
+  ])].slice(0, 5);
+  if (!detailLines.length && fileReference?.message) detailLines.push(fileReference.message);
+  const step = [...logLines]
+    .reverse()
+    .find((line) => /^Run\s+.+/.test(line))
+    ?.replace(/^Run\s+/, "") ?? null;
+  const detail = detailLines.length ? detailLines.join("\n").slice(0, 2_000) : null;
+  return {
+    detail,
+    step,
+    file: fileReference?.file ?? null,
+    line: fileReference?.line ?? null,
+    column: fileReference?.column ?? null,
+    suggestion: detail ? publicationSuggestionFor(detail) : null,
+  };
+};
+
+const hydrateEditorialPublicationDiagnostic = async (
+  env: Env,
+  run: EditorialPublicationRun | null,
+) => {
+  if (!run || run.failure_kind !== "ci" || run.failure_detail) return run;
+  try {
+    const pullRequest = run.head_sha
+      ? null
+      : run.pull_request_number
+        ? await getEditorialPublicationPullRequest(env, run.pull_request_number)
+        : null;
+    const headSha = run.head_sha ?? pullRequest?.head_sha;
+    if (!headSha) return run;
+    const checks = await getEditorialCheckRuns(env, headSha);
+    const failed = checks.failed;
+    if (!failed) return run;
+    const diagnostic = await getEditorialPublicationDiagnostic(env, failed);
+    if (!diagnostic) return run;
+    const values = {
+      head_sha: headSha,
+      check_name: failed.name ?? run.check_name,
+      check_url: failed.details_url ?? failed.html_url ?? run.check_url,
+      diagnostic_url: failed.details_url ?? failed.html_url ?? run.diagnostic_url,
+      failure_detail: diagnostic.detail,
+      failure_step: diagnostic.step,
+      failure_file: diagnostic.file,
+      failure_line: diagnostic.line,
+      failure_column: diagnostic.column,
+      failure_suggestion: diagnostic.suggestion,
+    };
+    await updateEditorialPublicationRun(env, run.id, values);
+    return { ...run, ...values };
+  } catch (error) {
+    console.error("publication diagnostic hydration failed", { runId: run.id, error });
+    return run;
+  }
+};
 
 type EditorialPullRequestReview = {
   user?: { login?: string };
@@ -10146,17 +10363,73 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
   const checks = await getEditorialCheckRuns(env, pullRequest.head_sha);
   const now = new Date().toISOString();
   if (checks.pending) {
-    await updateEditorialPublicationRun(env, run.id, { state: "checks_pending", last_check_at: now, failure_kind: null, error_code: null, error_message: "CIを自動確認しています。", check_name: checks.pendingCheck?.name ?? null, check_url: checks.pendingCheck?.html_url ?? null, diagnostic_url: checks.pendingCheck?.html_url ?? pullRequest.html_url });
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "checks_pending",
+      last_check_at: now,
+      failure_kind: null,
+      error_code: null,
+      error_message: "CIを自動確認しています。",
+      check_name: checks.pendingCheck?.name ?? null,
+      check_url: checks.pendingCheck?.html_url ?? null,
+      diagnostic_url: checks.pendingCheck?.html_url ?? pullRequest.html_url,
+      failure_detail: null,
+      failure_step: null,
+      failure_file: null,
+      failure_line: null,
+      failure_column: null,
+      failure_suggestion: null,
+    });
     return;
   }
   if (checks.failed) {
     const conclusion = checks.failed.conclusion ?? "failure";
     const transient = ["cancelled", "timed_out", "stale", "startup_failure"].includes(conclusion);
     const canRetry = transient && run.attempt < publicationMaxAttempts;
-    await updateEditorialPublicationRun(env, run.id, canRetry ? { state: "retry_wait", next_attempt_at: new Date(Date.now() + publicationRetryDelayMs(run.attempt)).toISOString(), failure_kind: "ci", error_code: "ci_transient_failure", error_message: `CIの一時的な失敗（${checks.failed.name ?? "verify"}）を検知しました。自動再試行します。`, check_name: checks.failed.name ?? null, check_url: checks.failed.html_url ?? null, diagnostic_url: checks.failed.html_url ?? pullRequest.html_url } : { state: "failed", failure_kind: "ci", error_code: "ci_failed", error_message: `CIが失敗しました（${checks.failed.name ?? "verify"}）。記事内容または検証結果を運営サイトで確認してください。`, check_name: checks.failed.name ?? null, check_url: checks.failed.html_url ?? null, diagnostic_url: checks.failed.html_url ?? pullRequest.html_url });
+    const diagnostic = await getEditorialPublicationDiagnostic(env, checks.failed);
+    const common = {
+      failure_kind: "ci" as const,
+      check_name: checks.failed.name ?? null,
+      check_url: checks.failed.details_url ?? checks.failed.html_url ?? null,
+      diagnostic_url: checks.failed.details_url ?? checks.failed.html_url ?? pullRequest.html_url,
+      failure_detail: diagnostic?.detail ?? null,
+      failure_step: diagnostic?.step ?? null,
+      failure_file: diagnostic?.file ?? null,
+      failure_line: diagnostic?.line ?? null,
+      failure_column: diagnostic?.column ?? null,
+      failure_suggestion: diagnostic?.suggestion ?? null,
+    };
+    await updateEditorialPublicationRun(env, run.id, canRetry
+      ? {
+          ...common,
+          state: "retry_wait",
+          next_attempt_at: new Date(Date.now() + publicationRetryDelayMs(run.attempt)).toISOString(),
+          error_code: "ci_transient_failure",
+          error_message: `CIの一時的な失敗（${checks.failed.name ?? "verify"}）を検知しました。自動再試行します。`,
+        }
+      : {
+          ...common,
+          state: "failed",
+          error_code: "ci_failed",
+          error_message: `CIが失敗しました（${checks.failed.name ?? "verify"}）。記事内容または検証結果を運営サイトで確認してください。`,
+        });
     return;
   }
-  await updateEditorialPublicationRun(env, run.id, { state: "merge_pending", last_check_at: now, failure_kind: null, error_code: null, error_message: "CI成功を確認しました。必須レビューを自動承認して公開処理を進めています。", check_name: null, check_url: null, diagnostic_url: pullRequest.html_url });
+  await updateEditorialPublicationRun(env, run.id, {
+    state: "merge_pending",
+    last_check_at: now,
+    failure_kind: null,
+    error_code: null,
+    error_message: "CI成功を確認しました。必須レビューを自動承認して公開処理を進めています。",
+    check_name: null,
+    check_url: null,
+    diagnostic_url: pullRequest.html_url,
+    failure_detail: null,
+    failure_step: null,
+    failure_file: null,
+    failure_line: null,
+    failure_column: null,
+    failure_suggestion: null,
+  });
   await approveEditorialPublicationPullRequest(env, pullRequest);
   const mergeSha = await mergeEditorialPublicationPullRequest(env, pullRequest.number);
   await updateEditorialPublicationRun(env, run.id, { state: "deploy_pending", merge_sha: mergeSha ?? pullRequest.merge_commit_sha ?? pullRequest.head_sha, error_message: "Merge済みです。学習サイトの反映を確認しています。" });
