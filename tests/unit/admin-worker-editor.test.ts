@@ -700,6 +700,9 @@ describe("admin worker editor APIs", () => {
           request.url.includes("/contents/") && request.init?.method === "PUT",
       );
       expect(contentWrites).toHaveLength(1);
+      expect(contentWrites[0]?.url).toContain(
+        "/contents/src/content/articles/jpn/mathematics/overview/test-article.md",
+      );
       const articleWrite = JSON.parse(String(contentWrites[0]?.init?.body));
       expect(articleWrite.branch).toMatch(/^editorial\/published-/);
       expect(articleWrite.branch).not.toBe("main");
