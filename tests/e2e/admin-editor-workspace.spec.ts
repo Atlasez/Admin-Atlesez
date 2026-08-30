@@ -263,7 +263,13 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   );
   const publicationDiagnostic = page.locator("[data-publication-diagnostic]");
   await expect(publicationDiagnostic).toBeVisible();
+  await expect(publicationDiagnostic).toHaveCSS("position", "absolute");
+  const documentActions = page.locator(".document-actions");
+  const beforeOpen = await documentActions.boundingBox();
   await publicationDiagnostic.locator("summary").click();
+  const afterOpen = await documentActions.boundingBox();
+  expect(afterOpen?.x).toBe(beforeOpen?.x);
+  expect(afterOpen?.y).toBe(beforeOpen?.y);
   await expect(publicationDiagnostic).toContainText(
     "node scripts/validate-content.mjs",
   );
