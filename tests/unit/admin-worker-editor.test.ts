@@ -150,6 +150,62 @@ describe("admin worker editor APIs", () => {
     }
   });
 
+  it("uses the installation token permission for GitHub App integrations", async () => {
+    const importKeyMock = vi
+      .spyOn(crypto.subtle, "importKey")
+      .mockResolvedValue({} as CryptoKey);
+    const signMock = vi
+      .spyOn(crypto.subtle, "sign")
+      .mockResolvedValue(new Uint8Array([0]).buffer);
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            token: "installation-token",
+            permissions: { contents: "write", pull_requests: "write" },
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            default_branch: "main",
+            archived: false,
+            permissions: { pull: false, push: false },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    try {
+      const response = await worker.fetch(
+        new Request(
+          "http://localhost/api/admin/editor/publication-integration",
+        ),
+        {
+          ...emptyEnv,
+          GITHUB_APP_ID: "4768541",
+          GITHUB_APP_INSTALLATION_ID: "157671744",
+          GITHUB_APP_PRIVATE_KEY:
+            "-----BEGIN PRIVATE KEY-----\nAQ==\n-----END PRIVATE KEY-----",
+        } as never,
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        ready: true,
+        canWrite: true,
+        automaticMerge: true,
+        automationReady: true,
+      });
+    } finally {
+      importKeyMock.mockRestore();
+      signMock.mockRestore();
+      fetchMock.mockRestore();
+    }
+  });
+
   it("exposes feedback completion progress before publication review", async () => {
     const documentId = "22222222-2222-4222-8222-222222222222";
     const document = {

@@ -9140,7 +9140,12 @@ async function editorialPublicationIntegrationStatus(
       permissions?: { push?: boolean; pull?: boolean };
     };
     const defaultBranch = data.default_branch ?? null;
-    const canWrite = data.permissions?.push === true;
+    // Installation tokens expose the granted App permissions in the token
+    // response; the repository resource's `permissions.push` describes the
+    // token's user-style permission object and is false for GitHub Apps.
+    const canWrite = auth.app
+      ? auth.permissions?.contents === "write"
+      : data.permissions?.push === true;
     const archived = data.archived === true;
     const automaticMerge = Boolean(auth?.app && canWrite);
     const ready = defaultBranch === "main" && canWrite && !archived;
