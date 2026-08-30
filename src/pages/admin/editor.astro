@@ -233,8 +233,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <label><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
               <label><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
               <label><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-      <label class="concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>学習地図と記事を結びつける主概念です。分野・カテゴリを選ぶと、その範囲の概念名だけが表示されます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
-      <details class="concept-id-advanced"><summary>概念IDを確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。手入力したIDは公開前に分野担当者が確認してください。</small></details>
+      <label class="concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>既存の概念はここから選びます。新しい概念は「新しい概念を作成」を選ぶと、記事と一緒に学習地図へ登録できます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
+      <details class="concept-id-advanced"><summary>概念IDを確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><label class="concept-registration-toggle"><input type="checkbox" data-register-concept /> 新しい概念として公開PRに追加する</label><div class="concept-registration-fields" data-concept-registration-fields hidden><label><span class="field-heading">概念名（日本語）<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptName" maxlength="180" placeholder="例：群の中心" /></label><label><span class="field-heading">概念名（英語・任意）</span><input name="conceptNameEn" maxlength="180" placeholder="例：The Center of a Group" /></label><small>チェックすると、この概念IDと概念名を記事の公開PRで concepts.yaml に追加します。学習地図に登録されるのはPRのCI成功後です。</small></div><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。既存概念を選ぶときは上の一覧を使ってください。</small></details>
               <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
       <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">フィードバック中</option><option value="on-hold">保留</option><option value="approved" disabled>フィードバック済み（公開審査後のみ）</option></select><small data-status-help>「フィードバック済み」は、フィードバック完了後の公開審査で承認されたときに自動で設定されます。</small></label>
@@ -922,7 +922,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   type LockedRange = { start: number; end: number; text: string };
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
   type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
-  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: { id: string; state: string; action: "publish" | "unpublish"; attempt: number; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null } | null; locked_ranges?: string | LockedRange[] };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: { id: string; state: string; action: "publish" | "unpublish"; attempt: number; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null } | null; locked_ranges?: string | LockedRange[] };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
@@ -968,6 +968,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
     const category = form.elements.namedItem("category") as HTMLSelectElement;
     const conceptId = form.elements.namedItem("conceptId") as HTMLInputElement;
+    const conceptName = form.elements.namedItem("conceptName") as HTMLInputElement;
+    const conceptNameEn = form.elements.namedItem("conceptNameEn") as HTMLInputElement;
+    const registerConcept = root.querySelector<HTMLInputElement>("[data-register-concept]")!;
+    const conceptRegistrationFields = root.querySelector<HTMLElement>("[data-concept-registration-fields]")!;
     const conceptPicker = root.querySelector<HTMLSelectElement>("[data-concept-picker]")!;
     const conceptIdPreview = root.querySelector<HTMLOutputElement>("[data-concept-id-preview]")!;
     const status = form.elements.namedItem("status") as HTMLSelectElement;
@@ -1965,21 +1969,34 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       category.innerHTML = categories.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
       category.value = categories.some((item) => item.slug === selected) ? selected : categories[0]?.slug ?? "general";
     };
+    const conceptPrefix = (subjectSlug: string) => ({ mathematics: "math", chemistry: "chem" }[subjectSlug] ?? subjectSlug);
+    const generatedConceptId = () => {
+      const slug = formValue("slug").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "new-concept";
+      return `${conceptPrefix(subject.value)}.${category.value}.${slug}`;
+    };
+    const syncConceptRegistration = () => {
+      const registering = registerConcept.checked;
+      conceptRegistrationFields.hidden = !registering;
+      conceptName.required = registering;
+      if (registering) conceptIdAdvanced.open = true;
+      conceptIdPreview.classList.toggle("is-new-concept", registering);
+    };
     const fillConceptOptions = (selected = conceptId.value) => {
       const matching = conceptOptions.filter((item) => item.subject === subject.value && item.category === category.value);
       const current = selected && !matching.some((item) => item.id === selected)
-        ? [{ id: selected, subject: subject.value, category: category.value, name: "未登録または旧形式の概念（要確認）", nameEn: "" }]
+        ? [{ id: selected, subject: subject.value, category: category.value, name: registerConcept.checked ? "新しい概念（公開PRで追加）" : "未登録または旧形式の概念（要確認）", nameEn: "" }]
         : [];
       const options = [...current, ...matching];
       conceptPicker.innerHTML = [
         '<option value="">概念を選択してください</option>',
+        '<option value="__new_concept__">＋ 新しい概念を作成（記事のURL名からIDを生成）</option>',
         ...options.map((item) => `<option value="${esc(item.id)}">${esc(item.name)}${item.nameEn ? `（${esc(item.nameEn)}）` : ""}${current.includes(item) ? "・要確認" : ""}</option>`),
       ].join("");
       conceptPicker.value = options.some((item) => item.id === selected) ? selected : "";
       conceptId.value = selected;
       const selectedOption = options.find((item) => item.id === selected);
       conceptIdPreview.textContent = selectedOption
-        ? `内部ID：${selectedOption.id}${selectedOption.name === "未登録または旧形式の概念（要確認）" ? "（公開前に担当者へ確認）" : ""}`
+        ? `内部ID：${selectedOption.id}${selectedOption.name === "未登録または旧形式の概念（要確認）" ? "（公開前に担当者へ確認）" : selectedOption.name === "新しい概念（公開PRで追加）" ? "（公開PRで学習地図へ追加）" : ""}`
         : selected ? `内部ID：${selected}（一覧に未登録・公開前に要確認）` : "概念を選択してください";
       conceptIdPreview.classList.toggle("is-unregistered", selectedOption?.name === "未登録または旧形式の概念（要確認）");
     };
@@ -2530,7 +2547,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }).filter((range) => after.slice(range.start, range.end) === range.text);
       return true;
     };
-    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
+    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
     body.addEventListener("beforeinput", (event) => {
       const start = body.selectionStart ?? 0;
       const end = body.selectionEnd ?? start;
@@ -2733,6 +2750,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       (form.elements.namedItem("slug") as HTMLInputElement).value = item.slug;
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
+      registerConcept.checked = Boolean(item.concept_is_new);
+      conceptName.value = item.concept_name ?? "";
+      conceptNameEn.value = item.concept_name_en ?? "";
+      syncConceptRegistration();
       fillConceptOptions(item.concept_id);
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
@@ -2745,7 +2766,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!selected) return;
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "", body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "", concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
@@ -2841,10 +2862,33 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           }).join("")
         : "<p class=\"feedback-request-history-empty\">この原稿には、まだフィードバック依頼はありません。</p>";
     };
-    subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; fillConceptOptions(); setUnsavedChanges(true); });
-    category.addEventListener("change", () => { conceptId.value = ""; fillConceptOptions(); setUnsavedChanges(true); });
-    conceptPicker.addEventListener("change", () => { conceptId.value = conceptPicker.value; fillConceptOptions(conceptId.value); setUnsavedChanges(true); });
+    const clearConceptRegistration = () => { registerConcept.checked = false; conceptName.value = ""; conceptNameEn.value = ""; syncConceptRegistration(); };
+    subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; clearConceptRegistration(); fillConceptOptions(); setUnsavedChanges(true); });
+    category.addEventListener("change", () => { conceptId.value = ""; clearConceptRegistration(); fillConceptOptions(); setUnsavedChanges(true); });
+    conceptPicker.addEventListener("change", () => {
+      if (conceptPicker.value === "__new_concept__") {
+        conceptId.value = generatedConceptId();
+        registerConcept.checked = true;
+        if (!conceptName.value.trim()) conceptName.value = formValue("title").trim();
+        syncConceptRegistration();
+        fillConceptOptions(conceptId.value);
+      } else {
+        conceptId.value = conceptPicker.value;
+        clearConceptRegistration();
+        fillConceptOptions(conceptId.value);
+      }
+      setUnsavedChanges(true);
+    });
     conceptId.addEventListener("input", () => { fillConceptOptions(conceptId.value); setUnsavedChanges(true); });
+    registerConcept.addEventListener("change", () => {
+      if (registerConcept.checked) {
+        if (!conceptId.value) conceptId.value = generatedConceptId();
+        if (!conceptName.value.trim()) conceptName.value = formValue("title").trim();
+      }
+      syncConceptRegistration();
+      fillConceptOptions(conceptId.value);
+      setUnsavedChanges(true);
+    });
     conceptId.addEventListener("invalid", () => { conceptIdAdvanced.open = true; conceptIdPreview.textContent = "概念を選択するか、概念IDを入力してください"; });
     sourceSubject.addEventListener("change", fillSourceArticles);
     outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
@@ -3364,9 +3408,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-workspace .concept-picker-field small, .editor-workspace .concept-id-advanced > small { color: var(--muted); font-size: .7rem; font-weight: 500; line-height: 1.45; }
   .editor-workspace .concept-id-preview { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .68rem; font-weight: 500; overflow-wrap: anywhere; }
   .editor-workspace .concept-id-preview.is-unregistered { color: var(--danger, #a03123); font-weight: 800; }
+  .editor-workspace .concept-id-preview.is-new-concept { color: var(--accent); font-weight: 800; }
   .editor-workspace .concept-id-advanced { align-self: start; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px dashed var(--border); border-radius: .45rem; padding: .45rem .55rem .55rem; }
   .editor-workspace .concept-id-advanced summary { color: var(--muted); font-size: .72rem; font-weight: 700; }
   .editor-workspace .concept-id-advanced label { margin-top: .5rem; }
+  .editor-workspace .concept-registration-toggle { align-items: center; display: flex; gap: .4rem; font-size: .75rem; font-weight: 700; }
+  .editor-workspace .concept-registration-toggle input { accent-color: var(--accent); }
+  .editor-workspace .concept-registration-fields { display: grid; gap: .5rem; margin-top: .5rem; }
+  .editor-workspace .concept-registration-fields[hidden] { display: none; }
   .collaboration-status { align-items:center; background:var(--surface-alt); border:1px solid var(--border); border-radius:.5rem; display:flex; flex-wrap:wrap; gap:.35rem .55rem; max-width:30rem; padding:.38rem .5rem; }
   .collaboration-status[hidden] { display:none; }
   .collaboration-status > span { color:var(--muted); font-size:.7rem; font-weight:800; }

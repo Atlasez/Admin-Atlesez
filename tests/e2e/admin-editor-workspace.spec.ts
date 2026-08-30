@@ -167,6 +167,31 @@ test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚�
   );
 });
 
+test("新しい概念を選ぶと記事と一緒に学習地図へ登録するIDを作成できる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  await page.locator('[name="subject"]').selectOption("mathematics");
+  await page.locator('[name="category"]').selectOption("group-theory");
+  await page.locator('[name="slug"]').fill("group-center");
+  await page.locator('[name="title"]').fill("群の中心");
+  await page.locator("[data-concept-picker]").selectOption("__new_concept__");
+
+  await expect(page.locator('[name="conceptId"]')).toHaveValue(
+    "math.group-theory.group-center",
+  );
+  await expect(page.locator("[data-register-concept]")).toBeChecked();
+  await expect(page.locator('[name="conceptName"]')).toHaveValue("群の中心");
+  await expect(
+    page.locator("[data-concept-registration-fields]"),
+  ).toBeVisible();
+  await expect(page.locator("[data-concept-id-preview]")).toContainText(
+    "公開PRで学習地図へ追加",
+  );
+});
+
 test("フィードバック済みは公開審査の承認前に状態選択できない", async ({
   page,
 }) => {
@@ -336,8 +361,8 @@ test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示�
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".required-mark")).toHaveCount(7);
-  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(7);
+  await expect(page.locator(".required-mark")).toHaveCount(8);
+  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(8);
   for (const name of [
     "title",
     "summary",

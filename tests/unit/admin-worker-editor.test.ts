@@ -200,6 +200,61 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("stores new concept metadata with a draft document", async () => {
+    class CapturedStatement extends EmptyStatement {
+      values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+    }
+    const inserted = new CapturedStatement(
+      `INSERT INTO editorial_documents VALUES (${Array.from({ length: 27 }, () => "?").join(", ")})`,
+    );
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (_query: string) => inserted,
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          subject: "mathematics",
+          category: "group-theory",
+          locale: "ja",
+          slug: "group-center",
+          title: "群の中心",
+          summary: "群の中心を説明します。",
+          conceptId: "math.group-theory.group-center",
+          conceptName: "群の中心",
+          conceptNameEn: "The Center of a Group",
+          registerConcept: true,
+          body: "本文です。",
+          latexEngine: "katex",
+          status: "draft",
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(201);
+    expect(inserted.values.slice(8, 12)).toEqual([
+      "math.group-theory.group-center",
+      "群の中心",
+      "The Center of a Group",
+      1,
+    ]);
+  });
+
   it("creates multiple subject coordinator assignments in one request", async () => {
     class CapturedStatement extends EmptyStatement {
       values: unknown[] = [];

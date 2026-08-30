@@ -166,6 +166,9 @@ type EditorialDocument = {
   title: string;
   summary: string;
   concept_id: string;
+  concept_name: string | null;
+  concept_name_en: string | null;
+  concept_is_new: number;
   body: string;
   writing_memo: string;
   latex_engine: LatexEngine;
@@ -239,6 +242,9 @@ type EditorialDocumentPayload = {
   title?: unknown;
   summary?: unknown;
   conceptId?: unknown;
+  conceptName?: unknown;
+  conceptNameEn?: unknown;
+  registerConcept?: unknown;
   body?: unknown;
   latexEngine?: unknown;
   status?: unknown;
@@ -2497,7 +2503,7 @@ async function updateMemberDiscordRoles(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
+  title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -2963,6 +2969,9 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
   const title = text(payload.title, 180);
   const summary = text(payload.summary, 800);
   const conceptId = text(payload.conceptId, 180);
+  const registerConcept = payload.registerConcept === true;
+  const conceptName = registerConcept ? text(payload.conceptName, 180) : "";
+  const conceptNameEn = registerConcept ? text(payload.conceptNameEn, 180) : "";
   const body = text(payload.body, MAX_EDITORIAL_BODY_LENGTH);
   const writingMemo = text(
     payload.writingMemo,
@@ -2989,6 +2998,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     !title ||
     !summary ||
     !/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/.test(conceptId) ||
+    (registerConcept && !conceptName) ||
     !EDITORIAL_DOCUMENT_STATUSES.has(status) ||
     !LATEX_ENGINES.has(latexEngine)
   )
@@ -3002,6 +3012,9 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
     title,
     summary,
     conceptId,
+    conceptName: registerConcept ? conceptName : null,
+    conceptNameEn: registerConcept ? conceptNameEn || null : null,
+    registerConcept,
     body,
     writingMemo,
     latexEngine,
@@ -8040,9 +8053,9 @@ async function createEditorialDocument(
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_documents
-      (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
+      (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine,
        status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -8054,6 +8067,9 @@ async function createEditorialDocument(
       values.title,
       values.summary,
       values.conceptId,
+      values.conceptName,
+      values.conceptNameEn,
+      values.registerConcept ? 1 : 0,
       values.body,
       values.writingMemo,
       values.latexEngine,
@@ -8092,7 +8108,7 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT subject, status, title, summary, concept_id, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
@@ -8103,6 +8119,9 @@ async function updateEditorialDocument(
         | "title"
         | "summary"
         | "concept_id"
+        | "concept_name"
+        | "concept_name_en"
+        | "concept_is_new"
         | "body"
         | "writing_memo"
         | "category"
@@ -8148,6 +8167,9 @@ async function updateEditorialDocument(
       values.title !== existing.title ||
       values.summary !== existing.summary ||
       values.conceptId !== existing.concept_id ||
+      values.conceptName !== existing.concept_name ||
+      values.conceptNameEn !== existing.concept_name_en ||
+      (values.registerConcept ? 1 : 0) !== existing.concept_is_new ||
       values.body !== existing.body ||
       (values.references !== undefined &&
         JSON.stringify(values.references) !==
@@ -8201,7 +8223,7 @@ async function updateEditorialDocument(
       .run();
   await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
-      slug = ?, title = ?, summary = ?, concept_id = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
+      slug = ?, title = ?, summary = ?, concept_id = ?, concept_name = ?, concept_name_en = ?, concept_is_new = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
       updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END,
       scheduled_publish_at = CASE WHEN ? = 'approved' THEN scheduled_publish_at ELSE NULL END,
       scheduled_publish_claimed_at = CASE WHEN ? = 'approved' THEN scheduled_publish_claimed_at ELSE NULL END,
@@ -8217,6 +8239,9 @@ async function updateEditorialDocument(
       values.title,
       values.summary,
       values.conceptId,
+      values.conceptName,
+      values.conceptNameEn,
+      values.registerConcept ? 1 : 0,
       values.body,
       values.writingMemo,
       values.latexEngine,
@@ -8938,6 +8963,77 @@ const githubText = (base64: string) => {
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 };
+
+const editorialConceptYaml = (document: EditorialDocument) => {
+  const yamlString = (value: string) => JSON.stringify(value);
+  return [
+    "# 運営サイトから追加した概念",
+    `- id: ${document.concept_id}`,
+    `  subject: ${document.subject}`,
+    `  category: ${document.category}`,
+    "  name:",
+    `    ja: ${yamlString(document.concept_name ?? document.title)}`,
+    ...(document.concept_name_en
+      ? [`    en: ${yamlString(document.concept_name_en)}`]
+      : []),
+    "  prerequisites: []",
+    "  recommendedNext: []",
+    "  related: []",
+    "  alternatives: []",
+  ].join("\n");
+};
+
+async function addEditorialConceptToGitHub(
+  document: EditorialDocument,
+  repository: string,
+  headers: Record<string, string>,
+  branch: string,
+) {
+  if (!document.concept_is_new) return;
+  const path = "src/content/concepts/concepts.yaml";
+  const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
+  const existing = await fetch(
+    `${endpoint}?ref=${encodeURIComponent(branch)}`,
+    { headers },
+  );
+  if (!existing.ok)
+    throw await githubFailure(
+      existing,
+      "GitHub上の概念カタログを確認できませんでした。",
+      "github_concept_lookup",
+    );
+  const data = (await existing.json()) as {
+    content?: string;
+    sha?: string;
+  };
+  if (!data.content || !data.sha)
+    throw new EditorialPublicationFailure(
+      "GitHub上の概念カタログを読み込めませんでした。",
+      "github_concept_content",
+      "github_api",
+      true,
+    );
+  const current = githubText(data.content);
+  const idLine = `- id: ${document.concept_id}`;
+  if (current.split(/\r?\n/).some((line) => line.trim() === idLine)) return;
+  const content = `${current.trimEnd()}\n\n${editorialConceptYaml(document)}\n`;
+  const response = await fetch(endpoint, {
+    method: "PUT",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: `Add learning concept: ${document.concept_name ?? document.title}`,
+      content: githubBase64(content),
+      branch,
+      sha: data.sha,
+    }),
+  });
+  if (!response.ok)
+    throw await githubFailure(
+      response,
+      "GitHubへ新しい概念を反映できませんでした。",
+      "github_concept_write",
+    );
+}
 
 // 公開リポジトリは、運営サイトの表示用ロケール（ja/en）とは別に
 // ISO 639-3 のディレクトリ名（jpn/eng）を使っている。
@@ -10247,6 +10343,8 @@ async function writeEditorialDocumentToGitHub(
         document.id,
         branch,
       );
+    if (publicationStatus === "published")
+      await addEditorialConceptToGitHub(document, repository, headers, branch);
     const body = editorialMarkdown(
       {
         ...document,
