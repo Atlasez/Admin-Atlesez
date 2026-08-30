@@ -198,6 +198,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-modal__help { color: #526779; font-size: .66rem; line-height: 1.5; margin: 0; }
   .member-modal__footer { align-items: center; border-top: 1px solid #d3e0e9; display: flex; gap: .6rem; justify-content: flex-end; padding: .85rem 1.5rem; }
   .member-modal__footer output { color: #526779; font-size: .72rem; margin-right: auto; }
+  .member-modal__footer output[data-state="error"] { background: #fff1f0; border-left: 3px solid #c43d35; color: #8f2924; padding: .45rem .55rem; }
   .member-modal__cancel { background: #fff !important; border: 1px solid #b9ccda !important; color: #526779 !important; }
   .member-modal__save { white-space: nowrap; }
   @media (max-width: 720px) { .member-modal__shell { border-left: 0; max-width: none; } .member-modal__header, .member-modal__body, .member-modal__footer { padding-left: 1rem; padding-right: 1rem; } .member-modal__grid { grid-template-columns: 1fr; } .member-modal__wide { grid-column: auto; } .member-modal__link-row { grid-template-columns: 1fr; } .member-modal__footer { align-items: stretch; flex-wrap: wrap; } .member-modal__footer output { flex-basis: 100%; margin-right: 0; } .member-modal__footer button { flex: 1; } }
@@ -311,6 +312,11 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
   html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__lead, .member-admin__header-meta small, .member-admin label, .member-admin__sync small, .member-admin__workspace .action-card output, .member-card__email, .member-fact, .member-modal__header small, .member-modal__section > p, .member-modal__help, .member-modal__footer output, .member-role-picker__count, .member-toolbar__summary) {
     color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal__footer output[data-state="error"] {
+    background: #3a2424;
+    border-left-color: #ef8179;
+    color: #ffb8b2 !important;
   }
   html[data-pref-bg="dark"] body:has(.member-admin) .member-admin small {
     color: #b5b1a8 !important;
@@ -559,6 +565,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const memberModalEmail = root.querySelector<HTMLElement>("[data-member-modal-email]")!;
     const memberModalContent = root.querySelector<HTMLElement>("[data-member-modal-content]")!;
     const memberModalMessage = root.querySelector<HTMLOutputElement>("[data-member-modal-message]")!;
+    const setMemberModalMessage = (value: string, state: "idle" | "error" = "idle") => { memberModalMessage.value = value; memberModalMessage.dataset.state = state; };
     const memberModalSave = root.querySelector<HTMLButtonElement>("[data-member-modal-save]")!;
     let activeMemberEmail = "";
     const discordRoleCount = root.querySelector<HTMLElement>("[data-discord-role-count]")!;
@@ -589,7 +596,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       memberModalTitle.textContent = member.display_name || "表示名未設定";
       memberModalEmail.textContent = member.email;
       memberModalContent.innerHTML = modalMarkup(member);
-      memberModalMessage.value = "";
+      setMemberModalMessage("");
       if (!memberModal.open) memberModal.showModal();
     };
     const closeMemberModal = () => { if (memberModal.open) memberModal.close(); activeMemberEmail = ""; };
@@ -612,15 +619,15 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const input = memberModalContent.querySelector<HTMLInputElement>("[data-modal-discord-id]");
       if (!input) return;
       linkButton.disabled = true;
-      memberModalMessage.value = "Discordユーザーを確認中…";
+      setMemberModalMessage("Discordユーザーを確認中…");
       try {
         const response = await fetch("/api/admin/member-discord-user", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,discordUserId:input.value.trim()})});
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error ?? "Discord連携に失敗しました。");
-        memberModalMessage.value = discordSyncMessage("Discord連携を保存しました。", data.provisioning);
+        setMemberModalMessage(discordSyncMessage("Discord連携を保存しました。", data.provisioning));
         closeMemberModal();
         await load();
-      } catch (error) { memberModalMessage.value = error instanceof Error ? error.message : "Discord連携に失敗しました。"; }
+      } catch (error) { setMemberModalMessage(error instanceof Error ? error.message : "Discord連携に失敗しました。", "error"); }
       finally { linkButton.disabled = false; }
     });
     memberModalSave.addEventListener("click", async () => {
@@ -629,21 +636,30 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const interests = Array.from(memberModalContent.querySelectorAll<HTMLInputElement>("[data-modal-interest]:checked")).map(input => input.value);
       const discordRoleIds = Array.from(memberModalContent.querySelectorAll<HTMLInputElement>("[data-modal-discord-role]:checked")).map(input => input.value);
       memberModalSave.disabled = true;
-      memberModalMessage.value = "保存・Discord同期中…";
+      setMemberModalMessage("保存・Discord同期中…");
       try {
         const permissionResponse = await fetch("/api/admin/report-admin-permissions", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,subjects:permissions})});
         const permissionResult = await permissionResponse.json().catch(() => ({}));
         if (!permissionResponse.ok) throw new Error(permissionResult.error ?? "担当権限を保存できませんでした。");
         const roleResponse = await fetch("/api/admin/member-discord-roles", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,roleIds:discordRoleIds})});
         const roleResult = await roleResponse.json().catch(() => ({}));
-        if (!roleResponse.ok) throw new Error(roleResult.error ?? "Discord役職を保存できませんでした。");
+        if (!roleResponse.ok || roleResult.provisioning?.status === "failed") {
+          setMemberModalMessage(roleResult.error ?? discordSyncMessage("Discord役職の同期に失敗しました。", roleResult.provisioning), "error");
+          await load();
+          return;
+        }
         const attributesResponse = await fetch("/api/admin/member-attributes", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,university:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-university]")?.value ?? "",year:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-year]")?.value ?? "",interests})});
         const attributesResult = await attributesResponse.json().catch(() => ({}));
         if (!attributesResponse.ok) throw new Error(attributesResult.error ?? "登録情報を保存できませんでした。");
-        memberModalMessage.value = discordSyncMessage("個人設定を保存しました。", attributesResult.provisioning ?? roleResult.provisioning);
+        if (attributesResult.provisioning?.status === "failed") {
+          setMemberModalMessage(discordSyncMessage("プロフィールは保存しましたが、Discord役職の同期に失敗しました。", attributesResult.provisioning), "error");
+          await load();
+          return;
+        }
+        setMemberModalMessage(discordSyncMessage("個人設定を保存しました。", attributesResult.provisioning ?? roleResult.provisioning));
         closeMemberModal();
         await load();
-      } catch (error) { memberModalMessage.value = error instanceof Error ? error.message : "保存・同期できませんでした。"; }
+      } catch (error) { setMemberModalMessage(error instanceof Error ? error.message : "保存・同期できませんでした。", "error"); }
       finally { memberModalSave.disabled = false; }
     });
     const filteredMembers = () => {

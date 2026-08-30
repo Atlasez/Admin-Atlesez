@@ -2487,7 +2487,10 @@ async function updateMemberDiscordRoles(
     );
   if (statements.length) await env.REPORTS.batch(statements);
   const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
-  return json({ ok: true, provisioning });
+  return json(
+    { ok: provisioning.status !== "failed", provisioning },
+    provisioning.status === "failed" ? 502 : 200,
+  );
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
@@ -4077,6 +4080,20 @@ type DiscordProvisioningResult = {
   warnings: string[];
 };
 
+const discordRoleMutationWarning = (
+  action: "付与" | "削除",
+  roles: Array<{ id: string; name: string }>,
+  roleId: string,
+  response: Response,
+) => {
+  const roleName = roles.find((role) => role.id === roleId)?.name.trim() || `ID: ${roleId}`;
+  const status = response.status ? `（HTTP ${response.status}）` : "";
+  const permissionHint = response.status === 403
+    ? "Botの「ロールの管理」権限と、Botのロールが対象ロールより上位にあることを確認してください。"
+    : "DiscordのBot権限と対象サーバーを確認してください。";
+  return `Discordロール「${roleName}」を${action}できませんでした${status}。${permissionHint}`;
+};
+
 type DiscordAccountTokenRow = {
   discord_user_id: string;
   access_token_ciphertext: string;
@@ -4368,7 +4385,7 @@ async function provisionApplicationDiscordRoles(
       { method: "PUT", headers },
     );
     if (response.ok) applied++;
-    else warnings.push(`Discordロール（ID: ${roleId}）を付与できませんでした。`);
+    else warnings.push(discordRoleMutationWarning("付与", guildRoles, roleId, response));
   }
   let removed = 0;
   for (const roleId of current) {
@@ -4378,7 +4395,7 @@ async function provisionApplicationDiscordRoles(
       { method: "DELETE", headers },
     );
     if (response.ok) removed++;
-    else warnings.push(`Discordロール（ID: ${roleId}）を削除できませんでした。`);
+    else warnings.push(discordRoleMutationWarning("削除", guildRoles, roleId, response));
   }
   return { status: warnings.length ? "failed" : "synced", applied, removed, warnings };
 }
