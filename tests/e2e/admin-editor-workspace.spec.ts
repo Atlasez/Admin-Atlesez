@@ -1131,8 +1131,9 @@ test("CK-4: autosave OFFの未保存本文をコメント状態変更で保存�
   await page.goto("./admin/editor/?document=doc-1");
 
   const body = page.locator("[data-body]");
+  const bodyEditor = page.locator(".body-codemirror .cm-content");
   const unsavedBody = `${documentItem.body}\n\n未保存の追記です。`;
-  await body.fill(unsavedBody);
+  await bodyEditor.fill(unsavedBody);
   await page
     .locator('[data-comment-context="comment-1"]')
     .getByRole("button", { name: /確認済み/ })
