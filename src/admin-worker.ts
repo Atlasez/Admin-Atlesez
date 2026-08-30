@@ -30,6 +30,7 @@ import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
 import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
+import { githubToken } from "./editorial-publication-github";
 // ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
 // Preview/本番は外部の専用Worker bindingを必ず経由する。
 export { EditorialCollaborationRoom } from "./editorial-collaboration-worker";
@@ -74,9 +75,17 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
   /** localhostの開発時だけ使う、ログイン不要のテスト用メールアドレス。 */
   ADMIN_LOCAL_EMAIL?: string;
-  /** 承認済み原稿の公開PRを作成するためのGitHub Fine-grained token（Secret）。 */
+  /** 既存運用からの移行用GitHub token（自動Mergeには使用しない）。 */
   GITHUB_PUBLISH_TOKEN?: string;
+  /** 公開専用GitHub App。設定後はInstallation tokenを短時間だけ発行する。 */
+  GITHUB_APP_ID?: string;
+  GITHUB_APP_INSTALLATION_ID?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
+  /** GitHub Webhookの署名検証用Secret。 */
+  GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_REPOSITORY?: string;
+  /** 学習サイトの配信確認先。 */
+  PUBLIC_SITE_ORIGIN?: string;
   /** 分野別・全体進捗の通知用。値はCloudflare Secretにのみ保存する。 */
   DISCORD_ATLAS_WEBHOOK_URL?: string;
   DISCORD_PROGRESS_WEBHOOK_URL?: string;
@@ -7848,8 +7857,10 @@ async function getEditorialDocument(
     actorCountList(counts).sort(
       (a, b) => b.count - a.count || a.actor_email.localeCompare(b.actor_email),
     );
+  const publicationRun = await getLatestEditorialPublicationRun(env, documentId);
   return json({
-    document,
+    document: { ...document, publication_run: publicationRun },
+    publicationRun,
     comments: commentsWithSelections,
     comment_action_summary: {
       counts: documentActionCounts,
@@ -8922,7 +8933,7 @@ async function storeArticleBackup(
 
 /** GitHubの履歴に加え、公開済みMarkdownをD1へ世代バックアップする。 */
 async function syncPublishedArticleBackups(env: Env) {
-  const token = env.GITHUB_PUBLISH_TOKEN;
+  const token = (await githubToken(env))?.token;
   if (!token) return { synced: 0, skipped: true };
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const headers = {
@@ -8982,7 +8993,7 @@ async function syncPublishedArticleBackups(env: Env) {
 
 /** GitHub main上の公開用Markdownを基準に、編集室の公開済み表示を正規化する。 */
 async function syncEditorialPublicationStatus(env: Env) {
-  const token = env.GITHUB_PUBLISH_TOKEN;
+  const token = (await githubToken(env))?.token;
   if (!token)
     throw new Error("GitHub公開連携が未設定のため、公開状態を同期できません。");
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
@@ -9094,7 +9105,8 @@ async function editorialPublicationIntegrationStatus(
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const token = env.GITHUB_PUBLISH_TOKEN;
+  const auth = await githubToken(env);
+  const token = auth?.token;
   if (!token)
     return json(
       {
@@ -9102,7 +9114,7 @@ async function editorialPublicationIntegrationStatus(
         configured: false,
         repository,
         error:
-          "GitHub公開連携が未設定です。GITHUB_PUBLISH_TOKENをCloudflare Secretへ登録してください。",
+          "GitHub公開連携が未設定です。公開専用GitHub Appを登録してください。",
       },
       503,
     );
@@ -9130,7 +9142,9 @@ async function editorialPublicationIntegrationStatus(
     const defaultBranch = data.default_branch ?? null;
     const canWrite = data.permissions?.push === true;
     const archived = data.archived === true;
+    const automaticMerge = Boolean(auth?.app && canWrite);
     const ready = defaultBranch === "main" && canWrite && !archived;
+    const automationReady = ready && automaticMerge;
     return json({
       ready,
       configured: true,
@@ -9138,15 +9152,22 @@ async function editorialPublicationIntegrationStatus(
       defaultBranch,
       canWrite,
       canCreatePullRequest: canWrite,
+      automaticMerge,
+      automationReady,
       archived,
       ...(ready
-        ? {}
+        ? automationReady
+          ? {}
+          : {
+              automationError:
+                "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
+            }
         : {
             error: archived
               ? "公開先リポジトリがアーカイブされています。"
               : defaultBranch !== "main"
                 ? "公開先リポジトリの既定ブランチがmainではありません。"
-                : "公開用トークンにContents書込権限がありません。",
+              : "公開用トークンにContents書込権限がありません。",
           }),
     });
   } catch {
@@ -9229,7 +9250,48 @@ type EditorialPublicationPullRequest = {
   html_url: string | null;
   state: "open" | "closed";
   merged_at: string | null;
+  merge_commit_sha: string | null;
+  head_sha: string | null;
+  head?: { sha?: string };
+  draft: boolean;
+  mergeable_state: string | null;
 };
+
+type EditorialPublicationRunState =
+  | "queued"
+  | "checks_pending"
+  | "merge_pending"
+  | "deploy_pending"
+  | "retry_wait"
+  | "published"
+  | "unpublished"
+  | "failed"
+  | "needs_operator";
+
+type EditorialPublicationRun = {
+  id: string;
+  document_id: string;
+  action: "publish" | "unpublish";
+  state: EditorialPublicationRunState;
+  attempt: number;
+  pull_request_number: number | null;
+  pull_request_url: string | null;
+  branch: string | null;
+  head_sha: string | null;
+  merge_sha: string | null;
+  last_check_at: string | null;
+  next_attempt_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+const publicationRunSelect = `SELECT id, document_id, action, state, attempt,
+  pull_request_number, pull_request_url, branch, head_sha, merge_sha,
+  last_check_at, next_attempt_at, error_code, error_message, created_by,
+  created_at, updated_at FROM editorial_publication_runs`;
 
 const githubApiHeaders = (token: string, userAgent: string) => ({
   accept: "application/vnd.github+json",
@@ -9242,7 +9304,7 @@ async function getEditorialPublicationPullRequest(
   env: Env,
   number: number,
 ): Promise<EditorialPublicationPullRequest | null> {
-  const token = env.GITHUB_PUBLISH_TOKEN;
+  const token = (await githubToken(env))?.token;
   if (!token) return null;
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
   const response = await fetch(
@@ -9261,7 +9323,374 @@ async function getEditorialPublicationPullRequest(
     html_url: typeof value.html_url === "string" ? value.html_url : null,
     state: value.state,
     merged_at: typeof value.merged_at === "string" ? value.merged_at : null,
+    merge_commit_sha:
+      typeof value.merge_commit_sha === "string" ? value.merge_commit_sha : null,
+    head_sha:
+      value.head && typeof value.head === "object" &&
+      typeof (value.head as { sha?: unknown }).sha === "string"
+        ? (value.head as { sha: string }).sha
+        : null,
+    draft: value.draft === true,
+    mergeable_state:
+      typeof value.mergeable_state === "string" ? value.mergeable_state : null,
   };
+}
+
+const publicationRunActiveStates = [
+  "queued",
+  "checks_pending",
+  "merge_pending",
+  "deploy_pending",
+  "retry_wait",
+] as const;
+
+const getLatestEditorialPublicationRun = async (
+  env: Env,
+  documentId: string,
+) =>
+  env.REPORTS.prepare(
+    `${publicationRunSelect} WHERE document_id = ? ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(documentId)
+    .first<EditorialPublicationRun>();
+
+const updateEditorialPublicationRun = async (
+  env: Env,
+  runId: string,
+  values: Partial<
+    Pick<
+      EditorialPublicationRun,
+      | "state"
+      | "attempt"
+      | "pull_request_number"
+      | "pull_request_url"
+      | "branch"
+      | "head_sha"
+      | "merge_sha"
+      | "last_check_at"
+      | "next_attempt_at"
+      | "error_code"
+      | "error_message"
+    >
+  >,
+) => {
+  const allowed = new Set([
+    "state",
+    "attempt",
+    "pull_request_number",
+    "pull_request_url",
+    "branch",
+    "head_sha",
+    "merge_sha",
+    "last_check_at",
+    "next_attempt_at",
+    "error_code",
+    "error_message",
+  ]);
+  const entries = Object.entries(values).filter(([key]) => allowed.has(key));
+  if (!entries.length) return;
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `UPDATE editorial_publication_runs SET ${entries.map(([key]) => `${key} = ?`).join(", ")}, updated_at = ? WHERE id = ?`,
+  )
+    .bind(...entries.map(([, value]) => value), now, runId)
+    .run();
+};
+
+const ensureEditorialPublicationRun = async (
+  env: Env,
+  documentId: string,
+  action: "publish" | "unpublish",
+  createdBy: string,
+  pullRequest: {
+    number: number | null;
+    url: string | null;
+    branch: string | null;
+  },
+) => {
+  const active = await env.REPORTS.prepare(
+    `${publicationRunSelect} WHERE document_id = ? AND state IN (${publicationRunActiveStates.map(() => "?").join(",")}) ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(documentId, ...publicationRunActiveStates)
+    .first<EditorialPublicationRun>();
+  if (active) return active;
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT OR IGNORE INTO editorial_publication_runs
+      (id, document_id, action, state, attempt, pull_request_number, pull_request_url, branch, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, 'checks_pending', 0, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      documentId,
+      action,
+      pullRequest.number,
+      pullRequest.url,
+      pullRequest.branch,
+      createdBy,
+      now,
+      now,
+    )
+    .run();
+  return getLatestEditorialPublicationRun(env, documentId);
+};
+
+type EditorialCheckRun = {
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  html_url?: string | null;
+};
+
+async function getEditorialCheckRuns(env: Env, headSha: string) {
+  const auth = await githubToken(env);
+  if (!auth) throw new Error("GitHub公開連携が未設定です。");
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`,
+    { headers: githubApiHeaders(auth.token, "atlasez-editorial-publication-run") },
+  );
+  if (!response.ok) throw new Error("CIの状態を取得できませんでした。");
+  const data = (await response.json()) as { check_runs?: EditorialCheckRun[] };
+  const checks = data.check_runs ?? [];
+  const pending = checks.length === 0 || checks.some((check) => check.status !== "completed");
+  const failed = checks.find(
+    (check) =>
+      check.status === "completed" &&
+      !["success", "skipped", "neutral"].includes(check.conclusion ?? ""),
+  );
+  return { checks, pending, failed };
+}
+
+async function mergeEditorialPublicationPullRequest(
+  env: Env,
+  number: number,
+) {
+  const auth = await githubToken(env);
+  if (!auth?.app)
+    throw new Error("自動Merge用のGitHub Appが設定されていません。");
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/pulls/${number}/merge`,
+    {
+      method: "PUT",
+      headers: { ...githubApiHeaders(auth.token, "atlasez-editorial-publication-run"), "content-type": "application/json" },
+      body: JSON.stringify({ merge_method: "squash" }),
+    },
+  );
+  const data = (await response.json().catch(() => ({}))) as {
+    merged?: boolean;
+    sha?: string;
+    message?: string;
+  };
+  if (!response.ok || data.merged !== true)
+    throw new Error(data.message ?? "CI成功後の自動Mergeに失敗しました。");
+  return data.sha ?? null;
+}
+
+async function closeEditorialPublicationPullRequest(env: Env, number: number) {
+  const auth = await githubToken(env);
+  if (!auth) return;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  await fetch(
+    `https://api.github.com/repos/${repository}/pulls/${number}`,
+    {
+      method: "PATCH",
+      headers: { ...githubApiHeaders(auth.token, "atlasez-editorial-publication-run"), "content-type": "application/json" },
+      body: JSON.stringify({ state: "closed" }),
+    },
+  ).catch(() => undefined);
+}
+
+const publicArticleUrl = (env: Env, document: EditorialDocument) => {
+  const origin = (env.PUBLIC_SITE_ORIGIN ?? "https://atlasez.org").replace(/\/$/, "");
+  return `${origin}/atlas/${encodeURIComponent(document.locale)}/${encodeURIComponent(document.subject)}/${encodeURIComponent(document.category)}/${encodeURIComponent(document.slug)}/`;
+};
+
+async function verifyEditorialPublicationDeployment(
+  env: Env,
+  document: EditorialDocument,
+  run: EditorialPublicationRun,
+) {
+  const origin = (env.PUBLIC_SITE_ORIGIN ?? "https://atlasez.org").replace(/\/$/, "");
+  const buildResponse = await fetch(`${origin}/build-info.json?publication_run=${encodeURIComponent(run.id)}`, {
+    cache: "no-store",
+    headers: { "cache-control": "no-cache" },
+  });
+  if (!buildResponse.ok) return { ready: false, reason: "build_info_unavailable" };
+  const buildInfo = (await buildResponse.json().catch(() => ({}))) as { commit?: string };
+  let buildIncludesMerge = Boolean(run.merge_sha && buildInfo.commit === run.merge_sha);
+  if (!buildIncludesMerge && run.merge_sha && buildInfo.commit) {
+    const auth = await githubToken(env);
+    if (auth) {
+      const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+      const comparison = await fetch(
+        `https://api.github.com/repos/${repository}/compare/${encodeURIComponent(run.merge_sha)}...${encodeURIComponent(buildInfo.commit)}`,
+        { headers: githubApiHeaders(auth.token, "atlasez-editorial-publication-run") },
+      );
+      if (comparison.ok) {
+        const data = (await comparison.json().catch(() => ({}))) as { status?: string };
+        buildIncludesMerge = data.status === "ahead" || data.status === "identical";
+      }
+    }
+  }
+  if (!buildIncludesMerge)
+    return { ready: false, reason: "build_pending" };
+  const articleResponse = await fetch(`${publicArticleUrl(env, document)}?publication_run=${encodeURIComponent(run.id)}`, {
+    cache: "no-store",
+    headers: { "cache-control": "no-cache" },
+  });
+  const expectedStatus = run.action === "publish" ? 200 : 404;
+  return articleResponse.status === expectedStatus
+    ? { ready: true, reason: "verified" }
+    : { ready: false, reason: "article_pending" };
+}
+
+async function progressEditorialPublicationRun(env: Env, run: EditorialPublicationRun) {
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id = ?`,
+  )
+    .bind(run.document_id)
+    .first<EditorialDocument>();
+  if (!document) {
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "failed",
+      error_code: "document_missing",
+      error_message: "対象原稿が削除されています。",
+    });
+    return;
+  }
+  if (run.state === "deploy_pending") {
+    const deployment = await verifyEditorialPublicationDeployment(env, document, run);
+    if (!deployment.ready) {
+      const age = Date.now() - Date.parse(run.updated_at);
+      await updateEditorialPublicationRun(env, run.id, {
+        last_check_at: new Date().toISOString(),
+        ...(age > 30 * 60 * 1_000
+          ? {
+              state: "needs_operator",
+              error_code: deployment.reason,
+              error_message: "学習サイトのビルド確認がタイムアウトしました。配信状態を確認してください。",
+            }
+          : { error_code: deployment.reason, error_message: "学習サイトの反映を確認しています。" }),
+      });
+      return;
+    }
+    const now = new Date().toISOString();
+    if (run.action === "publish") {
+      await env.REPORTS.prepare(
+        `UPDATE editorial_documents SET published_at = COALESCE(published_at, ?), publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
+      ).bind(now, document.id).run();
+      await updateEditorialPublicationRun(env, run.id, { state: "published", error_code: null, error_message: null, last_check_at: now });
+    } else {
+      await env.REPORTS.prepare(
+        `UPDATE editorial_documents SET status = 'draft', published_at = NULL, publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
+      ).bind(document.id).run();
+      await updateEditorialPublicationRun(env, run.id, { state: "unpublished", error_code: null, error_message: null, last_check_at: now });
+    }
+    return;
+  }
+  if (run.state === "retry_wait") {
+    if (run.attempt >= 2) {
+      await updateEditorialPublicationRun(env, run.id, { state: "failed", error_code: "retry_exhausted", error_message: "自動再試行の上限に達しました。記事内容またはCIの失敗内容を確認してください。" });
+      return;
+    }
+    const result = await writeEditorialDocumentToGitHub(document, env, run.action === "publish" ? "published" : "draft", `${run.action === "publish" ? "Publish" : "Unpublish"} article: ${document.title}`);
+    if (result instanceof Response) {
+      const data = (await result.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? "公開用PRの再作成に失敗しました。");
+    }
+    await env.REPORTS.prepare(
+      `UPDATE editorial_documents SET publication_pr_number = ?, publication_pr_url = ?, publication_branch = ?, publication_action = ?, publication_requested_at = ? WHERE id = ?`,
+    ).bind(result.pullRequestNumber, result.pullRequestUrl, result.branch, run.action, new Date().toISOString(), document.id).run();
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "checks_pending",
+      attempt: run.attempt + 1,
+      pull_request_number: result.pullRequestNumber,
+      pull_request_url: result.pullRequestUrl,
+      branch: result.branch,
+      head_sha: null,
+      merge_sha: null,
+      next_attempt_at: null,
+      error_code: null,
+      error_message: "自動再試行用の公開処理を開始しました。",
+    });
+    return;
+  }
+  const pullRequestNumber = run.pull_request_number ?? document.publication_pr_number;
+  if (!pullRequestNumber) {
+    await updateEditorialPublicationRun(env, run.id, { state: "failed", error_code: "pull_request_missing", error_message: "公開処理の識別情報が見つかりません。運営サイトから再試行してください。" });
+    return;
+  }
+  const pullRequest = await getEditorialPublicationPullRequest(env, pullRequestNumber);
+  if (!pullRequest) {
+    await updateEditorialPublicationRun(env, run.id, { state: "needs_operator", error_code: "pull_request_unavailable", error_message: "公開用PRの状態を取得できません。GitHub Appの権限を確認してください。" });
+    return;
+  }
+  await updateEditorialPublicationRun(env, run.id, {
+    pull_request_url: pullRequest.html_url,
+    head_sha: pullRequest.head_sha,
+  });
+  if (pullRequest.merged_at) {
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "deploy_pending",
+      merge_sha: pullRequest.merge_commit_sha ?? pullRequest.head_sha,
+      error_code: null,
+      error_message: "Merge済みです。学習サイトの反映を確認しています。",
+    });
+    return;
+  }
+  if (pullRequest.state !== "open") {
+    await updateEditorialPublicationRun(env, run.id, { state: "needs_operator", error_code: "pull_request_closed", error_message: "公開用PRがMergeされずに終了しました。運営サイトから再試行してください。" });
+    return;
+  }
+  if (pullRequest.draft || pullRequest.mergeable_state === "dirty") {
+    await updateEditorialPublicationRun(env, run.id, { state: "needs_operator", error_code: pullRequest.draft ? "pull_request_draft" : "merge_conflict", error_message: pullRequest.draft ? "公開用PRがDraftのため自動公開できません。" : "公開用PRに競合があります。記事を再確認してください。" });
+    return;
+  }
+  if (!pullRequest.head_sha) {
+    await updateEditorialPublicationRun(env, run.id, { state: "checks_pending", error_code: "head_sha_pending", error_message: "CI対象のCommitを確認しています。" });
+    return;
+  }
+  const checks = await getEditorialCheckRuns(env, pullRequest.head_sha);
+  const now = new Date().toISOString();
+  if (checks.pending) {
+    await updateEditorialPublicationRun(env, run.id, { state: "checks_pending", last_check_at: now, error_code: null, error_message: "CIを自動確認しています。" });
+    return;
+  }
+  if (checks.failed) {
+    const conclusion = checks.failed.conclusion ?? "failure";
+    const transient = ["cancelled", "timed_out", "stale", "startup_failure"].includes(conclusion);
+    await updateEditorialPublicationRun(env, run.id, transient && run.attempt < 2 ? { state: "retry_wait", next_attempt_at: new Date(Date.now() + 60_000).toISOString(), error_code: "ci_transient_failure", error_message: `CIの一時的な失敗（${checks.failed.name ?? "verify"}）を検知しました。自動再試行します。` } : { state: "failed", error_code: "ci_failed", error_message: `CIが失敗しました（${checks.failed.name ?? "verify"}）。記事内容または検証結果を運営サイトで確認してください。` });
+    return;
+  }
+  await updateEditorialPublicationRun(env, run.id, { state: "merge_pending", last_check_at: now, error_code: null, error_message: "CI成功を確認しました。公開処理を進めています。" });
+  const mergeSha = await mergeEditorialPublicationPullRequest(env, pullRequest.number);
+  await updateEditorialPublicationRun(env, run.id, { state: "deploy_pending", merge_sha: mergeSha ?? pullRequest.merge_commit_sha ?? pullRequest.head_sha, error_message: "Merge済みです。学習サイトの反映を確認しています。" });
+}
+
+async function progressEditorialPublicationRuns(env: Env) {
+  const now = new Date().toISOString();
+  const runs = await env.REPORTS.prepare(
+    `${publicationRunSelect} WHERE state IN (${publicationRunActiveStates.map(() => "?").join(",")}) AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY updated_at ASC LIMIT 20`,
+  ).bind(...publicationRunActiveStates, now).all<EditorialPublicationRun>();
+  for (const run of runs.results ?? []) {
+    try {
+      await progressEditorialPublicationRun(env, run);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "公開処理に失敗しました。";
+      await updateEditorialPublicationRun(env, run.id, {
+        state: run.attempt < 2 ? "retry_wait" : "needs_operator",
+        attempt: run.attempt + 1,
+        next_attempt_at: run.attempt < 2 ? new Date(Date.now() + 60_000).toISOString() : null,
+        error_code: "orchestrator_error",
+        error_message: message,
+      });
+      console.error("editorial publication run failed", { runId: run.id, error });
+    }
+  }
+  return { processed: runs.results?.length ?? 0 };
 }
 
 async function deleteEditorialPublicationBranch(
@@ -9317,7 +9746,7 @@ async function writeEditorialDocumentToGitHub(
   body: string;
 } | Response> {
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const token = env.GITHUB_PUBLISH_TOKEN;
+  const token = (await githubToken(env))?.token;
   if (!token)
     return json(
       {
@@ -9468,7 +9897,7 @@ async function writeEditorialDocumentToGitHub(
             `- 対象: ${editorialLocaleDirectory(document.locale)}/${document.subject}/${document.category}/${document.slug}`,
             `- 操作: ${publicationStatus === "published" ? "公開" : "公開取り消し"}`,
             "",
-            "CIと差分を確認してからMergeしてください。Merge後、学習サイトへ自動反映されます。",
+            "CI成功後、公開専用Botが自動でMergeし、学習サイトの反映まで確認します。",
           ].join("\n"),
         }),
       },
@@ -9533,6 +9962,7 @@ async function publishEditorialDocument(
     .bind(documentId)
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  const latestPublicationRun = await getLatestEditorialPublicationRun(env, documentId);
   if (document.publication_pr_number && document.publication_pr_url) {
     const existingPullRequest = await getEditorialPublicationPullRequest(
       env,
@@ -9548,18 +9978,39 @@ async function publishEditorialDocument(
       return json({
         ok: true,
         merged: true,
+        publicationRun: await getLatestEditorialPublicationRun(env, documentId),
         pullRequestUrl: document.publication_pr_url,
         pullRequestNumber: document.publication_pr_number,
       });
     }
-    if (existingPullRequest?.state === "open")
+    if (existingPullRequest?.state === "open") {
+      if (latestPublicationRun && ["failed", "needs_operator"].includes(latestPublicationRun.state)) {
+        await closeEditorialPublicationPullRequest(env, document.publication_pr_number);
+        await env.REPORTS.prepare(
+          `UPDATE editorial_documents SET publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
+        ).bind(documentId).run();
+      } else {
+      const publicationRun = await ensureEditorialPublicationRun(
+        env,
+        documentId,
+        "publish",
+        scope.email,
+        {
+          number: document.publication_pr_number,
+          url: existingPullRequest.html_url ?? document.publication_pr_url,
+          branch: document.publication_branch,
+        },
+      );
       return json({
         ok: true,
         pending: true,
+        publicationRun,
         pullRequestUrl:
           existingPullRequest.html_url ?? document.publication_pr_url,
         pullRequestNumber: document.publication_pr_number,
       });
+      }
+    }
     await env.REPORTS.prepare(
       `UPDATE editorial_documents
        SET publication_pr_number = NULL, publication_pr_url = NULL,
@@ -9600,9 +10051,21 @@ async function publishEditorialDocument(
       documentId,
     )
     .run();
+  const publicationRun = await ensureEditorialPublicationRun(
+    env,
+    documentId,
+    "publish",
+    scope.email,
+    {
+      number: result.pullRequestNumber,
+      url: result.pullRequestUrl,
+      branch: result.branch,
+    },
+  );
   return json({
     ok: true,
     pending: true,
+    publicationRun,
     pullRequestUrl: result.pullRequestUrl,
     pullRequestNumber: result.pullRequestNumber,
   });
@@ -9692,6 +10155,11 @@ async function dispatchScheduledEditorialPublications(env: Env) {
              updated_at = ?, updated_by = ?
          WHERE id = ?`,
       ).bind(result.pullRequestNumber, result.pullRequestUrl, result.branch, now, now, "scheduled-publisher", document.id).run();
+      await ensureEditorialPublicationRun(env, document.id, "publish", "scheduled-publisher", {
+        number: result.pullRequestNumber,
+        url: result.pullRequestUrl,
+        branch: result.branch,
+      });
       requested += 1;
     } catch (error) {
       console.error("scheduled editorial publication failed", { documentId: document.id, error });
@@ -9879,6 +10347,7 @@ async function unpublishEditorialDocument(
     .bind(documentId)
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+  const latestPublicationRun = await getLatestEditorialPublicationRun(env, documentId);
   if (
     document.publication_action === "unpublish" &&
     document.publication_pr_number &&
@@ -9888,14 +10357,34 @@ async function unpublishEditorialDocument(
       env,
       document.publication_pr_number,
     );
-    if (existingPullRequest?.state === "open")
+    if (existingPullRequest?.state === "open") {
+      if (latestPublicationRun && ["failed", "needs_operator"].includes(latestPublicationRun.state)) {
+        await closeEditorialPublicationPullRequest(env, document.publication_pr_number);
+        await env.REPORTS.prepare(
+          `UPDATE editorial_documents SET publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
+        ).bind(documentId).run();
+      } else {
+      const publicationRun = await ensureEditorialPublicationRun(
+        env,
+        documentId,
+        "unpublish",
+        scope.email,
+        {
+          number: document.publication_pr_number,
+          url: existingPullRequest.html_url ?? document.publication_pr_url,
+          branch: document.publication_branch,
+        },
+      );
       return json({
         ok: true,
         pending: true,
+        publicationRun,
         pullRequestUrl:
           existingPullRequest.html_url ?? document.publication_pr_url,
         pullRequestNumber: document.publication_pr_number,
       });
+      }
+    }
     if (existingPullRequest?.merged_at) {
       await syncEditorialPublicationStatus(env).catch((error) =>
         console.error("publication status sync after merged PR failed", {
@@ -9906,6 +10395,7 @@ async function unpublishEditorialDocument(
       return json({
         ok: true,
         merged: true,
+        publicationRun: await getLatestEditorialPublicationRun(env, documentId),
         pullRequestUrl: document.publication_pr_url,
         pullRequestNumber: document.publication_pr_number,
       });
@@ -9961,9 +10451,21 @@ async function unpublishEditorialDocument(
       documentId,
     )
     .run();
+  const publicationRun = await ensureEditorialPublicationRun(
+    env,
+    documentId,
+    "unpublish",
+    scope.email,
+    {
+      number: result.pullRequestNumber,
+      url: result.pullRequestUrl,
+      branch: result.branch,
+    },
+  );
   return json({
     ok: true,
     pending: true,
+    publicationRun,
     pullRequestUrl: result.pullRequestUrl,
     pullRequestNumber: result.pullRequestNumber,
   });
@@ -12076,9 +12578,14 @@ export default {
       "cron" in controller
         ? String((controller as { cron?: unknown }).cron ?? "")
         : "";
+    if (cron === "*/1 * * * *") {
+      ctx.waitUntil(progressEditorialPublicationRuns(env));
+      return;
+    }
     if (cron === "*/5 * * * *") {
       ctx.waitUntil(
         Promise.all([
+          progressEditorialPublicationRuns(env),
           dispatchDueTaskReminders(env),
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
@@ -12090,6 +12597,7 @@ export default {
     }
     ctx.waitUntil(
       Promise.all([
+        progressEditorialPublicationRuns(env),
         syncPublishedArticleBackups(env),
         syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
