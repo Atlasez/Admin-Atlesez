@@ -3,11 +3,11 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
 const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.data.order);
 ---
-<AdminLayout title="運営者・担当分野管理" description="運営内運営専用の参加者管理" darkReaderLock={true}>
+<AdminLayout title="運営者・担当分野管理" description="運営内運営専用の参加者管理">
   <main class="member-admin" data-member-admin>
     <header class="member-admin__header">
       <div>
-        <p class="member-admin__eyebrow">ATLAS / ACCESS CONTROL</p>
+        <p class="member-admin__eyebrow">権限管理</p>
         <h1>運営者・担当分野管理</h1>
         <p class="member-admin__lead">運営メンバーの権限、担当分野、公開フローの統括をまとめて管理します。</p>
       </div>
@@ -88,8 +88,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <style is:global>
-  /* 運営者管理は、操作の確実性を優先した白背景のトランザクションUIに統一する。 */
-  html:has(.member-admin) {
+  /* 運営者管理は、操作の確実性を優先したトランザクションUIに統一する。 */
+  html:has(.member-admin):not([data-pref-bg="dark"]) {
     --text-primary: #17324d !important;
     --text-secondary: #526779 !important;
     --background-primary: #ffffff !important;
@@ -103,8 +103,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     --link: #075a91 !important;
     color-scheme: light;
   }
-  body:has(.member-admin) { background: #f3f7fb; color: #17324d; }
-  body:has(.member-admin) .admin-layout-main { background: #f3f7fb; }
+  html:not([data-pref-bg="dark"]) body:has(.member-admin) { background: #f3f7fb; color: #17324d; }
+  html:not([data-pref-bg="dark"]) body:has(.member-admin) .admin-layout-main { background: #f3f7fb; }
   .member-admin { max-width: 1240px; padding: 2rem 1.25rem 5rem; }
   .member-admin__header { align-items: center; background: #fff; border: 1px solid #cddce7; border-top: 4px solid #075a91; box-shadow: 0 2px 8px rgb(18 62 91 / 6%); display: flex; gap: 1.5rem; justify-content: space-between; margin: 0 0 1.25rem; padding: 1.35rem 1.5rem 1.2rem; }
   .member-admin__eyebrow { color: #075a91 !important; font-size: .7rem !important; font-weight: 900 !important; letter-spacing: .1em; margin: 0 0 .3rem !important; }
@@ -277,6 +277,121 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     .member-toolbar { grid-template-columns: 1fr; }
     .member-toolbar__summary { grid-column: auto; }
     .member-role-options { grid-template-columns: 1fr; }
+  }
+</style>
+
+<style is:global>
+  /* 表示設定の「暗色」をこのページ固有の白背景指定で上書きしない。 */
+  html[data-pref-bg="dark"]:has(.member-admin) {
+    color-scheme: dark;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin),
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main {
+    background: #191a1c !important;
+    color: #e8e6e1;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__header,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal__shell {
+    background: #232427 !important;
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__header {
+    border-top-color: #7fa8cc !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-card {
+    box-shadow: 0 2px 8px rgb(0 0 0 / 24%);
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(h1, h2, h3, .member-admin__sync strong, .member-card__name, .member-card__discord-heading strong) {
+    color: #e8e6e1 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__lead, .member-admin__header-meta small, .member-admin label, .member-admin__sync small, .member-admin__workspace .action-card output, .member-card__email, .member-fact, .member-modal__header small, .member-modal__section > p, .member-modal__help, .member-modal__footer output, .member-role-picker__count, .member-toolbar__summary) {
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin small {
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__eyebrow, .member-admin__header-meta span, .action-card__heading p, .member-admin__section-heading p, .member-admin__count, .member-admin__section-heading h2, .member-modal__header p) {
+    color: #7fa8cc !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__header-meta span, .member-admin__count) {
+    background: #2b2c30 !important;
+    border-color: #6a6b70 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin input, .member-admin select) {
+    background: #191a1c !important;
+    border-color: #3d3e42 !important;
+    color: #e8e6e1 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin input::placeholder {
+    color: #8f8c84;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin input:focus, .member-admin select:focus) {
+    border-color: #7fa8cc !important;
+    box-shadow: 0 0 0 3px rgb(127 168 204 / 22%) !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__sync, .member-admin__workspace .workflow-role-list, .member-card__actions, .member-modal__header, .member-modal__footer) {
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__workspace .discord-readiness-message, .workflow-role-chip, .member-toolbar, .member-card__discord, .member-role-picker, .member-interest-picker, .member-modal__section) {
+    background: #2b2c30 !important;
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-avatar, .member-card__role, .member-fact, .member-role-chip, .member-modal__close, .member-modal__cancel, .member-toolbar__reset) {
+    background: #191a1c !important;
+    border-color: #3d3e42 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-interest-picker label, .member-role-option) {
+    background: #232427 !important;
+    border-color: #3d3e42 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-interest-picker label:has(input:checked), .member-role-option:has(input:checked), .member-admin .member-provision:hover) {
+    background: #2b3b49 !important;
+    border-color: #7fa8cc !important;
+    color: #b9dcf6 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-role-chip, .member-role-option:hover, .member-admin .member-action--promote, .member-admin .member-provision, .member-toolbar__reset:hover) {
+    color: #9cc8ea !important;
+    border-color: #6a91b1 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .button-primary, .member-admin .member-action--sync, .member-admin .member-modal__save) {
+    background: #7fa8cc !important;
+    border-color: #7fa8cc !important;
+    color: #10151a !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin .member-provision {
+    background: #191a1c !important;
+    border-color: #7fa8cc !important;
+    color: #9cc8ea !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin .member-provision--secondary {
+    border-color: #6a6b70 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .button-primary:hover, .member-admin .member-action--sync:hover) {
+    background: #a8c8e2 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .member-action--remove, .member-admin .member-action--promote, .member-admin .member-modal__cancel, .member-admin .member-toolbar__reset) {
+    background: #191a1c !important;
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .member-action--remove:hover, .member-admin .member-action--promote:hover, .member-admin .member-modal__cancel:hover, .member-admin .member-toolbar__reset:hover) {
+    background: #2b2c30 !important;
+    border-color: #7fa8cc !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-empty {
+    background: #232427 !important;
+    border-color: #6a6b70 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal::backdrop {
+    background: rgb(0 0 0 / 68%);
   }
 </style>
 

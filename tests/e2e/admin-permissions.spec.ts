@@ -119,4 +119,31 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   await expect(page.locator("[data-discord-readiness-message]")).toContainText(
     "未完了の項目があります",
   );
+
+  await expect(page.locator(".member-admin__eyebrow").first()).toHaveText(
+    "権限管理",
+  );
+  await expect(
+    page.getByText("ATLAS / ACCESS CONTROL", { exact: true }),
+  ).toHaveCount(0);
+
+  await page.locator("html").evaluate((html) => {
+    html.dataset.prefBg = "dark";
+  });
+  const darkThemeMetrics = await page.locator("body").evaluate(() => ({
+    bodyBackground: getComputedStyle(document.body).backgroundColor,
+    cardBackground: getComputedStyle(document.querySelector(".member-card")!)
+      .backgroundColor,
+    cardText: getComputedStyle(document.querySelector(".member-card__name")!)
+      .color,
+    inputBackground: getComputedStyle(
+      document.querySelector(".member-admin input")!,
+    ).backgroundColor,
+  }));
+  expect(darkThemeMetrics).toEqual({
+    bodyBackground: "rgb(25, 26, 28)",
+    cardBackground: "rgb(35, 36, 39)",
+    cardText: "rgb(232, 230, 225)",
+    inputBackground: "rgb(25, 26, 28)",
+  });
 });
