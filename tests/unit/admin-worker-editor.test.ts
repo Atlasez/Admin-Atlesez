@@ -261,6 +261,128 @@ describe("admin worker editor APIs", () => {
     expect(executed).toEqual([]);
   });
 
+  it("requires feedback tasks before a draft can enter publication review", async () => {
+    const documentId = "22222222-2222-4222-8222-222222222222";
+    const document = {
+      id: documentId,
+      subject: "mathematics",
+      status: "draft",
+      created_by: "local-editor@atlasez.test",
+      published_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+    };
+    const executed: string[] = [];
+    class DraftPublicationStartStatement extends EmptyStatement {
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        if (this.query.includes("FROM editorial_feedback_task_links"))
+          return { total: 0, done: 0 } as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push(this.query);
+        return {};
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new DraftPublicationStartStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request(
+        `http://localhost/api/admin/editor/documents/${documentId}/publication-review`,
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost",
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error:
+        "フィードバック依頼がありません。先にフィードバックを依頼してください。",
+    });
+    expect(executed).toEqual([]);
+  });
+
+  it("requires a project leader even when a subject coordinator is configured", async () => {
+    const documentId = "22222222-2222-4222-8222-222222222222";
+    const document = {
+      id: documentId,
+      subject: "mathematics",
+      status: "in-review",
+      created_by: "local-editor@atlasez.test",
+      published_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+    };
+    const executed: string[] = [];
+    class RolePublicationStartStatement extends EmptyStatement {
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        if (this.query.includes("FROM editorial_feedback_task_links"))
+          return { total: 1, done: 1 } as T;
+        return null as T | null;
+      }
+
+      async all<T>() {
+        if (this.query.includes("role = 'subject-coordinator'"))
+          return { results: [{ email: "coordinator@example.com" }] as T[] };
+        if (this.query.includes("role = 'project-leader'"))
+          return { results: [] as T[] };
+        return { results: [] as T[] };
+      }
+
+      async run() {
+        executed.push(this.query);
+        return {};
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new RolePublicationStartStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request(
+        `http://localhost/api/admin/editor/documents/${documentId}/publication-review`,
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost",
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error:
+        "プロジェクトリーダーが設定されていないため、公開審査を開始できません。",
+    });
+    expect(executed).toEqual([]);
+  });
+
   it("serves an editorial asset with its saved MIME type and filename", async () => {
     const assetId = "11111111-1111-4111-8111-111111111111";
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);

@@ -9716,8 +9716,7 @@ async function getPublicationReviewState(
     editorialFeedbackTaskState(env, document.id),
   ]);
   const feedbackComplete =
-    document.status !== "in-review" ||
-    (feedbackTasks.total > 0 && feedbackTasks.done === feedbackTasks.total);
+    feedbackTasks.total > 0 && feedbackTasks.done === feedbackTasks.total;
   return json({
     stage: document.publication_review_stage,
     round: document.publication_review_round,
@@ -9759,10 +9758,7 @@ async function startPublicationReview(
   if (document.status !== "in-review" && document.status !== "draft")
     return json({ error: "先に原稿を保存してください。" }, 400);
   const feedbackTasks = await editorialFeedbackTaskState(env, document.id);
-  if (
-    document.status === "in-review" &&
-    (feedbackTasks.total === 0 || feedbackTasks.done < feedbackTasks.total)
-  )
+  if (feedbackTasks.total === 0 || feedbackTasks.done < feedbackTasks.total)
     return json(
       {
         error:
@@ -9776,11 +9772,11 @@ async function startPublicationReview(
     );
   const coordinators = await publicationReviewRoleEmails(env, "subject-coordinator", document.subject);
   const leaders = await publicationReviewRoleEmails(env, "project-leader", document.subject);
+  if (!leaders.length)
+    return json({ error: "プロジェクトリーダーが設定されていないため、公開審査を開始できません。" }, 503);
   const stage: EditorialPublicationReviewStage = coordinators.length
     ? "subject-coordinator"
     : "project-leader";
-  if (stage === "project-leader" && !leaders.length)
-    return json({ error: "プロジェクトリーダーが設定されていないため、公開審査を開始できません。" }, 503);
   const now = new Date().toISOString();
   const round = (document.publication_review_round ?? 0) + 1;
   await env.REPORTS.prepare(
@@ -9817,6 +9813,11 @@ async function decidePublicationReview(
     ? canCoordinateSubject(scope, document.subject)
     : Boolean(scope.isProjectLeader);
   if (!authorized) return json({ error: "この審査を処理する権限がありません。" }, 403);
+  const leaders = stage === "subject-coordinator"
+    ? await publicationReviewRoleEmails(env, "project-leader", document.subject)
+    : [];
+  if (stage === "subject-coordinator" && !leaders.length)
+    return json({ error: "プロジェクトリーダーが設定されていないため、次の公開審査へ進めません。" }, 503);
   const already = await env.REPORTS.prepare(
     "SELECT id FROM editorial_publication_reviews WHERE document_id=? AND review_round=? AND stage=? LIMIT 1",
   ).bind(documentId, document.publication_review_round, stage).first<{ id: string }>();
@@ -9832,7 +9833,6 @@ async function decidePublicationReview(
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
     return json({ ok: true, status: "in-review", stage: null, returnedToFeedback: true });
   }
-  const leaders = await publicationReviewRoleEmails(env, "project-leader", document.subject);
   if (stage === "subject-coordinator" && leaders.length) {
     await env.REPORTS.prepare(
       "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
