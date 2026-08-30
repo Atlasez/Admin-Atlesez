@@ -92,7 +92,7 @@ async function mockAdminApi(
     subjects: ["mathematics"],
     isManager: true,
   },
-  document = documentItem,
+  document: Record<string, unknown> = documentItem,
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -295,6 +295,45 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   await expect(publicationDiagnostic).toContainText("登録済みの概念IDへ修正");
   await expect(
     page.getByRole("button", { name: "公開処理を再試行" }),
+  ).toBeVisible();
+});
+
+test("公開済み記事の未反映変更は運営サイトから再公開できる", async ({
+  page,
+}) => {
+  const failedPublishedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    updated_at: "2026-08-31T01:34:00.000Z",
+    published_at: "2026-08-30T01:34:00.000Z",
+    publication_run: {
+      id: "run-published-1",
+      state: "failed",
+      action: "publish" as const,
+      attempt: 3,
+      error_code: "ci_failed",
+      error_message: "CIが失敗しました（verify）。",
+      failure_kind: "ci",
+      failure_detail: "未対応の directive `defi` です。",
+      failure_step: "npm run check:math-directives",
+      failure_file:
+        "src/content/articles/jpn/mathematics/overview/test-mathematics.md",
+      failure_line: 27,
+      failure_column: null,
+      failure_suggestion: "対応するdirectiveへ修正して再試行してください。",
+    },
+  };
+  await mockAdminApi(page, undefined, failedPublishedDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-publication-state]")).toHaveText(
+    "自動公開失敗",
+  );
+  await expect(page.locator("[data-workflow-help]")).toContainText(
+    "最新の変更は学習サイトに未反映",
+  );
+  await expect(
+    page.getByRole("button", { name: "公開内容を更新して再試行" }),
   ).toBeVisible();
 });
 
