@@ -94,6 +94,7 @@ async function mockAdminApi(
     isManager: true,
   },
   document: Record<string, unknown> = documentItem,
+  feedbackRequests: Record<string, unknown>[] = [],
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -112,7 +113,7 @@ async function mockAdminApi(
     } else if (url.pathname === "/api/admin/personal-workspace") {
       payload = { privateNote: "", updatedAt: null };
     } else if (url.pathname.endsWith("/revisions")) {
-      payload = { revisions: [] };
+      payload = { revisions: [], feedbackRequests };
     }
     await route.fulfill({
       status: 200,
@@ -766,6 +767,50 @@ test("V-3: 依頼先未選択でもキャンセルできる", async ({ page }) =
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "キャンセル" }).click();
   await expect(dialog).not.toBeVisible();
+});
+
+test("通知から開いたワークスペースで担当フィードバックを完了にできる", async ({
+  page,
+}) => {
+  await mockAdminApi(
+    page,
+    {
+      email: "bob@example.com",
+      subjects: ["mathematics"],
+      isManager: false,
+    },
+    documentItem,
+    [
+      {
+        task_id: "task-feedback",
+        title: "群の定義を査読する",
+        details: "定義と例を確認してください。",
+        status: "open",
+        assignee_email: "bob@example.com",
+        created_by: "alice@example.com",
+        created_at: "2026-08-20T00:00:00.000Z",
+        requester_display_name: "Alice",
+        canUpdate: true,
+      },
+    ],
+  );
+  let taskStatus: "open" | "doing" | "done" = "open";
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/admin/operations/tasks/task-feedback")) {
+      taskStatus = (request.postDataJSON() as { status: typeof taskStatus })
+        .status;
+    }
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const task = page.locator(".feedback-request-history-item");
+  await expect(task).toContainText("群の定義を査読する");
+  await task.locator("select").selectOption("done");
+  await task.getByRole("button", { name: "状態を保存" }).click();
+  await expect.poll(() => taskStatus).toBe("done");
+  await expect(page.locator("[data-save-message]")).toHaveText(
+    "フィードバック依頼を完了にしました。",
+  );
 });
 
 test("V-4: 確認済み操作後も展開した返信を保持する", async ({ page }) => {
