@@ -77,6 +77,8 @@ interface Env {
   ADMIN_LOCAL_EMAIL?: string;
   /** 既存運用からの移行用GitHub token（自動Mergeには使用しない）。 */
   GITHUB_PUBLISH_TOKEN?: string;
+  /** 必須レビューを自動承認する、PR作成者とは別の書き込み権限Token。 */
+  GITHUB_REVIEW_TOKEN?: string;
   /** 公開専用GitHub App。設定後はInstallation tokenを短時間だけ発行する。 */
   GITHUB_APP_ID?: string;
   GITHUB_APP_INSTALLATION_ID?: string;
@@ -9098,6 +9100,65 @@ async function syncEditorialPublicationStatusForAdmin(
 }
 
 /** 公開用GitHub連携を、実際の対象リポジトリと権限まで含めて事前確認する。 */
+async function editorialPublicationReviewerStatus(
+  env: Env,
+  repository: string,
+) {
+  const token = env.GITHUB_REVIEW_TOKEN?.trim();
+  if (!token)
+    return {
+      configured: false,
+      canWrite: false,
+      error:
+        "自動承認用GITHUB_REVIEW_TOKENが未設定です。PR作成者とは別の書き込み権限Tokenを登録してください。",
+    };
+  const headers = githubApiHeaders(
+    token,
+    "atlasez-editorial-reviewer-integration-check",
+  );
+  const identityResponse = await fetch("https://api.github.com/user", {
+    headers,
+  });
+  if (!identityResponse.ok)
+    return {
+      configured: true,
+      canWrite: false,
+      error:
+        "自動承認用GitHub Tokenの利用者を確認できません。Tokenの有効期限を確認してください。",
+    };
+  const identity = (await identityResponse.json().catch(() => ({}))) as {
+    login?: string;
+  };
+  if (!identity.login?.trim())
+    return {
+      configured: true,
+      canWrite: false,
+      error: "自動承認用GitHub Tokenの利用者を確認できません。",
+    };
+  const repositoryResponse = await fetch(
+    `https://api.github.com/repos/${repository}`,
+    { headers },
+  );
+  if (!repositoryResponse.ok)
+    return {
+      configured: true,
+      canWrite: false,
+      error:
+        "自動承認用Tokenで対象リポジトリを確認できません。対象リポジトリへの書き込み権限を付与してください。",
+    };
+  const repositoryData = (await repositoryResponse.json().catch(() => ({}))) as {
+    permissions?: { push?: boolean };
+  };
+  return repositoryData.permissions?.push === true
+    ? { configured: true, canWrite: true }
+    : {
+        configured: true,
+        canWrite: false,
+        error:
+          "自動承認用Tokenに対象リポジトリへの書き込み権限がありません。",
+      };
+}
+
 async function editorialPublicationIntegrationStatus(
   request: Request,
   env: Env,
@@ -9148,8 +9209,10 @@ async function editorialPublicationIntegrationStatus(
       : data.permissions?.push === true;
     const archived = data.archived === true;
     const automaticMerge = Boolean(auth?.app && canWrite);
+    const reviewer = await editorialPublicationReviewerStatus(env, repository);
+    const automaticReview = reviewer.canWrite;
     const ready = defaultBranch === "main" && canWrite && !archived;
-    const automationReady = ready && automaticMerge;
+    const automationReady = ready && automaticMerge && automaticReview;
     return json({
       ready,
       configured: true,
@@ -9158,6 +9221,7 @@ async function editorialPublicationIntegrationStatus(
       canWrite,
       canCreatePullRequest: canWrite,
       automaticMerge,
+      automaticReview,
       automationReady,
       archived,
       ...(ready
@@ -9165,7 +9229,9 @@ async function editorialPublicationIntegrationStatus(
           ? {}
           : {
               automationError:
-                "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
+                automaticMerge
+                  ? reviewer.error ?? "自動承認用Tokenを確認できません。"
+                  : "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
             }
         : {
             error: archived
@@ -9258,6 +9324,7 @@ type EditorialPublicationPullRequest = {
   merge_commit_sha: string | null;
   head_sha: string | null;
   head?: { sha?: string };
+  user?: { login?: string };
   draft: boolean;
   mergeable_state: string | null;
 };
@@ -9335,6 +9402,11 @@ async function getEditorialPublicationPullRequest(
       typeof (value.head as { sha?: unknown }).sha === "string"
         ? (value.head as { sha: string }).sha
         : null,
+    user:
+      value.user && typeof value.user === "object" &&
+      typeof (value.user as { login?: unknown }).login === "string"
+        ? { login: (value.user as { login: string }).login }
+        : undefined,
     draft: value.draft === true,
     mergeable_state:
       typeof value.mergeable_state === "string" ? value.mergeable_state : null,
@@ -9466,6 +9538,96 @@ async function getEditorialCheckRuns(env: Env, headSha: string) {
       !["success", "skipped", "neutral"].includes(check.conclusion ?? ""),
   );
   return { checks, pending, failed };
+}
+
+type EditorialPullRequestReview = {
+  user?: { login?: string };
+  state?: string;
+  commit_id?: string | null;
+};
+
+class EditorialPublicationConfigurationError extends Error {}
+
+/**
+ * GitHubの必須レビューを、運営サイトの公開Runから満たす。
+ * 公開用AppはPRの作成者になるため、同じApp tokenでは承認しない。
+ */
+async function approveEditorialPublicationPullRequest(
+  env: Env,
+  pullRequest: EditorialPublicationPullRequest,
+) {
+  const reviewToken = env.GITHUB_REVIEW_TOKEN?.trim();
+  if (!reviewToken)
+    throw new EditorialPublicationConfigurationError(
+      "自動承認用のGITHUB_REVIEW_TOKENが設定されていません。PR作成者とは別の書き込み権限TokenをCloudflare Secretへ登録してください。",
+    );
+  if (!pullRequest.head_sha)
+    throw new Error("自動承認対象のCommitを確認できませんでした。");
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const headers = githubApiHeaders(
+    reviewToken,
+    "atlasez-editorial-publication-review",
+  );
+  const identityResponse = await fetch("https://api.github.com/user", {
+    headers,
+  });
+  if (!identityResponse.ok)
+    throw new Error(
+      "自動承認用GitHub Tokenの利用者を確認できませんでした。Tokenの有効期限と権限を確認してください。",
+    );
+  const identity = (await identityResponse.json().catch(() => ({}))) as {
+    login?: string;
+  };
+  const reviewerLogin = identity.login?.trim();
+  if (!reviewerLogin)
+    throw new Error("自動承認用GitHub Tokenの利用者を確認できませんでした。");
+  if (reviewerLogin === pullRequest.user?.login)
+    throw new EditorialPublicationConfigurationError(
+      "自動承認用Tokenは公開PRの作成者と別のGitHubアカウントにしてください。",
+    );
+
+  const reviewsResponse = await fetch(
+    `https://api.github.com/repos/${repository}/pulls/${pullRequest.number}/reviews?per_page=100`,
+    { headers },
+  );
+  if (!reviewsResponse.ok)
+    throw new Error("公開PRのレビュー状態を取得できませんでした。");
+  const reviews = (await reviewsResponse.json().catch(() => [])) as
+    | EditorialPullRequestReview[]
+    | { reviews?: EditorialPullRequestReview[] };
+  const reviewList = Array.isArray(reviews) ? reviews : (reviews.reviews ?? []);
+  const latestReview = [...reviewList]
+    .reverse()
+    .find((review) => review.user?.login === reviewerLogin);
+  if (
+    latestReview?.state === "APPROVED" &&
+    latestReview.commit_id === pullRequest.head_sha
+  )
+    return { reviewerLogin, alreadyApproved: true };
+
+  const approvalResponse = await fetch(
+    `https://api.github.com/repos/${repository}/pulls/${pullRequest.number}/reviews`,
+    {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        body: "Atlasez運営サイトの公開フローによる自動承認です。",
+        event: "APPROVE",
+      }),
+    },
+  );
+  const approval = (await approvalResponse.json().catch(() => ({}))) as {
+    state?: string;
+    commit_id?: string | null;
+    message?: string;
+  };
+  if (
+    !approvalResponse.ok ||
+    approval.state !== "APPROVED" ||
+    approval.commit_id !== pullRequest.head_sha
+  )
+    throw new Error(approval.message ?? "公開PRの自動承認に失敗しました。");
+  return { reviewerLogin, alreadyApproved: false };
 }
 
 async function mergeEditorialPublicationPullRequest(
@@ -9670,7 +9832,8 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
     await updateEditorialPublicationRun(env, run.id, transient && run.attempt < 2 ? { state: "retry_wait", next_attempt_at: new Date(Date.now() + 60_000).toISOString(), error_code: "ci_transient_failure", error_message: `CIの一時的な失敗（${checks.failed.name ?? "verify"}）を検知しました。自動再試行します。` } : { state: "failed", error_code: "ci_failed", error_message: `CIが失敗しました（${checks.failed.name ?? "verify"}）。記事内容または検証結果を運営サイトで確認してください。` });
     return;
   }
-  await updateEditorialPublicationRun(env, run.id, { state: "merge_pending", last_check_at: now, error_code: null, error_message: "CI成功を確認しました。公開処理を進めています。" });
+  await updateEditorialPublicationRun(env, run.id, { state: "merge_pending", last_check_at: now, error_code: null, error_message: "CI成功を確認しました。必須レビューを自動承認して公開処理を進めています。" });
+  await approveEditorialPublicationPullRequest(env, pullRequest);
   const mergeSha = await mergeEditorialPublicationPullRequest(env, pullRequest.number);
   await updateEditorialPublicationRun(env, run.id, { state: "deploy_pending", merge_sha: mergeSha ?? pullRequest.merge_commit_sha ?? pullRequest.head_sha, error_message: "Merge済みです。学習サイトの反映を確認しています。" });
 }
@@ -9685,11 +9848,12 @@ async function progressEditorialPublicationRuns(env: Env) {
       await progressEditorialPublicationRun(env, run);
     } catch (error) {
       const message = error instanceof Error ? error.message : "公開処理に失敗しました。";
+      const configurationError = error instanceof EditorialPublicationConfigurationError;
       await updateEditorialPublicationRun(env, run.id, {
-        state: run.attempt < 2 ? "retry_wait" : "needs_operator",
+        state: configurationError || run.attempt >= 2 ? "needs_operator" : "retry_wait",
         attempt: run.attempt + 1,
-        next_attempt_at: run.attempt < 2 ? new Date(Date.now() + 60_000).toISOString() : null,
-        error_code: "orchestrator_error",
+        next_attempt_at: configurationError || run.attempt >= 2 ? null : new Date(Date.now() + 60_000).toISOString(),
+        error_code: configurationError ? "configuration_error" : "orchestrator_error",
         error_message: message,
       });
       console.error("editorial publication run failed", { runId: run.id, error });

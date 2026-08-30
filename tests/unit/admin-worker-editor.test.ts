@@ -177,6 +177,18 @@ describe("admin worker editor APIs", () => {
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ login: "editorial-reviewer" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ permissions: { pull: true, push: true } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
       );
     try {
       const response = await worker.fetch(
@@ -187,6 +199,7 @@ describe("admin worker editor APIs", () => {
           ...emptyEnv,
           GITHUB_APP_ID: "4768541",
           GITHUB_APP_INSTALLATION_ID: "157671744",
+          GITHUB_REVIEW_TOKEN: "review-token",
           GITHUB_APP_PRIVATE_KEY:
             "-----BEGIN PRIVATE KEY-----\nAQ==\n-----END PRIVATE KEY-----",
         } as never,
@@ -197,6 +210,7 @@ describe("admin worker editor APIs", () => {
         ready: true,
         canWrite: true,
         automaticMerge: true,
+        automaticReview: true,
         automationReady: true,
       });
     } finally {
@@ -776,6 +790,158 @@ describe("admin worker editor APIs", () => {
         ),
       ).toBe(true);
     } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("approves the checked PR from the admin workflow before merging it", async () => {
+    const documentId = "22222222-2222-4222-8222-222222222222";
+    const run = {
+      id: "33333333-3333-4333-8333-333333333333",
+      document_id: documentId,
+      action: "publish" as const,
+      state: "checks_pending" as const,
+      attempt: 0,
+      pull_request_number: 321,
+      pull_request_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+      branch: "editorial/published-test",
+      head_sha: null,
+      merge_sha: null,
+      last_check_at: null,
+      next_attempt_at: null,
+      error_code: null,
+      error_message: null,
+      created_by: "local-editor@atlasez.test",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-30T00:00:00.000Z",
+    };
+    const document = { id: documentId };
+    const executed: { query: string; values: unknown[] }[] = [];
+    class PublicationRunStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async all<T>() {
+        if (this.query.includes("FROM editorial_publication_runs"))
+          return { results: [run] as T[] };
+        return { results: [] as T[] };
+      }
+
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.query, values: this.values });
+        return {};
+      }
+    }
+    const importKeyMock = vi
+      .spyOn(crypto.subtle, "importKey")
+      .mockResolvedValue({} as CryptoKey);
+    const signMock = vi
+      .spyOn(crypto.subtle, "sign")
+      .mockResolvedValue(new Uint8Array([0]).buffer);
+    const requests: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push({ url, init });
+        if (url.endsWith("/access_tokens") && init?.method === "POST")
+          return new Response(
+            JSON.stringify({
+              token: "installation-token",
+              permissions: { contents: "write", pull_requests: "write" },
+            }),
+            { status: 201 },
+          );
+        if (url.endsWith("/pulls/321") && !init?.method)
+          return new Response(
+            JSON.stringify({
+              number: 321,
+              state: "open",
+              user: { login: "publisher-bot" },
+              head: { sha: "head-sha" },
+              draft: false,
+              mergeable_state: "clean",
+            }),
+          );
+        if (url.includes("/check-runs?"))
+          return new Response(
+            JSON.stringify({
+              check_runs: [
+                { name: "content", status: "completed", conclusion: "success" },
+              ],
+            }),
+          );
+        if (url.endsWith("/user"))
+          return new Response(JSON.stringify({ login: "editorial-reviewer" }));
+        if (url.includes("/pulls/321/reviews?"))
+          return new Response(JSON.stringify([]));
+        if (url.endsWith("/pulls/321/reviews") && init?.method === "POST")
+          return new Response(
+            JSON.stringify({ state: "APPROVED", commit_id: "head-sha" }),
+            { status: 200 },
+          );
+        if (url.endsWith("/pulls/321/merge") && init?.method === "PUT")
+          return new Response(
+            JSON.stringify({ merged: true, sha: "merge-sha" }),
+            { status: 200 },
+          );
+        throw new Error(`Unexpected GitHub request: ${url}`);
+      },
+    );
+    const pending: Promise<unknown>[] = [];
+    try {
+      const response = await worker.scheduled(
+        { cron: "*/1 * * * *" },
+        {
+          ...emptyEnv,
+          GITHUB_APP_ID: "4768541",
+          GITHUB_APP_INSTALLATION_ID: "157671744",
+          GITHUB_APP_PRIVATE_KEY:
+            "-----BEGIN PRIVATE KEY-----\nAQ==\n-----END PRIVATE KEY-----",
+          GITHUB_REVIEW_TOKEN: "review-token",
+          REPORTS: {
+            ...emptyEnv.REPORTS,
+            prepare: (query: string) => new PublicationRunStatement(query),
+          },
+        } as never,
+        { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+      );
+
+      expect(response).toBeUndefined();
+      await Promise.all(pending);
+      const review = requests.find(
+        (request) =>
+          request.url.endsWith("/pulls/321/reviews") &&
+          request.init?.method === "POST",
+      );
+      expect(review).toBeDefined();
+      expect(JSON.parse(String(review?.init?.body))).toMatchObject({
+        event: "APPROVE",
+      });
+      expect(
+        requests.some(
+          (request) =>
+            request.url.endsWith("/pulls/321/merge") &&
+            request.init?.method === "PUT",
+        ),
+      ).toBe(true);
+      expect(
+        executed.some((entry) => entry.values.includes("deploy_pending")),
+      ).toBe(true);
+    } finally {
+      importKeyMock.mockRestore();
+      signMock.mockRestore();
       vi.unstubAllGlobals();
     }
   });
