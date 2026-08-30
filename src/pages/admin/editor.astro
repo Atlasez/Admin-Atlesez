@@ -1519,13 +1519,21 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (persist) localStorage.setItem("atlasez-editor-sidebar-collapsed", String(collapsed));
     };
     const workflowSteps = ["draft", "in-review", "publication-subject", "publication-leader", "approved", "published"] as const;
-    const updateWorkflow = (documentStatus: keyof typeof statusLabel, isPublished = false, publicationStage: Document["publication_review_stage"] = null) => {
+    const hasUnpublishedPublicationChanges = (item: Pick<Document, "published_at" | "updated_at">) => {
+      if (!item.published_at) return false;
+      const updatedAt = Date.parse(item.updated_at);
+      const publishedAt = Date.parse(item.published_at);
+      return Number.isFinite(updatedAt) && Number.isFinite(publishedAt) && updatedAt > publishedAt;
+    };
+    const updateWorkflow = (documentStatus: keyof typeof statusLabel, isPublished = false, publicationStage: Document["publication_review_stage"] = null, publicationNeedsUpdate = false) => {
       const current = isPublished ? "published" : publicationStage === "subject-coordinator" ? "publication-subject" : publicationStage === "project-leader" ? "publication-leader" : documentStatus;
       const currentIndex = workflowSteps.indexOf(current as typeof workflowSteps[number]);
       workflow.classList.toggle("is-on-hold", current === "on-hold");
       workflowCurrent.textContent = current === "published" ? "公開済み" : current === "publication-subject" ? "公開審査中（分野統括）" : current === "publication-leader" ? "公開審査中（プロジェクトリーダー）" : statusLabel[documentStatus];
-      const help = isPublished
-        ? "公開済みです。修正する場合は内容を保存し、必要に応じて公開を取り消して下書きへ戻します。"
+      const help = publicationNeedsUpdate
+        ? "公開済みですが、最新の変更は学習サイトに未反映です。「公開内容を更新して再試行」から反映できます。"
+        : isPublished
+        ? "公開済みです。修正する場合は内容を保存し、公開内容を更新して再試行します。"
         : current === "publication-subject" ? "分野統括の承認を待っています。" : current === "publication-leader" ? "プロジェクトリーダーの承認を待っています。" : ({ draft: "原稿を書いたら保存し、フィードバックを依頼します。", "in-review": "フィードバックを反映したら「執筆完了（公開審査へ）」を押します。", approved: "公開審査が完了しています。公開または公開予約へ進めます。", "on-hold": "保留中です。再開する場合は状態を変更して保存してください。" } as const)[documentStatus];
       const saveLabel = ({ draft: "保存する", "in-review": "変更を保存", approved: "変更を保存", "on-hold": "変更を保存" } as const)[documentStatus];
       workflowHelp.textContent = help;
@@ -1546,7 +1554,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (currentItem) {
         state.textContent = stage === "subject-coordinator" ? "公開審査中（分野統括）" : stage === "project-leader" ? "公開審査中（プロジェクトリーダー）" : statusLabel[currentItem.status];
         setPublicationState(currentItem);
-        updateWorkflow(currentItem.status, Boolean(currentItem.published_at), stage);
+        updateWorkflow(currentItem.status, Boolean(currentItem.published_at), stage, hasUnpublishedPublicationChanges(currentItem));
       }
       completeWritingButton.hidden = !Boolean(stateData.canCompleteWriting);
       const feedbackTaskTotal = stateData.feedbackTaskTotal ?? 0;
@@ -1601,16 +1609,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-    const setPublicationState = (item: Pick<Document, "status" | "publication_pr_url" | "publication_action" | "published_at" | "publication_pr_number" | "publication_run">) => {
+    const setPublicationState = (item: Pick<Document, "status" | "publication_pr_url" | "publication_action" | "published_at" | "updated_at" | "publication_pr_number" | "publication_run">) => {
       const run = item.publication_run;
       const runLabels: Record<string, string> = { queued: "受付済み", checks_pending: "自動検証中", merge_pending: "公開処理中", deploy_pending: "学習サイト反映確認中", retry_wait: "自動再試行中", published: "公開済み", unpublished: "非公開化済み", failed: "自動公開失敗", needs_operator: "運営サイトで確認が必要" };
       const failureLabels: Record<string, string> = { configuration: "設定", validation: "入力・記事検証", github_api: "GitHub API", github_conflict: "GitHub競合", ci: "CI", deployment: "学習サイト反映", internal: "内部処理" };
       const pending = Boolean(item.publication_pr_url && item.publication_action);
+      const publicationNeedsUpdate = hasUnpublishedPublicationChanges(item) || Boolean(run?.action === "publish" && ["failed", "needs_operator"].includes(run.state) && item.published_at);
       publicationState.textContent = run && !["published", "unpublished"].includes(run.state)
         ? runLabels[run.state] ?? "公開処理中"
         : pending
         ? item.publication_action === "unpublish" ? "公開取り消しPR確認待ち" : "公開PR確認待ち"
-        : item.published_at ? "公開済み" : item.status === "approved" ? "公開準備完了（公開操作待ち）" : "未公開";
+        : item.published_at ? publicationNeedsUpdate ? "公開済み（変更未反映）" : "公開済み" : item.status === "approved" ? "公開準備完了（公開操作待ち）" : "未公開";
       publicationRun.hidden = !run || ["published", "unpublished"].includes(run.state);
       publicationRun.textContent = publicationRun.hidden ? "" : run ? `${run.error_message ?? "運営サイトが自動処理しています。"}${run.failure_kind ? `［原因：${failureLabels[run.failure_kind] ?? run.failure_kind}］` : ""}${run.error_code ? `（${run.error_code}）` : ""}` : "";
       publicationRun.dataset.state = run?.state ?? "";
@@ -1647,6 +1656,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         link.textContent = "診断情報";
         publicationLink.append(link);
       }
+    };
+    const updatePublicationActions = (item: Pick<Document, "id" | "status" | "published_at" | "updated_at" | "publication_pr_url" | "publication_action" | "publication_run">) => {
+      const canRetryPublication = Boolean(item.publication_run && ["failed", "needs_operator"].includes(item.publication_run.state) && item.publication_run.action === "publish") || (item.publication_action === "publish" && Boolean(item.publication_pr_url));
+      const canUpdatePublishedArticle = Boolean(item.published_at && hasUnpublishedPublicationChanges(item));
+      const publicationBusy = Boolean(item.publication_run && ["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"].includes(item.publication_run.state));
+      publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && (!item.published_at || canUpdatePublishedArticle || canRetryPublication) && (!item.publication_pr_url || canRetryPublication));
+      publishButton.disabled = publicationBusy;
+      publishButton.textContent = canUpdatePublishedArticle || (canRetryPublication && Boolean(item.published_at)) ? "公開内容を更新して再試行" : canRetryPublication ? "公開処理を再試行" : "公開する";
+      scheduleButton.hidden = true;
+      unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at) && item.publication_action !== "unpublish");
+      unpublishButton.disabled = publicationBusy;
+      reviewButton.hidden = !Boolean(item.id);
+      reviewButton.disabled = Boolean(item.published_at) || Boolean(item.publication_pr_url);
+      reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
     };
     let publicationRefreshTimer: number | null = null;
     const monitorPublicationRun = (item: Document) => {
@@ -2591,14 +2614,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
         if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
         await loadMediaAssets(savedId);
-        publishButton.hidden = !(isManager && Boolean(savedId) && status.value === "approved" && !publicationLink.querySelector("a"));
-        reviewButton.hidden = !Boolean(savedId);
-        const isPublished = publicationState.textContent === "公開済み";
-        reviewButton.disabled = isPublished;
-        reviewButton.title = isPublished ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
         setUnsavedChanges(false);
-        saveMessage.value = status.value === "approved" ? "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。" : "保存しました。";
         await loadDocuments();
+        const refreshed = documents.find((item) => item.id === savedId);
+        if (refreshed) {
+          setPublicationState(refreshed);
+          updateWorkflow(refreshed.status, Boolean(refreshed.published_at), refreshed.publication_review_stage ?? null, hasUnpublishedPublicationChanges(refreshed));
+          updatePublicationActions(refreshed);
+        }
+        saveMessage.value = status.value === "approved"
+          ? refreshed?.published_at
+            ? "保存しました。公開内容を更新する場合は「公開内容を更新して再試行」を押してください。"
+            : "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。"
+          : "保存しました。";
         await loadPublicationReview(savedId);
         await loadRevisions(savedId);
         if (showProgress) { closeAllPanePopouts(); progressDialog.showModal(); }
@@ -2857,7 +2885,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
-      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); const canRetryPublication = Boolean(item.publication_run && ["failed", "needs_operator"].includes(item.publication_run.state) && item.publication_action === "publish") || (item.publication_action === "publish" && Boolean(item.publication_pr_url)); const publicationBusy = Boolean(item.publication_run && ["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"].includes(item.publication_run.state)); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at && (!item.publication_pr_url || canRetryPublication)); publishButton.disabled = publicationBusy; publishButton.textContent = canRetryPublication ? "公開処理を再試行" : "公開する"; scheduleButton.hidden = true; unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at) && item.publication_action !== "unpublish"); unpublishButton.disabled = publicationBusy; reviewButton.hidden = !Boolean(item.id); reviewButton.disabled = Boolean(item.published_at) || Boolean(item.publication_pr_url); reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。"; completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
+      heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null, hasUnpublishedPublicationChanges(item)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); updatePublicationActions(item); completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
       const available = availableEditorSubjects();

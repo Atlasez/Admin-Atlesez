@@ -9646,6 +9646,15 @@ const publicationRunActiveStates = [
   "retry_wait",
 ] as const;
 
+const editorialDocumentHasUnpublishedChanges = (
+  document: Pick<EditorialDocument, "published_at" | "updated_at">,
+) => {
+  if (!document.published_at) return false;
+  const updatedAt = Date.parse(document.updated_at);
+  const publishedAt = Date.parse(document.published_at);
+  return Number.isFinite(updatedAt) && Number.isFinite(publishedAt) && updatedAt > publishedAt;
+};
+
 const getLatestEditorialPublicationRun = async (
   env: Env,
   documentId: string,
@@ -10828,7 +10837,15 @@ async function publishEditorialDocument(
   }
   if (document.status !== "approved")
     return json({ error: "公開前に原稿を承認済みにしてください。" }, 400);
-  if (document.published_at)
+  const hasFailedPublishRun = Boolean(
+    latestPublicationRun?.action === "publish" &&
+      ["failed", "needs_operator"].includes(latestPublicationRun.state),
+  );
+  if (
+    document.published_at &&
+    !editorialDocumentHasUnpublishedChanges(document) &&
+    !hasFailedPublishRun
+  )
     return json({ error: "この記事はすでに公開済みです。" }, 400);
   const claim = await claimEditorialPublicationRun(env, documentId, "publish", scope.email);
   if (!claim.run)
