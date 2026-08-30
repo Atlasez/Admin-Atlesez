@@ -2301,7 +2301,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       references.forEach((reference, index) => { const item = document.createElement("li"); item.id = `preview-reference-${index + 1}`; const text = document.createElement("span"); text.textContent = formatArticleReference(reference); item.append(text); if (reference.url) { const link = document.createElement("a"); link.href = reference.url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = "（URL）"; item.append(" ", link); } list.append(item); });
       target.append(section);
     };
-    const renderPreviewInto = async (target: HTMLElement, value: string, references: ArticleReference[] = documentReferences, isCurrent: () => boolean = () => true) => {
+    const renderPreviewInto = async (target: HTMLElement, value: string, references: ArticleReference[] = documentReferences, isCurrent: () => boolean = () => true, signal?: AbortSignal) => {
       try {
         const html = await renderArticleMarkdown(value, {
           customPresets: customPresetMap(),
@@ -2318,7 +2318,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       applySubjectPreviewProfile(target, subject.value || "general");
       renderPreviewCitations(target, references);
       await hydrateAssetImages(target);
-      await hydrateTikzDiagrams(target, { isCurrent });
+      await hydrateTikzDiagrams(target, { isCurrent, signal });
       if (!isCurrent()) return;
       try {
         if (previewEngine.value === "mathjax") {
@@ -2329,12 +2329,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       } catch (error) { target.insertAdjacentHTML("afterbegin", `<p class="katex-error">${esc(error instanceof Error ? error.message : "数式を組版できませんでした。")}</p>`); }
     };
     let previewRenderId = 0;
+    let previewAbortController: AbortController | null = null;
     const renderPreview = async () => {
       const renderId = ++previewRenderId;
+      previewAbortController?.abort();
+      const abortController = new AbortController();
+      previewAbortController = abortController;
       const value = body.value;
       const isCurrent = () => renderId === previewRenderId;
-      await renderPreviewInto(preview, value, documentReferences, isCurrent);
-      if (isCurrent()) wordCount.textContent = `${value.length.toLocaleString()}文字`;
+      await renderPreviewInto(preview, value, documentReferences, isCurrent, abortController.signal);
+      if (isCurrent() && !abortController.signal.aborted) wordCount.textContent = `${value.length.toLocaleString()}文字`;
     };
     const renderDiagnostics = () => {
       const items = diagnoseArticleSource(body.value, {
@@ -2350,6 +2354,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const hasMediaSyntax = (source: string) => /asset:\/\/|\\includegraphics/i.test(source);
     const scheduleBodyRefresh = () => {
       window.clearTimeout(bodyRefreshTimer);
+      const previewDelay = /```\s*tikz\b/i.test(body.value) ? 700 : 140;
       bodyRefreshTimer = window.setTimeout(() => {
         renderHeadingOutline();
         renderDiagnostics();
@@ -2359,7 +2364,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           renderMediaList();
         }
         void renderPreview();
-      }, 140);
+      }, previewDelay);
     };
     const commentSelections = (item: Comment) => item.selections?.length ? item.selections : item.selection_text ? [{ selection_start: item.selection_start, selection_end: item.selection_end, selection_text: item.selection_text }] : [];
     type CommentHistoryAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
