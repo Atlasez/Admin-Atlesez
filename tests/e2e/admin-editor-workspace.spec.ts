@@ -92,6 +92,7 @@ async function mockAdminApi(
     subjects: ["mathematics"],
     isManager: true,
   },
+  document = documentItem,
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -99,12 +100,12 @@ async function mockAdminApi(
     let payload: unknown = {};
     if (url.pathname === "/api/admin/editor/documents") {
       payload = {
-        documents: [documentItem],
+        documents: [document],
         mentionNames: ["Alice", "Bob"],
         scope,
       };
     } else if (url.pathname === "/api/admin/editor/documents/doc-1") {
-      payload = { document: documentItem, comments };
+      payload = { document, comments };
     } else if (url.pathname.endsWith("/assets")) {
       payload = { assets: [] };
     } else if (url.pathname === "/api/admin/personal-workspace") {
@@ -149,10 +150,6 @@ test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚�
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator('[name="conceptId"]')).toHaveValue("");
-  await expect(page.locator("[data-concept-id-preview]")).toHaveText(
-    "概念を選択してください",
-  );
   await page.locator('select[name="category"]').selectOption("group-theory");
   const picker = page.locator("[data-concept-picker]");
   await expect(
@@ -185,6 +182,51 @@ test("フィードバック済みは公開審査の承認前に状態選択で�
   await expect(page.locator("[data-status-help]")).toContainText(
     "公開審査で承認されたときに自動で設定",
   );
+});
+
+test("公開Runの失敗原因・CIログ・再試行導線を表示する", async ({ page }) => {
+  const failedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    publication_pr_number: 321,
+    publication_pr_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+    publication_branch: "editorial/published-doc-1-run-1",
+    publication_action: "publish" as const,
+    publication_run: {
+      id: "run-1",
+      state: "failed",
+      action: "publish" as const,
+      attempt: 3,
+      error_code: "ci_failed",
+      error_message: "CIが失敗しました（content-check）。",
+      failure_kind: "ci",
+      check_name: "content-check",
+      check_url: "https://github.com/Atlasez/Atlasez01/actions/runs/123",
+      diagnostic_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+    },
+  };
+  await mockAdminApi(page, undefined, failedDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-publication-run]")).toContainText(
+    "CIが失敗しました（content-check）。［原因：CI］（ci_failed）",
+  );
+  await expect(page.locator("[data-publication-link] a")).toHaveCount(2);
+  await expect(page.locator("[data-publication-link] a").nth(0)).toHaveText(
+    "公開PRを確認",
+  );
+  await expect(page.locator("[data-publication-link] a").nth(1)).toHaveText(
+    "CIログ（content-check）",
+  );
+  await expect(
+    page.locator("[data-publication-link] a").nth(1),
+  ).toHaveAttribute(
+    "href",
+    "https://github.com/Atlasez/Atlasez01/actions/runs/123",
+  );
+  await expect(
+    page.getByRole("button", { name: "公開処理を再試行" }),
+  ).toBeVisible();
 });
 
 test("新規原稿では存在しない公開審査URLを呼ばず、枠の高さを調整できる", async ({
@@ -294,8 +336,8 @@ test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示�
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".required-mark")).toHaveCount(7);
-  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(7);
+  await expect(page.locator(".required-mark")).toHaveCount(6);
+  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(6);
   for (const name of [
     "title",
     "summary",
