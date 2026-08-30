@@ -12836,7 +12836,10 @@ async function notifyEditorialDocumentChange(
   if (!namespace) return;
   try {
     const document = await env.REPORTS.prepare(
-      "SELECT status, publication_review_stage, published_at, updated_at FROM editorial_documents WHERE id = ?",
+      `SELECT status, publication_review_stage, published_at, updated_at,
+              publication_pr_number, publication_pr_url, publication_branch,
+              publication_action, publication_requested_at
+       FROM editorial_documents WHERE id = ?`,
     )
       .bind(documentId)
       .first<{
@@ -12844,6 +12847,11 @@ async function notifyEditorialDocumentChange(
         publication_review_stage: EditorialPublicationReviewStage | null;
         published_at: string | null;
         updated_at: string;
+        publication_pr_number: number | null;
+        publication_pr_url: string | null;
+        publication_branch: string | null;
+        publication_action: "publish" | "unpublish" | null;
+        publication_requested_at: string | null;
       }>();
     if (!document) return;
     const publicationRun = await getLatestEditorialPublicationRun(env, documentId);
@@ -12856,12 +12864,50 @@ async function notifyEditorialDocumentChange(
         },
         body: JSON.stringify({
           type: "document-changed",
+          changeVersion: Math.max(
+            Date.parse(document.updated_at),
+            publicationRun?.updated_at ? Date.parse(publicationRun.updated_at) : 0,
+          ),
           status: document.status,
-          publicationStage: document.publication_review_stage,
-          publishedAt: Boolean(document.published_at),
-          updatedAt: document.updated_at,
-          publicationRunState: publicationRun?.state ?? null,
-        }),
+        publicationStage: document.publication_review_stage,
+        publishedAt: Boolean(document.published_at),
+        publishedAtValue: document.published_at,
+        updatedAt: document.updated_at,
+        publicationPrNumber: document.publication_pr_number,
+        publicationPrUrl: document.publication_pr_url,
+        publicationBranch: document.publication_branch,
+        publicationAction: document.publication_action,
+        publicationRequestedAt: document.publication_requested_at,
+        publicationRunState: publicationRun?.state ?? null,
+        publicationRun: publicationRun
+          ? {
+              id: publicationRun.id,
+              action: publicationRun.action,
+              state: publicationRun.state,
+              attempt: publicationRun.attempt,
+              pull_request_number: publicationRun.pull_request_number,
+              pull_request_url: publicationRun.pull_request_url,
+              branch: publicationRun.branch,
+              head_sha: publicationRun.head_sha,
+              merge_sha: publicationRun.merge_sha,
+              last_check_at: publicationRun.last_check_at,
+              next_attempt_at: publicationRun.next_attempt_at,
+              error_code: publicationRun.error_code,
+              error_message: publicationRun.error_message,
+              failure_kind: publicationRun.failure_kind,
+              check_name: publicationRun.check_name,
+              check_url: publicationRun.check_url,
+              diagnostic_url: publicationRun.diagnostic_url,
+              failure_detail: publicationRun.failure_detail ?? null,
+              failure_step: publicationRun.failure_step ?? null,
+              failure_file: publicationRun.failure_file ?? null,
+              failure_line: publicationRun.failure_line ?? null,
+              failure_column: publicationRun.failure_column ?? null,
+              failure_suggestion: publicationRun.failure_suggestion ?? null,
+              updated_at: publicationRun.updated_at,
+            }
+          : null,
+      }),
       }),
     );
   } catch {

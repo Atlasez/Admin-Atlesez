@@ -152,4 +152,120 @@ describe("editorial collaboration initialization", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("sends the current publication state immediately when a tab reconnects", async () => {
+    const send = vi.fn();
+    const socket = {
+      readyState: 1,
+      send,
+      serializeAttachment: vi.fn(),
+    } as unknown as WebSocket;
+    const state = {
+      storage: {
+        get: vi.fn(async () => undefined),
+        put: vi.fn(async () => undefined),
+      },
+      acceptWebSocket: vi.fn(),
+      getWebSockets: vi.fn(() => [socket]),
+      waitUntil: vi.fn(),
+    };
+    const database = {
+      prepare: vi.fn((query: string) => ({
+        bind: vi.fn(() => ({
+          first: vi.fn(async () => {
+            if (query.includes("SELECT title, summary, body")) {
+              return { title: "タイトル", summary: "要約", body: "本文" };
+            }
+            if (query.includes("FROM editorial_documents")) {
+              return {
+                status: "approved",
+                publication_review_stage: null,
+                published_at: null,
+                updated_at: "2026-08-31T02:00:00.000Z",
+                publication_pr_number: 321,
+                publication_pr_url:
+                  "https://github.com/Atlasez/Atlasez01/pull/321",
+                publication_branch: "editorial/test-run",
+                publication_action: "publish",
+                publication_requested_at: "2026-08-31T02:00:00.000Z",
+              };
+            }
+            return {
+              id: "run-1",
+              action: "publish",
+              state: "failed",
+              attempt: 2,
+              pull_request_number: 321,
+              pull_request_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+              branch: "editorial/test-run",
+              head_sha: "abc123",
+              merge_sha: null,
+              last_check_at: "2026-08-31T02:00:00.000Z",
+              next_attempt_at: null,
+              error_code: "ci_failed",
+              error_message: "CIが失敗しました。",
+              failure_kind: "ci",
+              check_name: "verify",
+              check_url:
+                "https://github.com/Atlasez/Atlasez01/actions/runs/999",
+              diagnostic_url: null,
+              failure_detail: "検証に失敗しました。",
+              failure_step: "npm run check",
+              failure_file: "src/content/articles/test.md",
+              failure_line: 12,
+              failure_column: null,
+              failure_suggestion: "記事を修正してください。",
+              updated_at: "2026-08-31T02:00:01.000Z",
+            };
+          }),
+        })),
+      })),
+    };
+    class Pair {
+      0 = {} as WebSocket;
+      1 = socket;
+    }
+    class UpgradeResponse {
+      readonly status: number;
+
+      constructor(_body: unknown, init?: ResponseInit) {
+        this.status = init?.status ?? 200;
+      }
+    }
+    vi.stubGlobal("WebSocket", { OPEN: 1 });
+    vi.stubGlobal("WebSocketPair", Pair);
+    vi.stubGlobal("Response", UpgradeResponse);
+    const room = new EditorialCollaborationRoom(state, {
+      REPORTS: database,
+    } as never);
+
+    const response = await room.fetch(
+      new Request("https://example.com/collaboration", {
+        headers: {
+          upgrade: "websocket",
+          "x-atlasez-document-id": "document-1",
+          "x-atlasez-user-email": "alice@example.com",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(101);
+    const messages = send.mock.calls
+      .map(([message]) => (typeof message === "string" ? message : null))
+      .filter((message): message is string => Boolean(message))
+      .map(
+        (message) =>
+          JSON.parse(message) as {
+            type?: string;
+            publicationRun?: { state?: string };
+          },
+      );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: "document-changed",
+        publicationRun: expect.objectContaining({ state: "failed" }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
 });
