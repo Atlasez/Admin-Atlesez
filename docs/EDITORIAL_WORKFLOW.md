@@ -44,9 +44,9 @@ Markdownが `status: published` となる。draft / in-review はビルドから
 
 ## 4. 公開
 
-公開審査の完了後、運営管理者が編集画面の「公開する」を押す。運営Workerが
-`Atlasez/Atlasez01` に公開用PRを作成し、CI確認とPRのMerge後に公開サイトの自動ビルドへ進む。
-公開ボタンはmainやCloudflareへ直接書き込まない。公開状態は5分ごとにGitHubのmainと同期する。
+公開審査の完了後、原稿は「公開準備完了」になり、運営管理者へ公開待ち通知が届く。運営管理者が編集画面の「公開する」を押すと、Workerが
+`Atlasez/Atlasez01` に公開用PRを作成する。公開ボタンはmainやCloudflareへ直接書き込まない。
+学習サイトの本番は同リポジトリの`main`をProduction branchとするCloudflare Workers Buildsで自動ビルドされるため、CI・差分確認後にPRをMergeすると反映される。公開状態は5分ごとにGitHubのmainと同期する。
 
 ## 5. 修正・報告対応
 

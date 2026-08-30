@@ -9081,6 +9081,82 @@ async function syncEditorialPublicationStatusForAdmin(
   }
 }
 
+/** 公開用GitHub連携を、実際の対象リポジトリと権限まで含めて事前確認する。 */
+async function editorialPublicationIntegrationStatus(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const token = env.GITHUB_PUBLISH_TOKEN;
+  if (!token)
+    return json(
+      {
+        ready: false,
+        configured: false,
+        repository,
+        error:
+          "GitHub公開連携が未設定です。GITHUB_PUBLISH_TOKENをCloudflare Secretへ登録してください。",
+      },
+      503,
+    );
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}`,
+      { headers: githubApiHeaders(token, "atlasez-editorial-integration-check") },
+    );
+    if (!response.ok)
+      return json(
+        {
+          ready: false,
+          configured: true,
+          repository,
+          error:
+            "GitHubの対象リポジトリを確認できません。トークンの対象リポジトリを確認してください。",
+        },
+        502,
+      );
+    const data = (await response.json()) as {
+      default_branch?: string;
+      archived?: boolean;
+      permissions?: { push?: boolean; pull?: boolean };
+    };
+    const defaultBranch = data.default_branch ?? null;
+    const canWrite = data.permissions?.push === true;
+    const archived = data.archived === true;
+    const ready = defaultBranch === "main" && canWrite && !archived;
+    return json({
+      ready,
+      configured: true,
+      repository,
+      defaultBranch,
+      canWrite,
+      canCreatePullRequest: canWrite,
+      archived,
+      ...(ready
+        ? {}
+        : {
+            error: archived
+              ? "公開先リポジトリがアーカイブされています。"
+              : defaultBranch !== "main"
+                ? "公開先リポジトリの既定ブランチがmainではありません。"
+                : "公開用トークンにContents書込権限がありません。",
+          }),
+    });
+  } catch {
+    return json(
+      {
+        ready: false,
+        configured: true,
+        repository,
+        error: "GitHub公開連携の疎通確認に失敗しました。",
+      },
+      502,
+    );
+  }
+}
+
 const editorialMarkdown = (
   document: EditorialDocument,
   publicationStatus: "published" | "draft" = "published",
@@ -10928,6 +11004,7 @@ async function adminNotifications(
     mentionRows,
     approvedRows,
     publishedRows,
+    publicationReadyRows,
     reviewRows,
     applicationRows,
     taskReminderRows,
@@ -10978,6 +11055,23 @@ async function adminNotifications(
     )
       .bind(scope.email)
       .all<{ id: string; title: string; published_at: string }>(),
+    scope.isManager
+      ? env.REPORTS.prepare(
+          "SELECT id, title, subject, updated_at FROM editorial_documents WHERE status = 'approved' AND published_at IS NULL AND publication_pr_number IS NULL ORDER BY updated_at DESC LIMIT 30",
+        ).all<{
+          id: string;
+          title: string;
+          subject: string;
+          updated_at: string;
+        }>()
+      : Promise.resolve({
+          results: [] as {
+            id: string;
+            title: string;
+            subject: string;
+            updated_at: string;
+          }[],
+        }),
     scope.isManager
       ? env.REPORTS.prepare(
           "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC LIMIT 30",
@@ -11139,6 +11233,14 @@ async function adminNotifications(
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.published_at,
     })),
+    ...(publicationReadyRows.results ?? []).map((item) => ({
+      id: `publication-ready-${item.id}`,
+      kind: "publication-ready",
+      title: `公開準備完了：${item.title}`,
+      detail: `担当分野：${item.subject} ／ 公開用PRを作成してください。`,
+      href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
+      updatedAt: item.updated_at,
+    })),
     ...(publicationReviewRows.results ?? []).map((item) => ({
       id: `publication-review-${item.id}-${item.publication_review_stage}`,
       kind: "publication-review",
@@ -11232,7 +11334,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|mention|approved|published|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
+                /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
@@ -11695,6 +11797,11 @@ async function handleAdminRequest(
     request.method === "POST"
   )
     return syncEditorialPublicationStatusForAdmin(request, env);
+  if (
+    url.pathname === "/api/admin/editor/publication-integration" &&
+    request.method === "GET"
+  )
+    return editorialPublicationIntegrationStatus(request, env);
   if (url.pathname === "/api/admin/editor/documents") {
     if (request.method === "GET") return listEditorialDocuments(request, env);
     if (request.method === "POST") return createEditorialDocument(request, env);

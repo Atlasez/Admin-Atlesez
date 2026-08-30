@@ -102,6 +102,52 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("reports an unconfigured GitHub publication integration before publishing", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/publication-integration"),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ready: false,
+      configured: false,
+      repository: "Atlasez/Atlasez01",
+    });
+  });
+
+  it("checks the publication repository branch and write permission", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          default_branch: "main",
+          archived: false,
+          permissions: { pull: true, push: true },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    try {
+      const response = await worker.fetch(
+        new Request(
+          "http://localhost/api/admin/editor/publication-integration",
+        ),
+        { ...emptyEnv, GITHUB_PUBLISH_TOKEN: "test-token" } as never,
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        ready: true,
+        repository: "Atlasez/Atlasez01",
+        defaultBranch: "main",
+        canWrite: true,
+        canCreatePullRequest: true,
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("exposes feedback completion progress before publication review", async () => {
     const documentId = "22222222-2222-4222-8222-222222222222";
     const document = {

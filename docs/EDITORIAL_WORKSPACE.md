@@ -21,7 +21,7 @@ Google OAuthでログインし、既存の `report_admin_permissions` に設定�
 2. 運営管理者が**公開する**を押す
 3. Workerが公開用ブランチを作成し、`src/content/articles/ja/<分野>/<カテゴリ>/<slug>.md` と画像素材をCommitして、`Atlasez/Atlasez01`へPRを作成する
 4. CIで差分を確認してPRをMergeする
-5. GitHub Actions / Cloudflareの自動ビルドが完了すると公開サイトへ反映される
+5. `main`へのMergeを検知したCloudflare Workers Buildsの自動ビルドが完了すると公開サイトへ反映される（GitHub PagesのWorkflowは確認用ミラー）
 
 公開ボタンを押した時点では学習サイトへ反映せず、PRのMerge後にだけ反映されます。PR作成後は編集画面からPRリンクを確認できます。公開状態は5分ごとの定期同期でGitHubの`main`を基準に更新されます。
 
@@ -36,7 +36,7 @@ Google OAuthでログインし、既存の `report_admin_permissions` に設定�
 1. `Atlasez/Atlasez01` のContents read/writeとPull requests read/writeだけを許可したFine-grained token
 2. Cloudflare WorkersのSecret `GITHUB_PUBLISH_TOKEN` と、必要に応じて変数 `GITHUB_REPOSITORY=Atlasez/Atlasez01`
 
-Secretが未設定の場合、保存・査読までは利用できますが、公開操作はエラーになります。
+Secretが未設定の場合、保存・査読までは利用できますが、公開操作はエラーになります。全分野管理者には編集画面で対象リポジトリと書込権限の疎通状態を表示します。
 
 ## ローカル確認
 
