@@ -102,6 +102,165 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("reports an unconfigured GitHub publication integration before publishing", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/publication-integration"),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ready: false,
+      configured: false,
+      repository: "Atlasez/Atlasez01",
+    });
+  });
+
+  it("checks the publication repository branch and write permission", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          default_branch: "main",
+          archived: false,
+          permissions: { pull: true, push: true },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    try {
+      const response = await worker.fetch(
+        new Request(
+          "http://localhost/api/admin/editor/publication-integration",
+        ),
+        { ...emptyEnv, GITHUB_PUBLISH_TOKEN: "test-token" } as never,
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        ready: true,
+        repository: "Atlasez/Atlasez01",
+        defaultBranch: "main",
+        canWrite: true,
+        canCreatePullRequest: true,
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("exposes feedback completion progress before publication review", async () => {
+    const documentId = "22222222-2222-4222-8222-222222222222";
+    const document = {
+      id: documentId,
+      subject: "mathematics",
+      status: "in-review",
+      created_by: "local-editor@atlasez.test",
+      published_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+    };
+    class PublicationStateStatement extends EmptyStatement {
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        if (this.query.includes("FROM editorial_feedback_task_links"))
+          return { total: 2, done: 1 } as T;
+        return null as T | null;
+      }
+
+      async all<T>() {
+        if (this.query.includes("FROM editorial_workflow_roles"))
+          return { results: [] as T[] };
+        return { results: [] as T[] };
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new PublicationStateStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request(
+        `http://localhost/api/admin/editor/documents/${documentId}/publication-review`,
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      feedbackTaskTotal: 2,
+      feedbackTaskDone: 1,
+      feedbackComplete: false,
+      canCompleteWriting: true,
+    });
+  });
+
+  it("blocks publication review until every feedback task is complete", async () => {
+    const documentId = "22222222-2222-4222-8222-222222222222";
+    const document = {
+      id: documentId,
+      subject: "mathematics",
+      status: "in-review",
+      created_by: "local-editor@atlasez.test",
+      published_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+    };
+    const executed: string[] = [];
+    class PublicationStartStatement extends EmptyStatement {
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        if (this.query.includes("FROM editorial_feedback_task_links"))
+          return { total: 2, done: 1 } as T;
+        return null as T | null;
+      }
+
+      async all<T>() {
+        if (this.query.includes("FROM editorial_workflow_roles"))
+          return { results: [] as T[] };
+        return { results: [] as T[] };
+      }
+
+      async run() {
+        executed.push(this.query);
+        return {};
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new PublicationStartStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request(
+        `http://localhost/api/admin/editor/documents/${documentId}/publication-review`,
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost",
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      feedbackTaskTotal: 2,
+      feedbackTaskDone: 1,
+    });
+    expect(executed).toEqual([]);
+  });
+
   it("serves an editorial asset with its saved MIME type and filename", async () => {
     const assetId = "11111111-1111-4111-8111-111111111111";
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);

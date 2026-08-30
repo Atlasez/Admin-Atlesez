@@ -9081,6 +9081,82 @@ async function syncEditorialPublicationStatusForAdmin(
   }
 }
 
+/** 公開用GitHub連携を、実際の対象リポジトリと権限まで含めて事前確認する。 */
+async function editorialPublicationIntegrationStatus(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const token = env.GITHUB_PUBLISH_TOKEN;
+  if (!token)
+    return json(
+      {
+        ready: false,
+        configured: false,
+        repository,
+        error:
+          "GitHub公開連携が未設定です。GITHUB_PUBLISH_TOKENをCloudflare Secretへ登録してください。",
+      },
+      503,
+    );
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}`,
+      { headers: githubApiHeaders(token, "atlasez-editorial-integration-check") },
+    );
+    if (!response.ok)
+      return json(
+        {
+          ready: false,
+          configured: true,
+          repository,
+          error:
+            "GitHubの対象リポジトリを確認できません。トークンの対象リポジトリを確認してください。",
+        },
+        502,
+      );
+    const data = (await response.json()) as {
+      default_branch?: string;
+      archived?: boolean;
+      permissions?: { push?: boolean; pull?: boolean };
+    };
+    const defaultBranch = data.default_branch ?? null;
+    const canWrite = data.permissions?.push === true;
+    const archived = data.archived === true;
+    const ready = defaultBranch === "main" && canWrite && !archived;
+    return json({
+      ready,
+      configured: true,
+      repository,
+      defaultBranch,
+      canWrite,
+      canCreatePullRequest: canWrite,
+      archived,
+      ...(ready
+        ? {}
+        : {
+            error: archived
+              ? "公開先リポジトリがアーカイブされています。"
+              : defaultBranch !== "main"
+                ? "公開先リポジトリの既定ブランチがmainではありません。"
+                : "公開用トークンにContents書込権限がありません。",
+          }),
+    });
+  } catch {
+    return json(
+      {
+        ready: false,
+        configured: true,
+        repository,
+        error: "GitHub公開連携の疎通確認に失敗しました。",
+      },
+      502,
+    );
+  }
+}
+
 const editorialMarkdown = (
   document: EditorialDocument,
   publicationStatus: "published" | "draft" = "published",
@@ -9542,6 +9618,30 @@ async function publicationReviewRoleEmails(
   return [...new Set((result.results ?? []).map((row) => row.email).filter(Boolean))];
 }
 
+type EditorialFeedbackTaskState = {
+  total: number;
+  done: number;
+};
+
+async function editorialFeedbackTaskState(
+  env: Env,
+  documentId: string,
+): Promise<EditorialFeedbackTaskState> {
+  const row = await env.REPORTS.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done
+       FROM editorial_feedback_task_links link
+       JOIN editorial_tasks t ON t.id = link.task_id
+      WHERE link.document_id = ?`,
+  )
+    .bind(documentId)
+    .first<{ total: number | string | null; done: number | string | null }>();
+  return {
+    total: Math.max(0, Number(row?.total ?? 0)),
+    done: Math.max(0, Number(row?.done ?? 0)),
+  };
+}
+
 async function scheduleEditorialPublication(request: Request, env: Env, documentId: string): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -9610,10 +9710,14 @@ async function getPublicationReviewState(
     .first<EditorialDocument>();
   if (!document || !canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
-  const [coordinators, leaders] = await Promise.all([
+  const [coordinators, leaders, feedbackTasks] = await Promise.all([
     publicationReviewRoleEmails(env, "subject-coordinator", document.subject),
     publicationReviewRoleEmails(env, "project-leader", document.subject),
+    editorialFeedbackTaskState(env, document.id),
   ]);
+  const feedbackComplete =
+    document.status !== "in-review" ||
+    (feedbackTasks.total > 0 && feedbackTasks.done === feedbackTasks.total);
   return json({
     stage: document.publication_review_stage,
     round: document.publication_review_round,
@@ -9622,6 +9726,9 @@ async function getPublicationReviewState(
       !document.publication_review_stage &&
       (document.status === "in-review" || document.status === "draft") &&
       (canEditSubject(scope, document.subject) || document.created_by === scope.email),
+    feedbackTaskTotal: feedbackTasks.total,
+    feedbackTaskDone: feedbackTasks.done,
+    feedbackComplete,
     canDecide:
       (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
       (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
@@ -9651,6 +9758,22 @@ async function startPublicationReview(
     return json({ error: "すでに公開審査中です。" }, 409);
   if (document.status !== "in-review" && document.status !== "draft")
     return json({ error: "先に原稿を保存してください。" }, 400);
+  const feedbackTasks = await editorialFeedbackTaskState(env, document.id);
+  if (
+    document.status === "in-review" &&
+    (feedbackTasks.total === 0 || feedbackTasks.done < feedbackTasks.total)
+  )
+    return json(
+      {
+        error:
+          feedbackTasks.total === 0
+            ? "フィードバック依頼がありません。先にフィードバックを依頼してください。"
+            : `フィードバックが未完了です（${feedbackTasks.done}/${feedbackTasks.total}件）。すべてのフィードバック依頼を完了にしてから進めてください。`,
+        feedbackTaskTotal: feedbackTasks.total,
+        feedbackTaskDone: feedbackTasks.done,
+      },
+      409,
+    );
   const coordinators = await publicationReviewRoleEmails(env, "subject-coordinator", document.subject);
   const leaders = await publicationReviewRoleEmails(env, "project-leader", document.subject);
   const stage: EditorialPublicationReviewStage = coordinators.length
@@ -10881,6 +11004,7 @@ async function adminNotifications(
     mentionRows,
     approvedRows,
     publishedRows,
+    publicationReadyRows,
     reviewRows,
     applicationRows,
     taskReminderRows,
@@ -10931,6 +11055,23 @@ async function adminNotifications(
     )
       .bind(scope.email)
       .all<{ id: string; title: string; published_at: string }>(),
+    scope.isManager
+      ? env.REPORTS.prepare(
+          "SELECT id, title, subject, updated_at FROM editorial_documents WHERE status = 'approved' AND published_at IS NULL AND publication_pr_number IS NULL ORDER BY updated_at DESC LIMIT 30",
+        ).all<{
+          id: string;
+          title: string;
+          subject: string;
+          updated_at: string;
+        }>()
+      : Promise.resolve({
+          results: [] as {
+            id: string;
+            title: string;
+            subject: string;
+            updated_at: string;
+          }[],
+        }),
     scope.isManager
       ? env.REPORTS.prepare(
           "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC LIMIT 30",
@@ -11092,6 +11233,14 @@ async function adminNotifications(
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.published_at,
     })),
+    ...(publicationReadyRows.results ?? []).map((item) => ({
+      id: `publication-ready-${item.id}`,
+      kind: "publication-ready",
+      title: `公開準備完了：${item.title}`,
+      detail: `担当分野：${item.subject} ／ 公開用PRを作成してください。`,
+      href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
+      updatedAt: item.updated_at,
+    })),
     ...(publicationReviewRows.results ?? []).map((item) => ({
       id: `publication-review-${item.id}-${item.publication_review_stage}`,
       kind: "publication-review",
@@ -11185,7 +11334,7 @@ async function markAdminNotificationsRead(
             .filter(
               (id): id is string =>
                 typeof id === "string" &&
-                /^(comment|mention|approved|published|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
+                /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
             )
@@ -11648,6 +11797,11 @@ async function handleAdminRequest(
     request.method === "POST"
   )
     return syncEditorialPublicationStatusForAdmin(request, env);
+  if (
+    url.pathname === "/api/admin/editor/publication-integration" &&
+    request.method === "GET"
+  )
+    return editorialPublicationIntegrationStatus(request, env);
   if (url.pathname === "/api/admin/editor/documents") {
     if (request.method === "GET") return listEditorialDocuments(request, env);
     if (request.method === "POST") return createEditorialDocument(request, env);
@@ -11912,6 +12066,7 @@ export default {
           dispatchDueTaskReminders(env),
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
+          syncEditorialPublicationStatus(env),
           dispatchScheduledEditorialPublications(env),
         ]),
       );
