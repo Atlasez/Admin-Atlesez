@@ -38,7 +38,84 @@ const emptyEnv = {
   },
 };
 
+const githubWebhookSignature = async (secret: string, body: string) => {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)),
+  );
+  return `sha256=${[...digest]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
+};
+
 describe("admin worker editor APIs", () => {
+  it("rejects unsigned GitHub publication webhooks", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/internal/github-publication-webhook", {
+        method: "POST",
+        headers: { "x-github-event": "check_run" },
+        body: JSON.stringify({ action: "completed" }),
+      }),
+      { ...emptyEnv, GITHUB_WEBHOOK_SECRET: "test-secret" } as never,
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("accepts a signed GitHub webhook and limits progress to the matching PR", async () => {
+    const body = JSON.stringify({
+      action: "completed",
+      repository: { full_name: "Atlasez/Atlasez01" },
+      check_run: {
+        head_sha: "abc123",
+        check_suite: { pull_requests: [{ number: 104 }] },
+      },
+    });
+    const queries: string[] = [];
+    const env = {
+      ...emptyEnv,
+      GITHUB_WEBHOOK_SECRET: "test-secret",
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          return new EmptyStatement(query);
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/internal/github-publication-webhook", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": "check_run",
+          "x-hub-signature-256": await githubWebhookSignature(
+            "test-secret",
+            body,
+          ),
+        },
+        body,
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      event: "check_run",
+      processed: 0,
+    });
+    expect(
+      queries.some((query) => query.includes("pull_request_number = ?")),
+    ).toBe(true);
+  });
+
   it("serves the CodeMirror completion module used by the article editor", async () => {
     let requestedPath = "";
     const assetEnv = {
