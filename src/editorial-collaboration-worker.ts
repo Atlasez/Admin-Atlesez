@@ -30,6 +30,7 @@ type CollaborationAttachment = {
   email: string;
   displayName: string;
   field: string;
+  mode: "document" | "presence";
   cursorStart: number | null;
   cursorEnd: number | null;
   cursorAnchor: string | null;
@@ -41,6 +42,7 @@ const emptyAttachment = (): CollaborationAttachment => ({
   email: "",
   displayName: "メンバー",
   field: "",
+  mode: "document",
   cursorStart: null,
   cursorEnd: null,
   cursorAnchor: null,
@@ -69,6 +71,7 @@ const collaborationAttachment = (
     email: attachment.email ?? "",
     displayName: attachment.displayName ?? attachment.email ?? "メンバー",
     field: attachment.field ?? "",
+    mode: attachment.mode === "presence" ? "presence" : "document",
     cursorStart:
       typeof attachment.cursorStart === "number" ? attachment.cursorStart : null,
     cursorEnd:
@@ -100,6 +103,7 @@ const mergeParticipants = (items: CollaborationAttachment[]) => {
       current.displayName = item.displayName;
     }
     if (item.field) current.field = item.field;
+    if (item.mode === "presence") current.mode = item.mode;
 
     const hasCursor =
       item.cursorStart !== null ||
@@ -137,6 +141,9 @@ export class EditorialCollaborationRoom {
   private readonly yDocument = new Y.Doc();
   private initializedDocumentId = "";
   private initializationPromise: Promise<void> | null = null;
+  private persistencePromise: Promise<void> | null = null;
+  private persistenceVersion = 0;
+  private persistedVersion = 0;
 
   constructor(
     private readonly state: DurableObjectState,
@@ -148,13 +155,42 @@ export class EditorialCollaborationRoom {
           socket.send(update);
         }
       }
-      this.state.waitUntil(
-        this.state.storage.put(
+      this.schedulePersistence();
+    });
+  }
+
+  private schedulePersistence() {
+    this.persistenceVersion += 1;
+    if (this.persistencePromise) return;
+
+    const persistence = new Promise<void>((resolve) => {
+      setTimeout(resolve, 100);
+    })
+      .then(async () => {
+        const versionAtEncode = this.persistenceVersion;
+        await this.state.storage.put(
           "yjs-state",
           Y.encodeStateAsUpdate(this.yDocument),
-        ),
-      );
-    });
+        );
+        this.persistedVersion = Math.max(
+          this.persistedVersion,
+          versionAtEncode,
+        );
+      })
+      .catch(() => {
+        // A later update will retry persistence. Live WebSocket delivery is
+        // independent from the write-behind snapshot.
+      })
+      .finally(() => {
+        if (this.persistencePromise === persistence) {
+          this.persistencePromise = null;
+          if (this.persistenceVersion > this.persistedVersion) {
+            this.schedulePersistence();
+          }
+        }
+      });
+    this.persistencePromise = persistence;
+    this.state.waitUntil(persistence);
   }
 
   private async initialize(documentId: string) {
@@ -253,6 +289,10 @@ export class EditorialCollaborationRoom {
       email: request.headers.get("x-atlasez-user-email") ?? "",
       displayName,
       field: "",
+      mode:
+        new URL(request.url).searchParams.get("mode") === "presence"
+          ? "presence"
+          : "document",
       cursorStart: null,
       cursorEnd: null,
       cursorAnchor: null,
@@ -277,6 +317,7 @@ export class EditorialCollaborationRoom {
 
   webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) {
     if (typeof message !== "string") {
+      if (collaborationAttachment(socket).mode === "presence") return;
       Y.applyUpdate(this.yDocument, new Uint8Array(message), socket);
       return;
     }
@@ -291,6 +332,7 @@ export class EditorialCollaborationRoom {
       };
       if (payload.type !== "presence") return;
       const attachment = collaborationAttachment(socket);
+      attachment.mode = attachment.mode === "presence" ? "presence" : "document";
       attachment.field =
         typeof payload.field === "string" ? payload.field.slice(0, 80) : "";
       attachment.cursorStart = normalizeCursor(payload.cursorStart);

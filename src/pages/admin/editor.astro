@@ -2712,6 +2712,25 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (inserted) shared.insert(prefix, inserted);
       }, "local-input");
     };
+    type SharedTextChange = { from: number; to: number; insert: string };
+    const applySharedTextChanges = (shared: Y.Text, changes: SharedTextChange[]) => {
+      if (!changes.length || !collaborationDocument) return false;
+      const ordered = [...changes].sort((a, b) => b.from - a.from);
+      let previousFrom = shared.length;
+      if (ordered.some((change) => {
+        const valid = Number.isInteger(change.from) && Number.isInteger(change.to) && change.from >= 0 && change.to >= change.from && change.to <= shared.length && change.to <= previousFrom;
+        previousFrom = change.from;
+        return !valid;
+      })) return false;
+      collaborationDocument.transact(() => {
+        for (const change of ordered) {
+          const removed = change.to - change.from;
+          if (removed) shared.delete(change.from, removed);
+          if (change.insert) shared.insert(change.from, change.insert);
+        }
+      }, "local-input");
+      return true;
+    };
     const connectCollaboration = (documentId: string) => {
       if (documentId === collaborationDocumentId && collaborationSocket && collaborationSocket.readyState <= WebSocket.OPEN) return;
       disconnectCollaboration();
@@ -2724,6 +2743,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationDocument = yDocument;
       collaborationAbort = new AbortController();
       let fieldsBound = false;
+      let skipNextBodyInput = false;
       const bindFields = () => {
         if (fieldsBound || generation !== collaborationGeneration) return;
         fieldsBound = true;
@@ -2745,7 +2765,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           };
           shared.observe(applySharedValue);
           applySharedValue();
-          element.addEventListener("input", () => replaceSharedText(shared, element.value), { signal: collaborationAbort!.signal });
+          element.addEventListener("atlasez:body-change", (event) => {
+            if (name !== "body") return;
+            const changes = (event as CustomEvent<{ changes?: SharedTextChange[] }>).detail?.changes;
+            if (Array.isArray(changes) && applySharedTextChanges(shared, changes)) skipNextBodyInput = true;
+          }, { signal: collaborationAbort!.signal });
+          element.addEventListener("input", () => {
+            if (name === "body" && skipNextBodyInput) {
+              skipNextBodyInput = false;
+              return;
+            }
+            replaceSharedText(shared, element.value);
+          }, { signal: collaborationAbort!.signal });
           element.addEventListener("focus", () => collaborationSocket?.readyState === WebSocket.OPEN && collaborationSocket.send(JSON.stringify({ type: "presence", field: name })), { signal: collaborationAbort!.signal });
           element.addEventListener("blur", () => collaborationSocket?.readyState === WebSocket.OPEN && collaborationSocket.send(JSON.stringify({ type: "presence", field: "" })), { signal: collaborationAbort!.signal });
         }
