@@ -20,13 +20,13 @@
    - `GITHUB_APP_ID`
    - `GITHUB_APP_INSTALLATION_ID`
    - `GITHUB_APP_PRIVATE_KEY`
-   - `GITHUB_REVIEW_TOKEN`（PR作成者とは別の、レビューを承認できる書き込み権限アカウントのToken）
+   - `GITHUB_REVIEW_TOKEN`（推奨。PR作成者とは別の、レビューを承認できる書き込み権限アカウントのToken）
 
 5. `PUBLIC_SITE_ORIGIN=https://atlasez.org`を設定する。
 
 `GITHUB_PUBLISH_TOKEN`は移行期間の読み書き用フォールバックとして残すが、自動Mergeには利用しない。GitHub Appが未設定の場合、管理画面の公開連携は「自動公開未設定」と表示される。
 
-`GITHUB_REVIEW_TOKEN`は公開用GitHub AppやPR作成者と同じアカウントにしない。管理画面は連携診断で自動承認の設定状態も表示し、CI成功後に同Tokenで対象Commitへの承認レビューを作成してから、公開用AppでMergeする。既存の同一Commitへの承認は再利用するため、Cron再実行でレビューを重複作成しない。
+`GITHUB_REVIEW_TOKEN`は公開用GitHub AppやPR作成者と同じアカウントにしない。専用Tokenが未設定でも、公開用Appが設定済みなら既存の人間用`GITHUB_PUBLISH_TOKEN`を移行用フォールバックとしてレビューに利用できる。管理画面はTokenの利用者・権限と自動承認の設定状態を表示し、CI成功後に別アカウントで対象Commitへの承認レビューを作成してから、公開用AppでMergeする。既存の同一Commitへの承認は再利用するため、Cron再実行でレビューを重複作成しない。
 
 ## 管理画面上の状態
 

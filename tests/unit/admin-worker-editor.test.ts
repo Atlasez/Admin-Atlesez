@@ -199,7 +199,7 @@ describe("admin worker editor APIs", () => {
           ...emptyEnv,
           GITHUB_APP_ID: "4768541",
           GITHUB_APP_INSTALLATION_ID: "157671744",
-          GITHUB_REVIEW_TOKEN: "review-token",
+          GITHUB_PUBLISH_TOKEN: "review-token",
           GITHUB_APP_PRIVATE_KEY:
             "-----BEGIN PRIVATE KEY-----\nAQ==\n-----END PRIVATE KEY-----",
         } as never,
