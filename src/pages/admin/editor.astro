@@ -90,6 +90,15 @@ const articles = (await getCollection("articles"))
     status: article.data.status,
   }));
 const concepts = await getCollection("concepts");
+const conceptOptions = concepts
+  .map((concept) => ({
+    id: concept.id,
+    subject: concept.data.subject,
+    category: concept.data.category,
+    name: concept.data.name.ja,
+    nameEn: concept.data.name.en ?? "",
+  }))
+  .sort((a, b) => a.subject.localeCompare(b.subject) || a.category.localeCompare(b.category) || a.name.localeCompare(b.name, "ja"));
 const plannedArticles = subjects.flatMap((subject) =>
   getPlannedArticles(subject.slug).map((item) => {
     const concept = concepts.find(
@@ -123,7 +132,7 @@ const commentTags = [
   "アクセシビリティ",
   "公開前確認",
 ];
-const editorData = JSON.stringify({ subjects, articles, plannedArticles, commentTags }).replace(
+const editorData = JSON.stringify({ subjects, articles, plannedArticles, conceptOptions, commentTags }).replace(
   /</g,
   "\\u003c",
 );
@@ -225,7 +234,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
               <label><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
               <label><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
               <label><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-              <label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="math.group-theory.group-definition" /></label>
+              <label class="concept-picker-field"><span class="field-heading">記事で扱う概念</span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>概念名を選ぶと、内部IDは自動で設定されます。記事の内容に最も近い項目を選択してください。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">内部ID：未選択</output></label>
+              <details class="concept-id-advanced"><summary>概念IDを確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><small>新しい概念や未登録の概念を扱う場合のみ使用します。公開前に分野担当者が確認してください。</small></details>
               <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
               <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">フィードバック中</option><option value="on-hold">保留</option><option value="approved">フィードバック済み</option></select></label>
@@ -908,6 +918,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
   type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
   type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published" };
   type PlannedArticle = { key: string; subject: string; category: string; title: string; order: number; progress: "not-started" | "in-progress"; slug: string; conceptId: string };
+  type ConceptOption = { id: string; subject: string; category: string; name: string; nameEn: string };
   type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; latexName: string; createdAt: string; marker: string };
   type LockedRange = { start: number; end: number; text: string };
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
@@ -935,7 +946,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       // arrives. The editor owns its initial position, so avoid that race.
       history.scrollRestoration = "manual";
     }
-    const { subjects, articles, plannedArticles, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; commentTags: string[] };
+    const { subjects, articles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
@@ -948,6 +959,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
     const sourceSubject = root.querySelector<HTMLSelectElement>("[data-source-subject]")!;
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
     const category = form.elements.namedItem("category") as HTMLSelectElement;
+    const conceptId = form.elements.namedItem("conceptId") as HTMLInputElement;
+    const conceptPicker = root.querySelector<HTMLSelectElement>("[data-concept-picker]")!;
+    const conceptIdPreview = root.querySelector<HTMLOutputElement>("[data-concept-id-preview]")!;
     const status = form.elements.namedItem("status") as HTMLSelectElement;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
     const diagnosticsPanel = root.querySelector<HTMLDialogElement>("[data-editor-diagnostics]")!;
@@ -1924,9 +1938,28 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       category.innerHTML = categories.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("");
       category.value = categories.some((item) => item.slug === selected) ? selected : categories[0]?.slug ?? "general";
     };
+    const fillConceptOptions = (selected = conceptId.value) => {
+      const matching = conceptOptions.filter((item) => item.subject === subject.value && item.category === category.value);
+      const current = selected && !matching.some((item) => item.id === selected)
+        ? [{ id: selected, subject: subject.value, category: category.value, name: "未登録または旧形式の概念（要確認）", nameEn: "" }]
+        : [];
+      const options = [...current, ...matching];
+      conceptPicker.innerHTML = [
+        '<option value="">概念を選択してください</option>',
+        ...options.map((item) => `<option value="${esc(item.id)}">${esc(item.name)}${item.nameEn ? `（${esc(item.nameEn)}）` : ""}${current.includes(item) ? "・要確認" : ""}</option>`),
+      ].join("");
+      conceptPicker.value = options.some((item) => item.id === selected) ? selected : "";
+      conceptId.value = selected;
+      const selectedOption = options.find((item) => item.id === selected);
+      conceptIdPreview.textContent = selectedOption
+        ? `内部ID：${selectedOption.id}${selectedOption.name === "未登録または旧形式の概念（要確認）" ? "（公開前に担当者へ確認）" : ""}`
+        : selected ? `内部ID：${selected}（一覧に未登録）` : "内部ID：未選択";
+      conceptIdPreview.classList.toggle("is-unregistered", selectedOption?.name === "未登録または旧形式の概念（要確認）");
+    };
     const initializeSelects = () => {
       populateEditorSubjects();
       fillCategories();
+      fillConceptOptions();
       populateSourceSubjects();
       fillSourceArticles();
     };
@@ -2666,7 +2699,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
       (form.elements.namedItem("slug") as HTMLInputElement).value = item.slug;
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
-      (form.elements.namedItem("conceptId") as HTMLInputElement).value = item.concept_id;
+      fillConceptOptions(item.concept_id);
       status.value = item.status; body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
@@ -2774,7 +2807,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
           }).join("")
         : "<p class=\"feedback-request-history-empty\">この原稿には、まだフィードバック依頼はありません。</p>";
     };
-    subject.addEventListener("change", () => { fillCategories(); setUnsavedChanges(true); }); sourceSubject.addEventListener("change", fillSourceArticles);
+    subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; fillConceptOptions(); setUnsavedChanges(true); });
+    category.addEventListener("change", () => { conceptId.value = ""; fillConceptOptions(); setUnsavedChanges(true); });
+    conceptPicker.addEventListener("change", () => { conceptId.value = conceptPicker.value; fillConceptOptions(conceptId.value); setUnsavedChanges(true); });
+    conceptId.addEventListener("input", () => { fillConceptOptions(conceptId.value); setUnsavedChanges(true); });
+    sourceSubject.addEventListener("change", fillSourceArticles);
     outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
     outlineCategory.addEventListener("change", renderAtlasOutline);
     outlineList.addEventListener("click", (event) => {
@@ -3289,6 +3326,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, comment
 <style is:global>
   .editor-workspace .field-heading { align-items:baseline; display:inline-flex; gap:.18rem; justify-self:start; }
   .editor-workspace .required-mark { color: var(--danger, #a03123); font-weight: 900; }
+  .editor-workspace .concept-picker-field small, .editor-workspace .concept-id-advanced > small { color: var(--muted); font-size: .7rem; font-weight: 500; line-height: 1.45; }
+  .editor-workspace .concept-id-preview { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .68rem; font-weight: 500; overflow-wrap: anywhere; }
+  .editor-workspace .concept-id-preview.is-unregistered { color: var(--danger, #a03123); font-weight: 800; }
+  .editor-workspace .concept-id-advanced { align-self: start; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px dashed var(--border); border-radius: .45rem; padding: .45rem .55rem .55rem; }
+  .editor-workspace .concept-id-advanced summary { color: var(--muted); font-size: .72rem; font-weight: 700; }
+  .editor-workspace .concept-id-advanced label { margin-top: .5rem; }
   .collaboration-status { align-items:center; background:var(--surface-alt); border:1px solid var(--border); border-radius:.5rem; display:flex; flex-wrap:wrap; gap:.35rem .55rem; max-width:30rem; padding:.38rem .5rem; }
   .collaboration-status[hidden] { display:none; }
   .collaboration-status > span { color:var(--muted); font-size:.7rem; font-weight:800; }
