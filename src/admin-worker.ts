@@ -9867,6 +9867,8 @@ const extractGithubFileReference = (lines: string[]) => {
 };
 
 const publicationSuggestionFor = (detail: string) => {
+  if (/未対応.*directive|unknown directive|unsupported directive|directive/i.test(detail))
+    return "記事本文のdirective名を、運営サイトが対応しているdefi・prop・thmなどへ修正し、保存してから再試行してください。";
   if (/存在しない概念|concept(?:\s+id)?|概念.?id/i.test(detail))
     return "記事の概念IDを、運営サイトで登録済みの概念IDへ修正して保存し、公開処理を再試行してください。";
   if (/内部リンク|broken link|リンク.*(?:見つか|存在しない)|not found/i.test(detail))
@@ -9951,9 +9953,11 @@ const getEditorialPublicationDiagnostic = async (
 
   const allLines = [...diagnosticLines, ...outputLines, ...logLines];
   if (!allLines.length) return null;
-  const fileReference = extractGithubFileReference(allLines);
-  const relevant = allLines.filter((line) =>
-    /error|failed|failure|invalid|not found|存在しない|検証エラー|検証.*失敗|重複|循環|katex|mathjax|latex|typescript|eslint|lint|format|process completed/i.test(line),
+  const noise = /node(?:\.js)?\s+20\s+is\s+deprecated|actions\/(?:checkout|setup-node)@|github\.blog\/changelog|process completed with exit code|^\[command\]|^Run\s+/i;
+  const meaningfulLines = allLines.filter((line) => !noise.test(line));
+  const fileReference = extractGithubFileReference(meaningfulLines) ?? extractGithubFileReference(allLines);
+  const relevant = meaningfulLines.filter((line) =>
+    /error|failed|failure|invalid|not found|存在しない|未対応|unsupported|directive|検証エラー|検証.*失敗|重複|循環|katex|mathjax|latex|typescript|eslint|lint|format/i.test(line),
   );
   const detailLines = [...new Set([
     ...(fileReference ? [fileReference.message] : []),
