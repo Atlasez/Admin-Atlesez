@@ -4411,6 +4411,305 @@ async function provisionMemberDiscordRolesForEmail(
   );
 }
 
+type DiscordAdminSyncAccount = {
+  email: string;
+  discord_user_id: string;
+};
+
+type DiscordAdminSyncSubjectMapping = {
+  subject: string;
+  discord_role_id: string;
+};
+
+type DiscordAdminSyncAttributeMapping = {
+  attribute_type: "university" | "year" | "interest";
+  attribute_value: string;
+  discord_role_id: string;
+};
+
+type DiscordAdminSyncProfile = {
+  email: string;
+  university: string;
+  year: string;
+  interests: string;
+  affiliation_type: string;
+};
+
+type DiscordAdminSyncResult = {
+  accounts: number;
+  synced: number;
+  skipped: number;
+  updated: number;
+  warnings: string[];
+};
+
+/**
+ * Discordの管理対象ロールを運営サイトへ取り込む。
+ * 対応表にないロールは権限へ変換せず、APIエラー時も既存権限を削除しない。
+ */
+export async function syncDiscordRolesToAdmin(
+  env: Env,
+): Promise<DiscordAdminSyncResult> {
+  const result: DiscordAdminSyncResult = {
+    accounts: 0,
+    synced: 0,
+    skipped: 0,
+    updated: 0,
+    warnings: [],
+  };
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID) return result;
+
+  try {
+    const [accounts, subjectMappings, attributeMappings, permissions, profiles] =
+      await Promise.all([
+        env.REPORTS.prepare(
+          "SELECT lower(email) AS email, discord_user_id FROM atlasez_member_discord_accounts WHERE discord_user_id IS NOT NULL AND discord_user_id != ''",
+        ).all<DiscordAdminSyncAccount>(),
+        env.REPORTS.prepare(
+          "SELECT subject, discord_role_id FROM atlasez_discord_role_mappings WHERE project_id='atlas'",
+        ).all<DiscordAdminSyncSubjectMapping>(),
+        env.REPORTS.prepare(
+          "SELECT attribute_type, attribute_value, discord_role_id FROM atlasez_discord_attribute_role_mappings",
+        ).all<DiscordAdminSyncAttributeMapping>(),
+        env.REPORTS.prepare(
+          "SELECT lower(email) AS email, subject FROM report_admin_permissions",
+        ).all<{ email: string; subject: string }>(),
+        env.REPORTS.prepare(
+          "SELECT lower(email) AS email, university, year, interests, affiliation_type FROM editorial_member_profiles",
+        ).all<DiscordAdminSyncProfile>(),
+      ]);
+    const accountRows = accounts.results ?? [];
+    result.accounts = accountRows.length;
+    if (!accountRows.length) return result;
+
+    const subjectByRole = new Map<string, string[]>();
+    const managedPermissionSubjects = new Set<string>();
+    const affiliationByRole = new Map<string, string[]>();
+    const managedAffiliations = new Set<string>();
+    for (const mapping of subjectMappings.results ?? []) {
+      const roleId = mapping.discord_role_id.trim();
+      const subject = mapping.subject.trim();
+      if (!roleId || !subject) continue;
+      if (subject.startsWith("__affiliation__")) {
+        const value = subject.slice("__affiliation__".length).trim();
+        if (!(MEMBER_AFFILIATION_TYPES as readonly string[]).includes(value))
+          continue;
+        managedAffiliations.add(value);
+        affiliationByRole.set(roleId, [
+          ...(affiliationByRole.get(roleId) ?? []),
+          value,
+        ]);
+        continue;
+      }
+      const permission = subject === "__manager__" ? "*" : subject;
+      if (permission !== "*" && !SUBJECT_SLUG.test(permission)) continue;
+      managedPermissionSubjects.add(permission);
+      subjectByRole.set(roleId, [
+        ...(subjectByRole.get(roleId) ?? []),
+        permission,
+      ]);
+    }
+
+    const attributeByRole = new Map<
+      string,
+      Array<Pick<DiscordAdminSyncAttributeMapping, "attribute_type" | "attribute_value">>
+    >();
+    const managedAttributeValues = {
+      university: new Set<string>(),
+      year: new Set<string>(),
+      interest: new Set<string>(),
+    };
+    for (const mapping of attributeMappings.results ?? []) {
+      const roleId = mapping.discord_role_id.trim();
+      const value = mapping.attribute_value.trim();
+      if (!roleId || !value) continue;
+      const allowed =
+        mapping.attribute_type === "university"
+          ? MEMBER_UNIVERSITIES
+          : mapping.attribute_type === "year"
+            ? MEMBER_YEARS
+            : MEMBER_INTERESTS;
+      if (!(allowed as readonly string[]).includes(value)) continue;
+      managedAttributeValues[mapping.attribute_type].add(value);
+      attributeByRole.set(roleId, [
+        ...(attributeByRole.get(roleId) ?? []),
+        { attribute_type: mapping.attribute_type, attribute_value: value },
+      ]);
+    }
+
+    const permissionsByEmail = new Map<string, Set<string>>();
+    for (const permission of permissions.results ?? []) {
+      const email = permission.email.toLowerCase();
+      const current = permissionsByEmail.get(email) ?? new Set<string>();
+      current.add(permission.subject);
+      permissionsByEmail.set(email, current);
+    }
+    const profilesByEmail = new Map<string, DiscordAdminSyncProfile>();
+    for (const profile of profiles.results ?? [])
+      profilesByEmail.set(profile.email.toLowerCase(), profile);
+
+    for (const account of accountRows) {
+      const email = account.email.toLowerCase();
+      let memberResponse: Response;
+      try {
+        memberResponse = await fetch(
+          `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}`,
+          { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
+        );
+      } catch (error) {
+        result.skipped += 1;
+        result.warnings.push(`${email}: Discordのメンバー情報を取得できませんでした。`);
+        console.error("discord to admin member lookup failed", { email, error });
+        continue;
+      }
+      if (!memberResponse.ok) {
+        result.skipped += 1;
+        result.warnings.push(`${email}: Discordのメンバー情報を確認できないため、権限を変更しませんでした。`);
+        continue;
+      }
+
+      let member: { roles?: string[] };
+      try {
+        member = (await memberResponse.json()) as { roles?: string[] };
+      } catch {
+        result.skipped += 1;
+        result.warnings.push(`${email}: Discordのメンバー情報が不正なため、権限を変更しませんでした。`);
+        continue;
+      }
+      result.synced += 1;
+      const currentRoleIds = new Set(member.roles ?? []);
+      const currentPermissions = new Set(permissionsByEmail.get(email) ?? []);
+      const nextPermissions = new Set(currentPermissions);
+      const desiredPermissions = new Set<string>();
+      for (const roleId of currentRoleIds)
+        for (const subject of subjectByRole.get(roleId) ?? [])
+          desiredPermissions.add(subject);
+      for (const subject of managedPermissionSubjects) {
+        if (desiredPermissions.has(subject)) nextPermissions.add(subject);
+        else nextPermissions.delete(subject);
+      }
+      const permissionsChanged =
+        currentPermissions.size !== nextPermissions.size ||
+        [...currentPermissions].some((subject) => !nextPermissions.has(subject));
+
+      const currentProfile = profilesByEmail.get(email);
+      const currentUniversity = currentProfile?.university?.trim() ?? "";
+      const currentYear = currentProfile?.year?.trim() ?? "";
+      const currentAffiliation = currentProfile?.affiliation_type?.trim() ?? "";
+      const currentInterests = (currentProfile?.interests ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const selectedAttributes = {
+        university: new Set<string>(),
+        year: new Set<string>(),
+        interest: new Set<string>(),
+      };
+      const selectedAffiliations = new Set<string>();
+      for (const roleId of currentRoleIds) {
+        for (const attribute of attributeByRole.get(roleId) ?? [])
+          selectedAttributes[attribute.attribute_type].add(attribute.attribute_value);
+        for (const affiliation of affiliationByRole.get(roleId) ?? [])
+          selectedAffiliations.add(affiliation);
+      }
+
+      const syncSingleAttribute = (
+        current: string,
+        selected: Set<string>,
+        managed: Set<string>,
+        label: string,
+      ) => {
+        if (selected.size > 1) {
+          result.warnings.push(`${email}: ${label}に対応するDiscord役職が複数あるため、変更しませんでした。`);
+          return current;
+        }
+        const value = [...selected][0];
+        if (value) return value;
+        return managed.has(current) ? "" : current;
+      };
+      const nextUniversity = syncSingleAttribute(
+        currentUniversity,
+        selectedAttributes.university,
+        managedAttributeValues.university,
+        "所属機関",
+      );
+      const nextYear = syncSingleAttribute(
+        currentYear,
+        selectedAttributes.year,
+        managedAttributeValues.year,
+        "学年",
+      );
+      const nextAffiliation = syncSingleAttribute(
+        currentAffiliation,
+        selectedAffiliations,
+        managedAffiliations,
+        "所属区分",
+      );
+      const unmanagedInterests = currentInterests.filter(
+        (value) => !managedAttributeValues.interest.has(value),
+      );
+      const nextInterests = [
+        ...new Set([...unmanagedInterests, ...selectedAttributes.interest]),
+      ];
+
+      const statements: D1PreparedStatement[] = [];
+      for (const subject of nextPermissions)
+        if (!currentPermissions.has(subject))
+          statements.push(
+            env.REPORTS.prepare(
+              "INSERT OR IGNORE INTO report_admin_permissions (email, subject) VALUES (?, ?)",
+            ).bind(email, subject),
+          );
+      for (const subject of currentPermissions)
+        if (managedPermissionSubjects.has(subject) && !nextPermissions.has(subject))
+          statements.push(
+            env.REPORTS.prepare(
+              "DELETE FROM report_admin_permissions WHERE email=? AND subject=?",
+            ).bind(email, subject),
+          );
+      if (permissionsChanged && nextPermissions.size)
+        statements.push(
+          env.REPORTS.prepare(
+            "INSERT OR IGNORE INTO atlasez_project_memberships (project_id,email,role,joined_at) VALUES ('atlas',?,?,?)",
+          ).bind(email, nextPermissions.has("*") ? "manager" : "member", new Date().toISOString()),
+        );
+      const profileChanged =
+        currentProfile
+          ? currentUniversity !== nextUniversity ||
+            currentYear !== nextYear ||
+            currentAffiliation !== nextAffiliation ||
+            currentInterests.join(",") !== nextInterests.join(",")
+          : Boolean(nextUniversity || nextYear || nextAffiliation || nextInterests.length);
+      if (profileChanged)
+        statements.push(
+          env.REPORTS.prepare(
+            `INSERT INTO editorial_member_profiles
+               (email,university,year,interests,affiliation_type,updated_at)
+             VALUES (?,?,?,?,?,?)
+             ON CONFLICT(email) DO UPDATE SET
+               university=excluded.university,year=excluded.year,interests=excluded.interests,
+               affiliation_type=excluded.affiliation_type,updated_at=excluded.updated_at`,
+          ).bind(
+            email,
+            nextUniversity,
+            nextYear,
+            nextInterests.join(","),
+            nextAffiliation,
+            new Date().toISOString(),
+          ),
+        );
+      if (statements.length) {
+        await env.REPORTS.batch(statements);
+        result.updated += 1;
+      }
+    }
+  } catch (error) {
+    result.warnings.push("Discordから運営サイトへの同期処理でエラーが発生しました。");
+    console.error("discord to admin sync failed", error);
+  }
+  return result;
+}
+
 const isAssignableDiscordRole = (
   role: { id: string; managed?: boolean },
   guildId: string,
@@ -11912,6 +12211,7 @@ export default {
           dispatchDueTaskReminders(env),
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
+          syncDiscordRolesToAdmin(env),
           dispatchScheduledEditorialPublications(env),
         ]),
       );
