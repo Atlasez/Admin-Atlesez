@@ -8890,6 +8890,11 @@ const githubText = (base64: string) => {
   return new TextDecoder().decode(bytes);
 };
 
+// 公開リポジトリは、運営サイトの表示用ロケール（ja/en）とは別に
+// ISO 639-3 のディレクトリ名（jpn/eng）を使っている。
+const editorialLocaleDirectory = (locale: string) =>
+  ({ ja: "jpn", en: "eng" })[locale] ?? locale;
+
 async function storeArticleBackup(
   env: Env,
   repository: string,
@@ -9005,7 +9010,7 @@ async function syncEditorialPublicationStatus(env: Env) {
   let pending = 0;
   const now = new Date().toISOString();
   for (const document of documents.results) {
-    const path = `src/content/articles/${document.locale}/${document.subject}/${document.category}/${document.slug}.md`;
+    const path = `src/content/articles/${editorialLocaleDirectory(document.locale)}/${document.subject}/${document.category}/${document.slug}.md`;
     const response = await fetch(
       `https://api.github.com/repos/${repository}/contents/${path}`,
       { headers },
@@ -9321,7 +9326,7 @@ async function writeEditorialDocumentToGitHub(
       },
       503,
     );
-  const path = `src/content/articles/${document.locale}/${document.subject}/${document.category}/${document.slug}.md`;
+  const path = `src/content/articles/${editorialLocaleDirectory(document.locale)}/${document.subject}/${document.category}/${document.slug}.md`;
   const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
   const headers = githubApiHeaders(token, "atlasez-editorial-workspace");
   const assets = await listEditorialAssetsForDocument(env, document.id);
@@ -9460,7 +9465,7 @@ async function writeEditorialDocumentToGitHub(
             "このPRは運営サイトの記事公開フローから自動作成されました。",
             "",
             `- 原稿ID: ${document.id}`,
-            `- 対象: ${document.locale}/${document.subject}/${document.category}/${document.slug}`,
+            `- 対象: ${editorialLocaleDirectory(document.locale)}/${document.subject}/${document.category}/${document.slug}`,
             `- 操作: ${publicationStatus === "published" ? "公開" : "公開取り消し"}`,
             "",
             "CIと差分を確認してからMergeしてください。Merge後、学習サイトへ自動反映されます。",
