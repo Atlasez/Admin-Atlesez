@@ -3,9 +3,11 @@ import tikzjax from "node-tikzjax";
 import {
   TIKZ_MAX_RENDERED_SVG_LENGTH,
   assertSafeTikzSource,
+  maskTikzUnicode,
   normalizeTikzMathSlashes,
   normalizeTikzLibraries,
   normalizeTikzPackages,
+  restoreTikzUnicode,
   normalizeTikzSvgFonts,
 } from "./tikz-policy.mjs";
 
@@ -34,6 +36,12 @@ function normalizeTikzSvgColors(svg) {
 // node-tikzjax uses a shared in-memory TeX filesystem and its own global
 // WASM state. Serialize renders so two requests cannot corrupt one another.
 let renderQueue = Promise.resolve();
+
+// Previewing an article can request the same source several times while the
+// author switches panes or reopens a document. Reusing the completed result
+// keeps a large figure from recompiling on every preview refresh.
+const TIKZ_RENDER_CACHE_SIZE = 8;
+const renderCache = new Map();
 
 const escapeHtml = (value) =>
   String(value)
@@ -64,7 +72,8 @@ function extractDeclarations(source) {
 
 function normalizeSource(source, packages, libraries) {
   const checked = normalizeTikzMathSlashes(assertSafeTikzSource(source));
-  const declarations = extractDeclarations(checked);
+  const unicode = maskTikzUnicode(checked);
+  const declarations = extractDeclarations(unicode.source);
   const packageList = normalizeTikzPackages([
     ...declarations.packages,
     ...packages,
@@ -77,6 +86,7 @@ function normalizeSource(source, packages, libraries) {
     body: declarations.body.trim(),
     packages: packageList,
     libraries: libraryList,
+    unicodeReplacements: unicode.replacements,
   };
 }
 
@@ -102,6 +112,18 @@ export async function renderTikzSource(source, options = {}) {
     options.packages ?? [],
     options.libraries ?? [],
   );
+  const cacheKey = JSON.stringify({
+    source: normalized.body,
+    packages: normalized.packages,
+    libraries: normalized.libraries,
+    unicode: normalized.unicodeReplacements,
+  });
+  const cached = renderCache.get(cacheKey);
+  if (cached) {
+    renderCache.delete(cacheKey);
+    renderCache.set(cacheKey, cached);
+    return cached;
+  }
   const render = async () => {
     const texPackages = Object.fromEntries(
       normalized.packages.map(({ name, options: packageOptions }) => [
@@ -122,17 +144,12 @@ export async function renderTikzSource(source, options = {}) {
     });
     return {
       svg: sanitizeRenderedSvg(
-        normalizeTikzSvgFonts(normalizeTikzSvgColors(svg)),
+        restoreTikzUnicode(
+          normalizeTikzSvgFonts(normalizeTikzSvgColors(svg)),
+          normalized.unicodeReplacements,
+        ),
       ),
-      hash: createHash("sha256")
-        .update(
-          JSON.stringify({
-            source: normalized.body,
-            packages: normalized.packages,
-            libraries: normalized.libraries,
-          }),
-        )
-        .digest("hex"),
+      hash: createHash("sha256").update(cacheKey).digest("hex"),
       packages: normalized.packages,
       libraries: normalized.libraries,
     };
@@ -142,6 +159,12 @@ export async function renderTikzSource(source, options = {}) {
     () => undefined,
     () => undefined,
   );
+  renderCache.set(cacheKey, result);
+  while (renderCache.size > TIKZ_RENDER_CACHE_SIZE)
+    renderCache.delete(renderCache.keys().next().value);
+  result.catch(() => {
+    if (renderCache.get(cacheKey) === result) renderCache.delete(cacheKey);
+  });
   return result;
 }
 

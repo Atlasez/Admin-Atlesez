@@ -2569,6 +2569,7 @@ async function renderEditorialTikz(
           : {}),
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(120_000),
     });
     const body = await upstream.text();
     let responsePayload: unknown;
@@ -2590,7 +2591,12 @@ async function renderEditorialTikz(
       );
     }
     return json(responsePayload);
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError")
+      return json(
+        { error: "TikZ組版サービスが120秒以内に応答しませんでした。" },
+        504,
+      );
     return json({ error: "TikZ組版サービスに接続できませんでした。" }, 502);
   }
 }

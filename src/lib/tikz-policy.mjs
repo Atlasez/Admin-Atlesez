@@ -4,7 +4,10 @@
  * Keep this file free of Node-only imports: the admin Worker and the Node
  * renderer both use the same policy when they expose package choices.
  */
-export const TIKZ_MAX_SOURCE_LENGTH = 24_000;
+// Keep the editor and public build limits aligned. The renderer still rejects
+// external I/O and shell execution below, so a larger authoring budget does
+// not turn TikZ into an unbounded TeX input surface.
+export const TIKZ_MAX_SOURCE_LENGTH = 64_000;
 export const TIKZ_MAX_PACKAGE_COUNT = 8;
 export const TIKZ_MAX_LIBRARY_COUNT = 24;
 // Large diagrams can contain many paths and embedded font references. Keep a
@@ -58,6 +61,30 @@ export const ALLOWED_TIKZ_LIBRARIES = Object.freeze([
 
 export const TIKZ_DANGEROUS_COMMAND_PATTERN =
   /\\(?:input|include|openin|openout|write18|directlua|latelua|read|write|catcode|special|pdfobj|immediate)\b|(?:https?:|file:|data:)/i;
+
+// The bundled TeX engine has no CJK input/font package. Mask authored
+// Unicode before TeX sees it, then restore it in generated SVG text nodes.
+export function maskTikzUnicode(source) {
+  const replacements = [];
+  const masked = String(source ?? "").replace(/[^\x00-\x7F]+/gu, (value) => {
+    const token = `ATLASEZUNICODE${replacements.length}X`;
+    replacements.push([token, value]);
+    return token;
+  });
+  return { source: masked, replacements };
+}
+
+export function restoreTikzUnicode(svg, replacements = []) {
+  let value = String(svg ?? "");
+  for (const [token, original] of replacements) {
+    const pattern = token
+      .split("")
+      .map((character) => character.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("(?:</text><text[^>]*>)?");
+    value = value.replace(new RegExp(pattern, "g"), () => original);
+  }
+  return value;
+}
 
 /**
  * node-tikzjax/TikZJax's TeX-to-SVG font encoding can emit the ordinary math
