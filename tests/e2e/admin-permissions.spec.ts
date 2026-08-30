@@ -61,6 +61,25 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
       }),
     });
   });
+  await page.route("**/api/admin/member-discord-roles", async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error:
+          "Discordロール「数学運営」を付与できませんでした（HTTP 403）。Botのロールが対象ロールより上位にあることを確認してください。",
+        provisioning: {
+          status: "failed",
+          applied: 0,
+          removed: 0,
+          warnings: [
+            "Discordロール「数学運営」を付与できませんでした（HTTP 403）。",
+          ],
+        },
+      }),
+    });
+  });
 
   await page.goto("./admin/permissions/?project=atlas");
 
@@ -125,6 +144,20 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   await expect(memberModal.locator("[data-modal-discord-role]")).toHaveCount(1);
   await expect(memberModal.locator(".member-role-option span")).toHaveText(
     "数学運営",
+  );
+  await memberModal.locator("[data-modal-discord-role]").check();
+  await memberModal
+    .getByRole("button", { name: "保存してDiscordへ同期" })
+    .click();
+  await expect(memberModal).toBeVisible();
+  await expect(
+    memberModal.locator("[data-member-modal-message]"),
+  ).toHaveAttribute("data-state", "error");
+  const syncErrorMessage = await memberModal
+    .locator("[data-member-modal-message]")
+    .evaluate((element) => (element as HTMLOutputElement).value);
+  expect(syncErrorMessage).toMatch(
+    /Discordロールの付与に失敗|対象ロールより上位/,
   );
   await page.keyboard.press("Escape");
   await expect(memberModal).toBeHidden();
