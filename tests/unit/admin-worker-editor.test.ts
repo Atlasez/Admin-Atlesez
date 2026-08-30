@@ -1409,16 +1409,23 @@ describe("admin worker editor APIs", () => {
       await Promise.all(pending);
 
       expect(requests.some((url) => url.includes("/check-runs?"))).toBe(true);
+      const publicationUpdates = executed.filter((entry) =>
+        entry.query.includes("UPDATE editorial_publication_runs"),
+      );
       expect(
-        executed.some(
+        publicationUpdates.some(
           (entry) =>
-            entry.query.includes("UPDATE editorial_publication_runs") &&
             entry.values.includes("retry_wait") &&
             entry.values.includes("ci") &&
             entry.values.includes("ci_transient_failure") &&
             entry.values.includes(
               "https://github.com/Atlasez/Atlasez01/actions/runs/654/job/765",
-            ) &&
+            ),
+        ),
+      ).toBe(true);
+      expect(
+        publicationUpdates.some(
+          (entry) =>
             entry.values.includes(
               "src/content/articles/jpn/mathematics/test.md",
             ) &&

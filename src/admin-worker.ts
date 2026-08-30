@@ -9917,57 +9917,60 @@ const getEditorialPublicationDiagnostic = async (
   let logLines: string[] = [];
   let outputLines: string[] = [];
 
-  if (check.id) {
-    const detailResponse = await fetch(
-      `https://api.github.com/repos/${repository}/check-runs/${check.id}`,
-      { headers },
-    ).catch(() => null);
-    if (detailResponse?.ok) {
-      const data = (await detailResponse.json().catch(() => ({}))) as {
-        output?: { title?: string | null; summary?: string | null; text?: string | null };
-      };
-      outputLines = [data.output?.title, data.output?.summary, data.output?.text]
-        .filter((line): line is string => Boolean(line?.trim()))
-        .flatMap((line) => line.split(/\r?\n/).map(cleanGithubLogLine));
-    }
-    const annotationsResponse = await fetch(
-      `https://api.github.com/repos/${repository}/check-runs/${check.id}/annotations?per_page=50`,
-      { headers },
-    ).catch(() => null);
-    if (annotationsResponse?.ok) {
-      const annotations = (await annotationsResponse.json().catch(() => [])) as Array<{
-        path?: string;
-        start_line?: number | null;
-        start_column?: number | null;
-        message?: string;
-        title?: string;
-        annotation_level?: string;
-      }>;
-      for (const annotation of annotations) {
-        const message = [annotation.title, annotation.message]
-          .filter((part): part is string => Boolean(part?.trim()))
-          .join("：");
-        if (!message) continue;
-        diagnosticLines.push(
-          `${annotation.path ?? "CI"}${annotation.start_line ? `:${annotation.start_line}` : ""}${annotation.start_column ? `:${annotation.start_column}` : ""}: ${message}`,
-        );
-      }
+  const jobId = check.details_url?.match(/\/job\/(\d+)(?:[/?]|$)/)?.[1];
+  const [detailResponse, annotationsResponse, logResponse] = await Promise.all([
+    check.id
+      ? fetch(
+          `https://api.github.com/repos/${repository}/check-runs/${check.id}`,
+          { headers },
+        ).catch(() => null)
+      : Promise.resolve(null),
+    check.id
+      ? fetch(
+          `https://api.github.com/repos/${repository}/check-runs/${check.id}/annotations?per_page=50`,
+          { headers },
+        ).catch(() => null)
+      : Promise.resolve(null),
+    jobId
+      ? fetch(
+          `https://api.github.com/repos/${repository}/actions/jobs/${jobId}/logs`,
+          { headers },
+        ).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  if (detailResponse?.ok) {
+    const data = (await detailResponse.json().catch(() => ({}))) as {
+      output?: { title?: string | null; summary?: string | null; text?: string | null };
+    };
+    outputLines = [data.output?.title, data.output?.summary, data.output?.text]
+      .filter((line): line is string => Boolean(line?.trim()))
+      .flatMap((line) => line.split(/\r?\n/).map(cleanGithubLogLine));
+  }
+  if (annotationsResponse?.ok) {
+    const annotations = (await annotationsResponse.json().catch(() => [])) as Array<{
+      path?: string;
+      start_line?: number | null;
+      start_column?: number | null;
+      message?: string;
+      title?: string;
+      annotation_level?: string;
+    }>;
+    for (const annotation of annotations) {
+      const message = [annotation.title, annotation.message]
+        .filter((part): part is string => Boolean(part?.trim()))
+        .join("：");
+      if (!message) continue;
+      diagnosticLines.push(
+        `${annotation.path ?? "CI"}${annotation.start_line ? `:${annotation.start_line}` : ""}${annotation.start_column ? `:${annotation.start_column}` : ""}: ${message}`,
+      );
     }
   }
-
-  const jobId = check.details_url?.match(/\/job\/(\d+)(?:[/?]|$)/)?.[1];
-  if (jobId) {
-    const logResponse = await fetch(
-      `https://api.github.com/repos/${repository}/actions/jobs/${jobId}/logs`,
-      { headers },
-    ).catch(() => null);
-    if (logResponse?.ok) {
-      const raw = await logResponse.text().catch(() => "");
-      logLines = raw
-        .split(/\r?\n/)
-        .map(cleanGithubLogLine)
-        .filter(Boolean);
-    }
+  if (logResponse?.ok) {
+    const raw = await logResponse.text().catch(() => "");
+    logLines = raw
+      .split(/\r?\n/)
+      .map(cleanGithubLogLine)
+      .filter(Boolean);
   }
 
   const allLines = [...diagnosticLines, ...outputLines, ...logLines];
@@ -10539,18 +10542,12 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
     const conclusion = checks.failed.conclusion ?? "failure";
     const transient = ["cancelled", "timed_out", "stale", "startup_failure"].includes(conclusion);
     const canRetry = transient && run.attempt < publicationMaxAttempts;
-    const diagnostic = await getEditorialPublicationDiagnostic(env, checks.failed);
+    const diagnosticPromise = getEditorialPublicationDiagnostic(env, checks.failed).catch(() => null);
     const common = {
       failure_kind: "ci" as const,
       check_name: checks.failed.name ?? null,
       check_url: checks.failed.details_url ?? checks.failed.html_url ?? null,
       diagnostic_url: checks.failed.details_url ?? checks.failed.html_url ?? pullRequest.html_url,
-      failure_detail: diagnostic?.detail ?? null,
-      failure_step: diagnostic?.step ?? null,
-      failure_file: diagnostic?.file ?? null,
-      failure_line: diagnostic?.line ?? null,
-      failure_column: diagnostic?.column ?? null,
-      failure_suggestion: diagnostic?.suggestion ?? null,
     };
     await updateEditorialPublicationRun(env, run.id, canRetry
       ? {
@@ -10566,6 +10563,16 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
           error_code: "ci_failed",
           error_message: `CIが失敗しました（${checks.failed.name ?? "verify"}）。記事内容または検証結果を運営サイトで確認してください。`,
         });
+    const diagnostic = await diagnosticPromise;
+    if (diagnostic)
+      await updateEditorialPublicationRun(env, run.id, {
+        failure_detail: diagnostic.detail,
+        failure_step: diagnostic.step,
+        failure_file: diagnostic.file,
+        failure_line: diagnostic.line,
+        failure_column: diagnostic.column,
+        failure_suggestion: diagnostic.suggestion,
+      });
     return;
   }
   await updateEditorialPublicationRun(env, run.id, {
