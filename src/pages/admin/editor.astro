@@ -926,7 +926,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   type LockedRange = { start: number; end: number; text: string };
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
   type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
-  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: { id: string; state: string; action: "publish" | "unpublish"; attempt: number; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null; failure_detail?: string | null; failure_step?: string | null; failure_file?: string | null; failure_line?: number | null; failure_column?: number | null; failure_suggestion?: string | null } | null; locked_ranges?: string | LockedRange[] };
+  type PublicationRun = { id: string; state: string; action: "publish" | "unpublish"; attempt: number; pull_request_number?: number | null; pull_request_url?: string | null; branch?: string | null; head_sha?: string | null; merge_sha?: string | null; last_check_at?: string | null; next_attempt_at?: string | null; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null; failure_detail?: string | null; failure_step?: string | null; failure_file?: string | null; failure_line?: number | null; failure_column?: number | null; failure_suggestion?: string | null; updated_at?: string };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: PublicationRun | null; locked_ranges?: string | LockedRange[] };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
@@ -1472,6 +1473,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     root.querySelector<HTMLAnchorElement>(".workspace-header nav a")?.addEventListener("click", closeAllPanePopouts);
     window.addEventListener("pagehide", closeAllPanePopouts);
     let documents: Omit<Document, "body">[] = [];
+    let latestPublicationRealtimeVersion = 0;
     let currentComments: Comment[] = [];
     const pendingCommentReactions = new Set<string>();
     const expandedReplyThreadIds = new Set<string>();
@@ -1543,7 +1545,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         step.classList.toggle("is-current", currentIndex >= 0 && stepIndex === currentIndex);
       });
     };
-    const loadPublicationReview = async (documentId: string, item?: Document) => {
+    const loadPublicationReview = async (documentId: string, item?: Omit<Document, "body">) => {
       if (!documentId) return;
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/publication-review`, { credentials: "same-origin", cache: "no-store" });
       const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; managerOverride?: boolean; feedbackTaskTotal?: number; feedbackTaskDone?: number; feedbackComplete?: boolean; error?: string }>(response);
@@ -1673,11 +1675,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
     };
     let publicationRefreshTimer: number | null = null;
-    const monitorPublicationRun = (item: Document) => {
+    const monitorPublicationRun = (item: Pick<Document, "id" | "publication_run">) => {
       if (publicationRefreshTimer !== null) window.clearInterval(publicationRefreshTimer);
       publicationRefreshTimer = null;
       if (!item.id || !item.publication_run || ["published", "unpublished", "failed", "needs_operator"].includes(item.publication_run.state)) return;
       publicationRefreshTimer = window.setInterval(async () => {
+        if (collaborationDocumentId === item.id && collaborationSocket?.readyState === WebSocket.OPEN) return;
         try {
           const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(item.id)}`, { credentials: "same-origin", cache: "no-store" });
           const data = await read<{ document?: Document }>(response);
@@ -1691,7 +1694,67 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         } catch {
           // 次の周期で再確認する。
         }
-      }, 15_000);
+      }, 30_000);
+    };
+    type CollaborationDocumentChange = {
+      changeVersion?: unknown;
+      status?: unknown;
+      publicationStage?: unknown;
+      publishedAt?: unknown;
+      publishedAtValue?: unknown;
+      updatedAt?: unknown;
+      publicationPrNumber?: unknown;
+      publicationPrUrl?: unknown;
+      publicationBranch?: unknown;
+      publicationAction?: unknown;
+      publicationRequestedAt?: unknown;
+      publicationRun?: unknown;
+    };
+    const applyPublicationRealtimeUpdate = (payload: CollaborationDocumentChange) => {
+      const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      if (!documentId || typeof payload.status !== "string") return false;
+      const changeVersion = typeof payload.changeVersion === "number" && Number.isFinite(payload.changeVersion) ? payload.changeVersion : 0;
+      if (changeVersion > 0 && changeVersion < latestPublicationRealtimeVersion) return true;
+      if (changeVersion > latestPublicationRealtimeVersion) latestPublicationRealtimeVersion = changeVersion;
+      const index = documents.findIndex((item) => item.id === documentId);
+      if (index < 0) return false;
+      const current = documents[index];
+      const validStatuses = new Set(["draft", "in-review", "on-hold", "approved"]);
+      if (!validStatuses.has(payload.status)) return false;
+      const nextPublishedAt = payload.publishedAtValue === null || typeof payload.publishedAtValue === "string"
+        ? payload.publishedAtValue
+        : payload.publishedAt === false
+        ? null
+        : current.published_at;
+      const nextStage = payload.publicationStage === null || typeof payload.publicationStage === "string"
+        ? payload.publicationStage as Document["publication_review_stage"]
+        : current.publication_review_stage;
+      const nextRun = payload.publicationRun === null || (payload.publicationRun && typeof payload.publicationRun === "object")
+        ? payload.publicationRun as PublicationRun | null
+        : current.publication_run;
+      const next: Omit<Document, "body"> = {
+        ...current,
+        status: payload.status as Document["status"],
+        updated_at: typeof payload.updatedAt === "string" && payload.updatedAt ? payload.updatedAt : current.updated_at,
+        published_at: nextPublishedAt,
+        publication_review_stage: nextStage,
+        publication_pr_number: typeof payload.publicationPrNumber === "number" ? payload.publicationPrNumber : payload.publicationPrNumber === null ? null : current.publication_pr_number,
+        publication_pr_url: typeof payload.publicationPrUrl === "string" ? payload.publicationPrUrl : payload.publicationPrUrl === null ? null : current.publication_pr_url,
+        publication_branch: typeof payload.publicationBranch === "string" ? payload.publicationBranch : payload.publicationBranch === null ? null : current.publication_branch,
+        publication_action: payload.publicationAction === "publish" || payload.publicationAction === "unpublish" ? payload.publicationAction : payload.publicationAction === null ? null : current.publication_action,
+        publication_requested_at: typeof payload.publicationRequestedAt === "string" ? payload.publicationRequestedAt : payload.publicationRequestedAt === null ? null : current.publication_requested_at,
+        publication_run: nextRun,
+      };
+      const stageChanged = current.publication_review_stage !== next.publication_review_stage;
+      documents[index] = next;
+      state.textContent = statusLabel[next.status];
+      setPublicationState(next);
+      monitorPublicationRun(next);
+      updateWorkflow(next.status, Boolean(next.published_at), next.publication_review_stage ?? null, hasUnpublishedPublicationChanges(next));
+      updatePublicationActions(next);
+      renderDocuments();
+      if (stageChanged) void loadPublicationReview(documentId, next).catch(() => undefined);
+      return true;
     };
     let editorialAssets: EditorialAsset[] = [];
     const formatBytes = (bytes: number) => bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1_000))}KB`;
@@ -2785,6 +2848,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const yDocument = new Y.Doc();
       collaborationDocument = yDocument;
       collaborationAbort = new AbortController();
+      let reconnectAttempt = 0;
       let fieldsBound = false;
       let skipNextBodyInput = false;
       const bindFields = () => {
@@ -2834,6 +2898,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         collaborationSocket = socket;
         socket.binaryType = "arraybuffer";
         socket.addEventListener("open", () => {
+          reconnectAttempt = 0;
           collaborationState.textContent = "同時編集に接続しました";
           if (fieldsBound) socket.send(Y.encodeStateAsUpdate(yDocument));
         });
@@ -2844,7 +2909,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             return;
           }
           try {
-            const payload = JSON.parse(event.data) as { type?: string; participants?: CollaborationParticipant[]; status?: string; updatedAt?: string };
+            const payload = JSON.parse(event.data) as CollaborationDocumentChange & { type?: string; participants?: CollaborationParticipant[] };
             if (payload.type === "presence") renderCollaborationParticipants(payload.participants ?? []);
             if (payload.type === "comments-changed") {
               const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
@@ -2852,16 +2917,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             }
             if (payload.type === "document-changed") {
               const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
-              if (currentDocumentId === documentId && typeof payload.status === "string") {
-                void refreshWorkflowFromCollaboration(documentId).catch(() => undefined);
-              }
+              if (currentDocumentId === documentId && !applyPublicationRealtimeUpdate(payload)) void refreshWorkflowFromCollaboration(documentId).catch(() => undefined);
             }
           } catch { /* malformed presence messages are ignored */ }
         });
         socket.addEventListener("close", () => {
-          if (generation !== collaborationGeneration) return;
+          if (generation !== collaborationGeneration || collaborationSocket !== socket) return;
           collaborationState.textContent = "同時編集を再接続中（通常の保存は利用できます）";
-          collaborationReconnectTimer = window.setTimeout(openSocket, 2_000);
+          const delay = Math.min(8_000, 500 * 2 ** reconnectAttempt);
+          reconnectAttempt += 1;
+          collaborationReconnectTimer = window.setTimeout(openSocket, delay);
         });
         socket.addEventListener("error", () => { collaborationState.textContent = "同時編集に接続できません（通常の保存は利用できます）"; });
       };
@@ -2869,6 +2934,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
       empty.hidden = true; form.hidden = false;
+      latestPublicationRealtimeVersion = 0;
       const id = form.elements.namedItem("documentId") as HTMLInputElement;
       id.value = item.id; id.dataset.sourceArticleId = item.source_article_id ?? "";
       subject.value = item.subject; fillCategories(item.category); category.value = item.category;
