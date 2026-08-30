@@ -91,6 +91,22 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   await card.getByRole("button", { name: "編集担当の個人設定を開く" }).click();
   const memberModal = page.locator("[data-member-modal]");
   await expect(memberModal).toBeVisible();
+  const shellGeometry = await memberModal
+    .locator(".member-modal__shell")
+    .evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        width: rect.width,
+        viewportWidth: window.innerWidth,
+      };
+    });
+  if (shellGeometry.width < shellGeometry.viewportWidth) {
+    expect(shellGeometry.left).toBeCloseTo(
+      (shellGeometry.viewportWidth - shellGeometry.width) / 2,
+      0,
+    );
+  }
   await expect(memberModal.locator("[data-modal-discord-role]")).toHaveCount(1);
   await expect(memberModal.locator(".member-role-option span")).toHaveText(
     "数学運営",
