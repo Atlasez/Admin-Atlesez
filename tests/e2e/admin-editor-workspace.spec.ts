@@ -167,6 +167,19 @@ test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚�
   );
 });
 
+test("新規記事には概念IDを初期値として設定する", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  await expect(page.locator('[name="conceptId"]')).toHaveValue(
+    "math.overview.new-article",
+  );
+  await page.locator('[name="slug"]').fill("new-definition");
+  await expect(page.locator('[name="conceptId"]')).toHaveValue(
+    "math.overview.new-definition",
+  );
+});
+
 test("新しい概念を選ぶと記事と一緒に学習地図へ登録するIDを作成できる", async ({
   page,
 }) => {
@@ -1114,11 +1127,6 @@ test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功
     .locator('[name="conceptId"]')
     .fill("math.group-theory.image-flow-test");
   await page.locator("[data-body]").fill("## 画像");
-  await page.locator("[data-save-document]").click();
-  await page
-    .locator("[data-progress-dialog]")
-    .getByRole("button", { name: "編集を続ける" })
-    .click();
 
   await page.locator('[data-pane-tab="media"]').click();
   await page.locator("[data-media-alt]").fill("図");
