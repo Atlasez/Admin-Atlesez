@@ -395,6 +395,147 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
 </style>
 
+<style is:global>
+  /* 管理画面は情報を近づけ、個人設定は操作に集中できる大きさにする。 */
+  .member-admin {
+    padding: 1rem 1.25rem 3rem;
+  }
+  .member-admin__header {
+    gap: 1rem;
+    margin-bottom: .85rem;
+    padding: .95rem 1.1rem .85rem;
+  }
+  .member-admin__header h1 {
+    font-size: clamp(1.45rem, 2.5vw, 1.9rem);
+  }
+  .member-admin__lead {
+    margin-top: .3rem;
+  }
+  .member-admin__workspace {
+    gap: .75rem;
+    margin-bottom: 1rem;
+  }
+  .member-admin__workspace .action-card {
+    gap: .7rem;
+    padding: .85rem .95rem .8rem;
+  }
+  .member-admin__add {
+    gap: .65rem;
+    margin: .8rem 0 1rem;
+    padding: .75rem .85rem;
+  }
+  .member-admin__add select[multiple] {
+    min-height: 5.6rem !important;
+  }
+  .member-admin__sync {
+    gap: .7rem;
+    padding-top: .65rem;
+  }
+  .member-admin__workspace output:empty {
+    display: none;
+    min-height: 0;
+  }
+  .member-admin__members {
+    padding: .85rem 1rem 1rem;
+  }
+  .member-admin__section-heading {
+    margin-bottom: .6rem;
+    padding-bottom: .55rem;
+  }
+  .member-toolbar {
+    gap: .5rem;
+    margin-bottom: .7rem;
+    padding: .6rem .7rem;
+  }
+  .member-grid {
+    gap: .6rem;
+  }
+  .member-card {
+    gap: .55rem;
+    padding: .75rem !important;
+  }
+  .member-card__actions {
+    padding-top: .6rem;
+  }
+  .member-modal {
+    height: 100dvh;
+    padding: 1rem;
+    width: 100%;
+  }
+  .member-modal__shell {
+    border: 1px solid var(--border-default) !important;
+    border-top: 4px solid var(--accent-primary) !important;
+    border-radius: 10px;
+    box-shadow: 0 18px 60px rgb(0 0 0 / 24%);
+    height: min(760px, calc(100dvh - 2rem)) !important;
+    max-height: calc(100dvh - 2rem);
+    max-width: 900px;
+    width: min(100%, 900px);
+  }
+  .member-modal__header {
+    padding: .8rem 1.1rem .7rem;
+  }
+  .member-modal__header h2 {
+    font-size: 1.2rem;
+  }
+  .member-modal__body {
+    padding: .85rem 1.1rem 1rem;
+    scrollbar-gutter: stable;
+  }
+  .member-modal__grid {
+    gap: .7rem;
+  }
+  .member-modal select[multiple] {
+    min-height: 5.6rem !important;
+  }
+  .member-modal__section,
+  .member-role-picker {
+    gap: .5rem;
+    padding: .65rem;
+  }
+  .member-modal__footer {
+    box-shadow: 0 -5px 14px rgb(0 0 0 / 7%);
+    padding: .7rem 1.1rem;
+  }
+  .member-modal__footer output {
+    max-width: 45%;
+    overflow-wrap: anywhere;
+  }
+  .member-modal__save,
+  .member-modal__cancel {
+    min-width: 7rem;
+  }
+  .member-admin :is(button, input, select):focus-visible,
+  .member-card__name:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
+    outline-offset: 2px;
+  }
+  @media (max-width: 720px) {
+    .member-admin {
+      padding: .75rem .7rem 2rem;
+    }
+    .member-admin__header {
+      padding: .85rem;
+    }
+    .member-modal {
+      padding: .5rem;
+    }
+    .member-modal__shell {
+      height: calc(100dvh - 1rem) !important;
+      max-height: calc(100dvh - 1rem);
+    }
+    .member-modal__header,
+    .member-modal__body,
+    .member-modal__footer {
+      padding-left: .85rem;
+      padding-right: .85rem;
+    }
+    .member-modal__footer output {
+      max-width: none;
+    }
+  }
+</style>
+
 <script>
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root) {
@@ -526,7 +667,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         const memberRoleIds = String(member.discord_role_ids ?? "").split(",").filter(Boolean);
         const memberRoleLabels = memberRoleIds.map(id => discordRoles.find(role => role.discord_role_id === id)?.name ?? `役職ID ${id.slice(0, 8)}…`);
         const roleChips = memberRoleLabels.length ? memberRoleLabels.map(name => `<span class="member-role-chip">${esc(name)}</span>`).join("") : `<span class="member-role-chip member-role-chip--empty">未付与</span>`;
-        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><div class="member-card__name">${esc(member.display_name || "表示名未設定")}</div><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord役職</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>Discordロールを再同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div></article>`;
+        const displayName = member.display_name || "表示名未設定";
+        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><button type="button" class="member-card__name" data-open-member aria-label="${esc(displayName)}の個人設定を開く">${esc(displayName)}</button><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord役職</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>Discordロールを再同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div></article>`;
       }).join("") : '<p class="member-empty">登録されている参加者はいません。</p>';
     };
     const discordSyncMessage = (prefix: string, provisioning: any) => { const warnings = Array.isArray(provisioning?.warnings) ? provisioning.warnings.join(" ") : ""; const added = Number(provisioning?.applied ?? 0); const removed = Number(provisioning?.removed ?? 0); return `${prefix} Discord同期: 追加${added}件・削除${removed}件${warnings ? `。${warnings}` : ""}`; };
@@ -573,9 +715,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       }
       if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage("権限を削除しました。", data.provisioning) : (data.error ?? "削除できませんでした。"); if (response.ok) await load(); }
     });
-    const enhanceMemberNames = () => list.querySelectorAll<HTMLElement>(".member-card__name").forEach(name => { name.setAttribute("role", "button"); name.tabIndex = 0; name.setAttribute("aria-label", `${name.textContent?.trim() || "参加者"}の個人設定を開く`); });
-    list.addEventListener("keydown", event => { const target = event.target as HTMLElement; if (!target.matches(".member-card__name") || !["Enter", " "].includes((event as KeyboardEvent).key)) return; event.preventDefault(); const card = target.closest<HTMLElement>("[data-email]"); if (card?.dataset.email) openMemberModal(card.dataset.email); });
-    new MutationObserver(enhanceMemberNames).observe(list, {childList:true});
     void load().catch(error => { list.textContent = error instanceof Error ? error.message : "参加者一覧を読み込めませんでした。"; });
   }
 </script>

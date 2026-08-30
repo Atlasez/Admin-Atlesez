@@ -66,6 +66,12 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
 
   const card = page.locator(".member-card");
   await expect(card).toBeVisible();
+  await expect(card.locator(".member-card__name")).toHaveAttribute(
+    "data-open-member",
+    "",
+  );
+  await expect(page.locator("[data-message]")).toBeHidden();
+  await expect(page.locator("[data-discord-readiness-message]")).toBeHidden();
   const buttons = card.locator(".member-card__actions button");
   await expect(buttons).toHaveCount(3);
 
@@ -97,8 +103,11 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
       const rect = element.getBoundingClientRect();
       return {
         left: rect.left,
+        top: rect.top,
         width: rect.width,
+        height: rect.height,
         viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
       };
     });
   if (shellGeometry.width < shellGeometry.viewportWidth) {
@@ -107,11 +116,17 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
       0,
     );
   }
+  expect(shellGeometry.width).toBeLessThanOrEqual(900);
+  expect(shellGeometry.height).toBeLessThanOrEqual(760);
+  expect(shellGeometry.top).toBeGreaterThanOrEqual(0);
+  expect(shellGeometry.top + shellGeometry.height).toBeLessThanOrEqual(
+    shellGeometry.viewportHeight,
+  );
   await expect(memberModal.locator("[data-modal-discord-role]")).toHaveCount(1);
   await expect(memberModal.locator(".member-role-option span")).toHaveText(
     "数学運営",
   );
-  await memberModal.locator("[data-member-modal-close]").first().click();
+  await page.keyboard.press("Escape");
   await expect(memberModal).toBeHidden();
   const readinessButton = page.locator("[data-discord-readiness]");
   await expect(readinessButton).toHaveText("運用事前チェック");
