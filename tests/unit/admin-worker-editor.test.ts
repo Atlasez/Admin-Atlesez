@@ -142,6 +142,8 @@ describe("admin worker editor APIs", () => {
         defaultBranch: "main",
         canWrite: true,
         canCreatePullRequest: true,
+        automaticMerge: false,
+        automationReady: false,
       });
     } finally {
       fetchMock.mockRestore();
