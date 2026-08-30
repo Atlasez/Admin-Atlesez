@@ -222,8 +222,19 @@ const enhanceBodyEditor = (textarea) => {
       EditorView.updateListener.of((update) => {
         if (syncingFromTextarea) return;
         const selection = update.state.selection.main;
-        if (update.docChanged)
+        if (update.docChanged) {
+          const changes = [];
+          update.changes.iterChanges((fromA, toA, _fromB, _toB, insert) => {
+            changes.push({ from: fromA, to: toA, insert: insert.toString() });
+          });
           setNativeValue(textarea, update.state.doc.toString());
+          textarea.dispatchEvent(
+            new CustomEvent("atlasez:body-change", {
+              bubbles: true,
+              detail: { changes },
+            }),
+          );
+        }
         nativeSetSelectionRange.call(
           textarea,
           selection.from,

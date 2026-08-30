@@ -276,7 +276,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <button type="button" class="pane-resize-handle" data-pane-resize="memo" aria-label="執筆メモ枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグして執筆メモ枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
             </section>
           <section class="media-area" aria-labelledby="media-studio-heading">
-            <div class="pane-heading"><h3 id="media-studio-heading">図・画像</h3><span data-media-status aria-live="polite">原稿を保存すると利用できます</span><div class="pane-controls"><button type="button" data-pane-popout="media">別窓</button></div></div>
+            <div class="pane-heading"><h3 id="media-studio-heading">図・画像</h3><span data-media-status aria-live="polite">画像を選択すると原稿を自動保存</span><div class="pane-controls"><button type="button" data-pane-popout="media">別窓</button></div></div>
             <div class="media-studio">
               <div class="media-studio-actions">
                 <label class="media-alt-label">画像の説明（alt）<input type="text" data-media-alt maxlength="180" placeholder="例：正多角形の対称軸" /></label>
@@ -285,7 +285,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 <button type="button" class="quiet-action" data-open-media>画像を選択</button>
                 <button type="button" class="quiet-action" data-insert-tikz>TikZを挿入</button>
               </div>
-              <div class="media-hint">PNG・JPEG・WebP・GIF・SVG、1.5MB以下。アップロードした画像はこの原稿に紐づき、Previewにも反映されます。TikZは組版サービス未設定時、無料のブラウザ内TikZJaxでプレビューします。素材一覧の「画像幅」でプリセットまたは1〜100%の任意の幅を指定でき、既存参照にも適用できます。</div>
+              <div class="media-hint">PNG・JPEG・WebP・GIF・SVG、1.5MB以下。新規原稿でも画像を選択すると、先に下書きを自動保存してからアップロードします。アップロードした画像はこの原稿に紐づき、Previewにも反映されます。TikZは組版サービス未設定時、無料のブラウザ内TikZJaxでプレビューします。素材一覧の「画像幅」でプリセットまたは1〜100%の任意の幅を指定でき、既存参照にも適用できます。</div>
               <div class="media-list" data-media-list aria-live="polite"></div>
             </div>
             <button type="button" class="pane-resize-handle" data-pane-resize="media" aria-label="図・画像枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグして図・画像枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
@@ -466,6 +466,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 </style>
 
 <style>
+  /* CodeMirrorが読み込めない場合も本文を隠さず、入力内容を編集できるようにする。 */
+  .body-editor-surface [data-body] { color: var(--text, #243447); overflow-wrap: anywhere; }
+  .body-editor-surface[data-codemirror-ready="true"] [data-body] { color: transparent; }
+
   /* ペインを手動で拡張したときもCodeMirrorを本文欄いっぱいに広げ、末尾の空白を残さない。 */
   .body-editor-surface { display: flex; flex-direction: column; }
   .body-editor-surface :global(.body-codemirror) { flex: 1 1 auto; height: 100% !important; min-height: 0; }
@@ -1486,6 +1490,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let documentReferences: ArticleReference[] = [];
     let lockedRanges: LockedRange[] = [];
     let previousBodyValue = "";
+    let defaultConceptId = "";
     let bodyRefreshTimer: number | undefined;
     let bodyHasMediaSyntax = false;
     let mathJaxLoading: Promise<void> | undefined;
@@ -1804,11 +1809,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。"; }
     };
     const uploadMediaFile = async (file: File) => {
-      const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
-      if (!documentId) { mediaStatus.textContent = "先に原稿を保存してください。"; mediaInput.value = ""; return; }
       mediaStatus.textContent = "画像をアップロード中…";
       const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim()); formData.set("latexName", mediaLatexName.value.trim());
       try {
+        let documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+        if (!documentId) documentId = await saveCurrentDocument(false);
         const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { method: "POST", body: formData, credentials: "same-origin" });
         const data = await read<{ asset?: EditorialAsset; error?: string }>(response);
         if (!response.ok || !data.asset) throw new Error(data.error ?? "画像をアップロードできませんでした。");
@@ -2585,6 +2590,51 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       return true;
     };
     const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
+    let documentSaveInFlight: Promise<unknown> | null = null;
+    const withDocumentSaveLock = <T,>(operation: () => Promise<T>): Promise<T> => {
+      if (documentSaveInFlight) return documentSaveInFlight as Promise<T>;
+      const operationPromise = operation();
+      documentSaveInFlight = operationPromise;
+      void operationPromise.then(
+        () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
+        () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
+      );
+      return operationPromise;
+    };
+    const saveCurrentDocument = (showProgress = true) => withDocumentSaveLock(async () => {
+      window.clearTimeout(autosaveTimer);
+      saveButton.disabled = true;
+      try {
+        saveMessage.value = "保存中…";
+        const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+        const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
+        const data = await read<{ id?: string; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+        const savedId = id || data.id || "";
+        if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
+        if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
+        await loadMediaAssets(savedId);
+        setUnsavedChanges(false);
+        await loadDocuments();
+        const refreshed = documents.find((item) => item.id === savedId);
+        if (refreshed) {
+          setPublicationState(refreshed);
+          updateWorkflow(refreshed.status, Boolean(refreshed.published_at), refreshed.publication_review_stage ?? null, hasUnpublishedPublicationChanges(refreshed));
+          updatePublicationActions(refreshed);
+        }
+        saveMessage.value = status.value === "approved"
+          ? refreshed?.published_at
+            ? "保存しました。公開内容を更新する場合は「公開内容を更新して再試行」を押してください。"
+            : "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。"
+          : "保存しました。";
+        await loadPublicationReview(savedId);
+        await loadRevisions(savedId);
+        if (showProgress) { closeAllPanePopouts(); progressDialog.showModal(); }
+        return savedId;
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
     body.addEventListener("beforeinput", (event) => {
       const start = body.selectionStart ?? 0;
       const end = body.selectionEnd ?? start;
@@ -2643,13 +2693,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!id || status.value !== "draft" || autosaveInFlight) return;
       autosaveInFlight = true;
       try {
-        saveMessage.value = "下書きを自動保存中…";
-        const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
-        if (!response.ok) {
-          const data = await read<{ error?: string }>(response);
-          throw new Error(data.error ?? "自動保存に失敗しました。");
-        }
-        setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
+        await withDocumentSaveLock(async () => {
+          saveMessage.value = "下書きを自動保存中…";
+          const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
+          if (!response.ok) {
+            const data = await read<{ error?: string }>(response);
+            throw new Error(data.error ?? "自動保存に失敗しました。");
+          }
+          setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
+        });
       } catch { if (!authRedirecting) saveMessage.value = "自動保存に失敗しました。手動で保存してください。"; }
       finally { autosaveInFlight = false; }
     };
@@ -2702,6 +2754,25 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (inserted) shared.insert(prefix, inserted);
       }, "local-input");
     };
+    type SharedTextChange = { from: number; to: number; insert: string };
+    const applySharedTextChanges = (shared: Y.Text, changes: SharedTextChange[]) => {
+      if (!changes.length || !collaborationDocument) return false;
+      const ordered = [...changes].sort((a, b) => b.from - a.from);
+      let previousFrom = shared.length;
+      if (ordered.some((change) => {
+        const valid = Number.isInteger(change.from) && Number.isInteger(change.to) && change.from >= 0 && change.to >= change.from && change.to <= shared.length && change.to <= previousFrom;
+        previousFrom = change.from;
+        return !valid;
+      })) return false;
+      collaborationDocument.transact(() => {
+        for (const change of ordered) {
+          const removed = change.to - change.from;
+          if (removed) shared.delete(change.from, removed);
+          if (change.insert) shared.insert(change.from, change.insert);
+        }
+      }, "local-input");
+      return true;
+    };
     const connectCollaboration = (documentId: string) => {
       if (documentId === collaborationDocumentId && collaborationSocket && collaborationSocket.readyState <= WebSocket.OPEN) return;
       disconnectCollaboration();
@@ -2714,6 +2785,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationDocument = yDocument;
       collaborationAbort = new AbortController();
       let fieldsBound = false;
+      let skipNextBodyInput = false;
       const bindFields = () => {
         if (fieldsBound || generation !== collaborationGeneration) return;
         fieldsBound = true;
@@ -2735,7 +2807,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           };
           shared.observe(applySharedValue);
           applySharedValue();
-          element.addEventListener("input", () => replaceSharedText(shared, element.value), { signal: collaborationAbort!.signal });
+          element.addEventListener("atlasez:body-change", (event) => {
+            if (name !== "body") return;
+            const changes = (event as CustomEvent<{ changes?: SharedTextChange[] }>).detail?.changes;
+            if (Array.isArray(changes) && applySharedTextChanges(shared, changes)) skipNextBodyInput = true;
+          }, { signal: collaborationAbort!.signal });
+          element.addEventListener("input", () => {
+            if (name === "body" && skipNextBodyInput) {
+              skipNextBodyInput = false;
+              return;
+            }
+            replaceSharedText(shared, element.value);
+          }, { signal: collaborationAbort!.signal });
           element.addEventListener("focus", () => collaborationSocket?.readyState === WebSocket.OPEN && collaborationSocket.send(JSON.stringify({ type: "presence", field: name })), { signal: collaborationAbort!.signal });
           element.addEventListener("blur", () => collaborationSocket?.readyState === WebSocket.OPEN && collaborationSocket.send(JSON.stringify({ type: "presence", field: "" })), { signal: collaborationAbort!.signal });
         }
@@ -2787,6 +2870,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       (form.elements.namedItem("slug") as HTMLInputElement).value = item.slug;
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
+      defaultConceptId = !item.id && item.concept_id === generatedConceptId() ? item.concept_id : "";
       registerConcept.checked = Boolean(item.concept_is_new);
       conceptName.value = item.concept_name ?? "";
       conceptNameEn.value = item.concept_name_en ?? "";
@@ -2803,7 +2887,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!selected) return;
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "", concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      const defaultSlug = (source?.slug ?? "new-article").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "new-article";
+      const defaultId = source?.conceptId ?? `${conceptPrefix(source?.subject ?? selected.slug)}.${categoryValue || "general"}.${defaultSlug}`;
+      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: defaultId, concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      defaultConceptId = source?.conceptId ? "" : defaultId;
+      conceptId.value = defaultId;
+      fillConceptOptions(defaultId);
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
@@ -2900,8 +2989,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         : "<p class=\"feedback-request-history-empty\">この原稿には、まだフィードバック依頼はありません。</p>";
     };
     const clearConceptRegistration = () => { registerConcept.checked = false; conceptName.value = ""; conceptNameEn.value = ""; syncConceptRegistration(); };
-    subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; clearConceptRegistration(); fillConceptOptions(); setUnsavedChanges(true); });
-    category.addEventListener("change", () => { conceptId.value = ""; clearConceptRegistration(); fillConceptOptions(); setUnsavedChanges(true); });
+    const refreshDefaultConceptId = () => {
+      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      if (id || registerConcept.checked || (conceptId.value && conceptId.value !== defaultConceptId)) return;
+      defaultConceptId = generatedConceptId();
+      conceptId.value = defaultConceptId;
+      fillConceptOptions(defaultConceptId);
+    };
+    subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; clearConceptRegistration(); refreshDefaultConceptId(); fillConceptOptions(); setUnsavedChanges(true); });
+    category.addEventListener("change", () => { conceptId.value = ""; clearConceptRegistration(); refreshDefaultConceptId(); fillConceptOptions(); setUnsavedChanges(true); });
     conceptPicker.addEventListener("change", () => {
       if (conceptPicker.value === "__new_concept__") {
         conceptId.value = generatedConceptId();
@@ -3370,6 +3466,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     form.addEventListener("input", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) || !documentFieldNames.has(target.name)) return;
+      if (target.name === "slug") refreshDefaultConceptId();
       heading.textContent = formValue("title") || "新規原稿";
       setUnsavedChanges(true);
       scheduleAutosave();
@@ -3377,33 +3474,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "既存の原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
-    form.addEventListener("submit", (event) => { event.preventDefault(); void (async () => {
-      saveMessage.value = "保存中…";
-      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
-      const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
-      const data = await read<{ id?: string; error?: string }>(response);
-      if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
-      const savedId = id || data.id || "";
-      if (!id && data.id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = data.id; connectCollaboration(data.id); }
-      await loadMediaAssets(savedId);
-      setUnsavedChanges(false);
-      await loadDocuments();
-      const refreshed = documents.find((item) => item.id === savedId);
-      if (refreshed) {
-        setPublicationState(refreshed);
-        updateWorkflow(refreshed.status, Boolean(refreshed.published_at), refreshed.publication_review_stage ?? null, hasUnpublishedPublicationChanges(refreshed));
-        updatePublicationActions(refreshed);
-      }
-      saveMessage.value = status.value === "approved"
-        ? refreshed?.published_at
-          ? "保存しました。公開内容を更新する場合は「公開内容を更新して再試行」を押してください。"
-          : "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。"
-        : "保存しました。";
-      await loadPublicationReview(savedId);
-      await loadRevisions(savedId);
-      closeAllPanePopouts();
-      progressDialog.showModal();
-    })().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
+    form.addEventListener("submit", (event) => { event.preventDefault(); void saveCurrentDocument().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-panel > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-action]"); if (!button) return; hideActionHistoryTooltip(); const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.commentId; const action = button.dataset.commentAction; if (!documentId || !commentId || !action) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ action }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "コメントの状態を更新できませんでした。"); await reloadComments(documentId); })().catch((error:unknown)=>{ saveMessage.value=error instanceof Error ? error.message : "コメントの状態を更新できませんでした。"; button.disabled=false; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-reaction]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.commentId; const item = commentId ? currentComments.find((comment) => comment.id === commentId) : null; if (!documentId || !commentId || !item || pendingCommentReactions.has(commentId)) return; pendingCommentReactions.add(commentId); const email = currentUserEmail.trim().toLowerCase(); const previousLikes = [...(item.like_actor_counts ?? [])]; const likedByMe = previousLikes.some((actor) => actor.actor_email.trim().toLowerCase() === email); item.like_actor_counts = likedByMe ? previousLikes.filter((actor) => actor.actor_email.trim().toLowerCase() !== email) : [...previousLikes, { actor_email: currentUserEmail, actor_display_name: "自分", count: 1 }]; renderComments(); void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ action:"like" }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "いいねを更新できませんでした。"); void reloadComments(documentId).catch(() => undefined); })().catch((error:unknown)=>{ item.like_actor_counts = previousLikes; renderComments(); saveMessage.value=error instanceof Error ? error.message : "いいねを更新できませんでした。"; }).finally(() => pendingCommentReactions.delete(commentId)); });
