@@ -10289,6 +10289,140 @@ const publicationFailureDetails = (error: unknown) => {
 const publicationFailureStatus = (failure: EditorialPublicationFailure) =>
   failure.kind === "configuration" ? 503 : failure.kind === "validation" ? 409 : 502;
 
+type PublicationRunProgressTarget = {
+  pullRequestNumber?: number;
+  branch?: string;
+  headSha?: string;
+};
+
+const hexDigest = (bytes: ArrayBuffer) =>
+  [...new Uint8Array(bytes)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+const verifyGithubWebhookSignature = async (
+  secret: string,
+  payload: string,
+  signature: string | null,
+) => {
+  if (!signature || !/^sha256=[0-9a-f]{64}$/i.test(signature)) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const expected = `sha256=${hexDigest(
+    await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(payload),
+    ),
+  )}`;
+  if (expected.length !== signature.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1)
+    difference |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  return difference === 0;
+};
+
+const recordValue = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+
+const webhookInteger = (value: unknown) =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+
+const webhookString = (value: unknown) =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+const publicationRunProgressTargetFromGithubEvent = (
+  event: string,
+  payload: Record<string, unknown>,
+): PublicationRunProgressTarget | null => {
+  if (event === "ping") return null;
+  if (!["check_run", "check_suite", "workflow_run", "pull_request"].includes(event))
+    return null;
+
+  const pullRequest = recordValue(payload.pull_request);
+  const checkRun = recordValue(payload.check_run);
+  const checkSuite =
+    recordValue(checkRun?.check_suite) ?? recordValue(payload.check_suite);
+  const workflowRun = recordValue(payload.workflow_run);
+  const workflowPullRequests = Array.isArray(workflowRun?.pull_requests)
+    ? workflowRun.pull_requests
+    : [];
+  const suitePullRequests = Array.isArray(checkSuite?.pull_requests)
+    ? checkSuite.pull_requests
+    : [];
+  const pullRequestNumber =
+    webhookInteger(pullRequest?.number) ??
+    webhookInteger(checkRun?.pull_requests && Array.isArray(checkRun.pull_requests)
+      ? recordValue(checkRun.pull_requests[0])?.number
+      : undefined) ??
+    webhookInteger(checkSuite?.pull_requests && Array.isArray(checkSuite.pull_requests)
+      ? recordValue(checkSuite.pull_requests[0])?.number
+      : undefined) ??
+    webhookInteger(workflowPullRequests.length ? recordValue(workflowPullRequests[0])?.number : undefined) ??
+    webhookInteger(suitePullRequests.length ? recordValue(suitePullRequests[0])?.number : undefined);
+  const headSha =
+    webhookString(pullRequest?.head && recordValue(pullRequest.head)?.sha) ??
+    webhookString(checkRun?.head_sha) ??
+    webhookString(checkSuite?.head_sha) ??
+    webhookString(workflowRun?.head_sha);
+  const branch =
+    webhookString(pullRequest?.head && recordValue(pullRequest.head)?.ref) ??
+    webhookString(workflowRun?.head_branch);
+  const target = { pullRequestNumber, branch, headSha };
+  return target.pullRequestNumber || target.branch || target.headSha ? target : null;
+};
+
+async function receiveGithubPublicationWebhook(
+  request: Request,
+  env: Env,
+  ctx?: WorkerExecutionContext,
+): Promise<Response> {
+  if (request.method !== "POST")
+    return json({ error: "POSTのみ利用できます。" }, 405);
+  const secret = env.GITHUB_WEBHOOK_SECRET?.trim();
+  if (!secret)
+    return json({ error: "GitHub Webhook Secretが設定されていません。" }, 503);
+  const body = await request.text();
+  if (
+    !(await verifyGithubWebhookSignature(
+      secret,
+      body,
+      request.headers.get("x-hub-signature-256"),
+    ))
+  )
+    return json({ error: "Webhook署名が不正です。" }, 401);
+  let payload: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(body);
+    if (!parsed || typeof parsed !== "object") throw new Error("invalid payload");
+    payload = parsed as Record<string, unknown>;
+  } catch {
+    return json({ error: "WebhookのJSONが不正です。" }, 400);
+  }
+  const event = request.headers.get("x-github-event")?.trim() ?? "";
+  if (event === "ping") return json({ ok: true, event });
+  const repository = recordValue(payload.repository)?.full_name;
+  const expectedRepository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  if (typeof repository === "string" && repository !== expectedRepository)
+    return json({ ok: true, ignored: true, reason: "repository_mismatch" }, 202);
+  const target = publicationRunProgressTargetFromGithubEvent(event, payload);
+  if (!target)
+    return json({ ok: true, ignored: true, reason: "unsupported_event" }, 202);
+  const progress = progressEditorialPublicationRuns(env, target);
+  if (ctx) {
+    ctx.waitUntil(progress);
+    return json({ ok: true, accepted: true, event }, 202);
+  }
+  return json({ ok: true, event, ...(await progress) }, 202);
+}
+
 async function progressEditorialPublicationRun(env: Env, run: EditorialPublicationRun) {
   const document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
@@ -10454,11 +10588,29 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
   await updateEditorialPublicationRun(env, run.id, { state: "deploy_pending", merge_sha: mergeSha ?? pullRequest.merge_commit_sha ?? pullRequest.head_sha, error_message: "Merge済みです。学習サイトの反映を確認しています。" });
 }
 
-async function progressEditorialPublicationRuns(env: Env) {
+async function progressEditorialPublicationRuns(
+  env: Env,
+  target?: PublicationRunProgressTarget,
+) {
   const now = new Date().toISOString();
+  const filters: string[] = [];
+  const bindings: unknown[] = [];
+  if (target?.pullRequestNumber) {
+    filters.push("pull_request_number = ?");
+    bindings.push(target.pullRequestNumber);
+  }
+  if (target?.branch) {
+    filters.push("branch = ?");
+    bindings.push(target.branch);
+  }
+  if (target?.headSha) {
+    filters.push("head_sha = ?");
+    bindings.push(target.headSha);
+  }
+  const targetFilter = filters.length ? ` AND (${filters.join(" OR ")})` : "";
   const runs = await env.REPORTS.prepare(
-    `${publicationRunSelect} WHERE state IN (${publicationRunActiveStates.map(() => "?").join(",")}) AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY updated_at ASC LIMIT 20`,
-  ).bind(...publicationRunActiveStates, now).all<EditorialPublicationRun>();
+    `${publicationRunSelect} WHERE state IN (${publicationRunActiveStates.map(() => "?").join(",")}) AND (next_attempt_at IS NULL OR next_attempt_at <= ?)${targetFilter} ORDER BY updated_at ASC LIMIT 20`,
+  ).bind(...publicationRunActiveStates, now, ...bindings).all<EditorialPublicationRun>();
   for (const run of runs.results ?? []) {
     if (!(await claimEditorialPublicationRunLease(env, run))) continue;
     try {
@@ -12920,6 +13072,8 @@ async function handleAdminRequest(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/api/internal/github-publication-webhook")
+    return receiveGithubPublicationWebhook(request, env, ctx);
   if (url.pathname === "/internal/article-reports")
     return ingestArticleReport(request, env);
   if (url.pathname === "/") {
