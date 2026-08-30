@@ -940,11 +940,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     }
     root.dataset.editorInitialized = "true";
     const routeQuery = new URLSearchParams(window.location.search);
-    if (routeQuery.has("new") || routeQuery.has("document")) root.setAttribute("data-editor-starting", "");
-    if (routeQuery.has("new") || routeQuery.has("document")) {
+    const isEditorEntry = routeQuery.has("new") || routeQuery.has("document");
+    const resetEditorEntryScroll = () => {
+      if (!isEditorEntry) return;
+      // The editor height changes after the document and preview are loaded. Chrome
+      // may anchor the viewport to that late layout change even when Astro has
+      // already scrolled the new route to the top.
+      window.scrollTo(0, 0);
+    };
+    if (isEditorEntry) root.setAttribute("data-editor-starting", "");
+    if (isEditorEntry) {
       // Chrome can restore the previous position after the async editor data
       // arrives. The editor owns its initial position, so avoid that race.
       history.scrollRestoration = "manual";
+      resetEditorEntryScroll();
     }
     const { subjects, articles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
@@ -3312,7 +3321,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
     const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const isNewDocument = query.get("new") === "1";
-    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); root.removeAttribute("data-editor-starting"); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); requestAnimationFrame(resetEditorEntryScroll); window.setTimeout(resetEditorEntryScroll, 250); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);

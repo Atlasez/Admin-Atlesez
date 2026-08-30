@@ -350,6 +350,21 @@ test("E-14: 編集画面から戻ると編集・フィードバック一覧へ�
   await expect(page).toHaveURL(/\/admin\/articles\/?(?:$|#)/);
 });
 
+test("既存記事を一覧から開いても編集画面は先頭から表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/articles/");
+  await expect(page.locator('[data-document-id="doc-1"]')).toBeVisible();
+
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.locator('[data-document-id="doc-1"]').click();
+
+  await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
+  await expect(page.locator('[name="title"]')).toHaveValue("群の定義");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
