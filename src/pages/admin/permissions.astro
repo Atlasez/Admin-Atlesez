@@ -178,7 +178,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-empty { background: #f3f7fb; border: 1px dashed #9fb4c4; color: #526779; padding: 2.5rem; }
   .member-modal { background: transparent; border: 0; height: 100dvh; margin: 0; max-height: none; max-width: none; padding: 0; width: 100%; }
   .member-modal::backdrop { background: rgb(10 33 52 / 52%); backdrop-filter: blur(3px); }
-  .member-modal__shell { background: #fff; border-left: 5px solid #075a91; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; margin-left: auto; max-width: 980px; overflow: hidden; }
+  .member-modal__shell { background: #fff; border-left: 5px solid #075a91; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; margin: 0 auto; max-width: 980px; overflow: hidden; width: 100%; }
   .member-modal__header { align-items: start; border-bottom: 1px solid #d3e0e9; display: flex; gap: 1rem; justify-content: space-between; padding: 1.25rem 1.5rem 1rem; }
   .member-modal__header p { color: #075a91; font-size: .68rem; font-weight: 900; letter-spacing: .08em; margin: 0 0 .2rem; }
   .member-modal__header h2 { color: #17324d; font-size: 1.35rem; margin: 0; }
