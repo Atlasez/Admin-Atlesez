@@ -11170,7 +11170,7 @@ async function unpublishEditorialDocument(
     return json({ error: "公開を取り消せるのは運営管理者だけです。" }, 403);
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
-  const document = await env.REPORTS.prepare(
+  let document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
   )
     .bind(documentId)
@@ -11238,6 +11238,22 @@ async function unpublishEditorialDocument(
     )
       .bind(documentId)
       .run();
+  }
+  // 過去の実装や同期遅延でD1だけが「未公開」になっていても、
+  // main上の記事が公開中なら、ここで状態を復元して再試行可能にする。
+  if (!document.published_at) {
+    await syncEditorialPublicationStatus(env).catch((error) =>
+      console.error("publication status sync before unpublish retry failed", {
+        documentId,
+        error,
+      }),
+    );
+    const refreshed = await env.REPORTS.prepare(
+      `${editorialDocumentSelect} WHERE id = ?`,
+    )
+      .bind(documentId)
+      .first<EditorialDocument>();
+    if (refreshed) document = refreshed;
   }
   if (!document.published_at)
     return json({ error: "この原稿は公開済みではありません。" }, 400);

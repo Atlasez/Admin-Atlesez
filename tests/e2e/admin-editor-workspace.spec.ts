@@ -337,6 +337,40 @@ test("公開済み記事の未反映変更は運営サイトから再公開で�
   ).toBeVisible();
 });
 
+test("非公開RunのCI失敗後も公開状態と再試行ボタンを維持する", async ({
+  page,
+}) => {
+  const failedUnpublishDocument = {
+    ...documentItem,
+    published_at: "2026-08-30T00:00:00.000Z",
+    publication_pr_number: 654,
+    publication_pr_url: "https://github.com/Atlasez/Atlasez01/pull/654",
+    publication_branch: "editorial/draft-doc-1-run-1",
+    publication_action: "unpublish" as const,
+    publication_run: {
+      id: "run-unpublish-1",
+      state: "failed",
+      action: "unpublish" as const,
+      attempt: 1,
+      error_code: "ci_failed",
+      error_message: "CIが失敗しました（content-check）。",
+      failure_kind: "ci",
+      check_name: "content-check",
+      check_url: "https://github.com/Atlasez/Atlasez01/actions/runs/654",
+      diagnostic_url: "https://github.com/Atlasez/Atlasez01/pull/654",
+    },
+  };
+  await mockAdminApi(page, undefined, failedUnpublishDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(
+    page.getByRole("button", { name: "非公開処理を再試行" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-publication-state]")).toHaveText(
+    "自動非公開化失敗",
+  );
+});
+
 test("新規原稿では存在しない公開審査URLを呼ばず、枠の高さを調整できる", async ({
   page,
 }) => {
