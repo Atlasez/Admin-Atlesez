@@ -5,11 +5,16 @@ import {
   normalizeTikzLibraries,
   normalizeTikzPackages,
   normalizeTikzSvgFonts,
+  TIKZ_MAX_RENDERED_SVG_LENGTH,
 } from "../../src/lib/tikz-policy.mjs";
 import { renderTikzSource } from "../../src/lib/tikz-renderer.mjs";
 import { renderArticleMarkdown } from "../../src/lib/article-browser-markdown.mjs";
 
 describe("TikZ server renderer policy", () => {
+  it("allows large but bounded rendered diagrams", () => {
+    expect(TIKZ_MAX_RENDERED_SVG_LENGTH).toBe(4_000_000);
+  });
+
   it("accepts bundled packages and libraries only", () => {
     expect(normalizeTikzPackages(["pgfplots", "amsmath:intlimits"])).toEqual([
       { name: "pgfplots", options: "" },

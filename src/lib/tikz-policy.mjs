@@ -7,7 +7,10 @@
 export const TIKZ_MAX_SOURCE_LENGTH = 24_000;
 export const TIKZ_MAX_PACKAGE_COUNT = 8;
 export const TIKZ_MAX_LIBRARY_COUNT = 24;
-export const TIKZ_MAX_RENDERED_SVG_LENGTH = 1_500_000;
+// Large diagrams can contain many paths and embedded font references. Keep a
+// bounded response for safety, while allowing the larger figures used in the
+// editor to finish SVG conversion instead of falling back with a size error.
+export const TIKZ_MAX_RENDERED_SVG_LENGTH = 4_000_000;
 
 // These are included in node-tikzjax's TeX bundle. `tikz` itself is supplied
 // by the renderer's standalone preamble and is therefore not selectable.
