@@ -283,6 +283,9 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   const afterOpen = await documentActions.boundingBox();
   expect(afterOpen?.x).toBe(beforeOpen?.x);
   expect(afterOpen?.y).toBe(beforeOpen?.y);
+  const diagnosticBox = await publicationDiagnostic.boundingBox();
+  expect(diagnosticBox?.width).toBeLessThanOrEqual(440);
+  expect(diagnosticBox?.height).toBeLessThanOrEqual(270);
   await expect(publicationDiagnostic).toContainText(
     "node scripts/validate-content.mjs",
   );
