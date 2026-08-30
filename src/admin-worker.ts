@@ -8321,7 +8321,13 @@ async function listEditorialRevisions(
     }>();
   return json({
     revisions: result.results,
-    feedbackRequests: feedbackRequests.results ?? [],
+    feedbackRequests: (feedbackRequests.results ?? []).map((task) => ({
+      ...task,
+      canUpdate:
+        scope.isManager ||
+        task.created_by.toLowerCase() === scope.email.toLowerCase() ||
+        taskAssignedTo(task.assignee_email, scope.email, "feedback"),
+    })),
   });
 }
 
@@ -12658,9 +12664,11 @@ async function adminNotifications(
       }>(),
     env.REPORTS.prepare(
       `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.updated_at,
+         feedback_link.document_id AS feedback_document_id,
          COALESCE(p.slug,t.project_id) AS project_slug
        FROM editorial_tasks t
        LEFT JOIN atlasez_projects p ON p.id=t.project_id
+       LEFT JOIN editorial_feedback_task_links feedback_link ON feedback_link.task_id=t.id
        WHERE t.status != 'done' AND ${
          scope.isManager
            ? "1=1"
@@ -12689,6 +12697,7 @@ async function adminNotifications(
         details: string;
         project_id: string;
         project_slug: string;
+        feedback_document_id: string | null;
         updated_at: string;
       }>(),
   ]);
@@ -12796,7 +12805,9 @@ async function adminNotifications(
       kind: item.task_kind === "feedback" ? "feedback-request" : "task-request",
       title: `${taskKindLabel(item.task_kind)}：${item.title}`,
       detail: item.details?.split("\n")[0] || "依頼内容を確認してください。",
-      href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+      href: item.task_kind === "feedback" && item.feedback_document_id
+        ? `/admin/editor/?document=${encodeURIComponent(item.feedback_document_id)}`
+        : `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
       updatedAt: item.updated_at,
     })),
     ...(applicationRows.results ?? []).map((item) => ({
