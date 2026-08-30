@@ -115,8 +115,7 @@ const plannedArticles = subjects.flatMap((subject) =>
       order: item.order,
       progress: plannedProgress(item),
       slug: `planned-${item.category}-${item.order}`,
-      conceptId:
-        concept?.id ?? `${item.subject}.${item.category}.planned-${item.order}`,
+      conceptId: concept?.id ?? "",
     };
   }),
 );
@@ -234,11 +233,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <label><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
               <label><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
               <label><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-              <label class="concept-picker-field"><span class="field-heading">記事で扱う概念</span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>概念名を選ぶと、内部IDは自動で設定されます。記事の内容に最も近い項目を選択してください。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">内部ID：未選択</output></label>
-              <details class="concept-id-advanced"><summary>概念IDを確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><small>新しい概念や未登録の概念を扱う場合のみ使用します。公開前に分野担当者が確認してください。</small></details>
+      <label class="concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>学習地図と記事を結びつける主概念です。分野・カテゴリを選ぶと、その範囲の概念名だけが表示されます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
+      <details class="concept-id-advanced"><summary>概念IDを確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。手入力したIDは公開前に分野担当者が確認してください。</small></details>
               <label>言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label>LaTeXコンパイル形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部のLaTeX処理で使う形式です。上の「Webプレビュー組版」は、この画面内での数式表示だけを切り替えます。</small></label>
-              <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">フィードバック中</option><option value="on-hold">保留</option><option value="approved">フィードバック済み</option></select></label>
+      <label>状態<select name="status"><option value="draft">下書き</option><option value="in-review">フィードバック中</option><option value="on-hold">保留</option><option value="approved" disabled>フィードバック済み（公開審査後のみ）</option></select><small data-status-help>「フィードバック済み」は、フィードバック完了後の公開審査で承認されたときに自動で設定されます。</small></label>
             </div>
           </details>
 
@@ -972,6 +971,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const conceptPicker = root.querySelector<HTMLSelectElement>("[data-concept-picker]")!;
     const conceptIdPreview = root.querySelector<HTMLOutputElement>("[data-concept-id-preview]")!;
     const status = form.elements.namedItem("status") as HTMLSelectElement;
+    const approvedStatusOption = status.querySelector<HTMLOptionElement>('option[value="approved"]')!;
+    const statusHelp = root.querySelector<HTMLElement>("[data-status-help]")!;
+    const conceptIdAdvanced = root.querySelector<HTMLDetailsElement>(".concept-id-advanced")!;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
     const diagnosticsPanel = root.querySelector<HTMLDialogElement>("[data-editor-diagnostics]")!;
     const diagnosticsTrigger = root.querySelector<HTMLButtonElement>("[data-open-diagnostics]")!;
@@ -1962,8 +1964,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const selectedOption = options.find((item) => item.id === selected);
       conceptIdPreview.textContent = selectedOption
         ? `内部ID：${selectedOption.id}${selectedOption.name === "未登録または旧形式の概念（要確認）" ? "（公開前に担当者へ確認）" : ""}`
-        : selected ? `内部ID：${selected}（一覧に未登録）` : "内部ID：未選択";
+        : selected ? `内部ID：${selected}（一覧に未登録・公開前に要確認）` : "概念を選択してください";
       conceptIdPreview.classList.toggle("is-unregistered", selectedOption?.name === "未登録または旧形式の概念（要確認）");
+    };
+    const syncStatusControl = (currentStatus: Document["status"]) => {
+      const approved = currentStatus === "approved";
+      approvedStatusOption.disabled = !approved;
+      statusHelp.textContent = approved
+        ? "公開審査で承認済みです。再審査が必要な場合は、公開審査の差し戻しを行います。"
+        : "「フィードバック済み」は、フィードバック完了後の公開審査で承認されたときに自動で設定されます。";
     };
     const initializeSelects = () => {
       populateEditorSubjects();
@@ -2709,7 +2718,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       (form.elements.namedItem("title") as HTMLInputElement).value = item.title;
       (form.elements.namedItem("summary") as HTMLInputElement).value = item.summary;
       fillConceptOptions(item.concept_id);
-      status.value = item.status; body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
+      status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); const canRetryPublication = item.publication_action === "publish" && Boolean(item.publication_pr_url); const publicationBusy = Boolean(item.publication_run && ["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"].includes(item.publication_run.state)); publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && !item.published_at && (!item.publication_pr_url || canRetryPublication)); publishButton.disabled = publicationBusy; publishButton.textContent = canRetryPublication ? "自動公開を再試行" : "公開する"; scheduleButton.hidden = true; unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at) && item.publication_action !== "unpublish"); unpublishButton.disabled = publicationBusy; reviewButton.hidden = !Boolean(item.id); reviewButton.disabled = Boolean(item.published_at) || Boolean(item.publication_pr_url); reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。"; completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
@@ -2720,7 +2729,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!selected) return;
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
-      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "example.category.concept", body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
+      setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: source?.conceptId ?? "", body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
       heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
     };
@@ -2820,6 +2829,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     category.addEventListener("change", () => { conceptId.value = ""; fillConceptOptions(); setUnsavedChanges(true); });
     conceptPicker.addEventListener("change", () => { conceptId.value = conceptPicker.value; fillConceptOptions(conceptId.value); setUnsavedChanges(true); });
     conceptId.addEventListener("input", () => { fillConceptOptions(conceptId.value); setUnsavedChanges(true); });
+    conceptId.addEventListener("invalid", () => { conceptIdAdvanced.open = true; conceptIdPreview.textContent = "概念を選択するか、概念IDを入力してください"; });
     sourceSubject.addEventListener("change", fillSourceArticles);
     outlineSubject.addEventListener("change", () => { fillOutlineCategories(); renderAtlasOutline(); });
     outlineCategory.addEventListener("change", renderAtlasOutline);

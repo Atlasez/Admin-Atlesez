@@ -149,6 +149,10 @@ test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚�
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
+  await expect(page.locator('[name="conceptId"]')).toHaveValue("");
+  await expect(page.locator("[data-concept-id-preview]")).toHaveText(
+    "概念を選択してください",
+  );
   await page.locator('select[name="category"]').selectOption("group-theory");
   const picker = page.locator("[data-concept-picker]");
   await expect(
@@ -163,6 +167,23 @@ test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚�
   );
   await expect(page.locator(".concept-id-advanced")).not.toHaveAttribute(
     "open",
+  );
+});
+
+test("フィードバック済みは公開審査の承認前に状態選択できない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const status = page.locator('[name="status"]');
+  await expect(status).toHaveValue("draft");
+  await expect(status.locator('option[value="approved"]')).toHaveAttribute(
+    "disabled",
+    "",
+  );
+  await expect(page.locator("[data-status-help]")).toContainText(
+    "公開審査で承認されたときに自動で設定",
   );
 });
 
@@ -273,8 +294,8 @@ test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示�
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".required-mark")).toHaveCount(6);
-  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(6);
+  await expect(page.locator(".required-mark")).toHaveCount(7);
+  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(7);
   for (const name of [
     "title",
     "summary",

@@ -102,6 +102,104 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("does not allow a new document to skip directly to feedback-complete", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          subject: "mathematics",
+          category: "group-theory",
+          locale: "ja",
+          slug: "direct-approval",
+          title: "直接承認テスト",
+          summary: "直接承認を拒否するテスト",
+          conceptId: "math.group-theory.group-definition",
+          body: "本文です。",
+          latexEngine: "katex",
+          status: "approved",
+        }),
+      }),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "フィードバック済みには直接変更できません。フィードバック依頼を完了し、公開審査の承認を受けてください。",
+    });
+  });
+
+  it("does not allow an in-progress document to be updated as feedback-complete", async () => {
+    class ExistingDocumentStatement extends EmptyStatement {
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return {
+            subject: "mathematics",
+            status: "in-review",
+            title: "フィードバック中",
+            summary: "要約",
+            concept_id: "math.group-theory.group-definition",
+            body: "本文です。",
+            writing_memo: "",
+            category: "group-theory",
+            locale: "ja",
+            slug: "in-review",
+            latex_engine: "katex",
+            published_at: null,
+            scheduled_publish_at: null,
+            scheduled_publish_claimed_at: null,
+            publication_review_stage: null,
+            publication_review_round: 0,
+            locked_ranges: "[]",
+            article_references: "[]",
+          } as T;
+        return null as T | null;
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new ExistingDocumentStatement(query),
+      },
+    };
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/documents/22222222-2222-4222-8222-222222222222",
+        {
+          method: "PATCH",
+          headers: {
+            origin: "http://localhost",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            subject: "mathematics",
+            category: "group-theory",
+            locale: "ja",
+            slug: "in-review",
+            title: "フィードバック中",
+            summary: "要約",
+            conceptId: "math.group-theory.group-definition",
+            body: "本文です。",
+            latexEngine: "katex",
+            status: "approved",
+          }),
+        },
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "フィードバック済みには直接変更できません。フィードバック依頼を完了し、公開審査の承認を受けてください。",
+    });
+  });
+
   it("creates multiple subject coordinator assignments in one request", async () => {
     class CapturedStatement extends EmptyStatement {
       values: unknown[] = [];

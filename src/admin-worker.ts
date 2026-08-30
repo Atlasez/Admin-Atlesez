@@ -8026,6 +8026,14 @@ async function createEditorialDocument(
       },
       400,
     );
+  if (values.status === "approved")
+    return json(
+      {
+        error:
+          "フィードバック済みには直接変更できません。フィードバック依頼を完了し、公開審査の承認を受けてください。",
+      },
+      409,
+    );
   if (!canEditSubject(scope, values.subject))
     return json({ error: "この分野の原稿を作成する権限がありません。" }, 403);
   const id = crypto.randomUUID();
@@ -8054,7 +8062,7 @@ async function createEditorialDocument(
       scope.email,
       now,
       now,
-      values.status === "approved" ? now : null,
+      null,
       null,
       null,
       null,
@@ -8109,8 +8117,16 @@ async function updateEditorialDocument(
         | "locked_ranges"
         | "article_references"
       >
-    >();
+  >();
   if (!existing) return json({ error: "原稿が見つかりません。" }, 404);
+  if (values.status === "approved" && existing.status !== "approved")
+    return json(
+      {
+        error:
+          "フィードバック済みには直接変更できません。フィードバック依頼を完了し、公開審査の承認を受けてください。",
+      },
+      409,
+    );
   if (existing.publication_review_stage)
     return json({ error: "公開審査中は原稿を編集できません。審査担当の判断を待つか、差し戻してください。" }, 409);
   const isReviewOnly =
