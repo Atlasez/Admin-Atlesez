@@ -2843,11 +2843,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             return;
           }
           try {
-            const payload = JSON.parse(event.data) as { type?: string; participants?: CollaborationParticipant[] };
+            const payload = JSON.parse(event.data) as { type?: string; participants?: CollaborationParticipant[]; status?: string; updatedAt?: string };
             if (payload.type === "presence") renderCollaborationParticipants(payload.participants ?? []);
             if (payload.type === "comments-changed") {
               const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
               if (currentDocumentId === documentId) void reloadComments(documentId).catch(() => undefined);
+            }
+            if (payload.type === "document-changed") {
+              const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+              if (currentDocumentId === documentId && typeof payload.status === "string") {
+                void refreshWorkflowFromCollaboration(documentId).catch(() => undefined);
+              }
             }
           } catch { /* malformed presence messages are ignored */ }
         });
@@ -2946,6 +2952,30 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!response.ok || !data.comments) throw new Error(data.error ?? "コメントを読み込めませんでした。");
       currentComments = data.comments;
       renderComments();
+    };
+    let workflowRefreshInFlight: Promise<void> | null = null;
+    const refreshWorkflowFromCollaboration = async (id: string) => {
+      if (workflowRefreshInFlight) return workflowRefreshInFlight;
+      const refresh = (async () => {
+        const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin", cache: "no-store" });
+        const data = await read<{ document?: Document; error?: string }>(response);
+        if (!response.ok || !data.document) throw new Error(data.error ?? "ワークフロー状態を読み込めませんでした。");
+        const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+        if (currentDocumentId !== id) return;
+        const index = documents.findIndex((item) => item.id === id);
+        if (index >= 0) documents[index] = data.document;
+        setPublicationState(data.document);
+        monitorPublicationRun(data.document);
+        updateWorkflow(data.document.status, Boolean(data.document.published_at), data.document.publication_review_stage ?? null);
+        await loadPublicationReview(id, data.document);
+        renderDocuments();
+      })();
+      workflowRefreshInFlight = refresh;
+      try {
+        await refresh;
+      } finally {
+        if (workflowRefreshInFlight === refresh) workflowRefreshInFlight = null;
+      }
     };
     type Revision = { id: string; title: string; summary: string; body: string; status: string; saved_by: string; saved_at: string };
     type FeedbackRequestHistory = { task_id: string; details: string; status: "open" | "doing" | "done"; assignee_email: string | null; created_at: string; requester_display_name?: string; created_by: string };

@@ -247,6 +247,19 @@ export class EditorialCollaborationRoom {
     }
   }
 
+  private broadcastDocumentChange(payload: {
+    status: string;
+    publicationStage: string | null;
+    publishedAt: boolean;
+    updatedAt: string;
+    publicationRunState: string | null;
+  }) {
+    const message = JSON.stringify({ type: "document-changed", ...payload });
+    for (const socket of this.state.getWebSockets()) {
+      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     // 一覧画面から現在接続中のメンバーだけを取得する。GETでは原稿本文を
     // 初期化せず、接続中のWebSocketがない原稿のDOを不必要に読み込まない。
@@ -261,10 +274,31 @@ export class EditorialCollaborationRoom {
         return json({ error: "WebSocket接続または通知POSTが必要です。" }, 426);
       const payload = (await request.json().catch(() => null)) as {
         type?: unknown;
+        status?: unknown;
+        publicationStage?: unknown;
+        publishedAt?: unknown;
+        updatedAt?: unknown;
+        publicationRunState?: unknown;
       } | null;
-      if (payload?.type !== "comments-changed")
+      if (payload?.type === "comments-changed") {
+        this.broadcastCommentChange();
+        return json({ ok: true });
+      }
+      if (payload?.type !== "document-changed" || typeof payload.status !== "string")
         return json({ error: "未知の通知です。" }, 400);
-      this.broadcastCommentChange();
+      this.broadcastDocumentChange({
+        status: payload.status,
+        publicationStage:
+          typeof payload.publicationStage === "string"
+            ? payload.publicationStage
+            : null,
+        publishedAt: payload.publishedAt === true,
+        updatedAt: typeof payload.updatedAt === "string" ? payload.updatedAt : "",
+        publicationRunState:
+          typeof payload.publicationRunState === "string"
+            ? payload.publicationRunState
+            : null,
+      });
       return json({ ok: true });
     }
     const Pair = (
