@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("参加者カードの権限操作は主CTAと補助操作を整理して表示する", async ({
+test("参加者カードは概要表示に絞り、個人設定モーダルを主導線にする", async ({
   page,
 }) => {
   let catalogLoaded = false;
@@ -84,8 +84,19 @@ test("参加者カードの権限操作は主CTAと補助操作を整理して�
     page.getByPlaceholder("名前・メールアドレスで検索"),
   ).toBeVisible();
   await expect(page.locator("[data-member-filter]")).toBeVisible();
-  await expect(card.locator("[data-discord-role]")).toHaveCount(1);
-  await expect(card.locator(".member-role-option span")).toHaveText("数学運営");
+  await expect(card.locator("[data-discord-role]")).toHaveCount(0);
+  await expect(
+    card.getByText("役職・プロフィールを編集", { exact: true }),
+  ).toHaveCount(0);
+  await card.getByRole("button", { name: "編集担当の個人設定を開く" }).click();
+  const memberModal = page.locator("[data-member-modal]");
+  await expect(memberModal).toBeVisible();
+  await expect(memberModal.locator("[data-modal-discord-role]")).toHaveCount(1);
+  await expect(memberModal.locator(".member-role-option span")).toHaveText(
+    "数学運営",
+  );
+  await memberModal.locator("[data-member-modal-close]").first().click();
+  await expect(memberModal).toBeHidden();
   const readinessButton = page.locator("[data-discord-readiness]");
   await expect(readinessButton).toHaveText("運用事前チェック");
   await readinessButton.click();
