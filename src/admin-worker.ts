@@ -9542,6 +9542,30 @@ async function publicationReviewRoleEmails(
   return [...new Set((result.results ?? []).map((row) => row.email).filter(Boolean))];
 }
 
+type EditorialFeedbackTaskState = {
+  total: number;
+  done: number;
+};
+
+async function editorialFeedbackTaskState(
+  env: Env,
+  documentId: string,
+): Promise<EditorialFeedbackTaskState> {
+  const row = await env.REPORTS.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done
+       FROM editorial_feedback_task_links link
+       JOIN editorial_tasks t ON t.id = link.task_id
+      WHERE link.document_id = ?`,
+  )
+    .bind(documentId)
+    .first<{ total: number | string | null; done: number | string | null }>();
+  return {
+    total: Math.max(0, Number(row?.total ?? 0)),
+    done: Math.max(0, Number(row?.done ?? 0)),
+  };
+}
+
 async function scheduleEditorialPublication(request: Request, env: Env, documentId: string): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -9610,10 +9634,14 @@ async function getPublicationReviewState(
     .first<EditorialDocument>();
   if (!document || !canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
-  const [coordinators, leaders] = await Promise.all([
+  const [coordinators, leaders, feedbackTasks] = await Promise.all([
     publicationReviewRoleEmails(env, "subject-coordinator", document.subject),
     publicationReviewRoleEmails(env, "project-leader", document.subject),
+    editorialFeedbackTaskState(env, document.id),
   ]);
+  const feedbackComplete =
+    document.status !== "in-review" ||
+    (feedbackTasks.total > 0 && feedbackTasks.done === feedbackTasks.total);
   return json({
     stage: document.publication_review_stage,
     round: document.publication_review_round,
@@ -9622,6 +9650,9 @@ async function getPublicationReviewState(
       !document.publication_review_stage &&
       (document.status === "in-review" || document.status === "draft") &&
       (canEditSubject(scope, document.subject) || document.created_by === scope.email),
+    feedbackTaskTotal: feedbackTasks.total,
+    feedbackTaskDone: feedbackTasks.done,
+    feedbackComplete,
     canDecide:
       (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
       (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
@@ -9651,6 +9682,22 @@ async function startPublicationReview(
     return json({ error: "すでに公開審査中です。" }, 409);
   if (document.status !== "in-review" && document.status !== "draft")
     return json({ error: "先に原稿を保存してください。" }, 400);
+  const feedbackTasks = await editorialFeedbackTaskState(env, document.id);
+  if (
+    document.status === "in-review" &&
+    (feedbackTasks.total === 0 || feedbackTasks.done < feedbackTasks.total)
+  )
+    return json(
+      {
+        error:
+          feedbackTasks.total === 0
+            ? "フィードバック依頼がありません。先にフィードバックを依頼してください。"
+            : `フィードバックが未完了です（${feedbackTasks.done}/${feedbackTasks.total}件）。すべてのフィードバック依頼を完了にしてから進めてください。`,
+        feedbackTaskTotal: feedbackTasks.total,
+        feedbackTaskDone: feedbackTasks.done,
+      },
+      409,
+    );
   const coordinators = await publicationReviewRoleEmails(env, "subject-coordinator", document.subject);
   const leaders = await publicationReviewRoleEmails(env, "project-leader", document.subject);
   const stage: EditorialPublicationReviewStage = coordinators.length
@@ -11912,6 +11959,7 @@ export default {
           dispatchDueTaskReminders(env),
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
+          syncEditorialPublicationStatus(env),
           dispatchScheduledEditorialPublications(env),
         ]),
       );
