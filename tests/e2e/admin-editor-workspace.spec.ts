@@ -336,8 +336,8 @@ test("E-4: 必須の記事設定にアスタリスクとrequired属性を表示�
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".required-mark")).toHaveCount(6);
-  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(6);
+  await expect(page.locator(".required-mark")).toHaveCount(7);
+  await expect(page.locator(".field-heading > .required-mark")).toHaveCount(7);
   for (const name of [
     "title",
     "summary",
