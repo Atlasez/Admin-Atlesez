@@ -9100,17 +9100,30 @@ async function syncEditorialPublicationStatusForAdmin(
 }
 
 /** 公開用GitHub連携を、実際の対象リポジトリと権限まで含めて事前確認する。 */
+const editorialPublicationReviewToken = (env: Env) => {
+  const dedicatedToken = env.GITHUB_REVIEW_TOKEN?.trim();
+  if (dedicatedToken) return dedicatedToken;
+  const appConfigured = Boolean(
+    env.GITHUB_APP_ID &&
+      env.GITHUB_APP_INSTALLATION_ID &&
+      env.GITHUB_APP_PRIVATE_KEY,
+  );
+  // 移行中に既存の人間用Tokenを利用できるようにする。ただしAppが
+  // PR作成者である構成に限定し、実際のレビュー時にも別アカウント検査を行う。
+  return appConfigured ? env.GITHUB_PUBLISH_TOKEN?.trim() || null : null;
+};
+
 async function editorialPublicationReviewerStatus(
   env: Env,
   repository: string,
 ) {
-  const token = env.GITHUB_REVIEW_TOKEN?.trim();
+  const token = editorialPublicationReviewToken(env);
   if (!token)
     return {
       configured: false,
       canWrite: false,
       error:
-        "自動承認用GITHUB_REVIEW_TOKENが未設定です。PR作成者とは別の書き込み権限Tokenを登録してください。",
+        "自動承認用Tokenが未設定です。GITHUB_REVIEW_TOKEN、または公開用Appと併用する既存のGITHUB_PUBLISH_TOKENを確認してください。",
     };
   const headers = githubApiHeaders(
     token,
@@ -9556,10 +9569,10 @@ async function approveEditorialPublicationPullRequest(
   env: Env,
   pullRequest: EditorialPublicationPullRequest,
 ) {
-  const reviewToken = env.GITHUB_REVIEW_TOKEN?.trim();
+  const reviewToken = editorialPublicationReviewToken(env);
   if (!reviewToken)
     throw new EditorialPublicationConfigurationError(
-      "自動承認用のGITHUB_REVIEW_TOKENが設定されていません。PR作成者とは別の書き込み権限TokenをCloudflare Secretへ登録してください。",
+      "自動承認用Tokenが設定されていません。GITHUB_REVIEW_TOKEN、または公開用Appと併用する既存のGITHUB_PUBLISH_TOKENを確認してください。",
     );
   if (!pullRequest.head_sha)
     throw new Error("自動承認対象のCommitを確認できませんでした。");
