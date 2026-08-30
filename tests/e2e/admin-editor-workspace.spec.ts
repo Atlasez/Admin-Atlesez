@@ -1586,3 +1586,164 @@ test("CM-RT: コメント変更通知を受けると一覧をリアルタイム�
     page.locator('[data-comment-context="comment-realtime"]'),
   ).toBeVisible();
 });
+
+test("公開Runの状態・CI失敗詳細を再読込なしでリアルタイム反映する", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    class TestSocket extends EventTarget {
+      static readonly OPEN = 1;
+      readonly readyState = 0;
+      binaryType = "arraybuffer";
+      constructor() {
+        super();
+        (window as Window & { __testSockets?: TestSocket[] }).__testSockets ??=
+          [];
+        (
+          window as unknown as { __testSockets: TestSocket[] }
+        ).__testSockets.push(this);
+        queueMicrotask(() => {
+          Object.defineProperty(this, "readyState", {
+            value: TestSocket.OPEN,
+          });
+          this.dispatchEvent(new Event("open"));
+        });
+      }
+      send() {}
+      close() {
+        Object.defineProperty(this, "readyState", { value: 3 });
+        this.dispatchEvent(new Event("close"));
+      }
+    }
+    Object.defineProperty(window, "WebSocket", {
+      configurable: true,
+      writable: true,
+      value: TestSocket,
+    });
+  });
+  const pendingDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    publication_run: {
+      id: "run-realtime",
+      state: "checks_pending",
+      action: "publish" as const,
+      attempt: 1,
+      error_message: "CIを確認しています。",
+    },
+  };
+  let documentReads = 0;
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/auth-status") {
+      await route.fulfill({
+        json: { email: "alice@example.com", isManager: true },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/profile") {
+      await route.fulfill({
+        json: { profile: { display_name: "Alice", avatar_url: "" } },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/notifications") {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents") {
+      await route.fulfill({
+        json: {
+          documents: [pendingDocument],
+          mentionNames: ["Alice", "Bob"],
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            isManager: true,
+          },
+        },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents/doc-1") {
+      documentReads += 1;
+      await route.fulfill({
+        json: { document: pendingDocument, comments },
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/assets")) {
+      await route.fulfill({ json: { assets: [] } });
+      return;
+    }
+    if (url.pathname.endsWith("/revisions")) {
+      await route.fulfill({ json: { revisions: [] } });
+      return;
+    }
+    await route.fulfill({ status: 200, json: {} });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(page.locator("[data-publication-state]")).toHaveText(
+    "自動検証中",
+  );
+  const readsAfterInitialLoad = documentReads;
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __testSockets?: unknown[] }).__testSockets
+            ?.length ?? 0,
+      ),
+    )
+    .toBeGreaterThan(0);
+  const failedRun = {
+    id: "run-realtime",
+    state: "failed",
+    action: "publish",
+    attempt: 2,
+    error_message: "CIが失敗しました（verify）。",
+    failure_kind: "ci",
+    check_name: "verify",
+    check_url: "https://github.com/Atlasez/Atlasez01/actions/runs/999",
+    failure_detail: "記事の検証に失敗しました。",
+    failure_step: "npm run check:math-directives",
+    failure_file: "src/content/articles/jpn/mathematics/overview/test.md",
+    failure_line: 27,
+    failure_suggestion: "記事を修正して公開処理を再試行してください。",
+    updated_at: "2026-08-31T02:00:00.000Z",
+  };
+  await page.evaluate((run) => {
+    const sockets =
+      (window as Window & { __testSockets?: EventTarget[] }).__testSockets ??
+      [];
+    sockets.forEach((socket) =>
+      socket.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "document-changed",
+            status: "approved",
+            publicationStage: null,
+            publishedAt: false,
+            publishedAtValue: null,
+            updatedAt: "2026-08-31T02:00:00.000Z",
+            publicationPrNumber: 321,
+            publicationPrUrl: "https://github.com/Atlasez/Atlasez01/pull/321",
+            publicationAction: "publish",
+            publicationRun: run,
+          }),
+        }),
+      ),
+    );
+  }, failedRun);
+  await expect(page.locator("[data-publication-state]")).toHaveText(
+    "自動公開失敗",
+  );
+  await expect(page.locator("[data-publication-diagnostic]")).toBeVisible();
+  await expect(page.locator("[data-publication-diagnostic]")).toContainText(
+    "npm run check:math-directives",
+  );
+  await expect(
+    page.getByRole("button", { name: "公開処理を再試行" }),
+  ).toBeVisible();
+  expect(documentReads).toBe(readsAfterInitialLoad);
+});
