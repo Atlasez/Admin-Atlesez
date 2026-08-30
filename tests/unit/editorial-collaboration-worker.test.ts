@@ -111,4 +111,45 @@ describe("editorial collaboration initialization", () => {
     expect(yDocument.getText("body").toString()).toBe("");
     source.destroy();
   });
+
+  it("broadcasts workflow changes to connected editor tabs", () => {
+    const socket = { readyState: 1, send: vi.fn() } as unknown as WebSocket;
+    const state = {
+      storage: {
+        get: vi.fn(async () => undefined),
+        put: vi.fn(async () => undefined),
+      },
+      acceptWebSocket: vi.fn(),
+      getWebSockets: vi.fn(() => [socket]),
+      waitUntil: vi.fn(),
+    };
+    const room = new EditorialCollaborationRoom(state, {
+      REPORTS: {} as never,
+    } as never);
+
+    vi.stubGlobal("WebSocket", { OPEN: 1 });
+    (
+      room as unknown as {
+        broadcastDocumentChange: (payload: Record<string, unknown>) => void;
+      }
+    ).broadcastDocumentChange({
+      status: "in-review",
+      publicationStage: "project-leader",
+      publishedAt: false,
+      updatedAt: "2026-08-31T00:00:00.000Z",
+      publicationRunState: null,
+    });
+
+    expect(socket.send).toHaveBeenCalledWith(
+      JSON.stringify({
+        type: "document-changed",
+        status: "in-review",
+        publicationStage: "project-leader",
+        publishedAt: false,
+        updatedAt: "2026-08-31T00:00:00.000Z",
+        publicationRunState: null,
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
 });

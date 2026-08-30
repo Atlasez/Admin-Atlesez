@@ -8267,6 +8267,7 @@ async function updateEditorialDocument(
       documentId,
     )
     .run();
+  await notifyEditorialDocumentChange(env, documentId);
   return json({ ok: true });
 }
 
@@ -9720,6 +9721,12 @@ const updateEditorialPublicationRun = async (
   )
     .bind(...entries.map(([, value]) => value), now, runId)
     .run();
+  const run = await env.REPORTS.prepare(
+    "SELECT document_id FROM editorial_publication_runs WHERE id = ?",
+  )
+    .bind(runId)
+    .first<{ document_id: string }>();
+  if (run) await notifyEditorialDocumentChange(env, run.document_id);
 };
 
 const claimEditorialPublicationRun = async (
@@ -9746,6 +9753,7 @@ const claimEditorialPublicationRun = async (
     .bind(id, documentId, action, idempotencyKey, new Date(Date.now() + 90_000).toISOString(), createdBy, now, now)
     .run()) as { meta?: { changes?: number } };
   const run = await getLatestEditorialPublicationRun(env, documentId);
+  await notifyEditorialDocumentChange(env, documentId);
   return { run, created: result.meta?.changes === 1 || run?.id === id };
 };
 
@@ -9786,7 +9794,9 @@ const ensureEditorialPublicationRun = async (
       now,
     )
     .run();
-  return getLatestEditorialPublicationRun(env, documentId);
+  const run = await getLatestEditorialPublicationRun(env, documentId);
+  await notifyEditorialDocumentChange(env, documentId);
+  return run;
 };
 
 type EditorialCheckRun = {
@@ -11059,6 +11069,7 @@ async function startPublicationReview(
   )
     .bind(stage, round, now, scope.email, documentId)
     .run();
+  await notifyEditorialDocumentChange(env, documentId);
   const recipients = stage === "subject-coordinator" ? coordinators : leaders;
   const recipientLabel = stage === "subject-coordinator" ? "分野統括" : "プロジェクトリーダー";
   await postDiscordWebhook(
@@ -11112,6 +11123,7 @@ async function decidePublicationReview(
     await env.REPORTS.prepare(
       "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
+    await notifyEditorialDocumentChange(env, documentId);
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
     return json({ ok: true, status: "in-review", stage: null, returnedToFeedback: true });
   }
@@ -11119,12 +11131,14 @@ async function decidePublicationReview(
     await env.REPORTS.prepare(
       "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
+    await notifyEditorialDocumentChange(env, documentId);
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査依頼（プロジェクトリーダー）：${document.title}`);
     return json({ ok: true, status: "in-review", stage: "project-leader" });
   }
   await env.REPORTS.prepare(
     "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
   ).bind(now, now, scope.email, documentId).run();
+  await notifyEditorialDocumentChange(env, documentId);
   return json({ ok: true, status: "approved", stage: null, approvedForPublication: true });
 }
 
@@ -12777,6 +12791,47 @@ async function notifyEditorialCommentChange(
     );
   } catch {
     // コメント自体の保存を失敗させず、接続中の画面は再読込で回復できるようにする。
+  }
+}
+
+async function notifyEditorialDocumentChange(
+  env: Env,
+  documentId: string,
+): Promise<void> {
+  const namespace = env.EDITORIAL_COLLABORATION;
+  if (!namespace) return;
+  try {
+    const document = await env.REPORTS.prepare(
+      "SELECT status, publication_review_stage, published_at, updated_at FROM editorial_documents WHERE id = ?",
+    )
+      .bind(documentId)
+      .first<{
+        status: EditorialDocumentStatus;
+        publication_review_stage: EditorialPublicationReviewStage | null;
+        published_at: string | null;
+        updated_at: string;
+      }>();
+    if (!document) return;
+    const publicationRun = await getLatestEditorialPublicationRun(env, documentId);
+    await namespace.get(namespace.idFromName(documentId)).fetch(
+      new Request("https://atlasez-editorial-collaboration.internal/events", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-atlasez-document-id": documentId,
+        },
+        body: JSON.stringify({
+          type: "document-changed",
+          status: document.status,
+          publicationStage: document.publication_review_stage,
+          publishedAt: Boolean(document.published_at),
+          updatedAt: document.updated_at,
+          publicationRunState: publicationRun?.state ?? null,
+        }),
+      }),
+    );
+  } catch {
+    // 状態更新自体は成功させ、接続が一時的に使えない場合は再読込で回復する。
   }
 }
 
