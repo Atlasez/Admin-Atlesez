@@ -830,6 +830,32 @@ describe("admin worker editor APIs", () => {
       article_references: "[]",
     };
     const executed: { query: string; values: unknown[] }[] = [];
+    const publicationRun = {
+      id: "33333333-3333-4333-8333-333333333333",
+      document_id: documentId,
+      action: "publish" as const,
+      state: "queued" as const,
+      attempt: 0,
+      pull_request_number: null,
+      pull_request_url: null,
+      branch: null,
+      head_sha: null,
+      merge_sha: null,
+      last_check_at: null,
+      next_attempt_at: null,
+      error_code: null,
+      error_message: null,
+      idempotency_key: `${documentId}:publish:test`,
+      lease_until: null,
+      failure_kind: null,
+      check_name: null,
+      check_url: null,
+      diagnostic_url: null,
+      created_by: "local-editor@atlasez.test",
+      created_at: "2026-08-28T00:00:00.000Z",
+      updated_at: "2026-08-28T00:00:00.000Z",
+    };
+    let currentPublicationRun: typeof publicationRun | null = null;
     class PublishStatement extends EmptyStatement {
       private values: unknown[] = [];
 
@@ -842,12 +868,20 @@ describe("admin worker editor APIs", () => {
       async first<T>() {
         if (this.query.includes("FROM editorial_documents"))
           return document as T;
+        if (this.query.includes("FROM editorial_publication_runs"))
+          return currentPublicationRun as T | null;
         return null as T | null;
       }
 
       async run() {
         executed.push({ query: this.query, values: this.values });
-        return {};
+        if (
+          this.query.includes(
+            "INSERT OR IGNORE INTO editorial_publication_runs",
+          )
+        )
+          currentPublicationRun = publicationRun;
+        return { meta: { changes: 1 } };
       }
     }
     const env = {
@@ -867,6 +901,11 @@ describe("admin worker editor APIs", () => {
         requests.push({ url, init });
         if (url.endsWith("/git/ref/heads/main"))
           return new Response(JSON.stringify({ object: { sha: "base-sha" } }));
+        if (
+          url.includes("/git/ref/heads/") &&
+          !url.endsWith("/git/ref/heads/main")
+        )
+          return new Response("Not found", { status: 404 });
         if (url.endsWith("/git/refs") && init?.method === "POST")
           return new Response(JSON.stringify({ ref: "refs/heads/editorial" }), {
             status: 201,
@@ -878,6 +917,7 @@ describe("admin worker editor APIs", () => {
             JSON.stringify({ content: { sha: "article-sha" } }),
             { status: 201 },
           );
+        if (url.includes("/pulls?")) return new Response(JSON.stringify([]));
         if (url.endsWith("/pulls") && init?.method === "POST")
           return new Response(
             JSON.stringify({
@@ -912,6 +952,32 @@ describe("admin worker editor APIs", () => {
         pullRequestNumber: 321,
         pullRequestUrl: "https://github.com/Atlasez/Atlasez01/pull/321",
       });
+      const secondResponse = await worker.fetch(
+        new Request(
+          `http://localhost/api/admin/editor/documents/${documentId}/publish`,
+          {
+            method: "POST",
+            headers: {
+              origin: "http://localhost",
+              "content-type": "application/json",
+            },
+            body: "{}",
+          },
+        ),
+        env as never,
+      );
+      expect(secondResponse.status).toBe(200);
+      await expect(secondResponse.json()).resolves.toMatchObject({
+        ok: true,
+        pending: true,
+        publicationRun: { id: publicationRun.id },
+      });
+      expect(
+        requests.filter(
+          (request) =>
+            request.url.endsWith("/pulls") && request.init?.method === "POST",
+        ),
+      ).toHaveLength(1);
       const contentWrites = requests.filter(
         (request) =>
           request.url.includes("/contents/") && request.init?.method === "PUT",
@@ -930,8 +996,10 @@ describe("admin worker editor APIs", () => {
       expect(pullRequestBody.base).toBe("main");
       expect(pullRequestBody.head).toBe(articleWrite.branch);
       expect(
-        executed.some((entry) =>
-          entry.query.includes("publication_action = 'publish'"),
+        executed.some(
+          (entry) =>
+            entry.query.includes("publication_action = ?") &&
+            entry.values.includes("publish"),
         ),
       ).toBe(true);
     } finally {
@@ -985,7 +1053,7 @@ describe("admin worker editor APIs", () => {
 
       async run() {
         executed.push({ query: this.query, values: this.values });
-        return {};
+        return { meta: { changes: 1 } };
       }
     }
     const importKeyMock = vi
@@ -1087,6 +1155,126 @@ describe("admin worker editor APIs", () => {
     } finally {
       importKeyMock.mockRestore();
       signMock.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("classifies transient CI failures and stores the check log for retry", async () => {
+    const documentId = "44444444-4444-4444-8444-444444444444";
+    const run = {
+      id: "55555555-5555-4555-8555-555555555555",
+      document_id: documentId,
+      action: "publish" as const,
+      state: "checks_pending" as const,
+      attempt: 0,
+      pull_request_number: 654,
+      pull_request_url: "https://github.com/Atlasez/Atlasez01/pull/654",
+      branch: "editorial/published-transient",
+      head_sha: null,
+      merge_sha: null,
+      last_check_at: null,
+      next_attempt_at: null,
+      error_code: null,
+      error_message: null,
+      idempotency_key: "run-555",
+      lease_until: null,
+      failure_kind: null,
+      check_name: null,
+      check_url: null,
+      diagnostic_url: null,
+      created_by: "local-editor@atlasez.test",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-30T00:00:00.000Z",
+    };
+    const executed: { query: string; values: unknown[] }[] = [];
+    class TransientPublicationStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async all<T>() {
+        if (this.query.includes("FROM editorial_publication_runs"))
+          return { results: [run] as T[] };
+        return { results: [] as T[] };
+      }
+
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return { id: documentId } as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.query, values: this.values });
+        return { meta: { changes: 1 } };
+      }
+    }
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.endsWith("/pulls/654"))
+        return new Response(
+          JSON.stringify({
+            number: 654,
+            state: "open",
+            user: { login: "publisher-bot" },
+            head: { sha: "transient-head" },
+            draft: false,
+            mergeable_state: "clean",
+          }),
+        );
+      if (url.includes("/check-runs?"))
+        return new Response(
+          JSON.stringify({
+            check_runs: [
+              {
+                name: "content-check",
+                status: "completed",
+                conclusion: "timed_out",
+                html_url:
+                  "https://github.com/Atlasez/Atlasez01/actions/runs/654",
+              },
+            ],
+          }),
+        );
+      throw new Error(`Unexpected GitHub request: ${url}`);
+    });
+    const pending: Promise<unknown>[] = [];
+    try {
+      await worker.scheduled(
+        { cron: "*/1 * * * *" },
+        {
+          ...emptyEnv,
+          GITHUB_PUBLISH_TOKEN: "test-token",
+          REPORTS: {
+            ...emptyEnv.REPORTS,
+            prepare: (query: string) =>
+              new TransientPublicationStatement(query),
+          },
+        } as never,
+        { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+      );
+      await Promise.all(pending);
+
+      expect(requests.some((url) => url.includes("/check-runs?"))).toBe(true);
+      expect(
+        executed.some(
+          (entry) =>
+            entry.query.includes("UPDATE editorial_publication_runs") &&
+            entry.values.includes("retry_wait") &&
+            entry.values.includes("ci") &&
+            entry.values.includes("ci_transient_failure") &&
+            entry.values.includes(
+              "https://github.com/Atlasez/Atlasez01/actions/runs/654",
+            ),
+        ),
+      ).toBe(true);
+    } finally {
       vi.unstubAllGlobals();
     }
   });
