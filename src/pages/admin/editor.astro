@@ -3000,6 +3000,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
         if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
         await loadMediaAssets(savedId);
+        persistedDocumentValues = { title: formValue("title"), summary: formValue("summary"), body: body.value };
         setUnsavedChanges(false);
         await loadDocuments();
         const refreshed = documents.find((item) => item.id === savedId);
@@ -3108,6 +3109,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationGeneration = 0;
     let collaborationApplyingRemote = false;
     let collaborationSessionId = "";
+    let persistedDocumentValues = { title: "", summary: "", body: "" };
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
     const setCollaborationConnectionState = (connectionState: "connecting" | "connected" | "reconnecting" | "error", message: string) => {
       collaborationStatus.dataset.state = connectionState;
@@ -3223,6 +3225,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             } finally {
               collaborationApplyingRemote = false;
             }
+            if (next !== persistedDocumentValues[name as keyof typeof persistedDocumentValues])
+              setUnsavedChanges(true);
             saveMessage.value = "共同編集の変更をリアルタイム同期しました。";
           };
           shared.observe(applySharedValue);
@@ -3347,6 +3351,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       syncConceptRegistration();
       fillConceptOptions(item.concept_id);
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
+      persistedDocumentValues = { title: item.title, summary: item.summary, body: item.body };
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       syncMetadataSummary(); metadata.open = !item.id || metadataMissingCount() > 0;
