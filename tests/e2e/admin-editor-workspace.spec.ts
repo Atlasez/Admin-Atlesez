@@ -254,6 +254,7 @@ test("フィードバック済みは公開審査の承認前に状態選択で�
 });
 
 test("公開Runの失敗原因・CIログ・再試行導線を表示する", async ({ page }) => {
+  await page.setViewportSize({ width: 1367, height: 768 });
   const failedDocument = {
     ...documentItem,
     status: "approved" as const,
@@ -312,6 +313,23 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
     "href",
     "https://github.com/Atlasez/Atlasez01/actions/runs/123",
   );
+  const statusLayout = await page.evaluate(() => {
+    const statuses = document.querySelector<HTMLElement>(".document-statuses");
+    const link = document.querySelector<HTMLAnchorElement>(
+      "[data-publication-link] a",
+    );
+    return {
+      statusWidth: statuses?.clientWidth ?? 0,
+      statusScrollWidth: statuses?.scrollWidth ?? 0,
+      linkWidth: link?.getBoundingClientRect().width ?? 0,
+      linkHeight: link?.getBoundingClientRect().height ?? 0,
+    };
+  });
+  expect(statusLayout.statusScrollWidth).toBeLessThanOrEqual(
+    statusLayout.statusWidth,
+  );
+  expect(statusLayout.linkWidth).toBeGreaterThan(60);
+  expect(statusLayout.linkHeight).toBeLessThan(44);
   const publicationDiagnostic = page.locator("[data-publication-diagnostic]");
   await expect(publicationDiagnostic).toBeVisible();
   await expect(publicationDiagnostic).toHaveCSS("position", "absolute");
