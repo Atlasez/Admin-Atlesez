@@ -3554,18 +3554,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const responseDocumentId = typeof data.document.id === "string" ? data.document.id.trim() : "";
       if (id && loadedDocumentId && responseDocumentId !== loadedDocumentId) void loadMediaAssets(loadedDocumentId);
     };
-    const openDocument = async (id: string) => {
-      if (id) activeDocumentId = id;
-      saveMessage.value = "原稿を読み込み中…";
-      const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" });
-      const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response);
-      if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。");
-      expandedReplyThreadIds.clear();
-      setDocument(data.document, data.comments ?? []);
-      const loadedDocumentId = documentIdForRequest();
-      const responseDocumentId = typeof data.document.id === "string" ? data.document.id.trim() : "";
-      if (id && loadedDocumentId && responseDocumentId !== loadedDocumentId) void loadMediaAssets(loadedDocumentId);
-    };
     const reloadComments = async (id: string) => {
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin", cache: "no-store" });
       const data = await read<{ comments?: Comment[]; error?: string }>(response);

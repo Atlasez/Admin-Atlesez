@@ -544,7 +544,7 @@ describe("既存公開記事の運営原稿移行契約", () => {
       importedArticle.locale,
       importedArticle.slug,
     ]);
-    expect(update?.values[8]).toContain("## 更新案");
+    expect(update?.values[11]).toContain("## 更新案");
     // The update changes the existing file in place; it must not create a new
     // path or replace the stable article identifier with the editorial UUID.
     expect(update?.query).not.toContain("published_at = NULL");

@@ -30,6 +30,7 @@ import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
 import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
+import { parse as parseYaml } from "yaml";
 import { githubToken } from "./editorial-publication-github";
 // ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
 // Preview/本番は外部の専用Worker bindingを必ず経由する。
@@ -1964,7 +1965,6 @@ async function listReportAdminPermissions(
     discordRoles: discordRoles.results,
     discordAssignments: discordAssignments.results,
   });
-  });
 }
 
 async function createEditorialWorkflowRole(
@@ -3305,6 +3305,8 @@ async function updateEditorialDocumentArchive(
     .bind(archivedAt, scope.email, archiveExpiresAt, archivedAt, scope.email, documentId)
     .run();
   return json({ ok: true, archived: true, archived_at: archivedAt, archive_expires_at: archiveExpiresAt });
+}
+
 const publicArticleCatalogFields = `
   path, identity_key, repository, locale, subject, category, slug,
   source_article_id, git_sha, title, summary, concept_id, public_status,
@@ -14628,7 +14630,6 @@ async function adminNotifications(
         project_id: string;
         feedback_document_id: string | null;
         project_slug: string;
-        feedback_document_id: string | null;
         updated_at: string;
       }>(),
   ]);

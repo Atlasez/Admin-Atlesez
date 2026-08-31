@@ -349,7 +349,10 @@ describe("admin worker editor APIs", () => {
       ...emptyEnv,
       REPORTS: {
         ...emptyEnv.REPORTS,
-        prepare: (_query: string) => inserted,
+        prepare: (query: string) =>
+          query.includes("INSERT INTO editorial_documents")
+            ? inserted
+            : new EmptyStatement(query),
       },
     };
     const response = await worker.fetch(
