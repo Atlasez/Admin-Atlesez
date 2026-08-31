@@ -184,15 +184,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       <section class="editor-panel" aria-label="原稿編集">
         <div class="empty-state" data-editor-empty>
           <h2>原稿を選んでください</h2>
-          <p>新規原稿を作るか、既存の記事を取り込むと、ここで執筆とプレビューを始められます。</p>
+          <p>新規原稿を作るか、学習サイトの公開記事を運営管理へ登録すると、ここで執筆とプレビューを始められます。</p>
           <div class="editor-start-actions">
             <button type="button" class="primary-action" data-new-document>新規原稿を作成</button>
             <div class="source-picker" aria-label="公開済み記事を編集">
-              <strong>学習サイトに公開済みの記事を編集</strong>
-              <span>分野と記事を選ぶと、公開済み本文を原稿として取り込めます。</span>
+              <strong>学習サイトに公開済みの記事を運営管理へ登録</strong>
+              <span>公開中の記事を編集用原稿として紐付けます。登録だけでは記事は再公開されません。</span>
               <label>分野<select data-source-subject><option value="">分野を選択…</option></select></label>
               <label>記事<select data-source-article disabled><option value="">先に分野を選択…</option></select></label>
-              <button type="button" class="quiet-action" data-import-source>選んだ公開記事を編集する</button>
+              <button type="button" class="quiet-action" data-import-source>公開記事を運営管理へ登録</button>
             </div>
           </div>
         </div>
@@ -446,7 +446,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
   .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: .5rem; justify-content: space-between; padding: .6rem .7rem; text-align: left; width: 100%; }
   .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
-  .document-card small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .document-card small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.document-card-publication { color: var(--muted); flex: 0 0 auto; font-size: .62rem; font-weight: 800; white-space: nowrap; }
   .state { border-radius: 999px; font-size: .7rem; font-weight: 800; padding: .14rem .4rem; width: fit-content; }
   .state-draft { background: #edf1f5; color: #52606d; }.state-in-review { background: #fff0c6; color: #805500; }.state-on-hold { background: #f4e5e7; color: #8a3b49; }.state-approved { background: #def4e6; color: #267143; }
   .approval-dialog { width: min(92vw, 31rem); border: 1px solid #d9e3eb; border-radius: 1rem; padding: 1.5rem; color: #183047; box-shadow: 0 1.5rem 5rem #162c4030; }.approval-dialog::backdrop { background: #10203388; }.approval-dialog h2 { margin: .2rem 0 .65rem; }.approval-dialog p { line-height: 1.7; }.approval-actions { display: flex; justify-content: flex-end; gap: .65rem; margin-top: 1.25rem; flex-wrap: wrap; }
@@ -1184,7 +1184,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     }
     root.dataset.editorInitialized = "true";
     const routeQuery = new URLSearchParams(window.location.search);
-    const isEditorEntry = routeQuery.has("new") || routeQuery.has("document");
+    const isEditorEntry = routeQuery.has("new") || routeQuery.has("document") || routeQuery.has("sourceArticle");
     const resetEditorEntryScroll = () => {
       if (!isEditorEntry) return;
       // The editor height changes after the document and preview are loaded. Chrome
@@ -1192,6 +1192,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // already scrolled the new route to the top.
       window.scrollTo(0, 0);
     };
+    if (isEditorEntry) root.setAttribute("data-editor-starting", "");
     if (isEditorEntry) root.setAttribute("data-editor-starting", "");
     if (isEditorEntry) {
       // Chrome can restore the previous position after the async editor data
@@ -2459,7 +2460,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }
       const groups = subjectData.categories.map((categoryData) => ({
         ...categoryData,
-        articles: articles.filter((article) => article.subject === subjectData.slug && article.category === categoryData.slug),
+        articles: articles.filter((article) => article.status === "published" && article.subject === subjectData.slug && article.category === categoryData.slug),
       })).filter((group) => group.articles.length);
       sourcePicker.disabled = false;
       sourcePicker.innerHTML = '<option value="">記事を選択…</option>' + groups.map((group) => `<optgroup label="${esc(group.name)}">${group.articles.map((article) => `<option value="${esc(article.articleId)}">${esc(article.title)}</option>`).join("")}</optgroup>`).join("");
@@ -3383,10 +3384,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       syncMetadataSummary();
       metadata.open = true;
       (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId = source?.articleId || "";
-      heading.textContent = source ? `${source.title}（編集用の下書き）` : "新規原稿";
+      heading.textContent = source ? `${source.title}（運営管理へ登録）` : "新規原稿";
     };
     const openOutlineDocument = (document: Omit<Document, "body">) => { void openDocument(document.id).then(() => loadRevisions(document.id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); };
-    const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || item.id, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span></button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
+    const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || item.id, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span>${item.published_at ? '<span class="document-card-publication">公開済み・運営管理中</span>' : '<span class="document-card-publication">未公開</span>'}</button>`).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
     const allowedOutlineSubjects = () => subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
     const documentForSourceArticle = (article: SourceArticle) => documents.find((item) => item.source_article_id === article.articleId) ?? documents.find((item) => item.subject === article.subject && item.category === article.category && item.slug === article.slug);
     const documentForPlannedArticle = (item: PlannedArticle) => documents.find((document) => document.subject === item.subject && document.category === item.category && document.title === item.title);
@@ -3421,7 +3422,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const categoryArticles = publishedArticles.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.title.localeCompare(b.title, "ja"));
         const categoryPlanned = planned.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.order - b.order);
         const entries = [
-          ...categoryArticles.map((item) => { const document = documentForSourceArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : "公開済み", statusClass: document ? "outline-status-editorial" : "outline-status-published", actionMarkup: `<button type="button" class="quiet-action" data-reference-article="${esc(item.articleId)}">本文を見る</button>${document ? `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">運営原稿を開く</button>` : `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">この形式で作成</button>`}`, articleId: item.articleId, plannedKey: "", meta: item.slug }; }),
+          ...categoryArticles.map((item) => { const document = documentForSourceArticle(item); return { title: item.title, status: document ? `公開済み・運営原稿あり（${statusLabel[document.status]}）` : "公開済み・未登録", statusClass: document ? "outline-status-editorial" : "outline-status-published", actionMarkup: `<button type="button" class="quiet-action" data-reference-article="${esc(item.articleId)}">本文を見る</button>${document ? `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">運営原稿を開く</button>` : `<button type="button" class="quiet-action" data-outline-article="${esc(item.articleId)}">運営管理へ登録</button>`}`, articleId: item.articleId, plannedKey: "", meta: document ? `${item.slug} ・ 公開記事と運営原稿を紐付け済み` : `${item.slug} ・ 学習サイトで公開中／運営原稿なし` }; }),
           ...categoryPlanned.map((item) => { const document = documentForPlannedArticle(item); return { title: item.title, status: document ? `運営原稿・${statusLabel[document.status]}` : item.progress === "in-progress" ? "執筆中" : "未着手", statusClass: document ? "outline-status-editorial" : item.progress === "in-progress" ? "outline-status-progress" : "outline-status-planned", actionMarkup: document ? `<button type="button" class="quiet-action" data-outline-planned="${esc(item.key)}">運営原稿を開く</button>` : `<button type="button" class="quiet-action" data-outline-planned="${esc(item.key)}">執筆を開始</button>`, articleId: "", plannedKey: item.key, meta: item.progress === "in-progress" ? "学習サイトで執筆中" : "今後作成予定" }; }),
         ];
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
@@ -3605,7 +3606,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const existing = documentForSourceArticle(article);
         if (existing) { openOutlineDocument(existing); return; }
         emptyDocument(article);
-        saveMessage.value = "公開記事を編集用の下書きとして取り込みました。保存して執筆を始めてください。";
+        saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。";
         return;
       }
       const plannedButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-outline-planned]");
@@ -4030,7 +4031,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (event.target instanceof HTMLElement && metadata.contains(event.target)) metadata.open = true;
     }, true);
     root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
-    root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "取り込む既存記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "既存の原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); });
+    root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "運営管理へ登録する公開記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId) ?? documents.find((item) => item.subject === source.subject && item.category === source.category && item.slug === source.slug); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
     form.addEventListener("submit", (event) => { event.preventDefault(); void saveCurrentDocument().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
     root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-panel > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
@@ -4061,8 +4062,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     unpublishButton.addEventListener("click", () => unpublishDialog.showModal());
     setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
-    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const isNewDocument = query.get("new") === "1";
-    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (isNewDocument) emptyDocument(); root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); requestAnimationFrame(resetEditorEntryScroll); window.setTimeout(resetEditorEntryScroll, 250); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const sourceArticleId = query.get("sourceArticle"); const isNewDocument = query.get("new") === "1";
+    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); else if (sourceArticleId) { const source = articles.find((item) => item.articleId === sourceArticleId); if (!source) throw new Error("指定された公開記事を見つけられませんでした。"); const existing = documentForSourceArticle(source); if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; } else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; } } else if (isNewDocument) emptyDocument(); root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); requestAnimationFrame(resetEditorEntryScroll); window.setTimeout(resetEditorEntryScroll, 250); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);
