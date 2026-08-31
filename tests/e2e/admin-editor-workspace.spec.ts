@@ -1336,31 +1336,29 @@ test("既存原稿の応答でIDが欠落しても画像アップロード先を
   );
   let documentPosts = 0;
   let assetPosts = 0;
-  await page.route(
-    "**/api/admin/editor/documents/doc-1",
-    async (route) => {
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: { document: { ...documentItem, id: undefined }, comments },
+    });
+  });
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    if (route.request().method() === "POST") {
+      documentPosts += 1;
+      await route.fulfill({ status: 201, json: { ok: true, id: "new-doc" } });
+    } else {
       await route.fulfill({
-        json: { document: { ...documentItem, id: undefined }, comments },
-      });
-    },
-  );
-  await page.route(
-    "**/api/admin/editor/documents",
-    async (route) => {
-      if (route.request().method() === "POST") {
-        documentPosts += 1;
-        await route.fulfill({ status: 201, json: { ok: true, id: "new-doc" } });
-      } else {
-        await route.fulfill({
-          json: {
-            documents: [documentItem],
-            mentionNames: [],
-            scope: { email: "alice@example.com", subjects: ["mathematics"], isManager: true },
+        json: {
+          documents: [documentItem],
+          mentionNames: [],
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            isManager: true,
           },
-        });
-      }
-    },
-  );
+        },
+      });
+    }
+  });
   await page.route(
     "**/api/admin/editor/documents/doc-1/assets",
     async (route) => {
