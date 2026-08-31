@@ -3392,7 +3392,23 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
     const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); void loadPublicationIntegration(); };
-    const openDocument = async (id: string) => { saveMessage.value = "原稿を読み込み中…"; const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" }); const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response); if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。"); expandedReplyThreadIds.clear(); setDocument(data.document, data.comments ?? []); };
+    const openDocument = async (id: string) => {
+      saveMessage.value = "原稿を読み込み中…";
+      const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+      const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response);
+      if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。");
+      expandedReplyThreadIds.clear();
+      setDocument(data.document, data.comments ?? []);
+      // 一部の認証付きレスポンス／古いキャッシュでは本文は返るのに
+      // document.id が欠落することがある。呼び出し元のIDを復元して、
+      // 画像アップロード等が新規原稿POSTへ誤分岐しないようにする。
+      const documentIdInput = form.elements.namedItem("documentId") as HTMLInputElement;
+      const loadedDocumentId = documentIdInput.value.trim();
+      if ((!loadedDocumentId || loadedDocumentId === "undefined" || loadedDocumentId === "null") && id) {
+        documentIdInput.value = id;
+        void loadMediaAssets(id);
+      }
+    };
     const reloadComments = async (id: string) => {
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin", cache: "no-store" });
       const data = await read<{ comments?: Comment[]; error?: string }>(response);
