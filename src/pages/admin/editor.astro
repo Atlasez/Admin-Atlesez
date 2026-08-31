@@ -374,8 +374,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       <form method="dialog" data-schedule-form>
         <p class="eyebrow">公開予約</p>
         <h2 id="schedule-dialog-title">公開日時を設定</h2>
-        <p>公開審査完了済みの記事だけ予約できます。指定時刻になると公開用PRが自動作成されます。</p>
-        <label>公開日時<input type="datetime-local" data-schedule-at required /></label>
+        <p>公開審査完了済みの記事だけ予約できます。指定時刻（日本時間）になると公開用PRが自動作成されます。</p>
+        <label>公開日時（日本時間）<input type="datetime-local" data-schedule-at required /></label>
         <output data-schedule-message aria-live="polite"></output>
         <div class="approval-actions"><button type="button" class="quiet-action" data-schedule-cancel>キャンセル</button><button type="submit" value="save" class="primary-action">予約する</button></div>
       </form>
@@ -1836,7 +1836,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }
       publicationReviewButton.hidden = !Boolean(stateData.canDecide);
       scheduleButton.hidden = !(isManager && Boolean(currentItem?.id) && currentItem?.status === "approved" && !currentItem?.published_at && !currentItem?.publication_pr_url);
-      if (currentItem?.scheduled_publish_at) scheduleAt.value = currentItem.scheduled_publish_at.slice(0, 16);
+      scheduleAt.value = currentItem?.scheduled_publish_at ? scheduleInputValue(currentItem.scheduled_publish_at) : "";
       publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : stateData.managerOverride ? "プロジェクトリーダー承認を代行する" : "プロジェクトリーダーとして審査する";
       publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダーへ通知されます。差し戻すとフィードバック中へ戻ります。" : stateData.managerOverride ? "運営管理者としてプロジェクトリーダー承認を代行します。実行内容は監査記録に残ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
     };
@@ -1863,6 +1863,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const scheduleInputValue = (value: string) => {
+      const instant = new Date(value);
+      if (!Number.isFinite(instant.getTime())) return "";
+      const parts = Object.fromEntries(new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).formatToParts(instant).map((part) => [part.type, part.value]));
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+    };
     const publicationRunActiveStates = new Set(["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"]);
     const publicationRunTerminalStates = new Set(["published", "unpublished", "failed", "needs_operator"]);
     const setPublicationState = (item: Pick<Document, "status" | "publication_pr_url" | "publication_action" | "published_at" | "updated_at" | "publication_pr_number" | "publication_run">) => {

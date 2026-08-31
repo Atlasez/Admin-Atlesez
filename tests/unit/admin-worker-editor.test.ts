@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import worker from "../../src/admin-worker";
+import worker, { scheduledPublicationEpoch } from "../../src/admin-worker";
 
 class EmptyStatement {
   constructor(protected readonly query: string) {}
@@ -55,6 +55,15 @@ const githubWebhookSignature = async (secret: string, body: string) => {
 };
 
 describe("admin worker editor APIs", () => {
+  it("interprets datetime-local publication schedules as Japan time", () => {
+    expect(scheduledPublicationEpoch("2026-09-01T12:00")).toBe(
+      Date.parse("2026-09-01T03:00:00.000Z"),
+    );
+    expect(scheduledPublicationEpoch("2026-09-01T12:00+09:00")).toBe(
+      Date.parse("2026-09-01T03:00:00.000Z"),
+    );
+  });
+
   it("rejects unsigned GitHub publication webhooks", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/api/internal/github-publication-webhook", {
