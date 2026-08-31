@@ -1326,6 +1326,78 @@ test("IM-1: 認証付き画像を取得してPreviewへBlob表示する", async 
   await expect(page.locator("[data-media-status]")).toHaveText("1件の素材");
 });
 
+test("既存原稿の応答でIDが欠落しても画像アップロード先を維持する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64",
+  );
+  let documentPosts = 0;
+  let assetPosts = 0;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    await route.fulfill({
+      json: { document: { ...documentItem, id: undefined }, comments },
+    });
+  });
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    if (route.request().method() === "POST") {
+      documentPosts += 1;
+      await route.fulfill({ status: 201, json: { ok: true, id: "new-doc" } });
+    } else {
+      await route.fulfill({
+        json: {
+          documents: [documentItem],
+          mentionNames: [],
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            isManager: true,
+          },
+        },
+      });
+    }
+  });
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/assets",
+    async (route) => {
+      if (route.request().method() === "POST") {
+        assetPosts += 1;
+        await route.fulfill({
+          status: 201,
+          json: {
+            asset: {
+              id: "55555555-5555-4555-8555-555555555555",
+              filename: "diagram.png",
+              mediaType: "image/png",
+              bytes: png.byteLength,
+              alt: "図",
+              latexName: "diagram",
+              createdAt: "2026-08-21T00:00:00.000Z",
+              marker: "asset://55555555-5555-4555-8555-555555555555",
+            },
+          },
+        });
+      } else await route.fulfill({ json: { assets: [] } });
+    },
+  );
+
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(page.locator('[name="documentId"]')).toHaveValue("doc-1");
+  await page.locator('[data-pane-tab="media"]').click();
+  await page.locator("[data-media-input]").setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
+  await expect(page.locator("[data-media-status]")).toHaveText(
+    "画像を本文へ挿入しました。",
+  );
+  expect(assetPosts).toBe(1);
+  expect(documentPosts).toBe(0);
+});
+
 test("IM-2: uploadから保存・参照解除・asset削除まで一連で成功する", async ({
   page,
 }) => {
