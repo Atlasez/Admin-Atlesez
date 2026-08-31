@@ -773,6 +773,306 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
 </style>
 
+<style is:global>
+  /* Apple/iOS系の「一つの面・一つの目的」に揃えた最終UIレイヤー。 */
+  html:has(.member-admin) body,
+  html:has(.member-admin) button,
+  html:has(.member-admin) input,
+  html:has(.member-admin) select {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  }
+  .member-admin {
+    --ma-canvas: #f5f5f7;
+    --ma-surface: #ffffff;
+    --ma-surface-muted: #f2f2f7;
+    --ma-surface-active: #e5f1ff;
+    --ma-border: #d8d8dc;
+    --ma-border-strong: #b8b8bf;
+    --ma-text: #1d1d1f;
+    --ma-muted: #6e6e73;
+    --ma-accent: #007aff;
+    --ma-accent-strong: #0066d6;
+    --ma-success: #248a3d;
+    --ma-warning: #9a6700;
+    --ma-danger: #c9342b;
+    max-width: 1200px !important;
+    padding: clamp(1rem, 2vw, 1.75rem) clamp(.75rem, 2.5vw, 2rem) 4rem !important;
+  }
+  html:not([data-pref-bg="dark"]) body:has(.member-admin),
+  html:not([data-pref-bg="dark"]) body:has(.member-admin) .admin-layout-main {
+    background: #f5f5f7 !important;
+  }
+  html[data-pref-bg="dark"] .member-admin {
+    --ma-canvas: #191a1c;
+    --ma-surface: #232427;
+    --ma-surface-muted: #2f3034;
+    --ma-surface-active: #263d52;
+    --ma-border: #3d3e42;
+    --ma-border-strong: #5b5d63;
+    --ma-text: #e8e6e1;
+    --ma-muted: #b5b1a8;
+    --ma-accent: #0a84ff;
+    --ma-accent-strong: #409cff;
+    --ma-success: #30d158;
+    --ma-warning: #ffd60a;
+    --ma-danger: #ff6961;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin),
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main {
+    background: #191a1c !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal__shell {
+    background: #232427 !important;
+  }
+  html[data-pref-bg="dark"] .member-card,
+  html[data-pref-bg="dark"] .member-admin__members,
+  html[data-pref-bg="dark"] .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] .member-modal__shell { background: #232427 !important; }
+  .member-admin__header {
+    align-items: flex-start;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ma-border) !important;
+    box-shadow: none !important;
+    gap: 1.25rem;
+    margin: 0 0 1.25rem;
+    padding: .25rem 0 1.25rem;
+  }
+  .member-admin__header h1 {
+    color: var(--ma-text) !important;
+    font-size: clamp(1.65rem, 3vw, 2.1rem);
+    font-weight: 700;
+    letter-spacing: -.025em;
+  }
+  .member-admin__lead,
+  .member-admin__header-meta small {
+    color: var(--ma-muted) !important;
+    font-size: .78rem;
+    line-height: 1.55;
+  }
+  .member-admin__header-meta {
+    align-items: flex-end;
+    display: grid;
+    gap: .35rem;
+    text-align: right;
+  }
+  .member-admin__header-meta span {
+    background: var(--ma-surface-muted) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: 999px;
+    color: var(--ma-muted) !important;
+    font-size: .66rem;
+    font-weight: 700;
+    padding: .3rem .55rem;
+  }
+  .member-admin__self-discord {
+    align-items: center;
+    background: var(--ma-accent) !important;
+    border: 1px solid var(--ma-accent) !important;
+    border-radius: 8px;
+    color: #fff !important;
+    display: inline-flex;
+    font-size: .74rem;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 2.3rem;
+    padding: .52rem .8rem;
+    text-decoration: none;
+  }
+  .member-admin__self-discord:hover { background: var(--ma-accent-strong) !important; border-color: var(--ma-accent-strong) !important; }
+  .member-admin__summary { gap: .65rem; margin-bottom: 1rem; }
+  .summary-card {
+    background: var(--ma-surface) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: 12px;
+    box-shadow: none !important;
+    gap: .15rem;
+    padding: .8rem .9rem;
+  }
+  .summary-card:first-child { border-left: 3px solid var(--ma-accent) !important; }
+  .summary-card span,
+  .summary-card small { color: var(--ma-muted) !important; }
+  .summary-card strong { color: var(--ma-text) !important; font-size: 1.35rem; font-weight: 700; }
+  .member-admin__members,
+  .member-admin__tools {
+    background: var(--ma-surface) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: 12px;
+    box-shadow: none !important;
+    padding: 1rem !important;
+  }
+  .member-admin__members { margin-bottom: 1rem; }
+  .member-admin__section-heading { align-items: flex-start; margin-bottom: .8rem; }
+  .member-admin__section-heading h2 { color: var(--ma-text) !important; font-size: 1.08rem; font-weight: 700; }
+  .member-admin__section-heading small { color: var(--ma-muted) !important; font-size: .72rem; line-height: 1.5; }
+  .member-admin__count {
+    background: var(--ma-surface-muted) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: 999px;
+    color: var(--ma-accent) !important;
+    font-size: .7rem !important;
+    font-weight: 700;
+    padding: .32rem .55rem;
+  }
+  .member-toolbar {
+    align-items: end;
+    background: var(--ma-surface-muted) !important;
+    border: 0 !important;
+    border-radius: 10px;
+    gap: .6rem;
+    margin-bottom: .8rem;
+    padding: .65rem !important;
+  }
+  .member-toolbar label { color: var(--ma-muted) !important; font-size: .66rem !important; }
+  .member-toolbar__summary { color: var(--ma-muted) !important; font-size: .66rem; }
+  .member-admin input,
+  .member-admin select {
+    background: var(--ma-surface) !important;
+    border: 1px solid var(--ma-border-strong) !important;
+    border-radius: 8px !important;
+    color: var(--ma-text) !important;
+    min-height: 2.4rem !important;
+    padding: .5rem .65rem !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin input,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin select { background: #191a1c !important; }
+  html[data-pref-bg="dark"] .member-admin input,
+  html[data-pref-bg="dark"] .member-admin select { background: #191a1c !important; }
+  .member-admin input:focus,
+  .member-admin select:focus { border-color: var(--ma-accent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ma-accent) 20%, transparent) !important; }
+  .member-toolbar__reset,
+  .member-admin .member-provision,
+  .member-admin .member-action--promote,
+  .member-admin .member-action--remove,
+  .member-modal__cancel {
+    background: transparent !important;
+    border: 1px solid var(--ma-border-strong) !important;
+    border-radius: 8px !important;
+    color: var(--ma-muted) !important;
+  }
+  .member-toolbar__reset:hover,
+  .member-admin .member-provision:hover,
+  .member-admin .member-action--promote:hover,
+  .member-admin .member-action--remove:hover,
+  .member-modal__cancel:hover { background: var(--ma-surface-active) !important; border-color: var(--ma-accent) !important; color: var(--ma-accent) !important; }
+  .member-list-heading { border-bottom: 1px solid var(--ma-border); color: var(--ma-muted); font-size: .64rem; padding: .4rem .6rem .5rem; }
+  .member-card {
+    background: var(--ma-surface) !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--ma-border) !important;
+    border-radius: 0;
+    min-height: 5rem;
+    padding: .7rem .6rem !important;
+  }
+  .member-card:last-child { border-bottom: 0 !important; }
+  .member-card:hover { background: var(--ma-surface-muted) !important; }
+  .member-avatar { background: var(--ma-surface-muted) !important; border-color: var(--ma-border) !important; flex-basis: 2.4rem; height: 2.4rem; width: 2.4rem; }
+  .member-card__name { color: var(--ma-text) !important; font-size: .86rem; font-weight: 700; }
+  .member-card__email { color: var(--ma-muted) !important; font-size: .68rem; }
+  .member-card__role { color: var(--ma-text); font-size: .7rem; }
+  .member-fact,
+  .member-role-chip { background: var(--ma-surface-muted) !important; border-color: var(--ma-border) !important; color: var(--ma-muted) !important; }
+  .member-fact b { color: var(--ma-accent) !important; }
+  .member-card__discord-heading strong { color: var(--ma-muted) !important; }
+  .member-role-chip { color: var(--ma-accent) !important; }
+  .member-admin .member-action--edit,
+  .member-admin .member-action--sync,
+  .member-admin .member-modal__save,
+  .member-admin .button-primary {
+    background: var(--ma-accent) !important;
+    border: 1px solid var(--ma-accent) !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+  }
+  .member-admin .member-action--edit:hover,
+  .member-admin .member-action--sync:hover,
+  .member-admin .member-modal__save:hover,
+  .member-admin .button-primary:hover { background: var(--ma-accent-strong) !important; border-color: var(--ma-accent-strong) !important; }
+  .member-action-menu > summary { background: var(--ma-surface) !important; border-color: var(--ma-border) !important; border-radius: 8px; color: var(--ma-muted); }
+  .member-action-menu > summary:hover,
+  .member-action-menu[open] > summary { background: var(--ma-surface-active) !important; border-color: var(--ma-accent); color: var(--ma-accent); }
+  .member-action-menu > div { background: var(--ma-surface) !important; border-color: var(--ma-border) !important; border-radius: 10px; box-shadow: 0 12px 30px rgb(0 0 0 / 18%); }
+  .member-action-menu button { color: var(--ma-text) !important; }
+  .member-action-menu button:hover { background: var(--ma-surface-muted) !important; }
+  .member-admin__workspace { gap: .65rem; margin: 0; }
+  .member-admin__workspace .action-card {
+    background: var(--ma-surface) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: 10px;
+    box-shadow: none !important;
+    margin: 0;
+  }
+  .member-admin__workspace .action-card[open] { border-color: var(--ma-border-strong) !important; }
+  .action-card > summary { min-height: 3.9rem; padding: .65rem .75rem; transition: background-color .18s ease; }
+  .action-card > summary:hover,
+  .action-card[open] > summary { background: var(--ma-surface-muted); }
+  .action-card__step { background: var(--ma-surface-active) !important; border: 1px solid color-mix(in srgb, var(--ma-accent) 32%, var(--ma-border)); border-radius: 8px; color: var(--ma-accent) !important; }
+  .action-card__summary-copy small,
+  .action-card__description { color: var(--ma-muted) !important; }
+  .action-card__summary-copy strong { color: var(--ma-text) !important; font-size: .78rem; }
+  .action-card__summary-status { background: var(--ma-surface-active) !important; color: var(--ma-accent) !important; }
+  .action-card__chevron { color: var(--ma-muted); }
+  .action-card__body { padding: .85rem; }
+  .member-admin__workspace .action-card form { gap: .65rem; }
+  .member-admin__sync,
+  .member-admin__workspace .workflow-role-list { border-color: var(--ma-border) !important; }
+  .discord-role-catalog__body,
+  .member-admin__workspace .discord-readiness-message,
+  .workflow-role-group,
+  .workflow-role-chip { background: var(--ma-surface-muted) !important; border-color: var(--ma-border) !important; }
+  .member-admin__global-message:not(:empty) { background: var(--ma-text); border-radius: 10px; color: var(--ma-surface); }
+  .member-modal::backdrop { background: rgb(0 0 0 / 42%) !important; backdrop-filter: blur(4px); }
+  .member-modal__shell {
+    background: var(--ma-surface) !important;
+    border: 1px solid var(--ma-border) !important;
+    border-radius: 16px 0 0 16px !important;
+    box-shadow: -20px 0 50px rgb(0 0 0 / 18%);
+    max-width: 720px !important;
+  }
+  .member-modal__header,
+  .member-modal__footer { background: var(--ma-surface) !important; border-color: var(--ma-border) !important; }
+  .member-modal__header h2,
+  .member-modal__section h3 { color: var(--ma-text) !important; }
+  .member-modal__header small,
+  .member-modal__section > p,
+  .member-modal__help,
+  .member-modal__footer output { color: var(--ma-muted) !important; }
+  .member-modal__section,
+  .member-role-picker,
+  .member-interest-picker { background: var(--ma-surface-muted) !important; border-color: var(--ma-border) !important; border-left-color: var(--ma-accent) !important; border-radius: 10px; }
+  .member-interest-picker label,
+  .member-role-option { background: var(--ma-surface) !important; border-color: var(--ma-border) !important; color: var(--ma-muted) !important; }
+  .member-interest-picker label:has(input:checked),
+  .member-role-option:has(input:checked) { background: var(--ma-surface-active) !important; border-color: var(--ma-accent) !important; color: var(--ma-accent) !important; }
+  .member-admin :is(button, input, select, summary):focus-visible,
+  .member-card__name:focus-visible { outline: 3px solid color-mix(in srgb, var(--ma-accent) 34%, transparent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .member-admin :is(button, input, select, .member-card, .member-action-menu > summary) { transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+    .member-admin .member-action--edit:hover,
+    .member-admin .member-action--sync:hover,
+    .member-admin .member-modal__save:hover,
+    .member-admin .button-primary:hover { transform: translateY(-1px); }
+    .member-modal[open] .member-modal__shell { animation: member-admin-sheet-in .22s ease-out; }
+    @keyframes member-admin-sheet-in { from { opacity: 0; } to { opacity: 1; } }
+  }
+  @media (max-width: 720px) {
+    .member-admin__header-meta { align-items: flex-start; text-align: left; }
+    .member-admin__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .member-admin__members,
+    .member-admin__tools { border-radius: 10px; padding: .8rem !important; }
+  }
+  /* 暗色テーマの既存コントラスト契約を、最終レイヤーでも維持する。 */
+  html[data-pref-bg="dark"] .member-card,
+  html[data-pref-bg="dark"] .member-admin__members,
+  html[data-pref-bg="dark"] .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] .member-modal__shell { background: #232427 !important; }
+  html[data-pref-bg="dark"] .member-admin input,
+  html[data-pref-bg="dark"] .member-admin select { background: #191a1c !important; }
+</style>
+
 <script>
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root) {
