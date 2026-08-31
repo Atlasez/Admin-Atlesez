@@ -289,6 +289,13 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   await expect(publicationRun).toContainText(
     "CIが失敗しました（content-check）。［原因：CI］（ci_failed）",
   );
+  await expect(
+    publicationRun.locator("[data-publication-run-state]"),
+  ).toHaveText("自動公開失敗");
+  await expect(publicationRun).toHaveAttribute(
+    "aria-label",
+    /GitHub反映：自動公開失敗/,
+  );
   await expect(publicationRun).toHaveCSS("white-space", "normal");
   await expect(publicationRun).toHaveCSS("overflow-wrap", "anywhere");
   await expect(publicationRun).toHaveCSS("overflow", "visible");
@@ -357,11 +364,19 @@ test("公開PRのCI確認中を視覚表示し、最終更新時刻を示す", a
     publicationRun.locator("[data-publication-run-label]"),
   ).toContainText("CIを自動確認しています");
   await expect(
+    publicationRun.locator("[data-publication-run-state]"),
+  ).toHaveText("自動検証中");
+  await expect(publicationRun).toHaveCSS("display", "grid");
+  await expect(
     publicationRun.locator("[data-publication-run-updated]"),
   ).toContainText("最終更新：");
   await expect(
     publicationRun.locator(".publication-run-indicator"),
   ).toBeVisible();
+  await expect(publicationRun.locator(".publication-run-indicator")).toHaveCSS(
+    "width",
+    "16px",
+  );
 });
 
 test("公開済み記事の未反映変更は運営サイトから再公開できる", async ({

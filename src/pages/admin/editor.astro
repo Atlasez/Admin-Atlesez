@@ -201,7 +201,22 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           <input type="hidden" name="documentId" />
           <section class="document-toolbar">
             <div>
-              <div class="document-statuses" aria-label="原稿と公開の状態"><span>原稿状態：<strong data-document-state>下書き</strong></span><span>公開状態：<strong data-publication-state>未公開</strong></span><span data-publication-run role="status" aria-live="polite" hidden><span class="publication-run-indicator" aria-hidden="true"></span><span data-publication-run-label></span><small data-publication-run-updated></small></span><span data-publication-link hidden></span><span data-publication-integration hidden></span><details class="publication-diagnostic" data-publication-diagnostic hidden><summary>CI失敗の詳細を表示</summary><div class="publication-diagnostic-body"><dl><div><dt>失敗ステップ</dt><dd data-publication-failure-step></dd></div><div><dt>対象ファイル</dt><dd data-publication-failure-file></dd></div><div><dt>原因</dt><dd data-publication-failure-detail></dd></div><div><dt>対処方法</dt><dd data-publication-failure-suggestion></dd></div></dl></div></details></div>
+              <div class="document-statuses" aria-label="原稿と公開の状態">
+                <span class="document-status-pill"><span>原稿</span><strong data-document-state>下書き</strong></span>
+                <span class="document-status-pill"><span>公開</span><strong data-publication-state>未公開</strong></span>
+                <span class="publication-run-status" data-publication-run role="status" aria-live="polite" hidden>
+                  <span class="publication-run-indicator" aria-hidden="true"></span>
+                  <span class="publication-run-copy">
+                    <strong class="publication-run-title">GitHub反映</strong>
+                    <span class="publication-run-state" data-publication-run-state></span>
+                    <span class="publication-run-message" data-publication-run-label></span>
+                  </span>
+                  <small class="publication-run-updated" data-publication-run-updated></small>
+                </span>
+                <span class="publication-links" data-publication-link hidden></span>
+                <span class="publication-integration-status" data-publication-integration hidden></span>
+                <details class="publication-diagnostic" data-publication-diagnostic hidden><summary>CI失敗の詳細を表示</summary><div class="publication-diagnostic-body"><dl><div><dt>失敗ステップ</dt><dd data-publication-failure-step></dd></div><div><dt>対象ファイル</dt><dd data-publication-failure-file></dd></div><div><dt>原因</dt><dd data-publication-failure-detail></dd></div><div><dt>対処方法</dt><dd data-publication-failure-suggestion></dd></div></dl></div></details>
+              </div>
               <h2 data-document-heading>新規原稿</h2>
             </div>
             <div class="toolbar-actions">
@@ -468,6 +483,178 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .progress-detail-label { color:var(--muted); display:grid; font-size:.78rem; font-weight:800; gap:.35rem; margin-top:.8rem; }.progress-detail-label textarea { box-sizing:border-box; font:inherit; line-height:1.6; min-height:8rem; padding:.65rem; resize:vertical; width:100%; }
   @media (max-width: 1080px) { .editor-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }.article-preview { height: auto; min-height: 28rem; }.workspace-grid, .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 1fr; }.document-sidebar { border-bottom: 1px solid var(--border); border-right: 0; }.editor-workspace.sidebar-collapsed .document-sidebar { align-items:start; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { font-size:1.05rem; }.document-list { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); max-height: 16rem; }.workspace-header { display: grid; }.workspace-header nav { justify-content: start; }.document-toolbar { display: grid; }.toolbar-actions { justify-content: start; }.metadata-grid { grid-template-columns: 1fr; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: auto; } }
   @media (max-width: 700px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .7rem; }.workflow-guide ol { gap: .2rem; }.workflow-guide li { flex-direction: column; gap: .2rem; text-align: center; }.workflow-guide li:not(:last-child)::after { margin: 0 .2rem; position: absolute; right: -.45rem; top: .62rem; width: .5rem; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions, .document-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; }.editor-tabs{display:flex;border-bottom:1px solid var(--border);gap:.3rem;margin:.5rem 0}.editor-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;padding:.5rem .75rem}.editor-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}.editor-split{grid-template-columns:1fr!important}.media-studio-actions{grid-template-columns:1fr}.heading-outline{display:block;background:var(--surface-alt);border:1px solid var(--border);font-size:.78rem;margin:.5rem 0;padding:.4rem .6rem}.document-statuses{font-size:.68rem}.personal-notebook-actions{align-items:stretch;display:grid}.personal-notebook-actions small{margin-left:0}.personal-notebook-actions .quiet-action{width:100%} }
+</style>
+
+<style>
+  /* GitHub/CI の状態は、短いバッジだけでなく「何を待っているか」まで読める状態カードにする。 */
+  .document-statuses {
+    align-items: stretch;
+    display: grid;
+    gap: .45rem;
+    grid-template-columns: max-content max-content minmax(0, 1fr);
+    margin-bottom: .55rem;
+  }
+  .document-statuses .document-status-pill {
+    align-items: baseline;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    display: inline-flex;
+    gap: .35rem;
+    min-height: 2rem;
+    padding: .35rem .55rem;
+  }
+  .document-status-pill > span {
+    color: var(--muted);
+    font-size: .66rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .document-status-pill strong { color: var(--text); font-size: .78rem; }
+  .document-statuses .publication-run-status {
+    align-items: center;
+    background: color-mix(in srgb, var(--accent-subtle, #e5f2fa) 72%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent, #176ea6) 62%, var(--border));
+    border-radius: .65rem;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #176ea6) 12%, transparent);
+    display: grid;
+    gap: .55rem;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-width: 0;
+    padding: .5rem .65rem;
+    width: auto;
+  }
+  .document-statuses .publication-run-status[hidden],
+  .document-statuses .publication-links[hidden],
+  .document-statuses .publication-integration-status[hidden] { display: none; }
+  .publication-run-status[aria-busy="true"] {
+    border-color: color-mix(in srgb, var(--accent, #176ea6) 84%, #164e73);
+  }
+  .publication-run-status[data-state="failed"],
+  .publication-run-status[data-state="needs_operator"] {
+    background: color-mix(in srgb, #fff3cf 76%, var(--surface));
+    border-color: #c58d13;
+    box-shadow: 0 0 0 2px rgb(197 141 19 / .12);
+  }
+  .publication-run-status .publication-run-indicator {
+    background: var(--accent, #176ea6);
+    border: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #176ea6) 20%, transparent);
+    display: inline-block;
+    flex: 0 0 16px;
+    height: 16px;
+    width: 16px;
+  }
+  .publication-run-status[aria-busy="true"] .publication-run-indicator {
+    animation: publication-run-spin .8s linear infinite;
+    background: transparent;
+    border: 3px solid color-mix(in srgb, var(--accent, #176ea6) 28%, transparent);
+    border-right-color: var(--accent, #176ea6);
+    border-top-color: var(--accent, #176ea6);
+    box-shadow: none;
+    box-sizing: border-box;
+    height: 16px;
+    width: 16px;
+  }
+  .document-statuses .publication-run-status[aria-busy="true"] .publication-run-indicator {
+    height: 16px;
+    width: 16px;
+  }
+  .publication-run-status[data-state="failed"] .publication-run-indicator,
+  .publication-run-status[data-state="needs_operator"] .publication-run-indicator {
+    background: #b77900;
+    box-shadow: 0 0 0 3px rgb(183 121 0 / .16);
+  }
+  .publication-run-copy {
+    align-items: baseline;
+    display: grid;
+    gap: .1rem .5rem;
+    grid-template-columns: max-content minmax(0, 1fr);
+    min-width: 0;
+  }
+  .publication-run-title { color: var(--text); font-size: .7rem; letter-spacing: .04em; }
+  .publication-run-state { color: var(--accent, #176ea6); font-size: .82rem; font-weight: 900; }
+  .publication-run-status[data-state="failed"] .publication-run-state,
+  .publication-run-status[data-state="needs_operator"] .publication-run-state { color: #8a5a00; }
+  .publication-run-message {
+    color: var(--muted);
+    font-size: .67rem;
+    grid-column: 1 / -1;
+    line-height: 1.35;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .publication-run-updated {
+    color: var(--muted);
+    font-size: .64rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    line-height: 1.35;
+    max-width: 12rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .document-statuses .publication-links,
+  .document-statuses .publication-integration-status {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: .4rem;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: .35rem;
+    min-width: 0;
+    padding: 0;
+  }
+  .publication-links a,
+  .publication-integration-status {
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: .4rem;
+    display: inline-flex;
+    font-size: .68rem;
+    font-weight: 800;
+    line-height: 1.25;
+    min-height: 1.8rem;
+    padding: .3rem .5rem;
+    text-decoration: none;
+  }
+  .publication-links a { background: var(--surface-alt); color: var(--accent, #176ea6); }
+  .publication-links a:hover,
+  .publication-links a:focus-visible { border-color: var(--accent, #176ea6); text-decoration: underline; }
+  .document-statuses .publication-integration-status[data-state="ready"] {
+    background: color-mix(in srgb, #e6f4eb 72%, var(--surface));
+    border-color: #83b995;
+    color: #24643a;
+  }
+  .document-statuses .publication-integration-status[data-state="checking"] {
+    background: color-mix(in srgb, var(--accent-subtle, #e5f2fa) 72%, var(--surface));
+    border-color: #72add3;
+    color: var(--accent, #176ea6);
+  }
+  .document-statuses .publication-integration-status[data-state="error"] {
+    background: color-mix(in srgb, #fff3cf 72%, var(--surface));
+    border-color: #c58d13;
+    color: #805500;
+  }
+  .document-statuses .publication-integration-status::before { content: "●"; font-size: .58rem; margin-right: .35rem; }
+  .document-statuses .publication-integration-status[data-state="checking"]::before { content: "◌"; font-size: .9rem; }
+  .publication-diagnostic { z-index: 31; }
+  @media (max-width: 700px) {
+    .document-statuses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .document-statuses .publication-run-status { grid-template-columns: auto minmax(0, 1fr); }
+    .publication-run-updated { grid-column: 2; max-width: none; text-align: left; }
+    .publication-run-message { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .publication-run-status[aria-busy="true"] .publication-run-indicator { animation: none; }
+  }
 </style>
 
 <style>
@@ -1101,6 +1288,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const publicationLink = root.querySelector<HTMLElement>("[data-publication-link]")!;
     const publicationIntegration = root.querySelector<HTMLElement>("[data-publication-integration]")!;
     const publicationRun = root.querySelector<HTMLElement>("[data-publication-run]")!;
+    const publicationRunState = root.querySelector<HTMLElement>("[data-publication-run-state]")!;
     const publicationRunLabel = root.querySelector<HTMLElement>("[data-publication-run-label]")!;
     const publicationRunUpdated = root.querySelector<HTMLElement>("[data-publication-run-updated]")!;
     const publicationDiagnostic = root.querySelector<HTMLDetailsElement>("[data-publication-diagnostic]")!;
@@ -1692,9 +1880,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       publicationRun.dataset.state = run?.state ?? "";
       publicationRun.hidden = !run || ["published", "unpublished"].includes(run.state);
       publicationRun.setAttribute("aria-busy", String(runIsActive));
-      publicationRunLabel.textContent = publicationRun.hidden ? "" : run ? `${run.error_message ?? "運営サイトが自動処理しています。"}${run.failure_kind ? `［原因：${failureLabels[run.failure_kind] ?? run.failure_kind}］` : ""}${run.error_code ? `（${run.error_code}）` : ""}` : "";
+      const runStateLabel = run && !publicationRun.hidden ? runLabels[run.state] ?? "公開処理中" : "";
+      const runMessage = run && !publicationRun.hidden ? `${run.error_message ?? "運営サイトが自動処理しています。"}${run.failure_kind ? `［原因：${failureLabels[run.failure_kind] ?? run.failure_kind}］` : ""}${run.error_code ? `（${run.error_code}）` : ""}` : "";
+      publicationRunState.textContent = runStateLabel;
+      publicationRunLabel.textContent = runMessage;
       const latestRunUpdate = run?.last_check_at ?? run?.updated_at;
       publicationRunUpdated.textContent = publicationRun.hidden ? "" : latestRunUpdate ? `最終更新：${date(latestRunUpdate)}` : runIsActive ? "確認結果を待っています" : "";
+      publicationRun.setAttribute("aria-label", publicationRun.hidden ? "" : `GitHub反映：${runStateLabel}${runMessage ? `。${runMessage}` : ""}${publicationRunUpdated.textContent ? `。${publicationRunUpdated.textContent}` : ""}`);
       const hasPublicationDiagnostic = Boolean(run && (run.failure_detail || run.failure_step || run.failure_file || run.failure_suggestion));
       publicationDiagnostic.hidden = !hasPublicationDiagnostic || publicationRun.hidden;
       publicationFailureStep.textContent = run?.failure_step ?? "";
