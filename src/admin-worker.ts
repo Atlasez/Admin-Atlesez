@@ -3054,8 +3054,10 @@ async function listEditorialDocuments(
       });
     const subjectValues = [...new Set([...scope.subjects, ...coordinatorSubjects])];
     const subjectFilter = subjectValues.length ? `subject IN (${subjectValues.map(() => "?").join(", ")})` : "0";
-    filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1) OR (publication_review_stage='subject-coordinator' AND ? = 1))`);
-    values.push(...subjectValues, scope.isProjectLeader ? 1 : 0, coordinatorSubjects.length ? 1 : 0);
+    // 分野統括者は担当分野の原稿だけを一覧できる。担当外の分野統括審査を
+    // 無条件で追加すると、一覧には出るのに本文APIで403になる不整合が起きる。
+    filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1))`);
+    values.push(...subjectValues, scope.isProjectLeader ? 1 : 0);
   }
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
   if (!includeArchived) filters.push("archived_at IS NULL");
