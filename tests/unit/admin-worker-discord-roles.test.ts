@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import worker from "../../src/admin-worker";
+import worker, { syncDiscordRolesToAdmin } from "../../src/admin-worker";
 
 class Statement {
   private readonly query: string;
@@ -531,5 +531,182 @@ describe("Discord managed role synchronization", () => {
       configured: { emailDelivery: true },
     });
     expect(requests.every(({ method }) => method === "GET")).toBe(true);
+  });
+});
+
+describe("Discord to admin role synchronization", () => {
+  type State = {
+    roles: string[];
+    permissions: Array<{ email: string; subject: string }>;
+    profile: {
+      email: string;
+      university: string;
+      year: string;
+      interests: string;
+      affiliation_type: string;
+    } | null;
+  };
+
+  class InboundStatement {
+    private args: unknown[] = [];
+
+    constructor(
+      private readonly query: string,
+      private readonly state: State,
+      private readonly writes: Array<{ query: string; args: unknown[] }>,
+    ) {}
+
+    bind(...args: unknown[]) {
+      this.args = args;
+      return this;
+    }
+
+    async run() {
+      this.writes.push({ query: this.query, args: this.args });
+      return { meta: { changes: 1 } };
+    }
+
+    async first<T>() {
+      return null as T | null;
+    }
+
+    async all<T>() {
+      if (this.query.includes("atlasez_member_discord_accounts"))
+        return {
+          results: [
+            {
+              email: "member@example.com",
+              discord_user_id: "123456789012345678",
+            },
+          ] as T[],
+        };
+      if (this.query.includes("atlasez_discord_role_mappings"))
+        return {
+          results: [
+            { subject: "mathematics", discord_role_id: "role-math" },
+            { subject: "physics", discord_role_id: "role-physics" },
+          ] as T[],
+        };
+      if (this.query.includes("atlasez_discord_attribute_role_mappings"))
+        return {
+          results: [
+            {
+              attribute_type: "university",
+              attribute_value: "ZEN大学",
+              discord_role_id: "role-zen",
+            },
+            {
+              attribute_type: "year",
+              attribute_value: "B2",
+              discord_role_id: "role-b2",
+            },
+            {
+              attribute_type: "interest",
+              attribute_value: "数学",
+              discord_role_id: "role-math",
+            },
+          ] as T[],
+        };
+      if (this.query.includes("report_admin_permissions"))
+        return { results: this.state.permissions as T[] };
+      if (this.query.includes("editorial_member_profiles"))
+        return { results: this.state.profile ? [this.state.profile as T] : [] };
+      return { results: [] as T[] };
+    }
+  }
+
+  const makeEnv = (
+    state: State,
+    writes: Array<{ query: string; args: unknown[] }>,
+  ) => ({
+    DISCORD_BOT_TOKEN: "test-token",
+    DISCORD_GUILD_ID: "guild-1",
+    REPORTS: {
+      prepare: (query: string) => new InboundStatement(query, state, writes),
+      batch: async (statements: InboundStatement[]) => {
+        for (const statement of statements) await statement.run();
+        return [];
+      },
+    },
+  });
+
+  it("imports mapped Discord roles and ignores unknown roles", async () => {
+    const state: State = {
+      roles: ["role-math", "role-zen", "role-b2", "unknown-role"],
+      permissions: [],
+      profile: null,
+    };
+    const writes: Array<{ query: string; args: unknown[] }> = [];
+    fetchSpy.mockResolvedValue(Response.json({ roles: state.roles }));
+
+    await expect(
+      syncDiscordRolesToAdmin(makeEnv(state, writes) as never),
+    ).resolves.toMatchObject({
+      accounts: 1,
+      synced: 1,
+      skipped: 0,
+      updated: 1,
+      warnings: [],
+    });
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("INSERT OR IGNORE INTO report_admin_permissions") &&
+          args.includes("mathematics"),
+      ),
+    ).toBe(true);
+    expect(writes.some(({ query }) => query.includes("unknown-role"))).toBe(
+      false,
+    );
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("INSERT INTO editorial_member_profiles") &&
+          args.includes("ZEN大学") &&
+          args.includes("B2") &&
+          args.includes("数学"),
+      ),
+    ).toBe(true);
+  });
+
+  it("removes only managed permissions and attributes when roles disappear", async () => {
+    const state: State = {
+      roles: ["unknown-role"],
+      permissions: [{ email: "member@example.com", subject: "mathematics" }],
+      profile: {
+        email: "member@example.com",
+        university: "ZEN大学",
+        year: "B2",
+        interests: "数学",
+        affiliation_type: "",
+      },
+    };
+    const writes: Array<{ query: string; args: unknown[] }> = [];
+    fetchSpy.mockResolvedValue(Response.json({ roles: state.roles }));
+
+    await expect(
+      syncDiscordRolesToAdmin(makeEnv(state, writes) as never),
+    ).resolves.toMatchObject({
+      accounts: 1,
+      synced: 1,
+      skipped: 0,
+      updated: 1,
+      warnings: [],
+    });
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("DELETE FROM report_admin_permissions") &&
+          args.includes("mathematics"),
+      ),
+    ).toBe(true);
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("INSERT INTO editorial_member_profiles") &&
+          args.includes("") &&
+          args.includes(""),
+      ),
+    ).toBe(true);
   });
 });
