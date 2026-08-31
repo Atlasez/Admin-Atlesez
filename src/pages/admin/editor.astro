@@ -4330,4 +4330,117 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     color: var(--editor-status-error-text);
   }
 
+  /*
+   * 状態表示は長いGitHub情報を含むため、max-contentの列で幅を確保しない。
+   * 以前の3列グリッドでは、左カラムに残った数pxへPRリンクが押し込まれ、
+   * リンク文字が縦一列になってツールバー全体の高さも不安定になっていた。
+   */
+  .editor-workspace .document-toolbar {
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.8fr);
+  }
+
+  .editor-workspace .document-toolbar > div:first-child,
+  .editor-workspace .toolbar-actions {
+    min-width: 0;
+  }
+
+  .editor-workspace .document-statuses {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem .4rem;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .editor-workspace .document-statuses > .document-status-pill {
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .editor-workspace .document-statuses .publication-run-status,
+  .editor-workspace .document-statuses .publication-links,
+  .editor-workspace .document-statuses .publication-integration-status {
+    flex: 1 1 100%;
+    grid-column: auto;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .editor-workspace .document-statuses .publication-run-status {
+    display: grid;
+  }
+
+  .editor-workspace .publication-run-copy,
+  .editor-workspace .publication-run-state,
+  .editor-workspace .publication-run-message {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .editor-workspace .publication-run-message {
+    white-space: normal;
+  }
+
+  .editor-workspace .publication-links {
+    align-items: stretch;
+  }
+
+  .editor-workspace .publication-links a {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .editor-workspace .publication-diagnostic {
+    max-width: 100%;
+    width: min(26rem, 100%);
+  }
+
+  .editor-workspace .toolbar-actions {
+    align-content: start;
+    justify-content: end;
+  }
+
+  .editor-workspace .toolbar-actions > .collaboration-status,
+  .editor-workspace .toolbar-actions > .document-actions,
+  .editor-workspace .toolbar-actions > .save-status {
+    min-width: 0;
+  }
+
+  .editor-workspace .toolbar-actions > .document-actions {
+    flex: 1 1 auto;
+    justify-content: end;
+  }
+
+  .editor-workspace .toolbar-actions > .save-status {
+    flex: 0 1 auto;
+    max-width: min(18rem, 100%);
+    overflow-wrap: anywhere;
+    width: auto;
+  }
+
+  @media (max-width: 1080px) {
+    .editor-workspace .document-toolbar {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .editor-workspace .toolbar-actions > .document-actions {
+      justify-content: start;
+    }
+  }
+
+  @media (max-width: 700px) {
+    .editor-workspace .document-statuses > .document-status-pill {
+      flex: 1 1 auto;
+    }
+
+    .editor-workspace .publication-run-status {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+  }
+
 </style>
