@@ -8580,6 +8580,7 @@ async function updateEditorialDocument(
       documentId,
     )
     .run();
+  await syncEditorialCollaborationDocument(env, documentId);
   await notifyEditorialDocumentChange(env, documentId);
   return json({ ok: true });
 }
@@ -13398,6 +13399,45 @@ async function notifyEditorialDocumentChange(
     );
   } catch {
     // 状態更新自体は成功させ、接続が一時的に使えない場合は再読込で回復する。
+  }
+}
+
+async function syncEditorialCollaborationDocument(
+  env: Env,
+  documentId: string,
+): Promise<void> {
+  const namespace = env.EDITORIAL_COLLABORATION;
+  if (!namespace) return;
+  try {
+    const document = await env.REPORTS.prepare(
+      "SELECT title, summary, body, updated_at FROM editorial_documents WHERE id = ?",
+    )
+      .bind(documentId)
+      .first<Pick<EditorialDocument, "title" | "summary" | "body" | "updated_at">>();
+    if (!document) return;
+    await namespace.get(namespace.idFromName(documentId)).fetch(
+      new Request("https://atlasez-editorial-collaboration.internal/sync", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-atlasez-document-id": documentId,
+        },
+        body: JSON.stringify({
+          title: document.title,
+          summary: document.summary,
+          body: document.body,
+          updatedAt: document.updated_at,
+        }),
+      }),
+    );
+  } catch (error) {
+    // Saving the database document must not fail just because realtime sync is
+    // temporarily unavailable. The collaboration room reconciles from D1 on
+    // the next connection.
+    console.error("editorial collaboration document sync failed", {
+      documentId,
+      error,
+    });
   }
 }
 

@@ -25,6 +25,13 @@ interface Env {
   REPORTS: D1Database;
 }
 
+type EditorialDocumentSnapshot = {
+  title: string;
+  summary: string;
+  body: string;
+  updated_at: string;
+};
+
 type CollaborationAttachment = {
   sessionId: string;
   email: string;
@@ -241,6 +248,7 @@ export class EditorialCollaborationRoom {
   private readonly yDocument = new Y.Doc();
   private initializedDocumentId = "";
   private initializationPromise: Promise<void> | null = null;
+  private databaseReconciliationPromise: Promise<void> | null = null;
   private persistencePromise: Promise<void> | null = null;
   private persistenceVersion = 0;
   private persistedVersion = 0;
@@ -293,8 +301,75 @@ export class EditorialCollaborationRoom {
     this.state.waitUntil(persistence);
   }
 
+  private async readDocument(
+    documentId: string,
+  ): Promise<EditorialDocumentSnapshot> {
+    const document = await this.env.REPORTS.prepare(
+      "SELECT title, summary, body, updated_at FROM editorial_documents WHERE id = ?",
+    )
+      .bind(documentId)
+      .first<EditorialDocumentSnapshot>();
+    if (!document) throw new Error("原稿が見つかりません。");
+    return document;
+  }
+
+  private replaceSharedText(name: string, value: string) {
+    const shared = this.yDocument.getText(name);
+    const previous = shared.toString();
+    if (previous === value) return;
+    this.yDocument.transact(() => {
+      if (previous) shared.delete(0, previous.length);
+      if (value) shared.insert(0, value);
+    }, "database-sync");
+  }
+
+  private async reconcileWithDatabase(
+    documentId: string,
+    document?: EditorialDocumentSnapshot,
+  ) {
+    if (this.databaseReconciliationPromise) {
+      await this.databaseReconciliationPromise;
+      return;
+    }
+    const reconciliation = (async () => {
+      const current = document ?? (await this.readDocument(documentId));
+      const sourceUpdatedAt = await this.state.storage.get<string>(
+        "yjs-source-updated-at",
+      );
+      const sourceTime = sourceUpdatedAt ? Date.parse(sourceUpdatedAt) : NaN;
+      const databaseTime = Date.parse(current.updated_at);
+      // The database is authoritative whenever this snapshot was created by an
+      // older admin deployment or before the latest explicit save. This also
+      // migrates existing rooms that only stored `yjs-state`.
+      const databaseIsNewer =
+        !sourceUpdatedAt ||
+        !Number.isFinite(sourceTime) ||
+        !Number.isFinite(databaseTime) ||
+        databaseTime > sourceTime;
+      if (databaseIsNewer) {
+        this.replaceSharedText("title", current.title);
+        this.replaceSharedText("summary", current.summary);
+        this.replaceSharedText("body", current.body);
+        await this.state.storage.put(
+          "yjs-source-updated-at",
+          current.updated_at,
+        );
+      }
+    })();
+    this.databaseReconciliationPromise = reconciliation;
+    try {
+      await reconciliation;
+    } finally {
+      if (this.databaseReconciliationPromise === reconciliation)
+        this.databaseReconciliationPromise = null;
+    }
+  }
+
   private async initialize(documentId: string) {
-    if (this.initializedDocumentId === documentId) return;
+    if (this.initializedDocumentId === documentId) {
+      await this.reconcileWithDatabase(documentId);
+      return;
+    }
     if (this.initializationPromise) {
       await this.initializationPromise;
       if (this.initializedDocumentId !== documentId)
@@ -303,25 +378,22 @@ export class EditorialCollaborationRoom {
     }
 
     const initialization = (async () => {
+      let initialDocument: EditorialDocumentSnapshot | undefined;
       const saved = await this.state.storage.get<ArrayBuffer | Uint8Array>(
         "yjs-state",
       );
       if (saved) {
         Y.applyUpdate(this.yDocument, new Uint8Array(saved));
       } else {
-        const document = await this.env.REPORTS.prepare(
-          "SELECT title, summary, body FROM editorial_documents WHERE id = ?",
-        )
-          .bind(documentId)
-          .first<{ title: string; summary: string; body: string }>();
-        if (!document) throw new Error("原稿が見つかりません。");
+        initialDocument = await this.readDocument(documentId);
         this.yDocument.transact(() => {
-          this.yDocument.getText("title").insert(0, document.title);
-          this.yDocument.getText("summary").insert(0, document.summary);
-          this.yDocument.getText("body").insert(0, document.body);
+          this.yDocument.getText("title").insert(0, initialDocument!.title);
+          this.yDocument.getText("summary").insert(0, initialDocument!.summary);
+          this.yDocument.getText("body").insert(0, initialDocument!.body);
         }, "initial");
       }
       this.initializedDocumentId = documentId;
+      await this.reconcileWithDatabase(documentId, initialDocument);
     })();
     this.initializationPromise = initialization;
     try {
@@ -364,6 +436,42 @@ export class EditorialCollaborationRoom {
       return json({ participants: activeParticipants(this.state) });
     await this.initialize(request.headers.get("x-atlasez-document-id") ?? "");
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+      const pathname = new URL(request.url).pathname;
+      if (request.method === "POST" && pathname.endsWith("/sync")) {
+        const payload = (await request.json().catch(() => null)) as {
+          title?: unknown;
+          summary?: unknown;
+          body?: unknown;
+          updatedAt?: unknown;
+        } | null;
+        if (
+          typeof payload?.title !== "string" ||
+          typeof payload.summary !== "string" ||
+          typeof payload.body !== "string" ||
+          typeof payload.updatedAt !== "string"
+        )
+          return json({ error: "共同編集本文の同期データが不正です。" }, 400);
+        const sourceUpdatedAt = await this.state.storage.get<string>(
+          "yjs-source-updated-at",
+        );
+        const incomingTime = Date.parse(payload.updatedAt);
+        const sourceTime = sourceUpdatedAt ? Date.parse(sourceUpdatedAt) : NaN;
+        if (
+          !sourceUpdatedAt ||
+          !Number.isFinite(sourceTime) ||
+          !Number.isFinite(incomingTime) ||
+          incomingTime >= sourceTime
+        ) {
+          this.replaceSharedText("title", payload.title);
+          this.replaceSharedText("summary", payload.summary);
+          this.replaceSharedText("body", payload.body);
+          await this.state.storage.put(
+            "yjs-source-updated-at",
+            payload.updatedAt,
+          );
+        }
+        return json({ ok: true });
+      }
       if (request.method !== "POST")
         return json({ error: "WebSocket接続または通知POSTが必要です。" }, 426);
       const payload = (await request.json().catch(() => null)) as {
