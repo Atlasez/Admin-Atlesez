@@ -1284,6 +1284,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const mediaLatexName = root.querySelector<HTMLInputElement>("[data-media-latex-name]")!;
     const mediaList = root.querySelector<HTMLElement>("[data-media-list]")!;
     const mediaStatus = root.querySelector<HTMLElement>("[data-media-status]")!;
+    let mediaLoadVersion = 0;
     const comments = root.querySelector<HTMLElement>("[data-comment-list]")!;
     const commentBody = root.querySelector<HTMLTextAreaElement>("[data-comment-body]")!;
     const commentSearch = root.querySelector<HTMLInputElement>("[data-comment-search]")!;
@@ -1949,7 +1950,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const updatePublicationActions = (item: Pick<Document, "id" | "status" | "published_at" | "updated_at" | "publication_pr_url" | "publication_action" | "publication_run">) => {
       const canRetryPublication = Boolean(item.publication_run && ["failed", "needs_operator"].includes(item.publication_run.state) && item.publication_run.action === "publish") || (item.publication_action === "publish" && Boolean(item.publication_pr_url));
-      const canUpdatePublishedArticle = Boolean(item.published_at && hasUnpublishedPublicationChanges(item));
+      const canUpdatePublishedArticle = Boolean(item.published_at);
       const canRetryUnpublication = Boolean(item.published_at && item.publication_run?.action === "unpublish" && ["failed", "needs_operator"].includes(item.publication_run.state));
       const publicationBusy = Boolean(item.publication_run && ["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"].includes(item.publication_run.state));
       publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && (!item.published_at || canUpdatePublishedArticle || canRetryPublication) && (!item.publication_pr_url || canRetryPublication));
@@ -2176,18 +2177,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       void hydrateAssetImages(mediaList);
     };
     const loadMediaAssets = async (documentId: string) => {
+      const loadVersion = ++mediaLoadVersion;
       if (!documentId) { editorialAssets = []; renderMediaList(); mediaStatus.textContent = "原稿を保存すると利用できます"; return; }
       try {
         const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { credentials: "same-origin" });
         const data = await read<{ assets?: EditorialAsset[]; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "素材を読み込めませんでした。");
+        if (loadVersion !== mediaLoadVersion) return;
         editorialAssets = data.assets ?? [];
         mediaStatus.textContent = editorialAssets.length ? `${editorialAssets.length}件の素材` : "素材はまだありません";
         renderMediaList();
         void renderPreview();
-      } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。"; }
+      } catch (error) {
+        if (loadVersion === mediaLoadVersion)
+          mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。";
+      }
     };
     const uploadMediaFile = async (file: File) => {
+      // Invalidate an initial asset-list request so a stale response cannot
+      // overwrite the upload result while the new asset is being inserted.
+      mediaLoadVersion += 1;
       mediaStatus.textContent = "画像をアップロード中…";
       const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim()); formData.set("latexName", mediaLatexName.value.trim());
       try {
@@ -2200,6 +2209,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`);
         mediaAlt.value = ""; mediaLatexName.value = ""; mediaInput.value = ""; mediaStatus.textContent = "画像を本文へ挿入しました。";
         await loadMediaAssets(documentId);
+        mediaStatus.textContent = "画像を本文へ挿入しました。";
       } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "画像をアップロードできませんでした。"; mediaInput.value = ""; }
     };
     const loadPersonalNote = async () => {
@@ -3000,6 +3010,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
         if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
         await loadMediaAssets(savedId);
+        persistedDocumentValues = { title: formValue("title"), summary: formValue("summary"), body: body.value };
         setUnsavedChanges(false);
         await loadDocuments();
         const refreshed = documents.find((item) => item.id === savedId);
@@ -3108,6 +3119,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationGeneration = 0;
     let collaborationApplyingRemote = false;
     let collaborationSessionId = "";
+    let persistedDocumentValues = { title: "", summary: "", body: "" };
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
     const setCollaborationConnectionState = (connectionState: "connecting" | "connected" | "reconnecting" | "error", message: string) => {
       collaborationStatus.dataset.state = connectionState;
@@ -3223,6 +3235,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             } finally {
               collaborationApplyingRemote = false;
             }
+            if (next !== persistedDocumentValues[name as keyof typeof persistedDocumentValues])
+              setUnsavedChanges(true);
             saveMessage.value = "共同編集の変更をリアルタイム同期しました。";
           };
           shared.observe(applySharedValue);
@@ -3347,6 +3361,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       syncConceptRegistration();
       fillConceptOptions(item.concept_id);
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
+      persistedDocumentValues = { title: item.title, summary: item.summary, body: item.body };
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       syncMetadataSummary(); metadata.open = !item.id || metadataMissingCount() > 0;
@@ -4040,7 +4055,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     publicationReviewButton.addEventListener("click", () => { publicationReviewNote.value = ""; if (!publicationReviewDialog.open) publicationReviewDialog.showModal(); });
     publicationReviewCancel.addEventListener("click", () => publicationReviewDialog.close());
     publicationReviewForm.addEventListener("submit", async (event) => { event.preventDefault(); const submitter = (event.submitter as HTMLButtonElement | null)?.value; if (submitter !== "approve" && submitter !== "reject") return; const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; const button = event.submitter as HTMLButtonElement; button.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/publication-review`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: submitter === "approve" ? "approved" : "rejected", note: publicationReviewNote.value }) }); const data = await read<{ error?: string; status?: string }>(response); if (!response.ok) throw new Error(data.error ?? "公開審査を処理できませんでした。"); publicationReviewDialog.close(); await openDocument(id); saveMessage.value = submitter === "approve" ? (data.status === "approved" ? "公開審査が完了しました。公開または公開予約へ進めます。" : "承認しました。次の審査担当へ通知しました。") : "差し戻しました。フィードバック中へ戻しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開審査を処理できませんでした。"; } finally { button.disabled = false; } });
-    const publishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { if (hasUnsavedChanges) { saveMessage.value = "公開前に最新の変更を保存中…"; await saveCurrentDocument(false); } const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; pending?: boolean; publicationRun?: { state?: string } | null }>(response); if (!response.ok) { await openDocument(id).catch(() => undefined); throw new Error(data.error ?? "自動公開を開始できませんでした。"); } await openDocument(id); await loadDocuments(); saveMessage.value = data.publicationRun ? "自動公開を開始しました。CI・学習サイト反映まで運営サイトが確認します。" : data.pending ? "自動公開処理を確認しています。" : "公開処理を完了しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "自動公開を開始できませんでした。"; } };
+    const publishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { if (hasUnsavedChanges) { saveMessage.value = "公開前に最新の変更を保存中…"; await saveCurrentDocument(false); } const currentItem = documents.find((item) => item.id === id); const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ force: Boolean(currentItem?.published_at) }) }); const data = await read<{ error?: string; pending?: boolean; publicationRun?: { state?: string } | null }>(response); if (!response.ok) { await openDocument(id).catch(() => undefined); throw new Error(data.error ?? "自動公開を開始できませんでした。"); } await openDocument(id); await loadDocuments(); saveMessage.value = data.publicationRun ? "自動公開を開始しました。CI・学習サイト反映まで運営サイトが確認します。" : data.pending ? "自動公開処理を確認しています。" : "公開処理を完了しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "自動公開を開始できませんでした。"; } };
     const unpublishCurrentDocument = async () => { const id = documentIdForRequest(); if (!id) { saveMessage.value = "非公開にする原稿IDを取得できませんでした。ページを再読み込みしてください。"; return; } unpublishButton.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/unpublish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; pending?: boolean; publicationRun?: { state?: string } | null }>(response); if (!response.ok) { await openDocument(id).catch(() => undefined); throw new Error(data.error ?? "自動非公開化を開始できませんでした。"); } await openDocument(id); await loadDocuments(); saveMessage.value = data.publicationRun ? "自動非公開化を開始しました。学習サイトの反映まで運営サイトが確認します。" : data.pending ? "自動非公開化を確認しています。" : "非公開化を完了しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "自動非公開化を開始できませんでした。"; } finally { if (documentIdForRequest() === id) unpublishButton.disabled = false; } };
     publishButton.addEventListener("click", () => approvalDialog.showModal());
     unpublishButton.addEventListener("click", () => unpublishDialog.showModal());

@@ -30,9 +30,12 @@ describe("editorial collaboration initialization", () => {
         })),
       })),
     };
-    const room = new EditorialCollaborationRoom(state, {
-      REPORTS: database,
-    } as never);
+    const room = new EditorialCollaborationRoom(
+      state as never,
+      {
+        REPORTS: database,
+      } as never,
+    );
 
     await Promise.all([
       (
@@ -48,9 +51,117 @@ describe("editorial collaboration initialization", () => {
         yDocument: { getText: (name: string) => { toString: () => string } };
       }
     ).yDocument;
-    expect(storageReads).toBe(1);
+    expect(storageReads).toBe(2);
     expect(database.prepare).toHaveBeenCalledTimes(1);
     expect(yDocument.getText("body").toString()).toBe("本文");
+  });
+
+  it("replaces a stale persisted snapshot with the newer D1 document", async () => {
+    const stale = new Y.Doc();
+    stale.getText("body").insert(0, "古い本文");
+    const staleState = Y.encodeStateAsUpdate(stale);
+    stale.destroy();
+    const storage = {
+      get: vi.fn(async (key: string) =>
+        key === "yjs-state" ? staleState : undefined,
+      ),
+      put: vi.fn(async () => undefined),
+    };
+    const state = {
+      storage,
+      acceptWebSocket: vi.fn(),
+      getWebSockets: vi.fn(() => []),
+      waitUntil: vi.fn(),
+    };
+    const database = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          first: vi.fn(async () => ({
+            title: "タイトル",
+            summary: "要約",
+            body: "画像を含む最新本文",
+            updated_at: "2026-08-31T03:00:00.000Z",
+          })),
+        })),
+      })),
+    };
+    const room = new EditorialCollaborationRoom(
+      state as never,
+      {
+        REPORTS: database,
+      } as never,
+    );
+
+    await (
+      room as unknown as { initialize: (id: string) => Promise<void> }
+    ).initialize("document-1");
+
+    const yDocument = (
+      room as unknown as {
+        yDocument: { getText: (name: string) => { toString: () => string } };
+      }
+    ).yDocument;
+    expect(yDocument.getText("body").toString()).toBe("画像を含む最新本文");
+    expect(storage.put).toHaveBeenCalledWith(
+      "yjs-source-updated-at",
+      "2026-08-31T03:00:00.000Z",
+    );
+  });
+
+  it("synchronizes an explicitly saved document into the collaboration room", async () => {
+    const storage = {
+      get: vi.fn(async () => undefined),
+      put: vi.fn(async () => undefined),
+    };
+    const state = {
+      storage,
+      acceptWebSocket: vi.fn(),
+      getWebSockets: vi.fn(() => []),
+      waitUntil: vi.fn(),
+    };
+    const database = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          first: vi.fn(async () => ({
+            title: "タイトル",
+            summary: "要約",
+            body: "本文",
+            updated_at: "2026-08-31T03:00:00.000Z",
+          })),
+        })),
+      })),
+    };
+    const room = new EditorialCollaborationRoom(state, {
+      REPORTS: database,
+    } as never);
+
+    const response = await room.fetch(
+      new Request("https://example.com/sync", {
+        method: "POST",
+        headers: {
+          "x-atlasez-document-id": "document-1",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "タイトル",
+          summary: "要約",
+          body: "本文とasset://image-id",
+          updatedAt: "2026-08-31T04:00:00.000Z",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const yDocument = (
+      room as unknown as {
+        yDocument: { getText: (name: string) => { toString: () => string } };
+      }
+    ).yDocument;
+    expect(yDocument.getText("body").toString()).toBe("本文とasset://image-id");
+    expect(storage.put).toHaveBeenCalledWith(
+      "yjs-source-updated-at",
+      "2026-08-31T04:00:00.000Z",
+    );
   });
 
   it("coalesces rapid document updates into one snapshot write", async () => {
