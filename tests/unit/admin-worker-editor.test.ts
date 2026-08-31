@@ -188,6 +188,52 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("does not add out-of-scope subject-coordinator documents to the editor list", async () => {
+    const documentQueries: string[] = [];
+    class ScopedStatement extends EmptyStatement {
+      async all<T>() {
+        if (this.query.includes("SELECT subject FROM report_admin_permissions"))
+          return { results: [{ subject: "mathematics" }] as T[] };
+        if (
+          this.query.includes(
+            "SELECT role, subject FROM editorial_workflow_roles",
+          )
+        )
+          return {
+            results: [
+              { role: "subject-coordinator", subject: "mathematics" },
+            ] as T[],
+          };
+        if (this.query.includes("FROM editorial_documents")) {
+          documentQueries.push(this.query);
+          return { results: [] as T[] };
+        }
+        return { results: [] as T[] };
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      ADMIN_AUTH_MODE: "cloudflare-access",
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new ScopedStatement(query),
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents", {
+        headers: { "Cf-Access-Authenticated-User-Email": "math@example.com" },
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(documentQueries).toHaveLength(1);
+    expect(documentQueries[0]).toContain("subject IN (?)");
+    expect(documentQueries[0]).not.toContain(
+      "publication_review_stage='subject-coordinator'",
+    );
+  });
+
   it("does not allow a new document to skip directly to feedback-complete", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/api/admin/editor/documents", {
