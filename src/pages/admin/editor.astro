@@ -4313,4 +4313,83 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     border-color: var(--editor-status-error-border);
     color: var(--editor-status-error-text);
   }
+
+  /*
+   * 背景色を「標準」のままOS/ブラウザのダーク設定で表示する場合は
+   * data-pref-bg が空のままになる。固定色の状態UIだけがライト配色に
+   * 取り残されないよう、システムのダーク設定にも同じ状態色を適用する。
+   */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace {
+      --editor-status-info-background: #1f3b4d;
+      --editor-status-info-border: #5f9fca;
+      --editor-status-info-text: #c5e7fb;
+      --editor-status-warning-background: #4a3a1b;
+      --editor-status-warning-border: #c79a3d;
+      --editor-status-warning-text: #f3d58a;
+      --editor-status-success-background: #1d3a2a;
+      --editor-status-success-border: #64b889;
+      --editor-status-success-text: #c8f0d5;
+      --editor-status-error-background: #4b2226;
+      --editor-status-error-border: #d77f88;
+      --editor-status-error-text: #ffd8dc;
+    }
+
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .body-editor-surface:not([data-codemirror-ready="true"]) [data-body],
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .source-picker select:disabled {
+      background: var(--background-inset);
+      color: var(--text-primary);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .source-picker select:disabled {
+      color: var(--text-muted);
+    }
+
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][data-state="failed"],
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"],
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses .publication-integration-status[data-state="error"],
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .publication-diagnostic {
+      background: var(--editor-status-warning-background);
+      border-color: var(--editor-status-warning-border);
+      color: var(--editor-status-warning-text);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][data-state="failed"] .publication-run-state,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-state,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .publication-diagnostic summary {
+      color: var(--editor-status-warning-text);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses .publication-integration-status[data-state="ready"] {
+      background: var(--editor-status-success-background);
+      border-color: var(--editor-status-success-border);
+      color: var(--editor-status-success-text);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses .publication-integration-status[data-state="checking"],
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][aria-busy="true"] {
+      background: var(--editor-status-info-background);
+      border-color: var(--editor-status-info-border);
+      color: var(--editor-status-info-text);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][data-state="failed"] .publication-run-indicator,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-indicator {
+      background: var(--editor-status-warning-border);
+    }
+
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .unsaved-warning,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .selection-action,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .selection-hint.has-selection {
+      background: var(--editor-status-warning-background);
+      border-color: var(--editor-status-warning-border);
+      color: var(--editor-status-warning-text);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .reply-target,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .reply-entry,
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .comment-reply {
+      background: var(--background-inset);
+      color: var(--text-primary);
+    }
+    :root:not([data-pref-bg="dark"]):not([data-pref-bg="soft"]) .editor-workspace .editorial-image-error {
+      background: var(--editor-status-error-background);
+      border-color: var(--editor-status-error-border);
+      color: var(--editor-status-error-text);
+    }
+  }
 </style>
