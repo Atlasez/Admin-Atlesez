@@ -1522,7 +1522,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         }
         const span = Math.max(1, gridUnits / row.length);
         paneElements[key].style.gridColumn = row.length === 1
-          ? "1 / -1"
+          ? `1 / span ${gridUnits}`
           : `${columnIndex * span + 1} / span ${span}`;
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => {
