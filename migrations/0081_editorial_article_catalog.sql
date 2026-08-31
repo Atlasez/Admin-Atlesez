@@ -61,7 +61,11 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS editorial_documents_identity_update
 BEFORE UPDATE OF locale, subject, category, slug ON editorial_documents
-WHEN EXISTS (
+WHEN (NEW.locale != OLD.locale
+   OR NEW.subject != OLD.subject
+   OR NEW.category != OLD.category
+   OR NEW.slug != OLD.slug)
+ AND EXISTS (
   SELECT 1 FROM editorial_documents
   WHERE id != OLD.id
     AND locale = NEW.locale
@@ -87,6 +91,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS editorial_documents_source_article_update
 BEFORE UPDATE OF source_article_id ON editorial_documents
 WHEN NEW.source_article_id IS NOT NULL
+ AND NEW.source_article_id IS NOT OLD.source_article_id
  AND EXISTS (
    SELECT 1 FROM editorial_documents
    WHERE id != OLD.id
