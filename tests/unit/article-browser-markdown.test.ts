@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { renderArticleMarkdown } from "../../src/lib/article-browser-markdown.mjs";
+/* @vitest-environment jsdom */
+
+import { describe, expect, it, vi } from "vitest";
+import {
+  hydrateTikzDiagrams,
+  renderArticleMarkdown,
+} from "../../src/lib/article-browser-markdown.mjs";
 
 describe("browser article Markdown renderer", () => {
   it("renders the same core Markdown, directives, tables, and KaTeX path used by articles", async () => {
@@ -55,5 +60,63 @@ describe("browser article Markdown renderer", () => {
     expect(html).toContain("<summary>補足");
     expect(html).toContain('class="folding-content"');
     expect(html.match(/class="katex"/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("turns TikZ fences into stable live-preview placeholders", async () => {
+    const html = await renderArticleMarkdown(
+      [
+        "## 図",
+        "",
+        "```tikz",
+        "\\begin{tikzpicture}\\draw (0,0)--(1,0);\\end{tikzpicture}",
+        "```",
+      ].join("\n"),
+    );
+    expect(html).toContain('class="tikz-diagram tikz-diagram-pending"');
+    expect(html).toContain("data-tikz-source=");
+    expect(html).toContain("TikZをSVG化しています");
+  });
+
+  it("does not let an aborted preview poison the next identical render", async () => {
+    let resolveResponse:
+      | ((value: { ok: boolean; json: () => Promise<{ svg: string }> }) => void)
+      | undefined;
+    const response = new Promise<{
+      ok: boolean;
+      json: () => Promise<{ svg: string }>;
+    }>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const fetchMock = vi.fn(() => response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const source = "\\begin{tikzpicture}\\draw (0,0)--(1,0);\\end{tikzpicture}";
+    const firstTarget = document.createElement("div");
+    firstTarget.innerHTML = `<div class="tikz-diagram tikz-diagram-pending" data-tikz-source="${encodeURIComponent(source)}"></div>`;
+    document.body.append(firstTarget);
+    const controller = new AbortController();
+    const first = hydrateTikzDiagrams(firstTarget, {
+      endpoint: "/tikz-test",
+      signal: controller.signal,
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    controller.abort();
+
+    const secondTarget = document.createElement("div");
+    secondTarget.innerHTML = `<div class="tikz-diagram tikz-diagram-pending" data-tikz-source="${encodeURIComponent(source)}"></div>`;
+    document.body.append(secondTarget);
+    const second = hydrateTikzDiagrams(secondTarget, {
+      endpoint: "/tikz-test",
+    });
+    resolveResponse?.({
+      ok: true,
+      json: async () => ({ svg: '<svg aria-label="ok"></svg>' }),
+    });
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(secondTarget.querySelector("svg")).not.toBeNull();
+    expect(firstTarget.querySelector("[data-tikz-source]")).not.toBeNull();
+    vi.unstubAllGlobals();
   });
 });

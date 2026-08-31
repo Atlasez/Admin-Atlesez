@@ -27,7 +27,7 @@ import {
 
 const TIKZJAX_SCRIPT_URL = "https://tikzjax.com/v1/tikzjax.js";
 const TIKZJAX_FONT_URL = "https://tikzjax.com/v1/fonts.css";
-const TIKZ_FREE_RENDER_TIMEOUT_MS = 120_000;
+const TIKZ_FREE_RENDER_TIMEOUT_MS = 30_000;
 const TIKZ_RETRY_DELAY_MS = 350;
 
 // 入力中のプレビュー更新で同じTikZを何度もWASM組版しないための共有キャッシュ。
@@ -157,6 +157,9 @@ async function renderTikzPreviewSvg(source, endpoint, signal) {
   const running = tikzRenderPromises.get(key);
   if (running) return running;
 
+  // Do not bind the shared render to the AbortSignal of the first preview.
+  // The editor aborts that signal on every keystroke; sharing its rejected
+  // promise made the next preview show "Preview cancelled" as well.
   const promise = (async () => {
     let serverError = "";
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -166,7 +169,6 @@ async function renderTikzPreviewSvg(source, endpoint, signal) {
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ source }),
-          signal,
         });
         const payload = await response.json().catch(() => ({}));
         if (response.ok && typeof payload.svg === "string") {
@@ -191,15 +193,13 @@ async function renderTikzPreviewSvg(source, endpoint, signal) {
 
     try {
       if (serverError) throw new Error(serverError);
-      if (signal?.aborted)
-        throw new DOMException("Preview cancelled", "AbortError");
       assertSafeTikzSource(source);
       let fallbackError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
           const unicode = maskTikzUnicode(normalizeTikzMathSlashes(source));
           const svg = restoreTikzUnicode(
-            await renderWithFreeTikzJax(unicode.source, signal),
+            await renderWithFreeTikzJax(unicode.source),
             unicode.replacements,
           );
           tikzSvgCache.set(key, svg);
@@ -227,15 +227,14 @@ async function renderTikzPreviewSvg(source, endpoint, signal) {
     }
   })().finally(() => tikzRenderPromises.delete(key));
   tikzRenderPromises.set(key, promise);
-  return promise;
+  const svg = await promise;
+  if (signal?.aborted)
+    throw new DOMException("Preview cancelled", "AbortError");
+  return svg;
 }
 
-function renderWithFreeTikzJax(source, signal) {
+function renderWithFreeTikzJax(source) {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException("Preview cancelled", "AbortError"));
-      return;
-    }
     const frame = document.createElement("iframe");
     frame.title = "TikZ preview renderer";
     frame.setAttribute("aria-hidden", "true");
@@ -253,8 +252,6 @@ function renderWithFreeTikzJax(source, signal) {
       frame.remove();
       callback();
     };
-    const abort = () =>
-      finish(() => reject(new DOMException("Preview cancelled", "AbortError")));
     const check = () => {
       const svg = frame.contentDocument?.querySelector("svg");
       if (!svg) return;
@@ -273,7 +270,6 @@ function renderWithFreeTikzJax(source, signal) {
       TIKZ_FREE_RENDER_TIMEOUT_MS,
     );
     frame.addEventListener("load", check, { once: false });
-    signal?.addEventListener("abort", abort, { once: true });
     document.body.append(frame);
   });
 }
