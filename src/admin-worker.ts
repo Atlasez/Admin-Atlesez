@@ -268,6 +268,15 @@ type PublicArticleCatalogEntry = {
   body: string;
   references: unknown[];
   publicUpdatedAt: string | null;
+  sourceKind: string;
+  sourceRef: string | null;
+  sourceChecksum: string | null;
+  sourceChecksumAlgorithm: string;
+  sourceBodyChecksum: string | null;
+  sourceFetchedAt: string | null;
+  sourceAuthority: string;
+  registrationMethod: string;
+  identityStatus: string;
 };
 type EditorialConceptPayload = {
   id?: unknown;
@@ -3299,7 +3308,10 @@ async function updateEditorialDocumentArchive(
 const publicArticleCatalogFields = `
   path, identity_key, repository, locale, subject, category, slug,
   source_article_id, git_sha, title, summary, concept_id, public_status,
-  document_id, last_seen_at, registered_at, registered_by`;
+  document_id, last_seen_at, registered_at, registered_by,
+  source_kind, source_ref, source_checksum, source_checksum_algorithm,
+  source_body_checksum, source_fetched_at, source_authority,
+  registration_method, identity_status`;
 
 const listEditorialArticleCatalogRows = async (env: Env) =>
   (
@@ -3367,6 +3379,15 @@ async function loadPublishedArticleCatalog(
               body: "",
               references: [],
               publicUpdatedAt: null,
+              sourceKind: "learning-site-catalog",
+              sourceRef: `${publicOrigin}/atlas/graph.json#${identityKey}`,
+              sourceChecksum: null,
+              sourceChecksumAlgorithm: "sha256",
+              sourceBodyChecksum: null,
+              sourceFetchedAt: new Date().toISOString(),
+              sourceAuthority: "reference-only",
+              registrationMethod: "catalog-observation",
+              identityStatus: "verified",
             });
           }
         }
@@ -3393,7 +3414,9 @@ async function loadPublishedArticleCatalog(
       cached.source_article_id &&
       cached.title &&
       cached.summary &&
-      cached.concept_id
+      cached.concept_id &&
+      cached.source_checksum &&
+      cached.source_kind !== "unknown"
     ) {
       articles.push({
         path: cached.path,
@@ -3411,6 +3434,15 @@ async function loadPublishedArticleCatalog(
         body: "",
         references: [],
         publicUpdatedAt: null,
+        sourceKind: cached.source_kind,
+        sourceRef: cached.source_ref,
+        sourceChecksum: cached.source_checksum,
+        sourceChecksumAlgorithm: cached.source_checksum_algorithm,
+        sourceBodyChecksum: cached.source_body_checksum,
+        sourceFetchedAt: cached.source_fetched_at,
+        sourceAuthority: cached.source_authority,
+        registrationMethod: cached.registration_method,
+        identityStatus: cached.identity_status,
       });
       continue;
     }
@@ -3422,6 +3454,18 @@ async function loadPublishedArticleCatalog(
     const article = parsePublicArticle(entry.path, markdown, entry.sha);
     if (!article) continue;
     article.repository = client.repository;
+    article.sourceKind = "github-published-markdown";
+    article.sourceRef = githubArticleSourceRef(
+      client.repository,
+      entry.path,
+      entry.sha,
+    );
+    article.sourceChecksum = await sha256Hex(markdown);
+    article.sourceBodyChecksum = await sha256Hex(article.body);
+    article.sourceFetchedAt = new Date().toISOString();
+    article.sourceAuthority = "reference-only";
+    article.registrationMethod = "catalog-observation";
+    article.identityStatus = "verified";
     await upsertEditorialArticleCatalog(env, article);
     articles.push(article);
   }
@@ -3471,11 +3515,13 @@ async function getEditorialArticleCatalog(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   try {
-    const [publicArticles, documents, storedCatalog] = await Promise.all([
-      loadPublishedArticleCatalog(env),
+    // 公開記事の観測でカタログを更新するため、保存済み行はその後に読む。
+    const publicArticles = await loadPublishedArticleCatalog(env);
+    const [documents, storedCatalog] = await Promise.all([
       catalogDocumentRows(env),
       listEditorialArticleCatalogRows(env),
     ]);
+    const storedByPath = new Map(storedCatalog.map((row) => [row.path, row]));
     const documentByKey = new Map<string, typeof documents>();
     for (const document of documents) {
       const key = editorialArticleIdentity(document);
@@ -3496,6 +3542,7 @@ async function getEditorialArticleCatalog(
       .map((article) => {
         const matches = documentByKey.get(article.identityKey) ?? [];
         const state = catalogDocumentState(matches, article.sourceArticleId);
+        const stored = storedByPath.get(article.path);
         return {
           path: article.path,
           identity_key: article.identityKey,
@@ -3519,6 +3566,23 @@ async function getEditorialArticleCatalog(
           state,
           duplicate_document_ids:
             matches.length > 1 ? matches.map((item) => item.id) : [],
+          provenance: {
+            source_kind: stored?.source_kind ?? article.sourceKind,
+            source_ref: stored?.source_ref ?? article.sourceRef,
+            source_checksum: stored?.source_checksum ?? article.sourceChecksum,
+            source_checksum_algorithm:
+              stored?.source_checksum_algorithm ??
+              article.sourceChecksumAlgorithm,
+            source_body_checksum:
+              stored?.source_body_checksum ?? article.sourceBodyChecksum,
+            source_fetched_at:
+              stored?.source_fetched_at ?? article.sourceFetchedAt,
+            source_authority:
+              stored?.source_authority ?? article.sourceAuthority,
+            registration_method:
+              stored?.registration_method ?? article.registrationMethod,
+            identity_status: stored?.identity_status ?? article.identityStatus,
+          },
         };
       });
     const editorialOnly = documents
@@ -3549,6 +3613,17 @@ async function getEditorialArticleCatalog(
         editorial_updated_at: document.updated_at,
         state: "editorial-only" as const,
         duplicate_document_ids: [],
+        provenance: {
+          source_kind: "editorial-document",
+          source_ref: null,
+          source_checksum: null,
+          source_checksum_algorithm: "sha256",
+          source_body_checksum: null,
+          source_fetched_at: null,
+          source_authority: "editorial-draft",
+          registration_method: "editorial-document",
+          identity_status: "unverified",
+        },
       }));
     return json({
       catalog: [...catalog, ...editorialOnly],
@@ -3571,6 +3646,145 @@ async function getEditorialArticleCatalog(
           error instanceof Error
             ? error.message
             : "公開記事カタログを取得できませんでした。",
+      },
+      502,
+    );
+  }
+}
+
+async function getEditorialArticleCatalogDiagnostics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  try {
+    const publicArticles = await loadPublishedArticleCatalog(env);
+    const [documents, storedCatalog] = await Promise.all([
+      catalogDocumentRows(env),
+      listEditorialArticleCatalogRows(env),
+    ]);
+    const visibleArticles = publicArticles.filter(
+      (article) =>
+        canEditSubject(scope, article.subject) ||
+        canCoordinateSubject(scope, article.subject) ||
+        scope.isProjectLeader,
+    );
+    const documentByKey = new Map<string, typeof documents>();
+    for (const document of documents) {
+      const key = editorialArticleIdentity(document);
+      documentByKey.set(key, [...(documentByKey.get(key) ?? []), document]);
+    }
+    const storedByPath = new Map(storedCatalog.map((row) => [row.path, row]));
+    const publicKeys = new Set(
+      visibleArticles.map((article) => article.identityKey),
+    );
+    const issues: Record<string, unknown>[] = [];
+    const addIssue = (
+      code: string,
+      severity: "error" | "warning",
+      article: PublicArticleCatalogEntry,
+      details: Record<string, unknown> = {},
+    ) => {
+      issues.push({
+        code,
+        severity,
+        identity_key: article.identityKey,
+        path: article.path,
+        source_article_id: article.sourceArticleId,
+        title: article.title,
+        ...details,
+      });
+    };
+
+    for (const article of visibleArticles) {
+      const matches = documentByKey.get(article.identityKey) ?? [];
+      const stored = storedByPath.get(article.path);
+      if (!matches.length)
+        addIssue("unregistered", "warning", article, {
+          message: "公開記事に対応する運営原稿がありません。",
+        });
+      if (matches.length > 1)
+        addIssue("duplicate", "error", article, {
+          message: "同じ公開パスの運営原稿が複数あります。",
+          document_ids: matches.map((document) => document.id),
+        });
+      if (matches.length === 1) {
+        const document = matches[0];
+        if (!document.source_article_id)
+          addIssue("source-link-missing", "warning", article, {
+            message: "運営原稿はありますが、公開記事IDが未登録です。",
+            document_id: document.id,
+          });
+        else if (document.source_article_id !== article.sourceArticleId)
+          addIssue("identity-mismatch", "error", article, {
+            message: "公開記事IDと運営原稿の紐付けが一致しません。",
+            document_id: document.id,
+            document_source_article_id: document.source_article_id,
+          });
+      }
+      if (!stored?.source_checksum)
+        addIssue("source-checksum-missing", "warning", article, {
+          message:
+            "公開元本文のSHA-256が未記録です。本文を正本とみなさず、移行前に出所を確認してください。",
+          source_kind: stored?.source_kind ?? article.sourceKind,
+          source_ref: stored?.source_ref ?? article.sourceRef,
+        });
+      if (
+        stored?.source_article_id &&
+        stored.source_article_id !== article.sourceArticleId
+      )
+        addIssue("identity-mismatch", "error", article, {
+          message: "カタログの公開記事IDと現在の公開記事が一致しません。",
+          catalog_source_article_id: stored.source_article_id,
+        });
+      if (
+        stored?.git_sha &&
+        article.gitSha &&
+        stored.git_sha !== article.gitSha
+      )
+        addIssue("source-version-changed", "warning", article, {
+          message: "カタログ登録後に公開元のGit SHAが変わっています。",
+          catalog_git_sha: stored.git_sha,
+          current_git_sha: article.gitSha,
+        });
+    }
+
+    for (const row of storedCatalog) {
+      if (
+        row.public_status === "published" &&
+        !publicKeys.has(row.identity_key)
+      )
+        issues.push({
+          code: "catalog-public-source-missing",
+          severity: "warning",
+          identity_key: row.identity_key,
+          path: row.path,
+          title: row.title,
+          message:
+            "保存済みカタログにはありますが、現在の公開一覧にありません。",
+        });
+    }
+    const summary = issues.reduce<Record<string, number>>((counts, issue) => {
+      const code = String(issue.code);
+      counts[code] = (counts[code] ?? 0) + 1;
+      return counts;
+    }, {});
+    return json({
+      generated_at: new Date().toISOString(),
+      checked_articles: visibleArticles.length,
+      issue_count: issues.length,
+      healthy: issues.length === 0,
+      summary,
+      issues,
+    });
+  } catch (error) {
+    return json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "公開記事カタログの診断に失敗しました。",
       },
       502,
     );
@@ -3613,6 +3827,18 @@ async function getPublicArticleForIdentity(
   const article = parsePublicArticle(path, markdown, entry.sha);
   if (!article) return null;
   article.repository = client.repository;
+  article.sourceKind = "github-published-markdown";
+  article.sourceRef = githubArticleSourceRef(
+    client.repository,
+    entry.path,
+    entry.sha,
+  );
+  article.sourceChecksum = await sha256Hex(markdown);
+  article.sourceBodyChecksum = await sha256Hex(article.body);
+  article.sourceFetchedAt = new Date().toISOString();
+  article.sourceAuthority = "reference-only";
+  article.registrationMethod = "catalog-observation";
+  article.identityStatus = "verified";
   await upsertEditorialArticleCatalog(env, article);
   return article;
 }
@@ -3834,7 +4060,10 @@ async function registerPublicArticleInEditorialCatalog(
         .run();
       await upsertEditorialArticleCatalog(
         env,
-        article,
+        {
+          ...article,
+          registrationMethod: "public-article-link",
+        },
         sourceDocument.id,
         new Date().toISOString(),
         scope.email,
@@ -3845,6 +4074,10 @@ async function registerPublicArticleInEditorialCatalog(
           sourceDocument.source_article_id !== article.sourceArticleId,
         documentId: sourceDocument.id,
         identityKey: key,
+        sourceChecksum: article.sourceChecksum,
+        sourceChecksumAlgorithm: article.sourceChecksumAlgorithm,
+        sourceAuthority: "reference-only",
+        bodySeed: "existing-editorial-document-preserved",
         publicationStarted: false,
       });
     }
@@ -3894,7 +4127,10 @@ async function registerPublicArticleInEditorialCatalog(
       );
     await upsertEditorialArticleCatalog(
       env,
-      article,
+      {
+        ...article,
+        registrationMethod: "public-article-adoption",
+      },
       documentId,
       now,
       scope.email,
@@ -3905,6 +4141,10 @@ async function registerPublicArticleInEditorialCatalog(
         registered: true,
         documentId,
         identityKey: key,
+        sourceChecksum: article.sourceChecksum,
+        sourceChecksumAlgorithm: article.sourceChecksumAlgorithm,
+        sourceAuthority: "reference-only",
+        bodySeed: "github-reference-only",
         publicationStarted: false,
       },
       201,
@@ -10231,6 +10471,13 @@ async function addEditorialConceptToGitHub(
 const editorialLocaleDirectory = (locale: string) =>
   ({ ja: "jpn", en: "eng" })[locale] ?? locale;
 
+const sha256Hex = async (value: string) => {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+  );
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
 const PUBLIC_ARTICLE_PATH_PATTERN =
   /^src\/content\/articles\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\.md$/;
 
@@ -10257,6 +10504,15 @@ type EditorialArticleCatalogRow = {
   last_seen_at: string;
   registered_at: string | null;
   registered_by: string | null;
+  source_kind: string;
+  source_ref: string | null;
+  source_checksum: string | null;
+  source_checksum_algorithm: string;
+  source_body_checksum: string | null;
+  source_fetched_at: string | null;
+  source_authority: string;
+  registration_method: string;
+  identity_status: string;
 };
 
 const editorialArticleIdentity = (value: {
@@ -10273,6 +10529,15 @@ const editorialArticlePath = (value: {
   slug: string;
 }) =>
   `src/content/articles/${value.locale}/${value.subject}/${value.category}/${value.slug}.md`;
+
+const githubArticleSourceRef = (
+  repository: string,
+  path: string,
+  gitSha: string | null,
+) =>
+  gitSha
+    ? `github://${repository}/${path}@${gitSha}`
+    : `github://${repository}/${path}`;
 
 const publicArticlePathParts = (path: string) => {
   const match = path.match(PUBLIC_ARTICLE_PATH_PATTERN);
@@ -10362,6 +10627,15 @@ const parsePublicArticle = (
       : [],
     publicUpdatedAt:
       typeof frontMatter.updatedAt === "string" ? frontMatter.updatedAt : null,
+    sourceKind: "unknown",
+    sourceRef: null,
+    sourceChecksum: null,
+    sourceChecksumAlgorithm: "sha256",
+    sourceBodyChecksum: null,
+    sourceFetchedAt: null,
+    sourceAuthority: "unverified",
+    registrationMethod: "catalog-observation",
+    identityStatus: "verified",
   };
 };
 
@@ -10417,8 +10691,8 @@ const upsertEditorialArticleCatalog = async (
 ) => {
   await env.REPORTS.prepare(
     `INSERT INTO editorial_article_catalog
-      (path, identity_key, repository, locale, subject, category, slug, source_article_id, git_sha, title, summary, concept_id, public_status, document_id, last_seen_at, registered_at, registered_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, ?, ?)
+      (path, identity_key, repository, locale, subject, category, slug, source_article_id, git_sha, title, summary, concept_id, public_status, document_id, last_seen_at, registered_at, registered_by, source_kind, source_ref, source_checksum, source_checksum_algorithm, source_body_checksum, source_fetched_at, source_authority, registration_method, identity_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(path) DO UPDATE SET
        identity_key=excluded.identity_key,
        repository=excluded.repository,
@@ -10435,7 +10709,16 @@ const upsertEditorialArticleCatalog = async (
        document_id=COALESCE(excluded.document_id, editorial_article_catalog.document_id),
        last_seen_at=excluded.last_seen_at,
        registered_at=COALESCE(excluded.registered_at, editorial_article_catalog.registered_at),
-       registered_by=COALESCE(excluded.registered_by, editorial_article_catalog.registered_by)`,
+       registered_by=COALESCE(excluded.registered_by, editorial_article_catalog.registered_by),
+       source_kind=excluded.source_kind,
+       source_ref=excluded.source_ref,
+       source_checksum=excluded.source_checksum,
+       source_checksum_algorithm=excluded.source_checksum_algorithm,
+       source_body_checksum=excluded.source_body_checksum,
+       source_fetched_at=excluded.source_fetched_at,
+       source_authority=excluded.source_authority,
+       registration_method=excluded.registration_method,
+       identity_status=excluded.identity_status`,
   )
     .bind(
       article.path,
@@ -10454,6 +10737,15 @@ const upsertEditorialArticleCatalog = async (
       new Date().toISOString(),
       registeredAt,
       registeredBy,
+      article.sourceKind,
+      article.sourceRef,
+      article.sourceChecksum,
+      article.sourceChecksumAlgorithm,
+      article.sourceBodyChecksum,
+      article.sourceFetchedAt,
+      article.sourceAuthority,
+      article.registrationMethod,
+      article.identityStatus,
     )
     .run();
 };
@@ -15126,6 +15418,11 @@ async function handleAdminRequest(
     return createEditorialConcept(request, env);
   if (url.pathname === "/api/admin/editor/catalog" && request.method === "GET")
     return getEditorialArticleCatalog(request, env);
+  if (
+    url.pathname === "/api/admin/editor/catalog/diagnostics" &&
+    request.method === "GET"
+  )
+    return getEditorialArticleCatalogDiagnostics(request, env);
   if (
     url.pathname === "/api/admin/editor/catalog/register" &&
     request.method === "POST"
