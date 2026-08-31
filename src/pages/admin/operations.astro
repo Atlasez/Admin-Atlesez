@@ -27,7 +27,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 <AdminLayout title={initialPageTitle} description="運営作業を共有する場所">
   <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined} data-progress-overview={progressOverview ? "true" : undefined}>
     <header>
+      <p class="operations-eyebrow">OPERATIONS / {projectLabel.toUpperCase()}</p>
       <h1 data-project-title>{initialPageTitle}</h1>
+      <p class="operations-lede">共有タスクと進捗を、いま必要なものから確認できます。</p>
     </header>
     <div class="grid">
       <section hidden={calendarPage || !progressOnly}>
@@ -69,7 +71,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
             <h2>タスク一覧</h2>
             <p>表示対象を切り替えると、一覧に表示するタスクが変わります。</p>
           </div>
-          <button type="button" class="task-create-open" data-open-task-create aria-label="タスクを作成・依頼">＋</button>
+          <button type="button" class="task-create-open" data-open-task-create aria-label="タスクを作成・依頼"><span aria-hidden="true">＋</span><span class="task-create-label">タスクを作成</span></button>
         </div>
         <div class="task-filters" role="group" aria-label="タスクの表示対象">
           <button
@@ -1161,6 +1163,48 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     .availability button {
       width: 100%;
     }
+  }
+</style>
+<style is:global>
+  /* Refero / Linear-inspired operations surface: compact, quiet, and action-led. */
+  .operations { max-width: 80rem; padding-bottom: 5rem; }
+  .operations > header { border-bottom-color: color-mix(in srgb, var(--border-default) 78%, transparent); padding: 2.4rem 0 1.5rem; }
+  .operations-eyebrow { color: var(--accent-primary) !important; font-family: var(--font-mono); font-size: .68rem !important; font-weight: 800 !important; letter-spacing: .12em !important; margin: 0 0 .55rem !important; text-transform: uppercase; }
+  .operations > header h1 { font-size: clamp(1.75rem, 3.4vw, 2.55rem); letter-spacing: -.035em; margin: 0; }
+  .operations > header .operations-lede { color: var(--text-secondary); font-size: .84rem; margin: .55rem 0 0; }
+  .grid { grid-template-columns: minmax(0, 1fr); margin-top: 1rem; }
+  .grid section { background: color-mix(in srgb, var(--background-secondary) 48%, var(--background-primary)); border-radius: 12px; padding: 1.35rem 1.5rem; }
+  .task-workspace { grid-column: 1 / -1; }
+  .task-list-heading { align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--border-default) 74%, transparent); padding-bottom: 1rem; }
+  .task-list-heading h2 { font-size: 1.15rem; letter-spacing: -.015em; }
+  .task-list-heading p { font-size: .76rem; margin-top: .3rem; }
+  .task-create-open { border-radius: 6px; display: inline-flex; flex: 0 0 auto; gap: .45rem; min-height: 2.35rem; padding: .52rem .78rem !important; width: auto; }
+  .task-create-open > span:first-child { font-size: 1.15rem; line-height: 1; }
+  .task-create-label { font-size: .74rem; font-weight: 800; }
+  .task-filters { align-items: center; background: color-mix(in srgb, var(--background-primary) 72%, transparent); border: 1px solid var(--border-default); border-radius: 8px; gap: .2rem; margin: 1rem 0; padding: .25rem; width: fit-content; }
+  .task-filters button { border-color: transparent; border-radius: 6px; font-size: .74rem; font-weight: 650; padding: .45rem .7rem; }
+  .task-filters button:hover:not(.is-selected) { background: color-mix(in srgb, var(--accent-primary) 9%, transparent); border-color: transparent; }
+  .task-filters button.is-selected { background: var(--accent-primary); box-shadow: 0 1px 2px rgb(0 0 0 / .18); }
+  .task-workspace [data-task-list] { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr)); }
+  .task-workspace .item { background: color-mix(in srgb, var(--background-primary) 82%, var(--background-secondary)); border: 1px solid color-mix(in srgb, var(--border-default) 86%, transparent); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / .025); margin: 0; min-width: 0; padding: .95rem 1rem 1rem 1.05rem; position: relative; }
+  .task-workspace .item::before { background: var(--accent-primary); border-radius: 2px 0 0 2px; bottom: .7rem; content: ""; left: 0; position: absolute; top: .7rem; width: 2px; }
+  .task-workspace .item:hover { border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-default)); }
+  .task-workspace .task-row { align-items: flex-start; gap: .8rem; }
+  .task-workspace .task-row b { font-size: .88rem; letter-spacing: -.01em; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+  .task-workspace .task-row select { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); flex: 0 0 auto; font-size: .72rem; min-width: 5.8rem; padding: .38rem .45rem; }
+  .task-workspace .item > small { color: var(--text-secondary); display: block; font-size: .72rem; line-height: 1.55; margin-top: .58rem; overflow-wrap: anywhere; }
+  .task-workspace .task-kind-label, .task-workspace .task-role { font-size: .64rem; letter-spacing: .01em; }
+  .task-workspace .task-reminder-editor { background: color-mix(in srgb, var(--background-secondary) 72%, transparent); border-top-color: color-mix(in srgb, var(--border-default) 78%, transparent); margin-top: .7rem; padding-top: .6rem; }
+  .operation-feedback { padding-top: .55rem; }
+  @media (max-width: 700px) {
+    .operations > header { padding-top: 1.6rem; }
+    .grid section { padding: 1rem; }
+    .task-list-heading { align-items: flex-start; }
+    .task-create-label { display: none; }
+    .task-create-open { padding: .5rem !important; }
+    .task-filters { width: 100%; }
+    .task-filters button { flex: 1 1 0; }
+    .task-workspace .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   }
 </style>
 <script>
