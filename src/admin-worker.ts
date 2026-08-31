@@ -1871,6 +1871,56 @@ async function listReportAdminPermissions(
     ...member,
     discord_role_ids: (assignmentsByEmail.get(member.email.toLowerCase()) ?? []).join(","),
   }));
+  // The primary operator is also allowed through the authentication fallback
+  // when an older production database is missing the seeded permission row.
+  // Keep the permissions screen consistent with that access decision instead
+  // of hiding the currently signed-in global administrator from the list.
+  if (
+    scope.email === PRIMARY_ADMIN_EMAIL &&
+    !permissions.some((member) => member.email.toLowerCase() === PRIMARY_ADMIN_EMAIL)
+  ) {
+    const [profile, discordAccount] = await Promise.all([
+      env.REPORTS.prepare(
+        `SELECT display_name, university, year, interests, avatar_url
+         FROM editorial_member_profiles
+         WHERE lower(email) = lower(?) LIMIT 1`,
+      )
+        .bind(PRIMARY_ADMIN_EMAIL)
+        .first<{
+          display_name: string;
+          university: string;
+          year: string;
+          interests: string;
+          avatar_url: string;
+        }>(),
+      env.REPORTS.prepare(
+        `SELECT discord_user_id
+         FROM atlasez_member_discord_accounts
+         WHERE lower(email) = lower(?) LIMIT 1`,
+      )
+        .bind(PRIMARY_ADMIN_EMAIL)
+        .first<{ discord_user_id: string }>(),
+    ]);
+    permissions.push({
+      email: PRIMARY_ADMIN_EMAIL,
+      subjects: "*",
+      display_name: profile?.display_name?.trim() || "主管理者",
+      university: profile?.university ?? "",
+      year: profile?.year ?? "",
+      interests: profile?.interests ?? "",
+      avatar_url: profile?.avatar_url ?? "",
+      discord_user_id: discordAccount?.discord_user_id ?? "",
+      discord_role_ids: (
+        assignmentsByEmail.get(PRIMARY_ADMIN_EMAIL) ?? []
+      ).join(","),
+    });
+    permissions.sort((left, right) =>
+      `${left.display_name}\u0000${left.email}`.localeCompare(
+        `${right.display_name}\u0000${right.email}`,
+        "ja",
+      ),
+    );
+  }
   return json({
     permissions,
     workflowRoles: workflowRoles.results,

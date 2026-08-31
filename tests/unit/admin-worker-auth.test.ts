@@ -228,6 +228,28 @@ describe("applicant stage server-side access", () => {
     );
   });
 
+  it("shows the designated primary admin in the permissions list if the seed row is missing", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      env("cloudflare-access") as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      permissions: [
+        expect.objectContaining({
+          email: "ukyoukay0@gmail.com",
+          subjects: "*",
+          display_name: "主管理者",
+        }),
+      ],
+    });
+  });
+
   it("requires an authenticated Google session before accepting an application", async () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/apply", {
