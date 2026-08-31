@@ -12,7 +12,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 
     <div class="menu-groups" aria-label="学習サイト運営メニュー">
       <section class="menu-group" data-menu-group="editorial" aria-labelledby="menu-group-editorial">
-        <header class="menu-group-heading"><span>01</span><div><h2 id="menu-group-editorial">編集・フィードバック</h2><p>原稿をつくり、確認し、改善する</p></div></header>
+        <header class="menu-group-heading"><span>01</span><div><h2 id="menu-group-editorial">編集・フィードバック</h2></div></header>
         <div class="project-links">
           <a href="/admin/articles/" aria-label="原稿一覧を開く"><strong>編集・フィードバック</strong><span aria-hidden="true">→</span></a>
           <a href="/admin/guide/"><strong>作業の進め方</strong><span aria-label="作業の進め方を開く">→</span></a>
@@ -21,7 +21,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </section>
 
       <section class="menu-group" data-menu-group="operations" aria-labelledby="menu-group-operations">
-        <header class="menu-group-heading"><span>02</span><div><h2 id="menu-group-operations">タスク・進行管理</h2><p>日々の作業と予定をそろえる</p></div></header>
+        <header class="menu-group-heading"><span>02</span><div><h2 id="menu-group-operations">タスク・進行管理</h2></div></header>
         <div class="project-links">
           <a href="/admin/operations/?project=atlas"><strong>タスク管理</strong><span aria-label="タスク管理を開く">→</span></a>
           <a href="/admin/progress/?project=atlas"><strong>進捗報告</strong><span aria-label="進捗報告を開く">→</span></a>
@@ -31,7 +31,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </section>
 
       <section class="menu-group" data-menu-group="community" aria-labelledby="menu-group-community">
-        <header class="menu-group-heading"><span>03</span><div><h2 id="menu-group-community">運営情報</h2><p>メンバーとサイトの基礎情報を確認する</p></div></header>
+        <header class="menu-group-heading"><span>03</span><div><h2 id="menu-group-community">運営情報</h2></div></header>
         <div class="project-links">
           <a href="/admin/introductions/?project=atlas"><strong>運営内自己紹介</strong><span aria-label="運営内自己紹介を開く">→</span></a>
           <a href="/admin/genres/"><strong>各ジャンル概要</strong><span aria-label="各ジャンル概要を開く">→</span></a>
@@ -40,7 +40,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </section>
 
       <section class="menu-group menu-group-management" data-menu-group="management" aria-labelledby="menu-group-management">
-        <header class="menu-group-heading"><span>04</span><div><h2 id="menu-group-management">管理</h2><p>権限や運営設定を管理する</p></div></header>
+        <header class="menu-group-heading"><span>04</span><div><h2 id="menu-group-management">管理</h2></div></header>
         <div class="project-links">
           <a href="/admin/manage/"><strong>管理トップ</strong><span aria-label="管理トップを開く">→</span></a>
         </div>
@@ -65,7 +65,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .menu-group-heading { align-items: start; display: flex; gap: .75rem; }
   .menu-group-heading > span { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; padding-top: .3rem; }
   .menu-group-heading h2 { font-size: 1.2rem; margin: 0; }
-  .menu-group-heading p { color: var(--text-secondary); font-size: .82rem; margin: .25rem 0 0; }
   .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1rem; }
   .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; min-height: 6.5rem; padding: 1.25rem; text-decoration: none; }
   .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
