@@ -583,6 +583,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
 <script>
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string};
+  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown};
   type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
@@ -602,7 +603,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const catalogSummary = root.querySelector<HTMLElement>("[data-catalog-summary]")!;
     const catalogFeedback = root.querySelector<HTMLElement>("[data-catalog-feedback]")!;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
-    const publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
+    let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
+    let catalogSource: "api" | "static" = "static";
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
     let scopeEmail = "";
@@ -666,7 +668,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const rows = catalogRows();
       const registeredCount = rows.filter((row) => (row.kind === "editorial" && row.publicArticle) || row.kind === "registered").length;
       const unregisteredCount = rows.filter((row) => row.kind === "unregistered").length;
-      catalogSummary.textContent = `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件`;
+      catalogSummary.textContent = `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件（${catalogSource === "api" ? "APIカタログ" : "静的データ"}）`;
       const filtered = rows.filter((row) => {
         const isUnregistered = row.kind === "unregistered";
         const article = row.kind === "editorial" ? row.article : null;
@@ -710,15 +712,49 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }).join("") : "<p>条件に一致する原稿はありません。</p>";
       updateWorkflowButtons();
     };
+    const normalizeCatalog = (raw: unknown): PublicArticle[] | null => {
+      if (!Array.isArray(raw)) return null;
+      return raw.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const entry = item as PublicArticleCatalogEntry;
+        const locale = typeof entry.locale === "string" ? entry.locale : "";
+        const publicStatus = typeof entry.public_status === "string" ? entry.public_status : "";
+        const articleId = typeof entry.source_article_id === "string" ? entry.source_article_id : "";
+        const subject = typeof entry.subject === "string" ? entry.subject : "";
+        const category = typeof entry.category === "string" ? entry.category : "";
+        const slug = typeof entry.slug === "string" ? entry.slug : "";
+        const title = typeof entry.title === "string" ? entry.title : "";
+        if (locale !== "ja" || publicStatus !== "published" || !articleId || !subject || !category || !slug || !title) return [];
+        const updatedAt = typeof entry.public_updated_at === "string" ? entry.public_updated_at : typeof entry.editorial_updated_at === "string" ? entry.editorial_updated_at : new Date().toISOString();
+        return [{ articleId, subject, category, slug, title, updatedAt }];
+      });
+    };
+    const loadCatalog = async () => {
+      try {
+        const response = await fetch("/api/admin/editor/catalog", { credentials: "same-origin", cache: "no-store" });
+        const contentType = response.headers.get("content-type") ?? "";
+        const data = contentType.includes("application/json") ? await response.json() as { catalog?: unknown[]; error?: string } : {};
+        if (!response.ok) throw new Error(data.error ?? `公開記事カタログを取得できませんでした（${response.status}）。`);
+        const normalized = normalizeCatalog(data.catalog);
+        if (!normalized) throw new Error("公開記事カタログの形式を確認できませんでした。");
+        publicArticles = normalized;
+        catalogSource = "api";
+      } catch (error) {
+        catalogSource = "static";
+        setCatalogFeedback(`公開記事カタログAPIを利用できないため、静的な記事一覧を表示しています。${error instanceof Error ? `（${error.message}）` : ""}`);
+      }
+    };
     const load = async () => {
       try {
         const includeArchived = archive.value !== "active";
         const response = await fetch(`/api/admin/editor/documents${includeArchived ? "?includeArchived=1" : ""}`, { credentials: "same-origin", cache: "no-store" });
+        const catalogPromise = loadCatalog();
         const contentType = response.headers.get("content-type") ?? "";
         const data = contentType.includes("application/json") ? await response.json() : {};
         if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
         items = data.documents ?? [];
         scopeEmail = data.scope?.email ?? "";
+        await catalogPromise;
         render();
       } catch (error) {
         list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";

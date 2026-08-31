@@ -1159,7 +1159,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   } from "../../lib/article-references.mjs";
 
   type Subject = { slug: string; name: string; status: "published" | "preparing"; categories: { slug: string; name: string; order: number }[] };
-  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published" };
+  type SourceArticle = { articleId: string; title: string; subject: string; category: string; slug: string; summary: string; conceptId: string; body: string; status: "draft" | "in-review" | "published"; catalogState?: "managed" | "unmanaged" | "needs-registration" | "duplicate" | "identity-conflict" | "editorial-only"; editorialDocumentId?: string | null };
+  type PublicCatalogEntry = { locale?: unknown; subject?: unknown; category?: unknown; slug?: unknown; source_article_id?: unknown; title?: unknown; summary?: unknown; concept_id?: unknown; public_status?: unknown; state?: unknown; editorial_document_id?: unknown };
   type PlannedArticle = { key: string; subject: string; category: string; title: string; order: number; progress: "not-started" | "in-progress"; slug: string; conceptId: string };
   type ConceptOption = { id: string; subject: string; category: string; name: string; nameEn: string };
   type EditorialAsset = { id: string; filename: string; mediaType: string; bytes: number; alt: string; latexName: string; createdAt: string; marker: string };
@@ -2272,6 +2273,53 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (message === "ログインが必要です。" || message.includes("認証が切れ")) redirectToAdminLogin();
       }
       return data;
+    };
+    const articleIdentity = (article: Pick<SourceArticle, "subject" | "category" | "slug">) => `${article.subject}/${article.category}/${article.slug}`;
+    const normalizePublicCatalog = (raw: unknown): SourceArticle[] | null => {
+      if (!Array.isArray(raw)) return null;
+      const staticByIdentity = new Map(staticArticles.map((article) => [articleIdentity(article), article]));
+      return raw.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const entry = item as PublicCatalogEntry;
+        const locale = typeof entry.locale === "string" ? entry.locale : "";
+        const publicStatus = typeof entry.public_status === "string" ? entry.public_status : "";
+        const sourceArticleId = typeof entry.source_article_id === "string" ? entry.source_article_id : "";
+        const subject = typeof entry.subject === "string" ? entry.subject : "";
+        const category = typeof entry.category === "string" ? entry.category : "";
+        const slug = typeof entry.slug === "string" ? entry.slug : "";
+        const title = typeof entry.title === "string" ? entry.title : "";
+        if (locale !== "ja" || publicStatus !== "published" || !sourceArticleId || !subject || !category || !slug || !title) return [];
+        const staticArticle = staticByIdentity.get(`${subject}/${category}/${slug}`);
+        const state = ["managed", "unmanaged", "needs-registration", "duplicate", "identity-conflict", "editorial-only"].includes(String(entry.state)) ? String(entry.state) as SourceArticle["catalogState"] : "unmanaged";
+        return [{
+          articleId: sourceArticleId,
+          title,
+          subject,
+          category,
+          slug,
+          summary: typeof entry.summary === "string" ? entry.summary : staticArticle?.summary ?? "",
+          conceptId: typeof entry.concept_id === "string" ? entry.concept_id : staticArticle?.conceptId ?? "",
+          body: staticArticle?.body ?? "",
+          status: "published",
+          catalogState: state,
+          editorialDocumentId: typeof entry.editorial_document_id === "string" ? entry.editorial_document_id : null,
+        }];
+      });
+    };
+    const loadPublicCatalog = async () => {
+      try {
+        const response = await fetch("/api/admin/editor/catalog", { credentials: "same-origin", cache: "no-store" });
+        const data = await read<{ catalog?: unknown[]; error?: string }>(response);
+        if (!response.ok) throw new Error(data.error ?? "公開記事カタログを読み込めませんでした。");
+        const normalized = normalizePublicCatalog(data.catalog);
+        if (!normalized) throw new Error("公開記事カタログの形式を確認できませんでした。");
+        articles = normalized;
+        publicCatalogSource = "api";
+      } catch {
+        articles = staticArticles;
+        publicCatalogSource = "static";
+      }
+      root.dataset.publicCatalogSource = publicCatalogSource;
     };
     const normalizeCustomMathPresets = (raw: unknown): CustomMathPreset[] => {
       if (!Array.isArray(raw)) return [];
@@ -3417,7 +3465,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const categories = [...categoryMap.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "ja")).filter((item) => !selectedCategory || item.slug === selectedCategory);
       const publishedArticles = articles.filter((item) => item.status === "published" && item.subject === selectedSubject.slug);
       const planned = plannedArticles.filter((item) => item.subject === selectedSubject.slug);
-      outlineSummary.textContent = `${publishedArticles.length}記事・${planned.length}件の予定`;
+      outlineSummary.textContent = `${publishedArticles.length}記事・${planned.length}件の予定（${publicCatalogSource === "api" ? "API同期" : "静的データ"}）`;
       outlineList.innerHTML = categories.length ? categories.map((categoryItem) => {
         const categoryArticles = publishedArticles.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.title.localeCompare(b.title, "ja"));
         const categoryPlanned = planned.filter((item) => item.category === categoryItem.slug).sort((a, b) => a.order - b.order);
@@ -3428,7 +3476,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); void loadPublicationIntegration(); };
+    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; await loadPublicCatalog(); populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); void loadPublicationIntegration(); };
     const openDocument = async (id: string) => {
       if (id) activeDocumentId = id;
       saveMessage.value = "原稿を読み込み中…";
@@ -3440,6 +3488,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // 一部の認証付きレスポンス／古いキャッシュでは本文は返るのに
       // document.id が欠落することがある。呼び出し元のIDを復元して、
       // 画像アップロード等が新規原稿POSTへ誤分岐しないようにする。
+      const loadedDocumentId = documentIdForRequest();
+      const responseDocumentId = typeof data.document.id === "string" ? data.document.id.trim() : "";
+      if (id && loadedDocumentId && responseDocumentId !== loadedDocumentId) void loadMediaAssets(loadedDocumentId);
+    };
+    const openDocument = async (id: string) => {
+      if (id) activeDocumentId = id;
+      saveMessage.value = "原稿を読み込み中…";
+      const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+      const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response);
+      if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。");
+      expandedReplyThreadIds.clear();
+      setDocument(data.document, data.comments ?? []);
       const loadedDocumentId = documentIdForRequest();
       const responseDocumentId = typeof data.document.id === "string" ? data.document.id.trim() : "";
       if (id && loadedDocumentId && responseDocumentId !== loadedDocumentId) void loadMediaAssets(loadedDocumentId);
