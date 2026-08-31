@@ -14,8 +14,10 @@ import {
 } from "./article-math.mjs";
 import {
   assertSafeTikzSource,
+  maskTikzUnicode,
   normalizeTikzMathSlashes,
   normalizeTikzSvgFonts,
+  restoreTikzUnicode,
 } from "./tikz-policy.mjs";
 import {
   editorialImageStyle,
@@ -25,7 +27,7 @@ import {
 
 const TIKZJAX_SCRIPT_URL = "https://tikzjax.com/v1/tikzjax.js";
 const TIKZJAX_FONT_URL = "https://tikzjax.com/v1/fonts.css";
-const TIKZ_FREE_RENDER_TIMEOUT_MS = 60_000;
+const TIKZ_FREE_RENDER_TIMEOUT_MS = 30_000;
 const TIKZ_RETRY_DELAY_MS = 350;
 
 // 入力中のプレビュー更新で同じTikZを何度もWASM組版しないための共有キャッシュ。
@@ -119,22 +121,23 @@ export async function hydrateTikzDiagrams(target, options = {}) {
   const endpoint = options.endpoint ?? "/api/admin/editor/tikz/render";
   const isCurrent =
     typeof options.isCurrent === "function" ? options.isCurrent : () => true;
+  const signal = options.signal;
   const nodes = [...target.querySelectorAll("[data-tikz-source]")];
   await Promise.all(
     nodes.map(async (node) => {
-      if (!isCurrent() || !node.isConnected) return;
+      if (signal?.aborted || !isCurrent() || !node.isConnected) return;
       const source = decodeURIComponent(
         node.getAttribute("data-tikz-source") ?? "",
       );
       try {
-        const svg = await renderTikzPreviewSvg(source, endpoint);
-        if (!isCurrent() || !node.isConnected) return;
+        const svg = await renderTikzPreviewSvg(source, endpoint, signal);
+        if (signal?.aborted || !isCurrent() || !node.isConnected) return;
         node.classList.remove("tikz-diagram-pending");
         node.removeAttribute("data-tikz-source");
         node.replaceChildren();
         node.insertAdjacentHTML("beforeend", svg);
       } catch (error) {
-        if (!isCurrent() || !node.isConnected) return;
+        if (signal?.aborted || !isCurrent() || !node.isConnected) return;
         node.classList.remove("tikz-diagram-pending");
         node.classList.add("tikz-diagram-failed");
         node.textContent =
@@ -146,13 +149,19 @@ export async function hydrateTikzDiagrams(target, options = {}) {
   );
 }
 
-async function renderTikzPreviewSvg(source, endpoint) {
+async function renderTikzPreviewSvg(source, endpoint, signal) {
+  if (signal?.aborted)
+    throw new DOMException("Preview cancelled", "AbortError");
   const key = `${endpoint}\u0000${source}`;
   if (tikzSvgCache.has(key)) return tikzSvgCache.get(key);
   const running = tikzRenderPromises.get(key);
   if (running) return running;
 
+  // Do not bind the shared render to the AbortSignal of the first preview.
+  // The editor aborts that signal on every keystroke; sharing its rejected
+  // promise made the next preview show "Preview cancelled" as well.
   const promise = (async () => {
+    let serverError = "";
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const response = await fetch(endpoint, {
@@ -166,8 +175,15 @@ async function renderTikzPreviewSvg(source, endpoint) {
           tikzSvgCache.set(key, payload.svg);
           return payload.svg;
         }
-        // 4xxは入力エラーなので再試行せず、ブラウザ側へ切り替える。
-        if (response.status >= 400 && response.status < 500) break;
+        // 4xxは入力エラーなので再試行もブラウザ側の組版も行わず、
+        // サーバーの診断をそのまま執筆者へ返す。
+        if (response.status >= 400 && response.status < 500) {
+          serverError =
+            typeof payload.error === "string"
+              ? payload.error
+              : "TikZソースを確認してください。";
+          break;
+        }
       } catch {}
       if (attempt === 0)
         await new Promise((resolve) =>
@@ -176,12 +192,15 @@ async function renderTikzPreviewSvg(source, endpoint) {
     }
 
     try {
+      if (serverError) throw new Error(serverError);
       assertSafeTikzSource(source);
       let fallbackError;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const svg = await renderWithFreeTikzJax(
-            normalizeTikzMathSlashes(source),
+          const unicode = maskTikzUnicode(normalizeTikzMathSlashes(source));
+          const svg = restoreTikzUnicode(
+            await renderWithFreeTikzJax(unicode.source),
+            unicode.replacements,
           );
           tikzSvgCache.set(key, svg);
           return svg;
@@ -208,7 +227,10 @@ async function renderTikzPreviewSvg(source, endpoint) {
     }
   })().finally(() => tikzRenderPromises.delete(key));
   tikzRenderPromises.set(key, promise);
-  return promise;
+  const svg = await promise;
+  if (signal?.aborted)
+    throw new DOMException("Preview cancelled", "AbortError");
+  return svg;
 }
 
 function renderWithFreeTikzJax(source) {
@@ -276,8 +298,9 @@ export async function renderArticleMarkdown(
     .use(remarkBrowserEditorialAssets)
     .use(remarkArticleTikzPlaceholder)
     .use(remarkRehype, { allowDangerousHtml: true });
+  processor.use(rehypeRaw);
   if (katex) processor.use(rehypeArticleKatex);
-  processor.use(rehypeRaw).use(rehypeStringify, { allowDangerousHtml: true });
+  processor.use(rehypeStringify, { allowDangerousHtml: true });
   const file = await processor.process(String(source ?? ""));
   return String(file);
 }

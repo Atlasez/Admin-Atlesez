@@ -222,8 +222,19 @@ const enhanceBodyEditor = (textarea) => {
       EditorView.updateListener.of((update) => {
         if (syncingFromTextarea) return;
         const selection = update.state.selection.main;
-        if (update.docChanged)
+        if (update.docChanged) {
+          const changes = [];
+          update.changes.iterChanges((fromA, toA, _fromB, _toB, insert) => {
+            changes.push({ from: fromA, to: toA, insert: insert.toString() });
+          });
           setNativeValue(textarea, update.state.doc.toString());
+          textarea.dispatchEvent(
+            new CustomEvent("atlasez:body-change", {
+              bubbles: true,
+              detail: { changes },
+            }),
+          );
+        }
         nativeSetSelectionRange.call(
           textarea,
           selection.from,
@@ -313,6 +324,18 @@ const enhanceBodyEditor = (textarea) => {
     syncEditorHeight();
   };
 
+  // Browser automation, paste handlers, and other integrations can update the
+  // backing textarea through the native value setter. Those updates do not
+  // necessarily pass through our property override, so reconcile them on the
+  // native input event as well. CodeMirror-originated input events are a no-op
+  // here because the document already has the same value.
+  const syncExternalInput = () => {
+    if (syncingFromTextarea) return;
+    if (nativeValue(textarea) !== view.state.doc.toString())
+      syncViewFromTextarea();
+  };
+  textarea.addEventListener("input", syncExternalInput);
+
   Object.defineProperty(textarea, "value", {
     configurable: true,
     get() {
@@ -386,7 +409,12 @@ const enhanceBodyEditor = (textarea) => {
   observer.observe(document.documentElement, { childList: true, subtree: true });
   view.dom.addEventListener("pointerdown", refreshRoot);
   view.dom.addEventListener("focusin", refreshRoot);
-  activeEditors.set(textarea, { view, observer, host });
+  activeEditors.set(textarea, {
+    view,
+    observer,
+    host,
+    syncExternalInput,
+  });
 };
 
 const initializeCodeMirror = () => {
@@ -396,8 +424,9 @@ const initializeCodeMirror = () => {
 };
 
 const destroyCodeMirror = () => {
-  activeEditors.forEach(({ view, observer, host }, textarea) => {
+  activeEditors.forEach(({ view, observer, host, syncExternalInput }, textarea) => {
     observer.disconnect();
+    textarea.removeEventListener("input", syncExternalInput);
     view.destroy();
     host.remove();
     delete textarea.dataset.codemirrorFocused;

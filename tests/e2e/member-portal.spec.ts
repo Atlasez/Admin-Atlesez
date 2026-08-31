@@ -32,6 +32,7 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
           timezone: "Asia/Tokyo",
           bio: "運営外向けプロフィール",
         },
+        discordUserId: "",
         profileChangeRequest: null,
       },
     });
@@ -48,6 +49,12 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
     "運営外向けプロフィール",
   );
   await expect(page.locator("[data-display-name]")).toHaveValue("山田 花子");
+  await expect(page.locator("[data-discord-status]")).toHaveText("未連携");
+  await expect(page.locator("[data-discord-link]")).toHaveText("Discordと連携");
+  await expect(page.locator("[data-discord-link]")).toHaveAttribute(
+    "href",
+    "/auth/discord/start?returnTo=%2Fadmin%2Fmember-profile%2F",
+  );
   await page.locator("[data-bio]").fill("更新した公開プロフィール");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-message]")).toContainText(
@@ -57,6 +64,30 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
     displayName: "山田 花子",
     bio: "更新した公開プロフィール",
   });
+});
+
+test("マイページはDiscord連携済みの状態と再連携ボタンを表示する", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({
+      json: {
+        email: "member@example.com",
+        discordUserId: "discord-user-123",
+        profile: { display_name: "連携済みメンバー" },
+      },
+    }),
+  );
+
+  await page.goto("admin/member-profile/");
+  await expect(page.locator("[data-discord-status]")).toHaveText("連携済み");
+  await expect(page.locator("[data-discord-link]")).toHaveText(
+    "Discord連携を更新",
+  );
+  await expect(page.locator("[data-discord-description]")).toContainText(
+    "連携済み",
+  );
 });
 
 test("APIがHTMLエラーを返してもJSON解析例外を画面へ表示しない", async ({

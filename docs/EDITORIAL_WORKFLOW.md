@@ -30,21 +30,23 @@ PRごとに自動実行される（`.github/workflows/ci.yml`）。
 
 CIが赤のうちはマージできない（mainブランチ保護を設定すること）。
 
-## 3. 査読（査読者）
+## 3. フィードバック（査読者）
 
-1. PRの差分と、CIビルドのプレビューで内容を確認
-2. 正確性・分かりやすさ・前提関係の妥当性をレビューコメントで指摘
-3. 承認時: frontmatterの `reviewers` に査読者名を追加し、`status: published` へ変更
-4. PRをApproveしてマージ
+1. 運営サイトの編集画面からフィードバック依頼を作成する
+2. 運営内タスクとして内容を確認し、修正後に担当タスクを「完了」にする
+3. 記事に紐づく全フィードバック依頼が完了したら、執筆者が「フィードバック完了・公開審査へ」を押す
+4. 分野統括、プロジェクトリーダーの順に運営サイトで公開審査を行う
 
-`status` の使い分け: `draft`（執筆中）→ `in-review`（査読依頼中）→ `published`（公開）。
-draft / in-review はビルドから除外されるため、**mainにマージされていても公開されない**。
+運営サイトの状態は `draft`（執筆中）→ `in-review`（フィードバック中）→
+公開審査→ `approved`（公開準備完了）で進み、公開用PRのMerge後に学習サイト側の
+Markdownが `status: published` となる。draft / in-review はビルドから除外されるため、
+**mainにマージされていても公開されない**。
 
 ## 4. 公開
 
-CI成功後、正規のnpmコマンドでCloudflare Workersへデプロイする。公開サイトは
-`npm run deploy:public`、運営用サイトは`npm run deploy:admin`を使用する
-（[DEPLOYMENT.md](DEPLOYMENT.md)）。
+公開審査の完了後、原稿は「公開準備完了」になり、運営管理者へ公開待ち通知が届く。運営管理者が編集画面の「公開する」を押すと、Workerが
+`Atlasez/Atlasez01` に公開用PRを作成する。公開ボタンはmainやCloudflareへ直接書き込まない。
+学習サイトの本番は同リポジトリの`main`をProduction branchとするCloudflare Workers Buildsで自動ビルドされるため、CI・差分確認後にPRをMergeすると反映される。公開状態は5分ごとにGitHubのmainと同期する。
 
 ## 5. 修正・報告対応
 

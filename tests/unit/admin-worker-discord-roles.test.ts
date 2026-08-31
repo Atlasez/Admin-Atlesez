@@ -323,6 +323,119 @@ describe("Discord managed role synchronization", () => {
     ).toBe(false);
   });
 
+  it("returns a visible failure when a manually selected role cannot be assigned", async () => {
+    class ManualRoleStatement {
+      constructor(private readonly query: string) {}
+
+      bind(..._args: unknown[]) {
+        return this;
+      }
+
+      async run() {
+        return { meta: { changes: 1 } };
+      }
+
+      async first<T>() {
+        if (this.query.includes("editorial_member_profiles"))
+          return {
+            university: "",
+            year: "",
+            interests: "",
+            affiliation_type: "",
+          } as T;
+        if (this.query.includes("atlasez_member_discord_accounts"))
+          return {
+            discord_user_id: "123456789012345678",
+            access_token_ciphertext: "",
+            refresh_token_ciphertext: "",
+            token_expires_at: null,
+          } as T;
+        return null as T | null;
+      }
+
+      async all<T>() {
+        if (this.query.includes("atlasez_discord_role_catalog"))
+          return {
+            results: [
+              { discord_role_id: "123456789012345678", is_managed: 0 },
+            ] as T[],
+          };
+        if (this.query.includes("report_admin_permissions"))
+          return { results: [] as T[] };
+        if (this.query.includes("atlasez_member_discord_role_assignments"))
+          return this.query.includes("is_active")
+            ? {
+                results: [
+                  { discord_role_id: "123456789012345678", is_active: 1 },
+                ] as T[],
+              }
+            : { results: [] as T[] };
+        return { results: [] as T[] };
+      }
+    }
+
+    const requests: Array<{ url: string; method: string }> = [];
+    fetchSpy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method });
+      if (url.endsWith("/guilds/guild-1"))
+        return Response.json({ name: "Atlasez学習サイト運営" });
+      if (url.endsWith("/members/123456789012345678"))
+        return Response.json({ roles: ["@everyone"] });
+      if (url.endsWith("/roles"))
+        return Response.json([
+          { id: "123456789012345678", name: "場の量子論" },
+        ]);
+      if (method === "PUT" && url.includes("/roles/123456789012345678"))
+        return new Response(null, { status: 403 });
+      throw new Error(`Unexpected Discord request: ${method} ${url}`);
+    });
+
+    const env = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "manager@example.com",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      DISCORD_GUILD_NAME: "Atlasez学習サイト運営",
+      REPORTS: {
+        prepare: (query: string) => new ManualRoleStatement(query),
+        batch: async () => [],
+      },
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/member-discord-roles", {
+        method: "PUT",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "member@example.com",
+          roleIds: ["123456789012345678"],
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as {
+      ok: boolean;
+      provisioning: { status: string; warnings: string[] };
+    };
+    expect(body.ok).toBe(false);
+    expect(body.provisioning.status).toBe("failed");
+    expect(body.provisioning.warnings[0]).toContain("場の量子論");
+    expect(body.provisioning.warnings[0]).toContain("Botのロール");
+    expect(
+      requests.some(
+        ({ url, method }) =>
+          url.endsWith("/roles/123456789012345678") && method === "PUT",
+      ),
+    ).toBe(true);
+  });
+
   it("reports Discord permission and hierarchy readiness without writing to Discord", async () => {
     class ReadinessStatement {
       constructor(private readonly query: string) {}

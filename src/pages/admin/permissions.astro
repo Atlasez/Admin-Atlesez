@@ -3,11 +3,11 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
 const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.data.order);
 ---
-<AdminLayout title="運営者・担当分野管理" description="運営内運営専用の参加者管理" darkReaderLock={true}>
+<AdminLayout title="運営者・担当分野管理" description="運営内運営専用の参加者管理">
   <main class="member-admin" data-member-admin>
     <header class="member-admin__header">
       <div>
-        <p class="member-admin__eyebrow">ATLAS / ACCESS CONTROL</p>
+        <p class="member-admin__eyebrow">権限管理</p>
         <h1>運営者・担当分野管理</h1>
         <p class="member-admin__lead">運営メンバーの権限、担当分野、公開フローの統括をまとめて管理します。</p>
       </div>
@@ -33,10 +33,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     </section>
 
     <section class="member-admin__add action-card workflow-role-admin" aria-labelledby="workflow-role-title">
-      <div class="action-card__heading"><span class="action-card__step">03</span><div><p>公開フロー</p><h2 id="workflow-role-title">分野統括の割り当て</h2><small>「執筆完了」後の公開審査を担当するロールです。</small></div></div>
+      <div class="action-card__heading"><span class="action-card__step">03</span><div><p>公開フロー</p><h2 id="workflow-role-title">分野統括の割り当て</h2><small>「執筆完了」後の公開審査を担当するロールです。同じ分野に複数人、1人が複数分野を兼任できます。</small></div></div>
       <form data-add-workflow-role>
-        <label>メールアドレス<input type="email" name="email" required maxlength="320" placeholder="coordinator@example.com" /></label>
-        <label>統括する分野<select name="subject" required>{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}</option>)}</select></label>
+        <label>担当者のメールアドレス<input type="email" name="email" required maxlength="320" list="workflow-coordinator-members" placeholder="coordinator@example.com" /><datalist id="workflow-coordinator-members" data-workflow-coordinator-members></datalist><small>既存メンバーは候補から選べます。未登録のメールアドレスも追加できます。</small></label>
+        <label class="workflow-role-field--subjects">統括する分野（複数選択可）<select name="subject" multiple required size="5" aria-describedby="workflow-role-subject-help">{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}</option>)}</select><small id="workflow-role-subject-help">Ctrl（Windows）または⌘（Mac）を押しながら選択すると、複数分野をまとめて割り当てられます。</small><output data-workflow-role-selection aria-live="polite">0分野を選択中</output></label>
         <button type="submit" class="button-primary">統括を追加</button>
       </form>
       <div class="workflow-role-list" data-workflow-role-list><small>読み込み中…</small></div>
@@ -44,7 +44,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     </div>
 
     <section class="member-admin__members" aria-labelledby="member-list-title">
-      <div class="member-admin__section-heading"><div><p class="member-admin__eyebrow">運営メンバー</p><h2 id="member-list-title">参加者一覧</h2><small>登録済みメンバーの担当権限とプロフィールを確認できます。</small></div><span class="member-admin__count" data-member-count></span></div>
+      <div class="member-admin__section-heading"><div><p class="member-admin__eyebrow">運営メンバー</p><h2 id="member-list-title">参加者一覧</h2><small>登録済みメンバーの概要を確認できます。名前をクリックすると個人設定を開けます。</small></div><span class="member-admin__count" data-member-count></span></div>
       <div class="member-toolbar" aria-label="参加者の検索と絞り込み">
         <label class="member-toolbar__search">参加者を検索<input type="search" data-member-search placeholder="名前・メールアドレスで検索" autocomplete="off" /></label>
         <label>表示を絞り込む<select data-member-filter><option value="all">すべての参加者</option><option value="unconnected">Discord未連携</option><option value="no-roles">Discord役職なし</option><option value="has-roles">Discord役職あり</option></select></label>
@@ -60,7 +60,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
           <button type="button" class="member-modal__close" data-member-modal-close aria-label="閉じる">×</button>
         </header>
         <div class="member-modal__body" data-member-modal-content></div>
-        <footer class="member-modal__footer"><output data-member-modal-message aria-live="polite"></output><button type="button" class="member-modal__cancel" data-member-modal-close>閉じる</button><button type="button" class="member-edit-form__save" data-member-modal-save>保存してDiscordへ同期</button></footer>
+        <footer class="member-modal__footer"><output data-member-modal-message aria-live="polite"></output><button type="button" class="member-modal__cancel" data-member-modal-close>閉じる</button><button type="button" class="member-modal__save" data-member-modal-save>保存してDiscordへ同期</button></footer>
       </div>
     </dialog>
   </main>
@@ -69,24 +69,17 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 <style is:global>
   .member-admin{box-sizing:border-box;margin:0 auto;max-width:1180px;padding:0 1.25rem 4rem;color:var(--text-primary)}
   .member-admin *{box-sizing:border-box}.member-admin__header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.2rem}.member-admin__header p,.member-admin__section-heading p{color:var(--accent-primary);font-size:.74rem;font-weight:800;letter-spacing:.09em;margin:0 0 .35rem}.member-admin__header h1{font-size:clamp(1.65rem,3vw,2.2rem);margin:0}.member-admin__header span{color:var(--text-secondary);display:block;font-size:.88rem;line-height:1.6;margin-top:.5rem}
-  .member-admin__add{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.8rem;grid-template-columns:185px 1fr;margin:1.2rem 0 1.5rem;padding:.9rem 1rem}.member-admin__add p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.08em;margin:0 0 .2rem}.member-admin__add h2{font-size:1rem;margin:0}.member-admin__add form{align-items:end;display:grid;gap:.55rem;grid-template-columns:minmax(0,1fr) minmax(160px,.7fr) auto}.member-admin__add label,.member-edit-form label{align-self:start;color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.28rem}.member-admin input,.member-admin select{appearance:auto;background:var(--background-primary)!important;border:1px solid var(--border-default)!important;border-radius:0!important;color:var(--text-primary)!important;font:inherit!important;line-height:1.2!important;min-height:2.35rem!important;outline:none;padding:.45rem .55rem!important;width:100%!important}.member-admin input:focus,.member-admin select:focus{border-color:var(--accent-primary)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary) 18%,transparent)}.member-admin button{appearance:none;border-radius:0!important;cursor:pointer;font:inherit!important;font-size:.78rem!important;font-weight:800!important;line-height:1.2!important;min-height:2.35rem!important;padding:.45rem .65rem!important}.member-admin__add button,.member-action--sync,.member-edit-form__save{background:var(--accent-primary)!important;border:1px solid var(--accent-primary)!important;color:#fff!important}.member-admin__add output{color:var(--text-secondary);font-size:.78rem;grid-column:2/-1;min-height:1em}
+  .member-admin__add{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.8rem;grid-template-columns:185px 1fr;margin:1.2rem 0 1.5rem;padding:.9rem 1rem}.member-admin__add p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.08em;margin:0 0 .2rem}.member-admin__add h2{font-size:1rem;margin:0}.member-admin__add form{align-items:end;display:grid;gap:.55rem;grid-template-columns:minmax(0,1fr) minmax(160px,.7fr) auto}.member-admin__add label{align-self:start;color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.28rem}.member-admin input,.member-admin select{appearance:auto;background:var(--background-primary)!important;border:1px solid var(--border-default)!important;border-radius:0!important;color:var(--text-primary)!important;font:inherit!important;line-height:1.2!important;min-height:2.35rem!important;outline:none;padding:.45rem .55rem!important;width:100%!important}.member-admin input:focus,.member-admin select:focus{border-color:var(--accent-primary)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary) 18%,transparent)}.member-admin button{appearance:none;border-radius:0!important;cursor:pointer;font:inherit!important;font-size:.78rem!important;font-weight:800!important;line-height:1.2!important;min-height:2.35rem!important;padding:.45rem .65rem!important}.member-admin__add button,.member-action--sync,.member-modal__save{background:var(--accent-primary)!important;border:1px solid var(--accent-primary)!important;color:#fff!important}.member-admin__add output{color:var(--text-secondary);font-size:.78rem;grid-column:2/-1;min-height:1em}
   .member-admin__add select[multiple]{min-height:7.2rem!important}.discord-role-catalog{border-left:3px solid var(--accent-primary)}.discord-role-catalog small{color:var(--text-secondary);display:block;font-size:.7rem;line-height:1.5;margin-top:.35rem}.discord-role-catalog__body{align-items:start;display:grid;gap:.35rem;min-width:0}.discord-role-catalog__body strong{color:var(--accent-primary);font-size:.8rem}.discord-role-catalog__body span{color:var(--text-secondary);font-size:.72rem;line-height:1.55;max-height:5.3rem;overflow:auto}
   .member-provision{background:transparent!important;border:1px solid var(--accent-primary)!important;color:var(--accent-primary)!important;justify-self:start}.member-provision:disabled{cursor:wait;opacity:.6}.member-admin__add output{grid-column:2/-1}
-  .workflow-role-admin{border-left:3px solid var(--accent-primary)}.workflow-role-admin small{color:var(--text-secondary);display:block;font-size:.7rem;line-height:1.5;margin-top:.35rem}.workflow-role-list{border-top:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:.4rem;grid-column:2/-1;padding-top:.6rem}.workflow-role-chip{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);display:inline-flex;gap:.35rem;padding:.35rem .5rem}.workflow-role-chip small{color:var(--text-secondary);margin:0}.workflow-role-chip button{background:transparent!important;border:0!important;color:var(--accent-primary)!important;min-height:auto!important;padding:.1rem!important}
-  .member-interest-picker{border:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:.28rem;padding:.4rem}.member-interest-picker label{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);display:flex;font-size:.68rem;font-weight:700;gap:.25rem;padding:.25rem .4rem}.member-interest-picker input{accent-color:var(--accent-primary);min-height:auto!important;width:auto!important}.member-edit-form select[data-interests]{display:none}
-  .member-admin__section-heading{align-items:end;display:flex;justify-content:space-between;margin-bottom:.7rem}.member-admin__section-heading h2{font-size:1.2rem;margin:0}.member-admin__section-heading span{color:var(--text-secondary);font-size:.78rem}.member-grid{align-items:start;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}.member-card{align-self:start;background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.7rem;min-width:0;padding:.85rem}.member-card:hover{border-color:var(--accent-primary)}.member-card__top{align-items:center;display:flex;gap:.65rem;min-width:0}.member-avatar{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:50%;display:grid;flex:0 0 2.8rem;height:2.8rem;object-fit:cover;place-items:center;width:2.8rem}.member-avatar--fallback{color:var(--accent-primary);font-size:1rem;font-weight:800}.member-card__identity{min-width:0}.member-card__name{font-size:.98rem;font-weight:800;line-height:1.3}.member-card__email{color:var(--text-secondary);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.member-card__role{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.7rem;margin-left:auto;padding:.22rem .42rem;white-space:nowrap}.member-card__facts{align-self:start;display:flex;flex-wrap:wrap;gap:.35rem}.member-fact{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.7rem;line-height:1.2;padding:.25rem .42rem}.member-fact b{color:var(--accent-primary)}.member-card__actions{align-self:start;display:flex;gap:.4rem}.member-action--sync{flex:1}.member-action--remove{background:transparent!important;border:1px solid var(--border-default)!important;color:var(--text-secondary)!important}.member-card details{border-top:1px solid var(--border-default);padding-top:.62rem}.member-card summary{color:var(--accent-primary);cursor:pointer;font-size:.76rem;font-weight:800;list-style:none}.member-card summary::-webkit-details-marker{display:none}.member-card summary::before{content:"＋ ";font-size:.9rem}.member-card details[open] summary::before{content:"− "}.member-edit-form{align-items:start;display:grid;gap:.65rem;grid-template-columns:minmax(0,1.45fr) minmax(96px,.55fr);margin-top:.65rem}.member-edit-form .member-edit-form__subjects{grid-column:1/-1}.member-edit-form select[multiple]{height:7.4rem!important;min-height:7.4rem!important;padding:.2rem!important}.member-edit-form small{color:var(--text-secondary);font-size:.66rem;line-height:1.4}.member-edit-form__save{grid-column:1/-1;justify-self:start}.member-empty{border:1px dashed var(--border-default);color:var(--text-secondary);padding:2rem;text-align:center}
-  @media(max-width:720px){.member-admin{padding:0 .85rem 3rem}.member-admin__header{padding-top:1.25rem}.member-admin__add{display:block;padding:.85rem}.member-admin__add form{display:grid;grid-template-columns:1fr;margin-top:.8rem}.member-admin__add output{display:block;margin-top:.55rem}.member-grid{grid-template-columns:1fr}.member-card{padding:.75rem}.member-card__top{align-items:flex-start}.member-card__role{margin-left:0}.member-card__top{flex-wrap:wrap}.member-card__actions{display:grid;grid-template-columns:1fr 1fr}.member-edit-form{grid-template-columns:1fr}.member-edit-form .member-edit-form__subjects,.member-edit-form__save{grid-column:auto}.member-admin__section-heading{align-items:start;display:block}.member-admin__section-heading span{display:block;margin-top:.25rem}}
+  .workflow-role-admin{border-left:3px solid var(--accent-primary)}.workflow-role-admin small{color:var(--text-secondary);display:block;font-size:.7rem;line-height:1.5;margin-top:.35rem}.workflow-role-list{border-top:1px solid var(--border-default);display:grid;gap:.65rem;grid-column:2/-1;padding-top:.6rem}.workflow-role-summary{color:var(--text-secondary);font-size:.72rem}.workflow-role-summary strong{color:var(--accent-primary)}.workflow-role-group{background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.45rem;padding:.55rem .65rem}.workflow-role-group__heading{align-items:center;display:flex;gap:.5rem;justify-content:space-between}.workflow-role-group__heading h3{font-size:.78rem;margin:0}.workflow-role-group__heading span{color:var(--text-secondary);font-size:.68rem}.workflow-role-assignees{display:flex;flex-wrap:wrap;gap:.35rem}.workflow-role-chip{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);display:inline-flex;gap:.35rem;padding:.35rem .5rem}.workflow-role-chip__identity{display:grid;gap:.08rem}.workflow-role-chip__identity b{font-size:.74rem}.workflow-role-chip__identity small{color:var(--text-secondary);font-size:.64rem;margin:0}.workflow-role-chip button{background:transparent!important;border:0!important;color:var(--accent-primary)!important;min-height:auto!important;padding:.1rem!important}.workflow-role-unassigned{color:var(--text-secondary);font-size:.7rem}.workflow-role-unassigned summary{cursor:pointer;font-weight:800}.workflow-role-unassigned span{display:block;line-height:1.55;margin-top:.35rem}
+  .member-interest-picker{border:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:.28rem;padding:.4rem}.member-interest-picker label{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);display:flex;font-size:.68rem;font-weight:700;gap:.25rem;padding:.25rem .4rem}.member-interest-picker input{accent-color:var(--accent-primary);min-height:auto!important;width:auto!important}
+  .member-admin__section-heading{align-items:end;display:flex;justify-content:space-between;margin-bottom:.7rem}.member-admin__section-heading h2{font-size:1.2rem;margin:0}.member-admin__section-heading span{color:var(--text-secondary);font-size:.78rem}.member-grid{align-items:start;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}.member-card{align-self:start;background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.7rem;min-width:0;padding:.85rem}.member-card:hover{border-color:var(--accent-primary)}.member-card__top{align-items:center;display:flex;gap:.65rem;min-width:0}.member-avatar{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:50%;display:grid;flex:0 0 2.8rem;height:2.8rem;object-fit:cover;place-items:center;width:2.8rem}.member-avatar--fallback{color:var(--accent-primary);font-size:1rem;font-weight:800}.member-card__identity{min-width:0}.member-card__name{font-size:.98rem;font-weight:800;line-height:1.3}.member-card__email{color:var(--text-secondary);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.member-card__role{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.7rem;margin-left:auto;padding:.22rem .42rem;white-space:nowrap}.member-card__facts{align-self:start;display:flex;flex-wrap:wrap;gap:.35rem}.member-fact{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.7rem;line-height:1.2;padding:.25rem .42rem}.member-fact b{color:var(--accent-primary)}.member-card__actions{align-self:start;display:flex;gap:.4rem}.member-action--sync{flex:1}.member-action--remove{background:transparent!important;border:1px solid var(--border-default)!important;color:var(--text-secondary)!important}.member-empty{border:1px dashed var(--border-default);color:var(--text-secondary);padding:2rem;text-align:center}
+  @media(max-width:720px){.member-admin{padding:0 .85rem 3rem}.member-admin__header{padding-top:1.25rem}.member-admin__add{display:block;padding:.85rem}.member-admin__add form{display:grid;grid-template-columns:1fr;margin-top:.8rem}.member-admin__add output{display:block;margin-top:.55rem}.member-grid{grid-template-columns:1fr}.member-card{padding:.75rem}.member-card__top{align-items:flex-start}.member-card__role{margin-left:0}.member-card__top{flex-wrap:wrap}.member-card__actions{display:grid;grid-template-columns:1fr 1fr}.member-admin__section-heading{align-items:start;display:block}.member-admin__section-heading span{display:block;margin-top:.25rem}}
 </style>
 
 <style is:global>
-  /* 保存操作はカード上部の保存ボタンに統合。編集欄は閉じるだけにする。 */
-  .member-edit-form__close {
-    background: transparent !important;
-    border: 1px solid var(--border-default) !important;
-    color: var(--text-secondary) !important;
-    grid-column: 1 / -1;
-    justify-self: start;
-  }
+  /* カードは概要表示に絞り、保存操作は個人設定モーダルへ集約する。 */
   .member-action--promote {
     background: var(--background-secondary) !important;
     border: 1px solid var(--accent-primary) !important;
@@ -95,8 +88,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <style is:global>
-  /* 運営者管理は、操作の確実性を優先した白背景のトランザクションUIに統一する。 */
-  html:has(.member-admin) {
+  /* 運営者管理は、操作の確実性を優先したトランザクションUIに統一する。 */
+  html:has(.member-admin):not([data-pref-bg="dark"]) {
     --text-primary: #17324d !important;
     --text-secondary: #526779 !important;
     --background-primary: #ffffff !important;
@@ -110,8 +103,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     --link: #075a91 !important;
     color-scheme: light;
   }
-  body:has(.member-admin) { background: #f3f7fb; color: #17324d; }
-  body:has(.member-admin) .admin-layout-main { background: #f3f7fb; }
+  html:not([data-pref-bg="dark"]) body:has(.member-admin) { background: #f3f7fb; color: #17324d; }
+  html:not([data-pref-bg="dark"]) body:has(.member-admin) .admin-layout-main { background: #f3f7fb; }
   .member-admin { max-width: 1240px; padding: 2rem 1.25rem 5rem; }
   .member-admin__header { align-items: center; background: #fff; border: 1px solid #cddce7; border-top: 4px solid #075a91; box-shadow: 0 2px 8px rgb(18 62 91 / 6%); display: flex; gap: 1.5rem; justify-content: space-between; margin: 0 0 1.25rem; padding: 1.35rem 1.5rem 1.2rem; }
   .member-admin__eyebrow { color: #075a91 !important; font-size: .7rem !important; font-weight: 900 !important; letter-spacing: .1em; margin: 0 0 .3rem !important; }
@@ -138,7 +131,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-admin input::placeholder { color: #8396a5; }
   .member-admin input:focus, .member-admin select:focus { border-color: #075a91 !important; box-shadow: 0 0 0 3px rgb(7 90 145 / 15%) !important; }
   .member-admin button { border-radius: 4px !important; min-height: 2.65rem !important; padding: .55rem .85rem !important; }
-  .member-admin .button-primary, .member-admin .member-action--sync, .member-admin .member-edit-form__save { background: #075a91 !important; border: 1px solid #075a91 !important; color: #fff !important; }
+  .member-admin .button-primary, .member-admin .member-action--sync, .member-admin .member-modal__save { background: #075a91 !important; border: 1px solid #075a91 !important; color: #fff !important; }
   .member-admin .button-primary { box-shadow: 0 2px 4px rgb(7 90 145 / 18%); white-space: nowrap; }
   .member-admin .button-primary:hover, .member-admin .member-action--sync:hover { background: #064b78 !important; }
   .member-admin__sync { align-items: center; border-top: 1px solid #dbe7ef; display: flex; gap: 1rem; grid-column: 1 / -1; justify-content: space-between; padding-top: .9rem; }
@@ -153,7 +146,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-admin__workspace .action-card output { color: #526779; font-size: .72rem; grid-column: 1 / -1; min-height: 1.1em; }
   .member-admin__workspace .discord-readiness-message { background: #f3f7fb; border-left: 3px solid #7894aa; padding: .5rem .6rem; }
   .member-admin__workspace .workflow-role-list { border-top: 1px solid #dbe7ef; display: flex; flex-wrap: wrap; gap: .45rem; grid-column: 1 / -1; padding-top: .85rem; }
-  .workflow-role-chip { background: #f3f7fb !important; border: 1px solid #b9ccda !important; border-radius: 3px; color: #17324d; padding: .38rem .55rem !important; }
+  .member-admin__workspace .workflow-role-list { display: grid; }
+  .workflow-role-group { background: #f3f7fb !important; border: 1px solid #b9ccda !important; }
+  .workflow-role-chip { background: #fff !important; border: 1px solid #b9ccda !important; border-radius: 3px; color: #17324d; padding: .38rem .55rem !important; }
   .workflow-role-chip small { color: #526779 !important; }
   .workflow-role-chip button { color: #075a91 !important; }
   .member-admin__members { background: #fff; border: 1px solid #cddce7; box-shadow: 0 2px 7px rgb(18 62 91 / 5%); padding: 1.15rem 1.2rem 1.3rem; }
@@ -178,8 +173,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-admin .member-action--remove, .member-admin .member-action--promote { background: #fff !important; border: 1px solid #b9ccda !important; color: #526779 !important; }
   .member-admin .member-action--promote { color: #075a91 !important; }
   .member-admin .member-action--remove:hover, .member-admin .member-action--promote:hover { background: #f3f7fb !important; border-color: #075a91 !important; }
-  .member-card details { border-top: 1px solid #dbe7ef; }
-  .member-card summary { color: #075a91 !important; }
   .member-interest-picker { background: #f3f7fb; border: 1px solid #b9ccda; border-radius: 4px; padding: .5rem !important; }
   .member-interest-picker label { background: #fff !important; border: 1px solid #cddce7 !important; border-radius: 3px !important; color: #526779 !important; padding: .34rem .45rem !important; }
   .member-interest-picker label:has(input:checked) { background: #e4f1f9 !important; border-color: #2d78a8 !important; box-shadow: inset 0 0 0 1px #2d78a8; color: #075a91 !important; }
@@ -187,7 +180,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-empty { background: #f3f7fb; border: 1px dashed #9fb4c4; color: #526779; padding: 2.5rem; }
   .member-modal { background: transparent; border: 0; height: 100dvh; margin: 0; max-height: none; max-width: none; padding: 0; width: 100%; }
   .member-modal::backdrop { background: rgb(10 33 52 / 52%); backdrop-filter: blur(3px); }
-  .member-modal__shell { background: #fff; border-left: 5px solid #075a91; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; margin-left: auto; max-width: 980px; overflow: hidden; }
+  .member-modal__shell { background: #fff; border-left: 5px solid #075a91; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; margin: 0 auto; max-width: 980px; overflow: hidden; width: 100%; }
   .member-modal__header { align-items: start; border-bottom: 1px solid #d3e0e9; display: flex; gap: 1rem; justify-content: space-between; padding: 1.25rem 1.5rem 1rem; }
   .member-modal__header p { color: #075a91; font-size: .68rem; font-weight: 900; letter-spacing: .08em; margin: 0 0 .2rem; }
   .member-modal__header h2 { color: #17324d; font-size: 1.35rem; margin: 0; }
@@ -207,8 +200,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-modal__help { color: #526779; font-size: .66rem; line-height: 1.5; margin: 0; }
   .member-modal__footer { align-items: center; border-top: 1px solid #d3e0e9; display: flex; gap: .6rem; justify-content: flex-end; padding: .85rem 1.5rem; }
   .member-modal__footer output { color: #526779; font-size: .72rem; margin-right: auto; }
+  .member-modal__footer output[data-state="error"] { background: #fff1f0; border-left: 3px solid #c43d35; color: #8f2924; padding: .45rem .55rem; }
   .member-modal__cancel { background: #fff !important; border: 1px solid #b9ccda !important; color: #526779 !important; }
-  .member-modal__footer .member-edit-form__save { white-space: nowrap; }
+  .member-modal__save { white-space: nowrap; }
   @media (max-width: 720px) { .member-modal__shell { border-left: 0; max-width: none; } .member-modal__header, .member-modal__body, .member-modal__footer { padding-left: 1rem; padding-right: 1rem; } .member-modal__grid { grid-template-columns: 1fr; } .member-modal__wide { grid-column: auto; } .member-modal__link-row { grid-template-columns: 1fr; } .member-modal__footer { align-items: stretch; flex-wrap: wrap; } .member-modal__footer output { flex-basis: 100%; margin-right: 0; } .member-modal__footer button { flex: 1; } }
   @media (max-width: 820px) {
     .member-admin { padding: 1.25rem .85rem 3rem; }
@@ -278,17 +272,278 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-role-option input { accent-color: #075a91; flex: 0 0 auto; min-height: auto !important; width: auto !important; }
   .member-role-option--managed { cursor: not-allowed; opacity: .58; }
   .member-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
-  .member-edit-form select[data-permission-subjects] { height: 5rem !important; min-height: 5rem !important; }
   .member-interest-picker { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); max-height: 7.2rem; overflow: auto; }
   .member-interest-picker label { font-size: .62rem !important; justify-content: flex-start; min-height: 1.8rem; padding: .22rem .3rem !important; }
   .member-role-options { max-height: 8.5rem; }
   .member-role-option { font-size: .64rem; padding: .3rem .35rem; }
-  .member-card details[open] { background: #fbfdff; margin: 0 -.2rem; padding: .65rem .2rem 0; }
-  .member-card details[open] summary { background: #e4f1f9; padding: .45rem .55rem; }
   @media (max-width: 720px) {
     .member-toolbar { grid-template-columns: 1fr; }
     .member-toolbar__summary { grid-column: auto; }
     .member-role-options { grid-template-columns: 1fr; }
+  }
+</style>
+
+<style is:global>
+  /* 表示設定の「暗色」をこのページ固有の白背景指定で上書きしない。 */
+  html[data-pref-bg="dark"]:has(.member-admin) {
+    color-scheme: dark;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin),
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main {
+    background: #191a1c !important;
+    color: #e8e6e1;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__header,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal__shell {
+    background: #232427 !important;
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__header {
+    border-top-color: #7fa8cc !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__workspace .action-card,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-card {
+    box-shadow: 0 2px 8px rgb(0 0 0 / 24%);
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(h1, h2, h3, .member-admin__sync strong, .member-card__name, .member-card__discord-heading strong) {
+    color: #e8e6e1 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__lead, .member-admin__header-meta small, .member-admin label, .member-admin__sync small, .member-admin__workspace .action-card output, .member-card__email, .member-fact, .member-modal__header small, .member-modal__section > p, .member-modal__help, .member-modal__footer output, .member-role-picker__count, .member-toolbar__summary) {
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal__footer output[data-state="error"] {
+    background: #3a2424;
+    border-left-color: #ef8179;
+    color: #ffb8b2 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin small {
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__eyebrow, .member-admin__header-meta span, .action-card__heading p, .member-admin__section-heading p, .member-admin__count, .member-admin__section-heading h2, .member-modal__header p) {
+    color: #7fa8cc !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__header-meta span, .member-admin__count) {
+    background: #2b2c30 !important;
+    border-color: #6a6b70 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin input, .member-admin select) {
+    background: #191a1c !important;
+    border-color: #3d3e42 !important;
+    color: #e8e6e1 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin input::placeholder {
+    color: #8f8c84;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin input:focus, .member-admin select:focus) {
+    border-color: #7fa8cc !important;
+    box-shadow: 0 0 0 3px rgb(127 168 204 / 22%) !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__sync, .member-admin__workspace .workflow-role-list, .member-card__actions, .member-modal__header, .member-modal__footer) {
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin__workspace .discord-readiness-message, .workflow-role-chip, .member-toolbar, .member-card__discord, .member-role-picker, .member-interest-picker, .member-modal__section) {
+    background: #2b2c30 !important;
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-avatar, .member-card__role, .member-fact, .member-role-chip, .member-modal__close, .member-modal__cancel, .member-toolbar__reset) {
+    background: #191a1c !important;
+    border-color: #3d3e42 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-interest-picker label, .member-role-option) {
+    background: #232427 !important;
+    border-color: #3d3e42 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-interest-picker label:has(input:checked), .member-role-option:has(input:checked), .member-admin .member-provision:hover) {
+    background: #2b3b49 !important;
+    border-color: #7fa8cc !important;
+    color: #b9dcf6 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-role-chip, .member-role-option:hover, .member-admin .member-action--promote, .member-admin .member-provision, .member-toolbar__reset:hover) {
+    color: #9cc8ea !important;
+    border-color: #6a91b1 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .button-primary, .member-admin .member-action--sync, .member-admin .member-modal__save) {
+    background: #7fa8cc !important;
+    border-color: #7fa8cc !important;
+    color: #10151a !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin .member-provision {
+    background: #191a1c !important;
+    border-color: #7fa8cc !important;
+    color: #9cc8ea !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-admin .member-provision--secondary {
+    border-color: #6a6b70 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .button-primary:hover, .member-admin .member-action--sync:hover) {
+    background: #a8c8e2 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .member-action--remove, .member-admin .member-action--promote, .member-admin .member-modal__cancel, .member-admin .member-toolbar__reset) {
+    background: #191a1c !important;
+    border-color: #3d3e42 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) :is(.member-admin .member-action--remove:hover, .member-admin .member-action--promote:hover, .member-admin .member-modal__cancel:hover, .member-admin .member-toolbar__reset:hover) {
+    background: #2b2c30 !important;
+    border-color: #7fa8cc !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-empty {
+    background: #232427 !important;
+    border-color: #6a6b70 !important;
+    color: #b5b1a8 !important;
+  }
+  html[data-pref-bg="dark"] body:has(.member-admin) .member-modal::backdrop {
+    background: rgb(0 0 0 / 68%);
+  }
+</style>
+
+<style is:global>
+  /* 管理画面は情報を近づけ、個人設定は操作に集中できる大きさにする。 */
+  .member-admin {
+    padding: 1rem 1.25rem 3rem;
+  }
+  .member-admin__header {
+    gap: 1rem;
+    margin-bottom: .85rem;
+    padding: .95rem 1.1rem .85rem;
+  }
+  .member-admin__header h1 {
+    font-size: clamp(1.45rem, 2.5vw, 1.9rem);
+  }
+  .member-admin__lead {
+    margin-top: .3rem;
+  }
+  .member-admin__workspace {
+    gap: .75rem;
+    margin-bottom: 1rem;
+  }
+  .member-admin__workspace .action-card {
+    gap: .7rem;
+    padding: .85rem .95rem .8rem;
+  }
+  .member-admin__add {
+    gap: .65rem;
+    margin: .8rem 0 1rem;
+    padding: .75rem .85rem;
+  }
+  .member-admin__add select[multiple] {
+    min-height: 5.6rem !important;
+  }
+  .member-admin__sync {
+    gap: .7rem;
+    padding-top: .65rem;
+  }
+  .member-admin__workspace output:empty {
+    display: none;
+    min-height: 0;
+  }
+  .workflow-role-admin form { align-items: start !important; }
+  .workflow-role-admin .workflow-role-field--subjects select[multiple] { min-height: 8.4rem !important; }
+  .workflow-role-admin .workflow-role-field--subjects output { color: #075a91; font-size: .68rem; font-weight: 800; min-height: 0; }
+  .member-admin__members {
+    padding: .85rem 1rem 1rem;
+  }
+  .member-admin__section-heading {
+    margin-bottom: .6rem;
+    padding-bottom: .55rem;
+  }
+  .member-toolbar {
+    gap: .5rem;
+    margin-bottom: .7rem;
+    padding: .6rem .7rem;
+  }
+  .member-grid {
+    gap: .6rem;
+  }
+  .member-card {
+    gap: .55rem;
+    padding: .75rem !important;
+  }
+  .member-card__actions {
+    padding-top: .6rem;
+  }
+  .member-modal {
+    height: 100dvh;
+    padding: 1rem;
+    width: 100%;
+  }
+  .member-modal__shell {
+    border: 1px solid var(--border-default) !important;
+    border-top: 4px solid var(--accent-primary) !important;
+    border-radius: 10px;
+    box-shadow: 0 18px 60px rgb(0 0 0 / 24%);
+    height: min(760px, calc(100dvh - 2rem)) !important;
+    max-height: calc(100dvh - 2rem);
+    max-width: 900px;
+    width: min(100%, 900px);
+  }
+  .member-modal__header {
+    padding: .8rem 1.1rem .7rem;
+  }
+  .member-modal__header h2 {
+    font-size: 1.2rem;
+  }
+  .member-modal__body {
+    padding: .85rem 1.1rem 1rem;
+    scrollbar-gutter: stable;
+  }
+  .member-modal__grid {
+    gap: .7rem;
+  }
+  .member-modal select[multiple] {
+    min-height: 5.6rem !important;
+  }
+  .member-modal__section,
+  .member-role-picker {
+    gap: .5rem;
+    padding: .65rem;
+  }
+  .member-modal__footer {
+    box-shadow: 0 -5px 14px rgb(0 0 0 / 7%);
+    padding: .7rem 1.1rem;
+  }
+  .member-modal__footer output {
+    max-width: 45%;
+    overflow-wrap: anywhere;
+  }
+  .member-modal__save,
+  .member-modal__cancel {
+    min-width: 7rem;
+  }
+  .member-admin :is(button, input, select):focus-visible,
+  .member-card__name:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
+    outline-offset: 2px;
+  }
+  @media (max-width: 720px) {
+    .member-admin {
+      padding: .75rem .7rem 2rem;
+    }
+    .member-admin__header {
+      padding: .85rem;
+    }
+    .member-modal {
+      padding: .5rem;
+    }
+    .member-modal__shell {
+      height: calc(100dvh - 1rem) !important;
+      max-height: calc(100dvh - 1rem);
+    }
+    .member-modal__header,
+    .member-modal__body,
+    .member-modal__footer {
+      padding-left: .85rem;
+      padding-right: .85rem;
+    }
+    .member-modal__footer output {
+      max-width: none;
+    }
   }
 </style>
 
@@ -305,6 +560,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const memberFilterSummary = root.querySelector<HTMLElement>("[data-member-filter-summary]")!;
     const workflowRoleForm = root.querySelector<HTMLFormElement>("[data-add-workflow-role]")!;
     const workflowRoleList = root.querySelector<HTMLElement>("[data-workflow-role-list]")!;
+    const workflowRoleSelection = root.querySelector<HTMLOutputElement>("[data-workflow-role-selection]")!;
+    const workflowCoordinatorMembers = root.querySelector<HTMLDataListElement>("[data-workflow-coordinator-members]")!;
     let discordRoles: Array<{ discord_role_id: string; name: string; position: number; is_managed: number }> = [];
     let discordRoleHydrationAttempted = false;
     let memberRecords: any[] = [];
@@ -315,18 +572,39 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const memberModalEmail = root.querySelector<HTMLElement>("[data-member-modal-email]")!;
     const memberModalContent = root.querySelector<HTMLElement>("[data-member-modal-content]")!;
     const memberModalMessage = root.querySelector<HTMLOutputElement>("[data-member-modal-message]")!;
+    const setMemberModalMessage = (value: string, state: "idle" | "error" = "idle") => { memberModalMessage.value = value; memberModalMessage.dataset.state = state; };
     const memberModalSave = root.querySelector<HTMLButtonElement>("[data-member-modal-save]")!;
     let activeMemberEmail = "";
     const discordRoleCount = root.querySelector<HTMLElement>("[data-discord-role-count]")!;
     const discordRoleList = root.querySelector<HTMLElement>("[data-discord-role-list]")!;
     const esc = (value: string) => value.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char] ?? char));
     const subjectLabels = new Map(Array.from(form.querySelectorAll("option")).map(option => [option.value, option.textContent ?? option.value]));
+    const workflowSubjectLabels = new Map(Array.from(subjectLabels.entries()).map(([value, label]) => [value, label.replace(/（担当）$/, "")]));
     const universities = ["北海道大学","東北大学","東京大学","東京科学大学","東京都立大学","早稲田大学","横浜国立大学","静岡大学","新潟大学","岐阜大学","立命館大学","京都大学","大阪大学","大阪公立大学","神戸大学","広島大学","九州大学","長崎大学","東洋大学","UCL","国立台湾大学","山口大学","慶應義塾大学","東京理科大学","中央大学","名古屋大学","筑波大学","名古屋市立大学","名城大学","Korea university, School of biomedical engineering","立教大学","Swarthmore College","北見工業大学","ZEN大学"];
     const years = ["中1","中2","中3","高1","高2","高3","高専1","高専2","高専3","高専4","高専5","B1","B2","B3","B4","M1","M2","D1","D2","D3","教職員・研究者","社会人","その他"];
     const fields = ["漢字","古文","漢文","地理","日本史","世界史","哲学","考古学","数学","物理","化学","地質","気象","海洋","天文","生物","情報","水産学","建築","薬学","中国語（普通話）","台湾華語","言語学","ページデザイン"];
     const opts = (items: string[], selected: string, multiple = false) => items.map(item => `<option value="${esc(item)}" ${multiple ? selected.split(",").includes(item) : selected === item ? "selected" : ""}>${esc(item)}</option>`).join("");
     const avatar = (member: any) => member.avatar_url ? `<img class="member-avatar" src="${esc(member.avatar_url)}" alt="" />` : `<span class="member-avatar member-avatar--fallback">${esc((member.display_name || "名").slice(0,1))}</span>`;
-    const renderWorkflowRoles = (roles: any[]) => { workflowRoleList.innerHTML = roles.length ? roles.map(role => `<span class="workflow-role-chip"><b>${esc(role.display_name || role.email)}</b><small>${esc(role.role === "project-leader" ? "プロジェクトリーダー" : (subjectLabels.get(role.subject) ?? role.subject) + "統括")}</small>${role.role === "subject-coordinator" ? `<button type="button" data-remove-workflow-role data-email="${esc(role.email)}" data-subject="${esc(role.subject)}" aria-label="${esc(role.email)}の統括を削除">×</button>` : ""}</span>`).join("") : "<small>分野統括はまだ割り当てられていません。</small>"; };
+    const renderWorkflowRoles = (roles: any[]) => {
+      const coordinators = roles.filter(role => role.role === "subject-coordinator" && role.subject);
+      const leaders = roles.filter(role => role.role === "project-leader");
+      const grouped = new Map<string, any[]>();
+      coordinators.forEach(role => grouped.set(role.subject, [...(grouped.get(role.subject) ?? []), role]));
+      const subjectsWithAssignments = Array.from(grouped.entries()).sort((left, right) => (workflowSubjectLabels.get(left[0]) ?? left[0]).localeCompare(workflowSubjectLabels.get(right[0]) ?? right[0], "ja"));
+      const assignedEmails = new Set(coordinators.map(role => String(role.email).toLowerCase()));
+      const subjectCount = subjectsWithAssignments.length;
+      const multiSubjectCount = Array.from(new Set(coordinators.map(role => String(role.email).toLowerCase()))).filter(email => coordinators.filter(role => String(role.email).toLowerCase() === email).length > 1).length;
+      const unassignedSubjects = Array.from(subjectLabels.keys()).filter(subject => subject !== "*" && !grouped.has(subject));
+      const chip = (role: any) => `<span class="workflow-role-chip" title="${esc(role.email)}"><span class="workflow-role-chip__identity"><b>${esc(role.display_name || role.email)}</b><small>${esc(role.email)}</small></span><button type="button" data-remove-workflow-role data-email="${esc(role.email)}" data-subject="${esc(role.subject)}" aria-label="${esc(role.display_name || role.email)}の${esc(workflowSubjectLabels.get(role.subject) ?? role.subject)}統括を削除">×</button></span>`;
+      const groups = subjectsWithAssignments.map(([subject, assigned]) => `<section class="workflow-role-group" data-workflow-subject-group="${esc(subject)}"><header class="workflow-role-group__heading"><h3>${esc(workflowSubjectLabels.get(subject) ?? subject)}</h3><span>${assigned.length}人（共同担当）</span></header><div class="workflow-role-assignees">${assigned.sort((left, right) => String(left.display_name || left.email).localeCompare(String(right.display_name || right.email), "ja")).map(chip).join("")}</div></section>`).join("");
+      const leaderMarkup = leaders.length ? `<section class="workflow-role-group"><header class="workflow-role-group__heading"><h3>プロジェクトリーダー</h3><span>${leaders.length}人</span></header><div class="workflow-role-assignees">${leaders.map(role => `<span class="workflow-role-chip" title="${esc(role.email)}"><span class="workflow-role-chip__identity"><b>${esc(role.display_name || role.email)}</b><small>${esc(role.email)}</small></span></span>`).join("")}</div></section>` : "";
+      const unassignedMarkup = unassignedSubjects.length ? `<details class="workflow-role-unassigned"><summary>未割り当て：${unassignedSubjects.length}分野</summary><span>${unassignedSubjects.map(subject => esc(workflowSubjectLabels.get(subject) ?? subject)).join("、")}</span></details>` : `<small class="workflow-role-unassigned">全分野に少なくとも1人の統括が割り当てられています。</small>`;
+      const coordinatorOptions = new Map<string, string>();
+      memberRecords.forEach(member => coordinatorOptions.set(String(member.email).toLowerCase(), String(member.display_name || member.email)));
+      coordinators.forEach(role => coordinatorOptions.set(String(role.email).toLowerCase(), String(role.display_name || role.email)));
+      workflowCoordinatorMembers.innerHTML = Array.from(coordinatorOptions.entries()).map(([email, displayName]) => `<option value="${esc(email)}">${esc(displayName)}</option>`).join("");
+      workflowRoleList.innerHTML = `<div class="workflow-role-summary"><strong>${subjectCount}分野</strong>・<strong>${assignedEmails.size}人</strong>を割り当て中${multiSubjectCount ? `（${multiSubjectCount}人が兼任）` : ""}。各分野は複数人の共同担当にできます。</div>${groups || "<small>分野統括はまだ割り当てられていません。</small>"}${leaderMarkup}${unassignedMarkup}`;
+    };
     const modalMarkup = (member: any) => {
       const memberSubjects = String(member.subjects ?? "").split(",").filter(Boolean);
       const memberRoleIds = String(member.discord_role_ids ?? "").split(",").filter(Boolean);
@@ -345,7 +623,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       memberModalTitle.textContent = member.display_name || "表示名未設定";
       memberModalEmail.textContent = member.email;
       memberModalContent.innerHTML = modalMarkup(member);
-      memberModalMessage.value = "";
+      setMemberModalMessage("");
       if (!memberModal.open) memberModal.showModal();
     };
     const closeMemberModal = () => { if (memberModal.open) memberModal.close(); activeMemberEmail = ""; };
@@ -368,15 +646,15 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const input = memberModalContent.querySelector<HTMLInputElement>("[data-modal-discord-id]");
       if (!input) return;
       linkButton.disabled = true;
-      memberModalMessage.value = "Discordユーザーを確認中…";
+      setMemberModalMessage("Discordユーザーを確認中…");
       try {
         const response = await fetch("/api/admin/member-discord-user", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,discordUserId:input.value.trim()})});
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error ?? "Discord連携に失敗しました。");
-        memberModalMessage.value = discordSyncMessage("Discord連携を保存しました。", data.provisioning);
+        setMemberModalMessage(discordSyncMessage("Discord連携を保存しました。", data.provisioning));
         closeMemberModal();
         await load();
-      } catch (error) { memberModalMessage.value = error instanceof Error ? error.message : "Discord連携に失敗しました。"; }
+      } catch (error) { setMemberModalMessage(error instanceof Error ? error.message : "Discord連携に失敗しました。", "error"); }
       finally { linkButton.disabled = false; }
     });
     memberModalSave.addEventListener("click", async () => {
@@ -385,21 +663,30 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const interests = Array.from(memberModalContent.querySelectorAll<HTMLInputElement>("[data-modal-interest]:checked")).map(input => input.value);
       const discordRoleIds = Array.from(memberModalContent.querySelectorAll<HTMLInputElement>("[data-modal-discord-role]:checked")).map(input => input.value);
       memberModalSave.disabled = true;
-      memberModalMessage.value = "保存・Discord同期中…";
+      setMemberModalMessage("保存・Discord同期中…");
       try {
         const permissionResponse = await fetch("/api/admin/report-admin-permissions", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,subjects:permissions})});
         const permissionResult = await permissionResponse.json().catch(() => ({}));
         if (!permissionResponse.ok) throw new Error(permissionResult.error ?? "担当権限を保存できませんでした。");
         const roleResponse = await fetch("/api/admin/member-discord-roles", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,roleIds:discordRoleIds})});
         const roleResult = await roleResponse.json().catch(() => ({}));
-        if (!roleResponse.ok) throw new Error(roleResult.error ?? "Discord役職を保存できませんでした。");
+        if (!roleResponse.ok || roleResult.provisioning?.status === "failed") {
+          setMemberModalMessage(roleResult.error ?? discordSyncMessage("Discord役職の同期に失敗しました。", roleResult.provisioning), "error");
+          await load();
+          return;
+        }
         const attributesResponse = await fetch("/api/admin/member-attributes", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,university:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-university]")?.value ?? "",year:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-year]")?.value ?? "",interests})});
         const attributesResult = await attributesResponse.json().catch(() => ({}));
         if (!attributesResponse.ok) throw new Error(attributesResult.error ?? "登録情報を保存できませんでした。");
-        memberModalMessage.value = discordSyncMessage("個人設定を保存しました。", attributesResult.provisioning ?? roleResult.provisioning);
+        if (attributesResult.provisioning?.status === "failed") {
+          setMemberModalMessage(discordSyncMessage("プロフィールは保存しましたが、Discord役職の同期に失敗しました。", attributesResult.provisioning), "error");
+          await load();
+          return;
+        }
+        setMemberModalMessage(discordSyncMessage("個人設定を保存しました。", attributesResult.provisioning ?? roleResult.provisioning));
         closeMemberModal();
         await load();
-      } catch (error) { memberModalMessage.value = error instanceof Error ? error.message : "保存・同期できませんでした。"; }
+      } catch (error) { setMemberModalMessage(error instanceof Error ? error.message : "保存・同期できませんでした。", "error"); }
       finally { memberModalSave.disabled = false; }
     });
     const filteredMembers = () => {
@@ -421,12 +708,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         const roles = memberSubjects.map((id: string) => subjectLabels.get(id) ?? id);
         const interests = String(member.interests ?? "").split(",").filter(Boolean);
         const memberRoleIds = String(member.discord_role_ids ?? "").split(",").filter(Boolean);
-        const institutionOptions = member.university && !universities.includes(member.university) ? [...universities, member.university] : universities;
-        const permissionOptions = Array.from(subjectLabels.entries()).map(([value, label]) => `<option value="${esc(value)}" ${memberSubjects.includes(value) ? "selected" : ""}>${esc(label)}</option>`).join("");
         const memberRoleLabels = memberRoleIds.map(id => discordRoles.find(role => role.discord_role_id === id)?.name ?? `役職ID ${id.slice(0, 8)}…`);
         const roleChips = memberRoleLabels.length ? memberRoleLabels.map(name => `<span class="member-role-chip">${esc(name)}</span>`).join("") : `<span class="member-role-chip member-role-chip--empty">未付与</span>`;
-        const discordRoleOptions = discordRoles.map((role: any) => `<label class="member-role-option${role.is_managed ? " member-role-option--managed" : ""}" data-role-option data-role-name="${esc(role.name.toLocaleLowerCase())}"><input type="checkbox" data-discord-role value="${esc(role.discord_role_id)}" ${memberRoleIds.includes(role.discord_role_id) ? "checked" : ""} ${role.is_managed ? "disabled" : ""} /><span>${esc(role.name)}${role.is_managed ? "（管理対象外）" : ""}</span></label>`).join("");
-        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><div class="member-card__name">${esc(member.display_name || "表示名未設定")}</div><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord役職</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>変更を保存して既存ロールを同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div><details><summary>役職・プロフィールを編集</summary><div class="member-edit-form"><label>所属機関<select data-university><option value="">未登録</option>${opts(institutionOptions, member.university ?? "")}</select></label><label>学年<select data-year><option value="">未登録</option>${opts(years, member.year ?? "")}</select></label><label class="member-edit-form__subjects">担当権限（複数選択可）<select data-permission-subjects multiple>${permissionOptions}</select></label><label class="member-edit-form__subjects">担当・関心分野<select data-interests multiple>${opts(fields, String(member.interests ?? ""), true)}</select></label><div class="member-role-picker"><strong>Discord役職（複数選択可）</strong><div class="member-role-picker__tools"><input type="search" data-role-search placeholder="役職名で検索" autocomplete="off" /><span class="member-role-picker__count" data-role-visible-count>${discordRoles.length}件</span></div><div class="member-role-options" data-role-options>${discordRoleOptions || "<small>読み込まれたロールはありません。</small>"}</div><small>既存ロールだけを割り当てます。Discord側のロール定義は変更しません。</small></div><button type="button" class="member-edit-form__close" data-close-editor>閉じる</button></div></details></article>`;
+        const displayName = member.display_name || "表示名未設定";
+        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><button type="button" class="member-card__name" data-open-member aria-label="${esc(displayName)}の個人設定を開く">${esc(displayName)}</button><div class="member-card__email">${esc(member.email)}</div></div><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord役職</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions">${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>Discordロールを再同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div></article>`;
       }).join("") : '<p class="member-empty">登録されている参加者はいません。</p>';
     };
     const discordSyncMessage = (prefix: string, provisioning: any) => { const warnings = Array.isArray(provisioning?.warnings) ? provisioning.warnings.join(" ") : ""; const added = Number(provisioning?.applied ?? 0); const removed = Number(provisioning?.removed ?? 0); return `${prefix} Discord同期: 追加${added}件・削除${removed}件${warnings ? `。${warnings}` : ""}`; };
@@ -435,7 +720,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     memberFilter.addEventListener("change", () => { memberViewFilter = memberFilter.value; render(filteredMembers()); });
     memberFilterReset.addEventListener("click", () => { memberQuery = ""; memberViewFilter = "all"; memberSearch.value = ""; memberFilter.value = "all"; render(filteredMembers()); memberSearch.focus(); });
     root.addEventListener("discord-roles-updated", () => void load());
-    workflowRoleForm.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(workflowRoleForm); const response = await fetch("/api/admin/editorial-workflow-roles", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),role:"subject-coordinator",subject:values.get("subject")})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? "分野統括を追加しました。" : (data.error ?? "分野統括を追加できませんでした。"); if (response.ok) { workflowRoleForm.reset(); await load(); } });
+    const updateWorkflowRoleSelection = () => { const selected = Array.from(workflowRoleForm.querySelector<HTMLSelectElement>('select[name="subject"]')?.selectedOptions ?? []); const label = `${selected.length}分野を選択中`; workflowRoleSelection.value = label; workflowRoleSelection.textContent = label; };
+    workflowRoleForm.querySelector<HTMLSelectElement>('select[name="subject"]')?.addEventListener("change", updateWorkflowRoleSelection);
+    updateWorkflowRoleSelection();
+    workflowRoleForm.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(workflowRoleForm); const selectedSubjects = values.getAll("subject").map(value => String(value)).filter(Boolean); const submit = workflowRoleForm.querySelector<HTMLButtonElement>('button[type="submit"]'); if (!selectedSubjects.length) return; if (submit) { submit.disabled = true; submit.textContent = "割り当て中…"; } const response = await fetch("/api/admin/editorial-workflow-roles", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),role:"subject-coordinator",subjects:selectedSubjects})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? `${selectedSubjects.length}分野の分野統括を追加しました。` : (data.error ?? "分野統括を追加できませんでした。"); if (response.ok) { workflowRoleForm.reset(); updateWorkflowRoleSelection(); await load(); } if (submit) { submit.disabled = false; submit.textContent = "統括を追加"; } });
     form.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(form); const selectedSubjects = values.getAll("subject"); const response = await fetch("/api/admin/report-admin-permissions", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),subjects:selectedSubjects})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage(`${selectedSubjects.length}件の担当権限を追加しました。`, data.provisioning) : (data.error ?? "追加できませんでした。"); if (response.ok) { form.reset(); await load(); } });
     list.addEventListener("click", async event => {
       const target = event.target as HTMLElement;
@@ -445,12 +733,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const open = target.closest<HTMLElement>("[data-open-member], .member-card__name");
       const promote = target.closest<HTMLButtonElement>("[data-promote-manager]");
       const sync = target.closest<HTMLButtonElement>("[data-sync]");
-      const close = target.closest<HTMLButtonElement>("[data-close-editor]");
       const remove = target.closest<HTMLButtonElement>("[data-remove]");
-      const removeWorkflowRole = target.closest<HTMLButtonElement>("[data-remove-workflow-role]");
-      if (removeWorkflowRole) { const query = new URLSearchParams({email:removeWorkflowRole.dataset.email ?? "",role:"subject-coordinator",subject:removeWorkflowRole.dataset.subject ?? ""}); const response = await fetch(`/api/admin/editorial-workflow-roles?${query}`, {method:"DELETE",credentials:"same-origin"}); message.value = response.ok ? "分野統括を削除しました。" : "分野統括を削除できませんでした。"; if (response.ok) await load(); return; }
       if (open) { openMemberModal(email); return; }
-      if (close) { const details = close.closest("details"); if (details) details.open = false; return; }
       if (promote) {
         if (!confirm(`${email} を全分野管理者に変更しますか？`)) return;
         promote.disabled = true;
@@ -463,39 +747,19 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         return;
       }
       if (sync) {
-        sync.disabled = true; sync.textContent = "保存中…";
-        const interests = Array.from(card.querySelector<HTMLSelectElement>("[data-interests]")!.selectedOptions).map(option => option.value);
-        const permissions = Array.from(card.querySelector<HTMLSelectElement>("[data-permission-subjects]")!.selectedOptions).map(option => option.value);
-        const discordRoleIds = Array.from(card.querySelectorAll<HTMLInputElement>("[data-discord-role]:checked")).map(input => input.value);
+        sync.disabled = true; sync.textContent = "同期中…";
         try {
-          const permissionResponse = await fetch("/api/admin/report-admin-permissions", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email,subjects:permissions})});
-          const permissionResult = await permissionResponse.json().catch(() => ({})); if (!permissionResponse.ok) throw new Error(permissionResult.error ?? "担当権限を保存できませんでした。");
-          const discordRolesResponse = await fetch("/api/admin/member-discord-roles", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email,roleIds:discordRoleIds})});
-          const discordRoleResult = await discordRolesResponse.json().catch(() => ({})); if (!discordRolesResponse.ok) throw new Error(discordRoleResult.error ?? "Discord役職を保存できませんでした。");
-          const attributes = await fetch("/api/admin/member-attributes", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email,university:card.querySelector<HTMLSelectElement>("[data-university]")!.value,year:card.querySelector<HTMLSelectElement>("[data-year]")!.value,interests})});
-          const attributeResult = await attributes.json().catch(() => ({})); if (!attributes.ok) throw new Error(attributeResult.error ?? "登録情報を保存できませんでした。");
-          message.value = discordSyncMessage("担当権限・Discord役職・登録情報を保存しました。", attributeResult.provisioning); await load();
+          const response = await fetch("/api/admin/discord-member-roles", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email})});
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(result.error ?? "Discord役職を再同期できませんでした。");
+          message.value = discordSyncMessage("Discord役職を再同期しました。", result.provisioning); await load();
         } catch (error) { message.value = error instanceof Error ? error.message : "保存・同期できませんでした。"; }
-        finally { sync.disabled = false; sync.textContent = "変更を保存して既存ロールを同期"; }
+        finally { sync.disabled = false; sync.textContent = "Discordロールを再同期"; }
         return;
       }
       if (remove) { if (!confirm(`${email} の権限を削除しますか？`)) return; const query = new URLSearchParams({email,subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/report-admin-permissions?${query}`, {method:"DELETE",credentials:"same-origin"}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage("権限を削除しました。", data.provisioning) : (data.error ?? "削除できませんでした。"); if (response.ok) await load(); }
     });
-    list.addEventListener("input", event => {
-      const target = event.target as HTMLInputElement;
-      if (!target.matches("[data-role-search]")) return;
-      const card = target.closest<HTMLElement>("[data-email]");
-      if (!card) return;
-      const query = target.value.trim().toLocaleLowerCase();
-      const options = Array.from(card.querySelectorAll<HTMLElement>("[data-role-option]"));
-      let visible = 0;
-      options.forEach(option => { const matches = !query || (option.dataset.roleName ?? "").includes(query); option.hidden = !matches; if (matches) visible += 1; });
-      const visibleCount = card.querySelector<HTMLElement>("[data-role-visible-count]");
-      if (visibleCount) visibleCount.textContent = `${visible}件`;
-    });
-    const enhanceMemberNames = () => list.querySelectorAll<HTMLElement>(".member-card__name").forEach(name => { name.setAttribute("role", "button"); name.tabIndex = 0; name.setAttribute("aria-label", `${name.textContent?.trim() || "参加者"}の個人設定を開く`); });
-    list.addEventListener("keydown", event => { const target = event.target as HTMLElement; if (!target.matches(".member-card__name") || !["Enter", " "].includes((event as KeyboardEvent).key)) return; event.preventDefault(); const card = target.closest<HTMLElement>("[data-email]"); if (card?.dataset.email) openMemberModal(card.dataset.email); });
-    new MutationObserver(enhanceMemberNames).observe(list, {childList:true});
+    workflowRoleList.addEventListener("click", async event => { const remove = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-workflow-role]"); if (!remove) return; remove.disabled = true; const query = new URLSearchParams({email:remove.dataset.email ?? "",role:"subject-coordinator",subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/editorial-workflow-roles?${query}`, {method:"DELETE",credentials:"same-origin"}); message.value = response.ok ? "分野統括の割り当てを削除しました。" : "分野統括の割り当てを削除できませんでした。"; if (response.ok) await load(); else remove.disabled = false; });
     void load().catch(error => { list.textContent = error instanceof Error ? error.message : "参加者一覧を読み込めませんでした。"; });
   }
 </script>
@@ -543,16 +807,4 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       readinessButton.textContent = "運用事前チェック";
     }
   });
-</script>
-
-<script>
-  const interestList = document.querySelector<HTMLElement>("[data-member-list]");
-  const enhanceInterestSelectors = () => interestList?.querySelectorAll<HTMLSelectElement>("select[data-interests]").forEach(select => {
-    if (select.dataset.enhanced === "true") return;
-    select.dataset.enhanced = "true";
-    const picker = document.createElement("div"); picker.className = "member-interest-picker"; picker.setAttribute("aria-label", "担当・関心分野");
-    Array.from(select.options).forEach((option) => { const label = document.createElement("label"); const input = document.createElement("input"); input.type = "checkbox"; input.value = option.value; input.checked = option.selected; input.addEventListener("change", () => { option.selected = input.checked; }); label.append(input, document.createTextNode(option.textContent ?? option.value)); picker.append(label); });
-    select.parentElement?.insertBefore(picker, select);
-  });
-  if (interestList) { new MutationObserver(() => enhanceInterestSelectors()).observe(interestList, { childList: true }); setTimeout(enhanceInterestSelectors, 1500); }
 </script>

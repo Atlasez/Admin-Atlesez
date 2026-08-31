@@ -1,4 +1,9 @@
 import rehypeKatex from "rehype-katex";
+import { fromHtml } from "hast-util-from-html";
+import {
+  articleTitleContainsMath,
+  renderArticleTitleMath,
+} from "./article-title-math.mjs";
 import {
   MATH_PRESETS,
   mathMacrosFromSource,
@@ -82,10 +87,45 @@ export function remarkArticleMathMacros(customPresets = {}) {
 }
 
 export function rehypeArticleKatex() {
-  return (tree, file) =>
-    rehypeKatex({
+  return (tree, file) => {
+    const macros = { ...(file.data.articleMathMacros ?? {}) };
+    const visitTitles = (node, parent = null) => {
+      if (!node) return;
+      if (node.type === "element") {
+        const classes = Array.isArray(node.properties?.className)
+          ? node.properties.className
+          : [];
+        const isDirectiveTitle =
+          classes.includes("thmtitle") ||
+          classes.includes("article-directive-title") ||
+          (node.tagName === "summary" &&
+            parent?.type === "element" &&
+            Array.isArray(parent.properties?.className) &&
+            parent.properties.className.some((name) =>
+              ["proof-details", "supp-details", "folding"].includes(name),
+            ));
+        if (isDirectiveTitle) {
+          const source = node.children
+            .filter((child) => child.type === "text")
+            .map((child) => child.value)
+            .join("");
+          if (articleTitleContainsMath(source)) {
+            node.properties ??= {};
+            node.properties["data-math-title-source"] = source;
+            node.children = fromHtml(renderArticleTitleMath(source, macros), {
+              fragment: true,
+            }).children;
+            return;
+          }
+        }
+      }
+      for (const child of node.children ?? []) visitTitles(child, node);
+    };
+    visitTitles(tree);
+    return rehypeKatex({
       throwOnError: false,
       strict: "warn",
-      macros: { ...(file.data.articleMathMacros ?? {}) },
+      macros,
     })(tree, file);
+  };
 }
