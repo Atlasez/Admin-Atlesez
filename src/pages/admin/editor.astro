@@ -1202,6 +1202,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const { subjects, articles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
+    let activeDocumentId = routeQuery.get("document")?.trim() ?? "";
+    const documentIdForRequest = () => {
+      const input = form.elements.namedItem("documentId") as HTMLInputElement;
+      const value = input.value.trim();
+      if (value && value !== "undefined" && value !== "null") {
+        activeDocumentId = value;
+        return value;
+      }
+      if (activeDocumentId) input.value = activeDocumentId;
+      return activeDocumentId;
+    };
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
     const outlineSubject = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
@@ -2180,7 +2191,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       mediaStatus.textContent = "画像をアップロード中…";
       const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim()); formData.set("latexName", mediaLatexName.value.trim());
       try {
-        let documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+        let documentId = documentIdForRequest();
         if (!documentId) documentId = await saveCurrentDocument(false);
         const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { method: "POST", body: formData, credentials: "same-origin" });
         const data = await read<{ asset?: EditorialAsset; error?: string }>(response);
@@ -2981,7 +2992,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       saveButton.disabled = true;
       try {
         saveMessage.value = "保存中…";
-        const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+        const id = documentIdForRequest();
         const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
         const data = await read<{ id?: string; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
@@ -3333,6 +3344,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage ?? null, hasUnpublishedPublicationChanges(item)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); updatePublicationActions(item); completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
+      activeDocumentId = "";
       const available = availableEditorSubjects();
       const selected = source ? available.find((item) => item.slug === source.subject) ?? available[0] : available[0];
       if (!selected) return;
@@ -3393,6 +3405,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); void loadPublicationIntegration(); };
     const openDocument = async (id: string) => {
+      if (id) activeDocumentId = id;
       saveMessage.value = "原稿を読み込み中…";
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" });
       const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response);
@@ -3402,12 +3415,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // 一部の認証付きレスポンス／古いキャッシュでは本文は返るのに
       // document.id が欠落することがある。呼び出し元のIDを復元して、
       // 画像アップロード等が新規原稿POSTへ誤分岐しないようにする。
-      const documentIdInput = form.elements.namedItem("documentId") as HTMLInputElement;
-      const loadedDocumentId = documentIdInput.value.trim();
-      if ((!loadedDocumentId || loadedDocumentId === "undefined" || loadedDocumentId === "null") && id) {
-        documentIdInput.value = id;
-        void loadMediaAssets(id);
-      }
+      const loadedDocumentId = documentIdForRequest();
+      const responseDocumentId = typeof data.document.id === "string" ? data.document.id.trim() : "";
+      if (id && loadedDocumentId && responseDocumentId !== loadedDocumentId) void loadMediaAssets(loadedDocumentId);
     };
     const reloadComments = async (id: string) => {
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin", cache: "no-store" });
