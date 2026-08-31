@@ -719,6 +719,44 @@ test("E-6c: ダークモード解除時に公開連携の状態UIをライト配
   expect(colors.light.text).toBe("rgb(36, 100, 58)");
 });
 
+test("E-6d: Chromeのダークモードでも公開状態カードを暗色配色で表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+  await page.locator("[data-publication-run]").waitFor({ state: "attached" });
+  await page
+    .locator("[data-publication-integration]")
+    .waitFor({ state: "attached" });
+
+  const colors = await page.evaluate(() => {
+    document.documentElement.setAttribute("data-darkreader-scheme", "dark");
+    const run = document.querySelector<HTMLElement>("[data-publication-run]")!;
+    run.hidden = false;
+    run.dataset.state = "checks_pending";
+    run.setAttribute("aria-busy", "true");
+    const integration = document.querySelector<HTMLElement>(
+      "[data-publication-integration]",
+    )!;
+    integration.hidden = false;
+    integration.dataset.state = "ready";
+    const runStyle = getComputedStyle(run);
+    const integrationStyle = getComputedStyle(integration);
+    return {
+      run: { background: runStyle.backgroundColor, text: runStyle.color },
+      integration: {
+        background: integrationStyle.backgroundColor,
+        text: integrationStyle.color,
+      },
+    };
+  });
+
+  expect(colors.run.background).toBe("rgb(31, 59, 77)");
+  expect(colors.run.text).toBe("rgb(197, 231, 251)");
+  expect(colors.integration.background).toBe("rgb(29, 58, 42)");
+  expect(colors.integration.text).toBe("rgb(200, 240, 213)");
+});
+
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
