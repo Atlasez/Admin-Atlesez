@@ -11250,6 +11250,10 @@ async function publishEditorialDocument(
     return json({ error: "公開できるのは運営管理者だけです。" }, 403);
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    force?: unknown;
+  } | null;
+  const forceRepublish = payload?.force === true;
   const document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
   )
@@ -11324,7 +11328,8 @@ async function publishEditorialDocument(
   if (
     document.published_at &&
     !editorialDocumentHasUnpublishedChanges(document) &&
-    !hasFailedPublishRun
+    !hasFailedPublishRun &&
+    !forceRepublish
   )
     return json({ error: "この記事はすでに公開済みです。" }, 400);
   const claim = await claimEditorialPublicationRun(env, documentId, "publish", scope.email);
