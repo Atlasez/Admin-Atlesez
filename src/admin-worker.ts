@@ -4169,6 +4169,7 @@ type DiscordProvisioningResult = {
   applied: number;
   removed: number;
   warnings: string[];
+  notices?: string[];
 };
 
 const discordRoleMutationWarning = (
@@ -4368,6 +4369,7 @@ async function provisionApplicationDiscordRoles(
   );
   const desired = new Set<string>();
   const warnings: string[] = [];
+  const notices: string[] = [];
   for (const assignment of manualAssignments.results ?? []) {
     if (
       assignableGuildRoles.some((role) => role.id === assignment.discord_role_id)
@@ -4382,6 +4384,18 @@ async function provisionApplicationDiscordRoles(
     key: string,
     label: string,
   ) => {
+    // Older profiles may contain the legacy English value `student`. It is an
+    // affiliation value, not a Discord role, so it must not make an otherwise
+    // successful synchronization fail because a role with that name is absent.
+    if (
+      kind === "affiliation" &&
+      !(MEMBER_AFFILIATION_TYPES as readonly string[]).includes(key)
+    ) {
+      notices.push(
+        `所属区分「${key}」はDiscordロール同期の対象外としてスキップしました。`,
+      );
+      return;
+    }
     let roleId = "";
     if (kind === "attribute") {
       const mapping = await env.REPORTS.prepare(
@@ -4404,8 +4418,14 @@ async function provisionApplicationDiscordRoles(
       !roleId ||
       !assignableGuildRoles.some((role) => role.id === roleId)
     ) {
-      const sameNameRoles = assignableGuildRoles.filter(
-        (role) => role.name.trim() === label.trim(),
+      const compatibleLabels =
+        kind === "subject" && key === "__manager__"
+          ? [label, "運営メンバー"]
+          : [label];
+      const sameNameRoles = assignableGuildRoles.filter((role) =>
+        compatibleLabels.some(
+          (compatibleLabel) => role.name.trim() === compatibleLabel.trim(),
+        ),
       );
       if (sameNameRoles.length === 1) roleId = sameNameRoles[0].id;
       else if (sameNameRoles.length > 1) {
@@ -4488,7 +4508,13 @@ async function provisionApplicationDiscordRoles(
     if (response.ok) removed++;
     else warnings.push(discordRoleMutationWarning("削除", guildRoles, roleId, response));
   }
-  return { status: warnings.length ? "failed" : "synced", applied, removed, warnings };
+  return {
+    status: warnings.length ? "failed" : "synced",
+    applied,
+    removed,
+    warnings,
+    ...(notices.length ? { notices } : {}),
+  };
 }
 
 async function provisionMemberDiscordRolesForEmail(

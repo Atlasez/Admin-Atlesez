@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import worker, { syncDiscordRolesToAdmin } from "../../src/admin-worker";
 
 class Statement {
-  private readonly query: string;
+  protected readonly query: string;
 
   constructor(query: string) {
     this.query = query;
@@ -321,6 +321,150 @@ describe("Discord managed role synchronization", () => {
         ({ url, method }) => url.includes("/roles/") && method === "PUT",
       ),
     ).toBe(false);
+  });
+
+  it("skips legacy affiliation values instead of treating them as Discord roles", async () => {
+    class LegacyProfileStatement extends Statement {
+      async first<T>() {
+        if (this.query.includes("editorial_member_profiles"))
+          return {
+            university: "",
+            year: "",
+            interests: "",
+            affiliation_type: "student",
+          } as T;
+        return super.first<T>();
+      }
+
+      async all<T>() {
+        return { results: [] as T[] };
+      }
+    }
+
+    const requests: Array<{ url: string; method: string }> = [];
+    fetchSpy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method });
+      if (url.endsWith("/guilds/guild-1"))
+        return Response.json({ name: "Atlasez学習サイト運営" });
+      if (url.endsWith("/members/123456789012345678"))
+        return Response.json({ roles: ["@everyone"] });
+      if (url.endsWith("/roles")) return Response.json([]);
+      throw new Error(`Unexpected Discord request: ${method} ${url}`);
+    });
+
+    const env = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "manager@example.com",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      DISCORD_GUILD_NAME: "Atlasez学習サイト運営",
+      REPORTS: {
+        prepare: (query: string) => new LegacyProfileStatement(query),
+        batch: async () => [],
+      },
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/member-attributes", {
+        method: "PUT",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "member@example.com",
+          university: "",
+          year: "",
+          interests: [],
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      provisioning: {
+        status: "synced",
+        warnings: [],
+        notices: [
+          "所属区分「student」はDiscordロール同期の対象外としてスキップしました。",
+        ],
+      },
+    });
+    expect(requests.some(({ url }) => url.includes("student"))).toBe(false);
+  });
+
+  it("reuses the existing 運営メンバー role for the global manager mapping", async () => {
+    class ManagerStatement extends Statement {
+      async all<T>() {
+        if (this.query.includes("report_admin_permissions"))
+          return { results: [{ subject: "*" }] as T[] };
+        if (this.query.includes("atlasez_discord_role_mappings"))
+          return { results: [] as T[] };
+        return { results: [] as T[] };
+      }
+    }
+
+    const requests: Array<{ url: string; method: string }> = [];
+    fetchSpy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method });
+      if (url.endsWith("/guilds/guild-1"))
+        return Response.json({ name: "Atlasez学習サイト運営" });
+      if (url.endsWith("/members/123456789012345678"))
+        return Response.json({ roles: ["@everyone"] });
+      if (url.endsWith("/roles"))
+        return Response.json([
+          { id: "123456789012345678", name: "運営メンバー" },
+        ]);
+      if (method === "PUT") return new Response(null, { status: 204 });
+      throw new Error(`Unexpected Discord request: ${method} ${url}`);
+    });
+
+    const env = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "manager@example.com",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      DISCORD_GUILD_NAME: "Atlasez学習サイト運営",
+      REPORTS: {
+        prepare: (query: string) => new ManagerStatement(query),
+        batch: async () => [],
+      },
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/member-attributes", {
+        method: "PUT",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "member@example.com",
+          university: "",
+          year: "",
+          interests: [],
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      provisioning: { status: "synced", applied: 1, warnings: [] },
+    });
+    expect(
+      requests.some(
+        ({ url, method }) =>
+          url.endsWith("/roles/123456789012345678") && method === "PUT",
+      ),
+    ).toBe(true);
   });
 
   it("returns a visible failure when a manually selected role cannot be assigned", async () => {
