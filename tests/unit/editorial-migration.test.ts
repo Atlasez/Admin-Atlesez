@@ -330,7 +330,7 @@ class CatalogStatement {
 }
 
 const publicArticlePath =
-  "src/content/articles/ja/mathematics/ring-theory/ring-definition.md";
+  "src/content/articles/jpn/mathematics/ring-theory/ring-definition.md";
 const publicArticleMarkdown = `---
 articleId: ja-mathematics-ring-definition
 locale: ja
