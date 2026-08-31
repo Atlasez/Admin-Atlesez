@@ -844,4 +844,17 @@ describe("既存公開記事の運営原稿移行契約", () => {
       'body: JSON.stringify({ locale: "ja", subject: source.subject, category: source.category, slug: source.slug })',
     );
   });
+
+  it("記事一覧UIから公開記事カタログの診断を読み取り専用で実行できる", async () => {
+    const articlesSource = await readFile(
+      new URL("../../src/pages/admin/articles.astro", import.meta.url),
+      "utf8",
+    );
+
+    expect(articlesSource).toContain("data-run-catalog-diagnostics");
+    expect(articlesSource).toContain("/api/admin/editor/catalog/diagnostics");
+    expect(articlesSource).toContain('cache: "no-store"');
+    expect(articlesSource).toContain("catalogDiagnosticsIssues.append(item)");
+    expect(articlesSource).toContain("カタログを診断");
+  });
 });
