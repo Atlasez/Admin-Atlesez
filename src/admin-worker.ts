@@ -30,6 +30,7 @@ import { dispatchDueTaskReminders } from "./lib/task-reminder-delivery";
 import { dispatchApplicationEmails } from "./lib/application-email-delivery";
 import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
+import { parse as parseYaml } from "yaml";
 import { githubToken } from "./editorial-publication-github";
 // ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
 // Preview/本番は外部の専用Worker bindingを必ず経由する。
@@ -251,6 +252,43 @@ type EditorialDocumentPayload = {
   writingMemo?: unknown;
   lockedRanges?: unknown;
   references?: unknown;
+};
+type PublicArticleCatalogEntry = {
+  path: string;
+  identityKey: string;
+  repository: string;
+  gitSha: string | null;
+  locale: string;
+  subject: string;
+  category: string;
+  slug: string;
+  sourceArticleId: string;
+  title: string;
+  summary: string;
+  conceptId: string;
+  body: string;
+  references: unknown[];
+  publicUpdatedAt: string | null;
+  sourceKind: string;
+  sourceRef: string | null;
+  sourceChecksum: string | null;
+  sourceChecksumAlgorithm: string;
+  sourceBodyChecksum: string | null;
+  sourceFetchedAt: string | null;
+  sourceAuthority: string;
+  registrationMethod: string;
+  identityStatus: string;
+};
+type EditorialConceptPayload = {
+  id?: unknown;
+  subject?: unknown;
+  category?: unknown;
+  nameJa?: unknown;
+  nameEn?: unknown;
+  prerequisites?: unknown;
+  recommendedNext?: unknown;
+  related?: unknown;
+  alternatives?: unknown;
 };
 type EditorialCommentPayload = {
   body?: unknown;
@@ -1925,10 +1963,14 @@ async function listReportAdminPermissions(
     permissions,
     workflowRoles: workflowRoles.results,
     discordRoles: discordRoles.results,
+    discordAssignments: discordAssignments.results,
   });
 }
 
-async function createEditorialWorkflowRole(request: Request, env: Env): Promise<Response> {
+async function createEditorialWorkflowRole(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -1948,19 +1990,29 @@ async function createEditorialWorkflowRole(request: Request, env: Env): Promise<
   return json({ ok: true, added: subjects.length }, 201);
 }
 
-async function deleteEditorialWorkflowRole(request: Request, env: Env): Promise<Response> {
+async function deleteEditorialWorkflowRole(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
   const url = new URL(request.url);
   const email = url.searchParams.get("email")?.trim().toLowerCase() ?? "";
   const role = url.searchParams.get("role")?.trim() ?? "";
   const subject = url.searchParams.get("subject")?.trim() ?? "";
-  if (!EMAIL_PATTERN.test(email) || role !== "subject-coordinator" || !SUBJECT_SLUG.test(subject))
+  if (
+    !EMAIL_PATTERN.test(email) ||
+    role !== "subject-coordinator" ||
+    !SUBJECT_SLUG.test(subject)
+  )
     return json({ error: "削除対象を確認してください。" }, 400);
   await env.REPORTS.prepare(
     "DELETE FROM editorial_workflow_roles WHERE lower(email)=lower(?) AND role=? AND subject=?",
-  ).bind(email, role, subject).run();
+  )
+    .bind(email, role, subject)
+    .run();
   return json({ ok: true });
 }
 
@@ -2581,10 +2633,17 @@ const canReviewDocument = (
   subject: string,
   status: EditorialDocumentStatus,
 ) =>
-  canEditSubject(scope, subject) || canCoordinateSubject(scope, subject) || (scope.isProjectLeader && status === "in-review") || (scope.isManager && status === "in-review");
+  canEditSubject(scope, subject) ||
+  canCoordinateSubject(scope, subject) ||
+  (scope.isProjectLeader && status === "in-review") ||
+  (scope.isManager && status === "in-review");
 
 const canCoordinateSubject = (scope: AdminScope, subject: string) =>
-  Boolean(scope.allSubjects || scope.coordinatorSubjects?.includes("*") || scope.coordinatorSubjects?.includes(subject));
+  Boolean(
+    scope.allSubjects ||
+    scope.coordinatorSubjects?.includes("*") ||
+    scope.coordinatorSubjects?.includes(subject),
+  );
 
 async function tikzRendererPackages(
   request: Request,
@@ -3106,8 +3165,14 @@ async function listEditorialDocuments(
   const filters: string[] = [];
   const values: unknown[] = [];
   if (!scope.allSubjects) {
-    const coordinatorSubjects = (scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*");
-    if (!scope.subjects.length && !coordinatorSubjects.length && !scope.isProjectLeader)
+    const coordinatorSubjects = (scope.coordinatorSubjects ?? []).filter(
+      (subject) => subject !== "*",
+    );
+    if (
+      !scope.subjects.length &&
+      !coordinatorSubjects.length &&
+      !scope.isProjectLeader
+    )
       return json({
         documents: [],
         mentionNames: [],
@@ -3240,6 +3305,863 @@ async function updateEditorialDocumentArchive(
     .bind(archivedAt, scope.email, archiveExpiresAt, archivedAt, scope.email, documentId)
     .run();
   return json({ ok: true, archived: true, archived_at: archivedAt, archive_expires_at: archiveExpiresAt });
+}
+
+const publicArticleCatalogFields = `
+  path, identity_key, repository, locale, subject, category, slug,
+  source_article_id, git_sha, title, summary, concept_id, public_status,
+  document_id, last_seen_at, registered_at, registered_by,
+  source_kind, source_ref, source_checksum, source_checksum_algorithm,
+  source_body_checksum, source_fetched_at, source_authority,
+  registration_method, identity_status`;
+
+const listEditorialArticleCatalogRows = async (env: Env) =>
+  (
+    await env.REPORTS.prepare(
+      `SELECT ${publicArticleCatalogFields} FROM editorial_article_catalog`,
+    ).all<EditorialArticleCatalogRow>()
+  ).results ?? [];
+
+const publicArticleCatalogClient = (env: Env) =>
+  githubPublishClient(env, "atlasez-editorial-article-catalog");
+
+async function loadPublishedArticleCatalog(
+  env: Env,
+): Promise<PublicArticleCatalogEntry[]> {
+  const publicOrigin = env.PUBLIC_ANALYTICS_ORIGIN?.trim().replace(/\/+$/, "");
+  if (publicOrigin) {
+    const response = await fetch(`${publicOrigin}/atlas/graph.json`, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "atlasez-editorial-article-catalog",
+      },
+    });
+    if (response.ok) {
+      const payload = (await response.json()) as {
+        nodes?: {
+          id?: unknown;
+          articles?: Record<
+            string,
+            { articleId?: unknown; title?: unknown; path?: unknown }[]
+          >;
+        }[];
+      };
+      const articles = new Map<string, PublicArticleCatalogEntry>();
+      for (const node of payload.nodes ?? []) {
+        const conceptId = text(node.id, 180);
+        for (const [locale, localeArticles] of Object.entries(
+          node.articles ?? {},
+        )) {
+          for (const item of localeArticles ?? []) {
+            const articleId = text(item.articleId, 180);
+            const title = text(item.title, 180);
+            const path = text(item.path, 400).replace(/^\/+/, "");
+            const match = path.match(
+              /^atlas\/(ja|en)\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/?$/,
+            );
+            if (!match || match[1] !== locale || !articleId || !title) continue;
+            const parts = {
+              locale: match[1],
+              subject: match[2],
+              category: match[3],
+              slug: match[4],
+            };
+            const identityKey = editorialArticleIdentity(parts);
+            if (articles.has(identityKey)) continue;
+            articles.set(identityKey, {
+              path: editorialArticlePath(parts),
+              identityKey,
+              repository: env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01",
+              gitSha: null,
+              ...parts,
+              sourceArticleId: articleId,
+              title,
+              summary: "",
+              conceptId,
+              body: "",
+              references: [],
+              publicUpdatedAt: null,
+              sourceKind: "learning-site-catalog",
+              sourceRef: `${publicOrigin}/atlas/graph.json#${identityKey}`,
+              sourceChecksum: null,
+              sourceChecksumAlgorithm: "sha256",
+              sourceBodyChecksum: null,
+              sourceFetchedAt: new Date().toISOString(),
+              sourceAuthority: "reference-only",
+              registrationMethod: "catalog-observation",
+              identityStatus: "verified",
+            });
+          }
+        }
+      }
+      return [...articles.values()].sort((a, b) =>
+        a.identityKey.localeCompare(b.identityKey),
+      );
+    }
+  }
+  const client = publicArticleCatalogClient(env);
+  if (!client)
+    throw new Error(
+      "GitHub公開連携がまだ設定されていません。公開記事カタログを取得できません。",
+    );
+  const tree = await githubArticleTree(client.repository, client.headers);
+  const cachedRows = await listEditorialArticleCatalogRows(env);
+  const cachedByPath = new Map(cachedRows.map((row) => [row.path, row]));
+  const articles: PublicArticleCatalogEntry[] = [];
+  for (const entry of tree) {
+    const cached = cachedByPath.get(entry.path);
+    if (
+      cached?.git_sha === entry.sha &&
+      cached.public_status === "published" &&
+      cached.source_article_id &&
+      cached.title &&
+      cached.summary &&
+      cached.concept_id &&
+      cached.source_checksum &&
+      cached.source_kind !== "unknown"
+    ) {
+      articles.push({
+        path: cached.path,
+        identityKey: cached.identity_key,
+        repository: cached.repository,
+        gitSha: cached.git_sha,
+        locale: cached.locale,
+        subject: cached.subject,
+        category: cached.category,
+        slug: cached.slug,
+        sourceArticleId: cached.source_article_id,
+        title: cached.title,
+        summary: cached.summary,
+        conceptId: cached.concept_id,
+        body: "",
+        references: [],
+        publicUpdatedAt: null,
+        sourceKind: cached.source_kind,
+        sourceRef: cached.source_ref,
+        sourceChecksum: cached.source_checksum,
+        sourceChecksumAlgorithm: cached.source_checksum_algorithm,
+        sourceBodyChecksum: cached.source_body_checksum,
+        sourceFetchedAt: cached.source_fetched_at,
+        sourceAuthority: cached.source_authority,
+        registrationMethod: cached.registration_method,
+        identityStatus: cached.identity_status,
+      });
+      continue;
+    }
+    const markdown = await githubArticleMarkdown(
+      client.repository,
+      client.headers,
+      entry,
+    );
+    const article = parsePublicArticle(entry.path, markdown, entry.sha);
+    if (!article) continue;
+    article.repository = client.repository;
+    article.sourceKind = "github-published-markdown";
+    article.sourceRef = githubArticleSourceRef(
+      client.repository,
+      entry.path,
+      entry.sha,
+    );
+    article.sourceChecksum = await sha256Hex(markdown);
+    article.sourceBodyChecksum = await sha256Hex(article.body);
+    article.sourceFetchedAt = new Date().toISOString();
+    article.sourceAuthority = "reference-only";
+    article.registrationMethod = "catalog-observation";
+    article.identityStatus = "verified";
+    await upsertEditorialArticleCatalog(env, article);
+    articles.push(article);
+  }
+  return articles.sort((a, b) => a.identityKey.localeCompare(b.identityKey));
+}
+
+const catalogDocumentRows = async (env: Env) =>
+  (
+    await env.REPORTS.prepare(
+      `SELECT id, source_article_id, subject, category, locale, slug, title,
+              status, published_at, updated_at, created_at
+       FROM editorial_documents`,
+    ).all<{
+      id: string;
+      source_article_id: string | null;
+      subject: string;
+      category: string;
+      locale: string;
+      slug: string;
+      title: string;
+      status: EditorialDocumentStatus;
+      published_at: string | null;
+      updated_at: string;
+      created_at: string;
+    }>()
+  ).results ?? [];
+
+const catalogDocumentState = (
+  documents: Awaited<ReturnType<typeof catalogDocumentRows>>,
+  sourceArticleId?: string,
+) => {
+  if (documents.length > 1) return "duplicate" as const;
+  const document = documents[0];
+  if (!document) return "unmanaged" as const;
+  if (
+    document.source_article_id &&
+    document.source_article_id !== sourceArticleId
+  )
+    return "identity-conflict" as const;
+  return document.source_article_id ? "managed" : "needs-registration";
+};
+
+async function getEditorialArticleCatalog(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  try {
+    // 公開記事の観測でカタログを更新するため、保存済み行はその後に読む。
+    const publicArticles = await loadPublishedArticleCatalog(env);
+    const [documents, storedCatalog] = await Promise.all([
+      catalogDocumentRows(env),
+      listEditorialArticleCatalogRows(env),
+    ]);
+    const storedByPath = new Map(storedCatalog.map((row) => [row.path, row]));
+    const documentByKey = new Map<string, typeof documents>();
+    for (const document of documents) {
+      const key = editorialArticleIdentity(document);
+      const current = documentByKey.get(key) ?? [];
+      current.push(document);
+      documentByKey.set(key, current);
+    }
+    const publicKeys = new Set(
+      publicArticles.map((article) => article.identityKey),
+    );
+    const catalog = publicArticles
+      .filter(
+        (article) =>
+          canEditSubject(scope, article.subject) ||
+          canCoordinateSubject(scope, article.subject) ||
+          scope.isProjectLeader,
+      )
+      .map((article) => {
+        const matches = documentByKey.get(article.identityKey) ?? [];
+        const state = catalogDocumentState(matches, article.sourceArticleId);
+        const stored = storedByPath.get(article.path);
+        return {
+          path: article.path,
+          identity_key: article.identityKey,
+          repository: article.repository,
+          locale: article.locale,
+          subject: article.subject,
+          category: article.category,
+          slug: article.slug,
+          source_article_id: article.sourceArticleId,
+          git_sha: article.gitSha,
+          title: article.title,
+          summary: article.summary,
+          concept_id: article.conceptId,
+          public_status: "published",
+          editorial_document_id: matches.length === 1 ? matches[0].id : null,
+          editorial_status: matches.length === 1 ? matches[0].status : null,
+          editorial_published_at:
+            matches.length === 1 ? matches[0].published_at : null,
+          editorial_updated_at:
+            matches.length === 1 ? matches[0].updated_at : null,
+          state,
+          duplicate_document_ids:
+            matches.length > 1 ? matches.map((item) => item.id) : [],
+          provenance: {
+            source_kind: stored?.source_kind ?? article.sourceKind,
+            source_ref: stored?.source_ref ?? article.sourceRef,
+            source_checksum: stored?.source_checksum ?? article.sourceChecksum,
+            source_checksum_algorithm:
+              stored?.source_checksum_algorithm ??
+              article.sourceChecksumAlgorithm,
+            source_body_checksum:
+              stored?.source_body_checksum ?? article.sourceBodyChecksum,
+            source_fetched_at:
+              stored?.source_fetched_at ?? article.sourceFetchedAt,
+            source_authority:
+              stored?.source_authority ?? article.sourceAuthority,
+            registration_method:
+              stored?.registration_method ?? article.registrationMethod,
+            identity_status: stored?.identity_status ?? article.identityStatus,
+          },
+        };
+      });
+    const editorialOnly = documents
+      .filter(
+        (document) =>
+          !publicKeys.has(editorialArticleIdentity(document)) &&
+          (canEditSubject(scope, document.subject) ||
+            canCoordinateSubject(scope, document.subject) ||
+            scope.isProjectLeader),
+      )
+      .map((document) => ({
+        path: editorialArticlePath(document),
+        identity_key: editorialArticleIdentity(document),
+        repository: env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01",
+        locale: document.locale,
+        subject: document.subject,
+        category: document.category,
+        slug: document.slug,
+        source_article_id: document.source_article_id,
+        git_sha: null,
+        title: document.title,
+        summary: "",
+        concept_id: "",
+        public_status: "not-found",
+        editorial_document_id: document.id,
+        editorial_status: document.status,
+        editorial_published_at: document.published_at,
+        editorial_updated_at: document.updated_at,
+        state: "editorial-only" as const,
+        duplicate_document_ids: [],
+        provenance: {
+          source_kind: "editorial-document",
+          source_ref: null,
+          source_checksum: null,
+          source_checksum_algorithm: "sha256",
+          source_body_checksum: null,
+          source_fetched_at: null,
+          source_authority: "editorial-draft",
+          registration_method: "editorial-document",
+          identity_status: "unverified",
+        },
+      }));
+    return json({
+      catalog: [...catalog, ...editorialOnly],
+      cache: {
+        records: storedCatalog.length,
+        repository: env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01",
+      },
+      scope: {
+        email: scope.email,
+        subjects: scope.subjects,
+        isManager: scope.isManager,
+        isProjectLeader: scope.isProjectLeader,
+        coordinatorSubjects: scope.coordinatorSubjects ?? [],
+      },
+    });
+  } catch (error) {
+    return json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "公開記事カタログを取得できませんでした。",
+      },
+      502,
+    );
+  }
+}
+
+async function getEditorialArticleCatalogDiagnostics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  try {
+    const publicArticles = await loadPublishedArticleCatalog(env);
+    const [documents, storedCatalog] = await Promise.all([
+      catalogDocumentRows(env),
+      listEditorialArticleCatalogRows(env),
+    ]);
+    const visibleArticles = publicArticles.filter(
+      (article) =>
+        canEditSubject(scope, article.subject) ||
+        canCoordinateSubject(scope, article.subject) ||
+        scope.isProjectLeader,
+    );
+    const documentByKey = new Map<string, typeof documents>();
+    for (const document of documents) {
+      const key = editorialArticleIdentity(document);
+      documentByKey.set(key, [...(documentByKey.get(key) ?? []), document]);
+    }
+    const storedByPath = new Map(storedCatalog.map((row) => [row.path, row]));
+    const publicKeys = new Set(
+      visibleArticles.map((article) => article.identityKey),
+    );
+    const issues: Record<string, unknown>[] = [];
+    const addIssue = (
+      code: string,
+      severity: "error" | "warning",
+      article: PublicArticleCatalogEntry,
+      details: Record<string, unknown> = {},
+    ) => {
+      issues.push({
+        code,
+        severity,
+        identity_key: article.identityKey,
+        path: article.path,
+        source_article_id: article.sourceArticleId,
+        title: article.title,
+        ...details,
+      });
+    };
+
+    for (const article of visibleArticles) {
+      const matches = documentByKey.get(article.identityKey) ?? [];
+      const stored = storedByPath.get(article.path);
+      if (!matches.length)
+        addIssue("unregistered", "warning", article, {
+          message: "公開記事に対応する運営原稿がありません。",
+        });
+      if (matches.length > 1)
+        addIssue("duplicate", "error", article, {
+          message: "同じ公開パスの運営原稿が複数あります。",
+          document_ids: matches.map((document) => document.id),
+        });
+      if (matches.length === 1) {
+        const document = matches[0];
+        if (!document.source_article_id)
+          addIssue("source-link-missing", "warning", article, {
+            message: "運営原稿はありますが、公開記事IDが未登録です。",
+            document_id: document.id,
+          });
+        else if (document.source_article_id !== article.sourceArticleId)
+          addIssue("identity-mismatch", "error", article, {
+            message: "公開記事IDと運営原稿の紐付けが一致しません。",
+            document_id: document.id,
+            document_source_article_id: document.source_article_id,
+          });
+      }
+      if (!stored?.source_checksum)
+        addIssue("source-checksum-missing", "warning", article, {
+          message:
+            "公開元本文のSHA-256が未記録です。本文を正本とみなさず、移行前に出所を確認してください。",
+          source_kind: stored?.source_kind ?? article.sourceKind,
+          source_ref: stored?.source_ref ?? article.sourceRef,
+        });
+      if (
+        stored?.source_article_id &&
+        stored.source_article_id !== article.sourceArticleId
+      )
+        addIssue("identity-mismatch", "error", article, {
+          message: "カタログの公開記事IDと現在の公開記事が一致しません。",
+          catalog_source_article_id: stored.source_article_id,
+        });
+      if (
+        stored?.git_sha &&
+        article.gitSha &&
+        stored.git_sha !== article.gitSha
+      )
+        addIssue("source-version-changed", "warning", article, {
+          message: "カタログ登録後に公開元のGit SHAが変わっています。",
+          catalog_git_sha: stored.git_sha,
+          current_git_sha: article.gitSha,
+        });
+    }
+
+    for (const row of storedCatalog) {
+      if (
+        row.public_status === "published" &&
+        !publicKeys.has(row.identity_key)
+      )
+        issues.push({
+          code: "catalog-public-source-missing",
+          severity: "warning",
+          identity_key: row.identity_key,
+          path: row.path,
+          title: row.title,
+          message:
+            "保存済みカタログにはありますが、現在の公開一覧にありません。",
+        });
+    }
+    const summary = issues.reduce<Record<string, number>>((counts, issue) => {
+      const code = String(issue.code);
+      counts[code] = (counts[code] ?? 0) + 1;
+      return counts;
+    }, {});
+    return json({
+      generated_at: new Date().toISOString(),
+      checked_articles: visibleArticles.length,
+      issue_count: issues.length,
+      healthy: issues.length === 0,
+      summary,
+      issues,
+    });
+  } catch (error) {
+    return json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "公開記事カタログの診断に失敗しました。",
+      },
+      502,
+    );
+  }
+}
+
+const stableEditorialDocumentId = async (identityKey: string) => {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(identityKey),
+    ),
+  );
+  digest[6] = (digest[6] & 0x0f) | 0x50;
+  digest[8] = (digest[8] & 0x3f) | 0x80;
+  const hex = [...digest.slice(0, 16)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+async function getPublicArticleForIdentity(
+  env: Env,
+  identity: { locale: string; subject: string; category: string; slug: string },
+): Promise<PublicArticleCatalogEntry | null> {
+  const client = publicArticleCatalogClient(env);
+  if (!client)
+    throw new Error(
+      "GitHub公開連携がまだ設定されていません。公開記事を取得できません。",
+    );
+  const path = editorialArticlePath(identity);
+  const tree = await githubArticleTree(client.repository, client.headers);
+  const entry = tree.find((item) => item.path === path);
+  if (!entry) return null;
+  const markdown = await githubArticleMarkdown(
+    client.repository,
+    client.headers,
+    entry,
+  );
+  const article = parsePublicArticle(path, markdown, entry.sha);
+  if (!article) return null;
+  article.repository = client.repository;
+  article.sourceKind = "github-published-markdown";
+  article.sourceRef = githubArticleSourceRef(
+    client.repository,
+    entry.path,
+    entry.sha,
+  );
+  article.sourceChecksum = await sha256Hex(markdown);
+  article.sourceBodyChecksum = await sha256Hex(article.body);
+  article.sourceFetchedAt = new Date().toISOString();
+  article.sourceAuthority = "reference-only";
+  article.registrationMethod = "catalog-observation";
+  article.identityStatus = "verified";
+  await upsertEditorialArticleCatalog(env, article);
+  return article;
+}
+
+const catalogRegistrationInput = (payload: Record<string, unknown> | null) => {
+  const locale = text(payload?.locale, 8);
+  const subject = text(payload?.subject, 80);
+  const category = text(payload?.category, 80);
+  const slug = text(payload?.slug, 100);
+  if (
+    !/^(ja|en)$/.test(locale) ||
+    !SUBJECT_SLUG.test(subject) ||
+    !SUBJECT_SLUG.test(category) ||
+    !SUBJECT_SLUG.test(slug)
+  )
+    return null;
+  return { locale, subject, category, slug };
+};
+
+type EditorialIdentityInput = {
+  sourceArticleId: string | null;
+  locale: string;
+  subject: string;
+  category: string;
+  slug: string;
+};
+
+async function editorialIdentityConflict(
+  env: Env,
+  identity: EditorialIdentityInput,
+  excludedDocumentId: string | null = null,
+): Promise<Response | null> {
+  const documents = await env.REPORTS.prepare(
+    `SELECT id, source_article_id FROM editorial_documents
+     WHERE locale=? AND subject=? AND category=? AND slug=?
+     AND (? IS NULL OR id != ?)
+     ORDER BY updated_at DESC`,
+  )
+    .bind(
+      identity.locale,
+      identity.subject,
+      identity.category,
+      identity.slug,
+      excludedDocumentId,
+      excludedDocumentId,
+    )
+    .all<{ id: string; source_article_id: string | null }>();
+  if ((documents.results ?? []).length)
+    return json(
+      {
+        error:
+          "同じ公開パスの運営原稿が既に存在します。既存原稿を開くか、重複原稿を整理してください。",
+        identityKey: editorialArticleIdentity(identity),
+        duplicateDocumentIds: (documents.results ?? []).map(
+          (document) => document.id,
+        ),
+      },
+      409,
+    );
+  if (identity.sourceArticleId) {
+    const sourceDocument = await env.REPORTS.prepare(
+      `SELECT id, locale, subject, category, slug FROM editorial_documents
+       WHERE source_article_id=? AND (? IS NULL OR id != ?) LIMIT 1`,
+    )
+      .bind(identity.sourceArticleId, excludedDocumentId, excludedDocumentId)
+      .first<{
+        id: string;
+        locale: string;
+        subject: string;
+        category: string;
+        slug: string;
+      }>();
+    if (sourceDocument && sourceDocument.id !== excludedDocumentId)
+      return json(
+        {
+          error: "この公開記事は別の運営原稿に紐付いています。",
+          documentId: sourceDocument.id,
+        },
+        409,
+      );
+  }
+  const catalogRow = await env.REPORTS.prepare(
+    `SELECT document_id, source_article_id FROM editorial_article_catalog WHERE identity_key=? LIMIT 1`,
+  )
+    .bind(editorialArticleIdentity(identity))
+    .first<{ document_id: string | null; source_article_id: string | null }>();
+  if (catalogRow?.document_id && catalogRow.document_id !== excludedDocumentId)
+    return json(
+      {
+        error:
+          "この公開パスは別の運営原稿に紐付いています。既存原稿を開いてください。",
+        documentId: catalogRow.document_id,
+      },
+      409,
+    );
+  if (
+    catalogRow?.source_article_id &&
+    catalogRow.source_article_id !== identity.sourceArticleId
+  )
+    return json(
+      { error: "同じ公開パスに別の公開記事IDが登録されています。" },
+      409,
+    );
+  if (!identity.sourceArticleId && catalogRow?.source_article_id)
+    return json(
+      {
+        error:
+          "既存の公開記事があります。新規作成ではなく、公開記事を運営管理下へ登録してください。",
+      },
+      409,
+    );
+  return null;
+}
+
+async function registerPublicArticleInEditorialCatalog(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  const identity = catalogRegistrationInput(payload);
+  if (!identity)
+    return json({ error: "公開記事の識別情報を確認してください。" }, 400);
+  if (!canEditSubject(scope, identity.subject))
+    return json(
+      { error: "この分野の記事を運営管理下へ登録する権限がありません。" },
+      403,
+    );
+  try {
+    const article = await getPublicArticleForIdentity(env, identity);
+    if (!article)
+      return json(
+        {
+          error:
+            "指定された公開記事がGitHub mainに見つかりません。公開済み記事だけ登録できます。",
+        },
+        404,
+      );
+    if (article.body.length > MAX_EDITORIAL_BODY_LENGTH)
+      return json(
+        { error: "公開記事本文が編集ワークスペースの上限を超えています。" },
+        413,
+      );
+    const key = article.identityKey;
+    const existingDocuments = await env.REPORTS.prepare(
+      `SELECT id, source_article_id, body, status, published_at FROM editorial_documents
+       WHERE locale=? AND subject=? AND category=? AND slug=?
+       ORDER BY CASE WHEN published_at IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC, id`,
+    )
+      .bind(identity.locale, identity.subject, identity.category, identity.slug)
+      .all<{
+        id: string;
+        source_article_id: string | null;
+        body: string;
+        status: EditorialDocumentStatus;
+        published_at: string | null;
+      }>();
+    const documents = existingDocuments.results ?? [];
+    if (documents.length > 1)
+      return json(
+        {
+          error:
+            "同じ公開パスに複数の運営原稿があります。削除せず、重複原稿を整理してから登録してください。",
+          identityKey: key,
+          duplicateDocumentIds: documents.map((document) => document.id),
+        },
+        409,
+      );
+    const sourceDocument = documents[0];
+    const conflictingSource = await env.REPORTS.prepare(
+      "SELECT id, locale, subject, category, slug FROM editorial_documents WHERE source_article_id=? AND (? IS NULL OR id != ?)",
+    )
+      .bind(
+        article.sourceArticleId,
+        sourceDocument?.id ?? null,
+        sourceDocument?.id ?? null,
+      )
+      .first<{
+        id: string;
+        locale: string;
+        subject: string;
+        category: string;
+        slug: string;
+      }>();
+    if (conflictingSource)
+      return json(
+        {
+          error: "この公開記事は別の運営原稿に紐付いています。",
+          documentId: conflictingSource.id,
+        },
+        409,
+      );
+    if (sourceDocument) {
+      if (
+        sourceDocument.source_article_id &&
+        sourceDocument.source_article_id !== article.sourceArticleId
+      )
+        return json(
+          { error: "同じ公開パスに別の公開記事IDが登録されています。" },
+          409,
+        );
+      await env.REPORTS.prepare(
+        "UPDATE editorial_documents SET source_article_id=?, updated_by=?, updated_at=? WHERE id=? AND source_article_id IS NULL",
+      )
+        .bind(
+          article.sourceArticleId,
+          scope.email,
+          new Date().toISOString(),
+          sourceDocument.id,
+        )
+        .run();
+      await upsertEditorialArticleCatalog(
+        env,
+        {
+          ...article,
+          registrationMethod: "public-article-link",
+        },
+        sourceDocument.id,
+        new Date().toISOString(),
+        scope.email,
+      );
+      return json({
+        ok: true,
+        registered:
+          sourceDocument.source_article_id !== article.sourceArticleId,
+        documentId: sourceDocument.id,
+        identityKey: key,
+        sourceChecksum: article.sourceChecksum,
+        sourceChecksumAlgorithm: article.sourceChecksumAlgorithm,
+        sourceAuthority: "reference-only",
+        bodySeed: "existing-editorial-document-preserved",
+        publicationStarted: false,
+      });
+    }
+    const documentId = await stableEditorialDocumentId(key);
+    const now = new Date().toISOString();
+    await env.REPORTS.prepare(
+      `INSERT OR IGNORE INTO editorial_documents
+       (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
+        status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'katex', 'draft', ?, ?, ?, ?, NULL, NULL, NULL, 0, '[]', ?)`,
+    )
+      .bind(
+        documentId,
+        article.sourceArticleId,
+        article.subject,
+        article.category,
+        article.locale,
+        article.slug,
+        article.title,
+        article.summary,
+        article.conceptId,
+        article.body,
+        scope.email,
+        scope.email,
+        now,
+        now,
+        JSON.stringify(
+          normalizeArticleReferences(
+            article.references,
+            MAX_PERSONAL_REFERENCES,
+          ),
+        ),
+      )
+      .run();
+    const registered = await env.REPORTS.prepare(
+      "SELECT id, source_article_id FROM editorial_documents WHERE id=?",
+    )
+      .bind(documentId)
+      .first<{ id: string; source_article_id: string | null }>();
+    if (!registered || registered.source_article_id !== article.sourceArticleId)
+      return json(
+        {
+          error:
+            "記事登録が別の操作と競合しました。重複を作らず、もう一度確認してください。",
+        },
+        409,
+      );
+    await upsertEditorialArticleCatalog(
+      env,
+      {
+        ...article,
+        registrationMethod: "public-article-adoption",
+      },
+      documentId,
+      now,
+      scope.email,
+    );
+    return json(
+      {
+        ok: true,
+        registered: true,
+        documentId,
+        identityKey: key,
+        sourceChecksum: article.sourceChecksum,
+        sourceChecksumAlgorithm: article.sourceChecksumAlgorithm,
+        sourceAuthority: "reference-only",
+        bodySeed: "github-reference-only",
+        publicationStarted: false,
+      },
+      201,
+    );
+  } catch (error) {
+    return json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "公開記事を運営管理下へ登録できませんでした。",
+      },
+      502,
+    );
+  }
 }
 
 const normalizePersonalMathPresets = (raw: unknown): PersonalMathPreset[] => {
@@ -3439,7 +4361,9 @@ const taskAssignedTo = (
   email: string,
   kind: unknown = "task",
 ) => {
-  const value = String(assignee ?? "").trim().toLowerCase();
+  const value = String(assignee ?? "")
+    .trim()
+    .toLowerCase();
   const normalizedEmail = email.trim().toLowerCase();
   if (!value || !normalizedEmail) return false;
   return (
@@ -5008,45 +5932,75 @@ async function dispatchPendingDiscordProvisioning(env: Env) {
 async function getMyProfile(request: Request, env: Env): Promise<Response> {
   const scope = await getMemberProfileScope(request, env);
   if (isResponse(scope)) return scope;
-  const [profile, discord, pendingRequest] = await Promise.all([
-    env.REPORTS.prepare(
-      "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, affiliation_type, country, timezone, updated_at FROM editorial_member_profiles WHERE email = ?",
-    )
-      .bind(scope.email)
-      .first<{
-        display_name: string;
-        bio: string;
-        availability_note: string;
-        avatar_url: string;
-        university: string;
-        year: string;
-        interests: string;
-        affiliation_type: string;
-        country: string;
-        timezone: string;
-        updated_at: string;
-      }>(),
-    env.REPORTS.prepare(
-      "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
-    )
-      .bind(scope.email)
-      .first<{ discord_user_id: string }>(),
-    env.REPORTS.prepare(
-      `SELECT id,proposed_display_name,proposed_university,proposed_year,
+  const [memberProfile, applicantProfile, discord, pendingRequest] =
+    await Promise.all([
+      env.REPORTS.prepare(
+        "SELECT display_name, bio, availability_note, avatar_url, university, year, interests, affiliation_type, country, timezone, updated_at FROM editorial_member_profiles WHERE lower(email)=lower(?)",
+      )
+        .bind(scope.email)
+        .first<{
+          display_name: string;
+          bio: string;
+          availability_note: string;
+          avatar_url: string;
+          university: string;
+          year: string;
+          interests: string;
+          affiliation_type: string;
+          country: string;
+          timezone: string;
+          updated_at: string;
+        }>(),
+      getApplicantProfile(env, scope.email),
+      env.REPORTS.prepare(
+        "SELECT discord_user_id FROM atlasez_member_discord_accounts WHERE email = ?",
+      )
+        .bind(scope.email)
+        .first<{ discord_user_id: string }>(),
+      env.REPORTS.prepare(
+        `SELECT id,proposed_display_name,proposed_university,proposed_year,
         proposed_affiliation_type,proposed_country,proposed_timezone,proposed_bio,
         status,submitted_at,reviewed_at,review_note
        FROM editorial_member_profile_change_requests
-       WHERE email=? ORDER BY submitted_at DESC LIMIT 1`,
-    )
-      .bind(scope.email)
-      .first<Record<string, unknown>>(),
-  ]);
+       WHERE lower(email)=lower(?) ORDER BY submitted_at DESC LIMIT 1`,
+      )
+        .bind(scope.email)
+        .first<Record<string, unknown>>(),
+    ]);
   const roles = [
     ...(scope.isManager ? ["全分野管理者"] : []),
     ...scope.subjects.map(
       (subject) => APPLICATION_SUBJECT_LABELS[subject] ?? subject,
     ),
   ];
+  const applicantDisplayName = applicantProfile
+    ? applicantProfile.nickname.trim() ||
+      [applicantProfile.family_name, applicantProfile.given_name]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+  // 基本情報は応募者プロフィールを正としてマイページへ渡す。運営者プロフィールが
+  // まだ作られていない応募者でも、保存済みの基本情報を空にせず確認できるようにする。
+  const profile = {
+    display_name: memberProfile?.display_name?.trim() || applicantDisplayName,
+    bio: memberProfile?.bio ?? "",
+    availability_note: memberProfile?.availability_note ?? "",
+    avatar_url: memberProfile?.avatar_url ?? "",
+    university:
+      memberProfile?.university?.trim() || applicantProfile?.institution || "",
+    year: memberProfile?.year?.trim() || applicantProfile?.grade || "",
+    interests: memberProfile?.interests ?? "",
+    affiliation_type:
+      memberProfile?.affiliation_type?.trim() ||
+      applicantProfile?.affiliation_type ||
+      "",
+    country: memberProfile?.country?.trim() || applicantProfile?.country || "",
+    timezone:
+      memberProfile?.timezone?.trim() ||
+      applicantProfile?.timezone ||
+      "Asia/Tokyo",
+    updated_at: memberProfile?.updated_at ?? null,
+  };
   return json({
     email: scope.email,
     subjects: scope.subjects,
@@ -5054,19 +6008,8 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
     isManager: scope.isManager,
     discordUserId: discord?.discord_user_id ?? "",
     profileChangeRequest: pendingRequest ?? null,
-    profile: profile ?? {
-      display_name: "",
-      bio: "",
-      availability_note: "",
-      avatar_url: "",
-      university: "",
-      year: "",
-      interests: "",
-      affiliation_type: "",
-      country: "",
-      timezone: "Asia/Tokyo",
-      updated_at: null,
-    },
+    profile,
+    basicProfile: applicantProfile,
   });
 }
 
@@ -5149,7 +6092,13 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
            ORDER BY t.due_at ASC LIMIT 300`,
         )
-          .bind(...projectIds, scope.email, scope.email, rangeStartKey, rangeEndKey)
+          .bind(
+            ...projectIds,
+            scope.email,
+            scope.email,
+            rangeStartKey,
+            rangeEndKey,
+          )
           .all<{
             id: string;
             project_id: string;
@@ -5422,7 +6371,25 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: "入力内容を読み取れませんでした。" }, 400);
   }
-  const avatarUrl = text(payload.avatarUrl, 3_000_000);
+  const currentProfile = await env.REPORTS.prepare(
+    `SELECT display_name,bio,avatar_url,university,year,affiliation_type,country,timezone
+     FROM editorial_member_profiles WHERE lower(email)=lower(?)`,
+  )
+    .bind(scope.email)
+    .first<{
+      display_name: string;
+      bio: string;
+      avatar_url: string;
+      university: string;
+      year: string;
+      affiliation_type: string;
+      country: string;
+      timezone: string;
+    }>();
+  const avatarUrl =
+    payload.avatarUrl === undefined
+      ? (currentProfile?.avatar_url ?? "")
+      : text(payload.avatarUrl, 3_000_000);
   const displayName =
     payload.displayName === undefined ? null : text(payload.displayName, 120);
   const university =
@@ -5437,6 +6404,14 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   const timezone =
     payload.timezone === undefined ? null : text(payload.timezone, 80);
   const bio = payload.bio === undefined ? null : text(payload.bio, 4_000);
+  const proposedDisplayName = displayName ?? currentProfile?.display_name ?? "";
+  const proposedUniversity = university ?? currentProfile?.university ?? "";
+  const proposedYear = year ?? currentProfile?.year ?? "";
+  const proposedAffiliationType =
+    affiliationType ?? currentProfile?.affiliation_type ?? "";
+  const proposedCountry = country ?? currentProfile?.country ?? "";
+  const proposedTimezone = timezone ?? currentProfile?.timezone ?? "Asia/Tokyo";
+  const proposedBio = bio ?? currentProfile?.bio ?? "";
   if (
     avatarUrl &&
     ((!/^https:\/\//i.test(avatarUrl) &&
@@ -5463,8 +6438,8 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
     timezone,
     bio,
   ].some((value) => value !== null);
-  if (requestsProfileChange && !displayName)
-    return json({ error: "氏名を入力してください。" }, 400);
+  if (requestsProfileChange && !proposedDisplayName)
+    return json({ error: "公開表示名を入力してください。" }, 400);
   const updatedAt = new Date().toISOString();
   const avatarStatement = env.REPORTS.prepare(
     `INSERT INTO editorial_member_profiles (email, avatar_url, updated_at) VALUES (?, ?, ?)
@@ -5481,22 +6456,21 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
 
   const requestId = crypto.randomUUID();
   const taskId = crypto.randomUUID();
-  const proposedTimezone = timezone || "Asia/Tokyo";
   const existing = await env.REPORTS.prepare(
-    "SELECT id,task_id FROM editorial_member_profile_change_requests WHERE email=? AND status='pending' ORDER BY submitted_at DESC LIMIT 1",
+    "SELECT id,task_id FROM editorial_member_profile_change_requests WHERE lower(email)=lower(?) AND status='pending' ORDER BY submitted_at DESC LIMIT 1",
   )
     .bind(scope.email)
     .first<{ id: string; task_id: string | null }>();
   const actualRequestId = existing?.id ?? requestId;
   const actualTaskId = existing?.task_id ?? taskId;
-  const taskTitle = `メンバー情報変更の承認：${displayName}`;
+  const taskTitle = `メンバー情報変更の承認：${proposedDisplayName}`;
   const taskDetails = [
     `申請者: ${scope.email}`,
-    `氏名: ${displayName}`,
-    `所属: ${university ?? ""}`,
-    `学年等: ${year ?? ""}`,
-    `所属区分: ${affiliationType ?? ""}`,
-    `国・地域: ${country ?? ""}`,
+    `公開表示名: ${proposedDisplayName}`,
+    `所属: ${proposedUniversity}`,
+    `学年等: ${proposedYear}`,
+    `所属区分: ${proposedAffiliationType}`,
+    `国・地域: ${proposedCountry}`,
     `タイムゾーン: ${proposedTimezone}`,
     "運営事務局の「メンバー情報の承認」から内容を確認してください。",
   ].join("\n");
@@ -5509,13 +6483,13 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
              proposed_bio=?,submitted_at=?,review_note=''
            WHERE id=? AND status='pending'`,
         ).bind(
-          displayName,
-          university ?? "",
-          year ?? "",
-          affiliationType ?? "",
-          country ?? "",
+          proposedDisplayName,
+          proposedUniversity,
+          proposedYear,
+          proposedAffiliationType,
+          proposedCountry,
           proposedTimezone,
-          bio ?? "",
+          proposedBio,
           updatedAt,
           actualRequestId,
         ),
@@ -5533,13 +6507,13 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
         ).bind(
           actualRequestId,
           scope.email,
-          displayName,
-          university ?? "",
-          year ?? "",
-          affiliationType ?? "",
-          country ?? "",
+          proposedDisplayName,
+          proposedUniversity,
+          proposedYear,
+          proposedAffiliationType,
+          proposedCountry,
           proposedTimezone,
-          bio ?? "",
+          proposedBio,
           actualTaskId,
           updatedAt,
         ),
@@ -6023,7 +6997,8 @@ async function reviewProjectProfileChangeRequest(
 
 async function listApplications(request: Request, env: Env): Promise<Response> {
   const requestedProject =
-    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ?? "";
+    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ??
+    "";
   if (!APPLICATION_FORM_SLUGS.has(requestedProject))
     return json(
       { error: "応募管理を表示するプロジェクトを指定してください。" },
@@ -6063,7 +7038,8 @@ async function updateApplication(
   ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const requestedProject =
-    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ?? "";
+    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ??
+    "";
   if (!APPLICATION_FORM_SLUGS.has(requestedProject))
     return json(
       { error: "応募管理を表示するプロジェクトを指定してください。" },
@@ -8432,6 +9408,8 @@ async function createEditorialDocument(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
   const payload = await readEditorialPayload(request);
   if (payload instanceof Response) return payload;
   const values = editorialValues(payload);
@@ -8452,6 +9430,14 @@ async function createEditorialDocument(
     );
   if (!canEditSubject(scope, values.subject))
     return json({ error: "この分野の原稿を作成する権限がありません。" }, 403);
+  const identityConflict = await editorialIdentityConflict(env, {
+    sourceArticleId: values.sourceArticleId,
+    locale: values.locale,
+    subject: values.subject,
+    category: values.category,
+    slug: values.slug,
+  });
+  if (identityConflict) return identityConflict;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
@@ -8500,6 +9486,8 @@ async function updateEditorialDocument(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
   const payload = await readEditorialPayload(request);
   if (payload instanceof Response) return payload;
   const values = editorialValues(payload);
@@ -8511,13 +9499,14 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
+    "SELECT source_article_id, subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
       Pick<
         EditorialDocument,
         | "subject"
+        | "source_article_id"
         | "status"
         | "title"
         | "summary"
@@ -8550,7 +9539,24 @@ async function updateEditorialDocument(
       409,
     );
   if (existing.publication_review_stage)
-    return json({ error: "公開審査中は原稿を編集できません。審査担当の判断を待つか、差し戻してください。" }, 409);
+    return json(
+      {
+        error:
+          "公開審査中は原稿を編集できません。審査担当の判断を待つか、差し戻してください。",
+      },
+      409,
+    );
+  if (
+    existing.source_article_id &&
+    existing.source_article_id !== values.sourceArticleId
+  )
+    return json(
+      {
+        error:
+          "既存記事との紐付けIDは変更できません。公開記事の識別情報を維持してください。",
+      },
+      409,
+    );
   const isReviewOnly =
     scope.isManager && !canEditSubject(scope, existing.subject);
   if (
@@ -8559,6 +9565,18 @@ async function updateEditorialDocument(
       values.subject !== existing.subject)
   )
     return json({ error: "この分野の原稿を更新する権限がありません。" }, 403);
+  const identityConflict = await editorialIdentityConflict(
+    env,
+    {
+      sourceArticleId: values.sourceArticleId,
+      locale: values.locale,
+      subject: values.subject,
+      category: values.category,
+      slug: values.slug,
+    },
+    documentId,
+  );
+  if (identityConflict) return identityConflict;
   // 同じ分野の担当者は共同執筆者として保存できる。担当外の管理者は
   // 従来どおり本文を変更できず、フィードバック状態とコメントだけを扱う。
   if (
@@ -8579,7 +9597,8 @@ async function updateEditorialDocument(
           (existing.article_references ?? "[]")) ||
       values.writingMemo !== existing.writing_memo ||
       values.latexEngine !== existing.latex_engine ||
-      (values.status !== "approved" && existing.scheduled_publish_at !== null) ||
+      (values.status !== "approved" &&
+        existing.scheduled_publish_at !== null) ||
       (values.lockedRanges !== undefined &&
         JSON.stringify(values.lockedRanges) !==
           JSON.stringify(
@@ -8850,7 +9869,10 @@ async function updateEditorialReviewAssignment(
     }>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (document.status !== "in-review")
-    return json({ error: "フィードバック中の原稿だけ担当者を設定できます。" }, 400);
+    return json(
+      { error: "フィードバック中の原稿だけ担当者を設定できます。" },
+      400,
+    );
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野のフィードバック権限がありません。" }, 403);
   const reviewerEmails = [
@@ -9451,6 +10473,473 @@ async function addEditorialConceptToGitHub(
 const editorialLocaleDirectory = (locale: string) =>
   ({ ja: "jpn", en: "eng" })[locale] ?? locale;
 
+const sha256Hex = async (value: string) => {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+  );
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const PUBLIC_ARTICLE_PATH_PATTERN =
+  /^src\/content\/articles\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\.md$/;
+
+type GithubArticleTreeEntry = {
+  path: string;
+  sha: string;
+};
+
+type EditorialArticleCatalogRow = {
+  path: string;
+  identity_key: string;
+  repository: string;
+  locale: string;
+  subject: string;
+  category: string;
+  slug: string;
+  source_article_id: string | null;
+  git_sha: string | null;
+  title: string;
+  summary: string;
+  concept_id: string;
+  public_status: string;
+  document_id: string | null;
+  last_seen_at: string;
+  registered_at: string | null;
+  registered_by: string | null;
+  source_kind: string;
+  source_ref: string | null;
+  source_checksum: string | null;
+  source_checksum_algorithm: string;
+  source_body_checksum: string | null;
+  source_fetched_at: string | null;
+  source_authority: string;
+  registration_method: string;
+  identity_status: string;
+};
+
+const editorialArticleIdentity = (value: {
+  locale: string;
+  subject: string;
+  category: string;
+  slug: string;
+}) => `${value.locale}/${value.subject}/${value.category}/${value.slug}`;
+
+const editorialArticlePath = (value: {
+  locale: string;
+  subject: string;
+  category: string;
+  slug: string;
+}) =>
+  `src/content/articles/${value.locale}/${value.subject}/${value.category}/${value.slug}.md`;
+
+const githubArticleSourceRef = (
+  repository: string,
+  path: string,
+  gitSha: string | null,
+) =>
+  gitSha
+    ? `github://${repository}/${path}@${gitSha}`
+    : `github://${repository}/${path}`;
+
+const publicArticlePathParts = (path: string) => {
+  const match = path.match(PUBLIC_ARTICLE_PATH_PATTERN);
+  if (!match) return null;
+  return {
+    locale: match[1],
+    subject: match[2],
+    category: match[3],
+    slug: match[4],
+  };
+};
+
+const githubPublishClient = (env: Env, userAgent: string) => {
+  const token = env.GITHUB_PUBLISH_TOKEN;
+  if (!token) return null;
+  return {
+    repository: env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01",
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${token}`,
+      "user-agent": userAgent,
+      "x-github-api-version": "2022-11-28",
+    },
+  };
+};
+
+const publicArticleFrontMatter = (markdown: string) => {
+  const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
+  if (!match) return null;
+  let frontMatter: Record<string, unknown>;
+  try {
+    const parsed = parseYaml(match[1]);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
+    frontMatter = parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  return { frontMatter, body: markdown.slice(match[0].length) };
+};
+
+const publicArticleConceptId = (value: unknown) => {
+  if (!Array.isArray(value)) return "";
+  const first = value.find(
+    (item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === "object" && !Array.isArray(item),
+  );
+  return text(first?.id, 180).trim();
+};
+
+const parsePublicArticle = (
+  path: string,
+  markdown: string,
+  gitSha: string | null,
+): PublicArticleCatalogEntry | null => {
+  const parts = publicArticlePathParts(path);
+  const parsed = publicArticleFrontMatter(markdown);
+  if (!parts || !parsed) return null;
+  const { frontMatter, body } = parsed;
+  if (text(frontMatter.status, 32) !== "published") return null;
+  const sourceArticleId = text(frontMatter.articleId, 180).trim();
+  const title = text(frontMatter.title, 180).trim();
+  const summary = text(frontMatter.summary, 800).trim();
+  const conceptId = publicArticleConceptId(frontMatter.concepts);
+  if (!sourceArticleId || !title || !summary || !CONCEPT_ID.test(conceptId))
+    return null;
+  if (
+    text(frontMatter.locale, 8) !== parts.locale ||
+    text(frontMatter.subject, 80) !== parts.subject ||
+    text(frontMatter.category, 80) !== parts.category ||
+    text(frontMatter.slug, 100) !== parts.slug
+  )
+    return null;
+  return {
+    path,
+    identityKey: editorialArticleIdentity(parts),
+    repository: "",
+    gitSha,
+    ...parts,
+    sourceArticleId,
+    title,
+    summary,
+    conceptId,
+    body,
+    references: Array.isArray(frontMatter.references)
+      ? frontMatter.references
+      : [],
+    publicUpdatedAt:
+      typeof frontMatter.updatedAt === "string" ? frontMatter.updatedAt : null,
+    sourceKind: "unknown",
+    sourceRef: null,
+    sourceChecksum: null,
+    sourceChecksumAlgorithm: "sha256",
+    sourceBodyChecksum: null,
+    sourceFetchedAt: null,
+    sourceAuthority: "unverified",
+    registrationMethod: "catalog-observation",
+    identityStatus: "verified",
+  };
+};
+
+const githubArticleTree = async (
+  repository: string,
+  headers: Record<string, string>,
+) => {
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/git/trees/main?recursive=1`,
+    { headers },
+  );
+  if (!response.ok) throw new Error("GitHubの記事一覧を取得できませんでした。");
+  const payload = (await response.json()) as {
+    tree?: { path?: string; type?: string; sha?: string }[];
+  };
+  return (payload.tree ?? [])
+    .filter(
+      (entry): entry is { path: string; type: string; sha: string } =>
+        entry.type === "blob" &&
+        typeof entry.path === "string" &&
+        Boolean(entry.sha) &&
+        Boolean(publicArticlePathParts(entry.path)),
+    )
+    .map(({ path, sha }) => ({ path, sha }));
+};
+
+const githubArticleMarkdown = async (
+  repository: string,
+  headers: Record<string, string>,
+  entry: GithubArticleTreeEntry,
+) => {
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/git/blobs/${entry.sha}`,
+    { headers },
+  );
+  if (!response.ok)
+    throw new Error(`GitHubの記事を取得できませんでした: ${entry.path}`);
+  const payload = (await response.json()) as {
+    content?: string;
+    encoding?: string;
+  };
+  if (!payload.content || payload.encoding !== "base64")
+    throw new Error(`GitHubの記事本文を読み取れませんでした: ${entry.path}`);
+  return githubText(payload.content);
+};
+
+const upsertEditorialArticleCatalog = async (
+  env: Env,
+  article: PublicArticleCatalogEntry,
+  documentId: string | null = null,
+  registeredAt: string | null = null,
+  registeredBy: string | null = null,
+) => {
+  await env.REPORTS.prepare(
+    `INSERT INTO editorial_article_catalog
+      (path, identity_key, repository, locale, subject, category, slug, source_article_id, git_sha, title, summary, concept_id, public_status, document_id, last_seen_at, registered_at, registered_by, source_kind, source_ref, source_checksum, source_checksum_algorithm, source_body_checksum, source_fetched_at, source_authority, registration_method, identity_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(path) DO UPDATE SET
+       identity_key=excluded.identity_key,
+       repository=excluded.repository,
+       locale=excluded.locale,
+       subject=excluded.subject,
+       category=excluded.category,
+       slug=excluded.slug,
+       source_article_id=excluded.source_article_id,
+       git_sha=excluded.git_sha,
+       title=excluded.title,
+       summary=excluded.summary,
+       concept_id=excluded.concept_id,
+       public_status=excluded.public_status,
+       document_id=COALESCE(excluded.document_id, editorial_article_catalog.document_id),
+       last_seen_at=excluded.last_seen_at,
+       registered_at=COALESCE(excluded.registered_at, editorial_article_catalog.registered_at),
+       registered_by=COALESCE(excluded.registered_by, editorial_article_catalog.registered_by),
+       source_kind=excluded.source_kind,
+       source_ref=excluded.source_ref,
+       source_checksum=excluded.source_checksum,
+       source_checksum_algorithm=excluded.source_checksum_algorithm,
+       source_body_checksum=excluded.source_body_checksum,
+       source_fetched_at=excluded.source_fetched_at,
+       source_authority=excluded.source_authority,
+       registration_method=excluded.registration_method,
+       identity_status=excluded.identity_status`,
+  )
+    .bind(
+      article.path,
+      article.identityKey,
+      article.repository,
+      article.locale,
+      article.subject,
+      article.category,
+      article.slug,
+      article.sourceArticleId,
+      article.gitSha,
+      article.title,
+      article.summary,
+      article.conceptId,
+      documentId,
+      new Date().toISOString(),
+      registeredAt,
+      registeredBy,
+      article.sourceKind,
+      article.sourceRef,
+      article.sourceChecksum,
+      article.sourceChecksumAlgorithm,
+      article.sourceBodyChecksum,
+      article.sourceFetchedAt,
+      article.sourceAuthority,
+      article.registrationMethod,
+      article.identityStatus,
+    )
+    .run();
+};
+
+const CONCEPT_ID = /^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/;
+const CONCEPT_ID_LINE = /^\s*-\s+id:\s*["']?([^"'\s]+)["']?\s*$/gm;
+
+const conceptRelationIds = (value: unknown): string[] | null => {
+  if (value === undefined || value === null || value === "") return [];
+  if (!Array.isArray(value) || value.length > 30) return null;
+  const ids = value.map((item) => text(item, 180).trim());
+  if (ids.some((id) => !CONCEPT_ID.test(id))) return null;
+  return [...new Set(ids)];
+};
+
+export const editorialConceptMarkdown = (concept: {
+  id: string;
+  subject: string;
+  category: string;
+  nameJa: string;
+  nameEn?: string;
+  prerequisites?: string[];
+  recommendedNext?: string[];
+  related?: string[];
+  alternatives?: string[];
+}) => {
+  const quote = (value: string) => JSON.stringify(value);
+  const list = (values: string[] | undefined) =>
+    values?.length ? `[${values.map(quote).join(", ")}]` : "[]";
+  return [
+    `- id: ${quote(concept.id)}`,
+    `  subject: ${quote(concept.subject)}`,
+    `  category: ${quote(concept.category)}`,
+    "  name:",
+    `    ja: ${quote(concept.nameJa)}`,
+    ...(concept.nameEn ? [`    en: ${quote(concept.nameEn)}`] : []),
+    `  prerequisites: ${list(concept.prerequisites)}`,
+    `  recommendedNext: ${list(concept.recommendedNext)}`,
+    `  related: ${list(concept.related)}`,
+    `  alternatives: ${list(concept.alternatives)}`,
+  ].join("\n");
+};
+
+const editorialConceptInput = (payload: EditorialConceptPayload) => {
+  const id = text(payload.id, 180).trim();
+  const subject = text(payload.subject, 80).trim();
+  const category = text(payload.category, 80).trim();
+  const nameJa = text(payload.nameJa, 180).trim();
+  const nameEn = text(payload.nameEn, 180).trim();
+  const prerequisites = conceptRelationIds(payload.prerequisites);
+  const recommendedNext = conceptRelationIds(payload.recommendedNext);
+  const related = conceptRelationIds(payload.related);
+  const alternatives = conceptRelationIds(payload.alternatives);
+  if (
+    !CONCEPT_ID.test(id) ||
+    !SUBJECT_SLUG.test(subject) ||
+    !SUBJECT_SLUG.test(category) ||
+    !nameJa ||
+    !prerequisites ||
+    !recommendedNext ||
+    !related ||
+    !alternatives
+  )
+    return null;
+  return {
+    id,
+    subject,
+    category,
+    nameJa,
+    ...(nameEn ? { nameEn } : {}),
+    prerequisites,
+    recommendedNext,
+    related,
+    alternatives,
+  };
+};
+
+const existingConceptIds = (source: string) =>
+  new Set(
+    [...source.matchAll(CONCEPT_ID_LINE)]
+      .map((match) => match[1])
+      .filter((id): id is string => Boolean(id)),
+  );
+
+async function createEditorialConcept(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = (await request
+    .json()
+    .catch(() => null)) as EditorialConceptPayload | null;
+  const concept = payload ? editorialConceptInput(payload) : null;
+  if (!concept)
+    return json(
+      {
+        error:
+          "概念ID・分野・カテゴリ・日本語名を確認してください。関連概念は正しいIDの配列で指定してください。",
+      },
+      400,
+    );
+  const token = env.GITHUB_PUBLISH_TOKEN;
+  if (!token)
+    return json(
+      {
+        error:
+          "GitHub公開連携がまだ設定されていません。運営管理者がGITHUB_PUBLISH_TOKENをCloudflare Secretへ登録してください。",
+      },
+      503,
+    );
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const headers = {
+    accept: "application/vnd.github+json",
+    authorization: `Bearer ${token}`,
+    "user-agent": "atlasez-editorial-concepts",
+    "x-github-api-version": "2022-11-28",
+  };
+  const path = "src/content/concepts/concepts.yaml";
+  const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
+  const currentResponse = await fetch(endpoint, { headers });
+  if (!currentResponse.ok)
+    return json({ error: "GitHub上の概念一覧を取得できませんでした。" }, 502);
+  const current = (await currentResponse.json()) as {
+    sha?: string;
+    content?: string;
+  };
+  const source = current.content ? githubText(current.content) : "";
+  const ids = existingConceptIds(source);
+  if (ids.has(concept.id))
+    return json(
+      { error: `概念ID「${concept.id}」はすでに登録されています。` },
+      409,
+    );
+  const relationIds = [
+    ...(concept.prerequisites ?? []),
+    ...(concept.recommendedNext ?? []),
+    ...(concept.related ?? []),
+    ...(concept.alternatives ?? []),
+  ];
+  const missingRelation = relationIds.find((id) => !ids.has(id));
+  if (missingRelation)
+    return json(
+      {
+        error: `関連概念「${missingRelation}」が concepts.yaml にありません。`,
+      },
+      409,
+    );
+  const block = editorialConceptMarkdown(concept);
+  const nextSource = `${source.replace(/\s*$/, "")}\n\n# ---------- 手動登録: ${concept.nameJa} ----------\n${block}\n`;
+  const writeResponse = await fetch(endpoint, {
+    method: "PUT",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({
+      message: `Add concept: ${concept.id}`,
+      content: githubBase64(nextSource),
+      branch: "main",
+      ...(current.sha ? { sha: current.sha } : {}),
+    }),
+  });
+  if (!writeResponse.ok)
+    return json(
+      {
+        error:
+          "概念の登録に失敗しました。別の変更が先に反映された可能性があります。概念一覧を再読み込みして再試行してください。",
+      },
+      writeResponse.status === 409 ? 409 : 502,
+    );
+  const result = (await writeResponse.json()) as {
+    commit?: { html_url?: string };
+  };
+  return json(
+    {
+      ok: true,
+      concept: {
+        id: concept.id,
+        subject: concept.subject,
+        category: concept.category,
+        nameJa: concept.nameJa,
+        nameEn: concept.nameEn ?? "",
+      },
+      commitUrl: result.commit?.html_url ?? null,
+      createdBy: scope.email,
+    },
+    201,
+  );
+}
+
 async function storeArticleBackup(
   env: Env,
   repository: string,
@@ -9810,29 +11299,35 @@ async function editorialPublicationIntegrationStatus(
   }
 }
 
-const editorialMarkdown = (
+export const editorialMarkdown = (
   document: EditorialDocument,
   publicationStatus: "published" | "draft" = "published",
 ) => {
-  const date = new Date().toISOString().slice(0, 10);
+  const createdDate = document.created_at.slice(0, 10);
+  const updatedDate = new Date().toISOString().slice(0, 10);
   const references = storedArticleReferences(document.article_references);
   const yaml = (value: string) => JSON.stringify(value);
+  // 既存記事は「あとで読む」などの保存キーに使われる articleId を維持する。
+  // 新規記事はカテゴリも含め、別カテゴリの同名slugで衝突しないIDにする。
+  const articleId =
+    document.source_article_id ??
+    `${document.locale}-${document.subject}-${document.category}-${document.slug}`;
   return [
     "---",
-    `articleId: ${document.locale}-${document.subject}-${document.slug}`,
-    `locale: ${document.locale}`,
-    `title: ${document.title}`,
-    `slug: ${document.slug}`,
-    `subject: ${document.subject}`,
-    `category: ${document.category}`,
+    `articleId: ${yaml(articleId)}`,
+    `locale: ${yaml(document.locale)}`,
+    `title: ${yaml(document.title)}`,
+    `slug: ${yaml(document.slug)}`,
+    `subject: ${yaml(document.subject)}`,
+    `category: ${yaml(document.category)}`,
     "concepts:",
-    `  - id: ${document.concept_id}`,
+    `  - id: ${yaml(document.concept_id)}`,
     "authors: [editorial-workspace]",
-    `reviewers: [${document.updated_by}]`,
+    `reviewers: [${yaml(document.updated_by)}]`,
     `status: ${publicationStatus}`,
-    `createdAt: ${date}`,
-    `updatedAt: ${date}`,
-    `summary: ${document.summary}`,
+    `createdAt: ${createdDate}`,
+    `updatedAt: ${updatedDate}`,
+    `summary: ${yaml(document.summary)}`,
     "difficulty: basic",
     "estimatedMinutes: 10",
     "tags: []",
@@ -11470,7 +12965,9 @@ async function publicationReviewRoleEmails(
   )
     .bind(...(role === "project-leader" ? [] : [subject]))
     .all<{ email: string }>();
-  return [...new Set((result.results ?? []).map((row) => row.email).filter(Boolean))];
+  return [
+    ...new Set((result.results ?? []).map((row) => row.email).filter(Boolean)),
+  ];
 }
 
 type EditorialFeedbackTaskState = {
@@ -11500,16 +12997,28 @@ async function editorialFeedbackTaskState(
 async function scheduleEditorialPublication(request: Request, env: Env, documentId: string): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
-  const payload = (await request.json().catch(() => null)) as { scheduledPublishAt?: unknown } | null;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    scheduledPublishAt?: unknown;
+  } | null;
   const raw = text(payload?.scheduledPublishAt, 80);
-  const document = await env.REPORTS.prepare(`${editorialDocumentSelect} WHERE id=?`).bind(documentId).first<EditorialDocument>();
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id=?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (document.status !== "approved" || document.publication_review_stage)
     return json({ error: "公開審査が完了した原稿だけ公開予約できます。" }, 400);
-  if (document.published_at) return json({ error: "公開済みの記事です。" }, 400);
+  if (document.published_at)
+    return json({ error: "公開済みの記事です。" }, 400);
   if (!raw) {
-    await env.REPORTS.prepare("UPDATE editorial_documents SET scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?").bind(new Date().toISOString(), scope.email, documentId).run();
+    await env.REPORTS.prepare(
+      "UPDATE editorial_documents SET scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+    )
+      .bind(new Date().toISOString(), scope.email, documentId)
+      .run();
     return json({ ok: true, scheduledPublishAt: null });
   }
   // datetime-local has no offset. Treat the operations site's wall-clock
@@ -11532,7 +13041,9 @@ async function dispatchScheduledEditorialPublications(env: Env) {
   for (const document of due.results ?? []) {
     const claim = (await env.REPORTS.prepare(
       "UPDATE editorial_documents SET scheduled_publish_claimed_at=? WHERE id=? AND published_at IS NULL AND scheduled_publish_claimed_at IS NULL",
-    ).bind(now, document.id).run()) as { meta?: { changes?: number } };
+    )
+      .bind(now, document.id)
+      .run()) as { meta?: { changes?: number } };
     if (!claim.meta?.changes) continue;
     let runClaim: Awaited<ReturnType<typeof claimEditorialPublicationRun>> | null = null;
     try {
@@ -11620,16 +13131,21 @@ async function startPublicationReview(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
   const document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
   )
     .bind(documentId)
     .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
-  if (!canEditSubject(scope, document.subject) && document.created_by !== scope.email)
+  if (
+    !canEditSubject(scope, document.subject) &&
+    document.created_by !== scope.email
+  )
     return json({ error: "執筆担当者だけが執筆完了にできます。" }, 403);
-  if (document.published_at) return json({ error: "公開済みの記事です。" }, 400);
+  if (document.published_at)
+    return json({ error: "公開済みの記事です。" }, 400);
   if (document.publication_review_stage)
     return json({ error: "すでに公開審査中です。" }, 409);
   if (document.status !== "in-review" && document.status !== "draft")
@@ -11663,7 +13179,8 @@ async function startPublicationReview(
     .run();
   await notifyEditorialDocumentChange(env, documentId);
   const recipients = stage === "subject-coordinator" ? coordinators : leaders;
-  const recipientLabel = stage === "subject-coordinator" ? "分野統括" : "プロジェクトリーダー";
+  const recipientLabel =
+    stage === "subject-coordinator" ? "分野統括" : "プロジェクトリーダー";
   await postDiscordWebhook(
     env.DISCORD_ATLAS_WEBHOOK_URL,
     `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
@@ -11678,12 +13195,21 @@ async function decidePublicationReview(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
-  const payload = (await request.json().catch(() => null)) as { decision?: unknown; note?: unknown } | null;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    decision?: unknown;
+    note?: unknown;
+  } | null;
   const decision = text(payload?.decision, 20);
   const note = text(payload?.note, 2_000);
-  if (decision !== "approved" && decision !== "rejected") return json({ error: "審査結果を選択してください。" }, 400);
-  const document = await env.REPORTS.prepare(`${editorialDocumentSelect} WHERE id = ?`).bind(documentId).first<EditorialDocument>();
+  if (decision !== "approved" && decision !== "rejected")
+    return json({ error: "審査結果を選択してください。" }, 400);
+  const document = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id = ?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   const stage = document.publication_review_stage;
   if (!stage) return json({ error: "この原稿は公開審査中ではありません。" }, 409);
@@ -11700,8 +13226,11 @@ async function decidePublicationReview(
     return json({ error: "プロジェクトリーダーが設定されていないため、次の公開審査へ進めません。" }, 503);
   const already = await env.REPORTS.prepare(
     "SELECT id FROM editorial_publication_reviews WHERE document_id=? AND review_round=? AND stage=? LIMIT 1",
-  ).bind(documentId, document.publication_review_round, stage).first<{ id: string }>();
-  if (already) return json({ error: "この段階の審査はすでに処理されています。" }, 409);
+  )
+    .bind(documentId, document.publication_review_round, stage)
+    .first<{ id: string }>();
+  if (already)
+    return json({ error: "この段階の審査はすでに処理されています。" }, 409);
   const now = new Date().toISOString();
   const reviewNote = managerOverride
     ? ["[運営管理者によるプロジェクトリーダー承認の代理実行]", note]
@@ -13099,8 +14628,8 @@ async function adminNotifications(
         task_kind: string;
         details: string;
         project_id: string;
-        project_slug: string;
         feedback_document_id: string | null;
+        project_slug: string;
         updated_at: string;
       }>(),
   ]);
@@ -13119,11 +14648,15 @@ async function adminNotifications(
          ))
        )
        ORDER BY d.updated_at DESC LIMIT 20`,
-    ).bind(scope.email, scope.email).all<{
-      id: string; title: string; subject: string;
-      publication_review_stage: EditorialPublicationReviewStage;
-      updated_at: string;
-    }>(),
+    )
+      .bind(scope.email, scope.email)
+      .all<{
+        id: string;
+        title: string;
+        subject: string;
+        publication_review_stage: EditorialPublicationReviewStage;
+        updated_at: string;
+      }>(),
     env.REPORTS.prepare(
       `SELECT d.id, d.title, r.stage, r.note, r.created_at
        FROM editorial_publication_reviews r
@@ -13131,10 +14664,15 @@ async function adminNotifications(
        WHERE r.decision='rejected' AND lower(d.created_by)=lower(?)
          AND r.created_at=(SELECT MAX(r2.created_at) FROM editorial_publication_reviews r2 WHERE r2.document_id=r.document_id)
        ORDER BY r.created_at DESC LIMIT 20`,
-    ).bind(scope.email).all<{
-      id: string; title: string; stage: EditorialPublicationReviewStage;
-      note: string; created_at: string;
-    }>(),
+    )
+      .bind(scope.email)
+      .all<{
+        id: string;
+        title: string;
+        stage: EditorialPublicationReviewStage;
+        note: string;
+        created_at: string;
+      }>(),
   ]);
   const notifications = [
     ...(commentRows.results ?? []).map((item) => ({
@@ -13189,7 +14727,8 @@ async function adminNotifications(
       id: `publication-review-returned-${item.id}-${item.created_at}`,
       kind: "publication-review-returned",
       title: `公開審査から差し戻し：${item.title}`,
-      detail: item.note || "フィードバック中へ戻されました。内容を確認してください。",
+      detail:
+        item.note || "フィードバック中へ戻されました。内容を確認してください。",
       href: `/admin/editor/?document=${encodeURIComponent(item.id)}`,
       updatedAt: item.created_at,
     })),
@@ -13352,10 +14891,13 @@ const listEditorialActiveEditors = async (
         const response = await namespace
           .get(namespace.idFromName(documentId))
           .fetch(
-            new Request("https://atlasez-editorial-collaboration.internal/presence", {
-              method: "GET",
-              headers: { "x-atlasez-document-id": documentId },
-            }),
+            new Request(
+              "https://atlasez-editorial-collaboration.internal/presence",
+              {
+                method: "GET",
+                headers: { "x-atlasez-document-id": documentId },
+              },
+            ),
           );
         if (!response.ok)
           return [documentId, [] as EditorialActiveEditor[]] as const;
@@ -13367,10 +14909,10 @@ const listEditorialActiveEditors = async (
               (participant): participant is EditorialActiveEditor =>
                 Boolean(
                   participant &&
-                    typeof participant.sessionId === "string" &&
-                    typeof participant.email === "string" &&
-                    typeof participant.displayName === "string" &&
-                    typeof participant.field === "string",
+                  typeof participant.sessionId === "string" &&
+                  typeof participant.email === "string" &&
+                  typeof participant.displayName === "string" &&
+                  typeof participant.field === "string",
                 ),
             )
           : [];
@@ -13652,8 +15194,10 @@ async function handleAdminRequest(
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
   if (url.pathname === "/api/admin/editorial-workflow-roles") {
-    if (request.method === "POST") return createEditorialWorkflowRole(request, env);
-    if (request.method === "DELETE") return deleteEditorialWorkflowRole(request, env);
+    if (request.method === "POST")
+      return createEditorialWorkflowRole(request, env);
+    if (request.method === "DELETE")
+      return deleteEditorialWorkflowRole(request, env);
     return json({ error: "POST、DELETEのみ利用できます。" }, 405);
   }
   if (
@@ -13868,6 +15412,23 @@ async function handleAdminRequest(
     request.method === "GET"
   )
     return editorialPublicationIntegrationStatus(request, env);
+  if (
+    url.pathname === "/api/admin/editor/concepts" &&
+    request.method === "POST"
+  )
+    return createEditorialConcept(request, env);
+  if (url.pathname === "/api/admin/editor/catalog" && request.method === "GET")
+    return getEditorialArticleCatalog(request, env);
+  if (
+    url.pathname === "/api/admin/editor/catalog/diagnostics" &&
+    request.method === "GET"
+  )
+    return getEditorialArticleCatalogDiagnostics(request, env);
+  if (
+    url.pathname === "/api/admin/editor/catalog/register" &&
+    request.method === "POST"
+  )
+    return registerPublicArticleInEditorialCatalog(request, env);
   if (url.pathname === "/api/admin/editor/documents") {
     if (request.method === "GET") return listEditorialDocuments(request, env);
     if (request.method === "POST") return createEditorialDocument(request, env);
@@ -13993,11 +15554,23 @@ async function handleAdminRequest(
   );
   if (editorialPublicationReviewMatch) {
     if (request.method === "GET")
-      return getPublicationReviewState(request, env, editorialPublicationReviewMatch[1]);
+      return getPublicationReviewState(
+        request,
+        env,
+        editorialPublicationReviewMatch[1],
+      );
     if (request.method === "POST")
-      return startPublicationReview(request, env, editorialPublicationReviewMatch[1]);
+      return startPublicationReview(
+        request,
+        env,
+        editorialPublicationReviewMatch[1],
+      );
     if (request.method === "PATCH")
-      return decidePublicationReview(request, env, editorialPublicationReviewMatch[1]);
+      return decidePublicationReview(
+        request,
+        env,
+        editorialPublicationReviewMatch[1],
+      );
     return json({ error: "GET、POST、PATCHのみ利用できます。" }, 405);
   }
   const editorialScheduleMatch = url.pathname.match(
