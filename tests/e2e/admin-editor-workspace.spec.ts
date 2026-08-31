@@ -1900,7 +1900,41 @@ test("共同編集の本文を低遅延で反映し、受信側から重複自�
             ?.length ?? 0,
       ),
     )
-    .toBeGreaterThan(0);
+    .toBeGreaterThanOrEqual(2);
+  await expect(page.locator("[data-collaboration-status]")).toHaveAttribute(
+    "data-state",
+    "connected",
+  );
+
+  await page.waitForTimeout(50);
+  await page.evaluate(() => {
+    const sockets =
+      (window as Window & { __testSockets?: EventTarget[] }).__testSockets ??
+      [];
+    sockets.forEach((socket) =>
+      socket.dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "presence",
+            participants: [
+              {
+                sessionId: "alice-session",
+                email: "alice@example.com",
+                displayName: "Alice",
+                field: "body",
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+  });
+  await expect(page.locator("[data-collaboration-participants]")).toContainText(
+    "Alice",
+  );
+  await expect(page.locator("[data-collaboration-state]")).toContainText(
+    "1人が接続中",
+  );
 
   const source = new Y.Doc();
   source.getText("title").insert(0, documentItem.title);
