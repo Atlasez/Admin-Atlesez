@@ -1284,6 +1284,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const mediaLatexName = root.querySelector<HTMLInputElement>("[data-media-latex-name]")!;
     const mediaList = root.querySelector<HTMLElement>("[data-media-list]")!;
     const mediaStatus = root.querySelector<HTMLElement>("[data-media-status]")!;
+    let mediaLoadVersion = 0;
     const comments = root.querySelector<HTMLElement>("[data-comment-list]")!;
     const commentBody = root.querySelector<HTMLTextAreaElement>("[data-comment-body]")!;
     const commentSearch = root.querySelector<HTMLInputElement>("[data-comment-search]")!;
@@ -2176,18 +2177,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       void hydrateAssetImages(mediaList);
     };
     const loadMediaAssets = async (documentId: string) => {
+      const loadVersion = ++mediaLoadVersion;
       if (!documentId) { editorialAssets = []; renderMediaList(); mediaStatus.textContent = "原稿を保存すると利用できます"; return; }
       try {
         const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/assets`, { credentials: "same-origin" });
         const data = await read<{ assets?: EditorialAsset[]; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "素材を読み込めませんでした。");
+        if (loadVersion !== mediaLoadVersion) return;
         editorialAssets = data.assets ?? [];
         mediaStatus.textContent = editorialAssets.length ? `${editorialAssets.length}件の素材` : "素材はまだありません";
         renderMediaList();
         void renderPreview();
-      } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。"; }
+      } catch (error) {
+        if (loadVersion === mediaLoadVersion)
+          mediaStatus.textContent = error instanceof Error ? error.message : "素材を読み込めませんでした。";
+      }
     };
     const uploadMediaFile = async (file: File) => {
+      // Invalidate an initial asset-list request so a stale response cannot
+      // overwrite the upload result while the new asset is being inserted.
+      mediaLoadVersion += 1;
       mediaStatus.textContent = "画像をアップロード中…";
       const formData = new FormData(); formData.set("file", file); formData.set("alt", mediaAlt.value.trim()); formData.set("latexName", mediaLatexName.value.trim());
       try {
@@ -2200,6 +2209,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         insertAtCursor(`![${asset.alt || asset.filename}](asset://${asset.id})\n`);
         mediaAlt.value = ""; mediaLatexName.value = ""; mediaInput.value = ""; mediaStatus.textContent = "画像を本文へ挿入しました。";
         await loadMediaAssets(documentId);
+        mediaStatus.textContent = "画像を本文へ挿入しました。";
       } catch (error) { mediaStatus.textContent = error instanceof Error ? error.message : "画像をアップロードできませんでした。"; mediaInput.value = ""; }
     };
     const loadPersonalNote = async () => {
