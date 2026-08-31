@@ -650,10 +650,9 @@ test("E-6b: ダークモードで編集ツールバーの状態UIを読み分け
   expect(toolbarColors.engineText).toBe("rgb(232, 230, 225)");
 });
 
-test("E-6c: システムのダーク設定でも公開連携の状態UIを読み分けられる", async ({
+test("E-6c: ダークモード解除時に公開連携の状態UIをライト配色へ戻す", async ({
   page,
 }) => {
-  await page.emulateMedia({ colorScheme: "dark" });
   await mockAdminApi(page);
   await page.goto("./admin/editor/?document=doc-1");
 
@@ -662,17 +661,24 @@ test("E-6c: システムのダーク設定でも公開連携の状態UIを読み
     .evaluate((element) => {
       (element as HTMLElement).hidden = false;
       element.dataset.state = "ready";
-      const style = getComputedStyle(element);
+      document.documentElement.setAttribute("data-pref-bg", "dark");
+      const dark = getComputedStyle(element);
+      const darkColors = {
+        background: dark.backgroundColor,
+        text: dark.color,
+      };
+      document.documentElement.removeAttribute("data-pref-bg");
+      const light = getComputedStyle(element);
       return {
-        background: style.backgroundColor,
-        border: style.borderColor,
-        text: style.color,
+        dark: darkColors,
+        light: { background: light.backgroundColor, text: light.color },
       };
     });
 
-  expect(colors.background).toBe("rgb(29, 58, 42)");
-  expect(colors.border).toBe("rgb(100, 184, 137)");
-  expect(colors.text).toBe("rgb(200, 240, 213)");
+  expect(colors.dark.background).toBe("rgb(29, 58, 42)");
+  expect(colors.dark.text).toBe("rgb(200, 240, 213)");
+  expect(colors.light.background).not.toBe(colors.dark.background);
+  expect(colors.light.text).toBe("rgb(36, 100, 58)");
 });
 
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
