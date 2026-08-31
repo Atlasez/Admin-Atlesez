@@ -693,6 +693,95 @@ test("E-7: 未保存の変更があると戻る・離脱を警告する", async 
   expect(prevented).toBe(true);
 });
 
+test("画像参照を含む未保存の変更を公開前に保存してからPRを作成する", async ({
+  page,
+}) => {
+  const assetId = "55555555-5555-4555-8555-555555555555";
+  const approvedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    body: "## 画像\n\n公開前の本文です。",
+  };
+  const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+
+  await page.route("**/api/admin/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const body = request.postDataJSON?.() ?? undefined;
+    requests.push({ method: request.method(), path: url.pathname, body });
+    if (url.pathname === "/api/admin/editor/documents") {
+      await route.fulfill({
+        json: {
+          documents: [approvedDocument],
+          mentionNames: [],
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            isManager: true,
+          },
+        },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents/doc-1") {
+      if (request.method() === "PATCH") {
+        await route.fulfill({ json: { ok: true } });
+      } else {
+        await route.fulfill({
+          json: { document: approvedDocument, comments: [] },
+        });
+      }
+      return;
+    }
+    if (url.pathname.endsWith("/assets")) {
+      await route.fulfill({ json: { assets: [] } });
+      return;
+    }
+    if (url.pathname.endsWith("/revisions")) {
+      await route.fulfill({ json: { revisions: [] } });
+      return;
+    }
+    if (url.pathname.endsWith("/publication-review")) {
+      await route.fulfill({ json: {} });
+      return;
+    }
+    if (url.pathname.endsWith("/publish")) {
+      await route.fulfill({ json: { ok: true, pending: true } });
+      return;
+    }
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("./admin/editor/?document=doc-1");
+  await page
+    .locator("[data-body]")
+    .fill(`## 画像\n\n![図](asset://${assetId})`);
+  await page.getByRole("button", { name: "公開する" }).click();
+  await page
+    .locator("[data-approval-dialog]")
+    .getByRole("button", { name: "はい（公開する）" })
+    .click();
+
+  await expect
+    .poll(() =>
+      requests.findIndex((request) => request.path.endsWith("/publish")),
+    )
+    .toBeGreaterThan(-1);
+  const publishIndex = requests.findIndex((request) =>
+    request.path.endsWith("/publish"),
+  );
+  const saveIndex = requests.findIndex(
+    (request) =>
+      request.method === "PATCH" &&
+      request.path === "/api/admin/editor/documents/doc-1",
+  );
+  expect(saveIndex).toBeGreaterThanOrEqual(0);
+  expect(saveIndex).toBeLessThan(publishIndex);
+  expect((requests[saveIndex]?.body as { body?: string }).body).toContain(
+    `asset://${assetId}`,
+  );
+});
+
 test("E-14: 編集画面から戻ると編集・フィードバック一覧へ移動する", async ({
   page,
 }) => {
