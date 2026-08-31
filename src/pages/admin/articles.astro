@@ -673,6 +673,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const isUnregistered = row.kind === "unregistered";
         const article = row.kind === "editorial" ? row.article : null;
         if (isUnregistered && mode !== "all") return false;
+        if (article && archive.value === "active" && isArchived(article)) return false;
+        if (article && archive.value === "archived" && !isArchived(article)) return false;
         if (article && mode === "review" && article.status === "approved") return false;
         if (article && mode === "request" && !([article.created_by, article.updated_by].includes(scopeEmail) && article.status !== "approved" && !article.published_at)) return false;
         if (subject.value !== "all" && rowSubject(row) !== subject.value) return false;
@@ -699,7 +701,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       count.textContent = `${shown.length}件`;
       const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
       list.innerHTML = shown.length ? shown.map((row) => {
-        if (row.kind === "unregistered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理未登録"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営管理未登録</span><a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-subject="${esc(row.publicArticle.subject)}" data-category="${esc(row.publicArticle.category)}" data-slug="${esc(row.publicArticle.slug)}">運営管理へ登録</a></div></article>`;
+        if (row.kind === "unregistered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理未登録"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営管理未登録</span><a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営管理へ登録</a></div></article>`;
         if (row.kind === "registered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理登録済み"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge published">運営管理登録済み</span>${row.documentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&mode=update&from=articles">更新案を作成</a>` : '<span class="badge">運営原稿を準備中</span>'}</div></article>`;
         const article = row.article;
         const editing = activeEditorsFor(article);
@@ -741,8 +743,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         publicArticles = normalized;
         catalogSource = "api";
       } catch (error) {
+        // APIに接続できない場合は、ビルド時の古いカタログを混ぜない。
+        // 原稿一覧の状態と公開サイトの状態が食い違うため、未確認の公開記事を
+        // 運営原稿として表示するよりも、カタログを空にして診断を促す。
+        publicArticles = [];
         catalogSource = "static";
-        setCatalogFeedback(`公開記事カタログAPIを利用できないため、静的な記事一覧を表示しています。${error instanceof Error ? `（${error.message}）` : ""}`);
+        setCatalogFeedback(`公開記事カタログAPIに接続できないため、公開記事カタログを表示できません。${error instanceof Error ? `（${error.message}）` : ""}`);
       }
     };
     const load = async () => {
