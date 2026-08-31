@@ -3107,6 +3107,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationHeartbeatNow: (() => void) | null = null;
     let collaborationGeneration = 0;
     let collaborationApplyingRemote = false;
+    let collaborationSessionId = "";
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
     const setCollaborationConnectionState = (connectionState: "connecting" | "connected" | "reconnecting" | "error", message: string) => {
       collaborationStatus.dataset.state = connectionState;
@@ -3114,16 +3115,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (connectionState !== "connected") collaborationLatency.hidden = true;
     };
     const renderCollaborationParticipants = (participants: CollaborationParticipant[]) => {
-      const ownEmail = currentUserEmail.trim().toLowerCase();
-      const others = participants.filter((participant) => !ownEmail || participant.email.trim().toLowerCase() !== ownEmail);
-      collaborationParticipants.replaceChildren(...others.map((participant) => {
+      const normalized = participants.filter((participant) => participant && typeof participant.displayName === "string");
+      collaborationParticipants.replaceChildren(...normalized.map((participant) => {
         const chip = document.createElement("span");
         const field = collaborationFieldLabels[participant.field];
-        chip.textContent = `${participant.displayName}${field ? `・${field}` : ""}`;
+        const isSelf = Boolean(
+          (collaborationSessionId && participant.sessionId === collaborationSessionId) ||
+          (currentUserEmail && participant.email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase()),
+        );
+        chip.textContent = `${participant.displayName || participant.email || "メンバー"}${isSelf ? "（自分）" : ""}${field ? `・${field}` : ""}`;
         chip.title = participant.email;
         return chip;
       }));
-      setCollaborationConnectionState("connected", others.length ? `リアルタイム同期・他${others.length}人` : "リアルタイム同期");
+      setCollaborationConnectionState("connected", normalized.length ? `同時編集：${normalized.length}人が接続中` : "リアルタイム同期");
     };
     const stopCollaborationHeartbeat = () => {
       window.clearTimeout(collaborationHeartbeatTimer);
@@ -3142,6 +3146,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationDocument?.destroy();
       collaborationDocument = null;
       collaborationDocumentId = "";
+      collaborationSessionId = "";
       collaborationParticipants.replaceChildren();
       collaborationLatency.hidden = true;
       collaborationHeartbeatNow = null;
@@ -3283,6 +3288,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 collaborationLatency.textContent = `${Math.max(1, Date.now() - payload.sentAt)}ms`;
                 collaborationLatency.hidden = false;
               }
+              return;
+            }
+            if (payload.type === "session" && typeof (payload as { sessionId?: unknown }).sessionId === "string") {
+              collaborationSessionId = (payload as { sessionId: string }).sessionId;
               return;
             }
             if (payload.type === "presence") renderCollaborationParticipants(payload.participants ?? []);
