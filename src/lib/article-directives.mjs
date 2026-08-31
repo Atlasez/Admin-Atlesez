@@ -15,6 +15,8 @@ const DIRECTIVE_LABELS = {
   note: "注",
   warning: "注意",
   tip: "ヒント",
+  folding: "折りたたみ",
+  supp: "補足",
 };
 
 const SEMANTIC_CLASSES = {
@@ -149,7 +151,7 @@ function directiveMarkup(marker) {
     : "";
   if (marker.name === "proof") {
     return {
-      open: `<details class="proof-details" data-directive="proof" open>`,
+      open: `<details class="proof-details folding" data-directive="proof" open>`,
       title: titleParagraph(marker, { tagName: "summary" }),
       bodyOpen: `<div class="proof-details-inner">`,
       close: "</div></details>",
@@ -161,6 +163,18 @@ function directiveMarkup(marker) {
       open: `<details class="folding" data-directive="folding">`,
       title: titleParagraph(marker, { tagName: "summary" }),
       bodyOpen: `<div class="folding-content">`,
+      close: "</div></details>",
+    };
+  }
+
+  if (marker.name === "supp") {
+    return {
+      open: `<details class="supp-details" data-directive="supp">`,
+      title: titleParagraph(marker, {
+        className: "supp-details-summary",
+        tagName: "summary",
+      }),
+      bodyOpen: `<div class="supp-details-inner">`,
       close: "</div></details>",
     };
   }

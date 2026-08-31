@@ -848,6 +848,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(45deg); transition:transform .15s ease; width:.45rem; }
   .article-preview .proof-details[open] > summary::before { transform:rotate(225deg); }
   .article-preview .proof-details > summary:hover { border-color:var(--accent); }
+  .article-preview .supp-details { border:0; margin:1rem 0; }
+  .article-preview .supp-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.45rem; cursor:pointer; font-weight:800; list-style:none; padding:.55rem 2rem .55rem .8rem; position:relative; text-align:center; }
+  .article-preview .supp-details > summary::-webkit-details-marker { display:none; }
+  .article-preview .supp-details > summary::after { content:"+"; position:absolute; right:.8rem; }
+  .article-preview .supp-details[open] > summary::after { content:"−"; }
+  .article-preview .supp-details-inner { border:1px solid var(--border); border-top:0; border-bottom:0; padding:.8rem 1rem; }
   .editor-split { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pane-controls { align-items:center; display:flex; flex:0 0 auto; flex-wrap:wrap; gap:.35rem; }
   .math-preset-control { align-items:center; color:var(--muted); display:flex; flex:1 1 10rem; font-size:.68rem; font-weight:800; gap:.35rem; justify-content:space-between; min-width:0; }

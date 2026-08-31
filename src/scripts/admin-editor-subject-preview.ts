@@ -39,13 +39,26 @@ function createDirectiveContainer(
 ): DirectiveContainer {
   if (marker.name === "proof") {
     const details = doc.createElement("details");
-    details.className = "proof-details";
+    details.className = "proof-details folding";
     details.dataset.directive = marker.name;
     details.open = true;
     const summary = doc.createElement("summary");
     summary.textContent = marker.title;
     const body = doc.createElement("div");
     body.className = "proof-details-inner";
+    details.append(summary, body);
+    return { section: details, body, fenceLength: marker.fence.length };
+  }
+
+  if (marker.name === "supp") {
+    const details = doc.createElement("details");
+    details.className = "supp-details";
+    details.dataset.directive = marker.name;
+    const summary = doc.createElement("summary");
+    summary.className = "supp-details-summary";
+    summary.textContent = marker.title;
+    const body = doc.createElement("div");
+    body.className = "supp-details-inner";
     details.append(summary, body);
     return { section: details, body, fenceLength: marker.fence.length };
   }
