@@ -1871,6 +1871,56 @@ async function listReportAdminPermissions(
     ...member,
     discord_role_ids: (assignmentsByEmail.get(member.email.toLowerCase()) ?? []).join(","),
   }));
+  // The primary operator is also allowed through the authentication fallback
+  // when an older production database is missing the seeded permission row.
+  // Keep the permissions screen consistent with that access decision instead
+  // of hiding the currently signed-in global administrator from the list.
+  if (
+    scope.email === PRIMARY_ADMIN_EMAIL &&
+    !permissions.some((member) => member.email.toLowerCase() === PRIMARY_ADMIN_EMAIL)
+  ) {
+    const [profile, discordAccount] = await Promise.all([
+      env.REPORTS.prepare(
+        `SELECT display_name, university, year, interests, avatar_url
+         FROM editorial_member_profiles
+         WHERE lower(email) = lower(?) LIMIT 1`,
+      )
+        .bind(PRIMARY_ADMIN_EMAIL)
+        .first<{
+          display_name: string;
+          university: string;
+          year: string;
+          interests: string;
+          avatar_url: string;
+        }>(),
+      env.REPORTS.prepare(
+        `SELECT discord_user_id
+         FROM atlasez_member_discord_accounts
+         WHERE lower(email) = lower(?) LIMIT 1`,
+      )
+        .bind(PRIMARY_ADMIN_EMAIL)
+        .first<{ discord_user_id: string }>(),
+    ]);
+    permissions.push({
+      email: PRIMARY_ADMIN_EMAIL,
+      subjects: "*",
+      display_name: profile?.display_name?.trim() || "主管理者",
+      university: profile?.university ?? "",
+      year: profile?.year ?? "",
+      interests: profile?.interests ?? "",
+      avatar_url: profile?.avatar_url ?? "",
+      discord_user_id: discordAccount?.discord_user_id ?? "",
+      discord_role_ids: (
+        assignmentsByEmail.get(PRIMARY_ADMIN_EMAIL) ?? []
+      ).join(","),
+    });
+    permissions.sort((left, right) =>
+      `${left.display_name}\u0000${left.email}`.localeCompare(
+        `${right.display_name}\u0000${right.email}`,
+        "ja",
+      ),
+    );
+  }
   return json({
     permissions,
     workflowRoles: workflowRoles.results,
@@ -4119,6 +4169,7 @@ type DiscordProvisioningResult = {
   applied: number;
   removed: number;
   warnings: string[];
+  notices?: string[];
 };
 
 const discordRoleMutationWarning = (
@@ -4318,6 +4369,7 @@ async function provisionApplicationDiscordRoles(
   );
   const desired = new Set<string>();
   const warnings: string[] = [];
+  const notices: string[] = [];
   for (const assignment of manualAssignments.results ?? []) {
     if (
       assignableGuildRoles.some((role) => role.id === assignment.discord_role_id)
@@ -4332,6 +4384,18 @@ async function provisionApplicationDiscordRoles(
     key: string,
     label: string,
   ) => {
+    // Older profiles may contain the legacy English value `student`. It is an
+    // affiliation value, not a Discord role, so it must not make an otherwise
+    // successful synchronization fail because a role with that name is absent.
+    if (
+      kind === "affiliation" &&
+      !(MEMBER_AFFILIATION_TYPES as readonly string[]).includes(key)
+    ) {
+      notices.push(
+        `所属区分「${key}」はDiscordロール同期の対象外としてスキップしました。`,
+      );
+      return;
+    }
     let roleId = "";
     if (kind === "attribute") {
       const mapping = await env.REPORTS.prepare(
@@ -4354,8 +4418,14 @@ async function provisionApplicationDiscordRoles(
       !roleId ||
       !assignableGuildRoles.some((role) => role.id === roleId)
     ) {
-      const sameNameRoles = assignableGuildRoles.filter(
-        (role) => role.name.trim() === label.trim(),
+      const compatibleLabels =
+        kind === "subject" && key === "__manager__"
+          ? [label, "運営メンバー"]
+          : [label];
+      const sameNameRoles = assignableGuildRoles.filter((role) =>
+        compatibleLabels.some(
+          (compatibleLabel) => role.name.trim() === compatibleLabel.trim(),
+        ),
       );
       if (sameNameRoles.length === 1) roleId = sameNameRoles[0].id;
       else if (sameNameRoles.length > 1) {
@@ -4438,7 +4508,13 @@ async function provisionApplicationDiscordRoles(
     if (response.ok) removed++;
     else warnings.push(discordRoleMutationWarning("削除", guildRoles, roleId, response));
   }
-  return { status: warnings.length ? "failed" : "synced", applied, removed, warnings };
+  return {
+    status: warnings.length ? "failed" : "synced",
+    applied,
+    removed,
+    warnings,
+    ...(notices.length ? { notices } : {}),
+  };
 }
 
 async function provisionMemberDiscordRolesForEmail(
