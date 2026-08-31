@@ -613,6 +613,43 @@ test("E-6: ダークモードでMarkdown本文を読める配色にする", asyn
   expect(lockedMarkColors?.border).toBe("rgb(255, 122, 135)");
 });
 
+test("E-6b: ダークモードで編集ツールバーの状態UIを読み分けられる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  await page.locator(".document-toolbar").waitFor({ state: "visible" });
+  await page.evaluate(() =>
+    document.documentElement.setAttribute("data-pref-bg", "dark"),
+  );
+
+  const toolbarColors = await page
+    .locator(".document-toolbar")
+    .evaluate((element) => {
+      const toolbar = getComputedStyle(element);
+      const statusPill = getComputedStyle(
+        element.querySelector(".document-status-pill")!,
+      );
+      const statusText = getComputedStyle(
+        element.querySelector(".document-status-pill strong")!,
+      );
+      const engine = getComputedStyle(element.querySelector("select")!);
+      return {
+        toolbarBackground: toolbar.backgroundColor,
+        statusBackground: statusPill.backgroundColor,
+        statusText: statusText.color,
+        engineBackground: engine.backgroundColor,
+        engineText: engine.color,
+      };
+    });
+
+  expect(toolbarColors.toolbarBackground).not.toBe("rgb(255, 255, 255)");
+  expect(toolbarColors.statusBackground).toBe("rgb(35, 36, 39)");
+  expect(toolbarColors.statusText).toBe("rgb(232, 230, 225)");
+  expect(toolbarColors.engineBackground).toBe("rgb(25, 26, 28)");
+  expect(toolbarColors.engineText).toBe("rgb(232, 230, 225)");
+});
+
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
