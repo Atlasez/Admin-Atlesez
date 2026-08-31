@@ -4089,7 +4089,7 @@ async function registerPublicArticleInEditorialCatalog(
       `INSERT OR IGNORE INTO editorial_documents
        (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
         status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'katex', 'draft', ?, ?, ?, ?, NULL, NULL, NULL, 0, '[]', ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'katex', 'draft', ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, '[]', ?)`,
     )
       .bind(
         documentId,

@@ -709,6 +709,11 @@ describe("既存公開記事の運営原稿移行契約", () => {
           call.query.includes("INSERT OR IGNORE INTO editorial_documents"),
         ),
       ).toHaveLength(1);
+      expect(
+        calls.find((call) =>
+          call.query.includes("INSERT OR IGNORE INTO editorial_documents"),
+        )?.query,
+      ).toContain("NULL, NULL, NULL, NULL, 0, '[]', ?");
       expect(githubRequests.some((request) => request.method === "PUT")).toBe(
         false,
       );
