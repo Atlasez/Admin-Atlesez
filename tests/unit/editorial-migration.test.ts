@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import worker, { editorialMarkdown } from "../../src/admin-worker";
+import { diagnoseArticleSource } from "../../src/lib/article-diagnostics.mjs";
 
 type SqlCall = { query: string; values: unknown[] };
 
@@ -187,8 +188,9 @@ class CatalogStatement {
   async first<T>() {
     if (
       this.query.includes(
-        "SELECT id, locale, subject, category, slug FROM editorial_documents WHERE source_article_id",
-      )
+        "SELECT id, locale, subject, category, slug FROM editorial_documents",
+      ) &&
+      this.query.includes("source_article_id=?")
     ) {
       const [sourceArticleId, excludedDocumentId] = this.values;
       return (this.store.documents.find(
@@ -485,6 +487,74 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(update?.values).toContain(importedArticle.category);
   });
 
+  it("公開済み記事の更新案でも同じ公開パスとarticleIdを維持する", async () => {
+    const calls: SqlCall[] = [];
+    const existing = {
+      id: "33333333-3333-4333-8333-333333333333",
+      ...importedArticle,
+      source_article_id: importedArticle.sourceArticleId,
+      concept_id: importedArticle.conceptId,
+      writing_memo: "",
+      latex_engine: importedArticle.latexEngine,
+      created_by: "author@example.com",
+      updated_by: "reviewer@example.com",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-31T00:00:00.000Z",
+      reviewed_at: "2026-08-31T00:00:00.000Z",
+      published_at: "2026-08-31T00:00:00.000Z",
+      scheduled_publish_at: null,
+      scheduled_publish_claimed_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+      locked_ranges: "[]",
+      article_references: "[]",
+      body: importedArticle.body,
+      status: "approved",
+    };
+    const env = {
+      ...baseEnv,
+      REPORTS: {
+        prepare: (query: string) =>
+          new RecordingStatement(query, calls, existing),
+        batch: async () => [],
+      },
+    };
+
+    const response = await worker.fetch(
+      sameOriginJsonRequest(
+        `/api/admin/editor/documents/${existing.id}`,
+        {
+          ...importedArticle,
+          status: "approved",
+          body: `${importedArticle.body}\n\n## 更新案\n\n公開済み記事への追記です。`,
+        },
+        "PATCH",
+      ),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    const update = calls.find((call) =>
+      call.query.includes("UPDATE editorial_documents SET source_article_id"),
+    );
+    expect(update?.values.slice(0, 5)).toEqual([
+      importedArticle.sourceArticleId,
+      importedArticle.subject,
+      importedArticle.category,
+      importedArticle.locale,
+      importedArticle.slug,
+    ]);
+    expect(update?.values[8]).toContain("## 更新案");
+    // The update changes the existing file in place; it must not create a new
+    // path or replace the stable article identifier with the editorial UUID.
+    expect(update?.query).not.toContain("published_at = NULL");
+    expect(
+      calls.some((call) =>
+        call.query.includes("INSERT INTO editorial_documents"),
+      ),
+    ).toBe(false);
+  });
+
   it("公開用Markdownでも既存記事のarticleIdを維持する", () => {
     const markdown = editorialMarkdown({
       id: "22222222-2222-4222-8222-222222222222",
@@ -684,6 +754,74 @@ describe("既存公開記事の運営原稿移行契約", () => {
         call.query.includes("INSERT INTO editorial_documents"),
       ),
     ).toBe(false);
+  });
+
+  it("同じsource_article_idを別の公開パスへ複製する新規原稿を拒否する", async () => {
+    const store: CatalogStore = {
+      documents: [
+        {
+          id: "existing-source-document",
+          source_article_id: importedArticle.sourceArticleId,
+          subject: importedArticle.subject,
+          category: "field-theory",
+          locale: importedArticle.locale,
+          slug: "ring-definition-copy",
+          title: importedArticle.title,
+          summary: "既存記事",
+          concept_id: importedArticle.conceptId,
+          body: "本文",
+          status: "draft",
+          published_at: null,
+          updated_at: "2026-08-31T00:00:00.000Z",
+          created_at: "2026-08-30T00:00:00.000Z",
+        },
+      ],
+      rows: new Map(),
+    };
+    const calls: SqlCall[] = [];
+
+    const response = await worker.fetch(
+      sameOriginJsonRequest("/api/admin/editor/documents", {
+        ...importedArticle,
+        category: "field-theory",
+        slug: "ring-definition",
+      }),
+      catalogEnvironment(store, calls) as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "この公開記事は別の運営原稿に紐付いています。",
+      documentId: "existing-source-document",
+    });
+    expect(
+      calls.some((call) =>
+        call.query.includes("INSERT INTO editorial_documents"),
+      ),
+    ).toBe(false);
+  });
+
+  it("診断結果のseverity・位置・メッセージを編集UIの契約で表示できる", async () => {
+    const editorSource = await readFile(
+      new URL("../../src/pages/admin/editor.astro", import.meta.url),
+      "utf8",
+    );
+    const result = diagnoseArticleSource("$未完了", { references: [] });
+
+    expect(result[0]).toMatchObject({
+      severity: "error",
+      code: "inline-math-unclosed",
+      line: 1,
+      column: 1,
+    });
+    expect(typeof result[0]?.message).toBe("string");
+    expect(editorSource).toContain("data-editor-diagnostics");
+    expect(editorSource).toContain("data-diagnostics-trigger-count");
+    expect(editorSource).toContain("data-diagnostics-summary");
+    expect(editorSource).toContain("data-diagnostics-list");
+    expect(editorSource).toContain('item.severity === "error"');
+    expect(editorSource).toContain("item.line}:${item.column}");
+    expect(editorSource).toContain("esc(item.message)");
   });
 
   it("記事一覧UIは公開済み・未登録を明示し、catalog/registerへ導く", async () => {
