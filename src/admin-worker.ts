@@ -548,6 +548,9 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 // session now proves Google identity only; admin access still requires the
 // separate report_admin_permissions check below.
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
+// Keep the designated primary operator available if an existing production
+// database temporarily loses its seeded permission row.
+const PRIMARY_ADMIN_EMAIL = "ukyoukay0@gmail.com";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
 const GOOGLE_LINK_STATE_COOKIE = "atlasez_google_account_link_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
@@ -1109,9 +1112,14 @@ async function getAdminScope(
   const grantedSubjects = result.results
     .map((permission) => permission.subject)
     .filter(Boolean);
-  if (!grantedSubjects.length && !(workflowRoles.results ?? []).length)
+  const isPrimaryAdmin = email === PRIMARY_ADMIN_EMAIL;
+  if (
+    !grantedSubjects.length &&
+    !(workflowRoles.results ?? []).length &&
+    !isPrimaryAdmin
+  )
     return json({ error: "この管理画面の閲覧権限が設定されていません。" }, 403);
-  const allSubjects = grantedSubjects.includes("*");
+  const allSubjects = isPrimaryAdmin || grantedSubjects.includes("*");
   // `*` は全分野管理者の権限であって、その人自身の執筆担当分野ではない。
   // 通常の原稿一覧・作業状況は担当分野だけに限定する。
   const subjects = grantedSubjects.filter((subject) => subject !== "*");
@@ -1207,7 +1215,10 @@ async function getUserStageForEmail(
       profileComplete: baseProfileComplete,
       projectProfileComplete,
       tutorialComplete: Boolean(tutorial?.tutorial_completed_at),
-      isAdmin: localAdmin || Boolean(permission),
+      isAdmin:
+        localAdmin ||
+        Boolean(permission) ||
+        email === PRIMARY_ADMIN_EMAIL,
     }),
   };
 }
