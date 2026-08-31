@@ -650,6 +650,31 @@ test("E-6b: ダークモードで編集ツールバーの状態UIを読み分け
   expect(toolbarColors.engineText).toBe("rgb(232, 230, 225)");
 });
 
+test("E-6c: システムのダーク設定でも公開連携の状態UIを読み分けられる", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const colors = await page
+    .locator(".publication-integration-status")
+    .evaluate((element) => {
+      (element as HTMLElement).hidden = false;
+      element.dataset.state = "ready";
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        border: style.borderColor,
+        text: style.color,
+      };
+    });
+
+  expect(colors.background).toBe("rgb(29, 58, 42)");
+  expect(colors.border).toBe("rgb(100, 184, 137)");
+  expect(colors.text).toBe("rgb(200, 240, 213)");
+});
+
 test("E-7: 未保存の変更があると戻る・離脱を警告する", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
