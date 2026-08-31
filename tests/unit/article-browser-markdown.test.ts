@@ -62,6 +62,32 @@ describe("browser article Markdown renderer", () => {
     expect(html.match(/class="katex"/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("renders proof and supplement directives as interactive details", async () => {
+    const html = await renderArticleMarkdown(
+      [
+        ":::proof",
+        "",
+        "証明本文",
+        "",
+        ":::",
+        "",
+        ":::supp 補足",
+        "",
+        "補足本文",
+        "",
+        ":::",
+      ].join("\n"),
+    );
+
+    expect(html).toContain(
+      '<details class="proof-details folding" data-directive="proof" open>',
+    );
+    expect(html).toContain(
+      '<details class="supp-details" data-directive="supp">',
+    );
+    expect(html).toContain('class="supp-details-inner"');
+  });
+
   it("turns TikZ fences into stable live-preview placeholders", async () => {
     const html = await renderArticleMarkdown(
       [

@@ -117,7 +117,7 @@ export function enhancePublishedMathematics(target: HTMLElement) {
       continue;
     }
     const details = target.ownerDocument.createElement("details");
-    details.className = "proof-details";
+    details.className = "proof-details folding";
     const summary = target.ownerDocument.createElement("summary");
     summary.textContent = "証明.";
     const inner = target.ownerDocument.createElement("div");

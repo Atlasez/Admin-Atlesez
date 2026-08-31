@@ -164,4 +164,21 @@ describe("admin editor subject preview", () => {
       "補足本文",
     );
   });
+
+  it("keeps supplement directives collapsible in the published preview", async () => {
+    const rendered = await renderArticleMarkdown(
+      [":::supp 補足", "", "補足本文", "", ":::"].join("\n"),
+    );
+    const preview = mountPreview(rendered.code)!;
+
+    applySubjectPreviewProfile(preview, "mathematics");
+
+    expect(preview.querySelector("details.supp-details")).not.toBeNull();
+    expect(
+      preview.querySelector("summary.supp-details-summary")?.textContent,
+    ).toBe("補足");
+    expect(preview.querySelector(".supp-details-inner")?.textContent).toContain(
+      "補足本文",
+    );
+  });
 });
