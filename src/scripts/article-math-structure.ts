@@ -1,3 +1,8 @@
+import {
+  articleTitleContainsMath,
+  renderArticleTitleMath,
+} from "../lib/article-title-math.mjs";
+
 const LABEL_TO_CLASS: Record<string, string> = {
   定義: "defi",
   命題: "prop",
@@ -178,7 +183,10 @@ function statementLabel(wrapper: HTMLElement): string | null {
 
 function authoredStatementTitle(title: HTMLElement, label: string): string {
   const source =
-    title.dataset.authoredStatementTitle ?? title.textContent?.trim() ?? "";
+    title.dataset.authoredStatementTitle ??
+    title.dataset.mathTitleSource ??
+    title.textContent?.trim() ??
+    "";
   const withoutNumber = source
     .replace(new RegExp(`^${label}\\s*\\d*\\s*[.．。:：]?\\s*`, "u"), "")
     .trim();
@@ -197,21 +205,14 @@ function preserveNumberedStatementTitle(
   number: number,
   authored: string,
 ): void {
-  const ownerDocument = title.ownerDocument;
-  const authoredSource = title.dataset.authoredStatementTitle ?? "";
-  const hasMathTitle =
-    Boolean(title.querySelector(".katex")) ||
-    /\$[^$\r\n]+\$/.test(authoredSource);
-  const authoredNodes = hasMathTitle
-    ? [...title.childNodes].map((node) => node.cloneNode(true))
-    : [ownerDocument.createTextNode(authored)];
-  title.replaceChildren(ownerDocument.createTextNode(`${label}${number}`));
-  if (!authored) return;
-  title.append(
-    ownerDocument.createTextNode("("),
-    ...authoredNodes,
-    ownerDocument.createTextNode(")"),
-  );
+  const visible = `${label} ${number}${authored ? ` (${authored})` : ""}`;
+  if (articleTitleContainsMath(visible)) {
+    title.innerHTML = renderArticleTitleMath(visible);
+    title.dataset.mathTitleSource = visible;
+  } else {
+    title.textContent = visible;
+    delete title.dataset.mathTitleSource;
+  }
 }
 
 /** Number definitions, propositions, theorems, lemmas, corollaries and examples in reading order. */
@@ -282,7 +283,7 @@ export function numberMathStatements(
         const link = mathBody.ownerDocument.createElement("a");
         link.className = "math-statement-reference";
         link.href = `#${match[1]}`;
-        link.textContent = `${target.dataset.statementLabel}${target.dataset.statementNumber}`;
+        link.textContent = `${target.dataset.statementLabel} ${target.dataset.statementNumber}`;
         fragment.append(link);
       } else {
         const candidates = index.filter((item) => item.id === match[1]);
@@ -304,7 +305,7 @@ export function numberMathStatements(
           link.className =
             "math-statement-reference math-statement-reference-external";
           link.href = `${external.href}#${encodeURIComponent(external.id)}`;
-          link.textContent = `${external.articleTitle}:${external.label}${external.number}`;
+          link.textContent = `${external.articleTitle}:${external.label} ${external.number}`;
           fragment.append(link);
         } else fragment.append(match[0]);
       }
@@ -335,6 +336,16 @@ function initializePublishedMathStructure(): void {
     locale: meta.dataset.locale,
     statementIndex,
   });
+  for (const title of body.querySelectorAll<HTMLElement>(
+    ".article-directive-title, .proof-details > summary, .supp-details-summary, details.folding > summary",
+  )) {
+    if (title.dataset.titleMathRendered === "true") continue;
+    const source = title.textContent ?? "";
+    if (!articleTitleContainsMath(source)) continue;
+    title.innerHTML = renderArticleTitleMath(source);
+    title.dataset.mathTitleSource = source;
+    title.dataset.titleMathRendered = "true";
+  }
 }
 
 if (typeof document !== "undefined") {

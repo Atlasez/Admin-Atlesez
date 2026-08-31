@@ -20,8 +20,8 @@
   margin-block: 0.7em;
 }
 
-.article-body .defi,
-.article-body .math-definition {
+.article-body[data-article-subject="mathematics"] .defi,
+.article-body[data-article-subject="mathematics"] .math-definition {
   background: color-mix(in srgb, #6cb4c2 10%, var(--background-primary));
   border: 1px solid color-mix(in srgb, #6cb4c2 35%, var(--border-default));
   border-left: 3px solid #6cb4c2;
@@ -34,12 +34,12 @@
   overflow: visible;
 }
 
-.article-body .prop,
-.article-body .thm,
-.article-body .lemma,
-.article-body .cor,
-.article-body .example,
-.article-body .math-theorem {
+.article-body[data-article-subject="mathematics"] .prop,
+.article-body[data-article-subject="mathematics"] .thm,
+.article-body[data-article-subject="mathematics"] .lemma,
+.article-body[data-article-subject="mathematics"] .cor,
+.article-body[data-article-subject="mathematics"] .example,
+.article-body[data-article-subject="mathematics"] .math-theorem {
   background: color-mix(in srgb, #e0c375 12%, var(--background-primary));
   border: 1px solid #e0c375;
   border-left-width: 3px;
@@ -52,29 +52,33 @@
   overflow: visible;
 }
 
-.article-body .defi > :first-child,
-.article-body .prop > :first-child,
-.article-body .thm > :first-child,
-.article-body .lemma > :first-child,
-.article-body .cor > :first-child,
-.article-body .example > :first-child,
-.article-body .math-definition > :first-child,
-.article-body .math-theorem > :first-child {
+.article-body[data-article-subject="mathematics"] .defi > :first-child,
+.article-body[data-article-subject="mathematics"] .prop > :first-child,
+.article-body[data-article-subject="mathematics"] .thm > :first-child,
+.article-body[data-article-subject="mathematics"] .lemma > :first-child,
+.article-body[data-article-subject="mathematics"] .cor > :first-child,
+.article-body[data-article-subject="mathematics"] .example > :first-child,
+.article-body[data-article-subject="mathematics"]
+  .math-definition
+  > :first-child,
+.article-body[data-article-subject="mathematics"] .math-theorem > :first-child {
   margin-top: 0;
 }
 
-.article-body .defi > :last-child,
-.article-body .prop > :last-child,
-.article-body .thm > :last-child,
-.article-body .lemma > :last-child,
-.article-body .cor > :last-child,
-.article-body .example > :last-child,
-.article-body .math-definition > :last-child,
-.article-body .math-theorem > :last-child {
+.article-body[data-article-subject="mathematics"] .defi > :last-child,
+.article-body[data-article-subject="mathematics"] .prop > :last-child,
+.article-body[data-article-subject="mathematics"] .thm > :last-child,
+.article-body[data-article-subject="mathematics"] .lemma > :last-child,
+.article-body[data-article-subject="mathematics"] .cor > :last-child,
+.article-body[data-article-subject="mathematics"] .example > :last-child,
+.article-body[data-article-subject="mathematics"]
+  .math-definition
+  > :last-child,
+.article-body[data-article-subject="mathematics"] .math-theorem > :last-child {
   margin-bottom: 0;
 }
 
-.article-body .thmtitle {
+.article-body[data-article-subject="mathematics"] .thmtitle {
   color: #12333a;
   float: left;
   box-sizing: border-box;
@@ -90,17 +94,17 @@
   display: block;
 }
 
-.article-body .prop .thmtitle,
-.article-body .thm .thmtitle,
-.article-body .lemma .thmtitle,
-.article-body .cor .thmtitle,
-.article-body .example .thmtitle {
+.article-body[data-article-subject="mathematics"] .prop .thmtitle,
+.article-body[data-article-subject="mathematics"] .thm .thmtitle,
+.article-body[data-article-subject="mathematics"] .lemma .thmtitle,
+.article-body[data-article-subject="mathematics"] .cor .thmtitle,
+.article-body[data-article-subject="mathematics"] .example .thmtitle {
   background: #e0c375;
   border-color: #e0c375;
   color: #4b3a12;
 }
 
-.article-body .example .thmtitle {
+.article-body[data-article-subject="mathematics"] .example .thmtitle {
   float: none;
   border: 3px solid #e0c375;
   border-radius: 6px;
@@ -109,12 +113,14 @@
   margin: 0 0 0.5rem;
 }
 
-.article-body .defi > p:first-child::after,
-.article-body .prop > p:first-child::after,
-.article-body .thm > p:first-child::after,
-.article-body .lemma > p:first-child::after,
-.article-body .cor > p:first-child::after,
-.article-body .example > p:first-child::after {
+.article-body[data-article-subject="mathematics"] .defi > p:first-child::after,
+.article-body[data-article-subject="mathematics"] .prop > p:first-child::after,
+.article-body[data-article-subject="mathematics"] .thm > p:first-child::after,
+.article-body[data-article-subject="mathematics"] .lemma > p:first-child::after,
+.article-body[data-article-subject="mathematics"] .cor > p:first-child::after,
+.article-body[data-article-subject="mathematics"]
+  .example
+  > p:first-child::after {
   content: "";
   clear: both;
   display: table;
@@ -148,11 +154,11 @@
   margin-bottom: 0;
 }
 
-.article-body .proof-details {
+.article-body[data-article-subject="mathematics"] .proof-details {
   margin-block: 1.2rem;
 }
 
-.article-body .proof-details > summary {
+.article-body[data-article-subject="mathematics"] .proof-details > summary {
   align-items: center;
   background: var(--background-secondary);
   border: 1px solid var(--border-default);
@@ -166,11 +172,15 @@
   position: relative;
 }
 
-.article-body .proof-details > summary::-webkit-details-marker {
+.article-body[data-article-subject="mathematics"]
+  .proof-details
+  > summary::-webkit-details-marker {
   display: none;
 }
 
-.article-body .proof-details > summary::before {
+.article-body[data-article-subject="mathematics"]
+  .proof-details
+  > summary::before {
   border-bottom: 2px solid var(--text-secondary);
   border-right: 2px solid var(--text-secondary);
   content: "";
@@ -183,21 +193,25 @@
   width: 0.45rem;
 }
 
-.article-body .proof-details[open] > summary::before {
+.article-body[data-article-subject="mathematics"]
+  .proof-details[open]
+  > summary::before {
   transform: rotate(225deg);
 }
 
-.article-body .proof-details > summary:hover {
+.article-body[data-article-subject="mathematics"]
+  .proof-details
+  > summary:hover {
   border-color: var(--accent-primary);
 }
 
-.article-body .proof-details-inner {
+.article-body[data-article-subject="mathematics"] .proof-details-inner {
   border-left: 3px solid var(--border-default);
   margin: 0.4rem 0 0 0.35rem;
   padding: 0.2rem 0.95rem;
 }
 
-.article-body .katex-display {
+.article-body[data-article-subject="mathematics"] .katex-display {
   box-sizing: border-box;
   display: block;
   margin-block: 0.9rem;
@@ -209,20 +223,20 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.article-body .katex-display > .katex {
+.article-body[data-article-subject="mathematics"] .katex-display > .katex {
   display: inline-block;
   max-width: none;
   min-width: max-content;
 }
 
-.article-body .defi > p,
-.article-body .prop > p,
-.article-body .thm > p,
-.article-body .lemma > p,
-.article-body .cor > p,
-.article-body .example > p,
-.article-body .math-definition > p,
-.article-body .math-theorem > p {
+.article-body[data-article-subject="mathematics"] .defi > p,
+.article-body[data-article-subject="mathematics"] .prop > p,
+.article-body[data-article-subject="mathematics"] .thm > p,
+.article-body[data-article-subject="mathematics"] .lemma > p,
+.article-body[data-article-subject="mathematics"] .cor > p,
+.article-body[data-article-subject="mathematics"] .example > p,
+.article-body[data-article-subject="mathematics"] .math-definition > p,
+.article-body[data-article-subject="mathematics"] .math-theorem > p {
   overflow-wrap: anywhere;
 }
 

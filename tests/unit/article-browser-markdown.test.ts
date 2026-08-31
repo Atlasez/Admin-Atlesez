@@ -18,6 +18,15 @@ describe("browser article Markdown renderer", () => {
     expect(html).toContain('class="katex"');
   });
 
+  it("renders inline math in directive frame titles", async () => {
+    const html = await renderArticleMarkdown(
+      ":::defi 定義 $G$ の単位元 {#group-unit}\n\n本文\n\n:::",
+    );
+    expect(html).toContain('class="thmtitle"');
+    expect(html).toContain('class="katex"');
+    expect(html).toContain("data-authored-statement-title");
+  });
+
   it("uses a selected custom preset while keeping its source marker out of HTML", async () => {
     const html = await renderArticleMarkdown(
       "<!-- math-preset: custom-1 -->\n<!-- math-custom-preset: custom-1 -->\n\\newcommand{\\RR}{\\mathbb{R}}\n<!-- /math-custom-preset -->\n\n$\\RR$",

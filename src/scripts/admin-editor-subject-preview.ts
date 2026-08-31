@@ -205,6 +205,7 @@ export function applySubjectPreviewProfile(
   target.dataset.previewSubject = subject || "general";
   target.dataset.publishedPreview = "true";
   const body = ensurePublishedArticleBody(target);
+  body.dataset.articleSubject = subject || "general";
   enhancePreviewDirectives(body);
   if (subject === "mathematics") {
     normalizeMathArticleBody(body);
