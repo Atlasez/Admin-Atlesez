@@ -460,6 +460,20 @@ test("非公開RunのCI失敗後も公開状態と再試行ボタンを維持す
     },
   };
   await mockAdminApi(page, undefined, failedUnpublishDocument);
+  let unpublishPosts = 0;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/unpublish",
+    async (route) => {
+      unpublishPosts += 1;
+      await route.fulfill({
+        json: {
+          ok: true,
+          pending: true,
+          publicationRun: failedUnpublishDocument.publication_run,
+        },
+      });
+    },
+  );
   await page.goto("./admin/editor/?document=doc-1");
 
   await expect(
@@ -468,6 +482,12 @@ test("非公開RunのCI失敗後も公開状態と再試行ボタンを維持す
   await expect(page.locator("[data-publication-state]")).toHaveText(
     "自動非公開化失敗",
   );
+  await page.locator('[name="documentId"]').evaluate((input) => {
+    (input as HTMLInputElement).value = "";
+  });
+  await page.getByRole("button", { name: "非公開処理を再試行" }).click();
+  await page.locator('[data-unpublish-dialog] button[value="yes"]').click();
+  await expect.poll(() => unpublishPosts).toBe(1);
 });
 
 test("新規原稿では存在しない公開審査URLを呼ばず、枠の高さを調整できる", async ({
