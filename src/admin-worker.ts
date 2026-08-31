@@ -600,6 +600,12 @@ const wallTimeToEpoch = (value: string, timeZone: string) => {
   }
 };
 
+/** Parse the schedule field independently of the Worker process timezone. */
+export const scheduledPublicationEpoch = (value: string) => {
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/u.test(value)) return Date.parse(value);
+  return wallTimeToEpoch(value, "Asia/Tokyo");
+};
+
 type TaskReminderRowInput = {
   remindAt: string;
   timezone: string;
@@ -11112,10 +11118,13 @@ async function scheduleEditorialPublication(request: Request, env: Env, document
     await env.REPORTS.prepare("UPDATE editorial_documents SET scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?").bind(new Date().toISOString(), scope.email, documentId).run();
     return json({ ok: true, scheduledPublishAt: null });
   }
-  const timestamp = new Date(raw);
-  if (!Number.isFinite(timestamp.getTime()) || timestamp.getTime() <= Date.now())
+  // datetime-local has no offset. Treat the operations site's wall-clock
+  // value as Japan time instead of letting the Worker runtime interpret it
+  // as UTC (which shifts a reservation by nine hours).
+  const timestampEpoch = scheduledPublicationEpoch(raw);
+  if (!Number.isFinite(timestampEpoch) || timestampEpoch <= Date.now())
     return json({ error: "公開日時は現在より後に設定してください。" }, 400);
-  const scheduledPublishAt = timestamp.toISOString();
+  const scheduledPublishAt = new Date(timestampEpoch).toISOString();
   await env.REPORTS.prepare("UPDATE editorial_documents SET scheduled_publish_at=?, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?").bind(scheduledPublishAt, new Date().toISOString(), scope.email, documentId).run();
   return json({ ok: true, scheduledPublishAt });
 }
