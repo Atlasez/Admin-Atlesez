@@ -10481,7 +10481,7 @@ const sha256Hex = async (value: string) => {
 };
 
 const PUBLIC_ARTICLE_PATH_PATTERN =
-  /^src\/content\/articles\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\.md$/;
+  /^src\/content\/articles\/(jpn|eng)\/([a-z0-9-]+)\/([a-z0-9-]+)\/([a-z0-9-]+)\.md$/;
 
 type GithubArticleTreeEntry = {
   path: string;
@@ -10530,7 +10530,7 @@ const editorialArticlePath = (value: {
   category: string;
   slug: string;
 }) =>
-  `src/content/articles/${value.locale}/${value.subject}/${value.category}/${value.slug}.md`;
+  `src/content/articles/${editorialLocaleDirectory(value.locale)}/${value.subject}/${value.category}/${value.slug}.md`;
 
 const githubArticleSourceRef = (
   repository: string,
@@ -10544,8 +10544,11 @@ const githubArticleSourceRef = (
 const publicArticlePathParts = (path: string) => {
   const match = path.match(PUBLIC_ARTICLE_PATH_PATTERN);
   if (!match) return null;
+  const locale = ({ jpn: "ja", eng: "en" } as Record<string, string>)[
+    match[1]
+  ];
   return {
-    locale: match[1],
+    locale,
     subject: match[2],
     category: match[3],
     slug: match[4],
