@@ -4231,3 +4231,86 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .popup-pane-toolbar button { width:auto; }
   .editor-popup-shell .pane-edge-controls { display:none; }
 </style>
+
+<style is:global>
+  /*
+   * 編集画面には、公開状態・警告・入力補助など意味を持つ色付きUIがある。
+   * これらをライトテーマの固定色のままにすると、暗色テーマで背景だけが
+   * 明るく浮いたり、文字とのコントラストが不足したりするため、ここで
+   * ダークテーマ用の状態色へ切り替える。本文や記事データは変更しない。
+   */
+  [data-pref-bg="dark"] .editor-workspace {
+    --editor-status-info-background: #1f3b4d;
+    --editor-status-info-border: #5f9fca;
+    --editor-status-info-text: #c5e7fb;
+    --editor-status-warning-background: #4a3a1b;
+    --editor-status-warning-border: #c79a3d;
+    --editor-status-warning-text: #f3d58a;
+    --editor-status-success-background: #1d3a2a;
+    --editor-status-success-border: #64b889;
+    --editor-status-success-text: #c8f0d5;
+    --editor-status-error-background: #4b2226;
+    --editor-status-error-border: #d77f88;
+    --editor-status-error-text: #ffd8dc;
+  }
+
+  /* CodeMirror が使えない場合にも表示されるフォールバック本文欄。 */
+  [data-pref-bg="dark"] .editor-workspace .body-editor-surface:not([data-codemirror-ready="true"]) [data-body],
+  [data-pref-bg="dark"] .editor-workspace .source-picker select:disabled {
+    background: var(--background-inset);
+    color: var(--text-primary);
+  }
+  [data-pref-bg="dark"] .editor-workspace .source-picker select:disabled {
+    color: var(--text-muted);
+  }
+
+  /* ツールバーの公開状態・CI状態 */
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="failed"],
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"],
+  [data-pref-bg="dark"] .editor-workspace .document-statuses .publication-integration-status[data-state="error"],
+  [data-pref-bg="dark"] .editor-workspace .publication-diagnostic {
+    background: var(--editor-status-warning-background);
+    border-color: var(--editor-status-warning-border);
+    color: var(--editor-status-warning-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="failed"] .publication-run-state,
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-state,
+  [data-pref-bg="dark"] .editor-workspace .publication-diagnostic summary {
+    color: var(--editor-status-warning-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .document-statuses .publication-integration-status[data-state="ready"] {
+    background: var(--editor-status-success-background);
+    border-color: var(--editor-status-success-border);
+    color: var(--editor-status-success-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .document-statuses .publication-integration-status[data-state="checking"],
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][aria-busy="true"] {
+    background: var(--editor-status-info-background);
+    border-color: var(--editor-status-info-border);
+    color: var(--editor-status-info-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="failed"] .publication-run-indicator,
+  [data-pref-bg="dark"] .editor-workspace .document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-indicator {
+    background: var(--editor-status-warning-border);
+  }
+
+  /* 保存前警告・選択範囲・返信欄など、編集操作に付随する補助UI */
+  [data-pref-bg="dark"] .editor-workspace .unsaved-warning,
+  [data-pref-bg="dark"] .editor-workspace .selection-action,
+  [data-pref-bg="dark"] .editor-workspace .selection-hint.has-selection {
+    background: var(--editor-status-warning-background);
+    border-color: var(--editor-status-warning-border);
+    color: var(--editor-status-warning-text);
+  }
+  [data-pref-bg="dark"] .editor-workspace .reply-target,
+  [data-pref-bg="dark"] .editor-workspace .reply-entry,
+  [data-pref-bg="dark"] .editor-workspace .comment-reply {
+    background: var(--background-inset);
+    color: var(--text-primary);
+  }
+  [data-pref-bg="dark"] .editor-workspace .editorial-image-error {
+    background: var(--editor-status-error-background);
+    border-color: var(--editor-status-error-border);
+    color: var(--editor-status-error-text);
+  }
+</style>
