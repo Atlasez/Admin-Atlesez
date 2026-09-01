@@ -788,6 +788,7 @@ describe("Discord to admin role synchronization", () => {
   type State = {
     roles: string[];
     permissions: Array<{ email: string; subject: string }>;
+    manualAssignments?: Array<{ email: string; discord_role_id: string }>;
     profile: {
       email: string;
       university: string;
@@ -861,6 +862,8 @@ describe("Discord to admin role synchronization", () => {
         return { results: this.state.permissions as T[] };
       if (this.query.includes("editorial_member_profiles"))
         return { results: this.state.profile ? [this.state.profile as T] : [] };
+      if (this.query.includes("atlasez_member_discord_role_assignments"))
+        return { results: (this.state.manualAssignments ?? []) as T[] };
       return { results: [] as T[] };
     }
   }
@@ -884,6 +887,9 @@ describe("Discord to admin role synchronization", () => {
     const state: State = {
       roles: ["role-math", "role-zen", "role-b2", "unknown-role"],
       permissions: [],
+      manualAssignments: [
+        { email: "member@example.com", discord_role_id: "role-math" },
+      ],
       profile: null,
     };
     const writes: Array<{ query: string; args: unknown[] }> = [];
@@ -923,6 +929,10 @@ describe("Discord to admin role synchronization", () => {
     const state: State = {
       roles: ["unknown-role"],
       permissions: [{ email: "member@example.com", subject: "mathematics" }],
+      manualAssignments: [
+        { email: "member@example.com", discord_role_id: "role-math" },
+        { email: "member@example.com", discord_role_id: "role-stale" },
+      ],
       profile: {
         email: "member@example.com",
         university: "ZEN大学",
@@ -956,6 +966,21 @@ describe("Discord to admin role synchronization", () => {
           query.includes("INSERT INTO editorial_member_profiles") &&
           args.includes("") &&
           args.includes(""),
+      ),
+    ).toBe(true);
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("UPDATE atlasez_member_discord_role_assignments") &&
+          args.includes("role-math") &&
+          args.includes("discord-sync"),
+      ),
+    ).toBe(true);
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("UPDATE atlasez_member_discord_role_assignments") &&
+          args.includes("role-stale"),
       ),
     ).toBe(true);
   });
