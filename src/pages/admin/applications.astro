@@ -13,52 +13,11 @@ const projectLabel = selectedProject?.[1] ?? "";
 ---
 <AdminLayout title={selectedProject ? `${projectLabel}：応募管理` : "応募管理"} description="プロジェクト別の運営参加応募を確認">
   <main class="applications" data-applications data-project={selectedProject?.[0] ?? ""}>
-    <section class="application-hero" aria-labelledby="applications-title">
-      <header>
-        <p>Application operations</p>
-        <h2 class="project-context-title">{selectedProject ? `${projectLabel}：応募管理` : "応募管理"}</h2>
-        <h1 id="applications-title">応募対応を、<br />ひとつの流れに。</h1>
-        <span>{selectedProject ? `${projectLabel}に届いた応募を、確認から参加準備まで一つの画面で進めます。` : "応募管理を表示するプロジェクトを選択してください。"}</span>
-        <div class="hero-actions" hidden={!selectedProject}>
-          <a class="button button--light" href="#application-workspace">応募を確認する</a>
-          <a class="hero-text-link" href="#application-flow-title">参加フローを見る <span aria-hidden="true">→</span></a>
-        </div>
-      </header>
-      <section class="application-overview hero-product" aria-labelledby="application-list-title" hidden={!selectedProject}>
-        <div class="product-chrome" aria-hidden="true">
-          <div class="product-brand"><span class="atlas-mark">A</span><strong>Atlas applications</strong><span>⌄</span></div>
-          <div class="product-tools"><span>⌕</span><span>•••</span></div>
-        </div>
-        <div class="hero-product-body">
-          <aside class="product-rail" aria-hidden="true">
-            <span class="is-active">受信トレイ</span>
-            <span>確認中</span>
-            <span>面談</span>
-            <span>受入済み</span>
-            <small>運営ワークスペース</small>
-          </aside>
-          <div class="product-workspace">
-            <div class="section-heading"><div><p>Live workspace</p><h2 id="application-list-title">応募一覧</h2></div><span data-total-count>—</span></div>
-            <div class="summary-grid" aria-label="応募状況">
-              <div class="summary-card summary-card--new"><strong data-summary-new>0</strong><span>新規</span></div>
-              <div class="summary-card summary-card--reviewing"><strong data-summary-reviewing>0</strong><span>確認中</span></div>
-              <div class="summary-card summary-card--accepted"><strong data-summary-accepted>0</strong><span>受入済み</span></div>
-              <div class="summary-card summary-card--rejected"><strong data-summary-rejected>0</strong><span>見送り</span></div>
-            </div>
-            <div class="filter-bar" role="search">
-              <label>検索<input type="search" data-search placeholder="名前・メール・所属で検索" /></label>
-              <label>状態<select data-filter-status><option value="all">すべての状態</option><option value="new">新規</option><option value="reviewing">確認中</option><option value="accepted">受入済み</option><option value="rejected">見送り</option></select></label>
-              <button type="button" class="button button--quiet" data-clear-filter>解除</button>
-            </div>
-            <div class="product-preview" aria-hidden="true">
-              <div><span class="preview-avatar">応</span><p><strong>応募内容を確認</strong><small>希望分野・記事案・参加理由</small></p><b>新規</b></div>
-              <div><span class="preview-avatar preview-avatar--muted">面</span><p><strong>面談情報を整理</strong><small>日時・形式・案内を一か所に</small></p><b>確認中</b></div>
-              <div><span class="preview-avatar preview-avatar--green">参</span><p><strong>参加環境へ接続</strong><small>受入・プロフィール・Discord</small></p><b>受入済み</b></div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </section>
+    <header>
+      <p>運営参加応募</p>
+      <h1>{selectedProject ? `${projectLabel}：応募管理` : "応募管理"}</h1>
+      <span>{selectedProject ? "このプロジェクトに届いた応募だけを表示しています。" : "応募管理を表示するプロジェクトを選択してください。"}</span>
+    </header>
     <nav class="project-switcher" aria-label="応募管理のプロジェクト切り替え">
       {applicationProjects.map(([slug, label]) => <a href={`/admin/applications/?project=${slug}`} aria-current={selectedProject?.[0] === slug ? "page" : undefined}>{label}</a>)}
     </nav>
@@ -67,82 +26,37 @@ const projectLabel = selectedProject?.[1] ?? "";
       <h2 id="project-picker-title">確認する応募先を選んでください</h2>
       <span>プロジェクトをまたいだ一括表示は行わず、各運営ページから個別に確認します。</span>
     </section>
-    <section class="application-principles" hidden={!selectedProject} aria-labelledby="application-principles-title">
-      <p class="principles-kicker">A focused path from interest to contribution</p>
-      <h2 id="application-principles-title"><span>応募の背景を理解し、</span>次の一歩を迷わず決められる運営ワークスペース。</h2>
-      <div class="principle-grid">
-        <article><span class="figure-label">FIG 0.1</span><div class="principle-graphic principle-graphic--intake" aria-hidden="true"><i></i><i></i><i></i></div><h3>見落とさない</h3><p>新着、確認中、受入済みを同じリズムで追い、対応の停滞を見つけます。</p></article>
-        <article><span class="figure-label">FIG 0.2</span><div class="principle-graphic principle-graphic--context" aria-hidden="true"><i></i><i></i><i></i></div><h3>背景を共有する</h3><p>応募内容、面談、担当候補を一つの文脈として、運営メンバーで共有します。</p></article>
-        <article><span class="figure-label">FIG 0.3</span><div class="principle-graphic principle-graphic--handoff" aria-hidden="true"><i></i><i></i><i></i></div><h3>参加までつなぐ</h3><p>受入後のプロフィール入力とDiscord確認まで、途切れない手続きをつくります。</p></article>
-      </div>
-    </section>
-    <section class="application-flow feature-section" aria-labelledby="application-flow-title" hidden={!selectedProject}>
-      <div class="flow-heading"><div><p>Participation flow</p><h2 id="application-flow-title">応募から<br />参加まで</h2></div><div class="feature-copy"><span>確認、面談、受入、参加環境の準備まで。段階ごとの状態と次の操作を、同じワークスペースで扱えます。</span><a href="#application-workspace">応募者を確認 <span aria-hidden="true">→</span></a></div></div>
+    <section class="application-flow" aria-labelledby="application-flow-title" hidden={!selectedProject}>
+      <div class="flow-heading"><div><p>参加手続き</p><h2 id="application-flow-title">応募から参加までの流れ</h2></div><span>各段階の確認内容を見ながら対応できます。</span></div>
       <ol class="flow-steps">
-        <li><span class="flow-step-number">1</span><div><strong>応募内容を確認</strong><small>希望分野、書きたい記事、参加理由を読み、対応の入口をそろえます。</small><em>Intake</em></div></li>
-        <li><span class="flow-step-number">2</span><div><strong>確認中に変更</strong><small>追加確認が必要な応募を「確認中」として整理し、面談へつなぎます。</small><em>Review</em></div></li>
-        <li><span class="flow-step-number">3</span><div><strong>受入を確定</strong><small>プロジェクト参加を登録し、本人へプロフィール入力を案内します。</small><em>Accept</em></div></li>
-        <li><span class="flow-step-number">4</span><div><strong>Discord情報を確認</strong><small>本人同意後、サーバー参加と既存ロールを照合。失敗時は再試行します。</small><em>Connect</em></div></li>
+        <li><span class="flow-step-number">1</span><div><strong>応募内容を確認</strong><small>希望分野、書きたい記事、参加理由を確認します。</small></div></li>
+        <li><span class="flow-step-number">2</span><div><strong>確認中に変更</strong><small>追加確認が必要な応募を確認中として整理します。</small></div></li>
+        <li><span class="flow-step-number">3</span><div><strong>受入を確定</strong><small>プロジェクト参加を登録し、プロフィール入力を案内します。</small></div></li>
+        <li><span class="flow-step-number">4</span><div><strong>Discord情報を確認する</strong><small>本人のDiscord同意後、サーバー参加と既存ロールの照合を行います。失敗時は再試行します。</small></div></li>
       </ol>
     </section>
-    <section class="application-feature-demo feature-section" hidden={!selectedProject} aria-labelledby="interview-demo-title">
-      <div class="flow-heading"><div><p>Interview and review</p><h2 id="interview-demo-title">面談と<br />確認</h2></div><div class="feature-copy"><span>候補日時、形式、案内先を応募内容と並べて管理。会話の前後で必要な文脈が離れません。</span><a href="#application-workspace">面談情報を確認 <span aria-hidden="true">→</span></a></div></div>
-      <div class="feature-demo-window interview-demo" aria-hidden="true">
-        <div class="demo-window-bar"><span><i></i> 面談ワークスペース</span><span>•••</span></div>
-        <div class="interview-demo-grid">
-          <aside><p>確認する応募者</p><strong>応募内容から面談へ</strong><span class="demo-person is-current"><b>01</b><span>応募内容を確認<small>希望分野と記事案</small></span></span><span class="demo-person"><b>02</b><span>候補日時を調整<small>オンライン / 対面</small></span></span><span class="demo-person"><b>03</b><span>応募者へ通知<small>案内を送信</small></span></span></aside>
-          <div class="demo-calendar"><div class="calendar-heading"><span>面談日時</span><strong>September 2026</strong></div><div class="calendar-week"><span>月<small>07</small></span><span>火<small>08</small></span><span class="is-selected">水<small>09</small></span><span>木<small>10</small></span><span>金<small>11</small></span></div><div class="calendar-slots"><span>14:00</span><div><i></i><b>応募者面談</b><small>Zoom ・ 45分</small></div><span>15:00</span><div class="is-muted"><i></i><b>面談メモ</b><small>確認事項を共有</small></div><span>16:00</span></div>
-        </div>
+    <section class="application-overview" aria-labelledby="application-list-title" hidden={!selectedProject}>
+      <div class="section-heading"><div><p>応募状況</p><h2 id="application-list-title">応募一覧</h2></div><span data-total-count>—</span></div>
+      <div class="summary-grid" aria-label="応募状況">
+        <div class="summary-card summary-card--new"><strong data-summary-new>0</strong><span>新規</span></div>
+        <div class="summary-card summary-card--reviewing"><strong data-summary-reviewing>0</strong><span>確認中</span></div>
+        <div class="summary-card summary-card--accepted"><strong data-summary-accepted>0</strong><span>受入済み</span></div>
+        <div class="summary-card summary-card--rejected"><strong data-summary-rejected>0</strong><span>見送り</span></div>
       </div>
+      <div class="filter-bar" role="search">
+        <label>検索<input type="search" data-search placeholder="名前・メール・所属で検索" /></label>
+        <label>状態<select data-filter-status><option value="all">すべての状態</option><option value="new">新規</option><option value="reviewing">確認中</option><option value="accepted">受入済み</option><option value="rejected">見送り</option></select></label>
+        <button type="button" class="button button--quiet" data-clear-filter>絞り込みを解除</button>
       </div>
-    </section>
-    <section class="application-feature-demo feature-section" hidden={!selectedProject} aria-labelledby="accept-demo-title">
-      <div class="flow-heading"><div><p>Acceptance and guidance</p><h2 id="accept-demo-title">受入と<br />案内</h2></div><div class="feature-copy"><span>受入を確定したら、プロフィール入力と次の手続きを本人へ案内。状態変更と連絡を一続きにします。</span><a href="#application-workspace">受入状態を確認 <span aria-hidden="true">→</span></a></div></div>
-      <div class="feature-demo-window acceptance-demo" aria-hidden="true">
-        <div class="demo-window-bar"><span><i></i> 受入アクション</span><span>準備完了</span></div>
-        <div class="acceptance-demo-body">
-          <div class="acceptance-track"><span class="is-done"><i>✓</i><b>応募を確認</b><small>内容と希望分野を確認済み</small></span><span class="is-done"><i>✓</i><b>面談を実施</b><small>面談メモを共有済み</small></span><span class="is-current"><i>3</i><b>受入を確定</b><small>承認メールを準備</small></span><span><i>4</i><b>プロフィール入力</b><small>本人の入力を待機</small></span></div>
-          <div class="acceptance-message"><p>Acceptance message</p><h3>参加のご案内</h3><span>プロジェクトへの参加を歓迎します。次に、プロフィール入力とDiscord連携を進めてください。</span><div><b>プロフィール入力</b><small>応募者専用画面</small><i>→</i></div><button type="button" tabindex="-1">受入してメールを送る</button></div>
-        </div>
-      </div>
-    </section>
-    <section class="application-feature-demo feature-section" hidden={!selectedProject} aria-labelledby="connect-demo-title">
-      <div class="flow-heading"><div><p>Workspace connection</p><h2 id="connect-demo-title">参加環境へ<br />接続</h2></div><div class="feature-copy"><span>Discord同意、サーバー参加、既存ロールの照合を確認。失敗した処理も状態を保ったまま再試行できます。</span><a href="#application-workspace">連携状態を確認 <span aria-hidden="true">→</span></a></div></div>
-      <div class="feature-demo-window connection-demo" aria-hidden="true">
-        <div class="demo-window-bar"><span><i></i> Participation environment</span><span>Live status</span></div>
-        <div class="connection-demo-body">
-          <aside><p>参加環境</p><strong>セットアップ状況</strong><span class="connection-health"><i></i>すべてのサービスは正常です</span></aside>
-          <div class="connection-steps"><span class="is-complete"><i>✓</i><p><b>受入済み</b><small>プロジェクト参加を登録</small></p><em>完了</em></span><span class="is-complete"><i>✓</i><p><b>Discord OAuth</b><small>本人の同意を確認</small></p><em>連携済み</em></span><span class="is-active"><i>↗</i><p><b>サーバーとロール</b><small>参加状況と既存ロールを照合</small></p><em>確認中</em></span><span><i>○</i><p><b>運営ワークスペース</b><small>必要な権限を別画面で設定</small></p><em>待機</em></span></div>
-        </div>
-      </div>
-    </section>
-    <section class="operations-timeline" hidden={!selectedProject} aria-labelledby="operations-timeline-title">
-      <h2 id="operations-timeline-title">運営のチェックポイント</h2>
-      <div><article><span></span><h3>内容</h3><p>応募者の希望とプロジェクトの活動を照合する。</p><small>REVIEW 01</small></article><article><span></span><h3>対話</h3><p>面談で期待、役割、参加方法をすり合わせる。</p><small>REVIEW 02</small></article><article><span></span><h3>受入</h3><p>参加登録と本人への案内を同じ操作で進める。</p><small>REVIEW 03</small></article><article><span></span><h3>接続</h3><p>プロフィールとDiscordの準備を最後まで確認する。</p><small>REVIEW 04</small></article></div>
     </section>
     <output class="notice" data-notice aria-live="polite" hidden={!selectedProject}></output>
-    <section class="applications-workspace feature-section" id="application-workspace" hidden={!selectedProject} aria-labelledby="workspace-title">
-      <div class="workspace-heading"><div><p>Application workspace</p><h2 id="workspace-title">一人ずつ、<br />丁寧に確認する。</h2></div><span>応募者を切り替えながら、面談情報、応募内容、受入状態を一つの画面で更新します。</span></div>
-      <section class="application-navigator" data-application-navigator aria-label="応募者の切り替え" hidden>
-        <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
-        <label class="application-picker">表示する応募者<select data-application-select aria-label="表示する応募者"></select></label>
-        <span class="application-position" data-application-position aria-live="polite"></span>
-        <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
-      </section>
-      <div class="application-list" data-list>読み込み中…</div>
+    <section class="application-navigator" data-application-navigator aria-label="応募者の切り替え" hidden>
+      <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
+      <label class="application-picker">表示する応募者<select data-application-select aria-label="表示する応募者"></select></label>
+      <span class="application-position" data-application-position aria-live="polite"></span>
+      <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
     </section>
-    <section class="applications-closing" hidden={!selectedProject}>
-      <p>Ready for the next conversation</p>
-      <h2>次の参加者を、<br />チームへ迎える。</h2>
-      <a class="button button--light" href="#application-workspace">応募ワークスペースへ</a>
-    </section>
-    <footer class="applications-footer" hidden={!selectedProject}>
-      <a class="applications-footer-brand" href="/admin/atlas/"><span>A</span><strong>Atlas operations</strong></a>
-      <div><h2>応募管理</h2><a href="#application-workspace">応募一覧</a><a href="#application-flow-title">参加フロー</a><a href="#operations-timeline-title">チェックポイント</a></div>
-      <div><h2>運営機能</h2><a href="/admin/articles/">編集・フィードバック</a><a href="/admin/operations/?project=atlas">タスク管理</a><a href="/admin/calendar/?project=atlas">カレンダー</a></div>
-      <div><h2>管理</h2><a href="/admin/manage/?project=atlas">管理トップ</a><a href="/admin/permissions/?project=atlas">運営者・担当管理</a><a href="/admin/reports/?project=atlas">問題報告</a></div>
-      <small>Atlasez / Learning site Atlas</small>
-    </footer>
+    <div class="application-list" data-list hidden={!selectedProject}>読み込み中…</div>
     <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title" hidden={!selectedProject}>
       <h2 id="accept-dialog-title">受入を確定しますか？</h2>
       <p>「はい」を押すと、プロジェクト参加を登録し、応募者本人へ受入承認メールを送信します。本人にはプロフィール入力も案内されます。管理権限は別途「運営者・担当管理」から付与してください。</p>
@@ -711,555 +625,6 @@ const projectLabel = selectedProject?.[1] ?? "";
     .accept-dialog__actions .button { width: 100%; }
   }
 </style>
-<style is:global>
-  body:has(.applications) {
-    background: #08090a;
-    color: #f7f8f8;
-  }
-
-  body:has(.applications) .admin-nav {
-    background: rgb(8 9 10 / 88%);
-    border-bottom: 1px solid #23252a;
-    color: #f7f8f8;
-    min-height: 72px;
-    padding-left: max(24px, calc((100vw - 1214px) / 2));
-    padding-right: max(24px, calc((100vw - 1214px) / 2));
-    position: sticky;
-    left: 0;
-    top: 0;
-    transform: none;
-    z-index: 40;
-    backdrop-filter: blur(18px);
-  }
-
-  body:has(.applications) .admin-nav a,
-  body:has(.applications) .admin-nav button,
-  body:has(.applications) .admin-nav summary {
-    color: #b4b7bd;
-  }
-
-  body:has(.applications) .admin-nav a:hover,
-  body:has(.applications) .admin-nav button:hover,
-  body:has(.applications) .admin-nav summary:hover {
-    color: #f7f8f8;
-  }
-
-  body:has(.applications) .admin-project-switcher,
-  body:has(.applications) .admin-account > * {
-    border-color: #2a2c31;
-  }
-
-  body:has(.applications) .admin-breadcrumbs {
-    background: #08090a;
-    border-bottom: 1px solid #1d1f23;
-    color: #62666d;
-    margin: 0;
-    max-width: none;
-    min-height: 42px;
-    padding: 12px max(24px, calc((100vw - 1214px) / 2));
-  }
-
-  body:has(.applications) .admin-breadcrumbs a { color: #73777f; }
-  body:has(.applications) .admin-layout-main { background: #08090a; padding: 0; }
-
-  .applications {
-    --background-primary: #0e0f11;
-    --background-secondary: #141518;
-    --border-default: #2a2c31;
-    --text-primary: #f7f8f8;
-    --text-secondary: #8a8f98;
-    --accent-primary: #8d90ff;
-    --app-divider: #27292e;
-    --app-muted-surface: #111214;
-    --app-success: #67c48d;
-    --app-danger: #f0877f;
-    color: var(--text-primary);
-    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    margin: 0;
-    max-width: none;
-    overflow: hidden;
-    padding: 0;
-  }
-
-  .applications,
-  .applications * { box-sizing: border-box; }
-  .applications [hidden] { display: none !important; }
-
-  .application-hero {
-    margin: 0 auto;
-    max-width: 1214px;
-    padding: 0 0 110px;
-  }
-
-  .applications .application-hero > header {
-    border: 0 !important;
-    min-height: 450px;
-    padding: 120px 16px 52px !important;
-    position: relative;
-  }
-
-  .applications[data-applications] .project-context-title {
-    color: #666a72 !important;
-    font-family: "SFMono-Regular", Consolas, ui-monospace, monospace !important;
-    font-size: 10px !important;
-    font-weight: 500 !important;
-    letter-spacing: .04em !important;
-    margin: 0 !important;
-    position: absolute;
-    right: 16px;
-    top: 122px;
-  }
-
-  .applications .application-hero > header > p,
-  .principles-kicker,
-  .flow-heading p,
-  .workspace-heading p,
-  .applications-closing > p,
-  .section-heading p {
-    color: #696e77;
-    font-family: "SFMono-Regular", Consolas, ui-monospace, monospace;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: .08em;
-    margin: 0;
-    text-transform: uppercase;
-  }
-
-  .applications[data-applications] .application-hero > header > p {
-    color: #696e77 !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
-    letter-spacing: .08em !important;
-  }
-
-  .applications .application-hero h1 {
-    color: #f7f8f8;
-    font-size: clamp(50px, 5vw, 68px);
-    font-weight: 520;
-    letter-spacing: -.052em;
-    line-height: .98;
-    margin: 22px 0 30px;
-    max-width: 900px;
-  }
-
-  .applications[data-applications] .application-hero h1 {
-    font-size: clamp(50px, 5vw, 68px) !important;
-    font-weight: 520 !important;
-    letter-spacing: -.052em !important;
-    line-height: .98 !important;
-    margin: 22px 0 30px !important;
-  }
-
-  .applications .application-hero > header > span {
-    color: #92969f;
-    display: block;
-    font-size: 16px;
-    line-height: 1.55;
-    max-width: 610px;
-  }
-
-  .applications[data-applications] .application-hero > header > span {
-    color: #92969f !important;
-    font-size: 16px !important;
-    line-height: 1.55 !important;
-  }
-
-  .hero-actions { align-items: center; display: flex; gap: 24px; margin-top: 30px; }
-  .applications .button {
-    border-radius: 7px;
-    font-size: 13px;
-    font-weight: 560;
-    min-height: 38px;
-    padding: 9px 14px;
-    transition: background-color 180ms cubic-bezier(.2,.8,.2,1), border-color 180ms cubic-bezier(.2,.8,.2,1), color 180ms cubic-bezier(.2,.8,.2,1), transform 180ms cubic-bezier(.2,.8,.2,1);
-  }
-  .applications .button:hover { transform: translateY(-1px); }
-  .applications .button--light { background: #f1f2f3; border-color: #f1f2f3; color: #111214; }
-  .applications .button--light:hover { background: #fff; border-color: #fff; }
-  .hero-text-link { color: #a6aab2; font-size: 13px; text-decoration: none; }
-  .hero-text-link:hover { color: #f7f8f8; }
-
-  .applications .hero-product {
-    background: linear-gradient(180deg, #111214 0%, #0d0e10 76%, #0a0b0c 100%);
-    border: 1px solid #2c2e33;
-    border-radius: 12px;
-    box-shadow: 0 45px 100px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 2%) inset;
-    height: 620px;
-    margin: 0;
-    overflow: hidden;
-    padding: 0;
-    position: relative;
-  }
-
-  .applications .hero-product::after {
-    background: linear-gradient(180deg, transparent, #08090a 92%);
-    bottom: 0;
-    content: "";
-    height: 150px;
-    left: 0;
-    pointer-events: none;
-    position: absolute;
-    right: 0;
-  }
-
-  .product-chrome {
-    align-items: center;
-    border-bottom: 1px solid #292b30;
-    display: flex;
-    height: 52px;
-    justify-content: space-between;
-    padding: 0 18px;
-  }
-  .product-brand,.product-tools { align-items: center; color: #8e929b; display: flex; font-size: 12px; gap: 9px; }
-  .product-brand strong { color: #d6d8dc; font-weight: 560; }
-  .atlas-mark { align-items: center; background: #e7e8ea; border-radius: 50%; color: #111214; display: inline-flex; font-size: 10px; font-weight: 800; height: 18px; justify-content: center; width: 18px; }
-  .product-tools { gap: 18px; }
-
-  .hero-product-body { display: grid; grid-template-columns: 214px minmax(0, 1fr); height: calc(100% - 52px); }
-  .product-rail { border-right: 1px solid #292b30; display: flex; flex-direction: column; gap: 4px; padding: 22px 14px; }
-  .product-rail > span { border-radius: 5px; color: #747982; font-size: 12px; padding: 9px 11px; }
-  .product-rail > span::before { color: #575b63; content: "○"; margin-right: 9px; }
-  .product-rail > span.is-active { background: #1a1b1f; color: #dfe1e4; }
-  .product-rail > span.is-active::before { color: #8d90ff; content: "●"; }
-  .product-rail small { color: #4f535a; font-size: 10px; margin-top: 28px; padding: 0 11px; text-transform: uppercase; }
-  .product-workspace { min-width: 0; padding: 34px 36px 80px; }
-  .applications .hero-product .section-heading { align-items: end; display: flex; justify-content: space-between; }
-  .applications .hero-product .section-heading h2 { color: #e9eaec; font-size: 24px; font-weight: 540; letter-spacing: -.03em; margin: 8px 0 0; }
-  .applications .hero-product .section-heading > span { color: #70747c; font-family: ui-monospace, monospace; font-size: 12px; }
-
-  .applications .hero-product .summary-grid { border-bottom: 1px solid #292b30; border-top: 1px solid #292b30; display: grid; gap: 0; grid-template-columns: repeat(4, 1fr); margin: 26px 0 0; }
-  .applications .hero-product .summary-card { background: transparent; border: 0; border-right: 1px solid #292b30; display: grid; gap: 6px; padding: 18px 20px; }
-  .applications .hero-product .summary-card:last-child { border-right: 0; }
-  .applications .hero-product .summary-card strong { color: #e9eaec; font-family: ui-monospace, monospace; font-size: 24px; font-weight: 450; }
-  .applications .hero-product .summary-card span { color: #777b84; font-size: 11px; }
-  .applications .hero-product .summary-card--new strong { color: #e5b168; }
-  .applications .hero-product .summary-card--reviewing strong { color: #a9aaff; }
-  .applications .hero-product .summary-card--accepted strong { color: #78ca98; }
-  .applications .hero-product .summary-card--rejected strong { color: #c98787; }
-
-  .applications .hero-product .filter-bar { align-items: end; border: 0; display: grid; gap: 10px; grid-template-columns: minmax(190px, 1fr) 170px auto; margin: 22px 0 0; padding: 0; }
-  .applications .hero-product .filter-bar label { color: #646870; font-family: ui-monospace, monospace; font-size: 10px; gap: 6px; letter-spacing: .04em; text-transform: uppercase; }
-  .applications .hero-product input,
-  .applications .hero-product select { background: #0d0e10; border: 1px solid #303238; border-radius: 6px; color: #d7d9dd; font-size: 12px; min-height: 38px; padding: 8px 10px; }
-  .applications .button--quiet { background: #151619; border-color: #303238; color: #a4a8b0; }
-  .applications .button--quiet:hover { background: #1b1c20; border-color: #43464e; color: #f1f2f3; }
-
-  .product-preview { border: 1px solid #292b30; border-radius: 8px; margin-top: 24px; overflow: hidden; }
-  .product-preview > div { align-items: center; border-bottom: 1px solid #24262a; display: grid; gap: 12px; grid-template-columns: 34px 1fr auto; min-height: 62px; padding: 10px 14px; }
-  .product-preview > div:last-child { border-bottom: 0; }
-  .product-preview p { display: grid; gap: 3px; margin: 0; }
-  .product-preview strong { color: #cdd0d5; font-size: 12px; font-weight: 540; }
-  .product-preview small { color: #656a73; font-size: 10px; }
-  .product-preview b { border: 1px solid #36383e; border-radius: 999px; color: #767b84; font-size: 9px; font-weight: 500; padding: 4px 7px; }
-  .preview-avatar { align-items: center; background: #2b2740; border: 1px solid #4d4774; border-radius: 6px; color: #aaaaff; display: flex; font-size: 11px; height: 30px; justify-content: center; width: 30px; }
-  .preview-avatar--muted { background: #24272b; border-color: #41454d; color: #b2b6be; }
-  .preview-avatar--green { background: #1d2b23; border-color: #365442; color: #80c99c; }
-
-  .applications .project-switcher {
-    border-bottom: 1px solid #222429;
-    border-top: 1px solid #222429;
-    display: grid;
-    gap: 0;
-    grid-template-columns: repeat(5, 1fr);
-    margin: 0;
-    padding: 0 max(24px, calc((100vw - 1214px) / 2));
-  }
-  .applications .project-switcher a { align-items: center; border: 0; border-right: 1px solid #222429; border-radius: 0; color: #6d7179; display: flex; font-size: 12px; justify-content: center; min-height: 104px; padding: 16px; text-align: center; text-decoration: none; }
-  .applications .project-switcher a:first-child { border-left: 1px solid #222429; }
-  .applications .project-switcher a[aria-current="page"] { background: #0d0e10; border-color: #2d3035; color: #e5e6e8; font-weight: 560; }
-  .applications .project-switcher a:hover { background: #0d0e10; color: #e5e6e8; }
-
-  .application-principles,
-  .applications .feature-section,
-  .applications-closing,
-  .project-picker {
-    margin-left: auto;
-    margin-right: auto;
-    max-width: 1214px;
-  }
-
-  .application-principles { padding: 122px 16px 128px; }
-  .application-principles > h2 { color: #7f838b; font-size: clamp(38px, 4vw, 52px); font-weight: 510; letter-spacing: -.048em; line-height: 1.13; margin: 80px 0 106px; max-width: 1130px; }
-  .application-principles > h2 span { color: #f0f1f2; }
-  .principle-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
-  .principle-grid article { border-right: 1px solid #24262b; min-width: 0; padding: 0 32px 28px; }
-  .principle-grid article:first-child { padding-left: 0; }
-  .principle-grid article:last-child { border-right: 0; padding-right: 0; }
-  .figure-label { color: #4b4f56; font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .08em; }
-  .principle-graphic { height: 220px; position: relative; }
-  .principle-graphic i { border: 1px solid #363940; display: block; left: 50%; position: absolute; top: 50%; transform: translate(-50%,-50%) rotate(30deg); }
-  .principle-graphic--intake i { border-radius: 8px; height: 90px; width: 130px; }
-  .principle-graphic--intake i:nth-child(2) { transform: translate(-50%,-65%) rotate(30deg); }
-  .principle-graphic--intake i:nth-child(3) { transform: translate(-50%,-80%) rotate(30deg); }
-  .principle-graphic--context i { border-radius: 50%; height: 80px; width: 80px; }
-  .principle-graphic--context i:nth-child(1) { margin-left: -48px; }
-  .principle-graphic--context i:nth-child(2) { margin-left: 48px; }
-  .principle-graphic--context i:nth-child(3) { height: 32px; width: 180px; }
-  .principle-graphic--handoff i { height: 128px; width: 34px; }
-  .principle-graphic--handoff i:nth-child(1) { margin-left: -52px; }
-  .principle-graphic--handoff i:nth-child(3) { margin-left: 52px; }
-  .principle-grid h3 { color: #e7e8ea; font-size: 15px; font-weight: 560; margin: 0 0 14px; }
-  .principle-grid p { color: #7f838b; font-size: 14px; line-height: 1.7; margin: 0; max-width: 330px; }
-
-  .applications .feature-section { border-top: 1px solid #24262b; padding: 122px 16px 136px; }
-  .applications[data-applications] .application-flow {
-    border-bottom: 0 !important;
-    border-left: 0 !important;
-    border-radius: 0 !important;
-    border-right: 0 !important;
-    margin-top: 0 !important;
-  }
-  .applications .flow-heading,
-  .workspace-heading { align-items: start; display: grid; gap: 80px; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); margin: 0; }
-  .applications .flow-heading h2,
-  .workspace-heading h2 { color: #f2f3f4; font-size: clamp(42px, 4.4vw, 58px); font-weight: 510; letter-spacing: -.052em; line-height: 1.03; margin: 14px 0 0; }
-  .applications[data-applications] .flow-heading h2 {
-    font-size: clamp(42px, 4.4vw, 58px) !important;
-    font-weight: 510 !important;
-    letter-spacing: -.052em !important;
-    line-height: 1.03 !important;
-    margin: 14px 0 0 !important;
-  }
-  .feature-copy,
-  .workspace-heading > span { color: #b5b8be; font-size: clamp(19px, 2vw, 25px); line-height: 1.38; max-width: 560px; }
-  .feature-copy { display: grid; gap: 32px; }
-  .feature-copy > span { color: inherit; font-size: inherit; text-align: left; }
-  .feature-copy a { color: #797e87; font-size: 13px; text-decoration: none; }
-  .feature-copy a:hover { color: #f2f3f4; }
-
-  .applications .flow-steps { border: 1px solid #292b30; border-radius: 10px; display: grid; gap: 0; grid-template-columns: repeat(4, 1fr); margin: 96px 0 0; overflow: hidden; padding: 0; }
-  .applications .flow-steps li { background: linear-gradient(180deg, #131417, #0d0e10); border: 0; border-right: 1px solid #292b30; display: block; min-height: 390px; padding: 28px 24px; position: relative; }
-  .applications[data-applications] .flow-steps li {
-    display: block !important;
-    min-height: 390px !important;
-    padding: 28px 24px !important;
-  }
-  .applications .flow-steps li:last-child { border-right: 0; }
-  .applications .flow-steps li::after { border: 1px solid #30333a; border-radius: 50%; bottom: 46px; content: ""; height: 86px; left: 50%; position: absolute; transform: translateX(-50%); width: 86px; }
-  .applications .flow-step-number { align-items: center; background: #ededee; border-radius: 50%; color: #111214; display: flex; font-family: ui-monospace, monospace; font-size: 10px; height: 24px; justify-content: center; width: 24px; }
-  .applications .flow-steps strong { color: #dfe1e4; display: block; font-size: 14px; font-weight: 560; margin-top: 25px; }
-  .applications .flow-steps small { color: #777b84; display: block; font-size: 12px; line-height: 1.7; margin-top: 12px; }
-  .applications .flow-steps em { bottom: 18px; color: #50545b; font-family: ui-monospace, monospace; font-size: 9px; font-style: normal; left: 24px; letter-spacing: .08em; position: absolute; text-transform: uppercase; }
-
-  .feature-demo-window {
-    background: linear-gradient(180deg, #111214, #0b0c0e);
-    border: 1px solid #2b2d32;
-    border-radius: 10px;
-    box-shadow: 0 35px 80px rgb(0 0 0 / 30%);
-    height: 590px;
-    margin-top: 96px;
-    overflow: hidden;
-    position: relative;
-  }
-  .feature-demo-window::after { background: linear-gradient(180deg, transparent, #08090a 96%); bottom: 0; content: ""; height: 84px; left: 0; pointer-events: none; position: absolute; right: 0; }
-  .demo-window-bar { align-items: center; border-bottom: 1px solid #292b30; color: #6d727b; display: flex; font-family: ui-monospace, monospace; font-size: 10px; height: 54px; justify-content: space-between; letter-spacing: .03em; padding: 0 18px; text-transform: uppercase; }
-  .demo-window-bar > span { align-items: center; display: flex; gap: 9px; }
-  .demo-window-bar i { background: #8d90ff; border-radius: 50%; display: inline-block; height: 8px; width: 8px; }
-
-  .interview-demo-grid { display: grid; grid-template-columns: 330px minmax(0,1fr); height: calc(100% - 54px); }
-  .interview-demo-grid > aside { border-right: 1px solid #292b30; padding: 34px 26px; }
-  .interview-demo-grid aside > p,
-  .acceptance-message > p,
-  .connection-demo-body aside > p { color: #636871; font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .06em; margin: 0 0 8px; text-transform: uppercase; }
-  .interview-demo-grid aside > strong,
-  .connection-demo-body aside > strong { color: #dedfe2; display: block; font-size: 18px; font-weight: 540; margin-bottom: 28px; }
-  .demo-person { align-items: center; border: 1px solid transparent; border-radius: 7px; color: #70747c; display: grid; gap: 12px; grid-template-columns: 32px 1fr; margin-bottom: 8px; padding: 13px; }
-  .demo-person.is-current { background: #18191d; border-color: #303238; color: #dfe1e4; }
-  .demo-person > b { align-items: center; border: 1px solid #34373d; border-radius: 50%; display: flex; font-family: ui-monospace, monospace; font-size: 9px; font-weight: 500; height: 28px; justify-content: center; width: 28px; }
-  .demo-person > span { display: grid; font-size: 12px; gap: 4px; }
-  .demo-person small { color: #5e626a; font-size: 10px; }
-  .demo-calendar { padding: 34px 38px; }
-  .calendar-heading { align-items: center; display: flex; justify-content: space-between; }
-  .calendar-heading span { color: #747982; font-size: 11px; }
-  .calendar-heading strong { color: #d5d7db; font-size: 14px; font-weight: 520; }
-  .calendar-week { border-bottom: 1px solid #292b30; border-top: 1px solid #292b30; display: grid; grid-template-columns: repeat(5,1fr); margin-top: 26px; }
-  .calendar-week > span { align-items: center; border-right: 1px solid #292b30; color: #646871; display: grid; font-size: 10px; gap: 6px; justify-items: center; padding: 16px 8px; }
-  .calendar-week > span:last-child { border-right: 0; }
-  .calendar-week small { color: #c7c9ce; font-family: ui-monospace, monospace; font-size: 16px; }
-  .calendar-week .is-selected { background: #191a20; color: #aaaaff; }
-  .calendar-week .is-selected small { color: #b9baff; }
-  .calendar-slots { display: grid; gap: 0 14px; grid-template-columns: 52px 1fr; margin-top: 22px; }
-  .calendar-slots > span { border-top: 1px solid #23252a; color: #545860; font-family: ui-monospace, monospace; font-size: 9px; padding-top: 12px; }
-  .calendar-slots > div { align-items: center; background: #17181c; border: 1px solid #33363c; border-radius: 7px; display: grid; gap: 6px 10px; grid-template-columns: 8px 1fr; margin-bottom: 12px; padding: 13px 15px; }
-  .calendar-slots > div i { background: #8d90ff; border-radius: 50%; grid-row: 1 / 3; height: 7px; width: 7px; }
-  .calendar-slots > div b { color: #d6d8dc; font-size: 11px; font-weight: 540; }
-  .calendar-slots > div small { color: #666b73; font-size: 9px; }
-  .calendar-slots > div.is-muted i { background: #6b7079; }
-
-  .acceptance-demo-body { display: grid; grid-template-columns: 1.05fr .95fr; height: calc(100% - 54px); }
-  .acceptance-track { border-right: 1px solid #292b30; display: grid; gap: 0; padding: 42px; }
-  .acceptance-track > span { align-items: center; border-bottom: 1px solid #27292e; display: grid; gap: 4px 14px; grid-template-columns: 34px 1fr; padding: 15px 0; }
-  .acceptance-track > span:last-child { border-bottom: 0; }
-  .acceptance-track i { align-items: center; border: 1px solid #3a3d43; border-radius: 50%; color: #686d76; display: flex; font-family: ui-monospace, monospace; font-size: 10px; font-style: normal; grid-row: 1 / 3; height: 28px; justify-content: center; width: 28px; }
-  .acceptance-track b { color: #989ca4; font-size: 12px; font-weight: 540; }
-  .acceptance-track small { color: #5f646c; font-size: 10px; }
-  .acceptance-track .is-done i { background: #1d2d24; border-color: #385945; color: #79c998; }
-  .acceptance-track .is-current { background: linear-gradient(90deg, #18191e, transparent); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
-  .acceptance-track .is-current i { background: #2b2940; border-color: #55527a; color: #b0b1ff; }
-  .acceptance-track .is-current b { color: #dedfe2; }
-  .acceptance-message { padding: 52px 44px; }
-  .acceptance-message h3 { color: #ececee; font-size: 28px; font-weight: 520; letter-spacing: -.035em; margin: 16px 0 18px; }
-  .acceptance-message > span { color: #7d818a; display: block; font-size: 12px; line-height: 1.75; }
-  .acceptance-message > div { align-items: center; border-bottom: 1px solid #2c2e33; border-top: 1px solid #2c2e33; display: grid; gap: 5px 12px; grid-template-columns: 1fr auto; margin: 28px 0; padding: 16px 0; }
-  .acceptance-message > div b { color: #cfd1d5; font-size: 12px; font-weight: 540; }
-  .acceptance-message > div small { color: #62666f; font-size: 10px; }
-  .acceptance-message > div i { color: #858991; font-style: normal; grid-column: 2; grid-row: 1 / 3; }
-  .acceptance-message button { background: #ececee; border: 0; border-radius: 6px; color: #101113; font: inherit; font-size: 11px; font-weight: 600; padding: 10px 13px; }
-
-  .connection-demo-body { display: grid; grid-template-columns: 330px minmax(0,1fr); height: calc(100% - 54px); }
-  .connection-demo-body > aside { border-right: 1px solid #292b30; padding: 46px 34px; }
-  .connection-health { color: #6f747c; display: block; font-size: 10px; line-height: 1.6; margin-top: 230px; }
-  .connection-health i { background: #67c48d; border-radius: 50%; display: inline-block; height: 7px; margin-right: 8px; width: 7px; }
-  .connection-steps { padding: 34px 42px; }
-  .connection-steps > span { align-items: center; border-bottom: 1px solid #282a2f; display: grid; gap: 14px; grid-template-columns: 34px 1fr auto; min-height: 94px; padding: 12px 0; }
-  .connection-steps > span > i { align-items: center; border: 1px solid #393c42; border-radius: 7px; color: #666b73; display: flex; font-family: ui-monospace, monospace; font-size: 11px; font-style: normal; height: 30px; justify-content: center; width: 30px; }
-  .connection-steps p { display: grid; gap: 5px; margin: 0; }
-  .connection-steps b { color: #cfd1d5; font-size: 12px; font-weight: 540; }
-  .connection-steps small { color: #60646c; font-size: 10px; }
-  .connection-steps em { border: 1px solid #33363c; border-radius: 999px; color: #696e77; font-size: 9px; font-style: normal; padding: 5px 8px; }
-  .connection-steps .is-complete > i { background: #1d2d24; border-color: #385945; color: #79c998; }
-  .connection-steps .is-active > i { background: #2b2940; border-color: #55527a; color: #b0b1ff; }
-  .connection-steps .is-active em { border-color: #55527a; color: #a7a9ff; }
-
-  .operations-timeline { border-top: 1px solid #24262b; margin: 0 auto; max-width: 1214px; padding: 110px 16px 130px; }
-  .operations-timeline h2 { color: #f0f1f2; font-size: 46px; font-weight: 510; letter-spacing: -.045em; margin: 0 0 74px; }
-  .operations-timeline > div { display: grid; grid-template-columns: repeat(4,1fr); }
-  .operations-timeline article { border-top: 1px solid #292b30; padding: 28px 28px 0 0; position: relative; }
-  .operations-timeline article > span { background: #3b3e44; border: 6px solid #121316; border-radius: 50%; height: 18px; left: 0; position: absolute; top: -9px; width: 18px; }
-  .operations-timeline article:first-child > span { background: #8d90ff; }
-  .operations-timeline h3 { color: #d5d7da; font-size: 13px; font-weight: 540; margin: 0 0 12px; }
-  .operations-timeline article p { color: #747981; font-size: 12px; line-height: 1.65; margin: 0; max-width: 230px; }
-  .operations-timeline small { color: #4d5158; display: block; font-family: ui-monospace, monospace; font-size: 9px; letter-spacing: .06em; margin-top: 24px; }
-
-  .notice { color: #9599a1; display: block; margin: 0 auto; max-width: 1182px; min-height: 0; padding: 0 0 12px; }
-  .notice[data-error="true"] { color: #f0877f; }
-  .applications-workspace { padding-bottom: 150px; }
-  .workspace-heading { margin-bottom: 92px; }
-  .workspace-heading > span { padding-top: 36px; }
-  .applications .application-navigator { background: #111214; border: 1px solid #2b2d32; border-radius: 9px 9px 0 0; display: grid; gap: 12px; grid-template-columns: auto minmax(240px,1fr) auto auto; margin: 0; padding: 14px; }
-  .applications .application-picker { color: #747982; font-family: ui-monospace, monospace; font-size: 10px; gap: 6px; letter-spacing: .04em; text-transform: uppercase; }
-  .applications .application-picker select { background: #0c0d0f; border-color: #34363c; color: #dcdee1; min-height: 38px; }
-  .applications .application-position { color: #747982; font-family: ui-monospace, monospace; font-size: 11px; }
-  .applications .application-list { background: #0d0e10; border: 1px solid #2b2d32; border-radius: 0 0 9px 9px; color: #aeb1b8; display: grid; gap: 0; margin: 0; min-height: 260px; padding: 28px; }
-  .applications .application-navigator[hidden] + .application-list { border-radius: 9px; }
-  .applications .application-empty { align-items: center; border: 1px dashed #303238; border-radius: 7px; color: #666b73; display: flex; justify-content: center; margin: 0; min-height: 200px; }
-  .applications .application-list .app { background: #101113; border: 1px solid #303238; border-radius: 8px; box-shadow: none; color: #dfe1e4; overflow: hidden; padding: 0; }
-  .applications .application-list .app .top { background: #121316; border-bottom: 1px solid #292b30; padding: 20px 22px; }
-  .applications .app-avatar { background: #ededee; border: 0; border-radius: 50%; color: #141518; box-shadow: none; height: 40px; width: 40px; }
-  .applications .app-email { color: #8f93ff; }
-  .applications .app-project,
-  .applications .badge { background: #18191d; border-color: #36383e; color: #a8abb2; }
-  .applications .application-profile,
-  .applications .interview-panel,
-  .applications .application-meta-item,
-  .applications .response-block,
-  .applications .application-original-fields { background: #111214; border-color: #2b2d32; color: #dadddf; }
-  .applications .application-meta-item,
-  .applications .response-block { background: #0d0e10; }
-
-  .applications-closing { border-top: 1px solid #24262b; min-height: 600px; padding: 140px 16px 160px; text-align: center; }
-  .applications-closing h2 { color: #f6f7f7; font-size: clamp(48px, 5.6vw, 76px); font-weight: 520; letter-spacing: -.055em; line-height: .98; margin: 28px auto 48px; }
-
-  .applications-footer { border-top: 1px solid #24262b; display: grid; gap: 44px; grid-template-columns: 1.4fr repeat(3,1fr); margin: 0 auto; max-width: 1214px; min-height: 340px; padding: 58px 16px 46px; position: relative; }
-  .applications-footer-brand { align-items: center; align-self: start; color: #e4e5e7; display: flex; gap: 10px; text-decoration: none; }
-  .applications-footer-brand span { align-items: center; background: #ececed; border-radius: 50%; color: #111214; display: flex; font-size: 10px; font-weight: 800; height: 22px; justify-content: center; width: 22px; }
-  .applications-footer-brand strong { font-size: 13px; font-weight: 560; }
-  .applications-footer > div { display: flex; flex-direction: column; gap: 11px; }
-  .applications-footer h2 { color: #d7d9dc; font-size: 12px; font-weight: 560; margin: 0 0 7px; }
-  .applications-footer > div a { color: #70747d; font-size: 11px; text-decoration: none; }
-  .applications-footer > div a:hover { color: #e7e8ea; }
-  .applications-footer > small { bottom: 30px; color: #4f535a; font-family: ui-monospace, monospace; font-size: 9px; left: 16px; letter-spacing: .04em; position: absolute; text-transform: uppercase; }
-
-  .project-picker { border: 1px solid #2a2c31; color: #969aa2; margin-bottom: 90px; margin-top: 70px; padding: 30px; }
-
-  @media (max-width: 900px) {
-    .application-hero { padding-left: 18px; padding-right: 18px; }
-    .hero-product-body { grid-template-columns: 160px minmax(0,1fr); }
-    .product-workspace { padding-left: 24px; padding-right: 24px; }
-    .principle-grid { grid-template-columns: 1fr; }
-    .principle-grid article { border-bottom: 1px solid #24262b; border-right: 0; padding: 32px 0; }
-    .principle-grid article:last-child { border-bottom: 0; }
-    .principle-graphic { height: 180px; }
-    .applications .flow-steps { grid-template-columns: repeat(2,1fr); }
-    .applications .flow-steps li:nth-child(2) { border-right: 0; }
-    .applications .flow-steps li:nth-child(-n+2) { border-bottom: 1px solid #292b30; }
-    .interview-demo-grid,
-    .connection-demo-body { grid-template-columns: 250px minmax(0,1fr); }
-    .acceptance-demo-body { grid-template-columns: 1fr 1fr; }
-    .operations-timeline > div { grid-template-columns: repeat(2,1fr); gap: 52px 0; }
-  }
-
-  @media (max-width: 680px) {
-    body:has(.applications) .admin-nav { min-height: 60px; padding-left: 14px; padding-right: 14px; }
-    body:has(.applications) .admin-breadcrumbs { padding-left: 16px; padding-right: 16px; }
-    .application-hero { padding-bottom: 78px; }
-    .applications .application-hero > header { min-height: 390px; padding: 92px 2px 42px; }
-    .applications .application-hero h1 { font-size: 48px; }
-    .applications[data-applications] .project-context-title { display: none; }
-    .hero-actions { align-items: flex-start; flex-direction: column; gap: 16px; }
-    .applications .hero-product { height: 690px; }
-    .hero-product-body { display: block; }
-    .product-rail { display: none; }
-    .product-workspace { padding: 26px 18px 70px; }
-    .applications .hero-product .summary-grid { grid-template-columns: repeat(2,1fr); }
-    .applications .hero-product .summary-card:nth-child(2) { border-right: 0; }
-    .applications .hero-product .summary-card:nth-child(-n+2) { border-bottom: 1px solid #292b30; }
-    .applications .hero-product .filter-bar { grid-template-columns: 1fr; }
-    .product-preview { display: none; }
-    .applications .project-switcher { grid-template-columns: 1fr 1fr; padding: 0 16px; }
-    .applications .project-switcher a { border-bottom: 1px solid #222429; min-height: 72px; }
-    .application-principles { padding-bottom: 94px; padding-top: 90px; }
-    .application-principles > h2 { font-size: 37px; margin-bottom: 58px; margin-top: 52px; }
-    .applications .feature-section { padding-bottom: 98px; padding-top: 90px; }
-    .applications .flow-heading,
-    .workspace-heading { gap: 42px; grid-template-columns: 1fr; }
-    .applications .flow-heading h2,
-    .workspace-heading h2 { font-size: 43px; }
-    .workspace-heading > span { padding-top: 0; }
-    .applications .flow-steps { grid-template-columns: 1fr; margin-top: 58px; }
-    .applications .flow-steps li,
-    .applications .flow-steps li:nth-child(2) { border-bottom: 1px solid #292b30; border-right: 0; min-height: 300px; }
-    .applications .flow-steps li:last-child { border-bottom: 0; }
-    .feature-demo-window { height: auto; margin-top: 58px; min-height: 620px; }
-    .interview-demo-grid,
-    .acceptance-demo-body,
-    .connection-demo-body { display: block; height: auto; }
-    .interview-demo-grid > aside,
-    .acceptance-track,
-    .connection-demo-body > aside { border-bottom: 1px solid #292b30; border-right: 0; padding: 28px 22px; }
-    .demo-person:nth-of-type(n+3) { display: none; }
-    .demo-calendar { padding: 28px 18px 60px; }
-    .acceptance-track > span:nth-child(n+4) { display: none; }
-    .acceptance-message { padding: 38px 24px 72px; }
-    .connection-health { margin-top: 28px; }
-    .connection-steps { padding: 18px 22px 72px; }
-    .connection-steps > span { grid-template-columns: 32px 1fr; }
-    .connection-steps em { display: none; }
-    .operations-timeline { padding-bottom: 98px; padding-top: 86px; }
-    .operations-timeline h2 { font-size: 37px; }
-    .operations-timeline > div { grid-template-columns: 1fr; gap: 42px; }
-    .workspace-heading { margin-bottom: 56px; }
-    .applications .application-navigator { grid-template-columns: 1fr 1fr; }
-    .applications .application-navigator .application-picker,
-    .applications .application-position { grid-column: 1 / -1; }
-    .applications .application-list { padding: 14px; }
-    .applications-closing { min-height: 480px; padding-bottom: 110px; padding-top: 110px; }
-    .applications-closing h2 { font-size: 49px; }
-    .applications-footer { grid-template-columns: 1fr 1fr; padding-bottom: 90px; }
-    .applications-footer-brand { grid-column: 1 / -1; }
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .application-hero > header,
-    .hero-product,
-    .principle-grid article,
-    .flow-steps li { animation: applications-rise 620ms cubic-bezier(.2,.8,.2,1) both; }
-    .hero-product { animation-delay: 90ms; }
-    .principle-grid article:nth-child(2) { animation-delay: 70ms; }
-    .principle-grid article:nth-child(3) { animation-delay: 140ms; }
-    @keyframes applications-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-  }
-</style>
 <script>
   const initializeApplications=()=>{const root=document.querySelector<HTMLElement>('[data-applications]');
   if(root && root.dataset.initialized !== 'true'){root.dataset.initialized='true';
@@ -1270,12 +635,12 @@ const projectLabel = selectedProject?.[1] ?? "";
     root.dataset.project=projectSlug;
     if(projectSlug){
       const label=projectLabels[projectSlug];
-      const contextHeading=root.querySelector<HTMLElement>('.project-context-title');
+      const heading=root.querySelector<HTMLElement>('header h1');
       const description=root.querySelector<HTMLElement>('header>span');
-      if(contextHeading)contextHeading.textContent=`${label}：応募管理`;
-      if(description)description.textContent=`${label}に届いた応募を、確認から参加準備まで一つの画面で進めます。`;
+      if(heading)heading.textContent=`${label}：応募管理`;
+      if(description)description.textContent='このプロジェクトに届いた応募だけを表示しています。';
       root.querySelector<HTMLElement>('.project-picker')?.setAttribute('hidden','');
-      root.querySelectorAll<HTMLElement>('.hero-actions,.application-flow,.application-overview,.application-principles,.application-feature-demo,.operations-timeline,.applications-workspace,.applications-closing,.applications-footer,[data-notice],[data-list],[data-accept-dialog]').forEach(element=>element.removeAttribute('hidden'));
+      root.querySelectorAll<HTMLElement>('.application-flow,.application-overview,[data-notice],[data-list],[data-accept-dialog]').forEach(element=>element.removeAttribute('hidden'));
       root.querySelectorAll<HTMLAnchorElement>('.project-switcher a').forEach(link=>link.setAttribute('aria-current',new URL(link.href).searchParams.get('project')===projectSlug?'page':'false'));
     }
     const notice=root.querySelector<HTMLOutputElement>('[data-notice]')!;
@@ -1318,7 +683,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     const render=(items:any[])=>{visibleApplications=items.filter(matches);if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
     const refresh=()=>render(applications);
     const resetSelectionAndRefresh=()=>{selectedApplicationId='';refresh()};
-    const load=async()=>{try{const response=await fetch(`/api/admin/applications?project=${encodeURIComponent(projectSlug)}`,{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};formLabels=data.formLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch{navigator.hidden=true;list.innerHTML='<p class="application-empty">応募データを読み込めませんでした。接続を確認して、ページを再読み込みしてください。</p>'}};
+    const load=async()=>{try{const response=await fetch(`/api/admin/applications?project=${encodeURIComponent(projectSlug)}`,{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};formLabels=data.formLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch(error){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};
     search.addEventListener('input',resetSelectionAndRefresh);statusFilter.addEventListener('change',resetSelectionAndRefresh);clearFilter?.addEventListener('click',()=>{search.value='';statusFilter.value='all';resetSelectionAndRefresh()});
     applicationSelect.addEventListener('change',()=>{selectedApplicationId=applicationSelect.value;refresh()});
     previousApplication.addEventListener('click',()=>{const index=visibleApplications.findIndex(application=>application.id===selectedApplicationId);if(index>0){selectedApplicationId=visibleApplications[index-1].id;refresh()}});
