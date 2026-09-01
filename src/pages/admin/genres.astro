@@ -24,7 +24,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       <div class="overview-item"><span>分野</span><strong>{subjects.length}</strong><small>登録済み</small></div>
       <div class="overview-item"><span>公開中</span><strong>{publishedCount}</strong><small>分野</small></div>
       <div class="overview-item"><span>準備中</span><strong>{subjects.length - publishedCount}</strong><small>分野</small></div>
-      <div class="overview-item"><span>カテゴリ</span><strong>{categoryCount}</strong><small>登録済み</small></div>
+      <div class="overview-item"><span>カテゴリ数</span><strong>{categoryCount}</strong><small>登録済み</small></div>
     </section>
 
     <nav class="subject-index" aria-label="分野内リンク">
@@ -48,7 +48,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
           <p class="genre-description">{subject.data.description.ja}</p>
           <dl class="genre-stats">
             <div><dt>分野ID</dt><dd><code>{subject.data.slug}</code></dd></div>
-            <div><dt>カテゴリ</dt><dd>{subject.data.categories.length}<span>件</span></dd></div>
+            <div><dt>カテゴリ数</dt><dd>{subject.data.categories.length}<span>件</span></dd></div>
           </dl>
           <section class="category-block" aria-labelledby={`${subject.data.slug}-categories`}>
             <div class="category-heading"><h3 id={`${subject.data.slug}-categories`}>カテゴリ</h3><span>{subject.data.categories.length}件</span></div>
