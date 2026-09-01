@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 50815)
+Total output lines: 3362
+
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { getCollection } from "astro:content";
@@ -3360,3 +3363,49 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   document.addEventListener("astro:page-load", initializeDiscordTools);
   initializeDiscordTools();
 </script>
+<style is:global>
+  /* 既存の運営サイト（各ジャンル概要等）と同じ余白・罫線・面の扱いに揃える。 */
+  .member-admin { max-width: 1280px !important; padding: 0 1.5rem 4rem !important; }
+  .member-admin__header { align-items: end !important; background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--border-default) !important; box-shadow: none !important; display: flex !important; gap: 2rem; justify-content: space-between; margin: 1.7rem 0 1.25rem !important; min-height: 0 !important; padding: 0 0 1.25rem !important; }
+  .member-admin__header h1 { font-size: clamp(1.75rem, 3vw, 2.25rem) !important; line-height: 1.15 !important; }
+  .member-admin__header-meta { align-items: end !important; display: grid !important; gap: .35rem; }
+  .member-admin__header-meta span { background: transparent !important; border: 0 !important; padding: 0 !important; }
+  .member-admin__summary { border-bottom: 1px solid var(--border-default) !important; border-top: 0 !important; display: grid !important; gap: 0 !important; grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem !important; }
+  .summary-card { background: transparent !important; border: 0 !important; border-right: 1px solid var(--border-default) !important; border-radius: 0 !important; min-height: 5rem; padding: .85rem 1rem !important; }
+  .summary-card:first-child { border-left: 0 !important; padding-left: 0 !important; }
+  .summary-card:last-child { border-right: 0 !important; }
+  .summary-card strong { font-size: 1.35rem !important; }
+  .member-admin__members, .member-admin__tools { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; }
+  .member-admin__members { margin-bottom: 3rem !important; }
+  .member-admin__tools { border-top: 1px solid var(--border-default) !important; padding-top: 3rem !important; }
+  .member-admin__section-heading { border-bottom: 2px solid var(--accent-primary) !important; margin-bottom: 1rem !important; padding-bottom: .7rem !important; }
+  .member-admin__section-heading h2 { font-size: 1.22rem !important; }
+  .member-toolbar { background: transparent !important; border-bottom: 1px solid var(--border-default) !important; border-radius: 0 !important; padding: 0 0 .85rem !important; }
+  .member-grid { gap: .7rem !important; }
+  .member-card, .member-admin__workspace .action-card { border-radius: var(--radius, 2px) !important; }
+  .member-admin__workspace { gap: .7rem !important; }
+  /* dialog のUA既定配置に依存せず、個人設定を常にビューポート中央へ置く。 */
+  .member-modal[open] { display: block !important; inset: 0 !important; margin: 0 !important; position: fixed !important; }
+  .member-modal[open] .member-modal__shell { left: 50% !important; margin: 0 !important; position: absolute !important; top: 50% !important; transform: translate(-50%, -50%) !important; }
+  .member-modal__shell { border-radius: .55rem !important; margin: auto !important; }
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__header,
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__tools { background: transparent !important; }
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__header,
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__members,
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__tools { background-color: transparent !important; }
+  html[data-pref-bg="dark"] body:has(.member-admin) .admin-layout-main > .member-admin .member-admin__header { border-top: 0 !important; }
+  .member-admin.member-admin .member-admin__header,
+  .member-admin.member-admin .member-admin__members,
+  .member-admin.member-admin .member-admin__tools { background: transparent !important; background-color: transparent !important; }
+  @media (max-width: 760px) {
+    .member-admin { padding-inline: .85rem !important; }
+    .member-admin__header { align-items: start !important; display: grid !important; gap: 1rem; margin-top: 1.25rem !important; }
+    .member-admin__header-meta { align-items: start !important; justify-items: start; text-align: left; }
+    .member-admin__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .summary-card:nth-child(2) { border-right: 0 !important; }
+    .summary-card:nth-child(n + 3) { border-top: 1px solid var(--border-default); }
+    .member-admin__members { margin-bottom: 2.5rem !important; }
+    .member-modal[open] .member-modal__shell { left: 0 !important; top: 0 !important; transform: none !important; }
+  }
+</style>
