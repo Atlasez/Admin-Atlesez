@@ -3384,6 +3384,52 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-grid { gap: .7rem !important; }
   .member-card, .member-admin__workspace .action-card { border-radius: var(--radius, 2px) !important; }
   .member-admin__workspace { gap: .7rem !important; }
+  /* Refero Stylesの「細い罫線・小さな面・12pxの角丸」を、この管理画面の語彙で取り入れる。 */
+  .member-admin { max-width: 1200px !important; }
+  .member-admin__header {
+    border: 1px solid var(--border-default) !important;
+    border-radius: 12px !important;
+    padding: 1.25rem 1.4rem !important;
+  }
+  .member-admin__summary { gap: .55rem !important; }
+  .summary-card {
+    background: var(--background-secondary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 8px !important;
+    padding: .75rem .85rem !important;
+  }
+  .member-admin__members,
+  .member-admin__tools {
+    background: var(--background-secondary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 12px !important;
+    padding: 1rem 1.1rem 1.15rem !important;
+  }
+  .member-admin__section-heading { border-bottom: 1px solid var(--border-default) !important; }
+  .member-toolbar {
+    background: var(--background-primary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 8px !important;
+    padding: .65rem !important;
+  }
+  .member-card {
+    grid-template-areas: "top actions" "access discord" !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 12px !important;
+    border-top: 1px solid var(--border-default) !important;
+    padding: .9rem !important;
+  }
+  .member-card__top { grid-area: top; }
+  .member-card__access { grid-area: access; }
+  .member-card__discord { grid-area: discord; }
+  .member-card__actions { align-self: start; grid-area: actions; }
+  .member-card__access,
+  .member-card__discord { overflow: hidden; }
+  .member-admin__workspace .action-card {
+    border-radius: 12px !important;
+    border-top-width: 1px !important;
+  }
   /* カードを複数列にしたときも、以前の固定幅グリッドが横にはみ出さないようにする。 */
   .member-card {
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1fr) auto !important;
@@ -3420,5 +3466,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     .summary-card:nth-child(n + 3) { border-top: 1px solid var(--border-default); }
     .member-admin__members { margin-bottom: 2.5rem !important; }
     .member-modal[open] .member-modal__shell { left: 0 !important; top: 0 !important; transform: none !important; }
+    .member-card {
+      grid-template-areas: "top actions" "access access" "discord discord" !important;
+    }
   }
 </style>
