@@ -104,6 +104,12 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
 
   await page.goto("./admin/permissions/?project=atlas");
 
+  await expect(page.locator(".member-admin__sidebar")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "メンバーと権限", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: /検索/ })).toBeVisible();
+
   const card = page.locator(".member-card");
   await expect(card).toBeVisible();
   await expect(card.locator(".member-card__name")).toHaveAttribute(
