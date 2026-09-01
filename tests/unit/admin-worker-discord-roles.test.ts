@@ -869,7 +869,9 @@ describe("Discord to admin role synchronization", () => {
       if (this.query.includes("atlasez_member_discord_role_sync_exclusions"))
         return {
           results: this.state.managerRoleExcluded
-            ? ([{ email: "member@example.com", exclude_manager_role: 1 }] as T[])
+            ? ([
+                { email: "member@example.com", exclude_manager_role: 1 },
+              ] as T[])
             : [],
         };
       return { results: [] as T[] };
