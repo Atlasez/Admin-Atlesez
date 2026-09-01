@@ -789,6 +789,7 @@ describe("Discord to admin role synchronization", () => {
     roles: string[];
     permissions: Array<{ email: string; subject: string }>;
     manualAssignments?: Array<{ email: string; discord_role_id: string }>;
+    managerRoleExcluded?: boolean;
     profile: {
       email: string;
       university: string;
@@ -834,6 +835,7 @@ describe("Discord to admin role synchronization", () => {
       if (this.query.includes("atlasez_discord_role_mappings"))
         return {
           results: [
+            { subject: "__manager__", discord_role_id: "role-manager" },
             { subject: "mathematics", discord_role_id: "role-math" },
             { subject: "physics", discord_role_id: "role-physics" },
           ] as T[],
@@ -864,6 +866,12 @@ describe("Discord to admin role synchronization", () => {
         return { results: this.state.profile ? [this.state.profile as T] : [] };
       if (this.query.includes("atlasez_member_discord_role_assignments"))
         return { results: (this.state.manualAssignments ?? []) as T[] };
+      if (this.query.includes("atlasez_member_discord_role_sync_exclusions"))
+        return {
+          results: this.state.managerRoleExcluded
+            ? ([{ email: "member@example.com", exclude_manager_role: 1 }] as T[])
+            : [],
+        };
       return { results: [] as T[] };
     }
   }
@@ -983,5 +991,33 @@ describe("Discord to admin role synchronization", () => {
           args.includes("role-stale"),
       ),
     ).toBe(true);
+  });
+
+  it("keeps the global-admin permission when manager Discord role is excluded", async () => {
+    const state: State = {
+      roles: ["unknown-role"],
+      permissions: [{ email: "member@example.com", subject: "*" }],
+      managerRoleExcluded: true,
+      profile: null,
+    };
+    const writes: Array<{ query: string; args: unknown[] }> = [];
+    fetchSpy.mockResolvedValue(Response.json({ roles: state.roles }));
+
+    await expect(
+      syncDiscordRolesToAdmin(makeEnv(state, writes) as never),
+    ).resolves.toMatchObject({
+      accounts: 1,
+      synced: 1,
+      skipped: 0,
+      updated: 0,
+      warnings: [],
+    });
+    expect(
+      writes.some(
+        ({ query, args }) =>
+          query.includes("DELETE FROM report_admin_permissions") &&
+          args.includes("*"),
+      ),
+    ).toBe(false);
   });
 });
