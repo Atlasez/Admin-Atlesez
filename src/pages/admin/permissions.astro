@@ -3384,6 +3384,19 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .member-grid { gap: .7rem !important; }
   .member-card, .member-admin__workspace .action-card { border-radius: var(--radius, 2px) !important; }
   .member-admin__workspace { gap: .7rem !important; }
+  /* カードを複数列にしたときも、以前の固定幅グリッドが横にはみ出さないようにする。 */
+  .member-card {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 1fr) auto !important;
+  }
+  .member-card__top,
+  .member-card__access,
+  .member-card__discord,
+  .member-card__actions,
+  .member-action-menu {
+    min-width: 0 !important;
+  }
+  .member-card__actions { overflow: hidden; }
+  .member-action--edit { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* dialog のUA既定配置に依存せず、個人設定を常にビューポート中央へ置く。 */
   .member-modal[open] { display: block !important; inset: 0 !important; margin: 0 !important; position: fixed !important; }
   .member-modal[open] .member-modal__shell { left: 50% !important; margin: 0 !important; position: absolute !important; top: 50% !important; transform: translate(-50%, -50%) !important; }

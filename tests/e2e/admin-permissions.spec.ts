@@ -110,6 +110,20 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
 
   const card = page.locator(".member-card");
   await expect(card).toBeVisible();
+  const layoutMetrics = await page.locator("body").evaluate((body) => ({
+    bodyScrollWidth: body.scrollWidth,
+    bodyClientWidth: body.clientWidth,
+  }));
+  expect(layoutMetrics.bodyScrollWidth).toBeLessThanOrEqual(
+    layoutMetrics.bodyClientWidth + 1,
+  );
+  const cardMetrics = await card.evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }));
+  expect(cardMetrics.scrollWidth).toBeLessThanOrEqual(
+    cardMetrics.clientWidth + 1,
+  );
   await expect(card.locator(".member-card__name")).toHaveAttribute(
     "data-open-member",
     "",
