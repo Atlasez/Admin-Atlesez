@@ -3443,6 +3443,12 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
   .member-card__actions { overflow: hidden; }
   .member-action--edit { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 直前の横はみ出し対策よりも2段カードの列定義を優先し、操作欄を潰さない。 */
+  .member-card {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas: "top actions" "access discord" !important;
+  }
+  .member-card__actions { overflow: visible !important; }
   /* dialog のUA既定配置に依存せず、個人設定を常にビューポート中央へ置く。 */
   .member-modal[open] { display: block !important; inset: 0 !important; margin: 0 !important; position: fixed !important; }
   .member-modal[open] .member-modal__shell { left: 50% !important; margin: 0 !important; position: absolute !important; top: 50% !important; transform: translate(-50%, -50%) !important; }
