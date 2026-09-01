@@ -98,8 +98,8 @@ const projectLabel = selectedProject?.[1] ?? "";
   .interview-panel{background:color-mix(in srgb,var(--accent-primary) 7%,var(--background-primary));border:1px solid color-mix(in srgb,var(--accent-primary) 32%,var(--border-default));border-radius:.7rem;margin:1rem 1.25rem 0 1.45rem;padding:.95rem 1rem}.interview-panel .application-section-heading{margin-bottom:.75rem}.interview-panel .application-section-heading h3{font-size:.95rem;margin:0}.interview-panel .application-section-heading>span{font-size:.68rem}.interview-fields{display:grid;gap:.65rem;grid-template-columns:minmax(0,1fr) minmax(10rem,.65fr) minmax(0,1.25fr)}.interview-fields label{color:var(--text-secondary);display:grid;font-size:.68rem;font-weight:800;gap:.3rem}.interview-fields input,.interview-fields select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.interview-fields input:focus-visible,.interview-fields select:focus-visible{border-color:var(--accent-primary);outline:2px solid color-mix(in srgb,var(--accent-primary) 30%,transparent);outline-offset:1px}.interview-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem}.interview-actions .button{font-size:.74rem;min-height:2.3rem;text-decoration:none}.interview-actions .button[aria-busy=true]{cursor:wait;opacity:.65}.interview-panel[data-mode=in_person] .interview-zoom-field{opacity:.7}.interview-panel[data-mode=in_person] .interview-zoom-field::after{color:var(--text-secondary);content:'対面の場合は任意';font-size:.62rem;font-weight:500;margin-top:-.15rem}@media(max-width:760px){.interview-panel{margin-left:1rem;margin-right:1rem}.interview-fields{grid-template-columns:1fr 1fr}.interview-zoom-field{grid-column:1/-1}}@media(max-width:480px){.interview-panel{margin-left:.75rem;margin-right:.75rem;padding:.8rem}.interview-fields{grid-template-columns:1fr}.interview-zoom-field{grid-column:auto}.interview-actions{display:grid}.interview-actions .button{justify-content:center;text-align:center;width:100%}}
 </style>
 <script>
-  const root=document.querySelector<HTMLElement>('[data-applications]');
-  if(root){
+  const initializeApplications=()=>{const root=document.querySelector<HTMLElement>('[data-applications]');
+  if(root && root.dataset.initialized !== 'true'){root.dataset.initialized='true';
     const esc=(value:unknown)=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]??char));
     const projectLabels:Record<string,string>={atlas:'学習サイト「アトラス」','thinking-cafe':'考えるカフェ','seminar-platform':'ゼミプラットフォーム','student-council-exchange':'日本生徒会協会',secretariat:'運営事務局'};
     const projectSlugFromUrl=new URLSearchParams(window.location.search).get('project')?.trim().toLowerCase()??'';
@@ -170,5 +170,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     root.addEventListener('click',event=>{const target=event.target as HTMLElement;const retryButton=target.closest<HTMLButtonElement>('[data-retry]');if(retryButton){void retryDiscord(retryButton.dataset.retry??'',retryButton);return}const saveButton=target.closest<HTMLButtonElement>('[data-interview-save]');if(saveButton){void interviewRequest(saveButton.dataset.interviewSave??'','save',saveButton);return}const notifyButton=target.closest<HTMLButtonElement>('[data-interview-notify]');if(notifyButton)void interviewRequest(notifyButton.dataset.interviewNotify??'','notify',notifyButton)});
     root.addEventListener('change',event=>{const format=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-interview-format]');if(!format)return;format.closest<HTMLElement>('.interview-panel')?.setAttribute('data-mode',format.value)});
     if(projectSlug) void load();
-  }
+  }};
+  document.addEventListener('astro:page-load',initializeApplications);
+  initializeApplications();
 </script>

@@ -40,8 +40,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 </style>
 
 <script>
-  const root=document.querySelector<HTMLElement>('[data-interview-page]');
-  if(root){
+  const initializeInterviewPage=()=>{const root=document.querySelector<HTMLElement>('[data-interview-page]');
+  if(root && root.dataset.initialized !== 'true'){root.dataset.initialized='true';
     type Interview={scheduledAt?:string|null;mode?:string|null;zoomUrl?:string|null;location?:string|null;completedAt?:string|null};
     type Review={note?:string|null;assignedSubjects?:string[]|null;decision?:string|null;finalizedAt?:string|null};
     type InterviewResponse={application?:{id?:string;name?:string;email?:string;status?:string};interview?:Interview|null;review?:Review|null;subjectLabels?:Record<string,string>;error?:string};
@@ -54,5 +54,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const load=async()=>{if(!applicationId){setNotice('応募者が指定されていません。',true);form.querySelectorAll('input,textarea,select,button[type="submit"]').forEach((element)=>{(element as HTMLInputElement).disabled=true});return}try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(applicationId)}/interview?project=${encodeURIComponent(project)}`,{credentials:'same-origin',cache:'no-store'});const data=await response.json() as InterviewResponse;if(!response.ok)throw Error(data.error??'面談情報を読み込めませんでした。');apply(data)}catch(error){setNotice(error instanceof Error?error.message:'面談情報を読み込めませんでした。',true)}};
     form.addEventListener('submit',async(event)=>{event.preventDefault();if(decision.value==='accepted'&&!confirm.checked){setNotice('採用を確定する場合は確認欄にチェックしてください。',true);confirm.focus();return}const subjects=[...root.querySelectorAll<HTMLInputElement>('[data-subject-options] input:checked')].map(input=>input.value);const note=get<HTMLTextAreaElement>('[data-notes]').value;const save=get<HTMLButtonElement>('[data-save]');save.disabled=true;setNotice('面談メモを保存中…');try{const reviewResponse=await fetch(`/api/admin/applications/${encodeURIComponent(applicationId)}/interview-review?project=${encodeURIComponent(project)}`,{method:'PUT',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({note,assignedSubjects:subjects,decision:decision.value})});const reviewData=await reviewResponse.json().catch(()=>({}));if(!reviewResponse.ok)throw Error(reviewData.error??'面談メモを保存できませんでした。');if(!interviewCompleted&&(decision.value==='accepted'||decision.value==='rejected')){const completeResponse=await fetch(`/api/admin/applications/${encodeURIComponent(applicationId)}/interview/complete?project=${encodeURIComponent(project)}`,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({note,assignedSubjects:subjects,decision:decision.value})});const completeData=await completeResponse.json().catch(()=>({}));if(!completeResponse.ok)throw Error(completeData.error??'面談の完了処理に失敗しました。');interviewCompleted=true;setNotice(decision.value==='accepted'?'面談を完了し、採用と担当分野を反映しました。':'面談を完了し、見送りとして記録しました。')}else setNotice('面談メモを保存しました。');await load()}catch(error){setNotice(error instanceof Error?error.message:'面談メモを保存できませんでした。',true)}finally{save.disabled=false}});
     const back=`/admin/applications/?project=${encodeURIComponent(project)}`;get<HTMLAnchorElement>('[data-back-link]').href=back;get<HTMLAnchorElement>('[data-cancel-link]').href=back;void load();
-  }
+  }};
+  document.addEventListener('astro:page-load',initializeInterviewPage);
+  initializeInterviewPage();
 </script>
