@@ -1876,25 +1876,13 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       memberModalSave.disabled = true;
       setMemberModalMessage("保存・Discord同期中…");
       try {
-        const permissionResponse = await fetch("/api/admin/report-admin-permissions", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,subjects:permissions})});
-        const permissionResult = await permissionResponse.json().catch(() => ({}));
-        if (!permissionResponse.ok) throw new Error(permissionResult.error ?? "担当権限を保存できませんでした。");
-        const roleResponse = await fetch("/api/admin/member-discord-roles", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,roleIds:discordRoleIds})});
-        const roleResult = await roleResponse.json().catch(() => ({}));
-        if (!roleResponse.ok || roleResult.provisioning?.status === "failed") {
-          setMemberModalMessage(roleResult.error ?? discordSyncMessage("Discord役職の同期に失敗しました。", roleResult.provisioning), "error");
-          await load();
+        const response = await fetch("/api/admin/member-settings", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,subjects:permissions,roleIds:discordRoleIds,university:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-university]")?.value ?? "",year:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-year]")?.value ?? "",interests})});
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setMemberModalMessage(result.error ?? discordSyncMessage("Discord同期に失敗しました。", result.provisioning), "error");
           return;
         }
-        const attributesResponse = await fetch("/api/admin/member-attributes", {method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:activeMemberEmail,university:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-university]")?.value ?? "",year:memberModalContent.querySelector<HTMLSelectElement>("[data-modal-year]")?.value ?? "",interests})});
-        const attributesResult = await attributesResponse.json().catch(() => ({}));
-        if (!attributesResponse.ok) throw new Error(attributesResult.error ?? "登録情報を保存できませんでした。");
-        if (attributesResult.provisioning?.status === "failed") {
-          setMemberModalMessage(discordSyncMessage("プロフィールは保存しましたが、Discord役職の同期に失敗しました。", attributesResult.provisioning), "error");
-          await load();
-          return;
-        }
-        setMemberModalMessage(discordSyncMessage("個人設定を保存しました。", attributesResult.provisioning ?? roleResult.provisioning));
+        setMemberModalMessage(discordSyncMessage("個人設定を保存しました。", result.provisioning));
         closeMemberModal();
         await load();
       } catch (error) { setMemberModalMessage(error instanceof Error ? error.message : "保存・同期できませんでした。", "error"); }
