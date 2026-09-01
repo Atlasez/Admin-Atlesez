@@ -146,6 +146,26 @@ const projectLabel = selectedProject?.[1] ?? "";
   @media(max-width:480px){.application-list .app .top{padding:.95rem .85rem .9rem 1rem}.application-list .app .top h2{font-size:1.12rem}.application-list .app .actions{grid-template-columns:1fr}.application-list .app .actions button{grid-column:auto;justify-self:stretch}.application-profile{padding:.8rem .75rem}.application-profile .application-section-heading{align-items:flex-start;display:grid;gap:.45rem}.application-profile .application-section-heading>span{justify-self:start}}
   .interview-panel{background:color-mix(in srgb,var(--accent-primary) 7%,var(--background-primary));border:1px solid color-mix(in srgb,var(--accent-primary) 32%,var(--border-default));border-radius:.7rem;margin:1rem 1.25rem 0 1.45rem;padding:.95rem 1rem}.interview-panel .application-section-heading{margin-bottom:.75rem}.interview-panel .application-section-heading h3{font-size:.95rem;margin:0}.interview-panel .application-section-heading>span{font-size:.68rem}.interview-fields{display:grid;gap:.65rem;grid-template-columns:minmax(0,1fr) minmax(10rem,.65fr) minmax(0,1.25fr)}.interview-fields label{color:var(--text-secondary);display:grid;font-size:.68rem;font-weight:800;gap:.3rem}.interview-fields input,.interview-fields select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.interview-fields input:focus-visible,.interview-fields select:focus-visible{border-color:var(--accent-primary);outline:2px solid color-mix(in srgb,var(--accent-primary) 30%,transparent);outline-offset:1px}.interview-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem}.interview-actions .button{font-size:.74rem;min-height:2.3rem;text-decoration:none}.interview-actions .button[aria-busy=true]{cursor:wait;opacity:.65}.interview-panel[data-mode=in_person] .interview-zoom-field{opacity:.7}.interview-panel[data-mode=in_person] .interview-zoom-field::after{color:var(--text-secondary);content:'対面の場合は任意';font-size:.62rem;font-weight:500;margin-top:-.15rem}@media(max-width:760px){.interview-panel{margin-left:1rem;margin-right:1rem}.interview-fields{grid-template-columns:1fr 1fr}.interview-zoom-field{grid-column:1/-1}}@media(max-width:480px){.interview-panel{margin-left:.75rem;margin-right:.75rem;padding:.8rem}.interview-fields{grid-template-columns:1fr}.interview-zoom-field{grid-column:auto}.interview-actions{display:grid}.interview-actions .button{justify-content:center;text-align:center;width:100%}}
 </style>
+<style is="global">
+  /* Final layer keeps the Geist treatment ahead of legacy page overrides. */
+  .applications .application-flow,.applications .application-overview{border-radius:6px;box-shadow:none}
+  .applications .flow-steps{border:1px solid var(--border-default);gap:0}
+  .applications .flow-steps li{background:transparent;border:0;border-right:1px solid var(--border-default);border-top:0;min-height:6.5rem}
+  .applications .flow-steps li:last-child{border-right:0}
+  .applications .flow-step-number{background:var(--text-primary);color:var(--background-primary);font-family:var(--font-mono,"SFMono-Regular",monospace);height:1.35rem;width:1.35rem}
+  .applications .summary-grid{gap:0}
+  .applications .summary-card{border-left:0;border-right:1px solid var(--border-default);border-radius:0;box-shadow:none}
+  .applications .summary-card:first-child{border-left:3px solid #d97706}
+  .applications .summary-card:last-child{border-right:0}
+  .applications .application-list .app{background:var(--background-primary);border-radius:6px;box-shadow:none}
+  .applications .application-list .app .top{background:transparent}
+  .applications .app-avatar{background:var(--text-primary);border:0;border-radius:6px;box-shadow:none;color:var(--background-primary);height:2.5rem;width:2.5rem}
+  .applications .interview-panel{background:transparent;border:0;border-bottom:1px solid var(--border-default);border-radius:0;margin-left:1.2rem;margin-right:1.2rem}
+  .applications .application-profile{border-radius:6px;box-shadow:none}
+  .applications .application-meta-item,.applications .response-block,.applications .application-original-fields{border-radius:6px;box-shadow:none}
+  @media(max-width:760px){.applications .flow-steps li:nth-child(2){border-right:0}.applications .flow-steps li:nth-child(-n+2){border-bottom:1px solid var(--border-default)}}
+  @media(max-width:480px){.applications .flow-steps li{border-bottom:1px solid var(--border-default);border-right:0}.applications .flow-steps li:last-child{border-bottom:0}}
+</style>
 <script>
   const initializeApplications=()=>{const root=document.querySelector<HTMLElement>('[data-applications]');
   if(root && root.dataset.initialized !== 'true'){root.dataset.initialized='true';
