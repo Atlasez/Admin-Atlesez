@@ -2417,6 +2417,21 @@ async function updateMemberAttributes(
       { error: "所属機関・学年・メールアドレスを確認してください。" },
       400,
     );
+  const state = await loadDiscordProvisioningState(env, email);
+  const candidateProfile: DiscordProvisioningProfile = {
+    ...state.profile,
+    university,
+    year,
+    interests: interests.join(","),
+  };
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    state.subjects,
+    discordProvisioningAttributes(candidateProfile),
+    state.manualAssignments,
+  );
+  if (provisioning.status !== "synced") return discordSyncFailure(provisioning);
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
     `INSERT INTO editorial_member_profiles (email, university, year, interests, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -2424,7 +2439,6 @@ async function updateMemberAttributes(
   )
     .bind(email, university, year, interests.join(","), now)
     .run();
-  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
   return json({ ok: true, provisioning });
 }
 
@@ -2458,6 +2472,15 @@ async function createReportAdminPermission(
   if (subjects.some((subject) => subject !== "*" && !SUBJECT_SLUG.test(subject)))
     return json({ error: "メールアドレスと担当分野を確認してください。" }, 400);
   const normalizedSubjects = subjects.includes("*") ? ["*"] : subjects;
+  const state = await loadDiscordProvisioningState(env, email);
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    normalizedSubjects,
+    discordProvisioningAttributes(state.profile),
+    state.manualAssignments,
+  );
+  if (provisioning.status !== "synced") return discordSyncFailure(provisioning);
   await env.REPORTS.batch(
     normalizedSubjects.map((subject) =>
       env.REPORTS.prepare(
@@ -2471,7 +2494,6 @@ async function createReportAdminPermission(
     allSubjects: normalizedSubjects.includes("*"),
     isManager: normalizedSubjects.includes("*"),
   });
-  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
   return json({ ok: true, provisioning }, 201);
 }
 
@@ -2501,6 +2523,15 @@ async function updateReportAdminPermissions(
     .first<{ found: number }>();
   if (email === scope.email && existingGlobal && !normalizedSubjects.includes("*"))
     return json({ error: "自分自身の全分野権限は削除できません。" }, 400);
+  const state = await loadDiscordProvisioningState(env, email);
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    normalizedSubjects,
+    discordProvisioningAttributes(state.profile),
+    state.manualAssignments,
+  );
+  if (provisioning.status !== "synced") return discordSyncFailure(provisioning);
   await env.REPORTS.prepare(
     "DELETE FROM report_admin_permissions WHERE email = ?",
   )
@@ -2520,7 +2551,6 @@ async function updateReportAdminPermissions(
     allSubjects: normalizedSubjects.includes("*"),
     isManager: normalizedSubjects.includes("*"),
   });
-  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
   return json({ ok: true, provisioning });
 }
 
@@ -2542,12 +2572,160 @@ async function deleteReportAdminPermission(
     return json({ error: "対象の権限を確認してください。" }, 400);
   if (email === scope.email && subject === "*")
     return json({ error: "自分自身の全分野権限は削除できません。" }, 400);
+  const state = await loadDiscordProvisioningState(env, email);
+  const subjects = state.subjects.filter((item) => item !== subject);
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    subjects,
+    discordProvisioningAttributes(state.profile),
+    state.manualAssignments,
+  );
+  if (provisioning.status !== "synced") return discordSyncFailure(provisioning);
   await env.REPORTS.prepare(
     "DELETE FROM report_admin_permissions WHERE email = ? AND subject = ?",
   )
     .bind(email, subject)
     .run();
-  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
+  return json({ ok: true, provisioning });
+}
+
+async function saveMemberSettings(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as {
+    email?: unknown;
+    subjects?: unknown;
+    roleIds?: unknown;
+    university?: unknown;
+    year?: unknown;
+    interests?: unknown;
+  } | null;
+  const email = text(payload?.email, 320).toLowerCase();
+  const rawSubjects = Array.isArray(payload?.subjects)
+    ? payload.subjects
+    : [];
+  const subjects = Array.from(
+    new Set(rawSubjects.map((subject) => text(subject, 80)).filter(Boolean)),
+  );
+  const normalizedSubjects = subjects.includes("*") ? ["*"] : subjects;
+  const roleIds = Array.isArray(payload?.roleIds)
+    ? Array.from(
+        new Set(payload.roleIds.map((roleId) => text(roleId, 32)).filter(Boolean)),
+      )
+    : [];
+  const university = normalizeInstitution(payload?.university);
+  const year = normalizeGrade(payload?.year);
+  const interests = [
+    ...new Set(
+      Array.isArray(payload?.interests)
+        ? payload.interests
+            .map((value) => normalizedText(value, 80))
+            .filter((value) => (MEMBER_INTERESTS as readonly string[]).includes(value))
+        : [],
+    ),
+  ];
+  if (
+    !EMAIL_PATTERN.test(email) ||
+    subjects.some((subject) => subject !== "*" && !SUBJECT_SLUG.test(subject)) ||
+    roleIds.length > 100 ||
+    roleIds.some((roleId) => !/^\d{15,22}$/.test(roleId)) ||
+    /[<>]/.test(university) ||
+    (year && !(MEMBER_YEARS as readonly string[]).includes(year))
+  )
+    return json({ error: "個人設定の入力内容を確認してください。" }, 400);
+
+  const catalog = await env.REPORTS.prepare(
+    `SELECT discord_role_id, is_managed
+     FROM atlasez_discord_role_catalog
+     WHERE discord_role_id IN (${roleIds.map(() => "?").join(",") || "NULL"})`,
+  )
+    .bind(...roleIds)
+    .all<{ discord_role_id: string; is_managed: number }>();
+  const catalogById = new Map(
+    (catalog.results ?? []).map((role) => [role.discord_role_id, role]),
+  );
+  if (roleIds.some((roleId) => !catalogById.has(roleId)))
+    return json({ error: "Discordの最新ロール一覧にない役職が含まれています。先に再読み込みしてください。" }, 400);
+  if (roleIds.some((roleId) => catalogById.get(roleId)?.is_managed))
+    return json({ error: "Discordが管理する役職は割り当てできません。" }, 400);
+
+  const state = await loadDiscordProvisioningState(env, email);
+  if (email === scope.email && state.subjects.includes("*") && !normalizedSubjects.includes("*"))
+    return json({ error: "自分自身の全分野権限は削除できません。" }, 400);
+  const candidateProfile: DiscordProvisioningProfile = {
+    ...state.profile,
+    university,
+    year,
+    interests: interests.join(","),
+  };
+  const selected = new Set(roleIds);
+  const candidateAssignments = state.manualAssignments.map((assignment) => ({
+    ...assignment,
+    is_active: selected.has(assignment.discord_role_id) ? 1 : 0,
+  }));
+  const existingAssignmentIds = new Set(
+    candidateAssignments.map((assignment) => assignment.discord_role_id),
+  );
+  for (const roleId of roleIds)
+    if (!existingAssignmentIds.has(roleId))
+      candidateAssignments.push({ discord_role_id: roleId, is_active: 1 });
+
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    normalizedSubjects,
+    discordProvisioningAttributes(candidateProfile),
+    candidateAssignments,
+  );
+  if (provisioning.status !== "synced") return discordSyncFailure(provisioning);
+
+  const now = new Date().toISOString();
+  const managerScope: AdminScope = {
+    email,
+    subjects: normalizedSubjects.includes("*") ? [] : normalizedSubjects,
+    allSubjects: normalizedSubjects.includes("*"),
+    isManager: normalizedSubjects.includes("*"),
+  };
+  const statements = [
+    env.REPORTS.prepare("DELETE FROM report_admin_permissions WHERE email = ?").bind(email),
+    ...normalizedSubjects.map((subject) =>
+      env.REPORTS.prepare(
+        "INSERT INTO report_admin_permissions (email, subject) VALUES (?, ?)",
+      ).bind(email, subject),
+    ),
+    atlasMembershipStatement(env, managerScope),
+    env.REPORTS.prepare(
+      `INSERT INTO editorial_member_profiles (email, university, year, interests, updated_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(email) DO UPDATE SET university=excluded.university, year=excluded.year, interests=excluded.interests, updated_at=excluded.updated_at`,
+    ).bind(email, university, year, interests.join(","), now),
+    ...state.manualAssignments.map((assignment) =>
+      env.REPORTS.prepare(
+        "UPDATE atlasez_member_discord_role_assignments SET is_active=?, assigned_at=?, assigned_by=? WHERE email=? AND discord_role_id=?",
+      ).bind(
+        selected.has(assignment.discord_role_id) ? 1 : 0,
+        now,
+        scope.email,
+        email,
+        assignment.discord_role_id,
+      ),
+    ),
+    ...roleIds.map((roleId) =>
+      env.REPORTS.prepare(
+        `INSERT INTO atlasez_member_discord_role_assignments
+           (email, discord_role_id, is_active, assigned_at, assigned_by)
+         VALUES (?, ?, 1, ?, ?)
+         ON CONFLICT(email, discord_role_id) DO UPDATE SET
+           is_active=1, assigned_at=excluded.assigned_at, assigned_by=excluded.assigned_by`,
+      ).bind(email, roleId, now, scope.email),
+    ),
+  ];
+  await env.REPORTS.batch(statements);
   return json({ ok: true, provisioning });
 }
 
@@ -2595,6 +2773,21 @@ async function updateMemberDiscordRoles(
     .bind(email)
     .all<{ discord_role_id: string }>();
   const selected = new Set(roleIds);
+  const state = await loadDiscordProvisioningState(env, email);
+  const candidateAssignments: DiscordManualRoleAssignment[] = [
+    ...state.manualAssignments
+      .filter((role) => !selected.has(role.discord_role_id))
+      .map((role) => ({ ...role, is_active: 0 })),
+    ...roleIds.map((roleId) => ({ discord_role_id: roleId, is_active: 1 })),
+  ];
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    state.subjects,
+    discordProvisioningAttributes(state.profile),
+    candidateAssignments,
+  );
+  if (provisioning.status !== "synced") return discordSyncFailure(provisioning);
   const statements = (existing.results ?? [])
     .filter((role) => !selected.has(role.discord_role_id))
     .map((role) =>
@@ -2614,11 +2807,7 @@ async function updateMemberDiscordRoles(
       ).bind(email, roleId, now, scope.email),
     );
   if (statements.length) await env.REPORTS.batch(statements);
-  const provisioning = await provisionMemberDiscordRolesForEmail(env, email);
-  return json(
-    { ok: provisioning.status !== "failed", provisioning },
-    provisioning.status === "failed" ? 502 : 200,
-  );
+  return json({ ok: true, provisioning });
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
@@ -4382,16 +4571,18 @@ type OperationProject = {
   description: string;
 };
 
-async function ensureAtlasMembership(env: Env, scope: AdminScope) {
-  await env.REPORTS.prepare(
+const atlasMembershipStatement = (env: Env, scope: AdminScope) =>
+  env.REPORTS.prepare(
     "INSERT OR IGNORE INTO atlasez_project_memberships (project_id, email, role, joined_at) VALUES ('atlas', ?, ?, ?)",
   )
     .bind(
       scope.email,
       scope.isManager ? "manager" : "member",
       new Date().toISOString(),
-    )
-    .run();
+    );
+
+async function ensureAtlasMembership(env: Env, scope: AdminScope) {
+  await atlasMembershipStatement(env, scope).run();
 }
 
 type OperationProjectAccess = OperationProject & { role: string };
@@ -5096,6 +5287,82 @@ type DiscordProvisioningResult = {
   notices?: string[];
 };
 
+type DiscordProvisioningProfile = {
+  university: string;
+  year: string;
+  interests: string;
+  affiliation_type: string;
+};
+
+type DiscordManualRoleAssignment = {
+  discord_role_id: string;
+  is_active: number;
+};
+
+type DiscordProvisioningState = {
+  subjects: string[];
+  profile: DiscordProvisioningProfile;
+  manualAssignments: DiscordManualRoleAssignment[];
+};
+
+const emptyDiscordProvisioningProfile = (): DiscordProvisioningProfile => ({
+  university: "",
+  year: "",
+  interests: "",
+  affiliation_type: "",
+});
+
+const discordProvisioningAttributes = (profile: DiscordProvisioningProfile) => ({
+  institution: profile.university ?? "",
+  year: profile.year ?? "",
+  affiliationType: profile.affiliation_type ?? "",
+  interests: (profile.interests ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+});
+
+async function loadDiscordProvisioningState(
+  env: Env,
+  email: string,
+): Promise<DiscordProvisioningState> {
+  const [profile, permissions, manualAssignments] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT university,year,interests,affiliation_type FROM editorial_member_profiles WHERE email=?",
+    )
+      .bind(email)
+      .first<DiscordProvisioningProfile>(),
+    env.REPORTS.prepare(
+      "SELECT subject FROM report_admin_permissions WHERE email=?",
+    )
+      .bind(email)
+      .all<{ subject: string }>(),
+    env.REPORTS.prepare(
+      "SELECT discord_role_id,is_active FROM atlasez_member_discord_role_assignments WHERE email=?",
+    )
+      .bind(email)
+      .all<DiscordManualRoleAssignment>(),
+  ]);
+  return {
+    subjects: (permissions.results ?? []).map((item) => item.subject),
+    profile: profile ?? emptyDiscordProvisioningProfile(),
+    manualAssignments: manualAssignments.results ?? [],
+  };
+}
+
+const discordSyncFailure = (provisioning: DiscordProvisioningResult) =>
+  json(
+    {
+      ok: false,
+      error: `Discord同期に失敗したため、変更は保存していません。${[
+        ...provisioning.warnings,
+        ...(provisioning.notices ?? []),
+      ].join(" ")}`,
+      provisioning,
+    },
+    provisioning.status === "skipped" ? 409 : 502,
+  );
+
 const discordRoleMutationWarning = (
   action: "付与" | "削除",
   roles: Array<{ id: string; name: string }>,
@@ -5179,6 +5446,7 @@ async function provisionApplicationDiscordRoles(
     affiliationType: string;
     interests: string[];
   },
+  manualAssignmentsOverride?: DiscordManualRoleAssignment[],
 ): Promise<DiscordProvisioningResult> {
   if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID)
     return {
@@ -5279,11 +5547,13 @@ async function provisionApplicationDiscordRoles(
       "SELECT discord_role_id FROM atlasez_discord_attribute_role_mappings",
     ).all<{ discord_role_id: string }>(),
   ]);
-  const manualAssignments = await env.REPORTS.prepare(
-    "SELECT discord_role_id, is_active FROM atlasez_member_discord_role_assignments WHERE email = ?",
-  )
-    .bind(email)
-    .all<{ discord_role_id: string; is_active: number }>();
+  const manualAssignments = manualAssignmentsOverride
+    ? { results: manualAssignmentsOverride }
+    : await env.REPORTS.prepare(
+        "SELECT discord_role_id, is_active FROM atlasez_member_discord_role_assignments WHERE email = ?",
+      )
+        .bind(email)
+        .all<DiscordManualRoleAssignment>();
   const managedRoleIds = new Set(
     [...(subjectMappings.results ?? []), ...(attributeMappings.results ?? [])]
       .map((mapping) => mapping.discord_role_id)
@@ -5294,6 +5564,11 @@ async function provisionApplicationDiscordRoles(
   const desired = new Set<string>();
   const warnings: string[] = [];
   const notices: string[] = [];
+  const discoveredMappings: Array<{
+    kind: "subject" | "attribute" | "affiliation";
+    key: string;
+    roleId: string;
+  }> = [];
   for (const assignment of manualAssignments.results ?? []) {
     if (
       assignableGuildRoles.some((role) => role.id === assignment.discord_role_id)
@@ -5321,6 +5596,7 @@ async function provisionApplicationDiscordRoles(
       return;
     }
     let roleId = "";
+    let discovered = false;
     if (kind === "attribute") {
       const mapping = await env.REPORTS.prepare(
         "SELECT discord_role_id FROM atlasez_discord_attribute_role_mappings WHERE attribute_type = ? AND attribute_value = ?",
@@ -5351,7 +5627,10 @@ async function provisionApplicationDiscordRoles(
           (compatibleLabel) => role.name.trim() === compatibleLabel.trim(),
         ),
       );
-      if (sameNameRoles.length === 1) roleId = sameNameRoles[0].id;
+      if (sameNameRoles.length === 1) {
+        roleId = sameNameRoles[0].id;
+        discovered = true;
+      }
       else if (sameNameRoles.length > 1) {
         warnings.push(
           `Discordに「${label}」ロールが複数存在するため、自動付与を停止しました。運営サイト側でロールID対応表を設定してください。`,
@@ -5363,23 +5642,7 @@ async function provisionApplicationDiscordRoles(
       warnings.push(`Discordに「${label}」ロールが存在しません。運営サイト側の対応表だけを確認しました。`);
       return;
     }
-    if (kind === "attribute") {
-      const attributeType = key.split(":", 1)[0];
-      const attributeValue = key.slice(key.indexOf(":") + 1);
-      await env.REPORTS.prepare(
-        "INSERT INTO atlasez_discord_attribute_role_mappings (attribute_type,attribute_value,discord_role_id) VALUES (?,?,?) ON CONFLICT(attribute_type,attribute_value) DO UPDATE SET discord_role_id=excluded.discord_role_id",
-      )
-        .bind(attributeType, attributeValue, roleId)
-        .run();
-    } else {
-      const mappingSubject =
-        kind === "affiliation" ? `__affiliation__${key}` : key;
-      await env.REPORTS.prepare(
-        "INSERT INTO atlasez_discord_role_mappings (project_id,subject,discord_role_id) VALUES ('atlas',?,?) ON CONFLICT(project_id,subject) DO UPDATE SET discord_role_id=excluded.discord_role_id",
-      )
-        .bind(mappingSubject, roleId)
-        .run();
-    }
+    if (discovered) discoveredMappings.push({ kind, key, roleId });
     desired.add(roleId);
   };
 
@@ -5413,25 +5676,79 @@ async function provisionApplicationDiscordRoles(
 
   const current = new Set(member.roles ?? []);
   let applied = 0;
+  const addedRoleIds: string[] = [];
   for (const roleId of desired) {
     if (current.has(roleId)) continue;
     const response = await fetch(
       `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
       { method: "PUT", headers },
     );
-    if (response.ok) applied++;
+    if (response.ok) {
+      applied++;
+      addedRoleIds.push(roleId);
+    }
     else warnings.push(discordRoleMutationWarning("付与", guildRoles, roleId, response));
   }
   let removed = 0;
+  const removedRoleIds: string[] = [];
   for (const roleId of current) {
     if (!managedRoleIds.has(roleId) || desired.has(roleId)) continue;
     const response = await fetch(
       `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
       { method: "DELETE", headers },
     );
-    if (response.ok) removed++;
+    if (response.ok) {
+      removed++;
+      removedRoleIds.push(roleId);
+    }
     else warnings.push(discordRoleMutationWarning("削除", guildRoles, roleId, response));
   }
+  if (warnings.length && (addedRoleIds.length || removedRoleIds.length)) {
+    let rollbackFailed = false;
+    for (const roleId of addedRoleIds) {
+      const response = await fetch(
+        `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
+        { method: "DELETE", headers },
+      );
+      if (!response.ok) rollbackFailed = true;
+    }
+    for (const roleId of removedRoleIds) {
+      const response = await fetch(
+        `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${account.discord_user_id}/roles/${roleId}`,
+        { method: "PUT", headers },
+      );
+      if (!response.ok) rollbackFailed = true;
+    }
+    if (rollbackFailed)
+      warnings.push(
+        "Discord側の部分変更を元に戻せませんでした。現在のDiscordロールを確認してから再試行してください。",
+      );
+    else {
+      applied = 0;
+      removed = 0;
+    }
+  }
+  if (!warnings.length)
+    for (const mapping of discoveredMappings)
+      if (mapping.kind === "attribute") {
+        const attributeType = mapping.key.split(":", 1)[0];
+        const attributeValue = mapping.key.slice(mapping.key.indexOf(":") + 1);
+        await env.REPORTS.prepare(
+          "INSERT INTO atlasez_discord_attribute_role_mappings (attribute_type,attribute_value,discord_role_id) VALUES (?,?,?) ON CONFLICT(attribute_type,attribute_value) DO UPDATE SET discord_role_id=excluded.discord_role_id",
+        )
+          .bind(attributeType, attributeValue, mapping.roleId)
+          .run();
+      } else {
+        const mappingSubject =
+          mapping.kind === "affiliation"
+            ? `__affiliation__${mapping.key}`
+            : mapping.key;
+        await env.REPORTS.prepare(
+          "INSERT INTO atlasez_discord_role_mappings (project_id,subject,discord_role_id) VALUES ('atlas',?,?) ON CONFLICT(project_id,subject) DO UPDATE SET discord_role_id=excluded.discord_role_id",
+        )
+          .bind(mappingSubject, mapping.roleId)
+          .run();
+      }
   return {
     status: warnings.length ? "failed" : "synced",
     applied,
@@ -5439,45 +5756,6 @@ async function provisionApplicationDiscordRoles(
     warnings,
     ...(notices.length ? { notices } : {}),
   };
-}
-
-async function provisionMemberDiscordRolesForEmail(
-  env: Env,
-  email: string,
-): Promise<DiscordProvisioningResult> {
-  const [profile, permissions] = await Promise.all([
-    env.REPORTS.prepare(
-      "SELECT university, year, interests, affiliation_type FROM editorial_member_profiles WHERE email = ?",
-    )
-      .bind(email)
-      .first<{
-        university: string;
-        year: string;
-        interests: string;
-        affiliation_type: string;
-      }>(),
-    env.REPORTS.prepare(
-      "SELECT subject FROM report_admin_permissions WHERE email = ?",
-    )
-      .bind(email)
-      .all<{ subject: string }>(),
-  ]);
-  // 権限を最後に削除した場合も、空の希望ロール集合として同期し、
-  // 既存の管理対象ロールをDiscordから取り除けるようにする。
-  return provisionApplicationDiscordRoles(
-    env,
-    email,
-    (permissions.results ?? []).map((item) => item.subject),
-    {
-      institution: profile?.university ?? "",
-      year: profile?.year ?? "",
-      affiliationType: profile?.affiliation_type ?? "",
-      interests: (profile?.interests ?? "")
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean),
-    },
-  );
 }
 
 type DiscordAdminSyncAccount = {
@@ -15196,6 +15474,11 @@ async function handleAdminRequest(
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
+  if (
+    url.pathname === "/api/admin/member-settings" &&
+    request.method === "PUT"
+  )
+    return saveMemberSettings(request, env);
   if (url.pathname === "/api/admin/editorial-workflow-roles") {
     if (request.method === "POST")
       return createEditorialWorkflowRole(request, env);

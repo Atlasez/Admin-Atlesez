@@ -82,6 +82,25 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
       }),
     });
   });
+  await page.route("**/api/admin/member-settings", async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error:
+          "Discord同期に失敗したため、変更は保存していません。Discordロール「数学運営」を付与できませんでした（HTTP 403）。対象ロールより上位にあることを確認してください。",
+        provisioning: {
+          status: "failed",
+          applied: 0,
+          removed: 0,
+          warnings: [
+            "Discordロール「数学運営」を付与できませんでした（HTTP 403）。",
+          ],
+        },
+      }),
+    });
+  });
 
   await page.goto("./admin/permissions/?project=atlas");
 

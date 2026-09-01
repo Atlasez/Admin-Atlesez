@@ -215,9 +215,9 @@ describe("Discord managed role synchronization", () => {
       env as never,
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(502);
     await expect(response.json()).resolves.toMatchObject({
-      ok: true,
+      ok: false,
       provisioning: { status: "failed", applied: 0 },
     });
     expect(
@@ -311,9 +311,9 @@ describe("Discord managed role synchronization", () => {
       env as never,
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(502);
     await expect(response.json()).resolves.toMatchObject({
-      ok: true,
+      ok: false,
       provisioning: { status: "failed", applied: 0 },
     });
     expect(
@@ -578,6 +578,112 @@ describe("Discord managed role synchronization", () => {
           url.endsWith("/roles/123456789012345678") && method === "PUT",
       ),
     ).toBe(true);
+  });
+
+  it("does not persist the combined member settings when Discord sync fails", async () => {
+    const writes: string[] = [];
+    class AtomicSettingsStatement {
+      constructor(private readonly query: string) {}
+
+      bind(..._args: unknown[]) {
+        return this;
+      }
+
+      async run() {
+        writes.push(this.query);
+        return { meta: { changes: 1 } };
+      }
+
+      async first<T>() {
+        if (this.query.includes("editorial_member_profiles"))
+          return {
+            university: "",
+            year: "",
+            interests: "",
+            affiliation_type: "",
+          } as T;
+        if (this.query.includes("atlasez_member_discord_accounts"))
+          return {
+            discord_user_id: "123456789012345678",
+            access_token_ciphertext: "",
+            refresh_token_ciphertext: "",
+            token_expires_at: null,
+          } as T;
+        if (this.query.includes("atlasez_discord_role_mappings"))
+          return { discord_role_id: "123456789012345678" } as T;
+        return null as T | null;
+      }
+
+      async all<T>() {
+        if (this.query.includes("atlasez_discord_role_catalog"))
+          return {
+            results: [
+              { discord_role_id: "123456789012345678", is_managed: 0 },
+            ] as T[],
+          };
+        if (this.query.includes("report_admin_permissions"))
+          return { results: [] as T[] };
+        if (this.query.includes("atlasez_member_discord_role_assignments"))
+          return { results: [] as T[] };
+        return { results: [] as T[] };
+      }
+    }
+
+    fetchSpy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (url.endsWith("/guilds/guild-1"))
+        return Response.json({ name: "Atlasez学習サイト運営" });
+      if (url.endsWith("/members/123456789012345678"))
+        return Response.json({ roles: ["@everyone"] });
+      if (url.endsWith("/roles"))
+        return Response.json([{ id: "123456789012345678", name: "数学" }]);
+      if (method === "PUT" && url.includes("/roles/123456789012345678"))
+        return new Response(null, { status: 403 });
+      throw new Error(`Unexpected Discord request: ${method} ${url}`);
+    });
+
+    const env = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "manager@example.com",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      DISCORD_GUILD_NAME: "Atlasez学習サイト運営",
+      REPORTS: {
+        prepare: (query: string) => new AtomicSettingsStatement(query),
+        batch: async (statements: Array<{ query?: string }>) => {
+          writes.push(`batch:${statements.length}`);
+          return [];
+        },
+      },
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/member-settings", {
+        method: "PUT",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "member@example.com",
+          subjects: ["mathematics"],
+          roleIds: [],
+          university: "",
+          year: "",
+          interests: [],
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining("変更は保存していません"),
+      provisioning: { status: "failed" },
+    });
+    expect(writes).toEqual([]);
   });
 
   it("reports Discord permission and hierarchy readiness without writing to Discord", async () => {
