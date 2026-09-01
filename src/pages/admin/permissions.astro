@@ -1618,6 +1618,142 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
 </style>
 
+<style is:global>
+  /* Referoの最小原則をさらに徹底。数値カード・ピル・影を減らし、設定画面を文書のように読む。 */
+  .member-admin {
+    --ref-page: #f5f5f7;
+    --ref-ink: #1d1d1f;
+    --ref-subtle: #6e6e73;
+    --ref-rule: #d2d2d7;
+    --ref-rule-strong: #b8b8bf;
+    --ref-blue: #0071e3;
+    --ref-blue-link: #0066cc;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    line-height: 1.47;
+    max-width: 1440px !important;
+  }
+  html[data-pref-bg="dark"] .member-admin {
+    --ref-page: #191a1c;
+    --ref-ink: #f5f5f7;
+    --ref-subtle: #b5b1a8;
+    --ref-rule: #3d3e42;
+    --ref-rule-strong: #5b5d63;
+    --ref-blue: #0a84ff;
+    --ref-blue-link: #409cff;
+  }
+  .member-admin__header h1,
+  .member-admin__section-heading h2 {
+    font-weight: 600 !important;
+  }
+  .member-admin__lead,
+  .member-admin__header-meta small,
+  .member-admin__section-heading small {
+    font-weight: 300;
+    letter-spacing: -0.012em;
+  }
+  .member-admin__header-meta {
+    min-width: min(20rem, 100%);
+  }
+  .member-admin__self-discord,
+  .member-admin .button-primary,
+  .member-admin .member-modal__save {
+    border-radius: 980px !important;
+  }
+  .member-admin .member-action--edit,
+  .member-admin .member-action--sync {
+    background: transparent !important;
+    border: 1px solid var(--ref-blue-link) !important;
+    border-radius: 980px !important;
+    color: var(--ref-blue-link) !important;
+  }
+  .member-admin .member-action--edit:hover,
+  .member-admin .member-action--sync:hover {
+    background: color-mix(in srgb, var(--ref-blue) 10%, transparent) !important;
+    border-color: var(--ref-blue) !important;
+    color: var(--ref-blue) !important;
+  }
+  .member-admin__summary {
+    align-items: baseline;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .summary-card {
+    min-height: 5.2rem;
+    padding: .85rem 1.15rem 1rem;
+  }
+  .summary-card strong {
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+  }
+  .summary-card small {
+    font-weight: 300;
+  }
+  .member-toolbar {
+    align-items: end;
+  }
+  .member-toolbar__reset {
+    border-radius: 980px !important;
+  }
+  .member-card__actions {
+    align-items: center;
+  }
+  .member-action-menu > summary {
+    border: 0 !important;
+    border-radius: 980px !important;
+    font-size: .95rem !important;
+    letter-spacing: .08em;
+  }
+  .member-action-menu > div {
+    border: 1px solid var(--ref-rule) !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+  }
+  .member-admin__tools {
+    margin-top: 3.5rem;
+  }
+  .member-admin__workspace .action-card {
+    border-bottom: 1px solid var(--ref-rule) !important;
+  }
+  .action-card > summary {
+    min-height: 3.7rem;
+  }
+  .action-card__step {
+    flex-basis: 2rem;
+    font-size: .62rem;
+    font-weight: 400;
+    letter-spacing: .06em;
+  }
+  .action-card__summary-copy strong {
+    font-weight: 500;
+  }
+  .action-card__summary-status {
+    font-size: .72rem;
+    font-weight: 400;
+  }
+  .member-modal__shell {
+    border-radius: 8px 0 0 8px !important;
+    box-shadow: none !important;
+  }
+  .member-modal__section,
+  .member-role-picker,
+  .member-interest-picker {
+    border-radius: 8px !important;
+  }
+  .member-interest-picker label {
+    border-radius: 980px !important;
+  }
+  @media (max-width: 720px) {
+    .member-admin__summary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .member-admin__tools {
+      margin-top: 2.5rem;
+    }
+  }
+</style>
+
 <script>
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root) {
