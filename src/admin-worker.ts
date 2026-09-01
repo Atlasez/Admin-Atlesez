@@ -7451,11 +7451,16 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
       a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
       a.desired_subjects,a.article_ideas,a.availability_note,a.provisioning_status,a.provisioning_error,a.provisioned_at,a.accepted_by,
       a.provisioning_attempt_count,a.provisioning_next_attempt_at,a.provisioning_last_attempt_at,
+      i.scheduled_at AS interview_scheduled_at,i.timezone AS interview_timezone,
+      i.mode AS interview_mode,i.zoom_url AS interview_zoom_url,i.location AS interview_location,
+      i.status AS interview_status,i.notified_at AS interview_notified_at,
+      i.notification_count AS interview_notification_count,i.completed_at AS interview_completed_at,
       COALESCE(d.discord_user_id, '') AS verified_discord_user_id,
       COALESCE(d.oauth_connected_at, '') AS discord_oauth_connected_at,
       COALESCE(d.oauth_scope, '') AS discord_oauth_scope
      FROM atlasez_member_applications a
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = a.email
+     LEFT JOIN atlasez_application_interviews i ON i.application_id = a.id
      WHERE a.project_slug = ?
      ORDER BY CASE a.status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END,a.created_at DESC LIMIT 300`,
   )
@@ -7731,7 +7736,7 @@ type ApplicationInterviewReviewRow = {
   interview_id: string | null;
   note: string;
   assigned_subjects: string;
-  decision: "pending" | "accepted" | "rejected";
+  decision: "pending" | "hold" | "accepted" | "rejected";
   finalized_at: string | null;
   finalized_by: string | null;
   created_by: string;
@@ -8026,7 +8031,7 @@ async function saveApplicationInterviewReview(
   const note = text(payload?.note, MAX_INTERVIEW_NOTE_LENGTH);
   const assignedSubjects = interviewSubjects(payload?.assignedSubjects);
   const decision = text(payload?.decision, 20) as ApplicationInterviewReviewRow["decision"];
-  if (!assignedSubjects || !["pending", "accepted", "rejected"].includes(decision))
+  if (!assignedSubjects || !["pending", "hold", "accepted", "rejected"].includes(decision))
     return json({ error: "担当分野または採否を確認してください。" }, 400);
   const current = await env.REPORTS.prepare(
     "SELECT id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at FROM atlasez_application_interview_reviews WHERE application_id=?",

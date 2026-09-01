@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS atlasez_application_interview_reviews (
   interview_id TEXT REFERENCES atlasez_application_interviews(id) ON DELETE SET NULL,
   note TEXT NOT NULL DEFAULT '',
   assigned_subjects TEXT NOT NULL DEFAULT '',
-  decision TEXT NOT NULL DEFAULT 'pending' CHECK(decision IN ('pending','accepted','rejected')),
+  decision TEXT NOT NULL DEFAULT 'pending' CHECK(decision IN ('pending','hold','accepted','rejected')),
   finalized_at TEXT,
   finalized_by TEXT,
   created_by TEXT NOT NULL,
