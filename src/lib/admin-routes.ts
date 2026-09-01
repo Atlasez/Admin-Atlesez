@@ -7,6 +7,7 @@ const adminPageNames = [
   "atlas",
   "semi-platform",
   "applications",
+  "application-interview",
   "articles",
   "operations",
   "progress",
