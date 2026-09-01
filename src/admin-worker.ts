@@ -5660,14 +5660,16 @@ async function provisionApplicationDiscordRoles(
   };
 
   for (const subject of subjects) {
-    if (subject === "*" && !excludeManagerRole)
-      await ensureMappedRole("subject", "__manager__", "運営内運営");
-    else
-      await ensureMappedRole(
-        "subject",
-        subject,
-        APPLICATION_SUBJECT_LABELS[subject] ?? subject,
-      );
+    if (subject === "*") {
+      if (!excludeManagerRole)
+        await ensureMappedRole("subject", "__manager__", "運営内運営");
+      continue;
+    }
+    await ensureMappedRole(
+      "subject",
+      subject,
+      APPLICATION_SUBJECT_LABELS[subject] ?? subject,
+    );
   }
   if (attrs.affiliationType)
     await ensureMappedRole(
