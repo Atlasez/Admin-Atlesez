@@ -391,6 +391,9 @@ const EDITORIAL_COMMENT_TAGS = new Set([
   "公開前確認",
 ]);
 const MAX_PERSONAL_WORKSPACE_NOTE_LENGTH = 12_000;
+const MAX_INTERVIEW_NOTE_LENGTH = 12_000;
+const MAX_INTERVIEW_LOCATION_LENGTH = 500;
+const MAX_INTERVIEW_URL_LENGTH = 2_000;
 const MAX_PERSONAL_MATH_PRESETS = 40;
 const MAX_PERSONAL_MATH_MACROS = 40;
 const MAX_PERSONAL_MATH_LABEL_LENGTH = 80;
@@ -4889,6 +4892,87 @@ async function queueApplicationAcceptanceEmail(
     .run();
 }
 
+async function queueApplicationInterviewEmail(
+  env: Env,
+  application: {
+    id: string;
+    email: string;
+    projectSlug: string;
+    formLanguage: string;
+  },
+  interview: {
+    scheduledAt: string;
+    timezone: string;
+    mode: "in_person" | "online";
+    zoomUrl: string;
+    location: string;
+  },
+  sentAt: string,
+) {
+  const projectLabel =
+    APPLICATION_FORM_LABELS[application.projectSlug] ?? application.projectSlug;
+  const english = application.formLanguage === "en";
+  const date = new Intl.DateTimeFormat(english ? "en-US" : "ja-JP", {
+    dateStyle: "long",
+    timeStyle: "short",
+    timeZone: interview.timezone,
+  }).format(new Date(interview.scheduledAt));
+  const mode = english
+    ? interview.mode === "online"
+      ? "Online (Zoom)"
+      : "In person"
+    : interview.mode === "online"
+      ? "オンライン（Zoom）"
+      : "対面";
+  const access = interview.mode === "online" ? interview.zoomUrl : interview.location;
+  const subject = english
+    ? `Atlasez | Interview details for ${projectLabel}`
+    : `Atlasez｜${projectLabel}の面談日時のお知らせ`;
+  const textBody = english
+    ? [
+        "This is Atlasez management.",
+        "",
+        `Your interview for ${projectLabel} is scheduled for ${date} (${interview.timezone}).`,
+        `Format: ${mode}`,
+        access ? `${interview.mode === "online" ? "Zoom link" : "Location"}: ${access}` : "",
+        "If you need to reschedule, please reply to this email.",
+      ].filter(Boolean).join("\n")
+    : [
+        "Atlasez運営です。",
+        "",
+        `${projectLabel}の面談日時が設定されました。`,
+        `日時：${date}（${interview.timezone}）`,
+        `形式：${mode}`,
+        access ? `${interview.mode === "online" ? "Zoomリンク" : "場所"}：${access}` : "",
+        "変更が必要な場合は、このメールに返信してご連絡ください。",
+      ].filter(Boolean).join("\n");
+  const htmlBody = english
+    ? `<h2>Interview details</h2><p>Your interview for ${emailSafe(projectLabel)} is scheduled for ${emailSafe(date)} (${emailSafe(interview.timezone)}).</p><p><b>Format:</b> ${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoom link" : "Location"}:</b> ${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`
+    : `<h2>面談日時のお知らせ</h2><p>${emailSafe(projectLabel)}の面談日時が設定されました。</p><p><b>日時：</b>${emailSafe(date)}（${emailSafe(interview.timezone)}）<br><b>形式：</b>${emailSafe(mode)}${access ? `<br><b>${interview.mode === "online" ? "Zoomリンク" : "場所"}：</b>${interview.mode === "online" ? `<a href="${emailSafe(access)}">${emailSafe(access)}</a>` : emailSafe(access)}` : ""}</p>`;
+  await env.REPORTS.prepare(
+    `INSERT INTO atlasez_application_email_deliveries
+     (id,application_id,recipient_email,kind,subject,text_body,html_body,status,attempt_count,next_attempt_at,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,'pending',0,?,?,?)
+     ON CONFLICT(application_id,recipient_email,kind) DO UPDATE SET
+       subject=excluded.subject,text_body=excluded.text_body,html_body=excluded.html_body,
+       status='pending',attempt_count=0,next_attempt_at=excluded.next_attempt_at,
+       claim_token=NULL,claimed_at=NULL,sent_at=NULL,last_error='',updated_at=excluded.updated_at`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      application.id,
+      application.email,
+      "applicant_interview_invitation",
+      subject,
+      textBody,
+      htmlBody,
+      sentAt,
+      sentAt,
+      sentAt,
+    )
+    .run();
+}
+
 async function queueApplicationDiscordEmail(
   env: Env,
   application: { id: string; email: string; projectSlug: string; formLanguage: string },
@@ -7409,6 +7493,7 @@ async function updateApplication(
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   let payload: {
     status?: unknown;
+    desiredSubjects?: unknown;
     reminderAction?: unknown;
     reminders?: unknown;
     reminderEmail?: unknown;
@@ -7466,7 +7551,13 @@ async function updateApplication(
   }
 
   // 旧形式の応募は追加列が空でも受入可能にし、自由記述から権限を推測しない。
-  const subjects = [
+  const requestedSubjects =
+    payload.desiredSubjects === undefined
+      ? null
+      : interviewSubjects(payload.desiredSubjects);
+  if (payload.desiredSubjects !== undefined && !requestedSubjects)
+    return json({ error: "担当分野を確認してください。" }, 400);
+  const subjects = requestedSubjects ?? [
     ...new Set(
       application.desired_subjects
         .split(",")
@@ -7615,6 +7706,415 @@ async function retryApplicationDiscordProvisioning(
   if (provisioning.status === "skipped") return json({ ok: true, provisioning });
   return json({ error: provisioning.warnings.join(" "), provisioning }, 502);
 }
+
+type ApplicationInterviewRow = {
+  id: string;
+  application_id: string;
+  scheduled_at: string;
+  timezone: string;
+  mode: "in_person" | "online";
+  zoom_url: string;
+  location: string;
+  status: "scheduled" | "completed" | "cancelled";
+  notified_at: string | null;
+  notification_count: number;
+  completed_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
+};
+
+type ApplicationInterviewReviewRow = {
+  id: string;
+  application_id: string;
+  interview_id: string | null;
+  note: string;
+  assigned_subjects: string;
+  decision: "pending" | "accepted" | "rejected";
+  finalized_at: string | null;
+  finalized_by: string | null;
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
+};
+
+const interviewApplicationAccess = async (
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<
+  | {
+      access: ProjectReviewerScope;
+      application: {
+        id: string;
+        name: string;
+        email: string;
+        project_slug: string;
+        form_language: string;
+        status: string;
+      };
+    }
+  | Response
+> => {
+  const requestedProject =
+    new URL(request.url).searchParams.get("project")?.trim().toLowerCase() ?? "";
+  if (!APPLICATION_FORM_SLUGS.has(requestedProject))
+    return json({ error: "応募管理を表示するプロジェクトを指定してください。" }, 400);
+  const access = await getProjectReviewerScope(request, env, requestedProject);
+  if (isResponse(access)) return access;
+  const projectSlug = canonicalApplicationProjectSlug(access.project.slug);
+  const application = await env.REPORTS.prepare(
+    `SELECT id,name,email,project_slug,form_language,status
+       FROM atlasez_member_applications WHERE id=? AND project_slug=?`,
+  )
+    .bind(id, projectSlug)
+    .first<{
+      id: string;
+      name: string;
+      email: string;
+      project_slug: string;
+      form_language: string;
+      status: string;
+    }>();
+  if (!application) return json({ error: "応募が見つかりません。" }, 404);
+  return { access, application };
+};
+
+const interviewSubjects = (value: unknown): string[] | null => {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : null;
+  if (!raw) return null;
+  const subjects = [...new Set(raw.map((item) => text(item, 80).trim()).filter(Boolean))];
+  return subjects.every((subject) => APPLICATION_SUBJECT_LABELS[subject])
+    ? subjects
+    : null;
+};
+
+const interviewHistory = (
+  env: Env,
+  applicationId: string,
+  interviewId: string | null,
+  reviewId: string | null,
+  eventType: string,
+  before: unknown,
+  after: unknown,
+  actorEmail: string,
+  createdAt: string,
+) =>
+  env.REPORTS.prepare(
+    `INSERT INTO atlasez_application_interview_history
+      (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+  ).bind(
+    crypto.randomUUID(),
+    applicationId,
+    interviewId,
+    reviewId,
+    eventType,
+    JSON.stringify(before ?? null),
+    JSON.stringify(after ?? null),
+    actorEmail,
+    createdAt,
+  );
+
+async function getApplicationInterview(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const access = await interviewApplicationAccess(request, env, id);
+  if (isResponse(access)) return access;
+  const [interview, review, history] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,notified_at,notification_count,completed_at,created_by,created_at,updated_by,updated_at FROM atlasez_application_interviews WHERE application_id=?",
+    ).bind(id).first<ApplicationInterviewRow>(),
+    env.REPORTS.prepare(
+      "SELECT id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at FROM atlasez_application_interview_reviews WHERE application_id=?",
+    ).bind(id).first<ApplicationInterviewReviewRow>(),
+    env.REPORTS.prepare(
+      "SELECT id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at FROM atlasez_application_interview_history WHERE application_id=? ORDER BY created_at DESC LIMIT 100",
+    ).bind(id).all<Record<string, unknown>>(),
+  ]);
+  return json({
+    application: access.application,
+    subjectLabels: APPLICATION_SUBJECT_LABELS,
+    interview: interview
+      ? {
+          ...interview,
+          scheduledAt: interview.scheduled_at,
+          zoomUrl: interview.zoom_url,
+          notificationCount: interview.notification_count,
+          completedAt: interview.completed_at,
+        }
+      : null,
+    review: review
+      ? {
+          ...review,
+          assignedSubjects: review.assigned_subjects
+            .split(",")
+            .map((subject) => subject.trim())
+            .filter(Boolean),
+        }
+      : null,
+    history: history.results ?? [],
+  });
+}
+
+async function saveApplicationInterview(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const access = await interviewApplicationAccess(request, env, id);
+  if (isResponse(access)) return access;
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const scheduledAt = text(payload?.scheduledAt, 80).trim();
+  const timezone = text(payload?.timezone, 80).trim() || "Asia/Tokyo";
+  const mode = text(payload?.mode, 20).trim() as "in_person" | "online";
+  const zoomUrl = text(payload?.zoomUrl, MAX_INTERVIEW_URL_LENGTH).trim();
+  const location = text(payload?.location, MAX_INTERVIEW_LOCATION_LENGTH).trim();
+  if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt)) || !isValidTimeZone(timezone))
+    return json({ error: "面談日時またはタイムゾーンを確認してください。" }, 400);
+  if (mode !== "in_person" && mode !== "online")
+    return json({ error: "面談形式を選択してください。" }, 400);
+  if (mode === "online") {
+    try {
+      const url = new URL(zoomUrl);
+      if (url.protocol !== "https:") throw new Error();
+    } catch {
+      return json({ error: "オンライン面談にはHTTPSのZoomリンクを設定してください。" }, 400);
+    }
+  }
+  if (mode === "in_person" && !location)
+    return json({ error: "対面面談の場所を入力してください。" }, 400);
+  const current = await env.REPORTS.prepare(
+    "SELECT id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,notified_at,notification_count,completed_at,created_by,created_at,updated_by,updated_at FROM atlasez_application_interviews WHERE application_id=?",
+  ).bind(id).first<ApplicationInterviewRow>();
+  if (current?.status === "completed")
+    return json({ error: "終了済みの面談は変更できません。" }, 409);
+  const now = new Date().toISOString();
+  const interviewId = current?.id ?? crypto.randomUUID();
+  const next = {
+    scheduled_at: scheduledAt,
+    timezone,
+    mode,
+    zoom_url: mode === "online" ? zoomUrl : "",
+    location: mode === "in_person" ? location : "",
+    status: "scheduled",
+  };
+  const statement = current
+    ? env.REPORTS.prepare(
+        `UPDATE atlasez_application_interviews
+            SET scheduled_at=?,timezone=?,mode=?,zoom_url=?,location=?,status='scheduled',updated_by=?,updated_at=?
+          WHERE id=? AND application_id=?`,
+      ).bind(
+        next.scheduled_at,
+        next.timezone,
+        next.mode,
+        next.zoom_url,
+        next.location,
+        access.access.scope.email,
+        now,
+        interviewId,
+        id,
+      )
+    : env.REPORTS.prepare(
+        `INSERT INTO atlasez_application_interviews
+          (id,application_id,scheduled_at,timezone,mode,zoom_url,location,status,created_by,created_at,updated_by,updated_at)
+         VALUES (?,?,?,?,? ,?,?, 'scheduled',?,?,?,?)`,
+      ).bind(
+        interviewId,
+        id,
+        next.scheduled_at,
+        next.timezone,
+        next.mode,
+        next.zoom_url,
+        next.location,
+        access.access.scope.email,
+        now,
+        access.access.scope.email,
+        now,
+      );
+  await env.REPORTS.batch([
+    statement,
+    interviewHistory(
+      env,
+      id,
+      interviewId,
+      null,
+      current ? "schedule_updated" : "schedule_created",
+      current,
+      next,
+      access.access.scope.email,
+      now,
+    ),
+  ]);
+  return json({ ok: true, interview: { id: interviewId, ...next, notified_at: null } });
+}
+
+async function notifyApplicationInterview(
+  request: Request,
+  env: Env,
+  id: string,
+  ctx?: WorkerExecutionContext,
+): Promise<Response> {
+  if (request.method !== "POST" || !isSameOrigin(request))
+    return json({ error: "POSTのみ利用できます。" }, 405);
+  const access = await interviewApplicationAccess(request, env, id);
+  if (isResponse(access)) return access;
+  const interview = await env.REPORTS.prepare(
+    "SELECT id,application_id,scheduled_at,timezone,mode,zoom_url,location,status FROM atlasez_application_interviews WHERE application_id=?",
+  ).bind(id).first<ApplicationInterviewRow>();
+  if (!interview || interview.status !== "scheduled")
+    return json({ error: "通知できる面談予定がありません。" }, 409);
+  const now = new Date().toISOString();
+  try {
+    await queueApplicationInterviewEmail(
+      env,
+      {
+        id: access.application.id,
+        email: access.application.email,
+        projectSlug: access.application.project_slug,
+        formLanguage: access.application.form_language,
+      },
+      {
+        scheduledAt: interview.scheduled_at,
+        timezone: interview.timezone,
+        mode: interview.mode,
+        zoomUrl: interview.zoom_url,
+        location: interview.location,
+      },
+      now,
+    );
+  } catch (error) {
+    console.error("application interview email queue failed", { applicationId: id, error });
+    return json({ error: "面談通知を準備できませんでした。" }, 500);
+  }
+  await env.REPORTS.prepare(
+    "UPDATE atlasez_application_interviews SET notified_at=?,notification_count=notification_count+1,updated_by=?,updated_at=? WHERE id=?",
+  ).bind(now, access.access.scope.email, now, interview.id).run();
+  await env.REPORTS.prepare(
+    "INSERT INTO atlasez_application_interview_history (id,application_id,interview_id,review_id,event_type,before_json,after_json,actor_email,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+  ).bind(
+    crypto.randomUUID(), id, interview.id, null, "notification_queued", "", JSON.stringify({ notifiedAt: now }), access.access.scope.email, now,
+  ).run();
+  ctx?.waitUntil(dispatchApplicationEmails(env));
+  return json({ ok: true, notifiedAt: now, notificationQueued: true });
+}
+
+async function saveApplicationInterviewReview(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const access = await interviewApplicationAccess(request, env, id);
+  if (isResponse(access)) return access;
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const note = text(payload?.note, MAX_INTERVIEW_NOTE_LENGTH);
+  const assignedSubjects = interviewSubjects(payload?.assignedSubjects);
+  const decision = text(payload?.decision, 20) as ApplicationInterviewReviewRow["decision"];
+  if (!assignedSubjects || !["pending", "accepted", "rejected"].includes(decision))
+    return json({ error: "担当分野または採否を確認してください。" }, 400);
+  const current = await env.REPORTS.prepare(
+    "SELECT id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at FROM atlasez_application_interview_reviews WHERE application_id=?",
+  ).bind(id).first<ApplicationInterviewReviewRow>();
+  const interview = await env.REPORTS.prepare(
+    "SELECT id,status FROM atlasez_application_interviews WHERE application_id=?",
+  ).bind(id).first<{ id: string; status: string }>();
+  const now = new Date().toISOString();
+  const reviewId = current?.id ?? crypto.randomUUID();
+  const next = { note, assigned_subjects: assignedSubjects.join(","), decision };
+  const statement = current
+    ? env.REPORTS.prepare(
+        `UPDATE atlasez_application_interview_reviews
+            SET note=?,assigned_subjects=?,decision=?,updated_by=?,updated_at=?
+          WHERE id=? AND application_id=?`,
+      ).bind(note, next.assigned_subjects, decision, access.access.scope.email, now, reviewId, id)
+    : env.REPORTS.prepare(
+        `INSERT INTO atlasez_application_interview_reviews
+          (id,application_id,interview_id,note,assigned_subjects,decision,created_by,created_at,updated_by,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(reviewId, id, interview?.id ?? null, note, next.assigned_subjects, decision, access.access.scope.email, now, access.access.scope.email, now);
+  await env.REPORTS.batch([
+    statement,
+    interviewHistory(env, id, interview?.id ?? null, reviewId, "review_saved", current, next, access.access.scope.email, now),
+  ]);
+  return json({ ok: true, review: { id: reviewId, ...next, assignedSubjects } });
+}
+
+async function completeApplicationInterview(
+  request: Request,
+  env: Env,
+  id: string,
+  ctx?: WorkerExecutionContext,
+): Promise<Response> {
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const access = await interviewApplicationAccess(request, env, id);
+  if (isResponse(access)) return access;
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const decision = text(payload?.decision, 20) as "accepted" | "rejected";
+  const assignedSubjects = interviewSubjects(payload?.assignedSubjects);
+  if ((decision !== "accepted" && decision !== "rejected") || !assignedSubjects)
+    return json({ error: "採否と担当分野を確認してください。" }, 400);
+  const interview = await env.REPORTS.prepare(
+    "SELECT id,status FROM atlasez_application_interviews WHERE application_id=?",
+  ).bind(id).first<{ id: string; status: string }>();
+  if (!interview || interview.status !== "scheduled")
+    return json({ error: "予定済みの面談だけ完了できます。" }, 409);
+  const current = await env.REPORTS.prepare(
+    "SELECT id,note,assigned_subjects,decision FROM atlasez_application_interview_reviews WHERE application_id=?",
+  ).bind(id).first<{ id: string; note: string; assigned_subjects: string; decision: string }>();
+  const note = text(payload?.note, MAX_INTERVIEW_NOTE_LENGTH) || current?.note || "";
+  // 採否確定は既存の受入処理を通し、参加登録・プロフィール・Discord同期・承認メールを同じ経路で行う。
+  const updateRequest = new Request(
+    `${new URL(request.url).origin}/api/admin/applications/${encodeURIComponent(id)}?project=${encodeURIComponent(access.access.project.slug)}`,
+    {
+      method: "PATCH",
+      headers: new Headers([...request.headers, ["content-type", "application/json"]]),
+      body: JSON.stringify({ status: decision, desiredSubjects: assignedSubjects }),
+    },
+  );
+  const applicationResult = await updateApplication(updateRequest, env, id, ctx);
+  if (!applicationResult.ok) return applicationResult;
+  const now = new Date().toISOString();
+  const reviewId = current?.id ?? crypto.randomUUID();
+  const reviewStatement = current
+    ? env.REPORTS.prepare(
+        `UPDATE atlasez_application_interview_reviews
+            SET note=?,assigned_subjects=?,decision=?,finalized_at=?,finalized_by=?,updated_by=?,updated_at=?
+          WHERE id=? AND application_id=?`,
+      ).bind(note, assignedSubjects.join(","), decision, now, access.access.scope.email, access.access.scope.email, now, reviewId, id)
+    : env.REPORTS.prepare(
+        `INSERT INTO atlasez_application_interview_reviews
+          (id,application_id,interview_id,note,assigned_subjects,decision,finalized_at,finalized_by,created_by,created_at,updated_by,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(reviewId, id, interview.id, note, assignedSubjects.join(","), decision, now, access.access.scope.email, access.access.scope.email, now, access.access.scope.email, now);
+  await env.REPORTS.batch([
+    env.REPORTS.prepare(
+      "UPDATE atlasez_application_interviews SET status='completed',completed_at=?,updated_by=?,updated_at=? WHERE id=? AND status='scheduled'",
+    ).bind(now, access.access.scope.email, now, interview.id),
+    reviewStatement,
+    interviewHistory(env, id, interview.id, reviewId, "interview_completed", current, { note, assigned_subjects: assignedSubjects, decision }, access.access.scope.email, now),
+  ]);
+  return json({ ok: true, decision, assignedSubjects, finalizedAt: now, application: await applicationResult.json() });
+}
+
 async function operationsOverview(
   request: Request,
   env: Env,
@@ -15711,6 +16211,50 @@ async function handleAdminRequest(
   );
   if (applicationMatch && request.method === "PATCH")
     return updateApplication(request, env, applicationMatch[1], ctx);
+  const applicationInterviewMatch = url.pathname.match(
+    /^\/api\/admin\/applications\/([0-9a-f-]{36})\/interview$/i,
+  );
+  if (applicationInterviewMatch) {
+    if (request.method === "GET")
+      return getApplicationInterview(request, env, applicationInterviewMatch[1]);
+    if (request.method === "PUT")
+      return saveApplicationInterview(request, env, applicationInterviewMatch[1]);
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  }
+  const applicationInterviewNotifyMatch = url.pathname.match(
+    /^\/api\/admin\/applications\/([0-9a-f-]{36})\/interview\/notify$/i,
+  );
+  if (applicationInterviewNotifyMatch && request.method === "POST")
+    return notifyApplicationInterview(
+      request,
+      env,
+      applicationInterviewNotifyMatch[1],
+      ctx,
+    );
+  const applicationInterviewReviewMatch = url.pathname.match(
+    /^\/api\/admin\/applications\/([0-9a-f-]{36})\/interview-review$/i,
+  );
+  if (applicationInterviewReviewMatch) {
+    if (request.method === "GET")
+      return getApplicationInterview(request, env, applicationInterviewReviewMatch[1]);
+    if (request.method === "PUT")
+      return saveApplicationInterviewReview(
+        request,
+        env,
+        applicationInterviewReviewMatch[1],
+      );
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  }
+  const applicationInterviewCompleteMatch = url.pathname.match(
+    /^\/api\/admin\/applications\/([0-9a-f-]{36})\/interview\/complete$/i,
+  );
+  if (applicationInterviewCompleteMatch && request.method === "POST")
+    return completeApplicationInterview(
+      request,
+      env,
+      applicationInterviewCompleteMatch[1],
+      ctx,
+    );
   const applicationDiscordRetryMatch = url.pathname.match(
     /^\/api\/admin\/applications\/([0-9a-f-]{36})\/discord-retry$/i,
   );
