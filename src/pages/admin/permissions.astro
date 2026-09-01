@@ -2013,8 +2013,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <script>
+  const initializeMemberAdmin = () => {
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
-  if (root) {
+  if (root && root.dataset.initialized !== "true") {
+    root.dataset.initialized = "true";
     const form = root.querySelector<HTMLFormElement>("[data-add-form]")!;
     const list = root.querySelector<HTMLElement>("[data-member-list]")!;
     const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
@@ -2252,11 +2254,16 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     });
     workflowRoleList.addEventListener("click", async event => { const remove = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-workflow-role]"); if (!remove) return; remove.disabled = true; const query = new URLSearchParams({email:remove.dataset.email ?? "",role:"subject-coordinator",subject:remove.dataset.subject ?? ""}); const response = await fetch(`/api/admin/editorial-workflow-roles?${query}`, {method:"DELETE",credentials:"same-origin"}); message.value = response.ok ? "分野統括の割り当てを削除しました。" : "分野統括の割り当てを削除できませんでした。"; if (response.ok) await load(); else remove.disabled = false; });
     void load().catch(error => { list.textContent = error instanceof Error ? error.message : "参加者一覧を読み込めませんでした。"; });
-  }
+  }};
+  document.addEventListener("astro:page-load", initializeMemberAdmin);
+  initializeMemberAdmin();
 </script>
 
 <script>
+  const initializeDiscordTools = () => {
   const provisionButton = document.querySelector<HTMLButtonElement>("[data-provision-roles]");
+  if (provisionButton?.dataset.initialized === "true") return;
+  if (provisionButton) provisionButton.dataset.initialized = "true";
   const provisionMessage = document.querySelector<HTMLOutputElement>("[data-message]");
   provisionButton?.addEventListener("click", async () => {
     if (!confirm("Discord対象サーバーの既存ロールを読み込み、運営サイト側の対応表を更新しますか？Discord側は変更しません。")) return;
@@ -2298,4 +2305,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       readinessButton.textContent = "運用事前チェック";
     }
   });
+  };
+  document.addEventListener("astro:page-load", initializeDiscordTools);
+  initializeDiscordTools();
 </script>
