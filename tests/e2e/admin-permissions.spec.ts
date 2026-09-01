@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 test("参加者カードは概要表示に絞り、個人設定モーダルを主導線にする", async ({
   page,
 }) => {
-  let catalogLoaded = false;
+  let catalogLoaded = true;
+  let catalogProvisionRequests = 0;
   await page.route("**/api/admin/report-admin-permissions", async (route) => {
     await route.fulfill({
       status: 200,
@@ -34,6 +35,7 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
     });
   });
   await page.route("**/api/admin/discord-provision-roles", async (route) => {
+    catalogProvisionRequests += 1;
     catalogLoaded = true;
     await route.fulfill({
       status: 200,
@@ -117,6 +119,7 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   await expect(page.locator("[data-member-filter]")).toBeVisible();
   await expect(page.locator("[data-summary-member-count]")).toHaveText("1");
   await expect(page.locator("[data-summary-role-count]")).toHaveText("1");
+  expect(catalogProvisionRequests).toBe(0);
   await expect(card.locator("[data-discord-role]")).toHaveCount(0);
   await expect(
     card.getByText("役職・プロフィールを編集", { exact: true }),

@@ -1774,7 +1774,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const workflowRoleSelection = root.querySelector<HTMLOutputElement>("[data-workflow-role-selection]")!;
     const workflowCoordinatorMembers = root.querySelector<HTMLDataListElement>("[data-workflow-coordinator-members]")!;
     let discordRoles: Array<{ discord_role_id: string; name: string; position: number; is_managed: number }> = [];
-    let discordRoleHydrationAttempted = false;
     let memberRecords: any[] = [];
     let memberQuery = "";
     let memberViewFilter = "all";
@@ -1930,7 +1929,37 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       }).join("") : '<p class="member-empty">登録されている参加者はいません。</p>';
     };
     const discordSyncMessage = (prefix: string, provisioning: any) => { const warnings = Array.isArray(provisioning?.warnings) ? provisioning.warnings.join(" ") : ""; const notices = Array.isArray(provisioning?.notices) ? provisioning.notices.join(" ") : ""; const added = Number(provisioning?.applied ?? 0); const removed = Number(provisioning?.removed ?? 0); return `${prefix} Discord同期: 追加${added}件・削除${removed}件${warnings ? `。${warnings}` : ""}${notices ? `。確認: ${notices}` : ""}`; };
-    const load = async () => { const response = await fetch("/api/admin/report-admin-permissions", {credentials:"same-origin", cache:"no-store"}); const data = await response.json().catch(() => ({})); if (response.status === 403) { list.textContent = "このページは全分野管理者のみ利用できます。"; form.hidden = true; workflowRoleForm.hidden = true; return; } if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。"); discordRoles = Array.isArray(data.discordRoles) ? data.discordRoles : []; if (!discordRoles.length && !discordRoleHydrationAttempted) { discordRoleHydrationAttempted = true; discordRoleCount.textContent = "読込中"; summaryRoleCount.textContent = "…"; discordRoleList.textContent = "既存ロールを取得しています。"; const hydration = await fetch("/api/admin/discord-provision-roles", {method:"POST", credentials:"same-origin"}); if (hydration.ok) { await load(); return; } discordRoleCount.textContent = "未同期"; summaryRoleCount.textContent = "—"; discordRoleList.textContent = "自動取得に失敗しました。「既存ロールを読み込む」から再試行できます。"; } const manageableRoles = discordRoles.filter(role => !role.is_managed); const previewRoles = manageableRoles.slice(0, 12); discordRoleCount.textContent = discordRoles.length ? `${discordRoles.length}件` : "未同期"; summaryRoleCount.textContent = discordRoles.length ? String(discordRoles.length) : "—"; discordRoleList.innerHTML = discordRoles.length ? `<div class="discord-role-catalog__meta">管理可能 ${manageableRoles.length}件・管理対象外 ${discordRoles.length - manageableRoles.length}件</div><div class="discord-role-catalog__chips">${previewRoles.map(role => `<span>${esc(role.name)}</span>`).join("")}${manageableRoles.length > previewRoles.length ? `<span class="discord-role-catalog__more">ほか${manageableRoles.length - previewRoles.length}件</span>` : ""}</div>` : "「既存ロールを読み込む」を押すと一覧を更新します。"; memberRecords = Array.isArray(data.permissions) ? data.permissions : []; render(filteredMembers()); renderWorkflowRoles(data.workflowRoles ?? []); };
+    const load = async () => {
+      root.setAttribute("aria-busy", "true");
+      list.textContent = "参加者一覧を読み込んでいます…";
+      try {
+        const response = await fetch("/api/admin/report-admin-permissions", {credentials:"same-origin", cache:"no-store"});
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 403) {
+          list.textContent = "このページは全分野管理者のみ利用できます。";
+          form.hidden = true;
+          workflowRoleForm.hidden = true;
+          return;
+        }
+        if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。");
+
+        // Discordロールの取得は初期表示から切り離す。ページを開くだけで
+        // Discord API/D1へ書き込まず、必要なときだけ明示操作で同期する。
+        discordRoles = Array.isArray(data.discordRoles) ? data.discordRoles : [];
+        const manageableRoles = discordRoles.filter(role => !role.is_managed);
+        const previewRoles = manageableRoles.slice(0, 12);
+        discordRoleCount.textContent = discordRoles.length ? `${discordRoles.length}件` : "未同期";
+        summaryRoleCount.textContent = discordRoles.length ? String(discordRoles.length) : "—";
+        discordRoleList.innerHTML = discordRoles.length
+          ? `<div class="discord-role-catalog__meta">管理可能 ${manageableRoles.length}件・管理対象外 ${discordRoles.length - manageableRoles.length}件</div><div class="discord-role-catalog__chips">${previewRoles.map(role => `<span>${esc(role.name)}</span>`).join("")}${manageableRoles.length > previewRoles.length ? `<span class="discord-role-catalog__more">ほか${manageableRoles.length - previewRoles.length}件</span>` : ""}</div>`
+          : "「既存ロールを読み込む」を押すと一覧を更新します。";
+        memberRecords = Array.isArray(data.permissions) ? data.permissions : [];
+        render(filteredMembers());
+        renderWorkflowRoles(data.workflowRoles ?? []);
+      } finally {
+        root.removeAttribute("aria-busy");
+      }
+    };
     memberSearch.addEventListener("input", () => { memberQuery = memberSearch.value; render(filteredMembers()); });
     memberFilter.addEventListener("change", () => { memberViewFilter = memberFilter.value; render(filteredMembers()); });
     memberFilterReset.addEventListener("click", () => { memberQuery = ""; memberViewFilter = "all"; memberSearch.value = ""; memberFilter.value = "all"; render(filteredMembers()); memberSearch.focus(); });
