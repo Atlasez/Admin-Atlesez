@@ -5,27 +5,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 ---
 <AdminLayout title="運営者・担当分野管理" description="運営内運営専用の参加者管理">
   <main class="member-admin" data-member-admin>
-    <aside class="member-admin__sidebar" aria-label="運営サイトのショートカット">
-      <a class="member-admin__workspace-switcher" href="/admin/atlas/">
-        <span class="member-admin__workspace-mark">A</span>
-        <span><strong>Atlasez</strong><small>運営ワークスペース</small></span>
-        <span class="member-admin__workspace-chevron" aria-hidden="true">⌄</span>
-      </a>
-      <nav class="member-admin__side-nav" aria-label="管理メニュー">
-        <a href="/admin/atlas/" class="member-admin__side-link"><span aria-hidden="true">⌂</span>概要</a>
-        <a href="/admin/articles/" class="member-admin__side-link"><span aria-hidden="true">▤</span>記事編集</a>
-        <a href="/admin/operations/?project=atlas" class="member-admin__side-link"><span aria-hidden="true">✓</span>タスク管理</a>
-        <a href="/admin/calendar/?project=atlas" class="member-admin__side-link"><span aria-hidden="true">◷</span>カレンダー</a>
-        <p class="member-admin__side-label">管理</p>
-        <a href="/admin/permissions/?project=atlas" class="member-admin__side-link is-active" aria-current="page"><span aria-hidden="true">◎</span>メンバーと権限</a>
-        <a href="/admin/manage/?project=atlas" class="member-admin__side-link"><span aria-hidden="true">⚙</span>設定</a>
-      </nav>
-      <div class="member-admin__sidebar-bottom">
-        <button type="button" class="member-admin__command" data-focus-member-search><span aria-hidden="true">⌕</span><span>検索</span><kbd>⌘ K</kbd></button>
-        <a class="member-admin__profile" href="/admin/workspace/?project=atlas"><span class="member-admin__profile-mark">上</span><span><strong>上杉和輝</strong><small>ukyoukay0@gmail.com</small></span><span aria-hidden="true">•••</span></a>
-      </div>
-    </aside>
-    <div class="member-admin__content">
     <header class="member-admin__header">
       <div>
         <p class="member-admin__eyebrow">権限管理</p>
@@ -94,7 +73,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         </details>
       </div>
     </section>
-    </div>
     <dialog class="member-modal" data-member-modal aria-labelledby="member-modal-title">
       <div class="member-modal__shell">
         <header class="member-modal__header">
@@ -2700,6 +2678,392 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   }
 </style>
 
+<style is:global>
+  /* 既存の運営サイトと同じデザイントークン・レイアウトへ統一する。 */
+  html:has(.member-admin) body,
+  html:has(.member-admin) .admin-layout-main {
+    background: var(--background-primary) !important;
+    color: var(--text-primary);
+  }
+
+  .member-admin {
+    background: transparent !important;
+    color: var(--text-primary) !important;
+    display: block !important;
+    font-family: var(--font-current, var(--font-sans, system-ui, sans-serif));
+    line-height: var(--line-height-body, 1.75);
+    margin: 0 auto;
+    max-width: 1100px !important;
+    min-height: 0 !important;
+    padding: 0 1.25rem 4rem !important;
+  }
+
+  .member-admin__header {
+    align-items: center;
+    background: var(--background-primary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-top: 4px solid var(--accent-primary) !important;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-primary) 8%, transparent) !important;
+    display: flex;
+    gap: 1.5rem;
+    justify-content: space-between;
+    margin: 2rem 0 1.25rem;
+    padding: 1.35rem 1.5rem 1.2rem;
+  }
+
+  .member-admin__eyebrow {
+    color: var(--accent-primary) !important;
+    font-size: .7rem !important;
+    font-weight: 900 !important;
+    letter-spacing: .1em !important;
+    margin: 0 0 .3rem !important;
+  }
+
+  .member-admin__header h1 {
+    color: var(--text-primary) !important;
+    font-size: clamp(1.55rem, 2.8vw, 2.1rem);
+    letter-spacing: .01em;
+    margin: 0;
+  }
+
+  .member-admin__lead,
+  .member-admin__header-meta small {
+    color: var(--text-secondary) !important;
+    font-size: .82rem !important;
+    line-height: 1.65;
+    margin: .45rem 0 0;
+  }
+
+  .member-admin__header-meta {
+    align-items: flex-end;
+    display: grid;
+    flex: 0 0 auto;
+    gap: .2rem;
+    text-align: right;
+  }
+
+  .member-admin__header-meta span {
+    background: var(--accent-subtle) !important;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, var(--border-default)) !important;
+    border-radius: var(--radius, 2px) !important;
+    color: var(--accent-primary) !important;
+    font-size: .7rem;
+    font-weight: 900;
+    padding: .35rem .55rem;
+  }
+
+  .member-admin__self-discord {
+    background: #5865f2 !important;
+    border: 1px solid #5865f2 !important;
+    border-radius: var(--radius, 2px) !important;
+    color: #fff !important;
+    font-size: .7rem;
+    font-weight: 900;
+    padding: .42rem .6rem;
+    text-decoration: none;
+  }
+
+  .member-admin__self-discord:hover {
+    background: #4752c4 !important;
+    border-color: #4752c4 !important;
+  }
+
+  .member-admin__summary {
+    display: grid;
+    gap: .55rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 1.25rem;
+  }
+
+  .summary-card {
+    background: var(--background-secondary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-left: 3px solid var(--border-default) !important;
+    border-radius: var(--radius, 2px) !important;
+    display: grid;
+    gap: .12rem;
+    padding: .65rem .75rem;
+  }
+
+  .summary-card:first-child { border-left-color: var(--accent-primary) !important; }
+  .summary-card:nth-child(2) { border-left-color: #2563a5 !important; }
+  .summary-card:nth-child(3) { border-left-color: #27834f !important; }
+  .summary-card:nth-child(4) { border-left-color: #9b5a5a !important; }
+
+  .summary-card span,
+  .summary-card small {
+    color: var(--text-secondary) !important;
+    font-size: .72rem;
+  }
+
+  .summary-card strong {
+    color: var(--text-primary) !important;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1.1;
+  }
+
+  .member-admin__members,
+  .member-admin__tools {
+    background: var(--background-secondary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: .55rem !important;
+    box-shadow: none !important;
+    padding: 1rem 1.15rem 1.25rem !important;
+  }
+
+  .member-admin__members { margin-bottom: 1.25rem; }
+
+  .member-admin__section-heading {
+    align-items: end;
+    border-bottom: 2px solid var(--accent-primary) !important;
+    margin-bottom: 1rem;
+    padding-bottom: .7rem !important;
+  }
+
+  .member-admin__section-heading h2 {
+    color: var(--text-primary) !important;
+    font-size: 1.22rem;
+    margin: 0;
+  }
+
+  .member-admin__section-heading small {
+    color: var(--text-secondary) !important;
+    display: block;
+    font-size: .72rem !important;
+    line-height: 1.5;
+    margin-top: .22rem;
+  }
+
+  .member-admin__count {
+    background: var(--accent-subtle) !important;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, var(--border-default)) !important;
+    border-radius: var(--radius, 2px) !important;
+    color: var(--accent-primary) !important;
+    font-size: .78rem !important;
+    font-weight: 900;
+    padding: .35rem .6rem !important;
+  }
+
+  .member-toolbar {
+    align-items: end;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--border-default) !important;
+    border-radius: 0 !important;
+    display: grid;
+    gap: .55rem;
+    grid-template-columns: minmax(220px, 1.5fr) minmax(150px, .65fr) auto auto;
+    margin-bottom: .85rem;
+    padding: 0 0 .85rem !important;
+  }
+
+  .member-toolbar label {
+    color: var(--text-secondary) !important;
+    display: grid;
+    font-size: .72rem !important;
+    font-weight: 800;
+    gap: .28rem;
+  }
+
+  .member-admin input,
+  .member-admin select {
+    background: var(--background-primary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-radius: .3rem !important;
+    color: var(--text-primary) !important;
+    font: inherit !important;
+    min-height: 2.35rem !important;
+    padding: .45rem .55rem !important;
+  }
+
+  .member-admin input:focus,
+  .member-admin select:focus {
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 15%, transparent) !important;
+  }
+
+  .member-admin button {
+    border-radius: .35rem !important;
+    font: inherit !important;
+    font-size: .78rem !important;
+    min-height: 2.35rem !important;
+    padding: .45rem .65rem !important;
+  }
+
+  .member-toolbar__reset,
+  .member-admin .member-provision,
+  .member-admin .member-action--promote,
+  .member-admin .member-action--remove,
+  .member-modal__cancel {
+    background: transparent !important;
+    border: 1px solid var(--border-default) !important;
+    color: var(--accent-primary) !important;
+  }
+
+  .member-toolbar__reset:hover,
+  .member-admin .member-provision:hover,
+  .member-admin .member-action--promote:hover,
+  .member-admin .member-action--remove:hover,
+  .member-modal__cancel:hover {
+    background: var(--background-primary) !important;
+    border-color: var(--accent-primary) !important;
+  }
+
+  .member-list-heading { display: none; }
+
+  .member-grid {
+    align-items: start;
+    display: grid;
+    gap: .8rem;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  }
+
+  .member-card {
+    align-self: start;
+    background: var(--background-primary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-top: 3px solid color-mix(in srgb, var(--accent-primary) 20%, var(--border-default)) !important;
+    border-radius: .45rem !important;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--accent-primary) 6%, transparent) !important;
+    display: grid;
+    gap: .7rem;
+    min-width: 0;
+    padding: 1rem !important;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+
+  .member-card:hover {
+    border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-default)) !important;
+    border-top-color: var(--accent-primary) !important;
+    box-shadow: 0 3px 9px color-mix(in srgb, var(--accent-primary) 10%, transparent) !important;
+  }
+
+  .member-card__name {
+    background: transparent !important;
+    border: 0 !important;
+    color: var(--text-primary) !important;
+    cursor: pointer;
+    min-height: auto !important;
+    padding: 0 !important;
+    text-align: left;
+  }
+
+  .member-card__name:hover { color: var(--accent-primary) !important; text-decoration: underline; }
+  .member-avatar { background: var(--background-inset) !important; border-color: var(--border-default) !important; }
+  .member-card__email { color: var(--text-secondary) !important; }
+  .member-card__role { background: var(--accent-subtle) !important; border: 1px solid var(--border-default) !important; border-radius: .25rem !important; color: var(--accent-primary) !important; }
+  .member-fact { background: var(--background-secondary) !important; border: 1px solid var(--border-default) !important; border-radius: .25rem !important; color: var(--text-secondary) !important; }
+  .member-fact b { color: var(--accent-primary) !important; }
+  .member-card__discord-state[data-state="connected"] { color: var(--success, #2c6e49) !important; }
+  .member-card__discord-state[data-state="unconnected"] { color: #9b6500 !important; }
+
+  .member-admin .member-action--edit,
+  .member-admin .member-action--sync,
+  .member-admin .button-primary,
+  .member-admin .member-modal__save {
+    background: var(--accent-primary) !important;
+    border: 1px solid var(--accent-primary) !important;
+    color: var(--on-accent, #fff) !important;
+    font-weight: 800 !important;
+  }
+
+  .member-admin .member-action--edit:hover,
+  .member-admin .member-action--sync:hover,
+  .member-admin .button-primary:hover,
+  .member-admin .member-modal__save:hover {
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+  }
+
+  .member-admin__workspace {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+    margin-bottom: 0;
+  }
+
+  .member-admin__workspace .action-card {
+    align-content: start;
+    background: var(--background-primary) !important;
+    border: 1px solid var(--border-default) !important;
+    border-top: 3px solid var(--accent-primary) !important;
+    border-radius: .45rem !important;
+    box-shadow: 0 2px 7px color-mix(in srgb, var(--accent-primary) 6%, transparent) !important;
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: 1.1rem 1.2rem 1rem !important;
+  }
+
+  .member-admin__workspace .workflow-role-admin { border-top-color: #2d78a8 !important; grid-column: 1 / -1; }
+  .action-card > summary { min-height: 2.7rem; padding: 0 !important; }
+  .action-card > summary:hover,
+  .action-card[open] > summary { background: transparent !important; }
+  .action-card__step { background: var(--accent-primary) !important; border-radius: 0 !important; color: var(--on-accent, #fff) !important; }
+  .action-card__summary-copy small,
+  .action-card__description { color: var(--text-secondary) !important; }
+  .action-card__summary-copy strong { color: var(--text-primary) !important; font-size: .9rem; }
+  .action-card__summary-status { background: var(--accent-subtle) !important; color: var(--accent-primary) !important; }
+  .action-card__body { border-top: 1px solid var(--border-default); padding: .85rem 0 0 !important; }
+  .member-admin__workspace .action-card form { grid-template-columns: minmax(0, 1fr) minmax(9.5rem, .72fr) auto; }
+  .member-admin__sync { border-top-color: var(--border-default); }
+  .workflow-role-group { background: var(--background-secondary) !important; border-color: var(--border-default) !important; }
+  .workflow-role-chip { background: var(--background-primary) !important; border-color: var(--border-default) !important; border-radius: .25rem !important; }
+
+  .member-modal {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    height: auto !important;
+    justify-content: center;
+    max-height: calc(100dvh - 2rem);
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .member-modal::backdrop { background: rgb(0 0 0 / 55%) !important; backdrop-filter: blur(2px); }
+  .member-modal__shell { background: var(--background-primary) !important; border: 1px solid var(--border-default) !important; border-radius: .55rem !important; box-shadow: 0 .8rem 2rem color-mix(in srgb, #001a2c 18%, transparent) !important; height: auto !important; margin: auto !important; max-height: calc(100dvh - 2rem) !important; max-width: 780px !important; width: min(100% - 2rem, 780px) !important; }
+  .member-modal__header,
+  .member-modal__footer { background: var(--background-primary) !important; border-color: var(--border-default) !important; }
+  .member-modal__section,
+  .member-role-picker,
+  .member-interest-picker { background: var(--background-secondary) !important; border-color: var(--border-default) !important; border-left-color: var(--accent-primary) !important; border-radius: .4rem !important; }
+  .member-modal__header h2,
+  .member-modal__section h3,
+  .member-role-picker strong { color: var(--text-primary) !important; }
+  .member-modal__header p,
+  .member-modal__header small,
+  .member-modal__section > p,
+  .member-modal__help,
+  .member-modal__footer output { color: var(--text-secondary) !important; }
+  .member-interest-picker label,
+  .member-role-option { background: var(--background-primary) !important; border-color: var(--border-default) !important; color: var(--text-secondary) !important; }
+  .member-interest-picker label:has(input:checked),
+  .member-role-option:has(input:checked) { background: var(--accent-subtle) !important; border-color: var(--accent-primary) !important; color: var(--accent-primary) !important; }
+
+  @media (max-width: 760px) {
+    .member-admin { padding: 0 .85rem 3rem !important; }
+    .member-admin__header { align-items: flex-start; display: grid; gap: 1rem; margin-top: 1.25rem; padding: 1rem; }
+    .member-admin__header-meta { align-items: flex-start; text-align: left; }
+    .member-admin__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .summary-card:nth-child(2) { border-right: 0 !important; }
+    .summary-card:nth-child(-n + 2) { border-bottom: 1px solid var(--border-default) !important; }
+    .member-admin__members,
+    .member-admin__tools { padding: .9rem !important; }
+    .member-toolbar { grid-template-columns: 1fr; }
+    .member-toolbar__summary { text-align: left; }
+    .member-grid { grid-template-columns: 1fr !important; }
+    .member-admin__workspace { grid-template-columns: 1fr; }
+    .member-admin__workspace .workflow-role-admin { grid-column: auto; }
+    .member-admin__workspace .action-card form { grid-template-columns: 1fr; }
+    .member-modal__shell { border-radius: .45rem !important; width: calc(100% - 1rem) !important; }
+    .member-modal__grid { grid-template-columns: 1fr; }
+  }
+</style>
+
 <script>
   const initializeMemberAdmin = () => {
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
@@ -2897,14 +3261,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       }
     };
     memberSearch.addEventListener("input", () => { memberQuery = memberSearch.value; render(filteredMembers()); });
-    root.querySelector<HTMLButtonElement>("[data-focus-member-search]")?.addEventListener("click", () => memberSearch.focus());
-    document.addEventListener("keydown", event => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "k") {
-        event.preventDefault();
-        memberSearch.focus();
-        memberSearch.select();
-      }
-    });
     memberFilter.addEventListener("change", () => { memberViewFilter = memberFilter.value; render(filteredMembers()); });
     memberFilterReset.addEventListener("click", () => { memberQuery = ""; memberViewFilter = "all"; memberSearch.value = ""; memberFilter.value = "all"; render(filteredMembers()); memberSearch.focus(); });
     root.addEventListener("discord-roles-updated", () => void load());

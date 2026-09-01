@@ -104,11 +104,9 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
 
   await page.goto("./admin/permissions/?project=atlas");
 
-  await expect(page.locator(".member-admin__sidebar")).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "メンバーと権限", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("button", { name: /検索/ })).toBeVisible();
+  await expect(page.locator(".member-admin")).toBeVisible();
+  await expect(page.locator(".member-admin__header")).toBeVisible();
+  await expect(page.locator(".member-admin__sidebar")).toHaveCount(0);
 
   const card = page.locator(".member-card");
   await expect(card).toBeVisible();
@@ -165,10 +163,13 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
         viewportHeight: window.innerHeight,
       };
     });
-  expect(shellGeometry.left + shellGeometry.width).toBeCloseTo(
-    shellGeometry.viewportWidth,
-    0,
-  );
+  expect(
+    Math.abs(
+      shellGeometry.left +
+        shellGeometry.width / 2 -
+        shellGeometry.viewportWidth / 2,
+    ),
+  ).toBeLessThanOrEqual(2);
   expect(shellGeometry.width).toBeLessThanOrEqual(780);
   expect(shellGeometry.height).toBeLessThanOrEqual(
     shellGeometry.viewportHeight,
