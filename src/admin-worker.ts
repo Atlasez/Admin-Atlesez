@@ -5782,11 +5782,17 @@ type DiscordAdminSyncProfile = {
   affiliation_type: string;
 };
 
+type DiscordAdminSyncManualAssignment = {
+  email: string;
+  discord_role_id: string;
+};
+
 type DiscordAdminSyncResult = {
   accounts: number;
   synced: number;
   skipped: number;
   updated: number;
+  assignmentsRevoked: number;
   warnings: string[];
 };
 
@@ -5802,13 +5808,20 @@ export async function syncDiscordRolesToAdmin(
     synced: 0,
     skipped: 0,
     updated: 0,
+    assignmentsRevoked: 0,
     warnings: [],
   };
   if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID) return result;
 
   try {
-    const [accounts, subjectMappings, attributeMappings, permissions, profiles] =
-      await Promise.all([
+    const [
+      accounts,
+      subjectMappings,
+      attributeMappings,
+      permissions,
+      profiles,
+      manualAssignments,
+    ] = await Promise.all([
         env.REPORTS.prepare(
           "SELECT lower(email) AS email, discord_user_id FROM atlasez_member_discord_accounts WHERE discord_user_id IS NOT NULL AND discord_user_id != ''",
         ).all<DiscordAdminSyncAccount>(),
@@ -5824,6 +5837,9 @@ export async function syncDiscordRolesToAdmin(
         env.REPORTS.prepare(
           "SELECT lower(email) AS email, university, year, interests, affiliation_type FROM editorial_member_profiles",
         ).all<DiscordAdminSyncProfile>(),
+        env.REPORTS.prepare(
+          "SELECT lower(email) AS email, discord_role_id FROM atlasez_member_discord_role_assignments WHERE is_active = 1",
+        ).all<DiscordAdminSyncManualAssignment>(),
       ]);
     const accountRows = accounts.results ?? [];
     result.accounts = accountRows.length;
@@ -5894,6 +5910,17 @@ export async function syncDiscordRolesToAdmin(
     const profilesByEmail = new Map<string, DiscordAdminSyncProfile>();
     for (const profile of profiles.results ?? [])
       profilesByEmail.set(profile.email.toLowerCase(), profile);
+    const manualAssignmentsByEmail = new Map<
+      string,
+      DiscordAdminSyncManualAssignment[]
+    >();
+    for (const assignment of manualAssignments.results ?? []) {
+      const email = assignment.email.toLowerCase();
+      manualAssignmentsByEmail.set(email, [
+        ...(manualAssignmentsByEmail.get(email) ?? []),
+        assignment,
+      ]);
+    }
 
     for (const account of accountRows) {
       const email = account.email.toLowerCase();
@@ -5925,6 +5952,9 @@ export async function syncDiscordRolesToAdmin(
       }
       result.synced += 1;
       const currentRoleIds = new Set(member.roles ?? []);
+      const revokedAssignments = (
+        manualAssignmentsByEmail.get(email) ?? []
+      ).filter((assignment) => !currentRoleIds.has(assignment.discord_role_id));
       const currentPermissions = new Set(permissionsByEmail.get(email) ?? []);
       const nextPermissions = new Set(currentPermissions);
       const desiredPermissions = new Set<string>();
@@ -6000,6 +6030,19 @@ export async function syncDiscordRolesToAdmin(
       ];
 
       const statements: D1PreparedStatement[] = [];
+      for (const assignment of revokedAssignments)
+        statements.push(
+          env.REPORTS.prepare(
+            `UPDATE atlasez_member_discord_role_assignments
+                SET is_active=0, assigned_at=?, assigned_by=?
+              WHERE lower(email)=lower(?) AND discord_role_id=? AND is_active=1`,
+          ).bind(
+            new Date().toISOString(),
+            "discord-sync",
+            email,
+            assignment.discord_role_id,
+          ),
+        );
       for (const subject of nextPermissions)
         if (!currentPermissions.has(subject))
           statements.push(
@@ -6049,6 +6092,7 @@ export async function syncDiscordRolesToAdmin(
         await env.REPORTS.batch(statements);
         result.updated += 1;
       }
+      result.assignmentsRevoked += revokedAssignments.length;
     }
   } catch (error) {
     result.warnings.push("Discordから運営サイトへの同期処理でエラーが発生しました。");

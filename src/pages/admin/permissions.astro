@@ -52,7 +52,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         <details class="member-admin__add action-card discord-role-catalog">
           <summary><span class="action-card__step">02</span><span class="action-card__summary-copy"><small>Discord連携</small><strong id="discord-role-catalog-title">既存ロールのカタログ</strong></span><span class="action-card__summary-status" data-discord-role-count>未同期</span><span class="action-card__chevron" aria-hidden="true">⌄</span></summary>
           <div class="action-card__body">
-            <p class="action-card__description">Discordに存在する既存ロールを読み込み、参加者へ複数選択で割り当てます。</p>
+            <p class="action-card__description">Discordに存在する既存ロールを読み込み、参加者へ複数選択で割り当てます。Discord側で管理対象ロールが外された場合は、定期同期で運営サイト側の権限・割当も無効化します。</p>
             <div class="discord-role-catalog__body"><div data-discord-role-list>「既存ロールを読み込む」を押すと一覧を更新します。</div></div>
             <div class="member-admin__sync"><div><strong>Discordロール対応表</strong><small>Discord側を読み取り、運営サイトと照合します。</small></div><div class="member-admin__sync-actions"><button type="button" class="member-provision" data-provision-roles>既存ロールを読み込む</button><button type="button" class="member-provision member-provision--secondary" data-discord-readiness>運用事前チェック</button></div></div>
             <output class="discord-readiness-message" data-discord-readiness-message aria-live="polite"></output>
