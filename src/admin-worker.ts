@@ -5554,6 +5554,12 @@ async function provisionApplicationDiscordRoles(
       )
         .bind(email)
         .all<DiscordManualRoleAssignment>();
+  const roleSyncExclusion = await env.REPORTS.prepare(
+    "SELECT exclude_manager_role FROM atlasez_member_discord_role_sync_exclusions WHERE lower(email)=lower(?)",
+  )
+    .bind(email)
+    .first<{ exclude_manager_role: number }>();
+  const excludeManagerRole = roleSyncExclusion?.exclude_manager_role === 1;
   const managedRoleIds = new Set(
     [...(subjectMappings.results ?? []), ...(attributeMappings.results ?? [])]
       .map((mapping) => mapping.discord_role_id)
@@ -5561,6 +5567,13 @@ async function provisionApplicationDiscordRoles(
         assignableGuildRoles.some((role) => role.id === roleId),
       ),
   );
+  if (excludeManagerRole) {
+    // 既存対応表が未登録でも、同名の管理ロールを削除対象として扱う。
+    const managerRole = assignableGuildRoles.find(
+      (role) => role.name.trim() === "運営内運営",
+    );
+    if (managerRole) managedRoleIds.add(managerRole.id);
+  }
   const desired = new Set<string>();
   const warnings: string[] = [];
   const notices: string[] = [];
@@ -5647,7 +5660,7 @@ async function provisionApplicationDiscordRoles(
   };
 
   for (const subject of subjects) {
-    if (subject === "*")
+    if (subject === "*" && !excludeManagerRole)
       await ensureMappedRole("subject", "__manager__", "運営内運営");
     else
       await ensureMappedRole(
@@ -5787,6 +5800,11 @@ type DiscordAdminSyncManualAssignment = {
   discord_role_id: string;
 };
 
+type DiscordRoleSyncExclusion = {
+  email: string;
+  exclude_manager_role: number;
+};
+
 type DiscordAdminSyncResult = {
   accounts: number;
   synced: number;
@@ -5821,6 +5839,7 @@ export async function syncDiscordRolesToAdmin(
       permissions,
       profiles,
       manualAssignments,
+      roleSyncExclusions,
     ] = await Promise.all([
         env.REPORTS.prepare(
           "SELECT lower(email) AS email, discord_user_id FROM atlasez_member_discord_accounts WHERE discord_user_id IS NOT NULL AND discord_user_id != ''",
@@ -5840,6 +5859,9 @@ export async function syncDiscordRolesToAdmin(
         env.REPORTS.prepare(
           "SELECT lower(email) AS email, discord_role_id FROM atlasez_member_discord_role_assignments WHERE is_active = 1",
         ).all<DiscordAdminSyncManualAssignment>(),
+        env.REPORTS.prepare(
+          "SELECT lower(email) AS email, exclude_manager_role FROM atlasez_member_discord_role_sync_exclusions WHERE exclude_manager_role = 1",
+        ).all<DiscordRoleSyncExclusion>(),
       ]);
     const accountRows = accounts.results ?? [];
     result.accounts = accountRows.length;
@@ -5921,6 +5943,9 @@ export async function syncDiscordRolesToAdmin(
         assignment,
       ]);
     }
+    const managerRoleExcludedEmails = new Set(
+      (roleSyncExclusions.results ?? []).map((row) => row.email.toLowerCase()),
+    );
 
     for (const account of accountRows) {
       const email = account.email.toLowerCase();
@@ -5961,7 +5986,12 @@ export async function syncDiscordRolesToAdmin(
       for (const roleId of currentRoleIds)
         for (const subject of subjectByRole.get(roleId) ?? [])
           desiredPermissions.add(subject);
+      // この例外は運営サイトの全分野管理者権限を残したまま、Discordの
+      // 「運営内運営」ロールを外したいメンバー向け。Discord側からロールを
+      // 外しても、逆同期で subject='*' を削除しない。
+      if (managerRoleExcludedEmails.has(email)) desiredPermissions.add("*");
       for (const subject of managedPermissionSubjects) {
+        if (subject === "*" && managerRoleExcludedEmails.has(email)) continue;
         if (desiredPermissions.has(subject)) nextPermissions.add(subject);
         else nextPermissions.delete(subject);
       }
