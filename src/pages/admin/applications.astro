@@ -735,24 +735,7 @@ const projectLabel = selectedProject?.[1] ?? "";
   body:has(.applications) .admin-nav a,
   body:has(.applications) .admin-nav button,
   body:has(.applications) .admin-nav summary {
-    color: #b4b7bd !important;
-    opacity: 1;
-  }
-
-  /* AdminLayout's scoped nav rule is intentionally more specific than the
-     page-level theme reset above. Keep the primary links readable on the
-     applications page regardless of the shared layout cascade. */
-  body:has(.applications) .admin-nav nav > a,
-  body:has(.applications) .admin-nav .admin-management-link,
-  body:has(.applications) .admin-nav .admin-management-menu > summary {
-    color: #b4b7bd !important;
-  }
-
-  body:has(.applications) .admin-nav nav > a[aria-current="page"],
-  body:has(.applications) .admin-nav nav > a:hover,
-  body:has(.applications) .admin-nav .admin-management-menu > summary:hover {
-    border-bottom-color: #8d90ff;
-    color: #f7f8f8 !important;
+    color: #b4b7bd;
   }
 
   body:has(.applications) .admin-nav a:hover,
