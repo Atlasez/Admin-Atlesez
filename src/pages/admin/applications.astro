@@ -18,9 +18,6 @@ const projectLabel = selectedProject?.[1] ?? "";
       <h1>{selectedProject ? `${projectLabel}：応募管理` : "応募管理"}</h1>
       <span>{selectedProject ? "このプロジェクトに届いた応募だけを表示しています。" : "応募管理を表示するプロジェクトを選択してください。"}</span>
     </header>
-    <nav class="project-switcher" aria-label="応募管理のプロジェクト切り替え">
-      {applicationProjects.map(([slug, label]) => <a href={`/admin/applications/?project=${slug}`} aria-current={selectedProject?.[0] === slug ? "page" : undefined}>{label}</a>)}
-    </nav>
     <section class="project-picker" hidden={Boolean(selectedProject)} aria-labelledby="project-picker-title">
       <p>プロジェクトを選択</p>
       <h2 id="project-picker-title">確認する応募先を選んでください</h2>
@@ -79,11 +76,6 @@ const projectLabel = selectedProject?.[1] ?? "";
   .applications header p,.flow-heading p,.section-heading p,.app-kicker{font-family:var(--font-mono,"SFMono-Regular",Consolas,monospace);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase}
   .applications h1{font-size:clamp(1.7rem,3vw,2.25rem);font-weight:650;letter-spacing:-.035em;margin:.55rem 0 .4rem}
   .applications header span{font-size:.82rem}
-  .project-switcher{border-bottom:1px solid var(--border-default);display:flex;gap:.15rem;overflow:auto;padding:.65rem 0;scrollbar-width:none}
-  .project-switcher::-webkit-scrollbar{display:none}
-  .project-switcher a{border:1px solid transparent;border-radius:.35rem;color:var(--text-secondary);font-size:.76rem;padding:.45rem .6rem;text-decoration:none;white-space:nowrap}
-  .project-switcher a:hover{background:var(--background-secondary);color:var(--text-primary)}
-  .project-switcher a[aria-current="page"]{background:var(--background-secondary);border-color:var(--border-default);color:var(--text-primary);font-weight:700}
   .application-flow{border:1px solid var(--border-default);border-radius:.5rem;margin-top:1.5rem;padding:1.2rem}
   .flow-heading{align-items:baseline;margin-bottom:1rem}
   .flow-heading h2,.section-heading h2{font-size:1.05rem;font-weight:650;letter-spacing:-.02em}
@@ -224,43 +216,6 @@ const projectLabel = selectedProject?.[1] ?? "";
     font-size: .84rem;
     line-height: 1.55;
     max-width: 54rem;
-  }
-
-  .project-switcher {
-    border-bottom: 1px solid var(--app-divider);
-    display: flex;
-    gap: .2rem;
-    margin: 0;
-    overflow-x: auto;
-    padding: .6rem 0;
-    scrollbar-width: none;
-  }
-
-  .project-switcher::-webkit-scrollbar { display: none; }
-
-  .project-switcher a {
-    border: 1px solid transparent;
-    border-radius: var(--app-radius-sm);
-    color: var(--text-secondary);
-    flex: 0 0 auto;
-    font-size: .78rem;
-    line-height: 1.3;
-    padding: .45rem .6rem;
-    text-decoration: none;
-    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-  }
-
-  .project-switcher a:hover,
-  .project-switcher a:focus-visible {
-    background: var(--app-muted-surface);
-    color: var(--text-primary);
-  }
-
-  .project-switcher a[aria-current="page"] {
-    background: var(--background-primary);
-    border-color: var(--border-default);
-    color: var(--text-primary);
-    font-weight: 700;
   }
 
   .project-picker,
@@ -641,7 +596,6 @@ const projectLabel = selectedProject?.[1] ?? "";
       if(description)description.textContent='このプロジェクトに届いた応募だけを表示しています。';
       root.querySelector<HTMLElement>('.project-picker')?.setAttribute('hidden','');
       root.querySelectorAll<HTMLElement>('.application-flow,.application-overview,[data-notice],[data-list],[data-accept-dialog]').forEach(element=>element.removeAttribute('hidden'));
-      root.querySelectorAll<HTMLAnchorElement>('.project-switcher a').forEach(link=>link.setAttribute('aria-current',new URL(link.href).searchParams.get('project')===projectSlug?'page':'false'));
     }
     const notice=root.querySelector<HTMLOutputElement>('[data-notice]')!;
     const list=root.querySelector<HTMLElement>('[data-list]')!;

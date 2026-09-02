@@ -65,6 +65,7 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
   await expect(
     page.getByRole("heading", { name: "学習サイト「アトラス」：応募管理" }),
   ).toBeVisible();
+  await expect(page.locator(".project-switcher")).toHaveCount(0);
   await expect(page.locator(".flow-steps > li")).toHaveCount(4);
   await expect(page.locator("[data-total-count]")).toHaveText("2件");
   await expect(page.locator("[data-summary-new]")).toHaveText("1");
