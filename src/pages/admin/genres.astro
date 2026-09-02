@@ -15,7 +15,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       <div class="hero-heading">
         <div class="eyebrow-row"><span class="eyebrow">アトラス / 構成管理</span><span class="hero-caption">学習サイトの構造を確認</span></div>
         <h1>各ジャンル概要</h1>
-        <p>アトラスに登録されている分野の構成、公開状態、カテゴリを一つの画面で確認できます。</p>
+        <p>アトラスに登録されている分野の構成、担当メンバー、進捗、カテゴリを一つの画面で確認できます。</p>
       </div>
       <div class="hero-actions">
         <a class="quiet-link" href="/admin/atlas/"><span>運営トップ</span><span aria-hidden="true">↗</span></a>
@@ -66,6 +66,18 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
                 <div class="category-heading"><h4 id={subject.data.slug + "-categories"}>カテゴリ</h4><span>{subject.data.categories.length}件</span></div>
                 {subject.data.categories.length > 0 ? <ul>{[...subject.data.categories].sort((a, b) => a.order - b.order).map((category) => <li><strong>{category.name.ja}</strong><code>{category.slug}</code></li>)}</ul> : <p class="empty-categories">カテゴリは準備中です。</p>}
               </section>
+              <section class="genre-people" aria-labelledby={subject.data.slug + "-people"}>
+                <div class="section-heading"><h4 id={subject.data.slug + "-people"}>担当メンバー</h4><span data-member-count>読み込み中</span></div>
+                <div class="member-list" data-genre-members><p class="loading-note">担当情報を読み込んでいます…</p></div>
+              </section>
+              <section class="genre-progress" aria-labelledby={subject.data.slug + "-progress"}>
+                <div class="section-heading"><h4 id={subject.data.slug + "-progress"}>進捗状況</h4><span data-progress-updated>未登録</span></div>
+                <p class="progress-view" data-genre-progress>進捗を読み込んでいます…</p>
+                <form class="progress-form" data-progress-form hidden>
+                  <label><span class="visually-hidden">進捗状況を編集</span><textarea data-progress-input maxlength="4000" placeholder="この分野の現在の進捗を入力してください"></textarea></label>
+                  <div class="progress-form-actions"><output data-progress-message aria-live="polite"></output><button type="submit">進捗を保存</button></div>
+                </form>
+              </section>
               <footer class="genre-actions">
                 <a class="card-link" href={"/admin/articles/?subject=" + encodeURIComponent(subject.data.slug)}><span>この分野の原稿を見る</span><span aria-hidden="true">→</span></a>
                 {subject.data.externalUrl && <a class="external-link" href={subject.data.externalUrl} target="_blank" rel="noopener noreferrer"><span>現行ページ</span><span aria-hidden="true">↗</span></a>}
@@ -92,7 +104,90 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     const count = root.querySelector<HTMLElement>("[data-visible-count]");
     const resultLabel = root.querySelector<HTMLElement>("[data-results-label]");
     const empty = root.querySelector<HTMLElement>("[data-empty-state]");
+    type GenreMember = { email?: string; role?: string; display_name?: string; assignments?: string[] };
+    type GenreOverview = { subject?: string; progress?: string; updated_at?: string; updatedAt?: string };
+    const subjectNames = new Map(cards.map((card) => [card.id, card.querySelector("h3")?.textContent?.trim() ?? card.id]));
+    const progressBySubject = new Map<string, GenreOverview>();
+    let overviewMembers: GenreMember[] = [];
+    let editableSubjects = new Set<string>();
     let activeFilter = "all";
+
+    const formatUpdatedAt = (value?: string) => {
+      if (!value) return "未登録";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "更新日時不明" : `最終更新 ${date.toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}`;
+    };
+
+    const renderMembers = (card: HTMLElement) => {
+      const subject = card.id;
+      const subjectName = subjectNames.get(subject) ?? subject;
+      const container = card.querySelector<HTMLElement>("[data-genre-members]");
+      const count = card.querySelector<HTMLElement>("[data-member-count]");
+      if (!container || !count) return;
+      const relevant = overviewMembers.filter((member) => {
+        const assignments = member.assignments ?? [];
+        return member.role === "manager" || assignments.includes("全ジャンル管理") || assignments.includes("プロジェクトリーダー") || assignments.includes("全分野統括") || assignments.includes(`${subjectName}担当`) || assignments.includes(`${subjectName}統括`);
+      });
+      count.textContent = `${relevant.length}人`;
+      container.replaceChildren();
+      if (!relevant.length) {
+        const emptyMembers = document.createElement("p");
+        emptyMembers.className = "loading-note";
+        emptyMembers.textContent = "担当者はまだ登録されていません。";
+        container.append(emptyMembers);
+        return;
+      }
+      relevant.forEach((member) => {
+        const item = document.createElement("div");
+        item.className = "member-item";
+        const name = document.createElement("strong");
+        name.textContent = member.display_name?.trim() || member.email || "表示名未設定";
+        item.append(name);
+        const roles = document.createElement("span");
+        roles.textContent = (member.assignments ?? []).filter((assignment) => assignment === "運営内運営" || assignment === "全ジャンル管理" || assignment === "プロジェクトリーダー" || assignment === "全分野統括" || assignment === `${subjectName}担当` || assignment === `${subjectName}統括`).join("・") || "担当メンバー";
+        item.append(roles);
+        container.append(item);
+      });
+    };
+
+    const renderProgress = (card: HTMLElement) => {
+      const subject = card.id;
+      const overview = progressBySubject.get(subject);
+      const view = card.querySelector<HTMLElement>("[data-genre-progress]");
+      const updated = card.querySelector<HTMLElement>("[data-progress-updated]");
+      const form = card.querySelector<HTMLFormElement>("[data-progress-form]");
+      const input = card.querySelector<HTMLTextAreaElement>("[data-progress-input]");
+      if (!view || !updated || !form || !input) return;
+      view.textContent = overview?.progress?.trim() || "進捗はまだ登録されていません。";
+      updated.textContent = formatUpdatedAt(overview?.updated_at ?? overview?.updatedAt);
+      input.value = overview?.progress ?? "";
+      form.hidden = !editableSubjects.has(subject);
+    };
+
+    const renderOverviews = () => cards.forEach((card) => { renderMembers(card); renderProgress(card); });
+
+    const loadOverviews = async () => {
+      try {
+        const response = await fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" });
+        const data = await response.json() as { members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string };
+        if (!response.ok) throw new Error(data.error ?? "ジャンル概要を読み込めませんでした。");
+        overviewMembers = data.members ?? [];
+        const coordinatorSubjects = data.scope?.coordinatorSubjects ?? [];
+        editableSubjects = data.canEditAll || coordinatorSubjects.includes("*")
+          ? new Set(cards.map((card) => card.id))
+          : new Set([...coordinatorSubjects, ...(data.editableSubjects ?? [])]);
+        progressBySubject.clear();
+        (data.overviews ?? []).forEach((overview) => { if (overview.subject) progressBySubject.set(overview.subject, overview); });
+        renderOverviews();
+      } catch (error) {
+        cards.forEach((card) => {
+          const memberContainer = card.querySelector<HTMLElement>("[data-genre-members]");
+          const progressView = card.querySelector<HTMLElement>("[data-genre-progress]");
+          if (memberContainer) memberContainer.textContent = "担当情報を読み込めませんでした。";
+          if (progressView) progressView.textContent = error instanceof Error ? error.message : "進捗を読み込めませんでした。";
+        });
+      }
+    };
 
     const applyFilters = () => {
       const query = search?.value.trim().toLowerCase() ?? "";
@@ -123,6 +218,29 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       });
       applyFilters();
     }));
+    cards.forEach((card) => card.querySelector<HTMLFormElement>("[data-progress-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const input = form.querySelector<HTMLTextAreaElement>("[data-progress-input]");
+      const message = form.querySelector<HTMLOutputElement>("[data-progress-message]");
+      const button = form.querySelector<HTMLButtonElement>("button[type=submit]");
+      if (!input || !button) return;
+      button.disabled = true;
+      if (message) message.textContent = "保存中…";
+      try {
+        const response = await fetch("/api/admin/genre-overviews?project=atlas", { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: card.id, progress: input.value }) });
+        const data = await response.json() as GenreOverview & { error?: string };
+        if (!response.ok) throw new Error(data.error ?? "進捗を保存できませんでした。");
+        progressBySubject.set(card.id, data);
+        renderProgress(card);
+        if (message) message.textContent = "保存しました。";
+      } catch (error) {
+        if (message) message.textContent = error instanceof Error ? error.message : "進捗を保存できませんでした。";
+      } finally {
+        button.disabled = false;
+      }
+    }));
+    void loadOverviews();
   })();
 </script>
 
@@ -233,6 +351,25 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .category-block li strong { color: var(--text-primary); font-size: .67rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .category-block code { color: var(--text-muted); font-size: .58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty-categories { color: var(--text-muted); font-size: .72rem; margin: 0; }
+  .genre-people, .genre-progress { border-top: 1px solid var(--border-default); display: grid; gap: .5rem; padding-top: .75rem; }
+  .section-heading { align-items: center; display: flex; gap: .6rem; justify-content: space-between; }
+  .section-heading h4 { color: var(--text-primary); font-size: .74rem; margin: 0; }
+  .section-heading > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .58rem; white-space: nowrap; }
+  .member-list { display: grid; gap: .3rem; }
+  .member-item { align-items: baseline; background: var(--background-primary); border: 1px solid var(--border-default); display: flex; gap: .45rem; justify-content: space-between; min-width: 0; padding: .38rem .45rem; }
+  .member-item strong { color: var(--text-primary); font-size: .67rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-item span { border-left: 1px solid var(--border-default); color: var(--text-muted); flex: 0 0 auto; font-size: .58rem; max-width: 58%; overflow: hidden; padding-left: .45rem; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+  .loading-note, .progress-view { color: var(--text-secondary); font-size: .7rem; line-height: 1.55; margin: 0; white-space: pre-wrap; }
+  .progress-view { background: var(--background-primary); border-left: 2px solid var(--accent-primary); padding: .45rem .55rem; }
+  .progress-form { display: grid; gap: .4rem; }
+  .progress-form[hidden] { display: none; }
+  .progress-form textarea { background: var(--background-primary); border: 1px solid var(--border-default); box-sizing: border-box; color: var(--text-primary); font: inherit; font-size: .7rem; line-height: 1.5; min-height: 4.2rem; padding: .45rem .55rem; resize: vertical; width: 100%; }
+  .progress-form textarea:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-subtle); outline: 0; }
+  .progress-form-actions { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
+  .progress-form output { color: var(--text-secondary); font-size: .62rem; line-height: 1.35; }
+  .progress-form button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: #090a0c; cursor: pointer; font: inherit; font-size: .65rem; font-weight: 800; padding: .42rem .55rem; }
+  .progress-form button:hover { background: var(--accent-hover); }
+  .progress-form button:disabled { cursor: wait; opacity: .65; }
   .genre-actions { align-items: center; border-top: 1px solid var(--border-default); display: flex; flex-wrap: wrap; gap: .8rem 1rem; margin-top: auto; padding-top: .75rem; }
   .card-link { color: var(--accent-primary); }
   .external-link { color: var(--text-secondary); font-size: .7rem; }

@@ -228,3 +228,69 @@ test("各ジャンル概要で現行の分野・カテゴリ情報を確認で�
   await expect(page.getByText("カテゴリ数").first()).toBeVisible();
   await expect(page.locator(".genre-grid article").first()).toBeVisible();
 });
+
+test("各ジャンル概要で担当メンバーと進捗を確認・更新できる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({ json: { email: "manager@example.com", isManager: true } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  let savedProgress = "";
+  await page.route("**/api/admin/genre-overviews?**", async (route) => {
+    if (route.request().method() === "PUT") {
+      savedProgress = (route.request().postDataJSON() as { progress: string })
+        .progress;
+      await route.fulfill({
+        json: {
+          subject: "mathematics",
+          progress: savedProgress,
+          updatedAt: "2026-09-02T12:00:00.000Z",
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        scope: { coordinatorSubjects: [] },
+        canEditAll: true,
+        members: [
+          {
+            display_name: "山田 花子",
+            role: "member",
+            assignments: ["運営メンバー", "数学担当"],
+          },
+        ],
+        overviews: [
+          {
+            subject: "mathematics",
+            progress: "集合論の記事を確認中",
+            updated_at: "2026-09-01T12:00:00.000Z",
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("admin/genres/");
+  const mathematics = page.locator("#mathematics");
+  await expect(
+    mathematics.getByText("山田 花子", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    mathematics.getByText("集合論の記事を確認中", { exact: true }),
+  ).toBeVisible();
+  await mathematics
+    .locator("[data-progress-input]")
+    .fill("線形代数の記事を執筆中");
+  await mathematics.getByRole("button", { name: "進捗を保存" }).click();
+  await expect(
+    mathematics.getByText("線形代数の記事を執筆中", { exact: true }),
+  ).toBeVisible();
+  expect(savedProgress).toBe("線形代数の記事を執筆中");
+});
