@@ -27,6 +27,7 @@ const adminPageNames = [
   "co-working",
   "permissions",
   "onboarding-demo",
+  "ui-prototype",
 ] as const;
 
 export const ADMIN_PAGE_PATHS = adminPageNames.map(
