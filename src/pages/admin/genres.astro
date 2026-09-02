@@ -2,6 +2,17 @@
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { genreLabel } from "../../lib/taxonomy";
+import memberCatalog from "../../data/atlas-members.json";
+
+type CatalogMember = { name: string; assignments: string[] };
+
+const atlasMembers = memberCatalog.members as Array<{ name: string; role: string }>;
+const catalogMembersForSubject = (subjectName: string): CatalogMember[] => atlasMembers
+  .filter((member) => {
+    const roleParts = member.role.split("学習サイト「アトラス」運営").at(-1)?.trim() ?? member.role;
+    return roleParts.split(/\s+/).some((part) => part.replace(/担当$/, "").split("・").includes(subjectName));
+  })
+  .map((member) => ({ name: member.name.trim(), assignments: [`${subjectName}担当`] }));
 
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order);
 const statusLabel = { published: "公開中", preparing: "準備中" } as const;
@@ -67,8 +78,10 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
                 {subject.data.categories.length > 0 ? <ul>{[...subject.data.categories].sort((a, b) => a.order - b.order).map((category) => <li><strong>{category.name.ja}</strong><code>{category.slug}</code></li>)}</ul> : <p class="empty-categories">カテゴリは準備中です。</p>}
               </section>
               <section class="genre-people" aria-labelledby={subject.data.slug + "-people"}>
-                <div class="section-heading"><h4 id={subject.data.slug + "-people"}>担当メンバー</h4><span data-member-count>読み込み中</span></div>
-                <div class="member-list" data-genre-members><p class="loading-note">担当情報を読み込んでいます…</p></div>
+                <div class="section-heading"><h4 id={subject.data.slug + "-people"}>担当メンバー</h4><span data-member-count>{catalogMembersForSubject(subject.data.name.ja).length}人</span></div>
+                <div class="member-list" data-genre-members data-catalog-members={JSON.stringify(catalogMembersForSubject(subject.data.name.ja))}>
+                  {catalogMembersForSubject(subject.data.name.ja).map((member) => <div class="member-item"><strong>{member.name}</strong><span>{member.assignments.join("・")}</span></div>)}
+                </div>
               </section>
               <section class="genre-progress" aria-labelledby={subject.data.slug + "-progress"}>
                 <div class="section-heading"><h4 id={subject.data.slug + "-progress"}>進捗状況</h4><span data-progress-updated>未登録</span></div>
@@ -105,6 +118,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     const resultLabel = root.querySelector<HTMLElement>("[data-results-label]");
     const empty = root.querySelector<HTMLElement>("[data-empty-state]");
     type GenreMember = { email?: string; role?: string; display_name?: string; assignments?: string[] };
+    type CatalogMember = { name: string; assignments?: string[] };
     type GenreOverview = { subject?: string; progress?: string; updated_at?: string; updatedAt?: string };
     const subjectNames = new Map(cards.map((card) => [card.id, card.querySelector("h3")?.textContent?.trim() ?? card.id]));
     const progressBySubject = new Map<string, GenreOverview>();
@@ -118,16 +132,48 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       return Number.isNaN(date.getTime()) ? "更新日時不明" : `最終更新 ${date.toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}`;
     };
 
+    const normalizeName = (value: string) => value.replace(/[\s\u3000]/g, "").trim();
+
+    const getCatalogMembers = (card: HTMLElement): CatalogMember[] => {
+      const container = card.querySelector<HTMLElement>("[data-genre-members]");
+      if (!container?.dataset.catalogMembers) return [];
+      try {
+        const members = JSON.parse(container.dataset.catalogMembers) as unknown;
+        return Array.isArray(members) ? members as CatalogMember[] : [];
+      } catch {
+        return [];
+      }
+    };
+
     const renderMembers = (card: HTMLElement) => {
       const subject = card.id;
       const subjectName = subjectNames.get(subject) ?? subject;
       const container = card.querySelector<HTMLElement>("[data-genre-members]");
       const count = card.querySelector<HTMLElement>("[data-member-count]");
       if (!container || !count) return;
-      const relevant = overviewMembers.filter((member) => {
+      const catalogMembers = getCatalogMembers(card);
+      const catalogNames = new Map(catalogMembers.map((member) => [normalizeName(member.name), member.name]));
+      const merged = new Map<string, { name: string; assignments: Set<string> }>();
+      catalogMembers.forEach((member) => {
+        merged.set(normalizeName(member.name), { name: member.name, assignments: new Set(member.assignments ?? []) });
+      });
+      overviewMembers.filter((member) => {
         const assignments = member.assignments ?? [];
         return member.role === "manager" || assignments.includes("全ジャンル管理") || assignments.includes("プロジェクトリーダー") || assignments.includes("全分野統括") || assignments.includes(`${subjectName}担当`) || assignments.includes(`${subjectName}統括`);
+      }).forEach((member) => {
+        const displayName = member.display_name?.trim();
+        if (!displayName || displayName === "表示名未設定") return;
+        const normalized = normalizeName(displayName);
+        const canonicalName = catalogNames.get(normalized) ?? displayName;
+        const current = merged.get(normalized) ?? { name: canonicalName, assignments: new Set<string>() };
+        (member.assignments ?? []).forEach((assignment) => {
+          if (assignment === "運営内運営" || assignment === "全ジャンル管理" || assignment === "プロジェクトリーダー" || assignment === "全分野統括" || assignment === `${subjectName}担当` || assignment === `${subjectName}統括`) {
+            current.assignments.add(assignment);
+          }
+        });
+        merged.set(normalized, current);
       });
+      const relevant = [...merged.values()];
       count.textContent = `${relevant.length}人`;
       container.replaceChildren();
       if (!relevant.length) {
@@ -141,10 +187,10 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
         const item = document.createElement("div");
         item.className = "member-item";
         const name = document.createElement("strong");
-        name.textContent = member.display_name?.trim() || member.email || "表示名未設定";
+        name.textContent = member.name;
         item.append(name);
         const roles = document.createElement("span");
-        roles.textContent = (member.assignments ?? []).filter((assignment) => assignment === "運営内運営" || assignment === "全ジャンル管理" || assignment === "プロジェクトリーダー" || assignment === "全分野統括" || assignment === `${subjectName}担当` || assignment === `${subjectName}統括`).join("・") || "担当メンバー";
+        roles.textContent = [...member.assignments].join("・") || "担当メンバー";
         item.append(roles);
         container.append(item);
       });
@@ -181,9 +227,8 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
         renderOverviews();
       } catch (error) {
         cards.forEach((card) => {
-          const memberContainer = card.querySelector<HTMLElement>("[data-genre-members]");
           const progressView = card.querySelector<HTMLElement>("[data-genre-progress]");
-          if (memberContainer) memberContainer.textContent = "担当情報を読み込めませんでした。";
+          renderMembers(card);
           if (progressView) progressView.textContent = error instanceof Error ? error.message : "進捗を読み込めませんでした。";
         });
       }
