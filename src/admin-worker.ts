@@ -4638,11 +4638,18 @@ async function projectAssignmentLabels(
 ): Promise<string[]> {
   const labels = [projectRoleLabel(role)];
   if (projectId !== "atlas") return labels;
-  const permissions = await env.REPORTS.prepare(
-    "SELECT subject FROM report_admin_permissions WHERE email=? ORDER BY subject",
-  )
-    .bind(email)
-    .all<{ subject: string }>();
+  const [permissions, workflowRoles] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT subject FROM report_admin_permissions WHERE email=? ORDER BY subject",
+    )
+      .bind(email)
+      .all<{ subject: string }>(),
+    env.REPORTS.prepare(
+      "SELECT role,subject FROM editorial_workflow_roles WHERE lower(email)=lower(?) ORDER BY role,subject",
+    )
+      .bind(email)
+      .all<{ role: string; subject: string }>(),
+  ]);
   for (const permission of permissions.results ?? []) {
     const label =
       permission.subject === "*"
@@ -4650,7 +4657,127 @@ async function projectAssignmentLabels(
         : `${APPLICATION_SUBJECT_LABELS[permission.subject] ?? permission.subject}担当`;
     if (!labels.includes(label)) labels.push(label);
   }
+  for (const workflowRole of workflowRoles.results ?? []) {
+    const label =
+      workflowRole.role === "project-leader"
+        ? "プロジェクトリーダー"
+        : workflowRole.subject === "*"
+          ? "全分野統括"
+          : `${APPLICATION_SUBJECT_LABELS[workflowRole.subject] ?? workflowRole.subject}統括`;
+    if (!labels.includes(label)) labels.push(label);
+  }
   return labels;
+}
+
+const MAX_SUBJECT_OVERVIEW_PROGRESS_LENGTH = 4_000;
+
+type SubjectOverviewMember = {
+  email: string;
+  role: string;
+  display_name: string;
+  university: string;
+  year: string;
+  assignments: string[];
+};
+
+async function genreOverviews(
+  request: Request,
+  env: Env,
+  method: "GET" | "PUT",
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const project = await resolveOperationProject(
+    env,
+    scope,
+    new URL(request.url).searchParams.get("project") ?? "atlas",
+  );
+  if (isResponse(project)) return project;
+  if (project.id !== "atlas")
+    return json({ error: "各ジャンル概要はアトラスでのみ利用できます。" }, 400);
+
+  const projectRole = await operationProjectRole(env, scope, project.id);
+  const canEditSubject = (subject: string) =>
+    scope.allSubjects ||
+    projectRole === "manager" ||
+    Boolean(scope.isProjectLeader) ||
+    Boolean(scope.coordinatorSubjects?.includes("*")) ||
+    Boolean(scope.coordinatorSubjects?.includes(subject));
+
+  if (method === "PUT") {
+    if (!isSameOrigin(request))
+      return json({ error: "この送信元からは受け付けられません。" }, 403);
+    let payload: { subject?: unknown; progress?: unknown };
+    try {
+      payload = (await request.json()) as typeof payload;
+    } catch {
+      return json({ error: "進捗内容を読み取れませんでした。" }, 400);
+    }
+    const subject = text(payload.subject, 80).toLowerCase();
+    if (!SUBJECT_SLUG.test(subject))
+      return json({ error: "分野を確認してください。" }, 400);
+    if (!canEditSubject(subject))
+      return json({ error: "この分野の進捗を編集する権限がありません。" }, 403);
+    if (typeof payload.progress !== "string")
+      return json({ error: "進捗内容を入力してください。" }, 400);
+    const progress = text(payload.progress, MAX_SUBJECT_OVERVIEW_PROGRESS_LENGTH);
+    const updatedAt = new Date().toISOString();
+    await env.REPORTS.prepare(
+      `INSERT INTO editorial_subject_overviews
+       (project_id,subject,progress,updated_by,updated_at) VALUES (?,?,?,?,?)
+       ON CONFLICT(project_id,subject) DO UPDATE SET
+         progress=excluded.progress,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
+    )
+      .bind(project.id, subject, progress, scope.email, updatedAt)
+      .run();
+    return json({ ok: true, subject, progress, updatedBy: scope.email, updatedAt });
+  }
+
+  const [members, overviews] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT m.email,m.role,
+        COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
+        COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year
+       FROM atlasez_project_memberships m
+       LEFT JOIN editorial_member_profiles p ON p.email=m.email
+       WHERE m.project_id=? ORDER BY display_name,m.email`,
+    )
+      .bind(project.id)
+      .all<Omit<SubjectOverviewMember, "assignments">>(),
+    env.REPORTS.prepare(
+      `SELECT subject,progress,updated_by,updated_at
+       FROM editorial_subject_overviews WHERE project_id=? ORDER BY subject`,
+    )
+      .bind(project.id)
+      .all<Record<string, unknown>>(),
+  ]);
+  const memberRows = await Promise.all(
+    (members.results ?? []).map(async (member) => ({
+      ...member,
+      assignments: await projectAssignmentLabels(
+        env,
+        project.id,
+        String(member.email ?? ""),
+        String(member.role ?? "member"),
+      ),
+    })),
+  );
+  return json({
+    project,
+    scope: {
+      email: scope.email,
+      isManager: scope.isManager,
+      isProjectLeader: Boolean(scope.isProjectLeader),
+      coordinatorSubjects: scope.coordinatorSubjects ?? [],
+    },
+    members: memberRows,
+    overviews: overviews.results ?? [],
+    editableSubjects: (overviews.results ?? [])
+      .map((row) => String(row.subject ?? ""))
+      .filter((subject) => canEditSubject(subject)),
+    canEditAll: scope.allSubjects || projectRole === "manager" || Boolean(scope.isProjectLeader),
+  });
 }
 
 async function getSecretariatReviewerScope(
@@ -16207,6 +16334,11 @@ async function handleAdminRequest(
     return memberTasksOverview(request, env);
   if (url.pathname === "/api/admin/member-calendar" && request.method === "GET")
     return memberCalendarOverview(request, env);
+  if (url.pathname === "/api/admin/genre-overviews") {
+    if (request.method === "GET") return genreOverviews(request, env, "GET");
+    if (request.method === "PUT") return genreOverviews(request, env, "PUT");
+    return json({ error: "GET、PUTのみ利用できます。" }, 405);
+  }
   if (url.pathname === "/api/admin/projects" && request.method === "POST")
     return createAtlasezProject(request, env);
   if (url.pathname === "/api/admin/applications" && request.method === "GET")
