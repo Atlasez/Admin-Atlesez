@@ -265,6 +265,11 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
             role: "member",
             assignments: ["運営メンバー", "数学担当"],
           },
+          {
+            display_name: "上杉和輝",
+            role: "manager",
+            assignments: ["全ジャンル管理"],
+          },
         ],
         overviews: [
           {
@@ -284,6 +289,9 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
   ).toBeVisible();
   await expect(
     mathematics.getByText("小林 和真", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    mathematics.getByText("上杉 和輝", { exact: true }),
   ).toBeVisible();
   await expect(
     mathematics.getByText("集合論の記事を確認中", { exact: true }),
