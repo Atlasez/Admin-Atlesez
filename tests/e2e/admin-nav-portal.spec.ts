@@ -3,6 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 type MockOptions = {
   notificationStatus?: number;
   avatarUrl?: string;
+  projects?: Array<{
+    id: string;
+    slug?: string;
+    name: string;
+    description?: string;
+    role: "manager" | "member";
+  }>;
 };
 
 async function mockAdminShell(page: Page, options: MockOptions = {}) {
@@ -70,6 +77,14 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
+          projects: options.projects ?? [
+            {
+              id: "atlas",
+              slug: "atlas",
+              name: "学習サイト「アトラス」運営",
+              role: "manager",
+            },
+          ],
           todos: [],
           calendar: { events: [] },
         }),
@@ -208,12 +223,57 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   await expect(
     page.getByRole("heading", { name: "参加中のプロジェクト" }),
   ).toBeVisible();
+  await expect(page.locator('[data-admin-project-link="manage"]')).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: "運営として参加中" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "参加者として参加中" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "同時作業会・交流会の日程" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "自分の未完了タスク" }),
   ).toBeVisible();
+});
+
+test("参加中のプロジェクトを運営と参加者に分けて表示する", async ({ page }) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        description: "学習サイトの編集と運営",
+        role: "manager",
+      },
+      {
+        id: "secretariat",
+        slug: "secretariat",
+        name: "Atlasez運営事務局",
+        role: "member",
+      },
+      {
+        id: "seminar-platform",
+        slug: "seminar-platform",
+        name: "ゼミプラットフォーム",
+        role: "member",
+      },
+    ],
+  });
+  await page.goto("admin/portal/");
+
+  const managed = page.locator('[data-project-group="managed"]');
+  const member = page.locator('[data-project-group="member"]');
+  await expect(managed.getByRole("link")).toHaveCount(1);
+  await expect(managed).toContainText("学習サイト「アトラス」運営");
+  await expect(member.getByRole("link")).toHaveCount(2);
+  await expect(member).toContainText("Atlasez運営事務局");
+  await expect(member).toContainText("ゼミプラットフォーム");
+  await expect(managed).not.toContainText("Atlasez運営事務局");
+  await expect(member).not.toContainText("学習サイト「アトラス」運営");
+  await expect(page.locator('[data-admin-project-link="manage"]')).toBeHidden();
 });
 
 test("メンバー用サイトの未完了タスクは参加中プロジェクトを横断して表示する", async ({
