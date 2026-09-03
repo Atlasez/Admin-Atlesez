@@ -462,7 +462,14 @@ const updateHistory = [
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>
           </button>
         </div>
+        <div class="sidebar-resize-handle" role="separator" tabindex="0" aria-label="サイドバーの幅を変更" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="380" aria-valuenow="236" data-sidebar-resize>
+          <span aria-hidden="true"></span>
+        </div>
       </aside>
+
+      <button class="sidebar-restore icon-button" type="button" aria-label="サイドバーを開く" data-sidebar-restore hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
 
       <div class="app-frame">
         <header class="topbar">
@@ -534,7 +541,7 @@ const updateHistory = [
             <div class="home-layout" data-workspace-scope="Atlas">
               <section class="home-panel" aria-labelledby="work-heading">
                 <div class="section-title home-section-title">
-                  <h2 id="work-heading">自分の仕事</h2>
+                  <h2 class="home-work-title" id="work-heading"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons.check} />自分の仕事</h2>
                   <button type="button" data-open-list="work">タスクを開く</button>
                 </div>
                 <div class="work-list">
@@ -605,7 +612,7 @@ const updateHistory = [
                   </section>
                   <div class="home-layout">
                     <section class="home-panel" aria-label="自分の仕事">
-                      <div class="section-title home-section-title"><h2>自分の仕事</h2><button type="button" data-open-list="work">タスクを開く</button></div>
+                      <div class="section-title home-section-title"><h2 class="home-work-title"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons.check} />自分の仕事</h2><button type="button" data-open-list="work">タスクを開く</button></div>
                       <div class="work-list">{workspace.work.map((item) => <button class="work-row" type="button" data-detail-type="work" data-detail-title={item.label} data-detail-meta={item.note} data-detail-count={item.count}><span><strong>{item.label}</strong><small>{item.note}</small></span><b>{item.count}</b></button>)}</div>
                     </section>
                     <section class="home-panel" aria-label="最近の動き">
@@ -968,6 +975,8 @@ const updateHistory = [
       const modalBody = document.querySelector<HTMLElement>("[data-modal-body]");
       const modalActions = document.querySelector<HTMLElement>("[data-modal-actions]");
       const toastStack = document.querySelector<HTMLElement>("[data-toast-stack]");
+      const sidebarResizeHandle = document.querySelector<HTMLElement>("[data-sidebar-resize]");
+      const sidebarRestore = document.querySelector<HTMLButtonElement>("[data-sidebar-restore]");
       const workspaceNames = document.querySelectorAll<HTMLElement>("[data-workspace-name]");
       const workspaceRoles = document.querySelectorAll<HTMLElement>("[data-workspace-role]");
       const workspaceButton = document.querySelector<HTMLButtonElement>("[data-workspace-menu]");
@@ -980,6 +989,44 @@ const updateHistory = [
       let lastFocusedElement: HTMLElement | null = null;
       let unreadNotifications = 2;
       let currentWorkspace = "Atlas";
+      const sidebarMinWidth = 180;
+      const sidebarMaxWidth = 380;
+      const sidebarCloseThreshold = 120;
+      let sidebarWidth = window.matchMedia("(max-width: 820px)").matches ? 208 : 236;
+      let sidebarLastWidth = sidebarWidth;
+      let sidebarDragging = false;
+      let sidebarDragStartX = 0;
+      let sidebarDragStartWidth = sidebarWidth;
+
+      try {
+        const savedSidebarWidth = Number(localStorage.getItem("atlasez-prototype-sidebar-width"));
+        if (Number.isFinite(savedSidebarWidth) && savedSidebarWidth >= sidebarMinWidth && savedSidebarWidth <= sidebarMaxWidth) {
+          sidebarWidth = savedSidebarWidth;
+          sidebarLastWidth = savedSidebarWidth;
+        }
+      } catch {
+        // The prototype still works when storage is unavailable.
+      }
+
+      const syncSidebar = (open: boolean) => {
+        if (!root) return;
+        root.classList.toggle("sidebar-collapsed", !open);
+        root.style.setProperty("--sidebar-width", open ? `${sidebarWidth}px` : "0px");
+        sidebarRestore?.toggleAttribute("hidden", open);
+        sidebarResizeHandle?.setAttribute("aria-valuenow", String(open ? Math.round(sidebarWidth) : 0));
+      };
+
+      const setSidebarOpen = (open: boolean) => {
+        if (window.matchMedia("(max-width: 640px)").matches) {
+          setNavOpen(open);
+          return;
+        }
+        if (open) sidebarWidth = sidebarLastWidth;
+        syncSidebar(open);
+        if (!open) sidebarRestore?.focus();
+      };
+
+      syncSidebar(true);
 
       const setNavOpen = (open: boolean) => {
         if (!root) return;
@@ -988,8 +1035,59 @@ const updateHistory = [
       };
 
       document.querySelector("[data-nav-open]")?.addEventListener("click", () => setNavOpen(true));
-      document.querySelector("[data-nav-close]")?.addEventListener("click", () => setNavOpen(false));
+      document.querySelector("[data-nav-close]")?.addEventListener("click", () => setSidebarOpen(false));
       document.querySelector("[data-nav-scrim]")?.addEventListener("click", () => setNavOpen(false));
+      sidebarRestore?.addEventListener("click", () => setSidebarOpen(true));
+
+      const updateSidebarWidth = (nextWidth: number) => {
+        const clampedWidth = Math.max(0, Math.min(sidebarMaxWidth, nextWidth));
+        if (clampedWidth <= sidebarCloseThreshold) {
+          syncSidebar(false);
+          return;
+        }
+        sidebarWidth = Math.max(sidebarMinWidth, clampedWidth);
+        sidebarLastWidth = sidebarWidth;
+        syncSidebar(true);
+        try {
+          localStorage.setItem("atlasez-prototype-sidebar-width", String(Math.round(sidebarWidth)));
+        } catch {
+          // The prototype still works when storage is unavailable.
+        }
+      };
+
+      sidebarResizeHandle?.addEventListener("pointerdown", (event) => {
+        if (window.matchMedia("(max-width: 640px)").matches) return;
+        sidebarDragging = true;
+        sidebarDragStartX = event.clientX;
+        sidebarDragStartWidth = sidebarWidth;
+        sidebarResizeHandle.setPointerCapture(event.pointerId);
+        root?.classList.add("sidebar-resizing");
+        event.preventDefault();
+      });
+      sidebarResizeHandle?.addEventListener("pointermove", (event) => {
+        if (!sidebarDragging) return;
+        updateSidebarWidth(sidebarDragStartWidth + event.clientX - sidebarDragStartX);
+      });
+      const finishSidebarDrag = (event: PointerEvent) => {
+        if (!sidebarDragging) return;
+        sidebarDragging = false;
+        if (sidebarResizeHandle?.hasPointerCapture(event.pointerId)) sidebarResizeHandle.releasePointerCapture(event.pointerId);
+        root?.classList.remove("sidebar-resizing");
+      };
+      sidebarResizeHandle?.addEventListener("pointerup", finishSidebarDrag);
+      sidebarResizeHandle?.addEventListener("pointercancel", finishSidebarDrag);
+      sidebarResizeHandle?.addEventListener("keydown", (event) => {
+        if (event.key === "Home") {
+          event.preventDefault();
+          setSidebarOpen(false);
+        } else if (event.key === "End") {
+          event.preventDefault();
+          updateSidebarWidth(sidebarMaxWidth);
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault();
+          updateSidebarWidth(sidebarWidth + (event.key === "ArrowRight" ? 16 : -16));
+        }
+      });
 
       const themeToggle = document.querySelector<HTMLButtonElement>("[data-theme-toggle]");
       const syncThemeLabel = () => {
@@ -2129,8 +2227,9 @@ const updateHistory = [
 
   .prototype-shell {
     display: grid;
-    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 236px) minmax(0, 1fr);
     min-height: 100vh;
+    transition: grid-template-columns 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .sidebar {
@@ -2140,10 +2239,80 @@ const updateHistory = [
     flex-direction: column;
     height: 100vh;
     min-height: 620px;
+    min-width: 0;
     overflow: hidden;
     position: sticky;
     top: 0;
+    transform: translateX(0);
+    transition: opacity 180ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
     z-index: 20;
+  }
+
+  .sidebar-collapsed .sidebar {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-12px);
+  }
+
+  .sidebar-resize-handle {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    cursor: col-resize;
+    display: flex;
+    height: 100%;
+    justify-content: center;
+    padding: 0;
+    position: absolute;
+    right: -4px;
+    top: 0;
+    width: 9px;
+    z-index: 2;
+  }
+
+  .sidebar-resize-handle span {
+    background: transparent;
+    border-radius: 999px;
+    height: 44px;
+    transition: background 140ms ease, height 140ms ease;
+    width: 3px;
+  }
+
+  .sidebar-resize-handle:hover span,
+  .sidebar-resize-handle:focus-visible span,
+  .sidebar-resizing .sidebar-resize-handle span {
+    background: var(--muted);
+    height: 64px;
+  }
+
+  .sidebar-restore {
+    align-items: center;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 3px 12px rgb(0 0 0 / 0.12);
+    display: none;
+    height: 34px;
+    justify-content: center;
+    left: 8px;
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    z-index: 21;
+  }
+
+  .sidebar-restore[hidden] {
+    display: none;
+  }
+
+  .sidebar-collapsed .sidebar-restore {
+    display: flex;
+  }
+
+  .sidebar-restore svg {
+    height: 17px;
+    width: 17px;
   }
 
   .sidebar-header {
@@ -3129,6 +3298,19 @@ const updateHistory = [
 
   .home-panel .queue-row {
     min-height: 64px;
+  }
+
+  .home-work-title {
+    align-items: center;
+    display: inline-flex;
+    gap: 7px;
+  }
+
+  .home-work-title svg {
+    color: var(--green);
+    flex-shrink: 0;
+    height: 16px;
+    width: 16px;
   }
 
   .heading-status {
@@ -5579,9 +5761,13 @@ const updateHistory = [
   }
 
   .mobile-menu,
-  .sidebar-close,
   .mobile-scrim {
     display: none;
+  }
+
+  .sidebar-close {
+    display: flex;
+    margin-left: auto;
   }
 
   @media (max-width: 960px) {
@@ -5608,7 +5794,7 @@ const updateHistory = [
 
   @media (max-width: 820px) {
     .prototype-shell {
-      grid-template-columns: 208px minmax(0, 1fr);
+      grid-template-columns: var(--sidebar-width, 208px) minmax(0, 1fr);
     }
 
     .main-content {
@@ -5758,6 +5944,11 @@ const updateHistory = [
       width: min(85vw, 268px);
     }
 
+    .sidebar-resize-handle,
+    .sidebar-restore {
+      display: none;
+    }
+
     .nav-open .sidebar {
       transform: translateX(0);
     }
@@ -5782,13 +5973,8 @@ const updateHistory = [
       overflow: hidden;
     }
 
-    .mobile-menu,
-    .sidebar-close {
+    .mobile-menu {
       display: flex;
-    }
-
-    .sidebar-close {
-      margin-left: auto;
     }
 
     .topbar {
