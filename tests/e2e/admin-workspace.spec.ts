@@ -288,11 +288,11 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
     mathematics.getByText("山田 花子", { exact: true }),
   ).toBeVisible();
   await expect(
-    mathematics.getByText("小林 和真", { exact: true }),
+    mathematics.getByText("上杉和輝", { exact: true }),
   ).toBeVisible();
-  await expect(
-    mathematics.getByText("上杉 和輝", { exact: true }),
-  ).toBeVisible();
+  await expect(mathematics.getByText("小林 和真", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(
     mathematics.getByText("集合論の記事を確認中", { exact: true }),
   ).toBeVisible();
