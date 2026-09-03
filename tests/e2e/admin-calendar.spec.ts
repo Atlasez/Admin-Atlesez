@@ -16,7 +16,26 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
     route.fulfill({ json: { notifications: [] } }),
   );
   await page.route("**/api/admin/portal", (route) =>
-    route.fulfill({ json: { todos: [], calendar: { events: [] } } }),
+    route.fulfill({
+      json: {
+        projects: [
+          {
+            id: "atlas",
+            slug: "atlas",
+            name: "学習サイト「アトラス」運営",
+            role: "manager",
+          },
+          {
+            id: "secretariat",
+            slug: "secretariat",
+            name: "Atlasez運営事務局",
+            role: "member",
+          },
+        ],
+        todos: [],
+        calendar: { events: [] },
+      },
+    }),
   );
 
   await page.goto("admin/atlas/");
@@ -26,6 +45,14 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
     "/admin/manage/?project=atlas",
   );
 
+  await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
+  await page
+    .getByRole("link", { name: /学習サイト「アトラス」運営/ })
+    .last()
+    .click();
+  await expect(
+    page.getByRole("link", { name: "管理", exact: true }),
+  ).toHaveAttribute("href", "/admin/manage/?project=atlas");
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
   await page.getByRole("link", { name: /Atlasez運営事務局/ }).click();
   await expect(

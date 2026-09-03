@@ -211,6 +211,18 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       switcher?.setAttribute('data-current-site', state.site);
       switcher?.setAttribute('data-current-slug', state.slug);
       document.querySelectorAll<HTMLAnchorElement>('[data-admin-project-link]').forEach((link) => {
+        const isManagementLink = link.dataset.adminProjectLink === 'manage';
+        if (isManagementLink && state.site === 'portal') {
+          // メンバー用サイトには運営管理への導線を表示しない。ClientRouterの
+          // persistent navでも、ポータルへ戻った瞬間に再表示されないようにする。
+          link.dataset.adminSite = 'restricted';
+          link.hidden = true;
+          link.setAttribute('aria-hidden', 'true');
+          link.tabIndex = -1;
+          return;
+        }
+        link.removeAttribute('aria-hidden');
+        link.removeAttribute('tabindex');
         link.dataset.adminSite = state.site;
         link.href = `/admin/${link.dataset.adminProjectLink}/?project=${encodeURIComponent(state.slug)}`;
       });

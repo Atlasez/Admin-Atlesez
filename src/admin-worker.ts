@@ -4736,12 +4736,31 @@ async function genreOverviews(
 
   const [members, overviews] = await Promise.all([
     env.REPORTS.prepare(
-      `SELECT m.email,m.role,
+      `WITH raw_members AS (
+        SELECT email,role
+        FROM atlasez_project_memberships
+        WHERE project_id=?
+        UNION ALL
+        SELECT email,'member' AS role
+        FROM report_admin_permissions
+        WHERE trim(email)<>'' AND trim(subject)<>''
+        UNION ALL
+        SELECT email,'member' AS role
+        FROM editorial_workflow_roles
+        WHERE trim(email)<>''
+      ), candidate_members AS (
+        SELECT lower(email) AS normalized_email,MAX(email) AS email,
+          MAX(CASE WHEN role='manager' THEN 1 ELSE 0 END) AS is_manager
+        FROM raw_members
+        WHERE trim(email)<>''
+        GROUP BY lower(email)
+      )
+      SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
         COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
         COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year
-       FROM atlasez_project_memberships m
-       LEFT JOIN editorial_member_profiles p ON p.email=m.email
-       WHERE m.project_id=? ORDER BY display_name,m.email`,
+       FROM candidate_members m
+       LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
+       ORDER BY display_name,m.email`,
     )
       .bind(project.id)
       .all<Omit<SubjectOverviewMember, "assignments">>(),

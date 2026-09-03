@@ -18,9 +18,17 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.locator("[data-admin-atlas-menu] .menu-groups"),
     ).not.toContainText("マイページ");
+    await expect(page.locator(".menu-group-heading > span")).toHaveText([
+      "・",
+      "・",
+      "・",
+      "・",
+    ]);
+    await expect(page.locator(".menu-group-heading p")).toHaveCount(0);
+    await expect(page.locator(".project-utility")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: /閲覧統計を開く/ }),
-    ).toHaveAttribute("href", "/admin/analytics/");
+    ).toHaveCount(0);
   });
 
   test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
