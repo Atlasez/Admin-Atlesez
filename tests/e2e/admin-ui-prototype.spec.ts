@@ -8,7 +8,22 @@ test("ワークスペース切り替えで記事執筆UIをAtlasだけに表示�
   await expect(
     page.getByRole("heading", { name: "Atlasホーム" }),
   ).toBeVisible();
+  await expect(
+    page.getByText("骨川 スネ夫", { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: /^記事 5$/ })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.locator('[data-nav-item="記事"] small').evaluate((element) => {
+        const sample = document.createElement("span");
+        sample.style.color = "var(--green)";
+        document.body.append(sample);
+        const expected = getComputedStyle(sample).color;
+        sample.remove();
+        return getComputedStyle(element).color === expected;
+      }),
+    )
+    .toBe(true);
   await expect(page.getByRole("heading", { name: "編集キュー" })).toBeVisible();
   await expect(
     page
