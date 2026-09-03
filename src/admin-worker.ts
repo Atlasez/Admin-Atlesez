@@ -9164,6 +9164,19 @@ async function submitMemberApplication(
   if (!APPLICATION_FORM_SLUGS.has(requestedProjectSlug))
     return json({ error: "応募フォームの種類を確認してください。" }, 400);
   const projectSlug = requestedProjectSlug;
+  if (authenticatedEmail) {
+    const existingProject = await env.REPORTS.prepare(
+      `SELECT 1 AS found FROM atlasez_member_applications
+       WHERE lower(email)=lower(?) AND project_slug=? AND status IN ('new','reviewing','accepted')
+       UNION ALL
+       SELECT 1 AS found FROM atlasez_project_memberships
+       WHERE lower(email)=lower(?) AND project_id=? LIMIT 1`,
+    )
+      .bind(authenticatedEmail, projectSlug, authenticatedEmail, onboardingProjectId(projectSlug))
+      .first<{ found: number }>();
+    if (existingProject)
+      return json({ error: "このプロジェクトにはすでに応募済み、または参加中です。" }, 409);
+  }
   const projectAnswerRecord: Record<string, string> = {};
   if (
     payload.projectAnswers &&
@@ -9463,10 +9476,24 @@ const publicApplicationConfig = (env: Env): Response =>
 async function userStatus(request: Request, env: Env): Promise<Response> {
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
+  const [applications, memberships] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT DISTINCT project_slug FROM atlasez_member_applications
+       WHERE lower(email)=lower(?) AND status IN ('new','reviewing','accepted')`,
+    ).bind(current.email).all<{ project_slug: string }>(),
+    env.REPORTS.prepare(
+      `SELECT DISTINCT project_id FROM atlasez_project_memberships WHERE lower(email)=lower(?)`,
+    ).bind(current.email).all<{ project_id: string }>(),
+  ]);
+  const applicationProjects = [...new Set([
+    ...(applications.results ?? []).map((row) => row.project_slug),
+    ...(memberships.results ?? []).map((row) => row.project_id === "semi-platform" ? "seminar-platform" : row.project_id),
+  ])];
   return json({
     email: current.email,
     stage: current.stage,
     applicationStatus: current.applicationStatus,
+    applicationProjects,
     tutorialStep: current.tutorialStep,
     access: {
       application: canAccess(current.stage, "application"),
