@@ -541,7 +541,7 @@ const updateHistory = [
             <div class="home-layout" data-workspace-scope="Atlas">
               <section class="home-panel" aria-labelledby="work-heading">
                 <div class="section-title home-section-title">
-                  <h2 class="home-work-title" id="work-heading"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons.check} />自分の仕事</h2>
+                  <h2 class="home-work-title" id="work-heading">自分の仕事</h2>
                   <button type="button" data-open-list="work">タスクを開く</button>
                 </div>
                 <div class="work-list">
@@ -612,7 +612,7 @@ const updateHistory = [
                   </section>
                   <div class="home-layout">
                     <section class="home-panel" aria-label="自分の仕事">
-                      <div class="section-title home-section-title"><h2 class="home-work-title"><svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons.check} />自分の仕事</h2><button type="button" data-open-list="work">タスクを開く</button></div>
+                      <div class="section-title home-section-title"><h2 class="home-work-title">自分の仕事</h2><button type="button" data-open-list="work">タスクを開く</button></div>
                       <div class="work-list">{workspace.work.map((item) => <button class="work-row" type="button" data-detail-type="work" data-detail-title={item.label} data-detail-meta={item.note} data-detail-count={item.count}><span><strong>{item.label}</strong><small>{item.note}</small></span><b>{item.count}</b></button>)}</div>
                     </section>
                     <section class="home-panel" aria-label="最近の動き">
@@ -714,7 +714,9 @@ const updateHistory = [
             <div class="prototype-list report-list" aria-label="問題報告一覧">
               {reportQueue.map((item) => (
                 <button class="prototype-list-row" type="button" data-filter-item="report" data-filter-value={item.tone} data-detail-type="report" data-detail-title={item.title} data-detail-meta={`${item.subject} · ${item.type}`} data-detail-status={item.status} data-detail-owner="運営チーム" data-detail-updated={item.received}>
-                  <span class="list-leading"><i class:list={["status-dot", item.tone === "new" ? "changes-requested" : item.tone === "reviewing" ? "in-review" : "published"]}></i></span>
+                  <span class="list-leading">
+                    {item.tone === "resolved" ? <svg class="status-check" viewBox="0 0 24 24" aria-hidden="true" set:html={icons.check} /> : <i class:list={["status-dot", item.tone === "new" ? "changes-requested" : "in-review"]}></i>}
+                  </span>
                   <span class="list-main"><strong>{item.title}</strong><small>{item.subject} · {item.type}</small></span>
                   <span class="list-meta"><small>{item.status}</small>{item.received}</span><span class="row-chevron">›</span>
                 </button>
@@ -3857,6 +3859,12 @@ const updateHistory = [
 
   .status-dot.changes-requested {
     background: var(--red);
+  }
+
+  .status-check {
+    color: var(--green);
+    height: 16px;
+    width: 16px;
   }
 
   .article-view[hidden] {

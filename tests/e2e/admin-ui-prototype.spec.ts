@@ -29,7 +29,7 @@ test("ワークスペース切り替えで記事執筆UIをAtlasだけに表示�
     page
       .getByRole("heading", { name: "自分の仕事", exact: true })
       .locator("svg"),
-  ).toBeVisible();
+  ).toHaveCount(0);
 
   await page
     .getByRole("button", { name: "現在のワークスペース: Atlas" })
@@ -81,6 +81,10 @@ test("ワークスペース切り替えで記事執筆UIをAtlasだけに表示�
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /^記事 5$/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "編集キュー" })).toBeVisible();
+  await page.getByRole("button", { name: /^問題報告 2$/ }).click();
+  const resolvedReport = page.getByRole("button", { name: /古典作品の入口/ });
+  await expect(resolvedReport).toBeVisible();
+  await expect(resolvedReport.locator("svg.status-check")).toBeVisible();
 });
 
 test("スマートフォン幅でも切り替え後にホーム全体を表示する", async ({
@@ -104,7 +108,7 @@ test("スマートフォン幅でも切り替え後にホーム全体を表示�
     page
       .getByRole("heading", { name: "自分の仕事", exact: true })
       .locator("svg"),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(page.locator("[data-prototype-shell]")).not.toHaveClass(
     /nav-open/,
   );
