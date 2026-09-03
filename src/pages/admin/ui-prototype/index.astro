@@ -16,13 +16,11 @@ const subjectCatalog = (await getCollection("subjects"))
 const publishedArticles = (await getCollection("articles")).filter(
   (article) => article.data.locale === "ja" && article.data.status === "published",
 );
-const publishedArticleCount = publishedArticles.length;
 const articleCountBySubject = new Map<string, number>();
 for (const article of publishedArticles) {
   articleCountBySubject.set(article.data.subject, (articleCountBySubject.get(article.data.subject) ?? 0) + 1);
 }
 const publishedSubjectCount = subjectCatalog.filter((subject) => subject.status === "published").length;
-const categoryCount = subjectCatalog.reduce((total, subject) => total + subject.categories, 0);
 const subjectPreview = subjectCatalog.filter((subject) => subject.status === "published").slice(0, 8);
 const categoryCatalog = subjectCatalog.flatMap((subject) => subject.categoryOptions.map((category) => ({ ...category, subject: subject.name })));
 const genreEntries = subjectCatalog
@@ -39,6 +37,7 @@ const navigation = [
   },
   {
     label: "コンテンツ",
+    workspace: "Atlas",
     items: [
       { label: "記事", icon: "article", count: "5" },
       { label: "レビュー", icon: "review", count: "3" },
@@ -57,8 +56,8 @@ const navigation = [
   {
     label: "管理",
     items: [
-      { label: "ジャンル", icon: "genre" },
-      { label: "閲覧統計", icon: "analytics" },
+      { label: "ジャンル", icon: "genre", workspace: "Atlas" },
+      { label: "閲覧統計", icon: "analytics", workspace: "Atlas" },
       { label: "アップデート履歴", icon: "history" },
       { label: "権限", icon: "lock" },
       { label: "管理トップ", icon: "manage" },
@@ -254,6 +253,49 @@ const projectEntries = [
   },
 ];
 
+const workspaceHomes = [
+  {
+    name: "運営事務局",
+    eyebrow: "組織運営",
+    title: "運営事務局ホーム",
+    description: "承認と全体タスクを、優先度の高い順に確認できます。",
+    priorities: [
+      { count: 2, title: "承認待ち", detail: "プロフィール申請を確認", tone: "review" },
+      { count: 1, title: "今日の予定", detail: "全体ミーティング · 19:00", tone: "task" },
+      { count: 4, title: "今週のタスク", detail: "あなたの担当は1件", tone: "report" },
+    ],
+    work: [
+      { label: "担当タスク", note: "明日期限 1件", count: 3 },
+      { label: "確認依頼", note: "新着 2件", count: 2 },
+    ],
+    activity: [
+      { time: "09:10", title: "プロフィール申請", detail: "佐藤 美咲 · 所属変更" },
+      { time: "昨日", title: "全体タスク更新", detail: "9月定例会の準備" },
+      { time: "昨日", title: "メンバー参加", detail: "山田 智也 · 承認済み" },
+    ],
+  },
+  {
+    name: "ゼミプラットフォーム",
+    eyebrow: "プロジェクト運営",
+    title: "ゼミプラットフォームホーム",
+    description: "直近の日程と共有タスクに絞って、活動の流れを確認できます。",
+    priorities: [
+      { count: 1, title: "参加確認", detail: "次回ゼミの回答期限は今日", tone: "review" },
+      { count: 2, title: "今週の予定", detail: "輪読会と交流会", tone: "task" },
+      { count: 4, title: "未完了タスク", detail: "あなたの担当は2件", tone: "report" },
+    ],
+    work: [
+      { label: "担当タスク", note: "今週期限 2件", count: 4 },
+      { label: "参加予定", note: "次回は金曜日", count: 2 },
+    ],
+    activity: [
+      { time: "10:05", title: "日程を更新", detail: "代数学ゼミ · 開始時刻変更" },
+      { time: "昨日", title: "資料を共有", detail: "第4回輪読会" },
+      { time: "昨日", title: "タスク完了", detail: "次回テーマの候補整理" },
+    ],
+  },
+];
+
 const reviewQueue = [
   { title: "条件付き期待値", subject: "確率論", reviewer: "M. Takahashi", due: "今日 18:00", priority: "高", tone: "urgent" },
   { title: "中心極限定理", subject: "確率論", reviewer: "近藤 葵", due: "明日", priority: "通常", tone: "normal" },
@@ -363,7 +405,7 @@ const updateHistory = [
           </div>
           <div class="product-copy">
             <strong>Atlasez</strong>
-            <button type="button" aria-label="現在のワークスペース: Atlas" data-workspace-menu>
+            <button type="button" aria-label="現在のワークスペース: Atlas" aria-haspopup="menu" aria-expanded="false" data-workspace-menu>
               <span data-workspace-name>Atlas</span>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
             </button>
@@ -376,7 +418,11 @@ const updateHistory = [
         <nav class="sidebar-nav">
           {
             navigation.map((group) => (
-              <section class="nav-group" aria-label={group.label || "メイン"}>
+              <section
+                class="nav-group"
+                aria-label={group.label || "メイン"}
+                data-workspace-scope={"workspace" in group ? group.workspace : undefined}
+              >
                 {group.label && <h2>{group.label}</h2>}
                 <div class="nav-items">
                   {group.items.map((item) => (
@@ -385,6 +431,7 @@ const updateHistory = [
                       type="button"
                       data-nav-item={item.label}
                       data-nav-group={group.label || "ホーム"}
+                      data-workspace-scope={"workspace" in item ? item.workspace : undefined}
                       aria-current={"active" in item && item.active ? "page" : undefined}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true" set:html={icons[item.icon]} />
@@ -410,7 +457,7 @@ const updateHistory = [
             <span class="avatar" aria-hidden="true">AK</span>
             <span class="account-copy">
               <strong>近藤 葵</strong>
-              <small>Atlas運営</small>
+              <small data-workspace-role>Atlas運営</small>
             </span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>
           </button>
@@ -448,168 +495,127 @@ const updateHistory = [
 
         <main class="main-content">
           <div data-view="overview">
-          <div class="page-heading">
-            <div>
-              <p>運営</p>
-              <h1>概要</h1>
+            <div class="page-heading home-heading">
+              <div>
+                <p data-home-eyebrow>学習サイト運営</p>
+                <h1 data-home-title>Atlasホーム</h1>
+                <span class="home-description" data-home-description>執筆・レビューで、今日対応する仕事を確認できます。</span>
+              </div>
+              <div class="heading-status" aria-label="ワークスペースの状態">
+                <span aria-hidden="true"></span>
+                稼働中
+              </div>
             </div>
-            <div class="heading-status" aria-label="ワークスペースの状態">
-              <span aria-hidden="true"></span>
-              システムは正常です
-            </div>
-          </div>
 
-          <section class="site-overview" aria-labelledby="site-overview-heading">
-            <div class="section-title">
-              <h2 id="site-overview-heading">運営サイト</h2>
-              <span>3プロジェクト</span>
-            </div>
-            <div class="site-project-grid">
-              {
-                projectEntries.map((project) => (
-                  <button
-                    class="site-project-card"
-                    type="button"
-                    data-detail-type="project"
-                    data-detail-title={project.name}
-                    data-detail-meta={project.detail}
-                    data-detail-status={project.status}
-                    data-detail-owner="Atlasez運営"
-                    data-detail-updated="現在"
-                  >
-                    <span class="site-project-status"><i></i>{project.status}</span>
-                    <strong>{project.name}</strong>
-                    <small>{project.note}</small>
-                    <span class="site-project-arrow" aria-hidden="true">→</span>
-                  </button>
-                ))
-              }
-            </div>
-            <div class="catalog-summary" id="catalog-summary">
-              <div class="catalog-summary-copy">
-                <span class="catalog-kicker">ATLAS CONTENT CATALOG</span>
-                <strong>学習サイト「アトラス」</strong>
-                <small>実際の公開コンテンツと分野定義を参照しています。</small>
-              </div>
-              <div class="catalog-stats" aria-label="アトラスのコンテンツ数">
-                <span><b>{publishedArticleCount}</b>公開記事</span>
-                <span><b>{publishedSubjectCount}</b>公開分野</span>
-                <span><b>{categoryCount}</b>カテゴリ</span>
-              </div>
-              <div class="subject-preview" aria-label="公開中の分野">
-                {subjectPreview.map((subject) => <span>{subject.name}</span>)}
-              </div>
-            </div>
-          </section>
-
-          <section class="attention-section" aria-labelledby="attention-heading">
-            <div class="section-title">
-              <h2 id="attention-heading">要対応</h2>
-              <span>9件</span>
-            </div>
-            <div class="attention-list">
-              {
-                attention.map((item) => (
-                  <button class="attention-row" type="button" data-detail-type="attention" data-detail-title={item.title} data-detail-meta={item.detail} data-detail-count={item.count}>
-                    <span class:list={["count-marker", item.tone]}>{item.count}</span>
-                    <span class="row-copy">
-                      <strong>{item.title}</strong>
-                      <small>{item.detail}</small>
-                    </span>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-                  </button>
-                ))
-              }
-            </div>
-          </section>
-
-          <div class="overview-grid">
-            <section class="activity-section" aria-labelledby="activity-heading">
-              <div class="section-title">
-                <h2 id="activity-heading">最近のアクティビティ</h2>
-                <button type="button" data-open-list="activity">すべて見る</button>
-              </div>
-              <div class="activity-list">
-                {
-                  activity.map((item) => (
-                    <button class="activity-row" type="button" data-detail-type="activity" data-detail-title={item.title} data-detail-meta={`${item.action} · ${item.meta}`} data-detail-time={item.time}>
-                      <time>{item.time}</time>
-                      <span class:list={["activity-icon", item.icon]} aria-hidden="true">
-                        {item.icon === "review" && <svg viewBox="0 0 24 24"><path d="M4 5h16v12H8l-4 4z"/><path d="m9 11 2 2 4-4"/></svg>}
-                        {item.icon === "comment" && <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>}
-                        {item.icon === "published" && <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>}
-                        {item.icon === "assigned" && <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M18 8v6M15 11h6"/></svg>}
-                      </span>
-                      <span class="activity-copy">
-                        <span><strong>{item.action}</strong><b>{item.title}</b></span>
-                        <small>{item.meta}</small>
-                      </span>
-                      <svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-                    </button>
-                  ))
-                }
-              </div>
-            </section>
-
-            <section class="work-section" aria-labelledby="work-heading">
-              <div class="section-title">
-                <h2 id="work-heading">自分の仕事</h2>
-                <button type="button" data-open-list="work">タスクを開く</button>
-              </div>
-              <div class="work-list">
-                {
-                  work.map((item) => (
-                    <button class="work-row" type="button" data-detail-type="work" data-detail-title={item.label} data-detail-meta={item.note} data-detail-count={item.count}>
-                      <span>
-                        <strong>{item.label}</strong>
-                        <small>{item.note}</small>
-                      </span>
-                      <b>{item.count}</b>
-                    </button>
-                  ))
-                }
-              </div>
-              <div class="review-note">
-                <div class="review-avatars" role="img" aria-label="フィードバック待ちメンバー">
-                  <span class="review-avatar review-avatar-blue" title="Y. Nakamura">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0" /></svg>
-                  </span>
-                  <span class="review-avatar review-avatar-green" title="M. Sato">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/><path d="M19 16v5M16.5 18.5h5" /></svg>
-                  </span>
-                  <span class="review-avatar review-avatar-violet" title="K. Tanaka">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M8 12h8M12 8v8" /></svg>
-                  </span>
+            <section class="home-focus" aria-labelledby="atlas-focus-heading" data-workspace-scope="Atlas">
+              <div class="section-title home-section-title">
+                <div>
+                  <span class="section-kicker">TODAY</span>
+                  <h2 id="atlas-focus-heading">今日の優先事項</h2>
                 </div>
-                <p><strong>3人のメンバー</strong>がフィードバックを待っています。</p>
+                <span>9件</span>
+              </div>
+              <div class="home-priority-grid">
+                {
+                  attention.map((item) => (
+                    <button class="home-priority-card" type="button" data-detail-type="attention" data-detail-title={item.title} data-detail-meta={item.detail} data-detail-count={item.count}>
+                      <span class:list={["priority-count", item.tone]}>{item.count}</span>
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                  ))
+                }
               </div>
             </section>
-          </div>
 
-          <section class="queue-section" aria-labelledby="queue-heading">
-            <div class="section-title">
-              <h2 id="queue-heading">編集キュー</h2>
-              <button type="button" data-open-list="queue">記事を開く</button>
+            <div class="home-layout" data-workspace-scope="Atlas">
+              <section class="home-panel" aria-labelledby="work-heading">
+                <div class="section-title home-section-title">
+                  <h2 id="work-heading">自分の仕事</h2>
+                  <button type="button" data-open-list="work">タスクを開く</button>
+                </div>
+                <div class="work-list">
+                  {
+                    work.map((item) => (
+                      <button class="work-row" type="button" data-detail-type="work" data-detail-title={item.label} data-detail-meta={item.note} data-detail-count={item.count}>
+                        <span><strong>{item.label}</strong><small>{item.note}</small></span>
+                        <b>{item.count}</b>
+                      </button>
+                    ))
+                  }
+                </div>
+              </section>
+
+              <section class="home-panel" aria-labelledby="activity-heading">
+                <div class="section-title home-section-title">
+                  <h2 id="activity-heading">最近の動き</h2>
+                  <button type="button" data-open-list="activity">すべて見る</button>
+                </div>
+                <div class="activity-list">
+                  {
+                    activity.slice(0, 3).map((item) => (
+                      <button class="activity-row" type="button" data-detail-type="activity" data-detail-title={item.title} data-detail-meta={`${item.action} · ${item.meta}`} data-detail-time={item.time}>
+                        <time>{item.time}</time>
+                        <span class="activity-copy"><b>{item.title}</b><small>{item.action} · {item.meta}</small></span>
+                        <svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                      </button>
+                    ))
+                  }
+                </div>
+              </section>
             </div>
-            <div class="queue-table" role="table" aria-label="編集キュー">
-              <div class="queue-header" role="row">
-                <span role="columnheader">状態</span>
-                <span role="columnheader">記事</span>
-                <span role="columnheader">担当</span>
-                <span role="columnheader">更新</span>
+
+            <section class="home-panel queue-section" aria-labelledby="queue-heading" data-workspace-scope="Atlas">
+              <div class="section-title home-section-title">
+                <h2 id="queue-heading">編集キュー</h2>
+                <button type="button" data-open-list="queue">記事を開く</button>
               </div>
-              {
-                editorialQueue.map((item) => (
-                  <button class="queue-row" type="button" role="row" data-detail-type="queue" data-detail-title={item.title} data-detail-meta={item.subject} data-detail-status={item.status} data-detail-owner={item.owner} data-detail-updated={item.updated}>
-                    <span role="cell"><i class:list={["status-dot", item.tone]}></i>{item.status}</span>
-                    <span class="queue-title" role="cell"><strong>{item.title}</strong><small>{item.subject}</small></span>
-                    <span role="cell">{item.owner}</span>
-                    <span role="cell">{item.updated}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
-                  </button>
-                ))
-              }
-            </div>
-          </section>
+              <div class="queue-table" role="table" aria-label="編集キュー">
+                <div class="queue-header" role="row"><span role="columnheader">状態</span><span role="columnheader">記事</span><span role="columnheader">担当</span><span role="columnheader">更新</span></div>
+                {
+                  editorialQueue.map((item) => (
+                    <button class="queue-row" type="button" role="row" data-detail-type="queue" data-detail-title={item.title} data-detail-meta={item.subject} data-detail-status={item.status} data-detail-owner={item.owner} data-detail-updated={item.updated}>
+                      <span role="cell"><i class:list={["status-dot", item.tone]}></i>{item.status}</span>
+                      <span class="queue-title" role="cell"><strong>{item.title}</strong><small>{item.subject}</small></span>
+                      <span role="cell">{item.owner}</span>
+                      <span role="cell">{item.updated}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+                    </button>
+                  ))
+                }
+              </div>
+            </section>
+
+            {
+              workspaceHomes.map((workspace) => (
+                <div class="workspace-home" data-workspace-scope={workspace.name} hidden>
+                  <section class="home-focus" aria-label={`${workspace.name}の優先事項`}>
+                    <div class="section-title home-section-title"><div><span class="section-kicker">TODAY</span><h2>今日の優先事項</h2></div><span>{workspace.priorities.reduce((sum, item) => sum + item.count, 0)}件</span></div>
+                    <div class="home-priority-grid">
+                      {workspace.priorities.map((item) => (
+                        <button class="home-priority-card" type="button" data-detail-type="work" data-detail-title={item.title} data-detail-meta={item.detail} data-detail-count={item.count}>
+                          <span class:list={["priority-count", item.tone]}>{item.count}</span>
+                          <span><strong>{item.title}</strong><small>{item.detail}</small></span>
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                  <div class="home-layout">
+                    <section class="home-panel" aria-label="自分の仕事">
+                      <div class="section-title home-section-title"><h2>自分の仕事</h2><button type="button" data-open-list="work">タスクを開く</button></div>
+                      <div class="work-list">{workspace.work.map((item) => <button class="work-row" type="button" data-detail-type="work" data-detail-title={item.label} data-detail-meta={item.note} data-detail-count={item.count}><span><strong>{item.label}</strong><small>{item.note}</small></span><b>{item.count}</b></button>)}</div>
+                    </section>
+                    <section class="home-panel" aria-label="最近の動き">
+                      <div class="section-title home-section-title"><h2>最近の動き</h2><button type="button" data-open-list="activity">すべて見る</button></div>
+                      <div class="activity-list">{workspace.activity.map((item) => <button class="activity-row" type="button" data-detail-type="activity" data-detail-title={item.title} data-detail-meta={item.detail} data-detail-time={item.time}><time>{item.time}</time><span class="activity-copy"><b>{item.title}</b><small>{item.detail}</small></span><svg class="row-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>)}</div>
+                    </section>
+                  </div>
+                </div>
+              ))
+            }
           </div>
 
           <section class="prototype-view hub-view" data-view="portal" aria-labelledby="portal-heading" hidden>
@@ -666,7 +672,7 @@ const updateHistory = [
             <article class="guide-article" data-guide-panel="links" hidden><span class="panel-kicker">LINKS</span><h2>運営リンク</h2><div class="guide-link-list"><button type="button" data-guide-link="discord">Discord運営サーバー ↗</button><button type="button" data-guide-link="drive">Google Drive資料 ↗</button><button type="button" data-guide-link="atlas">学習サイト「アトラス」 ↗</button></div></article>
           </section>
 
-          <section class="prototype-view" data-view="reviews" aria-labelledby="reviews-heading" hidden>
+          <section class="prototype-view" data-view="reviews" data-workspace-scope="Atlas" aria-labelledby="reviews-heading" hidden>
             <div class="page-heading">
               <div><p>コンテンツ</p><h1 id="reviews-heading">レビュー</h1></div>
               <button class="modal-primary" type="button" data-review-start>レビューを開始</button>
@@ -687,7 +693,7 @@ const updateHistory = [
             </div>
           </section>
 
-          <section class="prototype-view" data-view="reports" aria-labelledby="reports-heading" hidden>
+          <section class="prototype-view" data-view="reports" data-workspace-scope="Atlas" aria-labelledby="reports-heading" hidden>
             <div class="page-heading">
               <div><p>コンテンツ</p><h1 id="reports-heading">問題報告</h1></div>
               <button class="icon-button" type="button" data-reports-refresh aria-label="問題報告を更新">↻</button>
@@ -767,14 +773,14 @@ const updateHistory = [
             <div class="calendar-event-list" aria-label="同時作業会の開催予定">{calendarEvents.map((event) => <div class="calendar-event-row" tabindex="0" role="button" data-detail-type="calendar" data-detail-title={event.title} data-detail-meta={`${event.project} · ${event.place}`} data-detail-status="開催予定" data-detail-owner="参加者募集中" data-detail-updated={event.date}><time>{event.date}<small>{event.time}</small></time><span class="list-main"><strong>{event.title}</strong><small>{event.project} · {event.place}</small></span><button class="calendar-rsvp" type="button" data-calendar-rsvp>参加予定</button></div>)}</div>
           </section>
 
-          <section class="prototype-view" data-view="genres" aria-labelledby="genres-heading" hidden>
+          <section class="prototype-view" data-view="genres" data-workspace-scope="Atlas" aria-labelledby="genres-heading" hidden>
             <div class="page-heading"><div><p>管理 / アトラス</p><h1 id="genres-heading">ジャンル</h1></div><span class="view-badge">{publishedSubjectCount}公開分野</span></div>
             <p class="view-lede">学習サイト「アトラス」の分野とカテゴリ構成を確認できます。</p>
             <label class="prototype-search-field"><span>分野を検索</span><input type="search" placeholder="例：数学、物理" data-genre-search /></label>
             <div class="genre-grid" aria-label="公開中の分野">{genreEntries.map((genre) => <button class="genre-card" type="button" data-genre-card data-genre-name={genre.name} data-detail-type="genre" data-detail-title={genre.name} data-detail-meta={`${genre.categories}カテゴリ · ${genre.articles}公開記事`} data-detail-status="公開中" data-detail-owner="Atlas編集部" data-detail-updated="現在"><strong>{genre.name}</strong><small>{genre.categories}カテゴリ · {genre.articles}公開記事</small><span>›</span></button>)}</div>
           </section>
 
-          <section class="prototype-view" data-view="analytics" aria-labelledby="analytics-heading" hidden>
+          <section class="prototype-view" data-view="analytics" data-workspace-scope="Atlas" aria-labelledby="analytics-heading" hidden>
             <div class="page-heading"><div><p>管理 / アトラス</p><h1 id="analytics-heading">閲覧統計</h1></div><button class="icon-button" type="button" data-analytics-refresh aria-label="閲覧統計を更新">↻</button></div>
             <p class="view-lede">個人情報を保存せず、閲覧・15秒以上の滞在・本文の90%到達を集計します。</p>
             <div class="analytics-range" role="toolbar" aria-label="閲覧統計の期間"><button class="filter-chip" type="button" data-analytics-range="7">直近7日</button><button class="filter-chip active" type="button" data-analytics-range="30">直近30日</button><button class="filter-chip" type="button" data-analytics-range="90">直近90日</button></div>
@@ -796,7 +802,7 @@ const updateHistory = [
             <div class="permission-list" aria-label="運営メンバー一覧">{permissionMembers.map((member) => <button class="permission-row" type="button" data-detail-type="permission" data-detail-title={member.name} data-detail-meta={`${member.email} · ${member.scope}`} data-detail-status={member.role} data-detail-owner="Atlasez運営" data-detail-updated="現在"><span class="permission-avatar">{member.name.slice(0, 2)}</span><span class="list-main"><strong>{member.name}</strong><small>{member.email}</small></span><span class="permission-scope"><b>{member.role}</b><small>{member.scope}</small></span><span class="row-chevron">›</span></button>)}</div>
           </section>
 
-          <section class="prototype-view editor-view" data-view="editor" aria-labelledby="editor-heading" hidden>
+          <section class="prototype-view editor-view" data-view="editor" data-workspace-scope="Atlas" aria-labelledby="editor-heading" hidden>
             <header class="editor-view-header">
               <div>
                 <button class="editor-back" type="button" data-editor-back>← 記事一覧へ戻る</button>
@@ -865,7 +871,7 @@ const updateHistory = [
             </div>
           </section>
 
-          <section class="article-view" data-view="articles" aria-labelledby="articles-heading" hidden>
+          <section class="article-view" data-view="articles" data-workspace-scope="Atlas" aria-labelledby="articles-heading" hidden>
             <div class="page-heading article-heading">
               <div>
                 <p>コンテンツ</p>
@@ -963,7 +969,11 @@ const updateHistory = [
       const modalActions = document.querySelector<HTMLElement>("[data-modal-actions]");
       const toastStack = document.querySelector<HTMLElement>("[data-toast-stack]");
       const workspaceNames = document.querySelectorAll<HTMLElement>("[data-workspace-name]");
+      const workspaceRoles = document.querySelectorAll<HTMLElement>("[data-workspace-role]");
       const workspaceButton = document.querySelector<HTMLButtonElement>("[data-workspace-menu]");
+      const homeEyebrow = document.querySelector<HTMLElement>("[data-home-eyebrow]");
+      const homeTitle = document.querySelector<HTMLElement>("[data-home-title]");
+      const homeDescription = document.querySelector<HTMLElement>("[data-home-description]");
       const searchButton = document.querySelector<HTMLButtonElement>("[data-search-open]");
       const notificationButton = document.querySelector<HTMLButtonElement>("[data-notification-menu]");
       let popoverAnchor: HTMLElement | null = null;
@@ -1025,9 +1035,12 @@ const updateHistory = [
 
       const closePopover = () => {
         if (!popover) return;
+        const previousAnchor = popoverAnchor;
         popover.hidden = true;
         popover.innerHTML = "";
         popoverAnchor = null;
+        previousAnchor?.setAttribute("aria-expanded", "false");
+        previousAnchor?.focus();
       };
 
       const positionPopover = () => {
@@ -1048,6 +1061,7 @@ const updateHistory = [
         }
         popover.innerHTML = content;
         popoverAnchor = anchor;
+        anchor.setAttribute("aria-expanded", "true");
         popover.hidden = false;
         positionPopover();
         popover.querySelector<HTMLElement>("button")?.focus();
@@ -1082,19 +1096,30 @@ const updateHistory = [
           { name: "運営事務局", note: "メンバー情報と全体タスク" },
           { name: "ゼミプラットフォーム", note: "日程・交流と共有タスク" },
         ];
-        return `<div class="popover-heading"><strong>ワークスペース</strong><small>切り替えて作業場所を変更</small></div><div class="popover-menu">${options
+        return `<div class="popover-heading"><strong>ワークスペース</strong><small>切り替えて作業場所を変更</small></div><div class="popover-menu" role="menu">${options
           .map(
             (option) =>
-              `<button type="button" class="popover-option${option.name === currentWorkspace ? " selected" : ""}" data-workspace-choice="${escapeHtml(option.name)}"><span class="popover-option-copy"><strong>${escapeHtml(option.name)}</strong><small>${escapeHtml(option.note)}</small></span>${option.name === currentWorkspace ? '<span class="popover-check">✓</span>' : ""}</button>`,
+              `<button type="button" role="menuitemradio" aria-checked="${option.name === currentWorkspace}" class="popover-option${option.name === currentWorkspace ? " selected" : ""}" data-workspace-choice="${escapeHtml(option.name)}"><span class="popover-option-copy"><strong>${escapeHtml(option.name)}</strong><small>${escapeHtml(option.note)}</small></span>${option.name === currentWorkspace ? '<span class="popover-check" aria-hidden="true">✓</span>' : ""}</button>`,
           )
           .join("")}</div>`;
       };
 
       const notificationMenu = () => {
-        const items = [
-          { title: "レビュー依頼が届いています", detail: "条件付き期待値 · 12分前" },
-          { title: "問題報告が更新されました", detail: "Hoeffding inequality · 42分前" },
-        ];
+        const itemsByWorkspace: Record<string, { title: string; detail: string }[]> = {
+          Atlas: [
+            { title: "レビュー依頼が届いています", detail: "条件付き期待値 · 12分前" },
+            { title: "問題報告が更新されました", detail: "Hoeffding inequality · 42分前" },
+          ],
+          運営事務局: [
+            { title: "プロフィール申請が届いています", detail: "佐藤 美咲 · 18分前" },
+            { title: "全体タスクが更新されました", detail: "9月定例会の準備 · 1時間前" },
+          ],
+          ゼミプラットフォーム: [
+            { title: "参加確認の期限が近づいています", detail: "次回ゼミ · 今日まで" },
+            { title: "日程が更新されました", detail: "代数学ゼミ · 1時間前" },
+          ],
+        };
+        const items = itemsByWorkspace[currentWorkspace] || itemsByWorkspace.Atlas;
         return `<div class="popover-heading"><strong>通知</strong><button type="button" class="popover-link" data-notification-read>${unreadNotifications ? "すべて既読" : "既読にしました"}</button></div><div class="notification-list">${items
           .map(
             (item, index) =>
@@ -1104,7 +1129,7 @@ const updateHistory = [
       };
 
       const accountMenu = () =>
-        `<div class="popover-heading"><strong>アカウント</strong><small>近藤 葵 · Atlas運営</small></div><div class="popover-menu"><button type="button" class="popover-option" data-account-action="profile"><span class="popover-option-copy"><strong>プロフィール</strong><small>表示名と担当を確認</small></span></button><button type="button" class="popover-option" data-account-action="settings"><span class="popover-option-copy"><strong>設定</strong><small>プロトタイプの表示を調整</small></span></button><button type="button" class="popover-option" data-account-action="signout"><span class="popover-option-copy"><strong>デモを終了</strong><small>ログアウトの動作を確認</small></span></button></div>`;
+        `<div class="popover-heading"><strong>アカウント</strong><small>近藤 葵 · ${escapeHtml(workspaceHomeCopy[currentWorkspace]?.role || "Atlas運営")}</small></div><div class="popover-menu"><button type="button" class="popover-option" data-account-action="profile"><span class="popover-option-copy"><strong>プロフィール</strong><small>表示名と担当を確認</small></span></button><button type="button" class="popover-option" data-account-action="settings"><span class="popover-option-copy"><strong>設定</strong><small>プロトタイプの表示を調整</small></span></button><button type="button" class="popover-option" data-account-action="signout"><span class="popover-option-copy"><strong>デモを終了</strong><small>ログアウトの動作を確認</small></span></button></div>`;
 
       workspaceButton?.addEventListener("click", () => openPopover(workspaceButton, workspaceMenu()));
       notificationButton?.addEventListener("click", () => openPopover(notificationButton, notificationMenu()));
@@ -1136,10 +1161,14 @@ const updateHistory = [
         承認待ち: "approvals",
         "ガイド・規則": "guide",
       };
-      const setView = (view: PrototypeView) => {
+      const setView = (view: PrototypeView): PrototypeView => {
+        const target = Array.from(views).find((element) => element.dataset.view === view);
+        const resolvedView = target?.dataset.workspaceScope && target.dataset.workspaceScope !== currentWorkspace ? "overview" : view;
         views.forEach((element) => {
-          element.hidden = element.dataset.view !== view;
+          const outsideWorkspace = Boolean(element.dataset.workspaceScope && element.dataset.workspaceScope !== currentWorkspace);
+          element.hidden = element.dataset.view !== resolvedView || outsideWorkspace;
         });
+        return resolvedView;
       };
 
       const selectNavItem = (navItem: HTMLElement) => {
@@ -1153,8 +1182,56 @@ const updateHistory = [
         setNavOpen(false);
       };
 
+      const workspaceHomeCopy: Record<string, { eyebrow: string; title: string; description: string; role: string }> = {
+        Atlas: {
+          eyebrow: "学習サイト運営",
+          title: "Atlasホーム",
+          description: "執筆・レビューで、今日対応する仕事を確認できます。",
+          role: "Atlas運営",
+        },
+        運営事務局: {
+          eyebrow: "組織運営",
+          title: "運営事務局ホーム",
+          description: "承認と全体タスクを、優先度の高い順に確認できます。",
+          role: "事務局運営",
+        },
+        ゼミプラットフォーム: {
+          eyebrow: "プロジェクト運営",
+          title: "ゼミプラットフォームホーム",
+          description: "直近の日程と共有タスクに絞って、活動の流れを確認できます。",
+          role: "ゼミ運営",
+        },
+      };
+
+      const syncWorkspaceUi = () => {
+        const copy = workspaceHomeCopy[currentWorkspace] || workspaceHomeCopy.Atlas;
+        workspaceNames.forEach((element) => (element.textContent = currentWorkspace));
+        workspaceRoles.forEach((element) => (element.textContent = copy.role));
+        workspaceButton?.setAttribute("aria-label", `現在のワークスペース: ${currentWorkspace}`);
+        if (homeEyebrow) homeEyebrow.textContent = copy.eyebrow;
+        if (homeTitle) homeTitle.textContent = copy.title;
+        if (homeDescription) homeDescription.textContent = copy.description;
+        document.querySelectorAll<HTMLElement>("[data-workspace-scope]").forEach((element) => {
+          if (element.dataset.view) return;
+          element.hidden = element.dataset.workspaceScope !== currentWorkspace;
+        });
+        document.querySelectorAll<HTMLElement>("[data-nav-item]").forEach((item) => {
+          const isHome = item.dataset.navItem === "ホーム";
+          item.classList.toggle("active", isHome);
+          if (isHome) item.setAttribute("aria-current", "page");
+          else item.removeAttribute("aria-current");
+        });
+        setView("overview");
+        setNavOpen(false);
+      };
+
+      syncWorkspaceUi();
+
       const openEditorView = () => {
-        setView("editor");
+        if (setView("editor") !== "editor") {
+          showToast("記事執筆はAtlasワークスペースで利用できます");
+          return;
+        }
         document.querySelectorAll("[data-nav-item].active").forEach((item) => item.classList.remove("active"));
         document.querySelectorAll("[data-nav-item]").forEach((item) => item.removeAttribute("aria-current"));
         const articleNav = document.querySelector<HTMLElement>('[data-nav-item="記事"]');
@@ -1170,8 +1247,8 @@ const updateHistory = [
       });
 
       const activatePrototypeView = (view: PrototypeView, label?: string) => {
-        setView(view);
-        if (label) {
+        const resolvedView = setView(view);
+        if (label && resolvedView === view) {
           document.querySelectorAll("[data-nav-item].active").forEach((item) => item.classList.remove("active"));
           document.querySelectorAll("[data-nav-item]").forEach((item) => item.removeAttribute("aria-current"));
           const navItem = document.querySelector<HTMLElement>(`[data-nav-item="${CSS.escape(label)}"]`);
@@ -1751,12 +1828,18 @@ const updateHistory = [
       document.querySelector<HTMLButtonElement>("[data-editor-guide]")?.addEventListener("click", () => openModal("記事執筆の手順", '<ol class="modal-copy"><li>記事設定で分野・カテゴリ・URL名を確認します。</li><li>本文を執筆し、プレビューで数式と見出しを確認します。</li><li>下書きを保存してフィードバックを依頼します。</li></ol>', '<button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
 
       const openSearch = () => {
-        const entries = Array.from(document.querySelectorAll<HTMLElement>("[data-nav-item], [data-detail-type]"));
+        const entries = Array.from(document.querySelectorAll<HTMLElement>("[data-nav-item], [data-detail-type]")).filter((entry) => {
+          const scopedParent = entry.closest<HTMLElement>("[data-workspace-scope]");
+          const hiddenView = entry.dataset.detailType ? entry.closest<HTMLElement>("[data-view][hidden]") : null;
+          return !hiddenView && (!scopedParent || scopedParent.dataset.workspaceScope === currentWorkspace);
+        });
         const entryData = entries.map((entry) => ({
           title: entry.dataset.navItem || entry.dataset.detailTitle || "",
           meta: entry.dataset.navGroup || entry.dataset.detailMeta || "",
         }));
-        const searchBody = `<form class="search-dialog-form" data-search-form><label for="prototype-search-input">ページや記事を検索</label><div class="search-input-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.2 16.2 4 4"></path></svg><input id="prototype-search-input" data-search-input type="search" placeholder="例: レビュー、Bernstein" autocomplete="off" /></div><div class="search-results" data-search-results></div></form>`;
+        const searchLabel = currentWorkspace === "Atlas" ? "ページや記事を検索" : "ワークスペース内を検索";
+        const searchPlaceholder = currentWorkspace === "Atlas" ? "例: レビュー、Bernstein" : "例: タスク、カレンダー";
+        const searchBody = `<form class="search-dialog-form" data-search-form><label for="prototype-search-input">${searchLabel}</label><div class="search-input-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16.2 16.2 4 4"></path></svg><input id="prototype-search-input" data-search-input type="search" placeholder="${searchPlaceholder}" autocomplete="off" /></div><div class="search-results" data-search-results></div></form>`;
         openModal("検索", searchBody);
         const input = document.querySelector<HTMLInputElement>("[data-search-input]");
         const results = document.querySelector<HTMLElement>("[data-search-results]");
@@ -1795,12 +1878,17 @@ const updateHistory = [
       searchButton?.addEventListener("click", openSearch);
 
       const openList = (type: string) => {
-        const content: Record<string, { title: string; body: string }> = {
-          activity: { title: "最近のアクティビティ", body: "直近24時間の更新を表示しています。行を選ぶと関連する記事の詳細を確認できます。<div class=\"modal-stat-row\"><span>表示中</span><strong>4件</strong></div>" },
-          work: { title: "自分の仕事", body: "あなたに割り当てられた項目をまとめています。レビューや下書きの進行状況を確認できます。<div class=\"modal-stat-row\"><span>未完了</span><strong>9件</strong></div>" },
+        const atlasContent: Record<string, { title: string; body: string }> = {
+          activity: { title: "最近のアクティビティ", body: "直近24時間の記事更新を表示しています。<div class=\"modal-stat-row\"><span>表示中</span><strong>3件</strong></div>" },
+          work: { title: "自分の仕事", body: "レビューや下書きなど、あなたに割り当てられた項目をまとめています。<div class=\"modal-stat-row\"><span>未完了</span><strong>9件</strong></div>" },
           queue: { title: "編集キュー", body: "記事の状態を確認し、レビューや修正依頼を開始できます。<div class=\"modal-stat-row\"><span>キュー内</span><strong>5件</strong></div>" },
         };
-        const item = content[type] || content.queue;
+        const generalContent: Record<string, { title: string; body: string }> = {
+          activity: { title: "最近の動き", body: "このワークスペースの直近の更新を表示しています。<div class=\"modal-stat-row\"><span>表示中</span><strong>3件</strong></div>" },
+          work: { title: "自分の仕事", body: "あなたに割り当てられたタスクと確認依頼をまとめています。<div class=\"modal-stat-row\"><span>未完了</span><strong>5件</strong></div>" },
+        };
+        const content = currentWorkspace === "Atlas" ? atlasContent : generalContent;
+        const item = content[type] || content.work;
         openModal(item.title, `<p class="modal-copy">${item.body}</p>`, '<button class="modal-primary" type="button" data-modal-action="list">一覧を確認</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>');
       };
 
@@ -1862,9 +1950,8 @@ const updateHistory = [
         if (workspaceChoice) {
           const name = workspaceChoice.dataset.workspaceChoice || "Atlas";
           currentWorkspace = name;
-          workspaceNames.forEach((element) => (element.textContent = name));
-          workspaceButton?.setAttribute("aria-label", `現在のワークスペース: ${name}`);
           closePopover();
+          syncWorkspaceUi();
           showToast(`ワークスペースを「${name}」に切り替えました`);
           return;
         }
@@ -1880,7 +1967,8 @@ const updateHistory = [
         const notificationItem = target.closest<HTMLButtonElement>("[data-notification-item]");
         if (notificationItem) {
           closePopover();
-          openModal("通知", '<p class="modal-copy">この通知に関連する記事を確認できます。</p>', '<button class="modal-primary" type="button" data-modal-action="article">関連する記事を開く</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>');
+          const isAtlas = currentWorkspace === "Atlas";
+          openModal("通知", `<p class="modal-copy">この通知に関連する${isAtlas ? "記事" : "タスクや予定"}を確認できます。</p>`, `<button class="modal-primary" type="button" data-modal-action="${isAtlas ? "article" : "task"}">関連項目を開く</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>`);
           return;
         }
         const accountAction = target.closest<HTMLButtonElement>("[data-account-action]");
@@ -1888,7 +1976,10 @@ const updateHistory = [
           const action = accountAction.dataset.accountAction;
           closePopover();
           if (action === "settings") openSettings();
-          else if (action === "profile") openModal("プロフィール", '<p class="modal-copy">Atlas運営チームのメンバー情報です。</p><dl class="detail-list"><div><dt>表示名</dt><dd>近藤 葵</dd></div><div><dt>役割</dt><dd>Atlas運営</dd></div></dl>');
+          else if (action === "profile") {
+            const role = workspaceHomeCopy[currentWorkspace]?.role || "Atlas運営";
+            openModal("プロフィール", `<p class="modal-copy">${escapeHtml(currentWorkspace)}のメンバー情報です。</p><dl class="detail-list"><div><dt>表示名</dt><dd>近藤 葵</dd></div><div><dt>役割</dt><dd>${escapeHtml(role)}</dd></div></dl>`);
+          }
           else showToast("デモを終了する操作を確認しました");
           return;
         }
@@ -1913,7 +2004,8 @@ const updateHistory = [
       });
 
       const openSettings = () => {
-        openModal("設定", '<form class="settings-form" data-settings-form><label class="settings-row"><span><strong>通知を表示</strong><small>新しいレビューや問題報告を知らせる</small></span><input type="checkbox" checked data-setting-notifications /></label><label class="settings-row"><span><strong>コンパクト表示</strong><small>一覧の行間を狭くして情報量を増やす</small></span><input type="checkbox" data-setting-compact /></label></form>', '<button class="modal-primary" type="button" data-modal-action="settings">保存する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>');
+        const notificationDescription = currentWorkspace === "Atlas" ? "新しいレビューや問題報告を知らせる" : "新しいタスクや予定を知らせる";
+        openModal("設定", `<form class="settings-form" data-settings-form><label class="settings-row"><span><strong>通知を表示</strong><small>${notificationDescription}</small></span><input type="checkbox" checked data-setting-notifications /></label><label class="settings-row"><span><strong>コンパクト表示</strong><small>一覧の行間を狭くして情報量を増やす</small></span><input type="checkbox" data-setting-compact /></label></form>`, '<button class="modal-primary" type="button" data-modal-action="settings">保存する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>');
       };
 
       document.querySelectorAll<HTMLElement>('[data-open-panel="settings"]').forEach((button) => {
@@ -1949,7 +2041,7 @@ const updateHistory = [
     --active: #ececea;
     --text: #20201e;
     --secondary: #6b6b67;
-    --muted: #92928c;
+    --muted: #65655f;
     --border: #deded9;
     --soft-border: #e9e9e5;
     --accent: oklch(60.4% 0.151 260);
@@ -1976,7 +2068,7 @@ const updateHistory = [
     --active: #242424;
     --text: rgb(255 255 255 / 0.92);
     --secondary: rgb(255 255 255 / 0.63);
-    --muted: rgb(255 255 255 / 0.42);
+    --muted: rgb(255 255 255 / 0.56);
     --border: rgb(255 255 255 / 0.08);
     --soft-border: rgb(255 255 255 / 0.05);
     --accent: oklch(75% 0.16 255);
@@ -2846,6 +2938,197 @@ const updateHistory = [
     letter-spacing: -0.035em;
     line-height: 1.15;
     margin: 0;
+  }
+
+  [data-workspace-scope][hidden] {
+    display: none !important;
+  }
+
+  .home-heading {
+    align-items: center;
+    margin-bottom: 34px;
+  }
+
+  .home-heading h1 {
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+    font-weight: 620;
+    letter-spacing: -0.045em;
+  }
+
+  .home-heading > div:first-child {
+    display: grid;
+    gap: 5px;
+  }
+
+  .home-description {
+    color: var(--secondary);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+  }
+
+  .home-focus {
+    margin-bottom: 26px;
+  }
+
+  .home-section-title {
+    align-items: end;
+    margin-bottom: 12px;
+  }
+
+  .home-section-title > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  .home-section-title h2 {
+    font-size: 1.125rem;
+    font-weight: 620;
+    letter-spacing: -0.025em;
+  }
+
+  .section-kicker {
+    color: var(--accent-strong);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    letter-spacing: 0.11em;
+  }
+
+  .home-priority-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-priority-card {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    display: grid;
+    gap: 14px;
+    grid-template-columns: auto minmax(0, 1fr) 18px;
+    min-height: 112px;
+    padding: 18px;
+    text-align: left;
+    transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+  }
+
+  .home-priority-card:hover {
+    background: var(--hover);
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+    transform: translateY(-1px);
+  }
+
+  .home-priority-card > span:nth-child(2) {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .home-priority-card strong {
+    font-size: 1rem;
+    font-weight: 620;
+    line-height: 1.35;
+  }
+
+  .home-priority-card small {
+    color: var(--secondary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  .home-priority-card > svg {
+    color: var(--muted);
+    height: 17px;
+    width: 17px;
+  }
+
+  .priority-count {
+    align-items: center;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    border-radius: 8px;
+    display: flex;
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    height: 52px;
+    justify-content: center;
+    width: 52px;
+  }
+
+  .priority-count.review { color: var(--accent); }
+  .priority-count.report { color: var(--red); }
+  .priority-count.task { color: var(--amber); }
+
+  .home-layout {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+    margin-bottom: 20px;
+  }
+
+  .home-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 19px 20px;
+  }
+
+  .home-panel .activity-list,
+  .home-panel .work-list {
+    border-bottom: 0;
+    border-top: 1px solid var(--soft-border);
+  }
+
+  .home-panel .activity-row {
+    gap: 13px;
+    grid-template-columns: 58px minmax(0, 1fr) 16px;
+    min-height: 70px;
+    padding: 8px 3px;
+  }
+
+  .home-panel .activity-copy {
+    gap: 3px;
+  }
+
+  .home-panel .activity-copy b,
+  .home-panel .work-row strong,
+  .home-panel .queue-title strong {
+    font-size: 0.9375rem;
+    font-weight: 580;
+  }
+
+  .home-panel .activity-copy small,
+  .home-panel .work-row small,
+  .home-panel .queue-title small {
+    color: var(--secondary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  .home-section-title > span,
+  .home-section-title button,
+  .home-panel .activity-row time {
+    color: var(--secondary);
+    font-size: 0.75rem;
+  }
+
+  .home-panel .work-row {
+    min-height: 70px;
+    padding: 8px 4px;
+  }
+
+  .home-panel .work-row > b {
+    font-size: 1.375rem;
+  }
+
+  .home-panel.queue-section {
+    margin-top: 0;
+  }
+
+  .home-panel .queue-row {
+    min-height: 64px;
   }
 
   .heading-status {
@@ -5340,6 +5623,18 @@ const updateHistory = [
       grid-template-columns: 1fr;
     }
 
+    .home-priority-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .home-priority-card:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+
+    .home-layout {
+      grid-template-columns: 1fr;
+    }
+
     .queue-header,
     .queue-row {
       grid-template-columns: 113px minmax(180px, 1fr) 86px;
@@ -5524,6 +5819,34 @@ const updateHistory = [
     .page-heading {
       align-items: flex-start;
       margin-bottom: 24px;
+    }
+
+    .home-heading {
+      margin-bottom: 28px;
+    }
+
+    .home-heading h1 {
+      font-size: 1.75rem;
+    }
+
+    .home-description {
+      font-size: 0.875rem;
+      max-width: 28rem;
+    }
+
+    .home-priority-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .home-priority-card,
+    .home-priority-card:last-child:nth-child(odd) {
+      grid-column: auto;
+      min-height: 96px;
+      padding: 15px;
+    }
+
+    .home-panel {
+      padding: 16px;
     }
 
     .site-project-grid {
