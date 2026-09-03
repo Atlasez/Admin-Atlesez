@@ -14,6 +14,30 @@ test("応募フォームの基本情報にプロジェクト選択を置かず�
   await expect(page.getByText("ATLASEZ / APPLICATION")).toHaveCount(0);
 });
 
+test("応募済みプロジェクトは応募フォームの選択肢と入力画面から除外する", async ({
+  page,
+}) => {
+  await page.route("**/api/user/status", (route) =>
+    route.fulfill({
+      json: {
+        email: "member@example.com",
+        stage: "MEMBER",
+        applicationProjects: ["atlas"],
+      },
+    }),
+  );
+  await page.route("**/api/application-profile", (route) =>
+    route.fulfill({ json: { profile: null } }),
+  );
+
+  await page.goto("apply/?project=atlas");
+  await expect(
+    page.getByRole("heading", { name: "このプロジェクトには応募できません" }),
+  ).toBeVisible();
+  await expect(page.locator('[data-form-link="atlas"]')).toBeHidden();
+  await expect(page.locator("[data-project-fieldset]")).toBeHidden();
+});
+
 test("基本情報とプロジェクト情報を別ページで入力し、マイページへ進める", async ({
   page,
 }) => {
