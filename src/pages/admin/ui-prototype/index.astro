@@ -226,7 +226,7 @@ const articles = [
     tone: "in-review",
     title: "中心極限定理",
     subject: "確率論",
-    owner: "近藤 葵",
+    owner: "骨川 スネ夫",
     updated: "昨日",
     excerpt: "レビュー担当者を割り当て済みです",
   },
@@ -298,7 +298,7 @@ const workspaceHomes = [
 
 const reviewQueue = [
   { title: "条件付き期待値", subject: "確率論", reviewer: "M. Takahashi", due: "今日 18:00", priority: "高", tone: "urgent" },
-  { title: "中心極限定理", subject: "確率論", reviewer: "近藤 葵", due: "明日", priority: "通常", tone: "normal" },
+  { title: "中心極限定理", subject: "確率論", reviewer: "骨川 スネ夫", due: "明日", priority: "通常", tone: "normal" },
   { title: "運動量と力積", subject: "物理", reviewer: "Y. Nakamura", due: "明後日", priority: "通常", tone: "normal" },
 ];
 
@@ -309,9 +309,9 @@ const reportQueue = [
 ];
 
 const taskQueue = [
-  { title: "条件付き期待値のレビュー", project: "アトラス", assignee: "近藤 葵", due: "今日 18:00", status: "進行中", tone: "doing", kind: "フィードバック依頼" },
+  { title: "条件付き期待値のレビュー", project: "アトラス", assignee: "骨川 スネ夫", due: "今日 18:00", status: "進行中", tone: "doing", kind: "フィードバック依頼" },
   { title: "数学カテゴリの公開前確認", project: "アトラス", assignee: "M. Takahashi", due: "明日", status: "未着手", tone: "open", kind: "タスク依頼" },
-  { title: "7月の進捗をまとめる", project: "運営事務局", assignee: "近藤 葵", due: "7月31日", status: "未着手", tone: "open", kind: "タスク依頼" },
+  { title: "7月の進捗をまとめる", project: "運営事務局", assignee: "骨川 スネ夫", due: "7月31日", status: "未着手", tone: "open", kind: "タスク依頼" },
   { title: "次回ゼミの日程を確定", project: "ゼミプラットフォーム", assignee: "A. Sato", due: "完了", status: "完了", tone: "done", kind: "タスク依頼" },
 ];
 
@@ -324,11 +324,11 @@ const calendarEvents = [
 const progressUpdates = [
   { project: "アトラス", subject: "数学", author: "M. Takahashi", text: "条件付き期待値のフィードバック3件に対応しました。", time: "今日 09:12" },
   { project: "アトラス", subject: "物理", author: "Y. Nakamura", text: "運動量と力積の導入を書き直しました。", time: "昨日 18:40" },
-  { project: "運営事務局", subject: "全体", author: "近藤 葵", text: "7月の運営予定と担当を更新しました。", time: "昨日 16:05" },
+  { project: "運営事務局", subject: "全体", author: "骨川 スネ夫", text: "7月の運営予定と担当を更新しました。", time: "昨日 16:05" },
 ];
 
 const permissionMembers = [
-  { name: "近藤 葵", email: "aoi.kondo@example.com", role: "全分野管理者", scope: "すべての分野", tone: "manager" },
+  { name: "骨川 スネ夫", email: "aoi.kondo@example.com", role: "全分野管理者", scope: "すべての分野", tone: "manager" },
   { name: "M. Takahashi", email: "m.takahashi@example.com", role: "分野担当", scope: "数学・物理", tone: "editor" },
   { name: "A. Sato", email: "a.sato@example.com", role: "レビュー担当", scope: "化学", tone: "reviewer" },
 ];
@@ -346,7 +346,7 @@ const approvalQueue = [
 ];
 
 const introductionEntries = [
-  { name: "近藤 葵", affiliation: "Atlasez運営 · 全体統括", assignments: "運営 / 数学 / 記事編集", bio: "学習コンテンツの設計と運営フローを担当しています。" },
+  { name: "骨川 スネ夫", affiliation: "Atlasez運営 · 全体統括", assignments: "運営 / 数学 / 記事編集", bio: "学習コンテンツの設計と運営フローを担当しています。" },
   { name: "M. Takahashi", affiliation: "東京大学 · 数学", assignments: "数学 / 物理 / レビュー", bio: "確率論と解析の記事を中心に執筆・レビューしています。" },
   { name: "A. Sato", affiliation: "京都大学 · 化学", assignments: "化学 / 広報", bio: "化学分野の校正と、運営内の広報を担当しています。" },
   { name: "Y. Nakamura", affiliation: "大阪大学 · 物理", assignments: "物理 / 同時作業会", bio: "図表を使った分かりやすい説明を研究しています。" },
@@ -454,9 +454,9 @@ const updateHistory = [
             <span>設定</span>
           </button>
           <button class="account" type="button" data-account-menu>
-            <span class="avatar" aria-hidden="true">AK</span>
+            <span class="avatar" aria-hidden="true">SS</span>
             <span class="account-copy">
-              <strong>近藤 葵</strong>
+              <strong>骨川 スネ夫</strong>
               <small data-workspace-role>Atlas運営</small>
             </span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>
@@ -496,7 +496,7 @@ const updateHistory = [
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg>
               <span aria-hidden="true" data-notification-dot></span>
             </button>
-            <button class="topbar-avatar" type="button" aria-label="アカウントメニューを開く" data-account-menu>AK</button>
+            <button class="topbar-avatar" type="button" aria-label="アカウントメニューを開く" data-account-menu>SS</button>
           </div>
         </header>
 
@@ -639,7 +639,7 @@ const updateHistory = [
 
           <section class="prototype-view hub-view" data-view="workspace" aria-labelledby="workspace-heading" hidden>
             <div class="page-heading"><div><p>メンバー</p><h1 id="workspace-heading">マイページ</h1></div><button class="quiet-action" type="button" data-profile-avatar>プロフィール画像</button></div>
-            <div class="profile-layout"><section class="profile-card"><div class="profile-card-top"><span class="profile-avatar-large">AK</span><div><h2>近藤 葵</h2><p>aoi.kondo@example.com</p><span class="view-badge">Atlas運営</span></div></div><div class="profile-discord"><div><span class="panel-kicker">外部サービス連携</span><strong>Discord</strong><small>運営サーバーと連携済み</small></div><button class="quiet-action" type="button" data-profile-discord>連携を確認</button></div><div class="profile-form-grid"><label>氏名<input value="近藤 葵" data-profile-field="name" /></label><label>所属<input value="Atlasez" data-profile-field="university" /></label><label>学年等<select data-profile-field="year"><option>社会人</option><option>大学生</option><option>大学院生</option></select></label><label>国・地域<input value="日本" data-profile-field="country" /></label></div><label class="profile-bio-field">運営外自己紹介<textarea data-profile-field="bio">学習コンテンツの設計と運営を担当しています。</textarea></label><div class="profile-actions"><span data-profile-message>変更は承認申請として保存されます。</span><button class="modal-primary" type="button" data-profile-save>変更を承認申請</button></div></section><aside class="profile-side"><section class="editor-side-card"><div class="editor-panel-heading"><div><span class="panel-kicker">ASSIGNMENTS</span><h2>プロジェクト内の担当</h2></div></div><ul class="profile-assignment-list"><li>アトラス · 数学分野統括</li><li>アトラス · 記事レビュー</li><li>運営事務局 · 進行管理</li></ul></section><section class="editor-side-card"><div class="editor-panel-heading"><div><span class="panel-kicker">PRIVATE NOTE</span><h2>個人メモ</h2></div></div><textarea class="profile-private-note" data-profile-note placeholder="自分だけのメモ">次は群作用の記事の具体例を追加する。</textarea><button class="quiet-action" type="button" data-profile-note-save>個人メモを保存</button></section></aside></div>
+            <div class="profile-layout"><section class="profile-card"><div class="profile-card-top"><span class="profile-avatar-large">SS</span><div><h2>骨川 スネ夫</h2><p>aoi.kondo@example.com</p><span class="view-badge">Atlas運営</span></div></div><div class="profile-discord"><div><span class="panel-kicker">外部サービス連携</span><strong>Discord</strong><small>運営サーバーと連携済み</small></div><button class="quiet-action" type="button" data-profile-discord>連携を確認</button></div><div class="profile-form-grid"><label>氏名<input value="骨川 スネ夫" data-profile-field="name" /></label><label>所属<input value="Atlasez" data-profile-field="university" /></label><label>学年等<select data-profile-field="year"><option>社会人</option><option>大学生</option><option>大学院生</option></select></label><label>国・地域<input value="日本" data-profile-field="country" /></label></div><label class="profile-bio-field">運営外自己紹介<textarea data-profile-field="bio">学習コンテンツの設計と運営を担当しています。</textarea></label><div class="profile-actions"><span data-profile-message>変更は承認申請として保存されます。</span><button class="modal-primary" type="button" data-profile-save>変更を承認申請</button></div></section><aside class="profile-side"><section class="editor-side-card"><div class="editor-panel-heading"><div><span class="panel-kicker">ASSIGNMENTS</span><h2>プロジェクト内の担当</h2></div></div><ul class="profile-assignment-list"><li>アトラス · 数学分野統括</li><li>アトラス · 記事レビュー</li><li>運営事務局 · 進行管理</li></ul></section><section class="editor-side-card"><div class="editor-panel-heading"><div><span class="panel-kicker">PRIVATE NOTE</span><h2>個人メモ</h2></div></div><textarea class="profile-private-note" data-profile-note placeholder="自分だけのメモ">次は群作用の記事の具体例を追加する。</textarea><button class="quiet-action" type="button" data-profile-note-save>個人メモを保存</button></section></aside></div>
           </section>
 
           <section class="prototype-view hub-view" data-view="introductions" aria-labelledby="introductions-heading" hidden>
@@ -739,7 +739,7 @@ const updateHistory = [
             </div>
             <div class="prototype-list task-list" aria-label="タスク一覧">
               {taskQueue.map((item) => (
-                <button class="prototype-list-row task-row" type="button" data-filter-item="task" data-filter-value={item.tone} data-task-project={item.project === "アトラス" ? "atlas" : item.project === "運営事務局" ? "secretariat" : "seminar"} data-task-owner={item.assignee === "近藤 葵" ? "mine" : "created"} data-detail-type="task" data-detail-title={item.title} data-detail-meta={`${item.project} · ${item.kind}`} data-detail-status={item.status} data-detail-owner={item.assignee} data-detail-updated={item.due}>
+                <button class="prototype-list-row task-row" type="button" data-filter-item="task" data-filter-value={item.tone} data-task-project={item.project === "アトラス" ? "atlas" : item.project === "運営事務局" ? "secretariat" : "seminar"} data-task-owner={item.assignee === "骨川 スネ夫" ? "mine" : "created"} data-detail-type="task" data-detail-title={item.title} data-detail-meta={`${item.project} · ${item.kind}`} data-detail-status={item.status} data-detail-owner={item.assignee} data-detail-updated={item.due}>
                   <span class="list-leading"><i class:list={["status-dot", item.tone === "doing" ? "in-review" : item.tone === "done" ? "published" : "open"]}></i></span>
                   <span class="list-main"><strong>{item.title}</strong><small>{item.project} · {item.kind} · {item.assignee}</small></span>
                   <span class="list-meta"><small>期限</small>{item.due}</span><span class="row-chevron">›</span>
@@ -1227,7 +1227,7 @@ const updateHistory = [
       };
 
       const accountMenu = () =>
-        `<div class="popover-heading"><strong>アカウント</strong><small>近藤 葵 · ${escapeHtml(workspaceHomeCopy[currentWorkspace]?.role || "Atlas運営")}</small></div><div class="popover-menu"><button type="button" class="popover-option" data-account-action="profile"><span class="popover-option-copy"><strong>プロフィール</strong><small>表示名と担当を確認</small></span></button><button type="button" class="popover-option" data-account-action="settings"><span class="popover-option-copy"><strong>設定</strong><small>プロトタイプの表示を調整</small></span></button><button type="button" class="popover-option" data-account-action="signout"><span class="popover-option-copy"><strong>デモを終了</strong><small>ログアウトの動作を確認</small></span></button></div>`;
+        `<div class="popover-heading"><strong>アカウント</strong><small>骨川 スネ夫 · ${escapeHtml(workspaceHomeCopy[currentWorkspace]?.role || "Atlas運営")}</small></div><div class="popover-menu"><button type="button" class="popover-option" data-account-action="profile"><span class="popover-option-copy"><strong>プロフィール</strong><small>表示名と担当を確認</small></span></button><button type="button" class="popover-option" data-account-action="settings"><span class="popover-option-copy"><strong>設定</strong><small>プロトタイプの表示を調整</small></span></button><button type="button" class="popover-option" data-account-action="signout"><span class="popover-option-copy"><strong>デモを終了</strong><small>ログアウトの動作を確認</small></span></button></div>`;
 
       workspaceButton?.addEventListener("click", () => openPopover(workspaceButton, workspaceMenu()));
       notificationButton?.addEventListener("click", () => openPopover(notificationButton, notificationMenu()));
@@ -1576,7 +1576,7 @@ const updateHistory = [
         showToast(mode === "month" ? "月表示に切り替えました" : mode === "week" ? "週表示に切り替えました" : "予定一覧を表示しました");
       }));
       document.querySelector<HTMLButtonElement>("[data-review-start]")?.addEventListener("click", () => openModal("レビューを開始", '<p class="modal-copy">レビュー対象の記事と担当者を確認して開始します。</p><div class="modal-stat-row"><span>待機中</span><strong>3件</strong></div>', '<button class="modal-primary" type="button" data-modal-action="review">開始する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
-      document.querySelector<HTMLButtonElement>("[data-task-create-prototype]")?.addEventListener("click", () => openModal("タスクを追加", '<form class="settings-form"><label class="settings-row"><span><strong>タスク名</strong><small>依頼内容と期限を入力</small></span><input type="text" placeholder="例：記事を確認する" required /></label><label class="settings-row"><span><strong>詳細</strong><small>担当者へ伝える内容</small></span><textarea rows="3" placeholder="確認ポイント、関連URLなど"></textarea></label><label class="settings-row"><span><strong>プロジェクト</strong><small>担当する運営サイト</small></span><select><option>アトラス</option><option>運営事務局</option><option>ゼミプラットフォーム</option></select></label><label class="settings-row"><span><strong>担当者</strong><small>複数選択できます</small></span><select multiple size="3"><option selected>近藤 葵</option><option>M. Takahashi</option><option>A. Sato</option></select></label><label class="settings-row"><span><strong>期限</strong><small>Asia/Tokyo</small></span><input type="date" /></label><label class="settings-row"><span><strong>リマインダー</strong><small>期限前に通知</small></span><select><option>設定しない</option><option>1日前</option><option>3日前</option><option>当日毎時</option><option>指定日時</option></select></label><label class="settings-row"><span><strong>繰り返し</strong><small>定期タスクの場合</small></span><select><option>1回のみ</option><option>毎日</option><option>毎週</option><option>毎月</option></select></label><label class="settings-row"><span><strong>メール通知</strong><small>担当者へメールでも通知</small></span><input type="checkbox" checked /></label></form>', '<button class="modal-primary" type="button" data-modal-action="task-create">追加する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
+          document.querySelector<HTMLButtonElement>("[data-task-create-prototype]")?.addEventListener("click", () => openModal("タスクを追加", '<form class="settings-form"><label class="settings-row"><span><strong>タスク名</strong><small>依頼内容と期限を入力</small></span><input type="text" placeholder="例：記事を確認する" required /></label><label class="settings-row"><span><strong>詳細</strong><small>担当者へ伝える内容</small></span><textarea rows="3" placeholder="確認ポイント、関連URLなど"></textarea></label><label class="settings-row"><span><strong>プロジェクト</strong><small>担当する運営サイト</small></span><select><option>アトラス</option><option>運営事務局</option><option>ゼミプラットフォーム</option></select></label><label class="settings-row"><span><strong>担当者</strong><small>複数選択できます</small></span><select multiple size="3"><option selected>骨川 スネ夫</option><option>M. Takahashi</option><option>A. Sato</option></select></label><label class="settings-row"><span><strong>期限</strong><small>Asia/Tokyo</small></span><input type="date" /></label><label class="settings-row"><span><strong>リマインダー</strong><small>期限前に通知</small></span><select><option>設定しない</option><option>1日前</option><option>3日前</option><option>当日毎時</option><option>指定日時</option></select></label><label class="settings-row"><span><strong>繰り返し</strong><small>定期タスクの場合</small></span><select><option>1回のみ</option><option>毎日</option><option>毎週</option><option>毎月</option></select></label><label class="settings-row"><span><strong>メール通知</strong><small>担当者へメールでも通知</small></span><input type="checkbox" checked /></label></form>', '<button class="modal-primary" type="button" data-modal-action="task-create">追加する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
       document.querySelector<HTMLButtonElement>("[data-coworking-create]")?.addEventListener("click", () => openModal("同時作業会の日程を提案", '<form class="settings-form"><label class="settings-row"><span><strong>タイトル</strong><small>参加者に表示する名前</small></span><input type="text" value="アトラス同時作業会" /></label><label class="settings-row"><span><strong>日時</strong><small>Asia/Tokyo</small></span><input type="datetime-local" /></label></form>', '<button class="modal-primary" type="button" data-modal-action="calendar">提案する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
       document.querySelector<HTMLButtonElement>("[data-permission-invite]")?.addEventListener("click", () => openModal("運営者を追加", '<form class="settings-form"><label class="settings-row"><span><strong>メールアドレス</strong><small>既存メンバーを招待</small></span><input type="email" placeholder="member@example.com" /></label><label class="settings-row"><span><strong>担当権限</strong><small>複数の分野を選択できます</small></span><select><option>レビュー担当</option><option>分野担当</option></select></label></form>', '<button class="modal-primary" type="button" data-modal-action="permission">招待する</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
 
@@ -1904,7 +1904,7 @@ const updateHistory = [
         showToast("画像を原稿へ紐付けました（プロトタイプ内）");
       });
       mediaList?.addEventListener("click", (event) => { if (!(event.target instanceof Element) || !event.target.closest("[data-editor-media-remove]")) return; mediaList.hidden = true; mediaList.innerHTML = ""; if (mediaEmpty) mediaEmpty.hidden = false; if (mediaFile) mediaFile.value = ""; showToast("画像を原稿から外しました"); });
-      document.querySelector<HTMLButtonElement>("[data-editor-revisions]")?.addEventListener("click", () => openModal("版履歴・差分確認", '<div class="revision-list"><div><strong>v3 · 現在の下書き</strong><small>近藤 葵 · たった今</small><span>数式の説明を更新</span></div><div><strong>v2 · フィードバック対応</strong><small>M. Takahashi · 12分前</small><span>定義と例を追加</span></div><div><strong>v1 · 初稿</strong><small>近藤 葵 · 昨日</small><span>記事の骨子を作成</span></div></div>', '<button class="modal-primary" type="button" data-modal-action="revision">更新案を作成</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
+      document.querySelector<HTMLButtonElement>("[data-editor-revisions]")?.addEventListener("click", () => openModal("版履歴・差分確認", '<div class="revision-list"><div><strong>v3 · 現在の下書き</strong><small>骨川 スネ夫 · たった今</small><span>数式の説明を更新</span></div><div><strong>v2 · フィードバック対応</strong><small>M. Takahashi · 12分前</small><span>定義と例を追加</span></div><div><strong>v1 · 初稿</strong><small>骨川 スネ夫 · 昨日</small><span>記事の骨子を作成</span></div></div>', '<button class="modal-primary" type="button" data-modal-action="revision">更新案を作成</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
       document.querySelector<HTMLButtonElement>("[data-editor-schedule]")?.addEventListener("click", () => openModal("公開予約", '<form class="settings-form"><label class="settings-row"><span><strong>公開日時</strong><small>Asia/Tokyo</small></span><input type="datetime-local" value="2026-08-05T09:00" /></label><label class="settings-row"><span><strong>公開前チェック</strong><small>フィードバック済みの確認</small></span><input type="checkbox" checked /></label></form>', '<button class="modal-primary" type="button" data-modal-action="schedule">予約を保存</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
       document.querySelector<HTMLButtonElement>("[data-editor-publication-review]")?.addEventListener("click", () => openModal("公開審査へ送る", '<p class="modal-copy">分野統括と運営管理者へ公開審査を依頼します。</p><dl class="detail-list"><div><dt>必須確認</dt><dd>本文・数式・画像・概念ID</dd></div><div><dt>通知先</dt><dd>数学分野統括 · Atlas編集部</dd></div></dl>', '<button class="modal-primary" type="button" data-modal-action="publication-review">審査を依頼</button><button class="modal-secondary" type="button" data-modal-close>閉じる</button>'));
       document.querySelector<HTMLButtonElement>("[data-editor-publish]")?.addEventListener("click", () => openModal("記事を公開", '<p class="modal-copy">公開内容を最終確認しましたか？公開後は学習サイトへ反映されます。</p><label class="settings-row"><span><strong>公開確認</strong><small>未対応コメントがないことを確認</small></span><input type="checkbox" /></label>', '<button class="modal-primary" type="button" data-modal-action="publish">公開する</button><button class="modal-secondary" type="button" data-modal-close>キャンセル</button>'));
@@ -2076,7 +2076,7 @@ const updateHistory = [
           if (action === "settings") openSettings();
           else if (action === "profile") {
             const role = workspaceHomeCopy[currentWorkspace]?.role || "Atlas運営";
-            openModal("プロフィール", `<p class="modal-copy">${escapeHtml(currentWorkspace)}のメンバー情報です。</p><dl class="detail-list"><div><dt>表示名</dt><dd>近藤 葵</dd></div><div><dt>役割</dt><dd>${escapeHtml(role)}</dd></div></dl>`);
+            openModal("プロフィール", `<p class="modal-copy">${escapeHtml(currentWorkspace)}のメンバー情報です。</p><dl class="detail-list"><div><dt>表示名</dt><dd>骨川 スネ夫</dd></div><div><dt>役割</dt><dd>${escapeHtml(role)}</dd></div></dl>`);
           }
           else showToast("デモを終了する操作を確認しました");
           return;
@@ -2434,13 +2434,13 @@ const updateHistory = [
   }
 
   .nav-item small {
-    color: var(--muted);
+    color: var(--green);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
 
   .nav-item.active small {
-    color: var(--secondary);
+    color: var(--green);
   }
 
   .sidebar-footer {
