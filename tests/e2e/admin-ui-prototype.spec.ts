@@ -10,6 +10,11 @@ test("ワークスペース切り替えで記事執筆UIをAtlasだけに表示�
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /^記事 5$/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "編集キュー" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("heading", { name: "自分の仕事", exact: true })
+      .locator("svg"),
+  ).toBeVisible();
 
   await page
     .getByRole("button", { name: "現在のワークスペース: Atlas" })
@@ -80,6 +85,11 @@ test("スマートフォン幅でも切り替え後にホーム全体を表示�
   await expect(
     page.getByRole("heading", { name: "ゼミプラットフォームホーム" }),
   ).toBeVisible();
+  await expect(
+    page
+      .getByRole("heading", { name: "自分の仕事", exact: true })
+      .locator("svg"),
+  ).toBeVisible();
   await expect(page.locator("[data-prototype-shell]")).not.toHaveClass(
     /nav-open/,
   );
@@ -92,4 +102,57 @@ test("スマートフォン幅でも切り替え後にホーム全体を表示�
       })),
     )
     .toEqual({ scrollWidth: 360, viewportWidth: 360, scrollX: 0 });
+});
+
+test("デスクトップのサイドバーを閉じ、ドラッグで幅を調整できる", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/admin/ui-prototype/");
+
+  const shell = page.locator("[data-prototype-shell]");
+  const resizeHandle = page.getByRole("separator", {
+    name: "サイドバーの幅を変更",
+  });
+  await expect(resizeHandle).toBeVisible();
+  const initialColumns = await shell.evaluate(
+    (element) => getComputedStyle(element).gridTemplateColumns,
+  );
+  expect(initialColumns.startsWith("236px")).toBe(true);
+
+  await page.getByRole("button", { name: "ナビゲーションを閉じる" }).click();
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  await expect(
+    page.getByRole("button", { name: "サイドバーを開く" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "サイドバーを開く" }).click();
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  await page.waitForTimeout(260);
+  const handleBox = await resizeHandle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  if (!handleBox) return;
+  const centerY = handleBox.y + handleBox.height / 2;
+  const centerX = handleBox.x + handleBox.width / 2;
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down();
+  await page.mouse.move(centerX + 60, centerY);
+  await page.mouse.up();
+  await expect
+    .poll(() =>
+      shell.evaluate(
+        (element) => getComputedStyle(element).gridTemplateColumns,
+      ),
+    )
+    .toMatch(/^296px/);
+
+  const widerHandleBox = await resizeHandle.boundingBox();
+  expect(widerHandleBox).not.toBeNull();
+  if (!widerHandleBox) return;
+  const widerCenterX = widerHandleBox.x + widerHandleBox.width / 2;
+  await page.mouse.move(widerCenterX, centerY);
+  await page.mouse.down();
+  await page.mouse.move(widerCenterX - 210, centerY);
+  await page.mouse.up();
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
 });
