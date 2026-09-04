@@ -10,6 +10,12 @@ type MockOptions = {
     description?: string;
     role: "manager" | "member";
   }>;
+  availableProjects?: Array<{
+    id: string;
+    slug?: string;
+    name: string;
+    description?: string;
+  }>;
 };
 
 async function mockAdminShell(page: Page, options: MockOptions = {}) {
@@ -85,6 +91,7 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
               role: "manager",
             },
           ],
+          availableProjects: options.availableProjects ?? [],
           todos: [],
           calendar: { events: [] },
         }),
@@ -323,6 +330,35 @@ test("参加中のプロジェクトカードは取得後もレイアウトを�
   expect(cardBox).not.toBeNull();
   expect(groupBox).not.toBeNull();
   expect(cardBox!.width).toBeLessThanOrEqual(groupBox!.width);
+});
+
+test("未参加のプロジェクトを応募導線付きで表示する", async ({ page }) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        role: "member",
+      },
+    ],
+    availableProjects: [
+      {
+        id: "thinking-cafe",
+        slug: "thinking-cafe",
+        name: "考えるカフェ",
+        description: "対話と探究の場を運営します。",
+      },
+    ],
+  });
+
+  await page.goto("admin/portal/");
+  const section = page.locator("[data-available-projects]");
+  await expect(section).toBeVisible();
+  const card = section.locator(".project-entry-card");
+  await expect(card).toContainText("考えるカフェ");
+  await expect(card).toContainText("参加を申し込む");
+  await expect(card).toHaveAttribute("href", "/apply/?project=thinking-cafe");
 });
 
 test("メンバー用サイトの未完了タスクは参加中プロジェクトを横断して表示する", async ({
