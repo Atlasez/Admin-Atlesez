@@ -175,6 +175,26 @@ test("既存記事では設定を要約表示し、本文までの占有高を�
   ).toBeLessThan(390);
 });
 
+test("本文の数式設定とロック操作は必要なときだけ開く", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const mathTools = page.locator("details.writing-tools");
+  const lockTools = page.locator("details.editor-lock-bar");
+  await expect(mathTools).not.toHaveAttribute("open", "");
+  await expect(lockTools).not.toHaveAttribute("open", "");
+  await expect(mathTools.locator("[data-insert-math=inline]")).toBeHidden();
+  await expect(lockTools.locator("[data-lock-selection]")).toBeHidden();
+
+  await mathTools.locator(":scope > summary").click();
+  await expect(mathTools).toHaveAttribute("open", "");
+  await expect(mathTools.locator("[data-insert-math=inline]")).toBeVisible();
+
+  await lockTools.locator(":scope > summary").click();
+  await expect(lockTools).toHaveAttribute("open", "");
+  await expect(lockTools.locator("[data-lock-selection]")).toBeVisible();
+});
+
 test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚えなくてよい", async ({
   page,
 }) => {
