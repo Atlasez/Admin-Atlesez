@@ -236,6 +236,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       if (slug === 'atlas') return '/admin/atlas/';
       if (slug === 'secretariat') return '/admin/secretariat/';
       if (slug === 'seminar-platform' || slug === 'semi-platform') return '/admin/semi-platform/';
+      if (slug === 'student-council-exchange') return '/admin/student-council/';
+      if (slug === 'thinking-cafe') return '/admin/thinking-cafe/';
       return `/admin/workspace/?project=${encodeURIComponent(project.id)}`;
     };
     const projectCard = (project: PortalProject, available = false) => {
