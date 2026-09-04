@@ -453,3 +453,23 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     .category-block ul { grid-template-columns: 1fr; }
   }
 </style>
+
+<style is:global>
+  /* メンバー行はAPI取得後に生成するため、Astroのスコープ属性に依存しない。 */
+  .genres .member-item .member-avatar {
+    border: 1px solid var(--border-default);
+    border-radius: 50%;
+    flex: 0 0 1.35rem;
+    height: 1.35rem;
+    object-fit: cover;
+    width: 1.35rem;
+  }
+  .genres .member-item .member-avatar--fallback {
+    align-items: center;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    display: inline-flex;
+    font-size: .62rem;
+    justify-content: center;
+  }
+</style>
