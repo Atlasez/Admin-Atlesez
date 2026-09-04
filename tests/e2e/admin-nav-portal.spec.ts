@@ -276,6 +276,55 @@ test("参加中のプロジェクトを運営と参加者に分けて表示す�
   await expect(page.locator('[data-admin-project-link="manage"]')).toBeHidden();
 });
 
+test("参加中のプロジェクトカードは取得後もレイアウトを維持する", async ({
+  page,
+}) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        description: "記事編集・レビュー・公開管理",
+        role: "manager",
+      },
+      {
+        id: "secretariat",
+        slug: "secretariat",
+        name: "Atlasez運営事務局",
+        description: "応募・メンバー・手続きの管理",
+        role: "member",
+      },
+    ],
+  });
+  await page.goto("admin/portal/");
+
+  const cards = page.locator(".project-entry-card");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.first()).toHaveCSS("display", "grid");
+  await expect(cards.first()).toHaveCSS("padding", "16px");
+  const desktopGroups = await page
+    .locator(".project-group")
+    .evaluateAll((groups) =>
+      groups.map((group) => {
+        const rect = group.getBoundingClientRect();
+        return { left: rect.left, top: rect.top };
+      }),
+    );
+  expect(desktopGroups[1].left).toBeGreaterThan(desktopGroups[0].left);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(cards).toHaveCount(2);
+  const cardBox = await cards.first().boundingBox();
+  const groupBox = await page
+    .locator('[data-project-group="managed"]')
+    .boundingBox();
+  expect(cardBox).not.toBeNull();
+  expect(groupBox).not.toBeNull();
+  expect(cardBox!.width).toBeLessThanOrEqual(groupBox!.width);
+});
+
 test("メンバー用サイトの未完了タスクは参加中プロジェクトを横断して表示する", async ({
   page,
 }) => {
