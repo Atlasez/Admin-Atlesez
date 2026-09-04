@@ -4675,6 +4675,7 @@ type SubjectOverviewMember = {
   email: string;
   role: string;
   display_name: string;
+  avatar_url?: string;
   university: string;
   year: string;
   assignments: string[];
@@ -4757,6 +4758,7 @@ async function genreOverviews(
       )
       SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
         COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
+        COALESCE(p.avatar_url,'') AS avatar_url,
         COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year
        FROM candidate_members m
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
