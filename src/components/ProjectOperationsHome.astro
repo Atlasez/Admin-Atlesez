@@ -1,0 +1,59 @@
+---
+import AdminLayout from "../layouts/AdminLayout.astro";
+
+interface Props {
+  projectSlug: string;
+  title: string;
+  eyebrow: string;
+  description: string;
+}
+
+const { projectSlug, title, eyebrow, description } = Astro.props;
+---
+
+<AdminLayout title={`${title}運営`} description={`${title}の運営ワークスペース`}>
+  <main class="project-operations-home" data-project-home={projectSlug}>
+    <header class="project-heading">
+      <div>
+        <p>{eyebrow}</p>
+        <h1>{title}運営</h1>
+        <span>{description}</span>
+      </div>
+      <a href="/admin/portal/" aria-label="Atlasezメンバー用サイトへ戻る">AtlasezプロジェクトHomeへ</a>
+    </header>
+
+    <section class="project-links" aria-label={`${title}運営メニュー`}>
+      <a class="featured" href={`/admin/operations/?project=${projectSlug}`}>
+        <strong>タスク管理</strong>
+        <small>担当タスク、進捗報告、期限をまとめて管理します。</small>
+        <span>タスクを開く →</span>
+      </a>
+      <a class="featured" href={`/admin/calendar/?project=${projectSlug}`}>
+        <strong>カレンダー</strong>
+        <small>予定の登録と参加状況を確認します。</small>
+        <span>カレンダーを開く →</span>
+      </a>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .project-operations-home { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
+  .project-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.2rem 0 1.4rem; }
+  .project-heading p { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; margin: 0; }
+  .project-heading h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: .25rem 0; }
+  .project-heading span { color: var(--text-secondary); line-height: 1.6; }
+  .project-heading > a { color: var(--accent-primary); font-size: .8rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+  .project-links { display: grid; gap: .8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1.5rem; }
+  .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; min-height: 8rem; padding: 1.2rem; position: relative; text-decoration: none; }
+  .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
+  .project-links .featured { border-top: 3px solid var(--accent-primary); }
+  .project-links strong { font-size: 1.1rem; line-height: 1.35; }
+  .project-links small { color: var(--text-secondary); font-size: .8rem; line-height: 1.55; }
+  .project-links a > span { color: var(--accent-primary); font-size: .78rem; font-weight: 800; margin-top: auto; }
+  @media (max-width: 700px) {
+    .project-operations-home { padding: 0 .8rem 3rem; }
+    .project-heading { align-items: start; display: grid; }
+    .project-links { grid-template-columns: 1fr; }
+  }
+</style>

@@ -2,7 +2,7 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import { atlasRecurringSessions } from "../../lib/co-working-schedule";
 const requestedProject = Astro.url.searchParams.get("project");
-const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
+const operationProject = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
 ---
 <AdminLayout title="同時作業会" description="同時作業会の日時と参加状況">
   <main class="co-working" data-co-working>

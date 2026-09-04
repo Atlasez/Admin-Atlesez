@@ -10,16 +10,17 @@ const holidayCountries = [
 ] as const;
 const calendarSystems = [["gregory", "西暦（グレゴリオ暦）"], ["japanese", "和暦（日本）"]] as const;
 const calendarPage = memberMode || Astro.url.pathname.replace(/\/$/, "") === "/admin/calendar";
-const projectSlug = Astro.url.searchParams.get("project") === "secretariat"
-  ? "secretariat"
-  : Astro.url.searchParams.get("project") === "seminar-platform"
-    ? "seminar-platform"
-    : "atlas";
+const requestedProject = Astro.url.searchParams.get("project");
+const projectSlug = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
 const projectLabel = projectSlug === "secretariat"
   ? "運営事務局"
   : projectSlug === "seminar-platform"
     ? "ゼミプラットフォーム"
-    : "アトラス";
+    : projectSlug === "student-council-exchange"
+      ? "日本生徒会協会"
+      : projectSlug === "thinking-cafe"
+        ? "考えるカフェ"
+        : "アトラス";
 const pageLabel = calendarPage ? "カレンダー" : progressOnly ? "進捗報告" : "タスク管理";
 const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${pageLabel}`;
 ---
