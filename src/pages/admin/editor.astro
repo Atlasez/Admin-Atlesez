@@ -1947,6 +1947,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }
       publicationReviewButton.hidden = !Boolean(stateData.canDecide);
       scheduleButton.hidden = !(isManager && Boolean(currentItem?.id) && currentItem?.status === "approved" && !currentItem?.published_at && !currentItem?.publication_pr_url);
+      scheduleButton.textContent = currentItem?.scheduled_publish_at ? "公開予約を変更" : "公開予約";
       scheduleAt.value = currentItem?.scheduled_publish_at ? scheduleInputValue(currentItem.scheduled_publish_at) : "";
       publicationReviewButton.textContent = stage === "subject-coordinator" ? "分野統括として審査する" : stateData.managerOverride ? "プロジェクトリーダー承認を代行する" : "プロジェクトリーダーとして審査する";
       publicationReviewDescription.textContent = stage === "subject-coordinator" ? "承認するとプロジェクトリーダーへ通知されます。差し戻すとフィードバック中へ戻ります。" : stateData.managerOverride ? "運営管理者としてプロジェクトリーダー承認を代行します。実行内容は監査記録に残ります。" : "承認すると公開可能になり、公開または公開予約へ進めます。差し戻すとフィードバック中へ戻ります。";
@@ -1974,6 +1975,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const esc = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
     const date = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    const scheduleDate = (value: string) => {
+      const instant = new Date(value);
+      if (!Number.isFinite(instant.getTime())) return "日時未設定";
+      return new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Tokyo" }).format(instant);
+    };
     const scheduleInputValue = (value: string) => {
       const instant = new Date(value);
       if (!Number.isFinite(instant.getTime())) return "";
@@ -1986,7 +1992,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const publicationRunActiveStates = new Set(["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"]);
     const publicationRunTerminalStates = new Set(["published", "unpublished", "failed", "needs_operator"]);
     const learningSiteHasPublishedSource = (sourceArticleId?: string | null) => Boolean(sourceArticleId && articles.some((article) => article.articleId === sourceArticleId));
-    const setPublicationState = (item: Pick<Document, "status" | "publication_pr_url" | "publication_action" | "published_at" | "updated_at" | "publication_pr_number" | "publication_run"> & { source_article_id?: string | null }) => {
+    const setPublicationState = (item: Pick<Document, "status" | "publication_pr_url" | "publication_action" | "published_at" | "updated_at" | "publication_pr_number" | "publication_run" | "scheduled_publish_at"> & { source_article_id?: string | null }) => {
       const run = item.publication_run;
       const runLabels: Record<string, string> = { queued: "受付済み", checks_pending: "自動検証中", merge_pending: "公開処理中", deploy_pending: "学習サイト反映確認中", retry_wait: "自動再試行中", published: "公開済み", unpublished: "非公開化済み", failed: "自動公開失敗", needs_operator: "運営サイトで確認が必要" };
       const failureLabels: Record<string, string> = { configuration: "設定", validation: "入力・記事検証", github_api: "GitHub API", github_conflict: "GitHub競合", ci: "CI", deployment: "学習サイト反映", internal: "内部処理" };
@@ -1998,7 +2004,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         ? run.action === "unpublish" && run.state === "failed" ? "自動非公開化失敗" : runLabels[run.state] ?? "公開処理中"
         : pending
         ? item.publication_action === "unpublish" ? "公開取り消しPR確認待ち" : "公開PR確認待ち"
-        : item.published_at ? publicationNeedsUpdate ? "公開済み（変更未反映）" : "公開済み" : learningSitePublished ? "学習サイト公開済み（運営原稿は下書き）" : item.status === "approved" ? "公開準備完了（公開操作待ち）" : "未公開";
+        : item.published_at ? publicationNeedsUpdate ? "公開済み（変更未反映）" : "公開済み" : item.scheduled_publish_at ? `公開予約済み（${scheduleDate(item.scheduled_publish_at)}）` : learningSitePublished ? "学習サイト公開済み（運営原稿は下書き）" : item.status === "approved" ? "公開準備完了（公開操作待ち）" : "未公開";
       publicationRun.dataset.state = run?.state ?? "";
       publicationRun.hidden = !run || ["published", "unpublished"].includes(run.state);
       publicationRun.setAttribute("aria-busy", String(runIsActive));
