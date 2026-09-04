@@ -473,6 +473,30 @@ test.describe("学習サイト", () => {
     await expect(page.locator("[data-search-count]")).toContainText("件の記事");
   });
 
+  test("検索の分野フィルターをチェックボックスで複数選択できる", async ({
+    page,
+  }) => {
+    await page.goto("atlas/ja/search/");
+    const filters = page.locator("[data-search-filters]");
+    const all = filters.locator(
+      '[data-filter-name="subject"][data-filter-all="true"]',
+    );
+    const subjects = filters.locator(
+      '[data-filter-name="subject"]:not([data-filter-all="true"])',
+    );
+
+    await expect(all).toBeVisible();
+    expect(await subjects.count()).toBeGreaterThan(1);
+    await expect(all).toBeChecked();
+    await expect(filters.locator("select[multiple]")).toHaveCount(0);
+
+    await subjects.nth(0).check();
+    await subjects.nth(1).check();
+    await expect(all).not.toBeChecked();
+    await expect(subjects.nth(0)).toBeChecked();
+    await expect(subjects.nth(1)).toBeChecked();
+  });
+
   test("スマートフォンでも行き先が畳まれずに出ている", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("atlas/ja/");
