@@ -83,6 +83,12 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   const getSavedProjectProfile = await mockWorkspaceApi(page);
   await page.goto("admin/workspace/?project=atlas");
 
+  await expect(page.getByRole("link", { name: "原稿一覧を開く" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("link", { name: /承認画面を開く/ })).toHaveCount(
+    0,
+  );
   await expect(page.getByText("数学担当", { exact: true })).toBeVisible();
   await expect(page.getByLabel("運営内自己紹介")).toHaveValue(
     "既存の運営内自己紹介",
