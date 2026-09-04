@@ -175,6 +175,26 @@ test("既存記事では設定を要約表示し、本文までの占有高を�
   ).toBeLessThan(390);
 });
 
+test("本文の数式設定とロック操作は必要なときだけ開く", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const mathTools = page.locator("details.writing-tools");
+  const lockTools = page.locator("details.editor-lock-bar");
+  await expect(mathTools).not.toHaveAttribute("open", "");
+  await expect(lockTools).not.toHaveAttribute("open", "");
+  await expect(mathTools.locator("[data-insert-math=inline]")).toBeHidden();
+  await expect(lockTools.locator("[data-lock-selection]")).toBeHidden();
+
+  await mathTools.locator(":scope > summary").click();
+  await expect(mathTools).toHaveAttribute("open", "");
+  await expect(mathTools.locator("[data-insert-math=inline]")).toBeVisible();
+
+  await lockTools.locator(":scope > summary").click();
+  await expect(lockTools).toHaveAttribute("open", "");
+  await expect(lockTools.locator("[data-lock-selection]")).toBeVisible();
+});
+
 test("概念名を選ぶと内部IDが自動設定され、利用者はIDを覚えなくてよい", async ({
   page,
 }) => {
@@ -798,6 +818,7 @@ test("戻るの離脱確認前に別窓を閉じない", async ({ page }) => {
 test("インライン数式・表示数式を本文と別窓へ挿入できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
+  await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
   await body.fill("本文");
   await body.focus();
@@ -897,6 +918,7 @@ test("LaTeXコマンド補完と入力補助を使える", async ({ page }) => {
 test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
+  await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
   const expectedStarts: Record<string, string> = {
     frac: "\\frac{ }{ }",
@@ -908,6 +930,7 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
   };
   for (const [kind, expected] of Object.entries(expectedStarts)) {
     await body.fill("");
+    await expect(body).toHaveValue("");
     await body.focus();
     await page.locator(`[data-insert-latex-snippet="${kind}"]`).click();
     await expect(body).toHaveValue(
