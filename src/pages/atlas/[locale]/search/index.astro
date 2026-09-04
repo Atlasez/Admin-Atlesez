@@ -118,11 +118,48 @@ const subjectCategoryMap = Object.fromEntries(
   .search-filters :global(.search-filter.is-multiple) {
     min-width: min(100%, 16rem);
   }
+  .search-filters :global(fieldset.search-filter) {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .search-filters :global(.search-filter legend) {
+    color: var(--text-secondary);
+    font-weight: 400;
+    padding: 0;
+  }
   .search-filters :global(.search-filter select) {
     min-width: 13rem;
   }
-  .search-filters :global(.search-filter select[multiple]) {
-    min-height: 8.5rem;
+  .search-filters :global(.search-filter-options) {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.2rem;
+    margin-top: 0.05rem;
+    max-height: 10.5rem;
+    min-width: min(100%, 16rem);
+    overflow-y: auto;
+    padding: 0.3rem;
+  }
+  .search-filters :global(.search-filter-option) {
+    align-items: center;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    font-size: calc(0.86rem * var(--text-scale));
+    font-weight: 400;
+    gap: 0.45rem;
+    line-height: 1.35;
+    padding: 0.32rem 0.4rem;
+  }
+  .search-filters :global(.search-filter-option:hover) {
+    background: var(--background-primary);
+  }
+  .search-filters :global(.search-filter-option input) {
+    accent-color: var(--accent-primary);
+    flex: 0 0 auto;
+    margin: 0;
   }
   .search-filters :global(.search-filter-hint) {
     color: var(--text-secondary);
@@ -204,9 +241,16 @@ const subjectCategoryMap = Object.fromEntries(
   }
 
   const filterControls = new Map<string, HTMLSelectElement>();
+  const filterCheckboxes = new Map<string, HTMLInputElement[]>();
   let availableFilters: Record<string, Record<string, number>> = {};
 
   function selectedSubjectNames(): string[] {
+    const checkboxes = filterCheckboxes.get("subject");
+    if (checkboxes) {
+      return checkboxes
+        .filter((checkbox) => checkbox.checked && checkbox.value)
+        .map((checkbox) => checkbox.value);
+    }
     const select = filterControls.get("subject");
     if (!select) return [];
     return [...select.selectedOptions]
@@ -241,24 +285,82 @@ const subjectCategoryMap = Object.fromEntries(
     select.value = entries.some(([value]) => value === current) ? current : "";
   }
 
-  function normalizeMultipleSelect(select: HTMLSelectElement): void {
-    if (!select.multiple) return;
-    const selected = [...select.selectedOptions];
-    const all = selected.find((option) => option.value === "");
-    if (all) {
-      for (const option of select.options) option.selected = option === all;
-    } else if (selected.length === 0 && select.options[0]) {
-      select.options[0].selected = true;
-    }
-  }
-
   function createFilterControl(
     name: string,
     values: Record<string, number>,
     multiple = false,
-  ): HTMLSelectElement {
+  ): HTMLSelectElement | null {
+    if (multiple) {
+      const fieldset = document.createElement("fieldset");
+      fieldset.className = "search-filter is-multiple";
+      const legend = document.createElement("legend");
+      legend.textContent = filterLabels[name] ?? name;
+      const options = document.createElement("div");
+      options.className = "search-filter-options";
+      const checkboxes: HTMLInputElement[] = [];
+      const entries: Array<[string, string]> = [
+        ["", allLabel],
+        ...Object.entries(values).map(
+          ([value, articleCount]): [string, string] => [
+            value,
+            `${value} (${articleCount})`,
+          ],
+        ),
+      ];
+      entries.forEach(([value, labelText], index) => {
+        const label = document.createElement("label");
+        label.className = "search-filter-option";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = value;
+        checkbox.dataset.filterName = name;
+        if (!value) checkbox.dataset.filterAll = "true";
+        checkbox.id = `filter-${name}-${index}`;
+        checkbox.checked = !value;
+        const text = document.createElement("span");
+        text.textContent = labelText;
+        label.htmlFor = checkbox.id;
+        label.append(checkbox, text);
+        options.append(label);
+        checkboxes.push(checkbox);
+      });
+      const normalizeCheckboxes = () => {
+        const all = checkboxes[0];
+        const selected = checkboxes.slice(1).some((checkbox) => checkbox.checked);
+        if (all) all.checked = !selected;
+        if (!selected) {
+          checkboxes.slice(1).forEach((checkbox) => {
+            checkbox.checked = false;
+          });
+        }
+      };
+      checkboxes.forEach((checkbox, index) => {
+        checkbox.addEventListener("change", () => {
+          if (index === 0 && checkbox.checked) {
+            checkboxes.slice(1).forEach((item) => {
+              item.checked = false;
+            });
+          } else if (index > 0 && checkbox.checked && checkboxes[0]) {
+            checkboxes[0].checked = false;
+          }
+          normalizeCheckboxes();
+          if (name === "subject") refreshCategoryOptions();
+          void run();
+        });
+      });
+      const hint = document.createElement("small");
+      hint.className = "search-filter-hint";
+      hint.textContent =
+        document.documentElement.lang === "ja"
+          ? "チェックを入れて複数選択"
+          : "Select any number of subjects";
+      fieldset.append(legend, options, hint);
+      filtersEl?.append(fieldset);
+      filterCheckboxes.set(name, checkboxes);
+      return null;
+    }
     const wrap = document.createElement("span");
-    wrap.className = `search-filter${multiple ? " is-multiple" : ""}`;
+    wrap.className = "search-filter";
     const label = document.createElement("label");
     const id = `filter-${name}`;
     label.htmlFor = id;
@@ -266,11 +368,6 @@ const subjectCategoryMap = Object.fromEntries(
     const select = document.createElement("select");
     select.id = id;
     select.dataset.filterName = name;
-    select.multiple = multiple;
-    if (multiple) {
-      select.size = Math.min(6, Math.max(3, Object.keys(values).length + 1));
-      select.setAttribute("aria-describedby", "search-subject-hint");
-    }
     const all = document.createElement("option");
     all.value = "";
     all.textContent = allLabel;
@@ -283,21 +380,9 @@ const subjectCategoryMap = Object.fromEntries(
       select.append(option);
     }
     select.addEventListener("change", () => {
-      normalizeMultipleSelect(select);
-      if (name === "subject") refreshCategoryOptions();
       void run();
     });
     wrap.append(label, select);
-    if (multiple) {
-      const hint = document.createElement("small");
-      hint.id = "search-subject-hint";
-      hint.className = "search-filter-hint";
-      hint.textContent =
-        document.documentElement.lang === "ja"
-          ? "Ctrl / ⌘ を押しながら複数選択"
-          : "Hold Ctrl / ⌘ to select multiple";
-      wrap.append(hint);
-    }
     filtersEl?.append(wrap);
     filterControls.set(name, select);
     return select;
@@ -311,7 +396,7 @@ const subjectCategoryMap = Object.fromEntries(
       availableFilters = await adapter.filters();
       if (filtersEl) {
         filtersEl.replaceChildren();
-        const subjectSelect = createFilterControl(
+        createFilterControl(
           "subject",
           availableFilters.subject ?? {},
           true,
@@ -322,10 +407,9 @@ const subjectCategoryMap = Object.fromEntries(
           availableFilters.locale ?? {},
         );
         // 言語フィルタは現在ページのロケールを初期選択にする
-        if (localeName && availableFilters.locale?.[localeName]) {
+        if (localeSelect && localeName && availableFilters.locale?.[localeName]) {
           localeSelect.value = localeName;
         }
-        normalizeMultipleSelect(subjectSelect);
         refreshCategoryOptions();
       }
     } catch {
@@ -359,6 +443,12 @@ const subjectCategoryMap = Object.fromEntries(
           filters[name] = select.multiple ? values : values[0];
         }
       });
+    filterCheckboxes.forEach((checkboxes, name) => {
+      const values = checkboxes
+        .filter((checkbox) => checkbox.checked && checkbox.value)
+        .map((checkbox) => checkbox.value);
+      if (values.length > 0) filters[name] = values;
+    });
     const items = await adapter.search(q, filters);
     resultsEl.innerHTML = "";
     for (const item of items) {
