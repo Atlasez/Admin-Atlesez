@@ -845,6 +845,18 @@ describe("既存公開記事の運営原稿移行契約", () => {
     );
   });
 
+  it("編集画面は公開元が学習サイトの記事を下書き原稿にも公開済みとして表示する", async () => {
+    const editorSource = await readFile(
+      new URL("../../src/pages/admin/editor.astro", import.meta.url),
+      "utf8",
+    );
+
+    expect(editorSource).toContain("learningSiteHasPublishedSource");
+    expect(editorSource).toContain("学習サイト公開済み");
+    expect(editorSource).toContain("運営原稿は下書き");
+    expect(editorSource).toContain("article.articleId === sourceArticleId");
+  });
+
   it("記事一覧UIから公開記事カタログの診断を読み取り専用で実行できる", async () => {
     const articlesSource = await readFile(
       new URL("../../src/pages/admin/articles.astro", import.meta.url),
