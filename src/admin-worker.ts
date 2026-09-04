@@ -14600,6 +14600,12 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/introductions/" ||
       parsed.pathname === "/admin/procedures" ||
       parsed.pathname === "/admin/procedures/" ||
+      parsed.pathname === "/admin/member-management" ||
+      parsed.pathname === "/admin/member-management/" ||
+      parsed.pathname === "/admin/genre-roles" ||
+      parsed.pathname === "/admin/genre-roles/" ||
+      parsed.pathname === "/admin/operations-statistics" ||
+      parsed.pathname === "/admin/operations-statistics/" ||
       parsed.pathname === "/admin/project-profile-requests" ||
       parsed.pathname === "/admin/project-profile-requests/" ||
       parsed.pathname === "/admin/co-working" ||

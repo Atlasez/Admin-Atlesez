@@ -27,6 +27,9 @@ const adminPageNames = [
   "secretariat",
   "co-working",
   "permissions",
+  "member-management",
+  "genre-roles",
+  "operations-statistics",
   "onboarding-demo",
   "ui-prototype",
 ] as const;
