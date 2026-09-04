@@ -277,6 +277,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <div class="editor-lock-bar" data-editor-lock-bar><span data-lock-status>確定部分はありません</span><button type="button" class="quiet-action" data-lock-selection disabled>選択範囲をロック</button><button type="button" class="quiet-action" data-unlock-selection disabled>選択範囲のロック解除</button></div>
               <dialog class="editor-diagnostics-dialog" data-editor-diagnostics aria-labelledby="editor-diagnostics-title"><div class="editor-diagnostics-inner"><div class="editor-diagnostics-header"><div><p class="eyebrow">EDITOR CHECKS</p><h2 id="editor-diagnostics-title">確認事項</h2><p>保存前に確認してください。本文・プレビューとは別に表示しています。</p></div><button type="button" class="help-close" data-close-editor-diagnostics aria-label="確認事項を閉じる">×</button></div><div class="editor-diagnostics-summary"><strong data-diagnostics-summary></strong><span>記事の表示や参照に関する確認です。</span></div><ul data-diagnostics-list></ul></div></dialog>
               <dialog class="authoring-help-dialog" data-authoring-help-dialog aria-labelledby="authoring-help-title"><div class="authoring-help-inner"><div class="authoring-help-head"><div><p class="eyebrow">EDITOR HELP</p><h2 id="authoring-help-title">本文で使える機能</h2><p>カテゴリを選ぶと、右側の表示が切り替わります。</p></div><button type="button" class="help-close" data-close-authoring-help aria-label="ヘルプを閉じる">×</button></div><div class="authoring-help-layout"><nav class="authoring-help-nav" aria-label="ヘルプカテゴリ" role="tablist"><button type="button" class="help-topic-button" data-help-topic="markdown" role="tab" aria-selected="false" aria-controls="help-topic-markdown">Markdown</button><button type="button" class="help-topic-button is-active" data-help-topic="latex" role="tab" aria-selected="true" aria-controls="help-topic-latex">LaTeX・数式</button><button type="button" class="help-topic-button" data-help-topic="preset" role="tab" aria-selected="false" aria-controls="help-topic-preset">プリセット・マクロ</button><button type="button" class="help-topic-button" data-help-topic="proposition" role="tab" aria-selected="false" aria-controls="help-topic-proposition">命題・証明</button><button type="button" class="help-topic-button" data-help-topic="reference" role="tab" aria-selected="false" aria-controls="help-topic-reference">参照・番号</button><button type="button" class="help-topic-button" data-help-topic="media" role="tab" aria-selected="false" aria-controls="help-topic-media">画像・TikZ</button><button type="button" class="help-topic-button" data-help-topic="review" role="tab" aria-selected="false" aria-controls="help-topic-review">レビュー</button><button type="button" class="help-topic-button" data-help-topic="screen" role="tab" aria-selected="false" aria-controls="help-topic-screen">画面操作</button><button type="button" class="help-topic-button" data-help-topic="workflow" role="tab" aria-selected="false" aria-controls="help-topic-workflow">保存・公開</button></nav><div class="authoring-help-topics"><section class="help-topic-panel" id="help-topic-markdown" data-help-panel="markdown" role="tabpanel" hidden><h3>Markdownの基本</h3><p><code># 見出し</code>、空行で段落、<code>**太字**</code>、<code>*斜体*</code>、<code>&#96;コード&#96;</code>、<code>- 箇条書き</code>、<code>1. 番号付き</code> が使えます。</p><p>リンクは <code>[表示名](https://...)</code> と書けます。見出しは「見出し一覧」から移動できます。</p></section><section class="help-topic-panel" id="help-topic-latex" data-help-panel="latex" role="tabpanel"><h3>LaTeX数式・入力補完</h3><p><code>$...$</code> は本文中、<code>$$...$$</code> は表示数式です。<code>\</code> を入力するか、本文内で <kbd>Ctrl</kbd> + <kbd>Space</kbd> を押すと候補が出ます。</p><div class="help-command-groups">{LATEX_COMMAND_GROUPS.map((group) => <div class="help-command-group"><h4>{group.label}</h4><ul>{group.commands.map(([command, description]) => <li><code>{command}</code><span>{description}</span></li>)}</ul></div>)}</div><p class="help-tip">候補は入力中に絞り込まれます。候補を選択して <kbd>Enter</kbd>、移動して <kbd>↑</kbd> <kbd>↓</kbd> で確定できます。</p></section><section class="help-topic-panel" id="help-topic-preset" data-help-panel="preset" role="tabpanel" hidden><h3>LaTeXマクロ・共通プリセット</h3><p>「共通数式」から記事ごとにプリセットを選ぶと、よく使う記号を共通設定として使えます。</p><ul class="preset-help-list">{Object.entries(MATH_PRESETS).map(([value, preset]) => <li><code>{value}</code><span>{preset.label}</span><span class="preset-command-list">{Object.keys(preset.macros).join(" ")}</span></li>)}</ul><p>記事固有の定義は数式ブロック内で <code>\newcommand&#123;\foo&#125;[1]&#123;...&#125;</code>、<code>\DeclareMathOperator&#123;\rank&#125;&#123;rank&#125;</code> が使えます。定義は記事内の数式で再利用できます。</p></section><section class="help-topic-panel" id="help-topic-proposition" data-help-panel="proposition" role="tabpanel" hidden><h3>命題・定義・証明</h3><p><code>:::prop タイトル &#123;#識別子&#125;</code> のように書きます。<code>defi</code>（定義）、<code>prop</code>（命題）、<code>thm</code>（定理）、<code>lemma</code>（補題）、<code>cor</code>（系）、<code>example</code>（例）、<code>proof</code>（証明）などに対応しています。</p><button type="button" class="help-insert-button" data-help-insert="proposition">命題のひな形を挿入</button></section><section class="help-topic-panel" id="help-topic-reference" data-help-panel="reference" role="tabpanel" hidden><h3>参照・自動番号・参考文献</h3><p>命題などの参照は <code>[[ref:識別子]]</code>、参考文献の引用は <code>[[cite:識別子]]</code> です。番号は記事で使われた参考文献の登録順に付き、本文の <code>[1]</code> から記事末尾の参考文献へ移動できます。</p><p>「参考文献」ボタンから自分用リストを登録し、「本文へ引用」を押すと識別子の挿入と記事へのコピー保存を同時に行います。URL、著者、出版年、出版社・掲載誌、ページなどのメモも登録できます。</p></section><section class="help-topic-panel" id="help-topic-media" data-help-panel="media" role="tabpanel" hidden><h3>画像・図・TikZ</h3><p>「図・画像」から画像をアップロードして本文へ挿入できます。画像ごとに幅を選び、「既存参照に適用」で挿入済み画像も変更できます。</p><p>TikZは専用ボタンから <code>&#96;&#96;&#96;tikz</code> ブロックとして挿入できます。</p></section><section class="help-topic-panel" id="help-topic-review" data-help-panel="review" role="tabpanel" hidden><h3>コメントとレビュー</h3><p>本文またはプレビューの文章を選択するとコメントを付けられます。タグ、返信、引用添付、<code>@表示名</code> のメンションが使えます。</p><p>コメントを確認したら「確認済み」、修正が必要なら「未反映」を使います。</p></section><section class="help-topic-panel" id="help-topic-screen" data-help-panel="screen" role="tabpanel" hidden><h3>画面操作・共同編集</h3><p>「本文」「プレビュー」「コメント」「図・画像」は表示枠ボタンで切り替えられます。「別窓」で各枠を別ウィンドウにできます。</p><p>共同編集、自分用メモ、改訂比較、見出し一覧も利用できます。</p></section><section class="help-topic-panel" id="help-topic-workflow" data-help-panel="workflow" role="tabpanel" hidden><h3>保存・レビュー依頼・公開</h3><p>「保存する」で下書きを保存し、「フィードバックを依頼する」→確認・修正→承認→「公開する」の順に進めます。「下書きを自動保存」を有効にすると入力中の変更も保存されます。</p></section></div></div><p class="authoring-help-foot"><code>/help</code> は本文の末尾だけでなく、本文内のどこに入力してもこのヘルプを開きます。入力された <code>/help</code> は本文から自動的に取り除かれます。</p></div></dialog>
+              <p class="directive-completion-hint">本文の行頭で <code>:::</code> を入力すると、定義・命題・定理などの枠を候補から補完できます。<kbd>↑</kbd><kbd>↓</kbd>で移動し、<kbd>Enter</kbd>またはクリックで選択します。</p>
               <div class="body-editor-surface" data-body-surface>
                 <pre class="locked-range-markup" data-locked-range-markup aria-hidden="true"></pre>
                 <textarea name="body" data-body disabled spellcheck="true" placeholder={"## 見出し\n\n本文を書きます。\n\n$G$ を群とする。"}></textarea>
@@ -461,6 +462,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-panel { background: var(--surface); display:flex; flex-direction:column; min-width:0; padding:clamp(1rem, 2vw, 1.5rem); }
   .empty-state { color: var(--muted); margin: 5rem auto; max-width: 38rem; text-align: center; }.empty-state h2 { color: var(--text); }.editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
   .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
+  .directive-completion-hint { color:var(--muted); font-size:.72rem; line-height:1.5; margin:0; }.directive-completion-hint code { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; padding:.05rem .2rem; }.directive-completion-hint kbd { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; font:inherit; margin-left:.18rem; padding:.05rem .25rem; }
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses>span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-statuses [data-publication-run]{border-color:#8aa8c8;color:#24527c;flex:1 1 100%;line-height:1.5;min-width:0;overflow-wrap:anywhere;white-space:normal}.document-statuses [data-publication-run][data-state="failed"],.document-statuses [data-publication-run][data-state="needs_operator"]{border-color:#d9a429;color:#805500}.document-statuses [data-publication-integration][data-state="ready"]{border-color:#83b995;color:#24643a}.document-statuses [data-publication-integration][data-state="error"]{border-color:#d9a429;color:#805500}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
@@ -3053,6 +3055,117 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       else if (event.key === "Escape") { event.preventDefault(); hideMentionSuggestions(); }
     });
     paneElements.review.addEventListener("focusout", (event) => { if (isMentionTextarea(event.target)) mentionHideTimer = window.setTimeout(() => { if (!mentionSuggestions.matches(":hover")) hideMentionSuggestions(); }, 140); });
+    const directiveCandidates = [
+      ["defi", "定義", "用語や概念の定義"],
+      ["prop", "命題", "証明できる主張"],
+      ["thm", "定理", "重要な定理"],
+      ["lemma", "補題", "定理を支える補題"],
+      ["cor", "系", "定理から導く系"],
+      ["proof", "証明", "証明本文（折りたたみ）"],
+      ["example", "例", "具体例"],
+      ["exercise", "演習", "練習問題"],
+      ["remark", "補足", "補足説明"],
+      ["note", "注", "注記"],
+      ["warning", "注意", "注意事項"],
+      ["tip", "ヒント", "ヒント"],
+      ["folding", "折りたたみ", "折りたたみ可能な本文"],
+      ["supp", "補足", "補足本文（折りたたみ）"],
+    ] as const;
+    const directiveSuggestions = document.createElement("div");
+    directiveSuggestions.className = "directive-suggestions";
+    directiveSuggestions.id = "article-directive-suggestions";
+    directiveSuggestions.setAttribute("role", "listbox");
+    directiveSuggestions.hidden = true;
+    document.body.append(directiveSuggestions);
+    let directiveTarget: HTMLTextAreaElement | null = null;
+    let directiveMatches: (typeof directiveCandidates)[number][] = [];
+    let directiveIndex = 0;
+    let directiveHideTimer: number | undefined;
+    const directiveInCodeFence = (source: string, lineStart: number) => {
+      let inFence = false;
+      for (const line of source.slice(0, lineStart).split(/\r?\n/)) {
+        if (/^\s*```/.test(line)) inFence = !inFence;
+      }
+      return inFence;
+    };
+    const directiveContext = (textarea: HTMLTextAreaElement) => {
+      const caret = textarea.selectionStart ?? textarea.value.length;
+      const lineStart = textarea.value.lastIndexOf("\n", Math.max(0, caret - 1)) + 1;
+      const line = textarea.value.slice(lineStart, caret);
+      const match = /^(\s*)(:{3,4})([A-Za-z][A-Za-z0-9_-]*)?$/u.exec(line);
+      if (!match || directiveInCodeFence(textarea.value, lineStart)) return null;
+      return { caret, start: lineStart + match[1].length, fence: match[2], prefix: (match[3] ?? "").toLocaleLowerCase() };
+    };
+    const positionDirectiveSuggestions = () => {
+      if (!directiveTarget || directiveSuggestions.hidden) return;
+      const rect = directiveTarget.getBoundingClientRect();
+      const ownerWindow = directiveTarget.ownerDocument.defaultView ?? window;
+      const width = Math.min(Math.max(rect.width, 280), ownerWindow.innerWidth - 24);
+      directiveSuggestions.style.width = `${width}px`;
+      directiveSuggestions.style.left = `${Math.min(Math.max(12, rect.left), Math.max(12, ownerWindow.innerWidth - width - 12))}px`;
+      directiveSuggestions.style.top = `${Math.min(rect.bottom + 6, Math.max(12, ownerWindow.innerHeight - 12))}px`;
+    };
+    const hideDirectiveSuggestions = () => {
+      directiveSuggestions.hidden = true;
+      directiveSuggestions.replaceChildren();
+      directiveTarget?.removeAttribute("aria-activedescendant");
+      directiveTarget = null;
+      directiveMatches = [];
+      directiveIndex = 0;
+    };
+    const paintDirectiveSelection = () => directiveSuggestions.querySelectorAll<HTMLButtonElement>("[role=option]").forEach((option, index) => {
+      const active = index === directiveIndex;
+      option.classList.toggle("is-active", active);
+      option.setAttribute("aria-selected", String(active));
+      if (active && directiveTarget) directiveTarget.setAttribute("aria-activedescendant", option.id);
+    });
+    const chooseDirective = (index = directiveIndex) => {
+      if (!directiveTarget || !directiveMatches[index]) return;
+      const context = directiveContext(directiveTarget);
+      if (!context) return hideDirectiveSuggestions();
+      const [name] = directiveMatches[index];
+      const replacement = `${context.fence}${name} `;
+      directiveTarget.setRangeText(replacement, context.start, context.caret, "end");
+      directiveTarget.focus();
+      directiveTarget.dispatchEvent(new Event("input", { bubbles: true }));
+      hideDirectiveSuggestions();
+    };
+    const showDirectiveSuggestions = (textarea: HTMLTextAreaElement) => {
+      const context = directiveContext(textarea);
+      if (!context) return hideDirectiveSuggestions();
+      const matches = directiveCandidates.filter(([name, label]) => !context.prefix || name.startsWith(context.prefix) || label.startsWith(context.prefix)).slice(0, 10);
+      if (!matches.length) return hideDirectiveSuggestions();
+      window.clearTimeout(directiveHideTimer);
+      directiveTarget = textarea;
+      directiveMatches = matches;
+      directiveIndex = 0;
+      textarea.ownerDocument.body.append(directiveSuggestions);
+      directiveSuggestions.replaceChildren(...matches.map(([name, label, description], index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.id = `article-directive-option-${index}`;
+        option.setAttribute("role", "option");
+        option.innerHTML = `<strong>${context.fence}${name}</strong><small>${label} · ${description}</small>`;
+        option.addEventListener("mousedown", (event) => { event.preventDefault(); chooseDirective(index); });
+        return option;
+      }));
+      directiveSuggestions.hidden = false;
+      textarea.setAttribute("aria-controls", directiveSuggestions.id);
+      positionDirectiveSuggestions();
+      paintDirectiveSelection();
+    };
+    body.addEventListener("input", () => showDirectiveSuggestions(body));
+    body.addEventListener("focusin", () => showDirectiveSuggestions(body));
+    body.addEventListener("keydown", (event) => {
+      if (directiveTarget !== body || directiveSuggestions.hidden || !directiveMatches.length) return;
+      if (event.key === "ArrowDown") { event.preventDefault(); directiveIndex = (directiveIndex + 1) % directiveMatches.length; paintDirectiveSelection(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); directiveIndex = (directiveIndex - 1 + directiveMatches.length) % directiveMatches.length; paintDirectiveSelection(); }
+      else if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); chooseDirective(); }
+      else if (event.key === "Escape") { event.preventDefault(); hideDirectiveSuggestions(); }
+    });
+    body.addEventListener("focusout", () => { directiveHideTimer = window.setTimeout(() => { if (!directiveSuggestions.matches(":hover")) hideDirectiveSuggestions(); }, 140); });
+    window.addEventListener("resize", positionDirectiveSuggestions, { passive: true });
+    window.addEventListener("scroll", positionDirectiveSuggestions, { passive: true });
     paneElements.review.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-tag]");
       if (!button) return;
@@ -4411,6 +4524,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .mention-suggestions[hidden] { display:none; }
   .mention-suggestions button { background:transparent; border:0; border-radius:.35rem; color:var(--text,#182027); cursor:pointer; display:block; font:inherit; font-size:.82rem; padding:.45rem .55rem; text-align:left; width:100%; }
   .mention-suggestions button:hover,.mention-suggestions button.is-active { background:var(--accent-subtle,#e5f2fa); color:var(--accent,#176ea6); }
+  .directive-suggestions { background:var(--surface,#fff); border:1px solid var(--border,#d5dde2); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:18rem; overflow:auto; padding:.3rem; position:fixed; z-index:80; }
+  .directive-suggestions[hidden] { display:none; }
+  .directive-suggestions button { align-items:baseline; background:transparent; border:0; border-radius:.35rem; color:var(--text,#182027); cursor:pointer; display:flex; font:inherit; gap:.6rem; padding:.45rem .55rem; text-align:left; width:100%; }
+  .directive-suggestions button strong { color:var(--accent,#176ea6); font-family:var(--font-mono,monospace); font-size:.8rem; }
+  .directive-suggestions button small { color:var(--muted,#56616a); font-size:.72rem; }
+  .directive-suggestions button:hover,.directive-suggestions button.is-active { background:var(--accent-subtle,#e5f2fa); color:var(--accent,#176ea6); }
+  .directive-suggestions button.is-active small { color:inherit; }
   .review-panel .comment-replies { display:grid; gap:.65rem; grid-template-columns:minmax(0,1fr); margin:.55rem .7rem .7rem 2.25rem; max-width:calc(100% - 2.95rem); overflow:visible; padding:0 0 .35rem; }
   .review-panel .comment-replies .comment-reply { min-width:0; width:100%; }
   .review-panel .reply-entry textarea { font-size:.78rem; min-height:4rem; max-height:10rem; }
