@@ -6765,6 +6765,85 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   });
 }
 
+type MemberProcedureType = "pause" | "withdrawal";
+
+async function memberProcedureRequests(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const projectId = new URL(request.url).searchParams.get("project") ?? "atlas";
+  if (projectId !== "atlas")
+    return json({ error: "学習サイトの諸手続きのみ受け付けています。" }, 400);
+
+  if (request.method === "GET") {
+    const result = await env.REPORTS.prepare(
+      `SELECT id,procedure_type,effective_from,effective_until,reason,note,status,created_at,updated_at
+       FROM atlasez_member_procedure_requests
+       WHERE project_id=? AND lower(email)=lower(?)
+       ORDER BY created_at DESC LIMIT 20`,
+    )
+      .bind(projectId, scope.email)
+      .all();
+    return json({ requests: result.results ?? [] });
+  }
+  if (request.method !== "POST")
+    return json({ error: "GET、POSTのみ利用できます。" }, 405);
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.headers.get("content-type")?.includes("application/json") !== true)
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const procedureType = text(payload.type, 20) as MemberProcedureType;
+  if (procedureType !== "pause" && procedureType !== "withdrawal")
+    return json({ error: "手続きの種類を確認してください。" }, 400);
+  const effectiveFrom = text(payload.effectiveFrom, 10);
+  const effectiveUntil = text(payload.effectiveUntil, 10);
+  const reason = normalizedText(payload.reason, 300);
+  const note = normalizedText(payload.note, 2_000);
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(effectiveFrom))
+    return json({ error: "開始日・退会日を入力してください。" }, 400);
+  if (effectiveUntil && !datePattern.test(effectiveUntil))
+    return json({ error: "活動再開予定日は正しい日付で入力してください。" }, 400);
+  if (procedureType === "pause" && effectiveUntil && effectiveUntil < effectiveFrom)
+    return json({ error: "活動再開予定日は活動休止開始日以降にしてください。" }, 400);
+  if (!reason) return json({ error: "理由を入力してください。" }, 400);
+  if (procedureType === "withdrawal" && payload.confirm !== true)
+    return json({ error: "退会申請の確認にチェックを入れてください。" }, 400);
+
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await env.REPORTS.prepare(
+    `INSERT INTO atlasez_member_procedure_requests
+      (id,project_id,email,procedure_type,effective_from,effective_until,reason,note,status,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      id,
+      projectId,
+      scope.email,
+      procedureType,
+      effectiveFrom,
+      effectiveUntil,
+      reason,
+      note,
+      "pending",
+      now,
+      now,
+    )
+    .run();
+  return json({ ok: true, request: { id, procedure_type: procedureType, effective_from: effectiveFrom, effective_until: effectiveUntil, reason, note, status: "pending", created_at: now } });
+}
+
 async function memberTasksOverview(
   request: Request,
   env: Env,
@@ -14519,6 +14598,8 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/workspace/" ||
       parsed.pathname === "/admin/introductions" ||
       parsed.pathname === "/admin/introductions/" ||
+      parsed.pathname === "/admin/procedures" ||
+      parsed.pathname === "/admin/procedures/" ||
       parsed.pathname === "/admin/project-profile-requests" ||
       parsed.pathname === "/admin/project-profile-requests/" ||
       parsed.pathname === "/admin/co-working" ||
@@ -16410,6 +16491,8 @@ async function handleAdminRequest(
     );
   if (url.pathname === "/api/admin/portal" && request.method === "GET")
     return portalOverview(request, env);
+  if (url.pathname === "/api/admin/member-procedures")
+    return memberProcedureRequests(request, env);
   if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
     return memberTasksOverview(request, env);
   if (url.pathname === "/api/admin/member-calendar" && request.method === "GET")

@@ -21,6 +21,7 @@ const adminPageNames = [
   "guide",
   "rules",
   "introductions",
+  "procedures",
   "profile-requests",
   "project-profile-requests",
   "secretariat",
