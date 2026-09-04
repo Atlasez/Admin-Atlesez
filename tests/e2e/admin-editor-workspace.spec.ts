@@ -818,6 +818,7 @@ test("戻るの離脱確認前に別窓を閉じない", async ({ page }) => {
 test("インライン数式・表示数式を本文と別窓へ挿入できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
+  await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
   await body.fill("本文");
   await body.focus();
@@ -917,6 +918,7 @@ test("LaTeXコマンド補完と入力補助を使える", async ({ page }) => {
 test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
+  await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
   const expectedStarts: Record<string, string> = {
     frac: "\\frac{ }{ }",
