@@ -262,6 +262,7 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
         members: [
           {
             display_name: "山田 花子",
+            avatar_url: "https://cdn.example.com/yamada.png",
             role: "member",
             assignments: ["運営メンバー", "数学担当"],
           },
@@ -290,6 +291,10 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
   await expect(
     mathematics.getByText("上杉和輝", { exact: true }),
   ).toBeVisible();
+  await expect(mathematics.locator("img.member-avatar")).toHaveAttribute(
+    "src",
+    "https://cdn.example.com/yamada.png",
+  );
   await expect(mathematics.getByText("小林 和真", { exact: true })).toHaveCount(
     0,
   );

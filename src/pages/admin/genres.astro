@@ -106,7 +106,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     const count = root.querySelector<HTMLElement>("[data-visible-count]");
     const resultLabel = root.querySelector<HTMLElement>("[data-results-label]");
     const empty = root.querySelector<HTMLElement>("[data-empty-state]");
-    type GenreMember = { email?: string; role?: string; display_name?: string; assignments?: string[] };
+    type GenreMember = { email?: string; role?: string; display_name?: string; avatar_url?: string; assignments?: string[] };
     type GenreOverview = { subject?: string; progress?: string; updated_at?: string; updatedAt?: string };
     const subjectNames = new Map(cards.map((card) => [card.id, card.querySelector("h3")?.textContent?.trim() ?? card.id]));
     const progressBySubject = new Map<string, GenreOverview>();
@@ -129,7 +129,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       const container = card.querySelector<HTMLElement>("[data-genre-members]");
       const count = card.querySelector<HTMLElement>("[data-member-count]");
       if (!container || !count) return;
-      const merged = new Map<string, { name: string; assignments: Set<string> }>();
+      const merged = new Map<string, { name: string; avatar_url?: string; assignments: Set<string> }>();
       overviewMembers.filter((member) => {
         const assignments = member.assignments ?? [];
         return member.role === "manager" || assignments.includes("全ジャンル管理") || assignments.includes("プロジェクトリーダー") || assignments.includes("全分野統括") || assignments.includes(`${subjectName}担当`) || assignments.includes(`${subjectName}統括`);
@@ -137,7 +137,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
         const displayName = member.display_name?.trim();
         if (!displayName || displayName === "表示名未設定") return;
         const normalized = normalizeName(displayName);
-        const current = merged.get(normalized) ?? { name: displayName, assignments: new Set<string>() };
+        const current = merged.get(normalized) ?? { name: displayName, avatar_url: member.avatar_url?.trim() || undefined, assignments: new Set<string>() };
         (member.assignments ?? []).forEach((assignment) => {
           if (assignment === "運営内運営" || assignment === "全ジャンル管理" || assignment === "プロジェクトリーダー" || assignment === "全分野統括" || assignment === `${subjectName}担当` || assignment === `${subjectName}統括`) {
             current.assignments.add(assignment);
@@ -158,6 +158,22 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       relevant.forEach((member) => {
         const item = document.createElement("div");
         item.className = "member-item";
+        const avatarUrl = member.avatar_url?.trim();
+        if (avatarUrl) {
+          const avatar = document.createElement("img");
+          avatar.className = "member-avatar";
+          avatar.src = avatarUrl;
+          avatar.alt = "";
+          avatar.loading = "lazy";
+          avatar.referrerPolicy = "no-referrer";
+          item.append(avatar);
+        } else {
+          const fallback = document.createElement("span");
+          fallback.className = "member-avatar member-avatar--fallback";
+          fallback.textContent = member.name.slice(0, 1);
+          fallback.setAttribute("aria-hidden", "true");
+          item.append(fallback);
+        }
         const name = document.createElement("strong");
         name.textContent = member.name;
         item.append(name);
@@ -385,6 +401,8 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .section-heading > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .58rem; white-space: nowrap; }
   .member-list { display: grid; gap: .3rem; }
   .member-item { align-items: baseline; background: var(--background-primary); border: 1px solid var(--border-default); display: flex; gap: .45rem; justify-content: space-between; min-width: 0; padding: .38rem .45rem; }
+  .member-avatar { border: 1px solid var(--border-default); border-radius: 50%; flex: 0 0 1.35rem; height: 1.35rem; object-fit: cover; width: 1.35rem; }
+  .member-avatar--fallback { align-items: center; background: var(--background-secondary); color: var(--text-secondary); display: inline-flex; font-size: .62rem; justify-content: center; }
   .member-item strong { color: var(--text-primary); font-size: .67rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .member-item span { border-left: 1px solid var(--border-default); color: var(--text-muted); flex: 0 0 auto; font-size: .58rem; max-width: 58%; overflow: hidden; padding-left: .45rem; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
   .loading-note, .progress-view { color: var(--text-secondary); font-size: .7rem; line-height: 1.55; margin: 0; white-space: pre-wrap; }
