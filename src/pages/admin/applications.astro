@@ -48,10 +48,12 @@ const projectLabel = selectedProject?.[1] ?? "";
     </section>
     <output class="notice" data-notice aria-live="polite" hidden={!selectedProject}></output>
     <section class="application-navigator" data-application-navigator aria-label="応募者の切り替え" hidden>
-      <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
       <label class="application-picker">表示する応募者<select data-application-select aria-label="表示する応募者"></select></label>
       <span class="application-position" data-application-position aria-live="polite"></span>
-      <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
+      <div class="navigator-actions">
+        <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
+        <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
+      </div>
     </section>
     <div class="application-list" data-list hidden={!selectedProject}>読み込み中…</div>
     <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title" hidden={!selectedProject}>
@@ -114,7 +116,13 @@ const projectLabel = selectedProject?.[1] ?? "";
   @media(max-width:480px){.applications header{padding-top:2rem}.application-flow,.application-overview{padding:.9rem}.flow-steps{grid-template-columns:1fr}.flow-steps li{border-bottom:1px solid var(--border-default);border-right:0}.flow-steps li:last-child{border-bottom:0}.summary-grid{grid-template-columns:1fr 1fr}.application-list .app .top{padding-left:1rem}.interview-panel,.application-profile,.application-section,.application-response-grid,.application-original-fields,.provisioning-error,.member-link{margin-left:.9rem;margin-right:.9rem}}
 </style>
 <style>
-  .application-navigator{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;display:grid;gap:.65rem;grid-template-columns:auto minmax(12rem,1fr) auto auto;margin-top:.4rem;padding:.7rem}.application-navigator[hidden]{display:none}.application-picker{color:var(--text-secondary);display:grid;font-size:.7rem;font-weight:800;gap:.25rem}.application-picker select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.navigator-button{min-width:5rem}.navigator-button:disabled{cursor:not-allowed;opacity:.45}.application-position{color:var(--text-secondary);font-size:.75rem;font-variant-numeric:tabular-nums;white-space:nowrap}@media(max-width:650px){.application-navigator{grid-template-columns:1fr 1fr}.application-picker{grid-column:1/-1;grid-row:1}.application-position{justify-self:center;grid-column:1/-1;grid-row:2}.navigator-button{width:100%;grid-row:3}.application-navigator .navigator-button:first-child{grid-column:1}.application-navigator .navigator-button:last-child{grid-column:2}}
+  .application-navigator{align-items:end;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;display:grid;gap:.65rem;grid-template-columns:minmax(0,1fr) auto auto;margin-top:.4rem;padding:.7rem}.application-navigator[hidden]{display:none}.application-picker{color:var(--text-secondary);display:grid;font-size:.7rem;font-weight:800;gap:.25rem;min-width:0}.application-picker select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.navigator-button{min-width:5rem}.navigator-button:disabled{cursor:not-allowed;opacity:.45}.application-position{color:var(--text-secondary);font-size:.75rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  @media(max-width:1000px){
+    .application-navigator{grid-template-columns:minmax(0,1fr) auto}
+    .application-navigator .application-picker{grid-column:1/-1;grid-row:1}
+    .application-navigator .application-position{grid-column:1;grid-row:2;justify-self:start;align-self:center;padding-bottom:0}
+    .application-navigator .navigator-actions{grid-column:2;grid-row:2}
+  }
   .application-list{margin-top:.75rem}.application-list .app{background:var(--background-secondary);border-radius:.7rem;box-shadow:0 .35rem 1.2rem rgb(0 0 0 / .08);padding:1.25rem}.application-list .app .top{border-bottom:1px solid var(--border-default);padding-bottom:.85rem}.application-list .app .top h2{font-size:1.15rem;line-height:1.4}.application-list .app h3{color:var(--accent-primary);font-size:.78rem;letter-spacing:.03em}.application-list .app pre{background:var(--background-primary);border-left:2px solid var(--border-default);border-radius:.25rem;padding:.55rem .7rem}.application-original-fields{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.45rem;padding:.65rem .8rem}.application-original-fields summary{color:var(--accent-primary);cursor:pointer;font-size:.8rem;font-weight:800}.application-original-fields[open] summary{margin-bottom:.7rem}
 </style>
 <style is:global>
@@ -402,7 +410,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     background: var(--app-muted-surface);
     display: grid;
     gap: .7rem;
-    grid-template-columns: auto minmax(14rem, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     margin-top: .6rem;
     padding: .75rem;
   }
@@ -410,6 +418,7 @@ const projectLabel = selectedProject?.[1] ?? "";
   .application-position { color: var(--text-secondary); font-size: .75rem; font-variant-numeric: tabular-nums; padding-bottom: .65rem; white-space: nowrap; }
   .navigator-button { min-width: 5rem; }
   .navigator-button:disabled { opacity: .45; }
+  .navigator-actions { display: flex; gap: .5rem; justify-content: flex-end; }
 
   .application-list { display: grid; gap: .8rem; margin-top: .8rem; }
   .application-empty { border: 1px dashed var(--border-default); color: var(--text-secondary); padding: 2.4rem 1rem; text-align: center; }
@@ -533,6 +542,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     .application-navigator { grid-template-columns: auto minmax(0, 1fr) auto; }
     .application-position { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
     .application-navigator .application-picker { grid-column: 1 / -1; grid-row: 2; }
+    .application-navigator .navigator-actions { grid-column: 1 / -1; grid-row: 3; }
     .application-navigator .navigator-button { grid-row: 3; }
     .application-navigator .navigator-button:last-child { grid-column: 3; }
   }
@@ -634,7 +644,8 @@ const projectLabel = selectedProject?.[1] ?? "";
     const applicationCard=(application:any)=>{const name=displayName(application);const initial=String(name).trim().slice(0,1)||'？';const email=String(application.email||'');const projectLabel=formLabels[application.project_slug]??application.project_slug??'学習サイト「アトラス」';const subjectTags=String(application.desired_subjects||'').split(',').filter(Boolean).map(subject=>`<span>${esc(subjectLabels[subject]??subject)}</span>`).join('')||'<span>旧形式応募：未設定</span>';return `<article class="app" data-status="${esc(application.status)}" aria-labelledby="application-${esc(application.id)}-name"><div class="top"><div class="app-identity"><span class="app-avatar" aria-hidden="true">${esc(initial)}</span><div><p class="app-kicker">応募者情報</p><h2 id="application-${esc(application.id)}-name">${esc(name)}</h2>${email?`<a class="app-email" href="mailto:${encodeURIComponent(email)}">${esc(email)}</a>`:''}<p class="app-subline">${esc(formatDate(application.created_at))}</p><span class="app-project">${esc(projectLabel)}</span></div></div>${actions(application)}</div>${interviewFields(application)}${fields(application)}<section class="application-section application-section--subjects" aria-label="希望分野"><div class="application-section-heading"><p>希望分野</p><span>担当候補</span></div><div class="facts">${subjectTags}</div></section><section class="application-response-grid application-response-grid--main" aria-label="応募内容"><div class="response-block"><h3>書きたい記事・テーマ</h3><pre>${esc(application.article_ideas||'—')}</pre></div><div class="response-block"><h3>できること・関心</h3><pre>${esc(application.interests||'—')}</pre></div><div class="response-block response-block--wide"><h3>参加理由・自己紹介</h3><pre>${esc(application.message||'—')}</pre></div>${application.availability_note?`<div class="response-block"><h3>参加可能な時間帯</h3><pre>${esc(application.availability_note)}</pre></div>`:''}</section>${application.provisioning_error?`<p class="provisioning-error">${esc(application.provisioning_error)}</p>`:''}${application.status==='accepted'&&!application.verified_discord_user_id?'<a class="member-link" href="/applicant/">応募者画面から「Discordと連携」を案内する →</a>':''}</article>`};
     const applicationOptionLabel=(application:any)=>`${displayName(application)}｜${application.email||'メール未設定'}`;
     const renderNavigator=()=>{if(!visibleApplications.length){navigator.hidden=true;return}const selectedIndex=Math.max(0,visibleApplications.findIndex(application=>application.id===selectedApplicationId));const selected=visibleApplications[selectedIndex];selectedApplicationId=selected.id;applicationSelect.innerHTML=visibleApplications.map(application=>`<option value="${esc(application.id)}">${esc(applicationOptionLabel(application))}</option>`).join('');applicationSelect.value=selectedApplicationId;applicationPosition.textContent=`${selectedIndex+1} / ${visibleApplications.length}人`;previousApplication.disabled=selectedIndex===0;nextApplication.disabled=selectedIndex===visibleApplications.length-1;navigator.hidden=false};
-    const render=(items:any[])=>{visibleApplications=items.filter(matches);if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
+    const applicationCreatedAt=(application:any)=>{const timestamp=Date.parse(application.created_at??'');return Number.isFinite(timestamp)?timestamp:0};
+    const render=(items:any[])=>{visibleApplications=items.filter(matches).sort((a,b)=>applicationCreatedAt(b)-applicationCreatedAt(a));if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
     const refresh=()=>render(applications);
     const resetSelectionAndRefresh=()=>{selectedApplicationId='';refresh()};
     const load=async()=>{try{const response=await fetch(`/api/admin/applications?project=${encodeURIComponent(projectSlug)}`,{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};formLabels=data.formLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch(error){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};

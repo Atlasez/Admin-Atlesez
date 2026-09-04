@@ -1115,7 +1115,7 @@ test("CM-1: コメントと返信に本文とは独立したタグを付与・�
   await page.goto("./admin/editor/?document=doc-1");
 
   const mainTag = page.locator(
-    '.review-panel > .comment-tags [data-comment-tag="定義不足"]',
+    '.review-pane-content > .comment-tags [data-comment-tag="定義不足"]',
   );
   await mainTag.click();
   await expect(mainTag).toHaveAttribute("aria-pressed", "true");
@@ -1770,6 +1770,138 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
     "## 別窓\n\n同期された本文",
   );
 });
+
+for (const resized of [false, true]) {
+  test(`枠の四辺の矢印は全体が表示され操作できる（${resized ? "高さ変更後" : "標準高さ"}）`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1600, height: 1100 });
+    await mockAdminApi(page);
+    await page.addInitScript((resized) => {
+      localStorage.setItem(
+        "atlasez-editor-pane-layout",
+        JSON.stringify({
+          visible: ["writing", "preview", "review", "media", "memo"],
+          rows: [
+            ["writing", "preview", "review"],
+            ["media", "memo"],
+          ],
+        }),
+      );
+      if (resized)
+        localStorage.setItem(
+          "atlasez-editor-pane-heights",
+          JSON.stringify({
+            writing: 420,
+            preview: 420,
+            review: 420,
+            media: 420,
+            memo: 420,
+          }),
+        );
+    }, resized);
+    await page.goto("./admin/editor/?document=doc-1");
+    await expect(page.locator("[data-pane-edge]")).toHaveCount(20);
+    await expect(page.locator("[data-writing-memo]")).toHaveCSS(
+      "resize",
+      "none",
+    );
+    await expect(page.locator('[data-pane-resize="memo"]')).toBeVisible();
+    await page.mouse.wheel(0, 1);
+    for (const key of ["writing", "preview", "review", "media", "memo"]) {
+      const panel = page.locator(`[data-editor-pane="${key}"]`);
+      await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      const clipped = await panel
+        .locator("[data-pane-edge]")
+        .evaluateAll((buttons) =>
+          buttons.flatMap((button) => {
+            const r = button.getBoundingClientRect();
+            return [
+              [0.25, 0.25],
+              [0.75, 0.75],
+            ].flatMap(([x, y]) => {
+              const hit = document.elementFromPoint(
+                r.left + r.width * x,
+                r.top + r.height * y,
+              );
+              return hit && button.contains(hit)
+                ? []
+                : [button.getAttribute("aria-label")];
+            });
+          }),
+        );
+      await page.screenshot({ path: testInfo.outputPath(`${key}-edges.png`) });
+      expect.soft(clipped, `${key} の矢印が枠に隠れない`).toEqual([]);
+    }
+  });
+}
+
+test("コメント枠をスクロールしても見出しと別窓ボタンは動かない", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1100 });
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+  const panel = page.locator(".review-panel");
+  await expect(
+    panel.locator("[data-comment-list] .comment-thread"),
+  ).toHaveCount(1);
+  await page.mouse.wheel(0, 1);
+  await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const heading = panel.locator(":scope > .pane-heading");
+  const before = await heading.boundingBox();
+  const scrollArea = panel.locator(".review-pane-content");
+  const box = await scrollArea.boundingBox();
+  if (!box || !before) throw new Error("コメント枠が表示されていません");
+  await page.mouse.move(box.x + box.width - 12, box.y + box.height / 2);
+  await page.mouse.wheel(0, 650);
+  await expect
+    .poll(() => scrollArea.evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(100);
+  await page.screenshot({ path: testInfo.outputPath("comments-scrolled.png") });
+  const after = await heading.boundingBox();
+  expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThan(1);
+  await expect(heading.locator('[data-pane-popout="review"]')).toBeInViewport();
+});
+
+for (const returnVia of ["popup", "close", "toggle", "tab"] as const) {
+  test(`別窓から戻すと表示中の文言を解除し再度開ける（${returnVia}）`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1600, height: 1100 });
+    await mockAdminApi(page);
+    await page.goto("./admin/editor/?document=doc-1");
+    const panel = page.locator('[data-editor-pane="writing"]');
+    const button = panel.locator('[data-pane-popout="writing"]');
+    const popupPromise = page.waitForEvent("popup");
+    await button.click();
+    const popup = await popupPromise;
+    await expect(panel).toBeHidden();
+    if (returnVia === "popup")
+      await popup.locator("[data-reattach-pane]").click();
+    else if (returnVia === "close") await popup.close();
+    else if (returnVia === "toggle")
+      await page
+        .locator('.pane-layout-controls [data-pane-popout="writing"]')
+        .click();
+    else await page.locator('[data-pane-tab="writing"]').click();
+    await expect(panel).toBeVisible();
+    await expect(button).toBeEnabled();
+    await expect(button).toHaveText("別窓");
+    await expect.poll(() => popup.isClosed()).toBe(true);
+    await expect(
+      page.locator('.pane-layout-controls [data-pane-popout="writing"]'),
+    ).toHaveAttribute("aria-pressed", "false");
+    await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.screenshot({ path: testInfo.outputPath("reattached.png") });
+    const secondPopupPromise = page.waitForEvent("popup");
+    await button.click();
+    const secondPopup = await secondPopupPromise;
+    await secondPopup.close();
+    await expect(panel).toBeVisible();
+    await expect(button).toHaveText("別窓");
+  });
+}
 
 test("E-6〜E-11: コメント操作、返信表示、メンション候補を復元する", async ({
   page,
