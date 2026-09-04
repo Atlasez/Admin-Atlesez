@@ -550,6 +550,27 @@ test("長文のDirective境界でも本文の重ね合わせ表示が行順を�
   ).toHaveCount(1);
 });
 
+test("本文の:::入力からDirective候補を補完でき、コードフェンス内では表示しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const body = page.locator("textarea[data-body]");
+  await body.fill(":::");
+  const suggestions = page.locator("#article-directive-suggestions");
+  await expect(suggestions).toBeVisible();
+  await expect(suggestions.locator('[role="option"]').first()).toContainText(
+    ":::defi",
+  );
+  await body.press("Enter");
+  await expect(body).toHaveValue(":::defi ");
+  await expect(suggestions).toBeHidden();
+
+  await body.fill("```\n:::\n```");
+  await expect(suggestions).toBeHidden();
+});
+
 test("本文欄を拡張してもCodeMirrorが欄全体を使う", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");

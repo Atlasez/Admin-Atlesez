@@ -857,6 +857,21 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(editorSource).toContain("article.articleId === sourceArticleId");
   });
 
+  it("編集画面は:::入力から記事枠の候補を補完できる", async () => {
+    const editorSource = await readFile(
+      new URL("../../src/pages/admin/editor.astro", import.meta.url),
+      "utf8",
+    );
+
+    expect(editorSource).toContain("directiveCandidates");
+    expect(editorSource).toContain("directiveContext");
+    expect(editorSource).toContain("directiveInCodeFence");
+    expect(editorSource).toContain('body.addEventListener("keydown"');
+    expect(editorSource).toContain("replacement = `${context.fence}${name} `");
+    expect(editorSource).toContain('["defi", "定義"');
+    expect(editorSource).toContain('["prop", "命題"');
+  });
+
   it("記事一覧UIから公開記事カタログの診断を読み取り専用で実行できる", async () => {
     const articlesSource = await readFile(
       new URL("../../src/pages/admin/articles.astro", import.meta.url),
