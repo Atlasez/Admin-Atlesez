@@ -7608,7 +7608,7 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = a.email
      LEFT JOIN atlasez_application_interviews i ON i.application_id = a.id
      WHERE a.project_slug = ?
-     ORDER BY CASE a.status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END,a.created_at DESC LIMIT 300`,
+     ORDER BY a.created_at DESC,a.id DESC LIMIT 300`,
   )
     .bind(projectSlug)
     .all<Record<string, unknown>>();

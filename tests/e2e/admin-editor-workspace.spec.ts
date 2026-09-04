@@ -1802,6 +1802,11 @@ for (const resized of [false, true]) {
     }, resized);
     await page.goto("./admin/editor/?document=doc-1");
     await expect(page.locator("[data-pane-edge]")).toHaveCount(20);
+    await expect(page.locator("[data-writing-memo]")).toHaveCSS(
+      "resize",
+      "none",
+    );
+    await expect(page.locator('[data-pane-resize="memo"]')).toBeVisible();
     await page.mouse.wheel(0, 1);
     for (const key of ["writing", "preview", "review", "media", "memo"]) {
       const panel = page.locator(`[data-editor-pane="${key}"]`);
