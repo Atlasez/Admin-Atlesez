@@ -185,6 +185,52 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-list] .article")).toHaveCount(1);
   });
 
+  test("D-3a: 公開予約済みの記事を日時付きで表示し、絞り込める", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com" },
+          documents: [
+            {
+              id: "scheduled-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "予約公開の記事",
+              status: "approved",
+              updated_at: "2026-09-01T00:00:00.000Z",
+              published_at: null,
+              scheduled_publish_at: "2026-09-10T03:00:00.000Z",
+            },
+            {
+              id: "draft-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "未予約の下書き",
+              status: "draft",
+              updated_at: "2026-08-31T00:00:00.000Z",
+              published_at: null,
+              scheduled_publish_at: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=scheduled");
+    const scheduledCard = page.locator('[data-document-id="scheduled-doc"]');
+    await expect(scheduledCard).toContainText("公開予約済み・2026/09/10 12:00");
+    await expect(scheduledCard).toContainText("公開予約：2026/09/10 12:00");
+
+    await page.locator("[data-public]").selectOption("scheduled");
+    await expect(page.locator("[data-list] .article")).toHaveCount(1);
+    await expect(page.locator("[data-list]")).toContainText("予約公開の記事");
+    await expect(page.locator("[data-list]")).not.toContainText(
+      "未予約の下書き",
+    );
+  });
+
   test("D-4: 下書きをアーカイブし、30日以内なら一覧から復元できる", async ({
     page,
   }) => {

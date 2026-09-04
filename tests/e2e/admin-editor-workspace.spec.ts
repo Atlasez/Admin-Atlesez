@@ -397,6 +397,23 @@ test("公開PRのCI確認中を視覚表示し、最終更新時刻を示す", a
   );
 });
 
+test("公開予約済みの日時を編集画面へ表示する", async ({ page }) => {
+  const scheduledDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    scheduled_publish_at: "2026-09-10T03:00:00.000Z",
+  };
+  await mockAdminApi(page, undefined, scheduledDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-publication-state]")).toHaveText(
+    "公開予約済み（2026/09/10 12:00）",
+  );
+  await expect(
+    page.getByRole("button", { name: "公開予約を変更" }),
+  ).toBeVisible();
+});
+
 test("公開済み記事の未反映変更は運営サイトから再公開できる", async ({
   page,
 }) => {
