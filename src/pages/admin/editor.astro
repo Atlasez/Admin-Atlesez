@@ -311,6 +311,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           </section>
           <section class="review-panel" aria-labelledby="review-heading">
             <div class="pane-heading"><h3 id="review-heading">フィードバック</h3><div class="pane-controls"><button type="button" data-pane-popout="review">別窓</button></div></div>
+            <div class="review-pane-content">
             <details class="review-help"><summary>コメントの使い方</summary><p>本文またはプレビューで文章を選択してコメントすると、その文章に紐づきます。コメント投稿者が修正を反映したら「反映済み」にしてください。他の人のコメントは、投稿者と対応者の双方が「反映済み」にすると解決済みになります。</p></details>
             <div class="comment-list-toolbar"><h4 class="comment-list-heading">コメント</h4><div class="comment-list-filters"><label>コメントを検索<input type="search" data-comment-search placeholder="本文・投稿者・タグを検索" autocomplete="off" /></label><label>タグで絞り込む<select data-comment-tag-filter><option value="">すべて</option>{commentTags.map((tag) => <option value={tag}>{tag}</option>)}</select></label><label>確認状態<select data-comment-status-filter><option value="">すべて</option><option value="pending">未確認</option><option value="acknowledged">確認済み</option><option value="resolved">反映済み</option></select></label></div></div>
             <div class="comment-list" data-comment-list></div>
@@ -320,6 +321,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             <label class="comment-entry"><span>新しいコメント</span><output class="selection-hint" data-comment-selection>範囲未選択：記事全体へのコメントとして送信します。</output><textarea data-comment-body maxlength="8000" placeholder="例：@表示名 定義の前に具体例を一つ入れると読みやすくなりそうです。"></textarea></label>
             <datalist id="comment-mention-members" data-comment-mention-members></datalist>
             <button type="button" class="primary-action review-submit" data-send-comment>この内容でコメントを追加</button>
+            </div>
             <button type="button" class="pane-resize-handle" data-pane-resize="review" aria-label="フィードバック枠の高さを調整" aria-valuemin="240" aria-valuemax="1400" aria-valuenow="528" title="ドラッグしてフィードバック枠の高さを調整。ダブルクリックで元の高さに戻します"><span aria-hidden="true"></span></button>
           </section>
           </div>
@@ -670,6 +672,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   @media (prefers-reduced-motion: reduce) {
     .publication-run-status[aria-busy="true"] .publication-run-indicator { animation: none; }
   }
+</style>
+
+<style>
+  /* 外側の枠は矢印を切らず、内容のスクロールは内側に限定する。 */
+  .editor-split { gap:1.75rem; }
+  .editor-split > section, .editor-split > section.is-pane-resized { isolation:isolate; overflow:visible; }
+  .pane-heading, .pane-resize-handle { flex-shrink:0; }
+  .review-panel { display:flex; flex-direction:column; overflow:visible; padding-bottom:0; }
+  .review-pane-content { flex:1 1 0; min-height:0; overflow:auto; overscroll-behavior:contain; padding-bottom:.85rem; }
+  .review-panel .review-pane-content .comment-list { flex:none; max-height:none; min-height:0; overflow:visible; }
+  .memo-content { overflow:auto; }
 </style>
 
 <style>
@@ -1475,6 +1488,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       });
     };
     const activePopouts = new Map<PaneKey, Window>();
+    const restorePopouts = new Map<PaneKey, () => void>();
     const isPanePoppedOut = (key: PaneKey) => {
       const popup = activePopouts.get(key);
       return Boolean(popup && !popup.closed);
@@ -1548,6 +1562,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const columnIndex = rowIndex >= 0 ? paneRows[rowIndex].indexOf(key) : -1;
         const row = paneRows[rowIndex] ?? [];
         button.disabled = rowIndex < 0 || (edge === "left" && columnIndex === 0) || (edge === "right" && columnIndex === row.length - 1) || (edge === "top" && rowIndex === 0 && paneRows.length >= 3) || (edge === "bottom" && rowIndex === paneRows.length - 1 && paneRows.length >= 3);
+      });
+      // 枠内と表示枠バーの両方を、同じ別窓状態から更新する。
+      paneKeys.forEach((key) => {
+        const button = paneElements[key].querySelector<HTMLButtonElement>("[data-pane-popout]");
+        if (!button) return;
+        const poppedOut = isPanePoppedOut(key);
+        button.disabled = poppedOut;
+        button.textContent = poppedOut ? "別窓表示中" : "別窓";
+        button.setAttribute("aria-pressed", String(poppedOut));
       });
     };
     const placePanes = () => paneRows.flat().forEach((key) => { if (paneElements[key].parentElement === editorSplit) editorSplit.append(paneElements[key]); });
@@ -1640,10 +1663,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const toolbar = popup.document.createElement("header");
       toolbar.className = "popup-pane-toolbar";
       toolbar.innerHTML = `<div><strong>${esc(paneLabels[key])}</strong><small>元の編集画面とリアルタイム同期しています</small></div><button type="button" data-reattach-pane>元の画面に戻す</button>`;
-      const popoutButton = panel.querySelector<HTMLButtonElement>("[data-pane-popout]");
       const popupPanel = panel.cloneNode(true) as HTMLElement;
       popupPanel.querySelector<HTMLButtonElement>("[data-pane-popout]")?.remove();
-      if (popoutButton) { popoutButton.disabled = true; popoutButton.textContent = "別窓表示中"; }
       shell.append(toolbar, popupPanel);
       // 別窓へ移した枠は本体から外し、残った枠だけでレイアウトを詰め直す。
       // この変更は一時的なものなので、別窓を閉じたときに元の配置へ戻す。
@@ -1703,6 +1724,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         panel.removeEventListener("change", forwardSourceInput);
         popupPanel.removeEventListener("input", forwardPopupInput);
         popupPanel.removeEventListener("change", forwardPopupInput);
+        popup.removeEventListener("beforeunload", restore);
         if (key === "review" && typeof mentionSuggestions !== "undefined") document.body.append(mentionSuggestions);
         const otherOpenPopouts = new Set(
           [...activePopouts.entries()]
@@ -1710,7 +1732,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             .map(([paneKey]) => paneKey),
         );
         activePopouts.delete(key);
-        if (popoutButton) { popoutButton.disabled = false; }
+        restorePopouts.delete(key);
         requestedPaneKeys = [...new Set([...requestedPaneKeys, key])].filter((paneKey) => !otherOpenPopouts.has(paneKey));
         paneRows = rowsBeforePopout
           .map((row) => row.filter((paneKey) => paneKey === key || !otherOpenPopouts.has(paneKey)))
@@ -1719,17 +1741,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         paneKeys.forEach((paneKey) => { paneElements[paneKey].hidden = !requestedPaneKeys.includes(paneKey); });
         placePanes();
         updatePaneLayout();
-      try { if (!popup.closed) popup.close(); } catch { /* noop */ }
+        try { if (!popup.closed) popup.close(); } catch { /* noop */ }
       };
+      restorePopouts.set(key, restore);
       toolbar.querySelector<HTMLButtonElement>("[data-reattach-pane]")?.addEventListener("click", restore);
       watcher = window.setInterval(() => { if (popup.closed) restore(); }, 400);
       popup.addEventListener("beforeunload", restore, { once: true });
       popup.focus();
     };
     const closeAllPanePopouts = () => {
-      [...activePopouts.values()].forEach((popup) => {
-        try { if (!popup.closed) popup.close(); } catch { /* noop */ }
-      });
+      [...restorePopouts.values()].forEach((restore) => restore());
     };
     const setupPanes = () => {
       paneKeys.forEach((key) => { if (paneElements[key].parentElement !== editorSplit) editorSplit.append(paneElements[key]); });
@@ -1744,13 +1765,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       } catch { /* 既定の3枠を使う */ }
       root.querySelectorAll<HTMLButtonElement>("[data-pane-tab]").forEach((button) => button.addEventListener("click", () => {
         const key = button.dataset.paneTab as PaneKey;
+        const restore = restorePopouts.get(key);
+        if (restore) { restore(); return; }
         const next = requestedPaneKeys.includes(key) ? requestedPaneKeys.filter((item) => item !== key) : [...requestedPaneKeys, key];
         setPaneKeys(next);
       }));
       root.querySelectorAll<HTMLButtonElement>("[data-pane-popout]").forEach((button) => button.addEventListener("click", () => {
         const key = button.dataset.panePopout as PaneKey;
-        const popup = activePopouts.get(key);
-        if (popup && !popup.closed) popup.close();
+        const restore = restorePopouts.get(key);
+        if (restore) restore();
         else openPaneWindow(key);
       }));
       setPaneKeys(requestedPaneKeys, false);
@@ -4150,7 +4173,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "運営管理へ登録する公開記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId) ?? documents.find((item) => item.subject === source.subject && item.category === source.category && item.slug === source.slug); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
     form.addEventListener("submit", (event) => { event.preventDefault(); void saveCurrentDocument().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
-    root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-panel > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
+    root.querySelector<HTMLButtonElement>("[data-send-comment]")!.addEventListener("click", () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) { saveMessage.value = "先に原稿を保存してからコメントしてください。"; return; } void (async () => { const response = await fetch(`/api/admin/editor/documents/${id}/comments`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ body: commentBody.value, selections: selectedCommentRanges, tags: selectedCommentTags }) }); const data = await read<{ error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "コメントを送れませんでした。"); commentBody.value = ""; selectedCommentTags = []; root.querySelectorAll<HTMLButtonElement>(".review-pane-content > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", "false")); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); setCommentSelection(null); await reloadComments(id); })().catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "コメントを送れませんでした。"; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-action]"); if (!button) return; hideActionHistoryTooltip(); const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.commentId; const action = button.dataset.commentAction; if (!documentId || !commentId || !action) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ action }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "コメントの状態を更新できませんでした。"); await reloadComments(documentId); })().catch((error:unknown)=>{ saveMessage.value=error instanceof Error ? error.message : "コメントの状態を更新できませんでした。"; button.disabled=false; }); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-comment-reaction]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const commentId = button.dataset.commentId; const item = commentId ? currentComments.find((comment) => comment.id === commentId) : null; if (!documentId || !commentId || !item || pendingCommentReactions.has(commentId)) return; pendingCommentReactions.add(commentId); const email = currentUserEmail.trim().toLowerCase(); const previousLikes = [...(item.like_actor_counts ?? [])]; const likedByMe = previousLikes.some((actor) => actor.actor_email.trim().toLowerCase() === email); item.like_actor_counts = likedByMe ? previousLikes.filter((actor) => actor.actor_email.trim().toLowerCase() !== email) : [...previousLikes, { actor_email: currentUserEmail, actor_display_name: "自分", count: 1 }]; renderComments(); void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments/${commentId}`, { method:"PATCH", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ action:"like" }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "いいねを更新できませんでした。"); void reloadComments(documentId).catch(() => undefined); })().catch((error:unknown)=>{ item.like_actor_counts = previousLikes; renderComments(); saveMessage.value=error instanceof Error ? error.message : "いいねを更新できませんでした。"; }).finally(() => pendingCommentReactions.delete(commentId)); });
     comments.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-send-reply]"); if (!button) return; const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value; const parentCommentId = button.dataset.sendReply; const textarea = parentCommentId ? comments.querySelector<HTMLTextAreaElement>(`[data-reply-body="${parentCommentId}"]`) : null; if (!documentId || !parentCommentId || !textarea) return; button.disabled = true; void (async () => { const response = await fetch(`/api/admin/editor/documents/${documentId}/comments`, { method:"POST", headers:{"content-type":"application/json"}, credentials:"same-origin", body:JSON.stringify({ body: textarea.value, parentCommentId, selections: selectedCommentRanges, tags: selectedReplyTags.get(parentCommentId) ?? [] }) }); const data = await read<{error?:string}>(response); if(!response.ok) throw new Error(data.error ?? "返信を送れませんでした。"); selectedReplyTags.delete(parentCommentId); activeReplyId = null; selectedCommentRanges = []; appendSelectionMode = false; renderSelectedRanges(); await reloadComments(documentId); })().catch((error:unknown)=>{ saveMessage.value=error instanceof Error ? error.message : "返信を送れませんでした。"; button.disabled=false; }); });
