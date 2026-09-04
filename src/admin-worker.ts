@@ -6761,15 +6761,31 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   await ensureAtlasMembership(env, scope);
-  const projects = scope.isManager
-    ? await env.REPORTS.prepare(
-        `SELECT p.id,p.slug,p.name,p.description,'manager' AS role FROM atlasez_projects p ORDER BY p.name`,
-      ).all()
-    : await env.REPORTS.prepare(
-        `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
-      )
-        .bind(scope.email)
-        .all();
+  const [projects, availableProjects] = scope.isManager
+    ? await Promise.all([
+        env.REPORTS.prepare(
+          `SELECT p.id,p.slug,p.name,p.description,'manager' AS role FROM atlasez_projects p ORDER BY p.name`,
+        ).all(),
+        Promise.resolve({ results: [] as Array<Record<string, unknown>> }),
+      ])
+    : await Promise.all([
+        env.REPORTS.prepare(
+          `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
+        )
+          .bind(scope.email)
+          .all(),
+        env.REPORTS.prepare(
+          `SELECT p.id,p.slug,p.name,p.description,'available' AS role
+           FROM atlasez_projects p
+           WHERE NOT EXISTS (
+             SELECT 1 FROM atlasez_project_memberships m
+             WHERE m.project_id=p.id AND lower(m.email)=lower(?)
+           )
+           ORDER BY p.name`,
+        )
+          .bind(scope.email)
+          .all(),
+      ]);
   const projectRows = projects.results as Array<{
     id: string;
     slug: string;
@@ -6859,6 +6875,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   return json({
     email: scope.email,
     projects: projects.results,
+    availableProjects: availableProjects.results,
     todos: todos.results,
     calendar: {
       rangeStart: rangeStart.toISOString(),
@@ -14851,7 +14868,9 @@ async function authorizeUserPage(
     return Response.redirect(`${new URL(request.url).origin}/onboarding/`, 302);
   if (
     pathname === "/admin/member-profile" ||
-    pathname === "/admin/member-profile/"
+    pathname === "/admin/member-profile/" ||
+    pathname === "/admin/member-profile/edit" ||
+    pathname === "/admin/member-profile/edit/"
   ) {
     if (current.applicationStatus === "accepted" && current.baseProfileComplete)
       return current;
