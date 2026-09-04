@@ -846,6 +846,88 @@ test("インライン数式・表示数式を本文と別窓へ挿入できる",
   await popup.close();
 });
 
+test("LaTeXコマンド補完と入力補助を使える", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  const body = page.locator("[data-body]");
+  const editor = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  await editor.click();
+  await editor.pressSequentially("\\fr");
+  const suggestions = page.locator(".latex-suggestions");
+  await expect(suggestions).toBeVisible();
+  await expect(suggestions.getByRole("option").first()).toContainText("\\frac");
+  await editor.press("Enter");
+  await expect(body).toHaveValue("\\frac{ }{ }");
+  await expect(suggestions).toBeHidden();
+
+  await body.fill("");
+  await editor.click();
+  await editor.press("Control+Space");
+  await expect(suggestions).toBeVisible();
+  await expect(body).toHaveValue("\\");
+  await suggestions.getByRole("option", { name: /\\sqrt/ }).click();
+  await expect(body).toHaveValue("\\sqrt{ }");
+
+  await body.fill("");
+  await editor.click();
+  await editor.press("{");
+  await expect(body).toHaveValue("{}");
+  await expect
+    .poll(() =>
+      body.evaluate(
+        (element) => (element as HTMLTextAreaElement).selectionStart,
+      ),
+    )
+    .toBe(1);
+  await editor.press("a");
+  await editor.press("}");
+  await expect(body).toHaveValue("{a}");
+
+  await body.fill("\\begin{aligned}\n\\end{aligned}");
+  await editor.click();
+  await body.evaluate((element) =>
+    (element as HTMLTextAreaElement).setSelectionRange(16, 16),
+  );
+  await editor.press("Tab");
+  await expect(body).toHaveValue("\\begin{aligned}\n  \\end{aligned}");
+});
+
+test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  const body = page.locator("[data-body]");
+  const expectedStarts: Record<string, string> = {
+    frac: "\\frac{ }{ }",
+    sqrt: "\\sqrt{ }",
+    supsub: "^{ }_{ }",
+    matrix: "\\begin{pmatrix}\n",
+    cases: "\\begin{cases}\n",
+    aligned: "\\begin{aligned}\n",
+  };
+  for (const [kind, expected] of Object.entries(expectedStarts)) {
+    await body.fill("");
+    await body.focus();
+    await page.locator(`[data-insert-latex-snippet="${kind}"]`).click();
+    await expect(body).toHaveValue(
+      new RegExp(`^${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    );
+  }
+
+  const popupPromise = page.waitForEvent("popup");
+  await page
+    .locator('[data-editor-pane="writing"] [data-pane-popout="writing"]')
+    .click();
+  const popup = await popupPromise;
+  const popupBody = popup.locator("[data-body]");
+  await popupBody.fill("");
+  await popup.locator('[data-insert-latex-snippet="matrix"]').click();
+  await expect(popupBody).toHaveValue(/\\begin\{pmatrix\}\n/);
+  await expect(body).toHaveValue(await popupBody.inputValue());
+  await popup.close();
+});
+
 test("画像参照を含む未保存の変更を公開前に保存してからPRを作成する", async ({
   page,
 }) => {

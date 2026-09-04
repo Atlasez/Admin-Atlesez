@@ -176,6 +176,32 @@ const enhanceBodyEditor = (textarea) => {
     resize: "none",
   });
 
+  // The editor page keeps LaTeX completion, delimiter pairing and indentation
+  // on the backing textarea so those helpers also work with fallback editing.
+  // Forward visible CodeMirror key events before its own keymaps run, and
+  // mirror preventDefault back to CodeMirror when a helper handles the key.
+  host.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.defaultPrevented) return;
+      const forwarded = new KeyboardEvent("keydown", {
+        key: event.key,
+        code: event.code,
+        location: event.location,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        repeat: event.repeat,
+        bubbles: true,
+        cancelable: true,
+      });
+      textarea.dispatchEvent(forwarded);
+      if (forwarded.defaultPrevented) event.preventDefault();
+    },
+    true,
+  );
+
   let syncingFromTextarea = false;
   let heightFrame = 0;
 
