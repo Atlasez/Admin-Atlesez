@@ -930,6 +930,7 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
   };
   for (const [kind, expected] of Object.entries(expectedStarts)) {
     await body.fill("");
+    await expect(body).toHaveValue("");
     await body.focus();
     await page.locator(`[data-insert-latex-snippet="${kind}"]`).click();
     await expect(body).toHaveValue(
