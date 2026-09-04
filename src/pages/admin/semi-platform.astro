@@ -4,27 +4,87 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 <AdminLayout title="ゼミプラットフォーム" description="ゼミプラットフォームの運営ワークスペース">
   <main class="semi-platform-home">
     <header class="project-heading">
-      <div><h1>ゼミプラットフォーム</h1></div>
-      <a href="/admin/portal/" aria-label="Atlasezメンバー用サイトへ戻る">←</a>
+      <div>
+        <p>ATLASEZ / SEMI PLATFORM</p>
+        <h1>ゼミプラットフォーム</h1>
+        <span>ゼミの運営タスク、日程、メンバー情報をまとめて管理します。</span>
+      </div>
+      <a href="/admin/portal/" aria-label="Atlasezメンバー用サイトへ戻る">AtlasezプロジェクトHomeへ</a>
     </header>
-    <section class="project-links" aria-label="ゼミプラットフォームメニュー">
-      <a href="/admin/operations/?project=seminar-platform"><strong>タスク管理</strong><span aria-label="タスク管理を開く">→</span></a>
-      <a href="/admin/co-working/?project=seminar-platform"><strong>日程・交流</strong><span aria-label="日程・交流を開く">→</span></a>
-      <a href="/admin/introductions/?project=seminar-platform"><strong>運営内自己紹介</strong><span aria-label="運営内自己紹介を開く">→</span></a>
-      <a href="/admin/workspace/?project=seminar-platform"><strong>マイページ</strong><span aria-label="プロジェクトのマイページを開く">→</span></a>
+
+    <section class="menu-group" aria-labelledby="seminar-operations-heading">
+      <header class="menu-group-heading">
+        <span aria-hidden="true">・</span>
+        <h2 id="seminar-operations-heading">運営ワークスペース</h2>
+        <p>日々の作業と予定を確認します。</p>
+      </header>
+      <div class="project-links">
+        <a class="featured" href="/admin/operations/?project=seminar-platform">
+          <strong>ゼミ・タスク管理</strong>
+          <small>担当タスク、進捗報告、期限をまとめて管理します。</small>
+          <span>タスクを開く →</span>
+        </a>
+        <a class="featured" href="/admin/calendar/?project=seminar-platform">
+          <strong>ゼミ・カレンダー</strong>
+          <small>ゼミの予定と運営メンバーの参加状況を確認します。</small>
+          <span>カレンダーを開く →</span>
+        </a>
+        <a href="/admin/co-working/?project=seminar-platform">
+          <strong>日程・交流</strong>
+          <small>同時作業会や開催候補を共有します。</small>
+          <span>日程・交流を開く →</span>
+        </a>
+        <a href="/admin/introductions/?project=seminar-platform">
+          <strong>運営内自己紹介</strong>
+          <small>ゼミ運営メンバーのプロフィールを確認します。</small>
+          <span>自己紹介を開く →</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="menu-group menu-group-links" aria-labelledby="seminar-links-heading">
+      <header class="menu-group-heading">
+        <span aria-hidden="true">・</span>
+        <h2 id="seminar-links-heading">関連サイト</h2>
+        <p>公開サイトと共通ポータルへの導線です。</p>
+      </header>
+      <div class="project-links">
+        <a href="https://sites.google.com/view/atlasez-semi" target="_blank" rel="noreferrer">
+          <strong>現行サイト</strong>
+          <small>公開中のゼミプラットフォームを別タブで開きます。</small>
+          <span>サイトを開く ↗</span>
+        </a>
+        <a href="/admin/workspace/?project=seminar-platform">
+          <strong>マイページ</strong>
+          <small>自分のプロフィールと参加中の活動を確認します。</small>
+          <span>マイページを開く →</span>
+        </a>
+      </div>
     </section>
   </main>
 </AdminLayout>
 <style>
   .semi-platform-home { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
   .project-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.2rem 0 1.4rem; }
+  .project-heading p { color: var(--accent-primary); font-size: .72rem; font-weight: 800; letter-spacing: .1em; margin: 0; }
   .project-heading h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin: .25rem 0; }
   .project-heading span { color: var(--text-secondary); line-height: 1.6; }
   .project-heading > a { color: var(--accent-primary); font-size: .8rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
-  .project-links { display:grid;gap:.8rem;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:1.5rem }.project-links a{background:var(--background-secondary);border:1px solid var(--border-default);color:var(--text-primary);display:grid;gap:1rem;min-height:5.5rem;padding:1rem;text-decoration:none}.project-links a:hover{border-color:var(--accent-primary)}.project-links span{color:var(--accent-primary);font-size:.78rem;font-weight:800}
+  .menu-group { background: color-mix(in srgb, var(--background-secondary) 52%, transparent); border: 1px solid var(--border-default); margin-top: 1.5rem; padding: 1.1rem; }
+  .menu-group-heading { align-items: start; display: grid; gap: .2rem 1rem; grid-template-columns: auto minmax(0, 1fr); }
+  .menu-group-heading > span { color: var(--accent-primary); font-size: 1.2rem; font-weight: 800; line-height: 1; padding-top: .3rem; }
+  .menu-group-heading h2 { font-size: 1.35rem; line-height: 1.25; margin: .1rem 0 0; }
+  .menu-group-heading p { color: var(--text-secondary); font-size: .85rem; grid-column: 2; line-height: 1.5; margin: 0; }
+  .project-links { display: grid; gap: .6rem; grid-column: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1rem; }
+  .project-links a { background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-primary); display: grid; gap: .4rem; min-height: 7rem; padding: 1.1rem; position: relative; text-decoration: none; }
+  .project-links a:hover { border-color: var(--accent-primary); transform: translateY(-1px); }
+  .project-links .featured { border-top: 3px solid var(--accent-primary); min-height: 8rem; }
+  .project-links strong { font-size: 1.05rem; line-height: 1.35; padding-right: 1.2rem; }
+  .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
+  .project-links a > span { color: var(--accent-primary); font-size: .76rem; font-weight: 800; margin-top: auto; }
   @media (max-width: 700px) {
     .semi-platform-home { padding: 0 .8rem 3rem; }
     .project-heading { align-items: start; display: grid; }
-    .project-links { grid-template-columns:1fr; }
+    .project-links { grid-template-columns: 1fr; }
   }
 </style>
