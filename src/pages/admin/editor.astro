@@ -4514,6 +4514,51 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
 
   /*
+   * ChromeのDark Readerなど、サイト外のダークモードは
+   * data-pref-bgを変更せずにページの色だけを変えることがある。
+   * その場合も状態カードを暗色配色へ固定し、淡い背景と淡い文字の
+   * 組み合わせにならないようにする。
+   */
+  html[data-darkreader-scheme="dark"] .editor-workspace .document-statuses .publication-run-status[aria-busy="true"] {
+    background: #1f3b4d !important;
+    border-color: #5f9fca !important;
+    box-shadow: 0 0 0 2px rgb(95 159 202 / .22) !important;
+    color: #c5e7fb !important;
+  }
+  html[data-darkreader-scheme="dark"] .editor-workspace .document-statuses .publication-run-status[data-state="failed"],
+  html[data-darkreader-scheme="dark"] .editor-workspace .document-statuses .publication-run-status[data-state="needs_operator"],
+  html[data-darkreader-scheme="dark"] .editor-workspace .document-statuses .publication-integration-status[data-state="error"],
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-diagnostic {
+    background: #4a3a1b !important;
+    border-color: #c79a3d !important;
+    color: #f3d58a !important;
+  }
+  html[data-darkreader-scheme="dark"] .editor-workspace .document-statuses .publication-integration-status[data-state="ready"] {
+    background: #1d3a2a !important;
+    border-color: #64b889 !important;
+    color: #c8f0d5 !important;
+  }
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status[data-state="failed"] .publication-run-state,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status[data-state="needs_operator"] .publication-run-state,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-diagnostic summary {
+    color: #f3d58a !important;
+  }
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status .publication-run-title,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status .publication-run-state,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status .publication-run-message,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status .publication-run-updated {
+    color: #c5e7fb !important;
+  }
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status[data-state="failed"] .publication-run-state,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status[data-state="needs_operator"] .publication-run-state {
+    color: #f3d58a !important;
+  }
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status[data-state="failed"] .publication-run-indicator,
+  html[data-darkreader-scheme="dark"] .editor-workspace .publication-run-status[data-state="needs_operator"] .publication-run-indicator {
+    background: #c79a3d !important;
+  }
+
+  /*
    * 状態表示は長いGitHub情報を含むため、max-contentの列で幅を確保しない。
    * 以前の3列グリッドでは、左カラムに残った数pxへPRリンクが押し込まれ、
    * リンク文字が縦一列になってツールバー全体の高さも不安定になっていた。
