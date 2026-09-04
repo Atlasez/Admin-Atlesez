@@ -231,6 +231,67 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     );
   });
 
+  test("D-3b: 絞り込み条件を記憶し、担当分野だけを選択できる", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            coordinatorSubjects: [],
+            allSubjects: false,
+          },
+          documents: [
+            {
+              id: "math-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "数学の記事",
+              status: "approved",
+              updated_at: "2026-09-01T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "physics-doc",
+              subject: "physics",
+              category: "mechanics",
+              title: "担当外の記事",
+              status: "draft",
+              updated_at: "2026-08-31T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=filter-memory");
+    await expect(
+      page.locator("[data-subject] option:not([hidden])"),
+    ).toHaveText(["すべての分野", "数学"]);
+    await expect(
+      page.locator('[data-subject] option[value="physics"]'),
+    ).toBeHidden();
+
+    await page.locator("[data-query]").fill("数学");
+    await page.locator("[data-subject]").selectOption("mathematics");
+    await page.locator("[data-status]").selectOption("approved");
+    await page.reload();
+
+    await expect(page.locator("[data-query]")).toHaveValue("数学");
+    await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
+    await expect(page.locator("[data-status]")).toHaveValue("approved");
+
+    await page.getByRole("button", { name: "絞り込みをリセット" }).click();
+    await expect(page.locator("[data-query]")).toHaveValue("");
+    await expect(page.locator("[data-subject]")).toHaveValue("all");
+    await expect(page.locator("[data-status]")).toHaveValue("all");
+    await expect(page.locator("[data-test]")).toHaveValue("exclude");
+    await expect(page.locator("[data-archive]")).toHaveValue("active");
+  });
+
   test("D-4: 下書きをアーカイブし、30日以内なら一覧から復元できる", async ({
     page,
   }) => {

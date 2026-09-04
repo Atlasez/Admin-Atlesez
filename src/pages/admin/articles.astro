@@ -56,6 +56,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     </nav>
     <div class="catalog-toolbar">
       <p class="catalog-note" data-catalog-summary>公開記事との対応状態を確認しています…</p>
+      <button type="button" class="article-action" data-reset-filters>絞り込みをリセット</button>
       <button type="button" class="article-action" data-run-catalog-diagnostics>カタログを診断</button>
     </div>
     <details class="catalog-diagnostics" data-catalog-diagnostics hidden>
@@ -619,6 +620,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
 </style>
 <script>
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
+  type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
+  type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string};
   type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown};
   type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"};
@@ -643,14 +646,42 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const catalogDiagnostics = root.querySelector<HTMLDetailsElement>("[data-catalog-diagnostics]")!;
     const catalogDiagnosticsSummary = root.querySelector<HTMLElement>("[data-catalog-diagnostics-summary]")!;
     const catalogDiagnosticsIssues = root.querySelector<HTMLUListElement>("[data-catalog-diagnostics-issues]")!;
+    const resetFiltersButton = root.querySelector<HTMLButtonElement>("[data-reset-filters]")!;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
     let catalogSource: "api" | "static" = "static";
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
     let scopeEmail = "";
+    const filterStorageKey = "atlasez-admin-article-filters";
+    const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", management: "all", test: "exclude", workflow: "all", archive: "active" };
 
     const requestedMode = new URLSearchParams(location.search).get("mode");
+    const readStoredFilters = (): Partial<ArticleFilterState> => {
+      try {
+        const raw = localStorage.getItem(filterStorageKey);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw) as unknown;
+        if (!parsed || typeof parsed !== "object") return {};
+        return parsed as Partial<ArticleFilterState>;
+      } catch {
+        return {};
+      }
+    };
+    const storedFilters = readStoredFilters();
+    const assignSelectValue = (element: HTMLSelectElement, value: unknown, fallback: string) => {
+      const next = typeof value === "string" && [...element.options].some((option) => option.value === value) ? value : fallback;
+      element.value = next;
+    };
+    query.value = typeof storedFilters.query === "string" ? storedFilters.query : defaultFilterState.query;
+    assignSelectValue(subject, storedFilters.subject, defaultFilterState.subject);
+    assignSelectValue(category, storedFilters.category, defaultFilterState.category);
+    assignSelectValue(status, storedFilters.status, defaultFilterState.status);
+    assignSelectValue(publication, storedFilters.publication, defaultFilterState.publication);
+    assignSelectValue(management, storedFilters.management, defaultFilterState.management);
+    assignSelectValue(test, storedFilters.test, defaultFilterState.test);
+    assignSelectValue(workflow, requestedMode === "review" || requestedMode === "revise" || requestedMode === "request" ? requestedMode : storedFilters.workflow, defaultFilterState.workflow);
+    assignSelectValue(archive, storedFilters.archive, defaultFilterState.archive);
     if (requestedMode === "review" || requestedMode === "revise" || requestedMode === "request") workflow.value = requestedMode;
     const esc = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character));
     const labels = { draft: "下書き", "in-review": "フィードバック中", "on-hold": "保留", approved: "フィードバック済み" };
@@ -685,6 +716,48 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }
       if (selectedCategory !== "all" && category.selectedOptions[0]?.hidden) category.value = "all";
     };
+    const saveFilterState = () => {
+      const state: ArticleFilterState = {
+        query: query.value,
+        subject: subject.value,
+        category: category.value,
+        status: status.value,
+        publication: publication.value,
+        management: management.value,
+        test: test.value,
+        workflow: workflow.value,
+        archive: archive.value,
+      };
+      try {
+        localStorage.setItem(filterStorageKey, JSON.stringify(state));
+      } catch {
+        // プライベートブラウジングなどで保存できない場合も一覧操作は継続する。
+      }
+    };
+    const applySubjectScope = (scope: ArticleScope) => {
+      const directSubjects = Array.isArray(scope.subjects) ? scope.subjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
+      const coordinatorSubjects = Array.isArray(scope.coordinatorSubjects) ? scope.coordinatorSubjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
+      const unrestricted = Boolean(scope.allSubjects || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
+      if (unrestricted) {
+        for (const option of subject.options) {
+          option.hidden = false;
+          option.disabled = false;
+        }
+        return;
+      }
+      const allowedSubjects = new Set([...directSubjects, ...coordinatorSubjects]);
+      for (const option of subject.options) {
+        const allowed = option.value === "all" || allowedSubjects.has(option.value);
+        option.hidden = !allowed;
+        option.disabled = !allowed;
+      }
+      if (subject.value !== "all" && !allowedSubjects.has(subject.value)) {
+        subject.value = "all";
+        category.value = "all";
+      }
+      updateCategoryOptions();
+      saveFilterState();
+    };
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
     const catalogRows = (): CatalogRow[] => {
@@ -704,6 +777,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const rowCategory = (row: CatalogRow) => row.kind === "editorial" ? row.article.category : row.publicArticle.category;
     const rowUpdatedAt = (row: CatalogRow) => row.kind === "editorial" ? row.article.updated_at : row.publicArticle.updatedAt;
     const render = () => {
+      saveFilterState();
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
       const rows = catalogRows();
@@ -806,10 +880,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const response = await fetch(`/api/admin/editor/documents${includeArchived ? "?includeArchived=1" : ""}`, { credentials: "same-origin", cache: "no-store" });
         const catalogPromise = loadCatalog();
         const contentType = response.headers.get("content-type") ?? "";
-        const data = contentType.includes("application/json") ? await response.json() : {};
+        const data = contentType.includes("application/json") ? await response.json() as { documents?: Article[]; scope?: ArticleScope; error?: string } : {};
         if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
         items = data.documents ?? [];
         scopeEmail = data.scope?.email ?? "";
+        if (data.scope) applySubjectScope(data.scope);
         await catalogPromise;
         render();
       } catch (error) {
@@ -898,6 +973,21 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }
     };
     catalogDiagnosticsButton.addEventListener("click", () => { void runCatalogDiagnostics(); });
+    resetFiltersButton.addEventListener("click", () => {
+      query.value = defaultFilterState.query;
+      assignSelectValue(subject, defaultFilterState.subject, defaultFilterState.subject);
+      assignSelectValue(category, defaultFilterState.category, defaultFilterState.category);
+      assignSelectValue(status, defaultFilterState.status, defaultFilterState.status);
+      assignSelectValue(publication, defaultFilterState.publication, defaultFilterState.publication);
+      assignSelectValue(management, defaultFilterState.management, defaultFilterState.management);
+      assignSelectValue(test, defaultFilterState.test, defaultFilterState.test);
+      assignSelectValue(workflow, defaultFilterState.workflow, defaultFilterState.workflow);
+      assignSelectValue(archive, defaultFilterState.archive, defaultFilterState.archive);
+      updateCategoryOptions();
+      saveFilterState();
+      history.replaceState({}, "", `${location.pathname}#article-list`);
+      render();
+    });
     window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     [query, category, status, publication, test, workflow, archive].forEach((element) => element.addEventListener("input", render));
