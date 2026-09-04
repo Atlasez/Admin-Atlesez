@@ -497,6 +497,23 @@ test.describe("学習サイト", () => {
     await expect(subjects.nth(1)).toBeChecked();
   });
 
+  test("数学記事の証明ボタンの矢印がラベルに重ならない", async ({ page }) => {
+    await page.goto("atlas/ja/mathematics/group-theory/cyclic-groups/");
+    const summary = page
+      .locator(
+        '.article-body[data-article-subject="mathematics"] .proof-details > summary',
+      )
+      .first();
+    await expect(summary).toHaveText("証明.");
+    const layout = await summary.evaluate((element) => ({
+      markerContent: getComputedStyle(element, "::marker").content,
+      paddingLeft: Number.parseFloat(getComputedStyle(element).paddingLeft),
+      arrowLeft: Number.parseFloat(getComputedStyle(element, "::before").left),
+    }));
+    expect(layout.markerContent).toBe('""');
+    expect(layout.paddingLeft).toBeGreaterThan(layout.arrowLeft);
+  });
+
   test("スマートフォンでも行き先が畳まれずに出ている", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("atlas/ja/");

@@ -877,6 +877,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .article-preview .proof-details { margin:1.2rem 0; }
   .article-preview .proof-details > summary { align-items:center; background:var(--background-secondary); border:1px solid var(--border); border-radius:.4rem; cursor:pointer; display:inline-flex; font-weight:800; gap:.45rem; list-style:none; padding:.35rem .8rem .35rem 2rem; position:relative; }
   .article-preview .proof-details > summary::-webkit-details-marker { display:none; }
+  .article-preview .proof-details > summary::marker { content:""; }
   .article-preview .proof-details > summary::before { border-bottom:2px solid var(--muted); border-right:2px solid var(--muted); content:""; height:.45rem; left:.8rem; position:absolute; top:.65rem; transform:rotate(45deg); transition:transform .15s ease; width:.45rem; }
   .article-preview .proof-details[open] > summary::before { transform:rotate(225deg); }
   .article-preview .proof-details > summary:hover { border-color:var(--accent); }
