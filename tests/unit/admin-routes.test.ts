@@ -15,4 +15,10 @@ describe("admin page routes", () => {
     expect(isAdminPagePath("/admin/unknown")).toBe(false);
     expect(isAdminPagePath("/atlas/ja/")).toBe(false);
   });
+
+  it("exposes the nested member profile editor without adding it to top-level navigation", () => {
+    expect(isAdminPagePath("/admin/member-profile/edit")).toBe(true);
+    expect(isAdminPagePath("/admin/member-profile/edit/")).toBe(true);
+    expect(ADMIN_PAGE_PATHS).not.toContain("/admin/member-profile/edit");
+  });
 });

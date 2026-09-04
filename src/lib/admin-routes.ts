@@ -42,5 +42,12 @@ const adminPagePathSet = new Set(
   ADMIN_PAGE_PATHS.flatMap((path) => [path, `${path}/`]),
 );
 
+// Nested pages stay out of the top-level navigation list while still passing
+// through the admin Worker page gate.
+const adminNestedPagePathSet = new Set([
+  "/admin/member-profile/edit",
+  "/admin/member-profile/edit/",
+]);
+
 export const isAdminPagePath = (pathname: string) =>
-  adminPagePathSet.has(pathname);
+  adminPagePathSet.has(pathname) || adminNestedPagePathSet.has(pathname);
