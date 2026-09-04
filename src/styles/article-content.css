@@ -180,6 +180,12 @@
 
 .article-body[data-article-subject="mathematics"]
   .proof-details
+  > summary::marker {
+  content: "";
+}
+
+.article-body[data-article-subject="mathematics"]
+  .proof-details
   > summary::before {
   border-bottom: 2px solid var(--text-secondary);
   border-right: 2px solid var(--text-secondary);
@@ -322,6 +328,10 @@
 
 .article-body details.folding > summary::-webkit-details-marker {
   display: none;
+}
+
+.article-body details.folding > summary::marker {
+  content: "";
 }
 
 .article-body details.folding > summary::before {
