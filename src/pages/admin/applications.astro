@@ -18,9 +18,6 @@ const projectLabel = selectedProject?.[1] ?? "";
       <h1>{selectedProject ? `${projectLabel}：応募管理` : "応募管理"}</h1>
       <span>{selectedProject ? "このプロジェクトに届いた応募だけを表示しています。" : "応募管理を表示するプロジェクトを選択してください。"}</span>
     </header>
-    <nav class="project-switcher" aria-label="応募管理のプロジェクト切り替え">
-      {applicationProjects.map(([slug, label]) => <a href={`/admin/applications/?project=${slug}`} aria-current={selectedProject?.[0] === slug ? "page" : undefined}>{label}</a>)}
-    </nav>
     <section class="project-picker" hidden={Boolean(selectedProject)} aria-labelledby="project-picker-title">
       <p>プロジェクトを選択</p>
       <h2 id="project-picker-title">確認する応募先を選んでください</h2>
@@ -51,10 +48,12 @@ const projectLabel = selectedProject?.[1] ?? "";
     </section>
     <output class="notice" data-notice aria-live="polite" hidden={!selectedProject}></output>
     <section class="application-navigator" data-application-navigator aria-label="応募者の切り替え" hidden>
-      <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
       <label class="application-picker">表示する応募者<select data-application-select aria-label="表示する応募者"></select></label>
       <span class="application-position" data-application-position aria-live="polite"></span>
-      <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
+      <div class="navigator-actions">
+        <button type="button" class="button button--quiet navigator-button" data-previous-application aria-label="前の応募者">← 前へ</button>
+        <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
+      </div>
     </section>
     <div class="application-list" data-list hidden={!selectedProject}>読み込み中…</div>
     <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title" hidden={!selectedProject}>
@@ -72,8 +71,58 @@ const projectLabel = selectedProject?.[1] ?? "";
   @media(max-width:420px){.flow-steps{grid-template-columns:1fr}}
   .application-overview{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;margin-top:1.25rem;padding:1rem}.section-heading{align-items:end;display:flex;justify-content:space-between}.section-heading p{color:var(--accent-primary);font-size:.72rem;font-weight:900;letter-spacing:.1em;margin:0 0 .35rem}.section-heading h2{font-size:1.15rem;margin:0}.section-heading>span{color:var(--text-secondary);font-size:.76rem}.summary-grid{display:grid;gap:.55rem;grid-template-columns:repeat(4,1fr);margin-top:.9rem}.summary-card{background:var(--background-primary);border:1px solid var(--border-default);border-left:3px solid var(--border-default);display:grid;gap:.12rem;padding:.65rem .75rem}.summary-card strong{font-size:1.35rem;line-height:1.1}.summary-card span{color:var(--text-secondary);font-size:.72rem;font-weight:700}.summary-card--new{border-left-color:#d97706}.summary-card--reviewing{border-left-color:#2563a5}.summary-card--accepted{border-left-color:#27834f}.summary-card--rejected{border-left-color:#9b5a5a}.filter-bar{align-items:end;display:grid;gap:.55rem;grid-template-columns:minmax(220px,1.5fr) minmax(150px,.65fr) auto;margin-top:.85rem}.filter-bar label{color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.28rem}.filter-bar input,.filter-bar select{appearance:auto;background:var(--background-primary);border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);font:inherit;min-height:2.35rem;padding:.45rem .55rem;width:100%}.button{appearance:none;background:var(--accent-primary);border:1px solid var(--accent-primary);border-radius:.35rem;color:#fff;cursor:pointer;font:inherit;font-size:.78rem;font-weight:800;line-height:1.2;min-height:2.35rem;padding:.55rem .75rem;white-space:nowrap}.button--quiet{background:transparent;border:1px solid var(--border-default);color:var(--accent-primary)}.button--quiet:hover,.button--quiet:focus-visible{background:var(--background-primary);border-color:var(--accent-primary)}.application-list{display:grid;gap:.7rem}.application-empty{border:1px dashed var(--border-default);color:var(--text-secondary);padding:2.2rem 1rem;text-align:center}.application-list .app{margin-top:0}.accept-dialog{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);max-width:34rem;padding:1.25rem}.accept-dialog::backdrop{background:rgb(0 0 0 / .55)}.accept-dialog h2{font-size:1.1rem;margin:0}.accept-dialog p{color:var(--text-secondary);font-size:.84rem;line-height:1.7}.accept-dialog__actions{display:flex;flex-wrap:wrap;gap:.55rem;justify-content:flex-end}@media(max-width:650px){.summary-grid{grid-template-columns:repeat(2,1fr)}.filter-bar{grid-template-columns:1fr}.filter-bar .button{justify-self:start}}
 </style>
+<style is="global">
+  /* Geist-inspired surface: quiet borders, deliberate spacing, no decorative gradients. */
+  .applications{font-family:var(--font-sans,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif);max-width:1180px;padding-bottom:5rem}
+  .applications header{border-bottom:1px solid var(--border-default);padding:3.25rem 0 1.5rem}
+  .applications header p,.flow-heading p,.section-heading p,.app-kicker{font-family:var(--font-mono,"SFMono-Regular",Consolas,monospace);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase}
+  .applications h1{font-size:clamp(1.7rem,3vw,2.25rem);font-weight:650;letter-spacing:-.035em;margin:.55rem 0 .4rem}
+  .applications header span{font-size:.82rem}
+  .application-flow{border:1px solid var(--border-default);border-radius:.5rem;margin-top:1.5rem;padding:1.2rem}
+  .flow-heading{align-items:baseline;margin-bottom:1rem}
+  .flow-heading h2,.section-heading h2{font-size:1.05rem;font-weight:650;letter-spacing:-.02em}
+  .flow-steps{border:1px solid var(--border-default);gap:0;grid-template-columns:repeat(4,minmax(0,1fr));margin:0}
+  .flow-steps li{background:transparent;border:0;border-right:1px solid var(--border-default);min-height:6.5rem;padding:.9rem}
+  .flow-steps li:last-child{border-right:0}
+  .flow-step-number{background:var(--text-primary);color:var(--background-primary);font-family:var(--font-mono,"SFMono-Regular",monospace);font-size:.7rem;height:1.35rem;width:1.35rem}
+  .flow-steps strong{font-size:.76rem;margin-top:.55rem}
+  .flow-steps small{font-size:.67rem;line-height:1.55;margin-top:.3rem}
+  .application-overview{border-radius:.5rem;margin-top:1.5rem;padding:1.2rem}
+  .summary-grid{gap:0;margin-top:1rem}
+  .summary-card{border-left:0;border-right:1px solid var(--border-default);padding:.7rem .85rem}
+  .summary-card:first-child{border-left:3px solid #d97706}
+  .summary-card:last-child{border-right:0}
+  .summary-card strong{font-family:var(--font-mono,"SFMono-Regular",monospace);font-size:1.3rem;font-weight:500}
+  .filter-bar{border-top:1px solid var(--border-default);padding-top:.9rem}
+  .filter-bar input,.filter-bar select,.application-picker select,.interview-fields input,.interview-fields select{border-radius:.35rem;box-shadow:none}
+  .button{border-radius:.35rem;font-size:.75rem;font-weight:650;transition:background-color .15s ease,border-color .15s ease,transform .15s ease}
+  .button:hover{transform:translateY(-1px)}
+  .application-list{gap:.8rem;margin-top:1rem}
+  .application-list .app{background:var(--background-primary);border-radius:.55rem;box-shadow:none}
+  .application-list .app::before{width:2px}
+  .application-list .app .top{background:transparent;padding:1.1rem 1.2rem 1rem 1.3rem}
+  .app-avatar{border-radius:.4rem;font-family:var(--font-mono,"SFMono-Regular",monospace);font-size:1rem;height:2.5rem;width:2.5rem}
+  .application-list .app .actions .badge{border-radius:.35rem}
+  .interview-panel{background:transparent;border:0;border-bottom:1px solid var(--border-default);border-radius:0;margin:0 1.2rem;padding:.95rem 0 1.1rem}
+  .interview-panel .application-section-heading{border-top:1px solid var(--border-default);padding-top:1rem}
+  .interview-fields{gap:.7rem}
+  .interview-fields label,.filter-bar label{font-family:var(--font-mono,"SFMono-Regular",monospace);font-size:.64rem;letter-spacing:.03em;text-transform:uppercase}
+  .interview-actions{margin-top:.85rem}
+  .application-profile,.application-section,.application-response-grid,.application-original-fields,.provisioning-error,.member-link{margin-left:1.2rem;margin-right:1.2rem}
+  .application-profile{padding-top:1.15rem}
+  .application-meta-item,.response-block,.application-original-fields{border-radius:.4rem;box-shadow:none}
+  .application-original-fields summary{font-family:var(--font-mono,"SFMono-Regular",monospace);font-size:.7rem;letter-spacing:.03em;text-transform:uppercase}
+  @media(max-width:760px){.flow-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.flow-steps li:nth-child(2){border-right:0}.flow-steps li:nth-child(-n+2){border-bottom:1px solid var(--border-default)}.summary-card:nth-child(2){border-right:0}.summary-card:nth-child(-n+2){border-bottom:1px solid var(--border-default)}}
+  @media(max-width:480px){.applications header{padding-top:2rem}.application-flow,.application-overview{padding:.9rem}.flow-steps{grid-template-columns:1fr}.flow-steps li{border-bottom:1px solid var(--border-default);border-right:0}.flow-steps li:last-child{border-bottom:0}.summary-grid{grid-template-columns:1fr 1fr}.application-list .app .top{padding-left:1rem}.interview-panel,.application-profile,.application-section,.application-response-grid,.application-original-fields,.provisioning-error,.member-link{margin-left:.9rem;margin-right:.9rem}}
+</style>
 <style>
-  .application-navigator{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;display:grid;gap:.65rem;grid-template-columns:auto minmax(12rem,1fr) auto auto;margin-top:.4rem;padding:.7rem}.application-navigator[hidden]{display:none}.application-picker{color:var(--text-secondary);display:grid;font-size:.7rem;font-weight:800;gap:.25rem}.application-picker select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.navigator-button{min-width:5rem}.navigator-button:disabled{cursor:not-allowed;opacity:.45}.application-position{color:var(--text-secondary);font-size:.75rem;font-variant-numeric:tabular-nums;white-space:nowrap}@media(max-width:650px){.application-navigator{grid-template-columns:1fr 1fr}.application-picker{grid-column:1/-1;grid-row:1}.application-position{justify-self:center;grid-column:1/-1;grid-row:2}.navigator-button{width:100%;grid-row:3}.application-navigator .navigator-button:first-child{grid-column:1}.application-navigator .navigator-button:last-child{grid-column:2}}
+  .application-navigator{align-items:end;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.55rem;display:grid;gap:.65rem;grid-template-columns:minmax(0,1fr) auto auto;margin-top:.4rem;padding:.7rem}.application-navigator[hidden]{display:none}.application-picker{color:var(--text-secondary);display:grid;font-size:.7rem;font-weight:800;gap:.25rem;min-width:0}.application-picker select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.navigator-button{min-width:5rem}.navigator-button:disabled{cursor:not-allowed;opacity:.45}.application-position{color:var(--text-secondary);font-size:.75rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+  @media(max-width:1000px){
+    .application-navigator{grid-template-columns:minmax(0,1fr) auto}
+    .application-navigator .application-picker{grid-column:1/-1;grid-row:1}
+    .application-navigator .application-position{grid-column:1;grid-row:2;justify-self:start;align-self:center;padding-bottom:0}
+    .application-navigator .navigator-actions{grid-column:2;grid-row:2}
+  }
   .application-list{margin-top:.75rem}.application-list .app{background:var(--background-secondary);border-radius:.7rem;box-shadow:0 .35rem 1.2rem rgb(0 0 0 / .08);padding:1.25rem}.application-list .app .top{border-bottom:1px solid var(--border-default);padding-bottom:.85rem}.application-list .app .top h2{font-size:1.15rem;line-height:1.4}.application-list .app h3{color:var(--accent-primary);font-size:.78rem;letter-spacing:.03em}.application-list .app pre{background:var(--background-primary);border-left:2px solid var(--border-default);border-radius:.25rem;padding:.55rem .7rem}.application-original-fields{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.45rem;padding:.65rem .8rem}.application-original-fields summary{color:var(--accent-primary);cursor:pointer;font-size:.8rem;font-weight:800}.application-original-fields[open] summary{margin-bottom:.7rem}
 </style>
 <style is:global>
@@ -95,10 +144,455 @@ const projectLabel = selectedProject?.[1] ?? "";
   .application-profile{background:color-mix(in srgb,var(--background-primary) 55%,transparent);border:1px solid color-mix(in srgb,var(--border-default) 80%,transparent);border-radius:.7rem;margin-top:1rem;padding:.95rem 1rem 1rem}.application-profile .application-section-heading{margin-bottom:.75rem}.application-profile .application-section-heading>div{display:grid;gap:.15rem}.application-profile .application-section-heading h3{font-size:.95rem;margin:0}.application-profile .application-section-heading>span{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;padding:.25rem .5rem}.application-profile .application-meta-grid{gap:.55rem}.application-profile .application-meta-item{background:var(--background-secondary);min-height:4.3rem}.application-profile .application-meta-item strong{font-size:.82rem}.application-profile .application-meta-item:first-child{border-color:color-mix(in srgb,var(--accent-primary) 45%,var(--border-default));border-left:3px solid var(--accent-primary)}
   @media(max-width:760px){.application-list .app .top{gap:.9rem}.application-list .app .actions{display:grid;grid-template-columns:minmax(8rem,auto) minmax(11rem,1fr);justify-content:stretch}.application-list .app .actions .status-control{min-width:0}.status-control select{min-width:0}.application-list .app .actions button{grid-column:1/-1;justify-self:start}}
   @media(max-width:480px){.application-list .app .top{padding:.95rem .85rem .9rem 1rem}.application-list .app .top h2{font-size:1.12rem}.application-list .app .actions{grid-template-columns:1fr}.application-list .app .actions button{grid-column:auto;justify-self:stretch}.application-profile{padding:.8rem .75rem}.application-profile .application-section-heading{align-items:flex-start;display:grid;gap:.45rem}.application-profile .application-section-heading>span{justify-self:start}}
+  .interview-panel{background:color-mix(in srgb,var(--accent-primary) 7%,var(--background-primary));border:1px solid color-mix(in srgb,var(--accent-primary) 32%,var(--border-default));border-radius:.7rem;margin:1rem 1.25rem 0 1.45rem;padding:.95rem 1rem}.interview-panel .application-section-heading{margin-bottom:.75rem}.interview-panel .application-section-heading h3{font-size:.95rem;margin:0}.interview-panel .application-section-heading>span{font-size:.68rem}.interview-fields{display:grid;gap:.65rem;grid-template-columns:minmax(0,1fr) minmax(10rem,.65fr) minmax(0,1.25fr)}.interview-fields label{color:var(--text-secondary);display:grid;font-size:.68rem;font-weight:800;gap:.3rem}.interview-fields input,.interview-fields select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);font:inherit;font-size:.8rem;min-height:2.35rem;padding:.45rem .55rem;width:100%}.interview-fields input:focus-visible,.interview-fields select:focus-visible{border-color:var(--accent-primary);outline:2px solid color-mix(in srgb,var(--accent-primary) 30%,transparent);outline-offset:1px}.interview-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem}.interview-actions .button{font-size:.74rem;min-height:2.3rem;text-decoration:none}.interview-actions .button[aria-busy=true]{cursor:wait;opacity:.65}.interview-panel[data-mode=in_person] .interview-zoom-field{opacity:.7}.interview-panel[data-mode=in_person] .interview-zoom-field::after{color:var(--text-secondary);content:'対面の場合は任意';font-size:.62rem;font-weight:500;margin-top:-.15rem}@media(max-width:760px){.interview-panel{margin-left:1rem;margin-right:1rem}.interview-fields{grid-template-columns:1fr 1fr}.interview-zoom-field{grid-column:1/-1}}@media(max-width:480px){.interview-panel{margin-left:.75rem;margin-right:.75rem;padding:.8rem}.interview-fields{grid-template-columns:1fr}.interview-zoom-field{grid-column:auto}.interview-actions{display:grid}.interview-actions .button{justify-content:center;text-align:center;width:100%}}
+</style>
+<style is="global">
+  /* Final layer keeps the Geist treatment ahead of legacy page overrides. */
+  .applications .application-flow,.applications .application-overview{border-radius:6px;box-shadow:none}
+  .applications .flow-steps{border:1px solid var(--border-default);gap:0}
+  .applications .flow-steps li{background:transparent;border:0;border-right:1px solid var(--border-default);border-top:0;min-height:6.5rem}
+  .applications .flow-steps li:last-child{border-right:0}
+  .applications .flow-step-number{background:var(--text-primary);color:var(--background-primary);font-family:var(--font-mono,"SFMono-Regular",monospace);height:1.35rem;width:1.35rem}
+  .applications .summary-grid{gap:0}
+  .applications .summary-card{border-left:0;border-right:1px solid var(--border-default);border-radius:0;box-shadow:none}
+  .applications .summary-card:first-child{border-left:3px solid #d97706}
+  .applications .summary-card:last-child{border-right:0}
+  .applications .application-list .app{background:var(--background-primary);border-radius:6px;box-shadow:none}
+  .applications .application-list .app .top{background:transparent}
+  .applications .app-avatar{background:var(--text-primary);border:0;border-radius:6px;box-shadow:none;color:var(--background-primary);height:2.5rem;width:2.5rem}
+  .applications .interview-panel{background:transparent;border:0;border-bottom:1px solid var(--border-default);border-radius:0;margin-left:1.2rem;margin-right:1.2rem}
+  .applications .application-profile{border-radius:6px;box-shadow:none}
+  .applications .application-meta-item,.applications .response-block,.applications .application-original-fields{border-radius:6px;box-shadow:none}
+  @media(max-width:760px){.applications .flow-steps li:nth-child(2){border-right:0}.applications .flow-steps li:nth-child(-n+2){border-bottom:1px solid var(--border-default)}}
+  @media(max-width:480px){.applications .flow-steps li{border-bottom:1px solid var(--border-default);border-right:0}.applications .flow-steps li:last-child{border-bottom:0}}
+</style>
+<style is:global>
+  /* Application workspace design system: one calm surface, one clear primary action. */
+  .applications {
+    --app-radius-sm: 4px;
+    --app-radius-md: 6px;
+    --app-radius-lg: 10px;
+    --app-control-height: 2.5rem;
+    --app-content-width: 1180px;
+    --app-muted-surface: color-mix(in srgb, var(--background-secondary) 68%, var(--background-primary));
+    --app-divider: color-mix(in srgb, var(--border-default) 86%, transparent);
+    --app-danger: #b42318;
+    --app-success: #22734a;
+    margin: 0 auto;
+    max-width: var(--app-content-width);
+    padding: 0 1.5rem 5rem;
+  }
+
+  .applications,
+  .applications * {
+    box-sizing: border-box;
+  }
+
+  .applications [hidden] {
+    display: none !important;
+  }
+
+  .applications header {
+    border-bottom: 1px solid var(--app-divider);
+    padding: 2.75rem 0 1.35rem;
+  }
+
+  .applications header p,
+  .flow-heading p,
+  .section-heading p,
+  .app-kicker {
+    color: var(--accent-primary);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: .67rem;
+    font-weight: 700;
+    letter-spacing: .045em;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  .applications h1 {
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    font-weight: 650;
+    letter-spacing: -.035em;
+    line-height: 1.15;
+    margin: .55rem 0 .45rem;
+  }
+
+  .applications header > span {
+    color: var(--text-secondary);
+    display: block;
+    font-size: .84rem;
+    line-height: 1.55;
+    max-width: 54rem;
+  }
+
+  .project-picker,
+  .application-flow,
+  .application-overview,
+  .application-navigator {
+    border: 1px solid var(--app-divider);
+    border-radius: var(--app-radius-md);
+  }
+
+  .project-picker {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+  }
+
+  .project-picker p { color: var(--accent-primary); font-size: .72rem; font-weight: 700; margin: 0; }
+  .project-picker h2 { font-size: 1.1rem; letter-spacing: -.02em; margin: .35rem 0; }
+  .project-picker span { color: var(--text-secondary); font-size: .82rem; line-height: 1.55; }
+
+  .application-flow {
+    margin-top: 1.5rem;
+    padding: 1.2rem;
+  }
+
+  .flow-heading,
+  .section-heading {
+    align-items: baseline;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+
+  .flow-heading { margin-bottom: 1rem; }
+  .flow-heading h2,
+  .section-heading h2 { font-size: 1.08rem; font-weight: 650; letter-spacing: -.02em; margin: .32rem 0 0; }
+  .flow-heading > span,
+  .section-heading > span { color: var(--text-secondary); font-size: .75rem; line-height: 1.45; text-align: right; }
+
+  .flow-steps {
+    border: 1px solid var(--app-divider);
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .flow-steps li {
+    background: transparent;
+    border-right: 1px solid var(--app-divider);
+    display: grid;
+    gap: .55rem;
+    grid-template-columns: 1.45rem minmax(0, 1fr);
+    min-height: 7rem;
+    padding: .9rem;
+  }
+
+  .flow-steps li:last-child { border-right: 0; }
+  .flow-step-number {
+    align-items: center;
+    background: var(--text-primary);
+    border-radius: var(--app-radius-sm);
+    color: var(--background-primary);
+    display: flex;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: .68rem;
+    height: 1.35rem;
+    justify-content: center;
+    width: 1.35rem;
+  }
+  .flow-steps strong { font-size: .78rem; line-height: 1.35; }
+  .flow-steps small { color: var(--text-secondary); display: block; font-size: .69rem; line-height: 1.55; margin-top: .2rem; }
+
+  .application-overview {
+    margin-top: 1.5rem;
+    padding: 1.2rem;
+  }
+
+  .summary-grid {
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 1rem;
+  }
+
+  .summary-card {
+    background: transparent;
+    border: 0;
+    border-right: 1px solid var(--app-divider);
+    display: grid;
+    gap: .2rem;
+    min-height: 4.2rem;
+    padding: .25rem .9rem .25rem 0;
+  }
+  .summary-card + .summary-card { padding-left: .9rem; }
+  .summary-card:last-child { border-right: 0; }
+  .summary-card strong { font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.45rem; font-weight: 500; line-height: 1; }
+  .summary-card span { color: var(--text-secondary); font-size: .72rem; }
+  .summary-card--new strong { color: #b96800; }
+  .summary-card--reviewing strong { color: var(--accent-primary); }
+  .summary-card--accepted strong { color: var(--app-success); }
+  .summary-card--rejected strong { color: #9b5a5a; }
+
+  .filter-bar {
+    align-items: end;
+    border-top: 1px solid var(--app-divider);
+    display: grid;
+    gap: .7rem;
+    grid-template-columns: minmax(220px, 1.4fr) minmax(160px, .7fr) auto;
+    margin-top: 1rem;
+    padding-top: 1rem;
+  }
+
+  .filter-bar label,
+  .application-picker,
+  .interview-fields label {
+    color: var(--text-secondary);
+    display: grid;
+    font-size: .71rem;
+    font-weight: 650;
+    gap: .35rem;
+  }
+
+  .filter-bar input,
+  .filter-bar select,
+  .application-picker select,
+  .interview-fields input,
+  .interview-fields select {
+    appearance: auto;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--app-radius-sm);
+    color: var(--text-primary);
+    font: inherit;
+    min-height: var(--app-control-height);
+    padding: .5rem .6rem;
+    width: 100%;
+  }
+
+  .filter-bar input::placeholder,
+  .interview-fields input::placeholder { color: var(--text-secondary); opacity: .78; }
+
+  .applications input:focus-visible,
+  .applications select:focus-visible,
+  .applications button:focus-visible,
+  .applications a:focus-visible,
+  .applications summary:focus-visible {
+    border-color: var(--accent-primary);
+    outline: 2px solid color-mix(in srgb, var(--accent-primary) 38%, transparent);
+    outline-offset: 2px;
+  }
+
+  .button {
+    align-items: center;
+    appearance: none;
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--app-radius-sm);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: .76rem;
+    font-weight: 650;
+    justify-content: center;
+    line-height: 1.2;
+    min-height: var(--app-control-height);
+    padding: .55rem .75rem;
+    text-decoration: none;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+    white-space: nowrap;
+  }
+  .button:hover { background: color-mix(in srgb, var(--accent-primary) 88%, #000); }
+  .button:disabled { cursor: not-allowed; opacity: .48; }
+  .button--quiet { background: transparent; border-color: var(--border-default); color: var(--text-primary); }
+  .button--quiet:hover { background: var(--app-muted-surface); border-color: var(--accent-primary); color: var(--text-primary); }
+
+  .notice { color: var(--text-secondary); display: block; font-size: .78rem; min-height: 1.55rem; padding: .75rem 0 .1rem; }
+  .notice[data-error="true"] { color: var(--app-danger); }
+
+  .application-navigator {
+    align-items: end;
+    background: var(--app-muted-surface);
+    display: grid;
+    gap: .7rem;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    margin-top: .6rem;
+    padding: .75rem;
+  }
+  .application-navigator[hidden] { display: none !important; }
+  .application-position { color: var(--text-secondary); font-size: .75rem; font-variant-numeric: tabular-nums; padding-bottom: .65rem; white-space: nowrap; }
+  .navigator-button { min-width: 5rem; }
+  .navigator-button:disabled { opacity: .45; }
+  .navigator-actions { display: flex; gap: .5rem; justify-content: flex-end; }
+
+  .application-list { display: grid; gap: .8rem; margin-top: .8rem; }
+  .application-empty { border: 1px dashed var(--border-default); color: var(--text-secondary); padding: 2.4rem 1rem; text-align: center; }
+  .application-list .app {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--app-radius-md);
+    box-shadow: none;
+    display: grid;
+    gap: 0;
+    margin: 0;
+    overflow: hidden;
+    padding: 0;
+    position: relative;
+  }
+  .application-list .app::before { background: var(--accent-primary); content: ""; inset: 0 auto 0 0; position: absolute; width: 2px; }
+  .application-list .app[data-status="new"]::before { background: #d97706; }
+  .application-list .app[data-status="reviewing"]::before { background: #3478b7; }
+  .application-list .app[data-status="accepted"]::before { background: #2f8a58; }
+  .application-list .app[data-status="rejected"]::before { background: #9b5a5a; }
+
+  .application-list .app .top {
+    align-items: start;
+    border-bottom: 1px solid var(--app-divider);
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin: 0;
+    padding: 1.15rem 1.2rem 1rem 1.35rem;
+  }
+  .app-identity { align-items: start; display: flex; gap: .8rem; min-width: 0; }
+  .app-avatar {
+    align-items: center;
+    background: var(--text-primary);
+    border-radius: var(--app-radius-md);
+    color: var(--background-primary);
+    display: flex;
+    flex: 0 0 2.5rem;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 1rem;
+    font-weight: 600;
+    height: 2.5rem;
+    justify-content: center;
+    width: 2.5rem;
+  }
+  .app-kicker { margin: .05rem 0 .22rem; }
+  .application-list .app .top h2 { font-size: 1.12rem; font-weight: 650; letter-spacing: -.02em; line-height: 1.3; margin: 0; }
+  .app-email { color: var(--text-secondary); display: block; font-size: .76rem; margin-top: .22rem; overflow-wrap: anywhere; text-decoration: none; }
+  .app-email:hover { color: var(--accent-primary); text-decoration: underline; }
+  .app-subline { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .35rem 0 0; }
+  .app-project { border-left: 2px solid var(--border-default); color: var(--text-secondary); display: inline-block; font-size: .68rem; margin-top: .45rem; padding-left: .45rem; }
+
+  .application-list .app .actions { align-items: end; display: flex; flex-wrap: wrap; gap: .55rem; justify-content: flex-end; margin-left: auto; }
+  .action-status,
+  .status-control { display: grid; gap: .3rem; }
+  .action-caption,
+  .status-control > span { color: var(--text-secondary); font-size: .67rem; font-weight: 650; }
+  .status-control select { min-width: 11rem; }
+  .application-list .app .actions button { min-height: var(--app-control-height); }
+  .badge { border: 1px solid var(--border-default); border-radius: var(--app-radius-sm); color: var(--text-secondary); display: inline-flex; font-size: .7rem; font-weight: 650; min-height: var(--app-control-height); padding: .55rem .6rem; }
+  .badge[data-state="synced"] { background: color-mix(in srgb, #2f8a58 10%, var(--background-primary)); border-color: color-mix(in srgb, #2f8a58 45%, var(--border-default)); color: var(--text-primary); }
+  .badge[data-state="failed"] { background: color-mix(in srgb, var(--app-danger) 8%, var(--background-primary)); border-color: color-mix(in srgb, var(--app-danger) 42%, var(--border-default)); color: var(--app-danger); }
+  .badge[data-state="skipped"] { background: color-mix(in srgb, #b78312 8%, var(--background-primary)); border-color: color-mix(in srgb, #b78312 42%, var(--border-default)); color: var(--text-primary); }
+
+  .interview-panel { border-bottom: 1px solid var(--app-divider); margin: 0 1.2rem; padding: 1rem 0 1.1rem; }
+  .interview-panel .application-section-heading { margin-bottom: .75rem; }
+  .interview-panel .application-section-heading h3 { font-size: .92rem; margin: .3rem 0 0; }
+  .interview-panel .application-section-heading > span { color: var(--text-secondary); font-size: .7rem; }
+  .interview-fields { display: grid; gap: .7rem; grid-template-columns: minmax(0, 1fr) minmax(10rem, .65fr) minmax(0, 1.2fr); }
+  .interview-fields input, .interview-fields select { font-size: .8rem; }
+  .interview-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+  .interview-panel[data-mode="in_person"] .interview-zoom-field { opacity: .65; }
+  .interview-panel[data-mode="in_person"] .interview-zoom-field::after { color: var(--text-secondary); content: "対面の場合は任意"; display: block; font-size: .63rem; font-weight: 400; margin-top: .22rem; }
+
+  .application-profile,
+  .application-section,
+  .application-response-grid,
+  .application-original-fields,
+  .provisioning-error,
+  .member-link { margin-left: 1.2rem; margin-right: 1.2rem; }
+  .application-profile { padding: 1.1rem 0 1rem; }
+  .application-section { border-top: 1px solid var(--app-divider); padding-bottom: 1rem; padding-top: 1rem; }
+  .application-section-heading { align-items: baseline; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .65rem; }
+  .application-section-heading h3 { font-size: .9rem; font-weight: 650; margin: .3rem 0 0; }
+  .application-section-heading > span { color: var(--text-secondary); font-size: .7rem; }
+  .application-meta-grid { display: grid; gap: .55rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .application-meta-item { background: var(--app-muted-surface); border: 1px solid var(--app-divider); border-radius: var(--app-radius-sm); display: grid; gap: .2rem; min-width: 0; padding: .65rem .7rem; }
+  .application-meta-item span { color: var(--text-secondary); font-size: .65rem; font-weight: 650; }
+  .application-meta-item strong { font-size: .78rem; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+  .application-section--subjects .facts { gap: .35rem; }
+  .application-section--subjects .facts span { background: transparent; border: 1px solid var(--border-default); border-radius: var(--app-radius-sm); color: var(--text-primary); font-size: .74rem; font-weight: 600; padding: .3rem .5rem; }
+  .application-response-grid { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-bottom: 1.1rem; padding-top: 1rem; }
+  .response-block { background: var(--app-muted-surface); border: 1px solid var(--app-divider); border-radius: var(--app-radius-sm); min-width: 0; padding: .75rem; }
+  .response-block--wide { grid-column: 1 / -1; }
+  .application-list .app .response-block h3 { color: var(--text-primary); font-size: .74rem; font-weight: 650; margin: 0 0 .45rem; }
+  .application-list .app .response-block pre { border-top: 1px solid var(--app-divider); color: var(--text-primary); font-size: .8rem; line-height: 1.7; margin: 0; overflow-wrap: anywhere; padding: .55rem 0 0; white-space: pre-wrap; }
+  .application-original-fields { background: transparent; border: 1px solid var(--app-divider); border-radius: var(--app-radius-sm); margin-bottom: 1rem; padding: .7rem .8rem; }
+  .application-original-fields summary { color: var(--text-primary); cursor: pointer; font-size: .76rem; font-weight: 650; }
+  .application-original-fields summary::after { color: var(--text-secondary); content: "＋"; float: right; }
+  .application-original-fields[open] summary::after { content: "−"; }
+  .application-original-fields[open] summary { margin-bottom: .7rem; }
+  .application-original-fields .application-response-grid { margin: 0; padding-top: .15rem; }
+  .provisioning-error { background: color-mix(in srgb, var(--app-danger) 8%, var(--background-primary)); border: 1px solid color-mix(in srgb, var(--app-danger) 35%, var(--border-default)); border-left: 3px solid var(--app-danger); border-radius: var(--app-radius-sm); color: var(--app-danger); font-size: .76rem; line-height: 1.55; margin-bottom: 1rem; padding: .7rem .8rem; white-space: pre-wrap; }
+  .member-link { color: var(--accent-primary); display: inline-block; font-size: .78rem; font-weight: 650; margin-bottom: 1rem; }
+
+  .accept-dialog { background: var(--background-primary); border: 1px solid var(--border-default); border-radius: var(--app-radius-lg); color: var(--text-primary); max-width: 34rem; padding: 1.25rem; }
+  .accept-dialog::backdrop { background: rgb(0 0 0 / .5); }
+  .accept-dialog h2 { font-size: 1.1rem; letter-spacing: -.02em; margin: 0; }
+  .accept-dialog p { color: var(--text-secondary); font-size: .84rem; line-height: 1.7; }
+  .accept-dialog__actions { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: flex-end; }
+
+  @media (max-width: 860px) {
+    .flow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .flow-steps li:nth-child(2) { border-right: 0; }
+    .flow-steps li:nth-child(-n + 2) { border-bottom: 1px solid var(--app-divider); }
+    .summary-card:nth-child(2) { border-right: 0; }
+    .summary-card:nth-child(-n + 2) { border-bottom: 1px solid var(--app-divider); padding-bottom: .7rem; }
+    .summary-card:nth-child(n + 3) { padding-top: .7rem; }
+    .filter-bar { grid-template-columns: minmax(0, 1fr) minmax(10rem, .7fr); }
+    .filter-bar .button { justify-self: start; }
+    .application-navigator { grid-template-columns: auto minmax(0, 1fr) auto; }
+    .application-position { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
+    .application-navigator .application-picker { grid-column: 1 / -1; grid-row: 2; }
+    .application-navigator .navigator-actions { grid-column: 1 / -1; grid-row: 3; }
+    .application-navigator .navigator-button { grid-row: 3; }
+    .application-navigator .navigator-button:last-child { grid-column: 3; }
+  }
+
+  @media (max-width: 680px) {
+    .applications { padding-left: 1rem; padding-right: 1rem; }
+    .applications header { padding-top: 2rem; }
+    .flow-heading, .section-heading { align-items: start; display: grid; gap: .35rem; }
+    .flow-heading > span, .section-heading > span { text-align: left; }
+    .filter-bar { grid-template-columns: 1fr; }
+    .filter-bar .button { justify-self: stretch; }
+    .application-list .app .top { display: grid; gap: .9rem; }
+    .application-list .app .actions { justify-content: start; margin-left: 0; }
+    .status-control { min-width: 0; }
+    .status-control select { min-width: 0; }
+    .interview-fields { grid-template-columns: 1fr 1fr; }
+    .interview-zoom-field, .interview-location-field { grid-column: 1 / -1; }
+    .application-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .application-response-grid { grid-template-columns: 1fr; }
+    .response-block--wide { grid-column: auto; }
+  }
+
+  @media (max-width: 460px) {
+    .applications { padding-left: .8rem; padding-right: .8rem; }
+    .application-flow, .application-overview { padding: .9rem; }
+    .flow-steps, .summary-grid { grid-template-columns: 1fr; }
+    .flow-steps li, .flow-steps li:nth-child(-n + 2) { border-bottom: 1px solid var(--app-divider); border-right: 0; }
+    .flow-steps li:last-child { border-bottom: 0; }
+    .summary-card, .summary-card + .summary-card { border-bottom: 1px solid var(--app-divider); border-right: 0; padding: .7rem 0; }
+    .summary-card:last-child { border-bottom: 0; }
+    .application-navigator { grid-template-columns: 1fr 1fr; }
+    .application-navigator .application-picker { grid-column: 1 / -1; }
+    .application-navigator .navigator-button:last-child { grid-column: 2; }
+    .application-list .app .actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+    .application-list .app .actions > * { width: 100%; }
+    .interview-fields { grid-template-columns: 1fr; }
+    .interview-zoom-field, .interview-location-field { grid-column: auto; }
+    .interview-actions { display: grid; }
+    .interview-actions .button { width: 100%; }
+    .application-meta-grid { grid-template-columns: 1fr; }
+    .application-profile, .application-section, .application-response-grid, .application-original-fields, .provisioning-error, .member-link { margin-left: .85rem; margin-right: .85rem; }
+    .interview-panel { margin-left: .85rem; margin-right: .85rem; }
+    .accept-dialog { margin: auto .8rem; }
+    .accept-dialog__actions { display: grid; }
+    .accept-dialog__actions .button { width: 100%; }
+  }
 </style>
 <script>
-  const root=document.querySelector<HTMLElement>('[data-applications]');
-  if(root){
+  const initializeApplications=()=>{const root=document.querySelector<HTMLElement>('[data-applications]');
+  if(root && root.dataset.initialized !== 'true'){root.dataset.initialized='true';
     const esc=(value:unknown)=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]??char));
     const projectLabels:Record<string,string>={atlas:'学習サイト「アトラス」','thinking-cafe':'考えるカフェ','seminar-platform':'ゼミプラットフォーム','student-council-exchange':'日本生徒会協会',secretariat:'運営事務局'};
     const projectSlugFromUrl=new URLSearchParams(window.location.search).get('project')?.trim().toLowerCase()??'';
@@ -112,7 +606,6 @@ const projectLabel = selectedProject?.[1] ?? "";
       if(description)description.textContent='このプロジェクトに届いた応募だけを表示しています。';
       root.querySelector<HTMLElement>('.project-picker')?.setAttribute('hidden','');
       root.querySelectorAll<HTMLElement>('.application-flow,.application-overview,[data-notice],[data-list],[data-accept-dialog]').forEach(element=>element.removeAttribute('hidden'));
-      root.querySelectorAll<HTMLAnchorElement>('.project-switcher a').forEach(link=>link.setAttribute('aria-current',new URL(link.href).searchParams.get('project')===projectSlug?'page':'false'));
     }
     const notice=root.querySelector<HTMLOutputElement>('[data-notice]')!;
     const list=root.querySelector<HTMLElement>('[data-list]')!;
@@ -135,6 +628,8 @@ const projectLabel = selectedProject?.[1] ?? "";
     const setNotice=(message:string,error=false)=>{notice.value=message;notice.dataset.error=String(error)};
     const displayName=(application:any)=>{const split=[application.form_language==='en'?application.given_name:application.family_name,application.form_language==='en'?application.middle_name:'',application.form_language==='en'?application.family_name:application.given_name].filter(Boolean).join(' ');return split||application.name||'氏名未設定'};
     const formatDate=(value:unknown)=>{if(!value)return '日時未設定';const date=new Date(String(value));return Number.isNaN(date.getTime())?'日時未設定':new Intl.DateTimeFormat('ja-JP',{dateStyle:'medium',timeStyle:'short'}).format(date)};
+    const formatDateTimeLocal=(value:unknown)=>{if(!value)return '';const date=new Date(String(value));if(Number.isNaN(date.getTime()))return '';const offset=date.getTimezoneOffset();return new Date(date.getTime()-offset*60000).toISOString().slice(0,16)};
+    const interviewFor=(application:any)=>application.interview??{scheduledAt:application.interview_scheduled_at,mode:application.interview_mode,zoomUrl:application.interview_zoom_url,location:application.interview_location,notifiedAt:application.interview_notified_at};
     const answerLabels:Record<string,string>={theme:'参加してみたいテーマ',councilStatus:'生徒会への所属または所属経験',councilRole:'生徒会での役職名',councilPlans:'活動・企画案',strengths:'得意なこと・資格・実績',problemAwareness:'問題意識',plans:'本協議会で取り組みたいこと'};
     const projectAnswers=(application:any)=>{try{return JSON.parse(application.project_answers||'{}') as Record<string,string>}catch{return {}}};
     const fields=(application:any)=>{const answers=projectAnswers(application);const answerHtml=Object.entries(answers).map(([key,value])=>`<div class="response-block"><h3>${esc(answerLabels[key]??key)}</h3><pre>${esc(value||'—')}</pre></div>`).join('');const meta=(label:string,value:unknown)=>`<div class="application-meta-item"><span>${esc(label)}</span><strong>${esc(value||'—')}</strong></div>`;const discordLabel=application.discord_oauth_connected_at?'OAuth同意済み・連携済み':application.verified_discord_user_id?'手動確認済み・ID登録済み':'未連携';return `<section class="application-profile" aria-label="応募者の基本情報"><div class="application-section-heading"><div><p>応募者情報</p><h3>基本プロフィール</h3></div><span>${esc(formLabels[application.project_slug]??application.project_slug??'学習サイト「アトラス」')}</span></div><div class="application-meta-grid">${meta('所属',`${application.affiliation_type||'未設定'}：${application.institution||'—'}`)}${meta('呼称（ニックネーム）',application.nickname)}${meta('所属先メール',application.affiliation_email)}${meta('学年',application.grade)}${meta('国・居住地',`${application.country||'—'} / ${application.residence_city||'都市未登録'}`)}${meta('生年月日',application.birth_date)}${meta('タイムゾーン',application.timezone)}${meta('Discord連携',discordLabel)}${meta('応募日時',formatDate(application.created_at))}</div></section><details class="application-original-fields"><summary>フォーム回答の詳細を開く</summary><div class="application-response-grid"><div class="response-block"><h3>知ったきっかけ</h3><pre>${esc(application.referral_source||'—')}</pre></div><div class="response-block"><h3>現在のサークル・学生団体</h3><pre>${esc(application.current_organizations||'—')}</pre></div><div class="response-block"><h3>参加理由</h3><pre>${esc(application.motivation_reasons||'—')}</pre></div><div class="response-block"><h3>希望担当</h3><pre>${esc(application.desired_roles||'—')}</pre></div><div class="response-block"><h3>面談候補日</h3><pre>${esc(application.interview_availability||'—')}</pre></div><div class="response-block"><h3>質問</h3><pre>${esc(application.applicant_questions||'—')}</pre></div>${answerHtml}</div></details>`};
@@ -145,10 +640,12 @@ const projectLabel = selectedProject?.[1] ?? "";
     let pendingAcceptanceId='';
     const renderSummary=()=>{totalCount.textContent=`${applications.length}件`;for(const key of ['new','reviewing','accepted','rejected'])summary[key as keyof typeof summary].textContent=String(applications.filter(application=>application.status===key).length)};
     const matches=(application:any)=>{const query=search.value.trim().toLocaleLowerCase();const status=statusFilter.value;const haystack=[displayName(application),application.email,application.institution,application.desired_subjects,formLabels[application.project_slug]].join(' ').toLocaleLowerCase();return (!query||haystack.includes(query))&&(status==='all'||application.status===status)};
-    const applicationCard=(application:any)=>{const name=displayName(application);const initial=String(name).trim().slice(0,1)||'？';const email=String(application.email||'');const projectLabel=formLabels[application.project_slug]??application.project_slug??'学習サイト「アトラス」';const subjectTags=String(application.desired_subjects||'').split(',').filter(Boolean).map(subject=>`<span>${esc(subjectLabels[subject]??subject)}</span>`).join('')||'<span>旧形式応募：未設定</span>';return `<article class="app" data-status="${esc(application.status)}" aria-labelledby="application-${esc(application.id)}-name"><div class="top"><div class="app-identity"><span class="app-avatar" aria-hidden="true">${esc(initial)}</span><div><p class="app-kicker">応募者情報</p><h2 id="application-${esc(application.id)}-name">${esc(name)}</h2>${email?`<a class="app-email" href="mailto:${encodeURIComponent(email)}">${esc(email)}</a>`:''}<p class="app-subline">${esc(formatDate(application.created_at))}</p><span class="app-project">${esc(projectLabel)}</span></div></div>${actions(application)}</div>${fields(application)}<section class="application-section application-section--subjects" aria-label="希望分野"><div class="application-section-heading"><p>希望分野</p><span>担当候補</span></div><div class="facts">${subjectTags}</div></section><section class="application-response-grid application-response-grid--main" aria-label="応募内容"><div class="response-block"><h3>書きたい記事・テーマ</h3><pre>${esc(application.article_ideas||'—')}</pre></div><div class="response-block"><h3>できること・関心</h3><pre>${esc(application.interests||'—')}</pre></div><div class="response-block response-block--wide"><h3>参加理由・自己紹介</h3><pre>${esc(application.message||'—')}</pre></div>${application.availability_note?`<div class="response-block"><h3>参加可能な時間帯</h3><pre>${esc(application.availability_note)}</pre></div>`:''}</section>${application.provisioning_error?`<p class="provisioning-error">${esc(application.provisioning_error)}</p>`:''}${application.status==='accepted'&&!application.verified_discord_user_id?'<a class="member-link" href="/applicant/">応募者画面から「Discordと連携」を案内する →</a>':''}</article>`};
+    const interviewFields=(application:any)=>{const interview=interviewFor(application);const mode=interview.mode??'online';return `<section class="interview-panel" data-mode="${esc(mode)}" aria-labelledby="interview-${esc(application.id)}-title"><div class="application-section-heading"><div><p>面談</p><h3 id="interview-${esc(application.id)}-title">面談情報</h3></div><span>${interview.notifiedAt?`通知済み：${esc(formatDate(interview.notifiedAt))}`:'応募者への通知は未送信'}</span></div><div class="interview-fields"><label>面談日時<input type="datetime-local" data-interview-date="${esc(application.id)}" value="${esc(formatDateTimeLocal(interview.scheduledAt))}" /></label><label>形式<select data-interview-format="${esc(application.id)}"><option value="online" ${mode==='online'?'selected':''}>オンライン（Zoom）</option><option value="in_person" ${mode==='in_person'?'selected':''}>対面</option></select></label><label class="interview-zoom-field">Zoomリンク<input type="url" inputmode="url" data-interview-zoom="${esc(application.id)}" value="${esc(interview.zoomUrl??'')}" placeholder="https://zoom.us/j/..." autocomplete="url" /></label><label class="interview-location-field">場所（対面）<input type="text" data-interview-location="${esc(application.id)}" value="${esc(interview.location??'')}" placeholder="建物名・部屋など" maxlength="500" /></label></div><div class="interview-actions"><button type="button" class="button" data-interview-save="${esc(application.id)}">面談情報を保存</button><button type="button" class="button button--quiet" data-interview-notify="${esc(application.id)}">${interview.notifiedAt?'面談情報を再通知':'応募者へ通知'}</button><a class="button button--quiet" href="/admin/application-interview/?application=${encodeURIComponent(application.id)}&project=${encodeURIComponent(projectSlug)}">面談メモを開く</a></div></section>`};
+    const applicationCard=(application:any)=>{const name=displayName(application);const initial=String(name).trim().slice(0,1)||'？';const email=String(application.email||'');const projectLabel=formLabels[application.project_slug]??application.project_slug??'学習サイト「アトラス」';const subjectTags=String(application.desired_subjects||'').split(',').filter(Boolean).map(subject=>`<span>${esc(subjectLabels[subject]??subject)}</span>`).join('')||'<span>旧形式応募：未設定</span>';return `<article class="app" data-status="${esc(application.status)}" aria-labelledby="application-${esc(application.id)}-name"><div class="top"><div class="app-identity"><span class="app-avatar" aria-hidden="true">${esc(initial)}</span><div><p class="app-kicker">応募者情報</p><h2 id="application-${esc(application.id)}-name">${esc(name)}</h2>${email?`<a class="app-email" href="mailto:${encodeURIComponent(email)}">${esc(email)}</a>`:''}<p class="app-subline">${esc(formatDate(application.created_at))}</p><span class="app-project">${esc(projectLabel)}</span></div></div>${actions(application)}</div>${interviewFields(application)}${fields(application)}<section class="application-section application-section--subjects" aria-label="希望分野"><div class="application-section-heading"><p>希望分野</p><span>担当候補</span></div><div class="facts">${subjectTags}</div></section><section class="application-response-grid application-response-grid--main" aria-label="応募内容"><div class="response-block"><h3>書きたい記事・テーマ</h3><pre>${esc(application.article_ideas||'—')}</pre></div><div class="response-block"><h3>できること・関心</h3><pre>${esc(application.interests||'—')}</pre></div><div class="response-block response-block--wide"><h3>参加理由・自己紹介</h3><pre>${esc(application.message||'—')}</pre></div>${application.availability_note?`<div class="response-block"><h3>参加可能な時間帯</h3><pre>${esc(application.availability_note)}</pre></div>`:''}</section>${application.provisioning_error?`<p class="provisioning-error">${esc(application.provisioning_error)}</p>`:''}${application.status==='accepted'&&!application.verified_discord_user_id?'<a class="member-link" href="/applicant/">応募者画面から「Discordと連携」を案内する →</a>':''}</article>`};
     const applicationOptionLabel=(application:any)=>`${displayName(application)}｜${application.email||'メール未設定'}`;
     const renderNavigator=()=>{if(!visibleApplications.length){navigator.hidden=true;return}const selectedIndex=Math.max(0,visibleApplications.findIndex(application=>application.id===selectedApplicationId));const selected=visibleApplications[selectedIndex];selectedApplicationId=selected.id;applicationSelect.innerHTML=visibleApplications.map(application=>`<option value="${esc(application.id)}">${esc(applicationOptionLabel(application))}</option>`).join('');applicationSelect.value=selectedApplicationId;applicationPosition.textContent=`${selectedIndex+1} / ${visibleApplications.length}人`;previousApplication.disabled=selectedIndex===0;nextApplication.disabled=selectedIndex===visibleApplications.length-1;navigator.hidden=false};
-    const render=(items:any[])=>{visibleApplications=items.filter(matches);if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
+    const applicationCreatedAt=(application:any)=>{const timestamp=Date.parse(application.created_at??'');return Number.isFinite(timestamp)?timestamp:0};
+    const render=(items:any[])=>{visibleApplications=items.filter(matches).sort((a,b)=>applicationCreatedAt(b)-applicationCreatedAt(a));if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
     const refresh=()=>render(applications);
     const resetSelectionAndRefresh=()=>{selectedApplicationId='';refresh()};
     const load=async()=>{try{const response=await fetch(`/api/admin/applications?project=${encodeURIComponent(projectSlug)}`,{credentials:'same-origin'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??{};formLabels=data.formLabels??{};applications=Array.isArray(data.applications)?data.applications:[];renderSummary();refresh()}catch(error){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}};
@@ -158,10 +655,15 @@ const projectLabel = selectedProject?.[1] ?? "";
     nextApplication.addEventListener('click',()=>{const index=visibleApplications.findIndex(application=>application.id===selectedApplicationId);if(index>=0&&index<visibleApplications.length-1){selectedApplicationId=visibleApplications[index+1].id;refresh()}});
     const update=async(id:string,status:string,button?:HTMLButtonElement)=>{button?.setAttribute('disabled','');setNotice(status==='accepted'?'受入を確定し、承認メールを送信する準備中…':'状態を更新中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}?project=${encodeURIComponent(projectSlug)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'更新できませんでした。');const warning=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';const emailMessage=status==='accepted'?(data.acceptanceEmailQueued?'応募者への受入承認メールを送信する準備ができました。':'受入は完了しましたが、承認メールを送信する準備に失敗しました。'):'';setNotice(warning?`受入は完了しました。${emailMessage} ${warning}`:status==='accepted'?`受入が完了しました。${emailMessage}`:'状態を更新しました。',Boolean(warning||status==='accepted'&&!data.acceptanceEmailQueued));await load()}catch(error){setNotice(error instanceof Error?error.message:'更新できませんでした。',true);await load()}finally{button?.removeAttribute('disabled')}};
     const retryDiscord=async(id:string,button:HTMLButtonElement)=>{button.setAttribute('disabled','');setNotice('Discord同期を再試行中…');try{const response=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/discord-retry?project=${encodeURIComponent(projectSlug)}`,{method:'POST',credentials:'same-origin'});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error??'Discord同期に失敗しました。');const warnings=Array.isArray(data.provisioning?.warnings)?data.provisioning.warnings.join(' '):'';setNotice(warnings?`Discord同期を再試行しました。${warnings}`:'Discord同期が完了しました。',Boolean(warnings));await load()}catch(error){setNotice(error instanceof Error?error.message:'Discord同期に失敗しました。',true);await load()}finally{button.removeAttribute('disabled')}};
+    const interviewValues=(id:string)=>{const escapedId=CSS.escape(id);const date=root.querySelector<HTMLInputElement>(`[data-interview-date="${escapedId}"]`);const mode=root.querySelector<HTMLSelectElement>(`[data-interview-format="${escapedId}"]`);const zoom=root.querySelector<HTMLInputElement>(`[data-interview-zoom="${escapedId}"]`);const location=root.querySelector<HTMLInputElement>(`[data-interview-location="${escapedId}"]`);return {scheduledAt:date?.value?new Date(date.value).toISOString():null,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Tokyo',mode:mode?.value==='in_person'?'in_person':'online',zoomUrl:zoom?.value.trim()||'',location:location?.value.trim()||''}};
+    const interviewRequest=async(id:string,action:'save'|'notify',button:HTMLButtonElement)=>{const values=interviewValues(id);if(action==='notify'&&!values.scheduledAt){setNotice('応募者へ通知する前に面談日時を設定してください。',true);return}if(values.mode==='online'){try{const url=new URL(values.zoomUrl);if(url.protocol!=='https:')throw Error()}catch{setNotice('オンライン面談にはHTTPSのZoomリンクを設定してください。',true);return}}if(values.mode==='in_person'&&!values.location){setNotice('対面面談の場所を入力してください。',true);return}button.setAttribute('aria-busy','true');button.setAttribute('disabled','');setNotice(action==='notify'?'面談情報を保存して応募者へ通知中…':'面談情報を保存中…');try{const saveResponse=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/interview?project=${encodeURIComponent(projectSlug)}`,{method:'PUT',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(values)});const saveData=await saveResponse.json().catch(()=>({}));if(!saveResponse.ok)throw Error(saveData.error??'面談情報を保存できませんでした。');if(action==='notify'){const notifyResponse=await fetch(`/api/admin/applications/${encodeURIComponent(id)}/interview/notify?project=${encodeURIComponent(projectSlug)}`,{method:'POST',credentials:'same-origin'});const notifyData=await notifyResponse.json().catch(()=>({}));if(!notifyResponse.ok)throw Error(notifyData.error??'面談通知を準備できませんでした。')}setNotice(action==='notify'?'面談情報を保存し、応募者へ通知しました。':'面談情報を保存しました。');await load()}catch(error){setNotice(error instanceof Error?error.message:'面談情報を保存できませんでした。',true)}finally{button.removeAttribute('aria-busy');button.removeAttribute('disabled')}};
     root.addEventListener('change',event=>{const select=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-id]');if(!select)return;if(select.value==='accepted'){pendingAcceptanceId=select.dataset.id??'';acceptDialog.showModal();return}void update(select.dataset.id??'',select.value)});
     acceptCancel.addEventListener('click',()=>{pendingAcceptanceId='';acceptDialog.close();void load()});
     acceptConfirm.addEventListener('click',()=>{const id=pendingAcceptanceId;pendingAcceptanceId='';acceptDialog.close();if(id)void update(id,'accepted',acceptConfirm)});
-    root.addEventListener('click',event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-retry]');if(button)void retryDiscord(button.dataset.retry??'',button)});
+    root.addEventListener('click',event=>{const target=event.target as HTMLElement;const retryButton=target.closest<HTMLButtonElement>('[data-retry]');if(retryButton){void retryDiscord(retryButton.dataset.retry??'',retryButton);return}const saveButton=target.closest<HTMLButtonElement>('[data-interview-save]');if(saveButton){void interviewRequest(saveButton.dataset.interviewSave??'','save',saveButton);return}const notifyButton=target.closest<HTMLButtonElement>('[data-interview-notify]');if(notifyButton)void interviewRequest(notifyButton.dataset.interviewNotify??'','notify',notifyButton)});
+    root.addEventListener('change',event=>{const format=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-interview-format]');if(!format)return;format.closest<HTMLElement>('.interview-panel')?.setAttribute('data-mode',format.value)});
     if(projectSlug) void load();
-  }
+  }};
+  document.addEventListener('astro:page-load',initializeApplications);
+  initializeApplications();
 </script>

@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 test("参加者カードは概要表示に絞り、個人設定モーダルを主導線にする", async ({
   page,
 }) => {
-  let catalogLoaded = false;
+  let catalogLoaded = true;
+  let catalogProvisionRequests = 0;
   await page.route("**/api/admin/report-admin-permissions", async (route) => {
     await route.fulfill({
       status: 200,
@@ -34,6 +35,7 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
     });
   });
   await page.route("**/api/admin/discord-provision-roles", async (route) => {
+    catalogProvisionRequests += 1;
     catalogLoaded = true;
     await route.fulfill({
       status: 200,
@@ -80,11 +82,48 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
       }),
     });
   });
+  await page.route("**/api/admin/member-settings", async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error:
+          "Discord同期に失敗したため、変更は保存していません。Discordロール「数学運営」を付与できませんでした（HTTP 403）。対象ロールより上位にあることを確認してください。",
+        provisioning: {
+          status: "failed",
+          applied: 0,
+          removed: 0,
+          warnings: [
+            "Discordロール「数学運営」を付与できませんでした（HTTP 403）。",
+          ],
+        },
+      }),
+    });
+  });
 
   await page.goto("./admin/permissions/?project=atlas");
 
+  await expect(page.locator(".member-admin")).toBeVisible();
+  await expect(page.locator(".member-admin__header")).toBeVisible();
+  await expect(page.locator(".member-admin__sidebar")).toHaveCount(0);
+
   const card = page.locator(".member-card");
   await expect(card).toBeVisible();
+  const layoutMetrics = await page.locator("body").evaluate((body) => ({
+    bodyScrollWidth: body.scrollWidth,
+    bodyClientWidth: body.clientWidth,
+  }));
+  expect(layoutMetrics.bodyScrollWidth).toBeLessThanOrEqual(
+    layoutMetrics.bodyClientWidth + 1,
+  );
+  const cardMetrics = await card.evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }));
+  expect(cardMetrics.scrollWidth).toBeLessThanOrEqual(
+    cardMetrics.clientWidth + 1,
+  );
   await expect(card.locator(".member-card__name")).toHaveAttribute(
     "data-open-member",
     "",
@@ -92,23 +131,32 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   await expect(page.locator("[data-message]")).toBeHidden();
   await expect(page.locator("[data-discord-readiness-message]")).toBeHidden();
   const buttons = card.locator(".member-card__actions button");
-  await expect(buttons).toHaveCount(3);
+  await expect(buttons).toHaveCount(4);
 
   const buttonMetrics = await buttons.evaluateAll((elements) =>
     elements.map((element) => ({
       text: element.textContent?.trim(),
       height: element.getBoundingClientRect().height,
-      gridColumn: getComputedStyle(element).gridColumn,
     })),
   );
-  expect(buttonMetrics[0]?.text).toBe("全分野管理者に変更");
+  expect(buttonMetrics[0]?.text).toBe("設定");
   expect(buttonMetrics[0]?.height).toBeLessThanOrEqual(40);
-  expect(buttonMetrics[2]?.height).toBeLessThanOrEqual(40);
-  expect(buttonMetrics[1]?.gridColumn).toBe("1 / -1");
+  await expect(card.locator(".member-action-menu")).not.toHaveAttribute(
+    "open",
+    "",
+  );
+  await card.locator(".member-action-menu > summary").click();
+  await expect(card.locator(".member-action-menu")).toHaveAttribute("open", "");
+  await expect(
+    card.getByRole("button", { name: "Discordロールを再同期" }),
+  ).toBeVisible();
   await expect(
     page.getByPlaceholder("名前・メールアドレスで検索"),
   ).toBeVisible();
   await expect(page.locator("[data-member-filter]")).toBeVisible();
+  await expect(page.locator("[data-summary-member-count]")).toHaveText("1");
+  await expect(page.locator("[data-summary-role-count]")).toHaveText("1");
+  expect(catalogProvisionRequests).toBe(0);
   await expect(card.locator("[data-discord-role]")).toHaveCount(0);
   await expect(
     card.getByText("役職・プロフィールを編集", { exact: true }),
@@ -129,14 +177,17 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
         viewportHeight: window.innerHeight,
       };
     });
-  if (shellGeometry.width < shellGeometry.viewportWidth) {
-    expect(shellGeometry.left).toBeCloseTo(
-      (shellGeometry.viewportWidth - shellGeometry.width) / 2,
-      0,
-    );
-  }
-  expect(shellGeometry.width).toBeLessThanOrEqual(900);
-  expect(shellGeometry.height).toBeLessThanOrEqual(760);
+  expect(
+    Math.abs(
+      shellGeometry.left +
+        shellGeometry.width / 2 -
+        shellGeometry.viewportWidth / 2,
+    ),
+  ).toBeLessThanOrEqual(2);
+  expect(shellGeometry.width).toBeLessThanOrEqual(780);
+  expect(shellGeometry.height).toBeLessThanOrEqual(
+    shellGeometry.viewportHeight,
+  );
   expect(shellGeometry.top).toBeGreaterThanOrEqual(0);
   expect(shellGeometry.top + shellGeometry.height).toBeLessThanOrEqual(
     shellGeometry.viewportHeight,
@@ -161,6 +212,7 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   );
   await page.keyboard.press("Escape");
   await expect(memberModal).toBeHidden();
+  await page.locator(".discord-role-catalog > summary").click();
   const readinessButton = page.locator("[data-discord-readiness]");
   await expect(readinessButton).toHaveText("運用事前チェック");
   await readinessButton.click();
@@ -292,6 +344,8 @@ test("分野統括は同じ分野の共同担当と一人の兼任を表示・�
   await expect(page.locator("[data-workflow-role-list]")).toContainText(
     "1人が兼任",
   );
+
+  await page.locator(".workflow-role-admin > summary").click();
 
   await page
     .locator('input[name="email"][list="workflow-coordinator-members"]')

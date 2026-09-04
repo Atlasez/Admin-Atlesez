@@ -61,12 +61,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          actual="$(curl --fail --silent --show-error https://admin.atlasez.org/build-info.json)"
-          printf '%s\n' "$actual"
-          ACTUAL_BUILD_INFO="$actual" EXPECTED_COMMIT="${GITHUB_SHA}" node --input-type=module <<'NODE'
-          const actual = JSON.parse(process.env.ACTUAL_BUILD_INFO);
-          const expected = process.env.EXPECTED_COMMIT;
-          if (actual.commit !== expected) {
-            throw new Error(`本番build-infoのCommitが不一致です: ${actual.commit} !== ${expected}`);
-          }
+          max_attempts=12
+          for attempt in $(seq 1 "$max_attempts"); do
+            if actual="$(curl --fail --silent --show-error --retry 2 --retry-delay 2 https://admin.atlasez.org/build-info.json)"; then
+              printf '%s\n' "$actual"
+              if ACTUAL_BUILD_INFO="$actual" EXPECTED_COMMIT="${GITHUB_SHA}" node --input-type=module <<'NODE'
+              const actual = JSON.parse(process.env.ACTUAL_BUILD_INFO);
+              const expected = process.env.EXPECTED_COMMIT;
+              if (actual.commit !== expected || actual.repository !== "Atlasez/Admin-Atlesez" || actual.target !== "admin") {
+                throw new Error(`本番build-infoの身元が不一致です: ${JSON.stringify(actual)} (expected commit ${expected}, target admin)`);
+              }
           NODE
+              then
+                echo "本番build-infoを確認しました（試行 ${attempt}/${max_attempts}）。"
+                exit 0
+              fi
+            fi
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              delay=$((attempt * 5))
+              echo "本番への反映を待機します（${delay}秒後に再確認、試行 ${attempt}/${max_attempts}）。"
+              sleep "$delay"
+            fi
+          done
+          echo "本番build-infoが${max_attempts}回の確認後も対象SHAに一致しません。" >&2
+          exit 1

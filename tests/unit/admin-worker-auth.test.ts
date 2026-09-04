@@ -36,6 +36,7 @@ const stageEnv = (
   atlasWritingPracticeStep = 0,
   atlasWritingPracticeComplete = false,
   projectProfileComplete = profileComplete,
+  sessionEmail = "applicant@example.com",
 ) => ({
   ADMIN_AUTH_MODE: "google-oauth",
   REPORTS: {
@@ -62,7 +63,7 @@ const stageEnv = (
       };
       statement.first = async <T>() => {
         if (query.includes("admin_auth_sessions"))
-          return { email: "applicant@example.com" } as T;
+          return { email: sessionEmail } as T;
         if (
           query.includes(
             "SELECT status,project_slug FROM atlasez_member_applications",
@@ -206,6 +207,49 @@ describe("admin logout contract", () => {
 });
 
 describe("applicant stage server-side access", () => {
+  it("keeps the designated primary admin in the admin stage if the seed row is missing", async () => {
+    const rootPage = await worker.fetch(
+      loggedInRequest("/"),
+      stageEnv(
+        "reviewing",
+        false,
+        false,
+        false,
+        false,
+        0,
+        false,
+        false,
+        "ukyoukay0@gmail.com",
+      ) as never,
+    );
+    expect(rootPage.status).toBe(302);
+    expect(rootPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
+  });
+
+  it("shows the designated primary admin in the permissions list if the seed row is missing", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      env("cloudflare-access") as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      permissions: [
+        expect.objectContaining({
+          email: "ukyoukay0@gmail.com",
+          subjects: "*",
+          display_name: "主管理者",
+        }),
+      ],
+    });
+  });
+
   it("requires an authenticated Google session before accepting an application", async () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/apply", {

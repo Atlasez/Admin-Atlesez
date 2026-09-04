@@ -1,5 +1,90 @@
 import { expect, test } from "@playwright/test";
 
+for (const width of [1440, 800, 390]) {
+  test(`応募管理は最新の応募者から開き、前へ・次へを隣接表示する（${width}px）`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    let newestId = "latest";
+    await page.route("**/api/admin/**", async (route) => {
+      const url = new URL(route.request().url());
+      await route.fulfill({
+        json:
+          url.pathname === "/api/admin/applications"
+            ? {
+                applications: [
+                  {
+                    id: "old",
+                    family_name: "山田",
+                    given_name: "太郎",
+                    status: "new",
+                    created_at: "2026-09-01T09:00:00Z",
+                  },
+                  {
+                    id: newestId,
+                    family_name: "佐藤",
+                    given_name: "花子",
+                    status: "accepted",
+                    created_at: "2026-09-04T09:00:00Z",
+                  },
+                  {
+                    id: "middle",
+                    family_name: "鈴木",
+                    given_name: "次郎",
+                    status: "reviewing",
+                    created_at: "2026-09-03T09:00:00Z",
+                  },
+                  {
+                    id: "undated",
+                    family_name: "日時",
+                    given_name: "未登録",
+                    status: "new",
+                  },
+                ],
+              }
+            : {},
+      });
+    });
+    await page.goto("./admin/applications/?project=atlas");
+    const select = page.locator("[data-application-select]");
+    const previous = page.getByRole("button", { name: "前の応募者" });
+    const next = page.getByRole("button", { name: "次の応募者" });
+    await expect(select).toHaveValue("latest");
+    await expect(page.locator(".application-list h2")).toHaveText("佐藤 花子");
+    await expect(previous).toBeDisabled();
+    await expect(next).toBeEnabled();
+    await page.locator("[data-application-navigator]").scrollIntoViewIfNeeded();
+    const left = (await previous.boundingBox())!;
+    const right = (await next.boundingBox())!;
+    expect(Math.abs(left.y - right.y)).toBeLessThan(2);
+    expect(right.x - (left.x + left.width)).toBeGreaterThanOrEqual(0);
+    expect(right.x - (left.x + left.width)).toBeLessThanOrEqual(12);
+    const picker = (await page.locator(".application-picker").boundingBox())!;
+    const position = (await page
+      .locator("[data-application-position]")
+      .boundingBox())!;
+    expect(
+      position.x >= picker.x + picker.width ||
+        position.y >= picker.y + picker.height,
+    ).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath("applications-latest.png"),
+    });
+    await next.click();
+    await expect(select).toHaveValue("middle");
+    await previous.click();
+    await expect(select).toHaveValue("latest");
+    await select.selectOption("old");
+    newestId = "new-arrival";
+    await page.reload();
+    await expect(select).toHaveValue("new-arrival");
+    await page.locator("[data-filter-status]").selectOption("new");
+    await expect(select).toHaveValue("old");
+    await page.locator("[data-clear-filter]").click();
+    await expect(select).toHaveValue("new-arrival");
+  });
+}
+
 test("B-1: 応募フロー・状況集計・検索と状態フィルターを表示する", async ({
   page,
 }) => {
@@ -65,6 +150,7 @@ test("B-1: 応募フロー・状況集計・検索と状態フィルターを表
   await expect(
     page.getByRole("heading", { name: "学習サイト「アトラス」：応募管理" }),
   ).toBeVisible();
+  await expect(page.locator(".project-switcher")).toHaveCount(0);
   await expect(page.locator(".flow-steps > li")).toHaveCount(4);
   await expect(page.locator("[data-total-count]")).toHaveText("2件");
   await expect(page.locator("[data-summary-new]")).toHaveText("1");

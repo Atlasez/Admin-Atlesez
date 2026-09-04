@@ -1,30 +1,481 @@
 ---
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import { genreLabel } from "../../lib/taxonomy";
 
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order);
 const statusLabel = { published: "公開中", preparing: "準備中" } as const;
+const publishedCount = subjects.filter((subject) => subject.data.status === "published").length;
+const categoryCount = subjects.reduce((total, subject) => total + subject.data.categories.length, 0);
 ---
 
 <AdminLayout title="各ジャンル概要" description="アトラスの分野・カテゴリ構成を確認します">
-  <main class="genres">
-    <header><div><h1>各ジャンル概要</h1></div><a href="/admin/articles/" aria-label="原稿一覧を開く">→</a></header>
-    <nav aria-label="分野内リンク">{subjects.map((subject) => <a href={`#${subject.data.slug}`}>{subject.data.name.ja}</a>)}</nav>
-    <div class="genre-grid">
-      {subjects.map((subject) => (
-        <article id={subject.data.slug}>
-          <div class="genre-heading"><div><small>{subject.data.genre}</small><h2>{subject.data.name.ja}</h2></div><span data-status={subject.data.status}>{statusLabel[subject.data.status]}</span></div>
-          <p>{subject.data.description.ja}</p>
-          <dl><div><dt>分野ID</dt><dd>{subject.data.slug}</dd></div><div><dt>カテゴリ数</dt><dd>{subject.data.categories.length}</dd></div></dl>
-          <h3>カテゴリ</h3>
-          <ul>{subject.data.categories.sort((a, b) => a.order - b.order).map((category) => <li><strong>{category.name.ja}</strong><code>{category.slug}</code></li>)}</ul>
-          <div class="genre-actions"><a href={`/admin/articles/?subject=${encodeURIComponent(subject.data.slug)}`}>この分野の原稿を見る</a>{subject.data.externalUrl && <a href={subject.data.externalUrl} target="_blank" rel="noopener noreferrer">現行ページを確認 ↗</a>}</div>
-        </article>
-      ))}
-    </div>
+  <main class="genres" id="main" data-genres-page>
+    <header class="genres-hero">
+      <div class="hero-heading">
+        <div class="eyebrow-row"><span class="eyebrow">アトラス / 構成管理</span><span class="hero-caption">学習サイトの構造を確認</span></div>
+        <h1>各ジャンル概要</h1>
+        <p>アトラスに登録されている分野の構成、担当メンバー、進捗、カテゴリを一つの画面で確認できます。</p>
+      </div>
+      <div class="hero-actions">
+        <a class="quiet-link" href="/admin/atlas/"><span>運営トップ</span><span aria-hidden="true">↗</span></a>
+        <a class="primary-link" href="/admin/articles/"><span>原稿一覧を開く</span><span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <section class="metric-grid" aria-label="分野の概要">
+      <div class="metric"><span>登録分野</span><strong>{subjects.length}</strong><small>すべての分野</small></div>
+      <div class="metric"><span>公開中</span><strong>{publishedCount}</strong><small>学習可能な分野</small></div>
+      <div class="metric"><span>準備中</span><strong>{subjects.length - publishedCount}</strong><small>公開前の分野</small></div>
+      <div class="metric"><span>カテゴリ数</span><strong>{categoryCount}</strong><small>登録されている項目</small></div>
+    </section>
+
+    <section class="genres-workspace" aria-label="分野の詳細">
+      <aside class="index-panel">
+        <div class="panel-heading"><div><span class="panel-kicker">ナビゲーション</span><h2>分野一覧</h2></div><span class="result-count" data-visible-count>{subjects.length}件</span></div>
+        <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><span class="visually-hidden">分野を検索</span><input type="search" placeholder="分野名・IDで検索" data-genre-search /></label>
+        <div class="filter-row" role="group" aria-label="公開状態で絞り込む">
+          <button type="button" class="filter-button is-active" data-filter="all" aria-pressed="true">すべて</button>
+          <button type="button" class="filter-button" data-filter="published" aria-pressed="false">公開中</button>
+          <button type="button" class="filter-button" data-filter="preparing" aria-pressed="false">準備中</button>
+        </div>
+        <nav class="subject-index" aria-label="分野内リンク">
+          {subjects.map((subject) => <a href={"#" + subject.data.slug} data-subject-link data-subject={subject.data.slug}><i data-status={subject.data.status} aria-hidden="true"></i><span>{subject.data.name.ja}</span><small>{subject.data.categories.length}</small></a>)}
+        </nav>
+        <p class="index-note"><span class="status-legend status-legend-published"></span>公開中 <span class="status-legend status-legend-preparing"></span>準備中</p>
+      </aside>
+
+      <div class="content-panel">
+        <header class="content-heading"><div><span class="panel-kicker">分野詳細</span><h2>学習領域</h2></div><span class="content-count" data-results-label>{subjects.length}件を表示</span></header>
+        <div class="genre-grid">
+          {subjects.map((subject) => (
+            <article id={subject.data.slug} class="genre-card" data-genre-card data-status={subject.data.status} data-search={(subject.data.name.ja + " " + subject.data.slug + " " + genreLabel(subject.data.genre, "ja")).toLowerCase()}>
+              <header class="genre-heading">
+                <div class="genre-title">
+                  <div class="genre-meta"><span>{genreLabel(subject.data.genre, "ja")}</span><span class="status" data-status={subject.data.status}><i aria-hidden="true"></i>{statusLabel[subject.data.status]}</span></div>
+                  <h3>{subject.data.name.ja}</h3>
+                </div>
+                <a class="anchor-link" href={"#" + subject.data.slug} aria-label={subject.data.name.ja + "へのリンク"}>#</a>
+              </header>
+              <p class="genre-description">{subject.data.description.ja}</p>
+              <dl class="genre-stats">
+                <div><dt>分野ID</dt><dd><code>{subject.data.slug}</code></dd></div>
+                <div><dt>カテゴリ数</dt><dd>{subject.data.categories.length}<span>件</span></dd></div>
+              </dl>
+              <section class="category-block" aria-labelledby={subject.data.slug + "-categories"}>
+                <div class="category-heading"><h4 id={subject.data.slug + "-categories"}>カテゴリ</h4><span>{subject.data.categories.length}件</span></div>
+                {subject.data.categories.length > 0 ? <ul>{[...subject.data.categories].sort((a, b) => a.order - b.order).map((category) => <li><strong>{category.name.ja}</strong><code>{category.slug}</code></li>)}</ul> : <p class="empty-categories">カテゴリは準備中です。</p>}
+              </section>
+              <section class="genre-people" aria-labelledby={subject.data.slug + "-people"}>
+                <div class="section-heading"><h4 id={subject.data.slug + "-people"}>担当メンバー</h4><span data-member-count>—</span></div>
+                <div class="member-list" data-genre-members>
+                  <p class="loading-note">担当メンバーを読み込んでいます…</p>
+                </div>
+              </section>
+              <section class="genre-progress" aria-labelledby={subject.data.slug + "-progress"}>
+                <div class="section-heading"><h4 id={subject.data.slug + "-progress"}>進捗状況</h4><span data-progress-updated>未登録</span></div>
+                <p class="progress-view" data-genre-progress>進捗を読み込んでいます…</p>
+                <form class="progress-form" data-progress-form hidden>
+                  <label><span class="visually-hidden">進捗状況を編集</span><textarea data-progress-input maxlength="4000" placeholder="この分野の現在の進捗を入力してください"></textarea></label>
+                  <div class="progress-form-actions"><output data-progress-message aria-live="polite"></output><button type="submit">進捗を保存</button></div>
+                </form>
+              </section>
+              <footer class="genre-actions">
+                <a class="card-link" href={"/admin/articles/?subject=" + encodeURIComponent(subject.data.slug)}><span>この分野の原稿を見る</span><span aria-hidden="true">→</span></a>
+                {subject.data.externalUrl && <a class="external-link" href={subject.data.externalUrl} target="_blank" rel="noopener noreferrer"><span>現行ページ</span><span aria-hidden="true">↗</span></a>}
+              </footer>
+            </article>
+          ))}
+        </div>
+        <p class="empty-state" data-empty-state hidden>条件に一致する分野はありません。</p>
+      </div>
+    </section>
   </main>
 </AdminLayout>
 
+<script>
+  (() => {
+    const root = document.querySelector<HTMLElement>("[data-genres-page]");
+    if (!root || root.dataset.bound === "true") return;
+    root.dataset.bound = "true";
+
+    const search = root.querySelector<HTMLInputElement>("[data-genre-search]");
+    const cards = [...root.querySelectorAll<HTMLElement>("[data-genre-card]")];
+    const links = [...root.querySelectorAll<HTMLElement>("[data-subject-link]")];
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-filter]")];
+    const count = root.querySelector<HTMLElement>("[data-visible-count]");
+    const resultLabel = root.querySelector<HTMLElement>("[data-results-label]");
+    const empty = root.querySelector<HTMLElement>("[data-empty-state]");
+    type GenreMember = { email?: string; role?: string; display_name?: string; avatar_url?: string; assignments?: string[]; subjectAssignments?: string[]; workflowSubjects?: string[] };
+    type GenreOverview = { subject?: string; progress?: string; updated_at?: string; updatedAt?: string };
+    const subjectNames = new Map(cards.map((card) => [card.id, card.querySelector("h3")?.textContent?.trim() ?? card.id]));
+    const progressBySubject = new Map<string, GenreOverview>();
+    let overviewMembers: GenreMember[] = [];
+    let editableSubjects = new Set<string>();
+    let activeFilter = "all";
+    let membersLoaded = false;
+
+    const formatUpdatedAt = (value?: string) => {
+      if (!value) return "未登録";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "更新日時不明" : `最終更新 ${date.toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}`;
+    };
+
+    const normalizeName = (value: string) => value.replace(/[\s\u3000]/g, "").trim();
+
+    const renderMembers = (card: HTMLElement) => {
+      const subject = card.id;
+      const subjectName = subjectNames.get(subject) ?? subject;
+      const container = card.querySelector<HTMLElement>("[data-genre-members]");
+      const count = card.querySelector<HTMLElement>("[data-member-count]");
+      if (!container || !count) return;
+      const merged = new Map<string, { name: string; avatar_url?: string; assignments: Set<string> }>();
+      overviewMembers.filter((member) => {
+        const assignments = member.assignments ?? [];
+        const hasAssignmentMetadata = Array.isArray(member.subjectAssignments) || Array.isArray(member.workflowSubjects);
+        const explicitlyAssigned = (member.subjectAssignments ?? []).includes(subject) || (member.workflowSubjects ?? []).includes(subject);
+        // 新APIでは分野IDを正本として判定し、全体管理者を各カードへ誤って複製しない。
+        // 旧API/テストfixtureには分野ラベルしかないため、ラベルをフォールバックに使う。
+        return hasAssignmentMetadata
+          ? explicitlyAssigned
+          : assignments.includes(`${subjectName}担当`) || assignments.includes(`${subjectName}統括`);
+      }).forEach((member) => {
+        const displayName = member.display_name?.trim();
+        if (!displayName || displayName === "表示名未設定") return;
+        const normalized = normalizeName(displayName);
+        const current = merged.get(normalized) ?? { name: displayName, avatar_url: member.avatar_url?.trim() || undefined, assignments: new Set<string>() };
+        (member.assignments ?? []).forEach((assignment) => {
+          if (assignment === `${subjectName}担当` || assignment === `${subjectName}統括`) {
+            current.assignments.add(assignment);
+          }
+        });
+        merged.set(normalized, current);
+      });
+      const relevant = [...merged.values()];
+      count.textContent = `${relevant.length}人`;
+      container.replaceChildren();
+      if (!relevant.length) {
+        const emptyMembers = document.createElement("p");
+        emptyMembers.className = "loading-note";
+        emptyMembers.textContent = membersLoaded ? "担当者はまだ登録されていません。" : "担当メンバーを読み込んでいます…";
+        container.append(emptyMembers);
+        return;
+      }
+      relevant.forEach((member) => {
+        const item = document.createElement("div");
+        item.className = "member-item";
+        const avatarUrl = member.avatar_url?.trim();
+        if (avatarUrl) {
+          const avatar = document.createElement("img");
+          avatar.className = "member-avatar";
+          avatar.src = avatarUrl;
+          avatar.alt = "";
+          avatar.loading = "lazy";
+          avatar.referrerPolicy = "no-referrer";
+          item.append(avatar);
+        } else {
+          const fallback = document.createElement("span");
+          fallback.className = "member-avatar member-avatar--fallback";
+          fallback.textContent = member.name.slice(0, 1);
+          fallback.setAttribute("aria-hidden", "true");
+          item.append(fallback);
+        }
+        const name = document.createElement("strong");
+        name.textContent = member.name;
+        item.append(name);
+        const roles = document.createElement("span");
+        roles.textContent = [...member.assignments].join("・") || "担当メンバー";
+        item.append(roles);
+        container.append(item);
+      });
+    };
+
+    const renderProgress = (card: HTMLElement) => {
+      const subject = card.id;
+      const overview = progressBySubject.get(subject);
+      const view = card.querySelector<HTMLElement>("[data-genre-progress]");
+      const updated = card.querySelector<HTMLElement>("[data-progress-updated]");
+      const form = card.querySelector<HTMLFormElement>("[data-progress-form]");
+      const input = card.querySelector<HTMLTextAreaElement>("[data-progress-input]");
+      if (!view || !updated || !form || !input) return;
+      view.textContent = overview?.progress?.trim() || "進捗はまだ登録されていません。";
+      updated.textContent = formatUpdatedAt(overview?.updated_at ?? overview?.updatedAt);
+      input.value = overview?.progress ?? "";
+      form.hidden = !editableSubjects.has(subject);
+    };
+
+    const renderOverviews = () => cards.forEach((card) => { renderMembers(card); renderProgress(card); });
+
+    const loadOverviews = async () => {
+      try {
+        const response = await fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" });
+        const data = await response.json() as { members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string };
+        if (!response.ok) throw new Error(data.error ?? "ジャンル概要を読み込めませんでした。");
+        overviewMembers = data.members ?? [];
+        membersLoaded = true;
+        const coordinatorSubjects = data.scope?.coordinatorSubjects ?? [];
+        editableSubjects = data.canEditAll || coordinatorSubjects.includes("*")
+          ? new Set(cards.map((card) => card.id))
+          : new Set([...coordinatorSubjects, ...(data.editableSubjects ?? [])]);
+        progressBySubject.clear();
+        (data.overviews ?? []).forEach((overview) => { if (overview.subject) progressBySubject.set(overview.subject, overview); });
+        renderOverviews();
+      } catch (error) {
+        membersLoaded = true;
+        cards.forEach((card) => {
+          const progressView = card.querySelector<HTMLElement>("[data-genre-progress]");
+          const members = card.querySelector<HTMLElement>("[data-genre-members]");
+          const memberCount = card.querySelector<HTMLElement>("[data-member-count]");
+          if (members && memberCount) {
+            memberCount.textContent = "—";
+            members.replaceChildren();
+            const message = document.createElement("p");
+            message.className = "loading-note";
+            message.textContent = "担当メンバーを読み込めませんでした。";
+            members.append(message);
+          }
+          if (progressView) progressView.textContent = error instanceof Error ? error.message : "進捗を読み込めませんでした。";
+        });
+      }
+    };
+
+    const applyFilters = () => {
+      const query = search?.value.trim().toLowerCase() ?? "";
+      let visible = 0;
+      cards.forEach((card) => {
+        const matchesQuery = !query || (card.dataset.search ?? "").includes(query);
+        const matchesFilter = activeFilter === "all" || card.dataset.status === activeFilter;
+        const isVisible = matchesQuery && matchesFilter;
+        card.hidden = !isVisible;
+        if (isVisible) visible += 1;
+      });
+      links.forEach((link) => {
+        const card = document.getElementById(link.dataset.subject ?? "");
+        link.hidden = Boolean(card?.hidden);
+      });
+      if (count) count.textContent = visible + "件";
+      if (resultLabel) resultLabel.textContent = visible + "件を表示";
+      if (empty) empty.hidden = visible !== 0;
+    };
+
+    search?.addEventListener("input", applyFilters);
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      activeFilter = button.dataset.filter ?? "all";
+      buttons.forEach((item) => {
+        const isActive = item === button;
+        item.classList.toggle("is-active", isActive);
+        item.setAttribute("aria-pressed", String(isActive));
+      });
+      applyFilters();
+    }));
+    cards.forEach((card) => card.querySelector<HTMLFormElement>("[data-progress-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const input = form.querySelector<HTMLTextAreaElement>("[data-progress-input]");
+      const message = form.querySelector<HTMLOutputElement>("[data-progress-message]");
+      const button = form.querySelector<HTMLButtonElement>("button[type=submit]");
+      if (!input || !button) return;
+      button.disabled = true;
+      if (message) message.textContent = "保存中…";
+      try {
+        const response = await fetch("/api/admin/genre-overviews?project=atlas", { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: card.id, progress: input.value }) });
+        const data = await response.json() as GenreOverview & { error?: string };
+        if (!response.ok) throw new Error(data.error ?? "進捗を保存できませんでした。");
+        progressBySubject.set(card.id, data);
+        renderProgress(card);
+        if (message) message.textContent = "保存しました。";
+      } catch (error) {
+        if (message) message.textContent = error instanceof Error ? error.message : "進捗を保存できませんでした。";
+      } finally {
+        button.disabled = false;
+      }
+    }));
+    void loadOverviews();
+  })();
+</script>
+
 <style>
-  .genres{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.genres header{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.25rem}.genres header p{color:var(--accent-primary);font-size:.74rem;font-weight:800;margin:0}.genres h1{font-size:2rem;margin:.25rem 0}.genres header span{color:var(--text-secondary)}.genres a{color:var(--accent-primary);font-size:.78rem;font-weight:800;text-decoration:none}.genres>nav{display:flex;flex-wrap:wrap;gap:.4rem;padding:1rem 0}.genres>nav a{border:1px solid var(--border-default);border-radius:999px;padding:.35rem .6rem}.genre-grid{display:grid;gap:.8rem;grid-template-columns:repeat(2,minmax(0,1fr))}.genre-grid article{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.7rem;padding:1rem;scroll-margin-top:6rem}.genre-heading{align-items:start;display:flex;gap:.8rem;justify-content:space-between}.genre-heading small{color:var(--text-secondary);font-size:.68rem}.genre-heading h2{font-size:1.2rem;margin:.15rem 0}.genre-heading>span{border:1px solid var(--border-default);border-radius:999px;font-size:.68rem;font-weight:800;padding:.2rem .45rem}.genre-heading>[data-status=published]{background:#e8f7ed;color:#176b32}.genre-grid p{line-height:1.65;margin:0}.genre-grid dl{display:flex;gap:.5rem;margin:0}.genre-grid dl div{background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.1rem;padding:.35rem .5rem}.genre-grid dt{color:var(--text-secondary);font-size:.65rem}.genre-grid dd{font-size:.76rem;font-weight:800;margin:0}.genre-grid h3{font-size:.82rem;margin:0}.genre-grid ul{display:flex;flex-wrap:wrap;gap:.35rem;list-style:none;margin:0;padding:0}.genre-grid li{background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.08rem;padding:.3rem .45rem}.genre-grid li strong{font-size:.73rem}.genre-grid code{color:var(--text-secondary);font-size:.64rem}.genre-actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:auto}@media(max-width:720px){.genres{padding:0 .85rem 3rem}.genres header{align-items:start;display:grid}.genre-grid{grid-template-columns:1fr}}
+  :global(body:has(main.genres)) {
+    --background-primary: #090a0c;
+    --background-secondary: #111316;
+    --background-inset: #17191d;
+    --border-default: rgba(255, 255, 255, .12);
+    --border-strong: rgba(255, 255, 255, .22);
+    --text-primary: #f1f3f5;
+    --text-secondary: #a3a8b1;
+    --text-muted: #6f747d;
+    --accent-primary: #a9d4ff;
+    --accent-hover: #d3e8ff;
+    --accent-subtle: rgba(169, 212, 255, .12);
+    --success: #9ee5ad;
+    --focus-ring: #a9d4ff;
+    background: #090a0c;
+    color: #f1f3f5;
+    color-scheme: dark;
+  }
+  :global(body:has(main.genres) .admin-layout-main) { background: #090a0c; }
+  :global(body:has(main.genres) .admin-nav) { background: rgba(9, 10, 12, .92); border-bottom-color: var(--border-default); color: var(--text-primary); left: 0; position: sticky; top: 0; transform: none; width: 100%; backdrop-filter: blur(18px); }
+  :global(body:has(main.genres) .admin-nav nav > a) { color: var(--text-secondary); }
+  :global(body:has(main.genres) .admin-nav nav > a:hover), :global(body:has(main.genres) .admin-nav nav > a[aria-current="page"]) { color: var(--text-primary); }
+  :global(body:has(main.genres) .admin-nav .admin-nav-brand-title), :global(body:has(main.genres) .admin-nav .admin-project-switcher-title), :global(body:has(main.genres) .admin-nav .admin-account-profile), :global(body:has(main.genres) .admin-nav .admin-account-email) { color: var(--text-primary); }
+  :global(body:has(main.genres) .admin-nav-brand-logo img) { filter: grayscale(1) brightness(1.8); opacity: .9; }
+  :global(body:has(main.genres) .admin-nav .admin-nav-brand-logo), :global(body:has(main.genres) .admin-nav .admin-notifications), :global(body:has(main.genres) .admin-nav .admin-menu-toggle) { color: var(--text-primary); }
+  :global(body:has(main.genres) .admin-nav .admin-logout), :global(body:has(main.genres) .admin-nav .admin-menu-toggle) { border-color: var(--border-default); color: var(--text-secondary); }
+  :global(body:has(main.genres) .admin-breadcrumbs) { background: #090a0c; color: var(--text-muted); }
+  :global(body:has(main.genres) .admin-breadcrumbs a) { color: var(--text-secondary); }
+  :global(body:has(main.genres) .admin-breadcrumbs span[aria-current="page"]) { color: var(--text-primary); }
+
+  .genres { max-width: 1275px; margin: 0 auto; padding: 0 1.75rem 5rem; }
+  .genres-hero { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 2rem; justify-content: space-between; padding: 3.75rem 0 2.6rem; }
+  .eyebrow-row { align-items: center; display: flex; flex-wrap: wrap; gap: .9rem; }
+  .eyebrow, .panel-kicker { color: var(--accent-primary); font-size: .68rem; font-weight: 800; letter-spacing: .08em; }
+  .hero-caption { color: var(--text-muted); font-size: .68rem; }
+  .genres-hero h1 { color: var(--text-primary); font-size: clamp(2.4rem, 4.8vw, 4.2rem); font-weight: 500; letter-spacing: -.08em; line-height: 1; margin: 1rem 0 1.2rem; }
+  .genres-hero p { color: var(--text-secondary); font-size: .95rem; line-height: 1.7; margin: 0; max-width: 34rem; }
+  .hero-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; }
+  .quiet-link, .primary-link, .card-link, .external-link { align-items: center; display: inline-flex; font-size: .76rem; font-weight: 800; gap: .8rem; text-decoration: none; }
+  .quiet-link { color: var(--text-secondary); padding: .7rem .8rem; }
+  .quiet-link:hover, .external-link:hover { color: var(--text-primary); }
+  .quiet-link span:last-child { color: var(--text-muted); font-size: 1rem; line-height: 1; }
+  .primary-link { background: var(--text-primary); color: #090a0c; padding: .75rem .9rem; }
+  .primary-link:hover { background: var(--accent-hover); }
+  .primary-link span:last-child, .card-link span:last-child, .external-link span:last-child { color: var(--accent-primary); font-size: 1rem; line-height: 1; }
+  .primary-link span:last-child { color: #090a0c; }
+  .metric-grid { border-bottom: 1px solid var(--border-default); display: grid; grid-template-columns: repeat(4, 1fr); }
+  .metric { border-right: 1px solid var(--border-default); display: grid; gap: .2rem; padding: 1.15rem 1.25rem; }
+  .metric:first-child { padding-left: 0; }
+  .metric:last-child { border-right: 0; }
+  .metric span, .metric small { color: var(--text-muted); font-size: .67rem; }
+  .metric strong { color: var(--text-primary); font-size: 1.7rem; font-weight: 500; letter-spacing: -.06em; line-height: 1; }
+  .genres-workspace { display: grid; gap: 2rem; grid-template-columns: 16rem minmax(0, 1fr); padding-top: 2rem; }
+  .index-panel { align-self: start; position: sticky; top: 6.7rem; }
+  .panel-heading, .content-heading { align-items: end; display: flex; justify-content: space-between; }
+  .panel-heading h2, .content-heading h2 { color: var(--text-primary); font-size: 1.05rem; font-weight: 600; letter-spacing: -.03em; margin: .35rem 0 0; }
+  .result-count, .content-count { color: var(--text-muted); font-family: var(--font-mono); font-size: .66rem; }
+  .search-field { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); color: var(--text-muted); display: flex; gap: .45rem; margin-top: 1rem; padding: .55rem .65rem; }
+  .search-field:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--accent-subtle); }
+  .search-icon { font-size: 1.1rem; line-height: .8; }
+  .search-field input { background: transparent; border: 0; color: var(--text-primary); font: inherit; font-size: .72rem; min-width: 0; outline: 0; width: 100%; }
+  .search-field input::placeholder { color: var(--text-muted); }
+  .filter-row { display: flex; gap: .25rem; margin: .65rem 0 .8rem; }
+  .filter-button { background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--text-muted); cursor: pointer; font: inherit; font-size: .68rem; padding: .4rem .25rem; }
+  .filter-button:hover, .filter-button.is-active { border-bottom-color: var(--accent-primary); color: var(--text-primary); }
+  .subject-index { border-top: 1px solid var(--border-default); display: grid; gap: .15rem; padding-top: .65rem; }
+  .subject-index a { align-items: center; border-left: 1px solid transparent; color: var(--text-secondary); display: flex; font-size: .74rem; gap: .45rem; min-width: 0; padding: .35rem .45rem; text-decoration: none; }
+  .subject-index a:hover, .subject-index a:focus-visible { background: var(--background-secondary); border-left-color: var(--accent-primary); color: var(--text-primary); }
+  .subject-index a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subject-index a small { color: var(--text-muted); font-family: var(--font-mono); font-size: .6rem; margin-left: auto; }
+  .subject-index a i, .status i { background: var(--text-muted); border-radius: 50%; display: inline-block; flex: 0 0 auto; height: .4rem; width: .4rem; }
+  .subject-index a i[data-status="published"], .status[data-status="published"] i { background: var(--success); }
+  .index-note { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-size: .62rem; gap: .35rem; margin: 1rem 0 0; }
+  .status-legend { border-radius: 50%; display: inline-block; height: .4rem; margin-left: .2rem; width: .4rem; }
+  .status-legend-published { background: var(--success); }
+  .status-legend-preparing { background: var(--text-muted); }
+
+  .content-heading { border-bottom: 1px solid var(--border-default); padding-bottom: .8rem; }
+  .genre-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .7rem; }
+  .genre-card { background: var(--background-secondary); border: 1px solid var(--border-default); display: flex; flex-direction: column; gap: .8rem; min-width: 0; padding: 1rem; scroll-margin-top: 6.7rem; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+  .genre-card:hover { background: var(--background-inset); border-color: var(--border-strong); transform: translateY(-1px); }
+  .genre-card[hidden], .subject-index a[hidden] { display: none; }
+  .genre-heading { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
+  .genre-title { min-width: 0; }
+  .genre-meta { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-size: .65rem; gap: .55rem; }
+  .genre-meta > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status { align-items: center; border: 1px solid var(--border-default); color: var(--text-secondary); display: inline-flex; font-size: .62rem; gap: .35rem; padding: .18rem .4rem; }
+  .status[data-status="published"] { border-color: color-mix(in srgb, var(--success) 48%, var(--border-default)); color: var(--success); }
+  .genre-heading h3 { color: var(--text-primary); font-size: 1.2rem; letter-spacing: -.04em; margin: .35rem 0 0; }
+  .anchor-link { color: var(--text-muted); font-family: var(--font-mono); font-size: .76rem; line-height: 1; padding: .2rem; text-decoration: none; }
+  .anchor-link:hover { color: var(--accent-primary); }
+  .genre-description { color: var(--text-secondary); font-size: .76rem; line-height: 1.6; margin: 0; min-height: 2.55em; }
+  .genre-stats { display: grid; gap: .4rem; grid-template-columns: minmax(0, 1fr) 6.5rem; margin: 0; }
+  .genre-stats div { background: var(--background-primary); border: 1px solid var(--border-default); display: grid; gap: .15rem; min-width: 0; padding: .45rem .55rem; }
+  .genre-stats dt, .category-heading > span { color: var(--text-muted); font-size: .62rem; }
+  .genre-stats dd { color: var(--text-primary); font-size: .73rem; font-weight: 700; margin: 0; min-width: 0; }
+  .genre-stats dd code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .genre-stats dd span { color: var(--text-secondary); font-size: .62rem; font-weight: 400; margin-left: .2rem; }
+  .category-block { display: grid; gap: .45rem; }
+  .category-heading { align-items: center; display: flex; justify-content: space-between; }
+  .category-heading h4 { color: var(--text-primary); font-size: .74rem; margin: 0; }
+  .category-block ul { display: grid; gap: .3rem; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+  .category-block li { background: var(--background-primary); border: 1px solid var(--border-default); display: grid; gap: .1rem; min-width: 0; padding: .38rem .45rem; }
+  .category-block li strong { color: var(--text-primary); font-size: .67rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .category-block code { color: var(--text-muted); font-size: .58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty-categories { color: var(--text-muted); font-size: .72rem; margin: 0; }
+  .genre-people, .genre-progress { border-top: 1px solid var(--border-default); display: grid; gap: .5rem; padding-top: .75rem; }
+  .section-heading { align-items: center; display: flex; gap: .6rem; justify-content: space-between; }
+  .section-heading h4 { color: var(--text-primary); font-size: .74rem; margin: 0; }
+  .section-heading > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .58rem; white-space: nowrap; }
+  .member-list { display: grid; gap: .3rem; }
+  .member-item { align-items: baseline; background: var(--background-primary); border: 1px solid var(--border-default); display: flex; gap: .45rem; justify-content: space-between; min-width: 0; padding: .38rem .45rem; }
+  .member-avatar { border: 1px solid var(--border-default); border-radius: 50%; flex: 0 0 1.35rem; height: 1.35rem; object-fit: cover; width: 1.35rem; }
+  .member-avatar--fallback { align-items: center; background: var(--background-secondary); color: var(--text-secondary); display: inline-flex; font-size: .62rem; justify-content: center; }
+  .member-item strong { color: var(--text-primary); font-size: .67rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-item span { border-left: 1px solid var(--border-default); color: var(--text-muted); flex: 0 0 auto; font-size: .58rem; max-width: 58%; overflow: hidden; padding-left: .45rem; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+  .loading-note, .progress-view { color: var(--text-secondary); font-size: .7rem; line-height: 1.55; margin: 0; white-space: pre-wrap; }
+  .progress-view { background: var(--background-primary); border-left: 2px solid var(--accent-primary); padding: .45rem .55rem; }
+  .progress-form { display: grid; gap: .4rem; }
+  .progress-form[hidden] { display: none; }
+  .progress-form textarea { background: var(--background-primary); border: 1px solid var(--border-default); box-sizing: border-box; color: var(--text-primary); font: inherit; font-size: .7rem; line-height: 1.5; min-height: 4.2rem; padding: .45rem .55rem; resize: vertical; width: 100%; }
+  .progress-form textarea:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-subtle); outline: 0; }
+  .progress-form-actions { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
+  .progress-form output { color: var(--text-secondary); font-size: .62rem; line-height: 1.35; }
+  .progress-form button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: #090a0c; cursor: pointer; font: inherit; font-size: .65rem; font-weight: 800; padding: .42rem .55rem; }
+  .progress-form button:hover { background: var(--accent-hover); }
+  .progress-form button:disabled { cursor: wait; opacity: .65; }
+  .genre-actions { align-items: center; border-top: 1px solid var(--border-default); display: flex; flex-wrap: wrap; gap: .8rem 1rem; margin-top: auto; padding-top: .75rem; }
+  .card-link { color: var(--accent-primary); }
+  .external-link { color: var(--text-secondary); font-size: .7rem; }
+  .empty-state { border: 1px dashed var(--border-default); color: var(--text-secondary); margin: .7rem 0 0; padding: 2rem; text-align: center; }
+
+  .visually-hidden { height: 1px; margin: -1px; overflow: hidden; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); }
+  :where(a, button, input):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  @media (max-width: 980px) {
+    .genres-workspace { grid-template-columns: 13rem minmax(0, 1fr); gap: 1.2rem; }
+    .genre-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .genres { padding-inline: 1rem; }
+    .genres-hero { align-items: start; display: grid; gap: 1.5rem; padding-top: 2.5rem; }
+    .genres-hero h1 { font-size: 2.8rem; }
+    .hero-actions { justify-content: flex-start; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    .metric:nth-child(2) { border-right: 0; }
+    .metric:nth-child(-n + 2) { border-bottom: 1px solid var(--border-default); }
+    .metric:nth-child(3) { padding-left: 0; }
+    .genres-workspace { grid-template-columns: 1fr; }
+    .index-panel { position: static; }
+    .subject-index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 460px) {
+    .genres { padding-inline: .75rem; }
+    .genres-hero h1 { font-size: 2.35rem; }
+    .hero-actions { align-items: stretch; flex-direction: column; }
+    .quiet-link, .primary-link { justify-content: space-between; }
+    .metric { padding: .85rem .7rem; }
+    .metric:first-child, .metric:nth-child(3) { padding-left: 0; }
+    .metric strong { font-size: 1.35rem; }
+    .subject-index { grid-template-columns: 1fr 1fr; }
+    .genre-stats { grid-template-columns: minmax(0, 1fr) 5.5rem; }
+    .category-block ul { grid-template-columns: 1fr; }
+  }
+</style>
+
+<style is:global>
+  /* メンバー行はAPI取得後に生成するため、Astroのスコープ属性に依存しない。 */
+  .genres .member-item .member-avatar {
+    border: 1px solid var(--border-default);
+    border-radius: 50%;
+    flex: 0 0 1.35rem;
+    height: 1.35rem;
+    object-fit: cover;
+    width: 1.35rem;
+  }
+  .genres .member-item .member-avatar--fallback {
+    align-items: center;
+    background: var(--background-secondary);
+    color: var(--text-secondary);
+    display: inline-flex;
+    font-size: .62rem;
+    justify-content: center;
+  }
 </style>

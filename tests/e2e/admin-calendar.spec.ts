@@ -16,7 +16,26 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
     route.fulfill({ json: { notifications: [] } }),
   );
   await page.route("**/api/admin/portal", (route) =>
-    route.fulfill({ json: { todos: [], calendar: { events: [] } } }),
+    route.fulfill({
+      json: {
+        projects: [
+          {
+            id: "atlas",
+            slug: "atlas",
+            name: "学習サイト「アトラス」運営",
+            role: "manager",
+          },
+          {
+            id: "secretariat",
+            slug: "secretariat",
+            name: "Atlasez運営事務局",
+            role: "member",
+          },
+        ],
+        todos: [],
+        calendar: { events: [] },
+      },
+    }),
   );
 
   await page.goto("admin/atlas/");
@@ -26,6 +45,14 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
     "/admin/manage/?project=atlas",
   );
 
+  await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
+  await page
+    .getByRole("link", { name: /学習サイト「アトラス」運営/ })
+    .last()
+    .click();
+  await expect(
+    page.getByRole("link", { name: "管理", exact: true }),
+  ).toHaveAttribute("href", "/admin/manage/?project=atlas");
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
   await page.getByRole("link", { name: /Atlasez運営事務局/ }).click();
   await expect(
@@ -196,6 +223,27 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
     new Date(year, now.getMonth() + 1, 0).getDate(),
   );
 
+  const todayButton = page.locator(
+    ".calendar-cell--today .calendar-date-select",
+  );
+  const todayNumber = todayButton.locator(".calendar-day");
+  const todayButtonBox = await todayButton.boundingBox();
+  const todayNumberBox = await todayNumber.boundingBox();
+  expect(
+    Math.abs(
+      (todayButtonBox?.x ?? 0) +
+        (todayButtonBox?.width ?? 0) / 2 -
+        ((todayNumberBox?.x ?? 0) + (todayNumberBox?.width ?? 0) / 2),
+    ),
+  ).toBeLessThan(1);
+  expect(
+    Math.abs(
+      (todayButtonBox?.y ?? 0) +
+        (todayButtonBox?.height ?? 0) / 2 -
+        ((todayNumberBox?.y ?? 0) + (todayNumberBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThan(1);
+
   const holidayRegions = page.locator("[data-calendar-holiday-country]");
   expect(await holidayRegions.locator("option").count()).toBeGreaterThanOrEqual(
     500,
@@ -281,27 +329,6 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   expect((eventHeader?.y ?? 0) - (eventCellBox?.y ?? 0)).toBe(
     (emptyHeader?.y ?? 0) - (emptyCellBox?.y ?? 0),
   );
-  const todayButton = page.locator(
-    ".calendar-cell--today .calendar-date-select",
-  );
-  const todayNumber = todayButton.locator(".calendar-day");
-  const todayButtonBox = await todayButton.boundingBox();
-  const todayNumberBox = await todayNumber.boundingBox();
-  expect(
-    Math.abs(
-      (todayButtonBox?.x ?? 0) +
-        (todayButtonBox?.width ?? 0) / 2 -
-        ((todayNumberBox?.x ?? 0) + (todayNumberBox?.width ?? 0) / 2),
-    ),
-  ).toBeLessThan(1);
-  expect(
-    Math.abs(
-      (todayButtonBox?.y ?? 0) +
-        (todayButtonBox?.height ?? 0) / 2 -
-        ((todayNumberBox?.y ?? 0) + (todayNumberBox?.height ?? 0) / 2),
-    ),
-  ).toBeLessThan(1);
-
   await expect(page.getByText("本人だけのメモ")).toHaveCount(1);
 
   const endCell = page.locator(`[data-calendar-date="${endDate}"]`);

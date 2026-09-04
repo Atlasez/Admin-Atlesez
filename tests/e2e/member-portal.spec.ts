@@ -43,18 +43,22 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
   await expect(page.locator("[data-email]")).toHaveText(
     "hanako@school.example",
   );
-  await expect(page.locator("[data-university]")).toHaveValue("Atlasez大学");
-  await expect(page.locator("[data-year]")).toHaveValue("B2");
-  await expect(page.locator("[data-bio]")).toHaveValue(
-    "運営外向けプロフィール",
+  await expect(page.locator("[data-fact=university]")).toHaveText(
+    "Atlasez大学",
   );
-  await expect(page.locator("[data-display-name]")).toHaveValue("山田 花子");
+  await expect(page.locator("[data-fact=year]")).toHaveText("B2");
+  await expect(page.locator("[data-bio]")).toHaveText("運営外向けプロフィール");
+  await expect(
+    page.getByRole("link", { name: "プロフィールを編集" }),
+  ).toHaveAttribute("href", "/admin/member-profile/edit/");
   await expect(page.locator("[data-discord-status]")).toHaveText("未連携");
   await expect(page.locator("[data-discord-link]")).toHaveText("Discordと連携");
   await expect(page.locator("[data-discord-link]")).toHaveAttribute(
     "href",
     "/auth/discord/start?returnTo=%2Fadmin%2Fmember-profile%2F",
   );
+  await page.goto("admin/member-profile/edit/");
+  await expect(page.locator("[data-display-name]")).toHaveValue("山田 花子");
   await page.locator("[data-bio]").fill("更新した公開プロフィール");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-message]")).toContainText(

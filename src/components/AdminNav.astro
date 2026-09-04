@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "member-profile" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "introductions" | "secretariat" | "co-working" | "management" | "onboarding-demo";
+  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "onboarding-demo";
   site?: "portal" | "atlas" | "semi-platform" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -10,7 +10,7 @@ const normalizedPath = Astro.url.pathname.replace(/\/$/, "") || "/";
 const requestedProject = Astro.url.searchParams.get("project");
 const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
 const querySite = requestedProject === "portal" ? "portal" : requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "semi-platform" : "atlas";
-const portalRoutes = new Set(["/admin/portal", "/admin/member-profile", "/admin/member-tasks", "/admin/member-calendar"]);
+const portalRoutes = new Set(["/admin/portal", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/member-calendar"]);
 const routeSite = portalRoutes.has(normalizedPath)
   ? "portal"
   : normalizedPath === "/admin/profile-requests"
@@ -40,6 +40,14 @@ const routeCurrent = normalizedPath === "/admin/portal"
                 ? "genres"
               : normalizedPath === "/admin/manage"
                 ? "management"
+              : normalizedPath === "/admin/procedures"
+                ? "procedures"
+              : normalizedPath === "/admin/member-management"
+                ? "member-management"
+              : normalizedPath === "/admin/genre-roles"
+                ? "genre-roles"
+              : normalizedPath === "/admin/operations-statistics"
+                ? "operations-statistics"
               : normalizedPath === "/admin/calendar"
                 ? "calendar"
               : normalizedPath === "/admin/operations"
@@ -64,10 +72,14 @@ const routeCurrent = normalizedPath === "/admin/portal"
                             ? "onboarding-demo"
                           : normalizedPath === "/admin/applications"
                             ? "applications"
+                          : normalizedPath === "/admin/application-interview"
+                            ? "application-interview"
                             : normalizedPath === "/admin/introductions"
                               ? "introductions"
                               : normalizedPath === "/admin/member-profile"
                                 ? "member-profile"
+                              : normalizedPath === "/admin/member-profile/edit"
+                                ? "member-profile-edit"
                                 : normalizedPath === "/admin/member-tasks"
                                   ? "member-tasks"
                                   : normalizedPath === "/admin/member-calendar"
@@ -92,6 +104,7 @@ const pageLabel = ({
   articles: "編集・フィードバック",
   workspace: "マイページ",
   "member-profile": "マイページ",
+  "member-profile-edit": "プロフィール編集",
   "member-tasks": "タスク管理",
   "member-calendar": "カレンダー",
   "profile-requests": "メンバー情報の承認",
@@ -108,9 +121,14 @@ const pageLabel = ({
   rules: "規則",
   "onboarding-demo": "オンボーディング紹介",
   applications: "運営参加応募",
+  "application-interview": "面談メモ",
   introductions: "運営内自己紹介",
   "co-working": "同時作業会",
   management: "管理トップ",
+  procedures: "諸手続き",
+  "member-management": "運営メンバー管理",
+  "genre-roles": "ジャンル・役割管理",
+  "operations-statistics": "運営内統計",
 } as Record<NonNullable<Props["current"]>, string>)[current];
 const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "secretariat"]);
 ---
@@ -181,11 +199,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     applyLanguage(currentLanguage());
 
     type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'secretariat'; slug: string; current: string; home: string; label: string };
-    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', progress: '進捗報告', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', 'co-working': '同時作業会', reports: '問題報告', analytics: '閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', rules: '規則', applications: '運営参加応募', introductions: '運営内自己紹介', review: 'フィードバック一覧', 'onboarding-demo': 'オンボーディング紹介' };
+    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-profile/edit': 'プロフィール編集', 'member-profile-edit': 'プロフィール編集', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', progress: '進捗報告', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', procedures: '諸手続き', 'member-management': '運営メンバー管理', 'genre-roles': 'ジャンル・役割管理', 'operations-statistics': '運営内統計', 'co-working': '同時作業会', reports: '問題報告', analytics: '閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', rules: '規則', applications: '運営参加応募', 'application-interview': '面談メモ', introductions: '運営内自己紹介', review: 'フィードバック一覧', 'onboarding-demo': 'オンボーディング紹介' };
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
-      const site = ['/admin/portal', '/admin/member-profile', '/admin/member-tasks', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : project === 'secretariat' || path === '/admin/secretariat' || path === '/admin/profile-requests' ? 'secretariat' : project === 'seminar-platform' || path === '/admin/semi-platform' ? 'semi-platform' : 'atlas';
+      const site = ['/admin/portal', '/admin/member-profile', '/admin/member-profile/edit', '/admin/member-tasks', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : project === 'secretariat' || path === '/admin/secretariat' || path === '/admin/profile-requests' ? 'secretariat' : project === 'seminar-platform' || path === '/admin/semi-platform' ? 'semi-platform' : 'atlas';
       const slug = site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : 'atlas';
       const labels: Record<RouteState['site'], string> = { portal: 'Atlasezメンバー用サイト', atlas: '学習サイト「アトラス」運営用サイト', 'semi-platform': 'ゼミプラットフォーム', secretariat: 'Atlasez運営事務局' };
       const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
@@ -205,6 +223,18 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       switcher?.setAttribute('data-current-site', state.site);
       switcher?.setAttribute('data-current-slug', state.slug);
       document.querySelectorAll<HTMLAnchorElement>('[data-admin-project-link]').forEach((link) => {
+        const isManagementLink = link.dataset.adminProjectLink === 'manage';
+        if (isManagementLink && state.site === 'portal') {
+          // メンバー用サイトには運営管理への導線を表示しない。ClientRouterの
+          // persistent navでも、ポータルへ戻った瞬間に再表示されないようにする。
+          link.dataset.adminSite = 'restricted';
+          link.hidden = true;
+          link.setAttribute('aria-hidden', 'true');
+          link.tabIndex = -1;
+          return;
+        }
+        link.removeAttribute('aria-hidden');
+        link.removeAttribute('tabindex');
         link.dataset.adminSite = state.site;
         link.href = `/admin/${link.dataset.adminProjectLink}/?project=${encodeURIComponent(state.slug)}`;
       });
