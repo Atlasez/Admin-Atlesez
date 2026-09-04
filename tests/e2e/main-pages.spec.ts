@@ -350,10 +350,15 @@ test.describe("学習サイト", () => {
 
     await page.locator("[data-map-search]").fill("群の定義");
     await page.locator("[data-map-search]").dispatchEvent("change");
-    const fold = page.getByRole("button", { name: /群論を折りたたむ/ });
-    await expect(fold).toBeVisible();
-    await fold.click();
-    await expect(fold).not.toBeVisible();
+    // 詳細表示から戻る操作はEscまたは背景クリックに集約し、
+    // カテゴリ名ごとの「折りたたむ」ボタンは表示しない。
+    await expect(
+      page.getByRole("button", { name: /折りたたむ|Fold/ }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("[data-map-status]")).toContainText(
+      "カテゴリを表示",
+    );
 
     const open = page.getByRole("button", { name: "学習ルート検索" });
     // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す
@@ -484,6 +489,10 @@ test.describe("学習サイト", () => {
     await page.goto("atlas/ja/");
     // 表示設定はヘッダーのメニュー1か所に集約されている
     const menu = page.locator("[data-settings-menu]");
+    await expect(page.locator(".atlas-footer select")).toHaveCount(0);
+    await expect(
+      page.locator(".atlas-footer [data-settings-menu]"),
+    ).toHaveCount(0);
     await page.locator("[data-settings-menu] > summary").click();
     await expect(menu).toHaveAttribute("open", "");
     /*

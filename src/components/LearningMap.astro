@@ -174,9 +174,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
         {locale === "ja" ? "地図を操作" : "Control map"}
       </button>
       <div class="map-action-tools" data-graph-controls hidden>
-        <button type="button" class="map-tool" data-map-back hidden>
-          {locale === "ja" ? "▴ カテゴリを折りたたむ" : "▴ Fold category"}
-        </button>
         <button
           type="button"
           class="map-tool"
@@ -279,8 +276,8 @@ const mapCategoryPath = fixedSubject && fixedCategory
   <p class="map-thread-hint" data-graph-controls hidden>
     {
       locale === "ja"
-        ? "▸のカテゴリを押すと中の項目が開き、「▴ 折りたたむ」またはEscで閉じられます。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。"
-        : "Select a ▸ category to open it; use “▴ Fold” or Esc to close. Dotted nodes belong to other categories; double-click one to move there."
+        ? "▸のカテゴリを押すと中の項目が開き、Escまたは背景を押すと概要へ戻ります。点線の枠は別のカテゴリの項目で、ダブルクリックでそちらへ移れます。"
+        : "Select a ▸ category to open it; press Esc or select the background to return to the overview. Dotted nodes belong to other categories; double-click one to move there."
     }
   </p>
   <ul
@@ -1487,8 +1484,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
     const mapStatus = document.querySelector<HTMLElement>("[data-map-status]");
     const subjectSelect =
       document.querySelector<HTMLSelectElement>("[data-map-subject]");
-    const backButton =
-      document.querySelector<HTMLButtonElement>("[data-map-back]");
     const zoomLevel =
       document.querySelector<HTMLOutputElement>("[data-map-zoom-level]");
 
@@ -1612,11 +1607,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
     function renderOverview(subject: string): void {
       focused = null;
       hideAll();
-      if (backButton) {
-        backButton.hidden = true;
-        backButton.textContent = ja ? "▴ カテゴリを折りたたむ" : "▴ Fold category";
-      }
-
       const slugs = subject
         ? subjectOrder.filter((s) => s === subject)
         : subjectOrder;
@@ -1670,7 +1660,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
     function renderCategory(key: string): void {
       focused = key;
       hideAll();
-      if (backButton) backButton.hidden = false;
 
       const inside = conceptsByCat.get(key) ?? [];
       const insideIds = new Set(inside.map((n) => n.id));
@@ -1747,11 +1736,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
       fitReadable(visibleConcepts);
 
       const name = categoryName.get(key) ?? key;
-      if (backButton) {
-        backButton.textContent = ja
-          ? `▴ ${name}を折りたたむ`
-          : `▴ Fold ${name}`;
-      }
       setStatus(
         ja
           ? `${name}: ${inside.length}項目（外とのつながり ${outsideIds.size}件）`
@@ -1765,7 +1749,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
       if (routeIds.size === 0) return;
       focused = null;
       hideAll();
-      if (backButton) backButton.hidden = false;
       for (const id of routeIds) {
         const node = cy.getElementById(id);
         if (node.length === 0) continue;
@@ -2015,8 +1998,6 @@ const mapCategoryPath = fixedSubject && fixedCategory
       renderOverview(subjectSelect?.value ?? "");
       syncUrl();
     }
-
-    backButton?.addEventListener("click", collapse);
 
     // Esc でも閉じられるようにする。開いていないときは何もしない。
     document.addEventListener("keydown", (event) => {
