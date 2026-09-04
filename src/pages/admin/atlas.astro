@@ -33,6 +33,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
           <a href="/admin/introductions/?project=atlas"><strong>運営内自己紹介</strong><span aria-label="運営内自己紹介を開く">→</span></a>
           <a href="/admin/genres/"><strong>各ジャンル概要</strong><span aria-label="各ジャンル概要を開く">→</span></a>
           <a href="/admin/rules/"><strong>規則</strong><span aria-label="規則を開く">→</span></a>
+          <a href="/admin/procedures/?project=atlas"><strong>諸手続き</strong><span aria-label="諸手続きを開く">→</span></a>
         </div></header>
       </section>
 
@@ -65,6 +66,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .project-links small { color: var(--text-secondary); font-size: .78rem; line-height: 1.55; }
   .project-links a > span { bottom: .5rem; color: var(--accent-primary); font-size: .66rem; font-weight: 800; line-height: 1; position: absolute; right: .65rem; }
   .menu-group[data-menu-group="operations"] .project-links { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .menu-group[data-menu-group="community"] .project-links { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .menu-group-management .project-links { grid-template-columns: minmax(0, 10rem); }
   @media (max-width: 800px) {
     .project-home { padding: 0 .8rem 3rem; }
@@ -73,6 +75,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .menu-group-title { grid-column: 2; }
     .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .menu-group[data-menu-group="operations"] .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .menu-group[data-menu-group="community"] .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .menu-group-management .project-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .menu-group-heading .project-links { grid-column: 2; }
   }

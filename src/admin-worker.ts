@@ -2593,6 +2593,130 @@ async function deleteReportAdminPermission(
   return json({ ok: true, provisioning });
 }
 
+type GenreRoleCatalogRow = {
+  id: string;
+  project_id: string;
+  kind: "genre" | "role";
+  slug: string;
+  name: string;
+  description: string;
+  created_by: string;
+  created_at: string;
+};
+
+async function genreRoleCatalog(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const url = new URL(request.url);
+  if (request.method === "GET") {
+    const [catalog, assignments] = await Promise.all([
+      env.REPORTS.prepare(
+        `SELECT id,project_id,kind,slug,name,description,created_by,created_at
+         FROM admin_genre_role_catalog WHERE project_id='atlas'
+         ORDER BY kind,name,created_at`,
+      ).all<GenreRoleCatalogRow>(),
+      env.REPORTS.prepare(
+        `SELECT a.catalog_id,a.email,
+          COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
+          COALESCE(p.avatar_url,'') AS avatar_url
+         FROM admin_genre_role_assignments a
+         JOIN admin_genre_role_catalog c ON c.id=a.catalog_id AND c.project_id='atlas'
+         LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(a.email)
+         ORDER BY a.catalog_id,display_name,a.email`,
+      ).all<{ catalog_id: string; email: string; display_name: string; avatar_url: string }>(),
+    ]);
+    return json({
+      catalog: catalog.results ?? [],
+      assignments: assignments.results ?? [],
+      canEdit: scope.isManager,
+    });
+  }
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.method === "POST") {
+    const payload = (await request.json().catch(() => null)) as {
+      kind?: unknown;
+      slug?: unknown;
+      name?: unknown;
+      description?: unknown;
+    } | null;
+    const kind = text(payload?.kind, 12) as "genre" | "role";
+    const slug = text(payload?.slug, 80).toLowerCase();
+    const name = text(payload?.name, 120);
+    const description = text(payload?.description, 500);
+    if ((kind !== "genre" && kind !== "role") || !SUBJECT_SLUG.test(slug) || !name)
+      return json({ error: "種類、ID、表示名を確認してください。" }, 400);
+    const id = crypto.randomUUID();
+    try {
+      await env.REPORTS.prepare(
+        `INSERT INTO admin_genre_role_catalog
+         (id,project_id,kind,slug,name,description,created_by,created_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      )
+        .bind(id, "atlas", kind, slug, name, description, scope.email, new Date().toISOString())
+        .run();
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique"))
+        return json({ error: "同じ種類のIDがすでに存在します。" }, 409);
+      throw error;
+    }
+    return json({ ok: true, id, kind, slug, name, description }, 201);
+  }
+  if (request.method === "DELETE") {
+    const id = text(url.searchParams.get("id"), 64);
+    if (!id) return json({ error: "削除対象を確認してください。" }, 400);
+    await env.REPORTS.batch([
+      env.REPORTS.prepare("DELETE FROM admin_genre_role_assignments WHERE catalog_id=?").bind(id),
+      env.REPORTS.prepare("DELETE FROM admin_genre_role_catalog WHERE id=? AND project_id='atlas'").bind(id),
+    ]);
+    return json({ ok: true });
+  }
+  return json({ error: "GET、POST、DELETEのみ利用できます。" }, 405);
+}
+
+async function genreRoleAssignment(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.method === "POST") {
+    const payload = (await request.json().catch(() => null)) as {
+      catalogId?: unknown;
+      email?: unknown;
+    } | null;
+    const catalogId = text(payload?.catalogId, 64);
+    const email = text(payload?.email, 320).toLowerCase();
+    if (!catalogId || !EMAIL_PATTERN.test(email))
+      return json({ error: "対象とメールアドレスを確認してください。" }, 400);
+    const catalog = await env.REPORTS.prepare(
+      "SELECT id FROM admin_genre_role_catalog WHERE id=? AND project_id='atlas'",
+    ).bind(catalogId).first<{ id: string }>();
+    if (!catalog) return json({ error: "ジャンルまたは役割が見つかりません。" }, 404);
+    await env.REPORTS.prepare(
+      "INSERT OR IGNORE INTO admin_genre_role_assignments (catalog_id,email,created_by,created_at) VALUES (?,?,?,?)",
+    ).bind(catalogId, email, scope.email, new Date().toISOString()).run();
+    return json({ ok: true }, 201);
+  }
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+    const catalogId = text(url.searchParams.get("catalogId"), 64);
+    const email = text(url.searchParams.get("email"), 320).toLowerCase();
+    if (!catalogId || !EMAIL_PATTERN.test(email))
+      return json({ error: "対象とメールアドレスを確認してください。" }, 400);
+    await env.REPORTS.prepare(
+      "DELETE FROM admin_genre_role_assignments WHERE catalog_id=? AND lower(email)=lower(?)",
+    ).bind(catalogId, email).run();
+    return json({ ok: true });
+  }
+  return json({ error: "POST、DELETEのみ利用できます。" }, 405);
+}
+
 async function saveMemberSettings(
   request: Request,
   env: Env,
@@ -4703,6 +4827,7 @@ type SubjectOverviewMember = {
   avatar_url?: string;
   university: string;
   year: string;
+  country: string;
   assignments: string[];
   subjectAssignments: string[];
   workflowSubjects: string[];
@@ -4786,7 +4911,8 @@ async function genreOverviews(
       SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
         COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
         COALESCE(p.avatar_url,'') AS avatar_url,
-        COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year
+        COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year,
+        COALESCE(p.country,'') AS country
        FROM candidate_members m
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
        ORDER BY display_name,m.email`,
@@ -6763,6 +6889,85 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
       ],
     },
   });
+}
+
+type MemberProcedureType = "pause" | "withdrawal";
+
+async function memberProcedureRequests(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const projectId = new URL(request.url).searchParams.get("project") ?? "atlas";
+  if (projectId !== "atlas")
+    return json({ error: "学習サイトの諸手続きのみ受け付けています。" }, 400);
+
+  if (request.method === "GET") {
+    const result = await env.REPORTS.prepare(
+      `SELECT id,procedure_type,effective_from,effective_until,reason,note,status,created_at,updated_at
+       FROM atlasez_member_procedure_requests
+       WHERE project_id=? AND lower(email)=lower(?)
+       ORDER BY created_at DESC LIMIT 20`,
+    )
+      .bind(projectId, scope.email)
+      .all();
+    return json({ requests: result.results ?? [] });
+  }
+  if (request.method !== "POST")
+    return json({ error: "GET、POSTのみ利用できます。" }, 405);
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.headers.get("content-type")?.includes("application/json") !== true)
+    return json({ error: "JSON形式で送信してください。" }, 415);
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const procedureType = text(payload.type, 20) as MemberProcedureType;
+  if (procedureType !== "pause" && procedureType !== "withdrawal")
+    return json({ error: "手続きの種類を確認してください。" }, 400);
+  const effectiveFrom = text(payload.effectiveFrom, 10);
+  const effectiveUntil = text(payload.effectiveUntil, 10);
+  const reason = normalizedText(payload.reason, 300);
+  const note = normalizedText(payload.note, 2_000);
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(effectiveFrom))
+    return json({ error: "開始日・退会日を入力してください。" }, 400);
+  if (effectiveUntil && !datePattern.test(effectiveUntil))
+    return json({ error: "活動再開予定日は正しい日付で入力してください。" }, 400);
+  if (procedureType === "pause" && effectiveUntil && effectiveUntil < effectiveFrom)
+    return json({ error: "活動再開予定日は活動休止開始日以降にしてください。" }, 400);
+  if (!reason) return json({ error: "理由を入力してください。" }, 400);
+  if (procedureType === "withdrawal" && payload.confirm !== true)
+    return json({ error: "退会申請の確認にチェックを入れてください。" }, 400);
+
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await env.REPORTS.prepare(
+    `INSERT INTO atlasez_member_procedure_requests
+      (id,project_id,email,procedure_type,effective_from,effective_until,reason,note,status,created_at,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      id,
+      projectId,
+      scope.email,
+      procedureType,
+      effectiveFrom,
+      effectiveUntil,
+      reason,
+      note,
+      "pending",
+      now,
+      now,
+    )
+    .run();
+  return json({ ok: true, request: { id, procedure_type: procedureType, effective_from: effectiveFrom, effective_until: effectiveUntil, reason, note, status: "pending", created_at: now } });
 }
 
 async function memberTasksOverview(
@@ -14519,6 +14724,14 @@ const adminReturnPath = (value: string | null) => {
       parsed.pathname === "/admin/workspace/" ||
       parsed.pathname === "/admin/introductions" ||
       parsed.pathname === "/admin/introductions/" ||
+      parsed.pathname === "/admin/procedures" ||
+      parsed.pathname === "/admin/procedures/" ||
+      parsed.pathname === "/admin/member-management" ||
+      parsed.pathname === "/admin/member-management/" ||
+      parsed.pathname === "/admin/genre-roles" ||
+      parsed.pathname === "/admin/genre-roles/" ||
+      parsed.pathname === "/admin/operations-statistics" ||
+      parsed.pathname === "/admin/operations-statistics/" ||
       parsed.pathname === "/admin/project-profile-requests" ||
       parsed.pathname === "/admin/project-profile-requests/" ||
       parsed.pathname === "/admin/co-working" ||
@@ -16262,6 +16475,10 @@ async function handleAdminRequest(
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
+  if (url.pathname === "/api/admin/genre-role-catalog")
+    return genreRoleCatalog(request, env);
+  if (url.pathname === "/api/admin/genre-role-catalog/assignments")
+    return genreRoleAssignment(request, env);
   if (
     url.pathname === "/api/admin/member-settings" &&
     request.method === "PUT"
@@ -16410,6 +16627,8 @@ async function handleAdminRequest(
     );
   if (url.pathname === "/api/admin/portal" && request.method === "GET")
     return portalOverview(request, env);
+  if (url.pathname === "/api/admin/member-procedures")
+    return memberProcedureRequests(request, env);
   if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
     return memberTasksOverview(request, env);
   if (url.pathname === "/api/admin/member-calendar" && request.method === "GET")

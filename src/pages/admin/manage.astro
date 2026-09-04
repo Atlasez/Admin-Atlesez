@@ -10,9 +10,12 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
     <header><p>{projectLabel}</p><h1>管理トップ</h1><span>このプロジェクトの運営設定と応募を管理します。</span></header>
     <section aria-label="管理機能">
       <a href={`/admin/permissions/?project=${project}`} data-manager-only data-admin-site={projectSite} hidden><strong>運営者・担当管理</strong><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span aria-label="運営者・担当管理を開く">→</span></a>
+      {project === "atlas" && <a href="/admin/member-management/?project=atlas"><strong>運営メンバー管理</strong><ul class="role-tags"><li>名簿</li><li>担当確認</li></ul><span aria-label="運営メンバー管理を開く">→</span></a>}
+      {project === "atlas" && <a href="/admin/genre-roles/?project=atlas"><strong>ジャンル・役割管理</strong><ul class="role-tags"><li>分野</li><li>役割</li></ul><span aria-label="ジャンル・役割管理を開く">→</span></a>}
       {project !== "atlas" && <a href={`/admin/project-profile-requests/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>運営内自己紹介の承認</strong><ul class="role-tags"><li>運営内運営</li></ul><span aria-label="運営内自己紹介の承認を開く">→</span></a>}
       <a href={`/admin/reports/?project=${project}`}><strong>問題報告</strong><ul class="role-tags"><li>運営メンバー</li></ul><span aria-label="問題報告を開く">→</span></a>
       <a href={`/admin/analytics/?project=${project}`}><strong>閲覧統計</strong><ul class="role-tags"><li>運営メンバー</li></ul><span aria-label="閲覧統計を開く">→</span></a>
+      {project === "atlas" && <a href="/admin/operations-statistics/?project=atlas"><strong>運営内統計</strong><ul class="role-tags"><li>活動状況</li><li>進捗</li></ul><span aria-label="運営内統計を開く">→</span></a>}
       <a href={`/admin/applications/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>応募管理</strong><ul class="role-tags"><li>運営内運営</li></ul><span aria-label="応募管理を開く">→</span></a>
     </section>
   </main>
