@@ -769,6 +769,83 @@ test("E-7: 未保存の変更があると戻る・離脱を警告する", async 
   expect(prevented).toBe(true);
 });
 
+test("戻るの離脱確認前に別窓を閉じない", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  const popupPromise = page.waitForEvent("popup");
+  await page
+    .locator('[data-editor-pane="writing"] [data-pane-popout="writing"]')
+    .click();
+  const popup = await popupPromise;
+  await page.locator('[name="title"]').fill("未保存のタイトル");
+
+  const state = await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    const canceled = !window.dispatchEvent(event);
+    return {
+      canceled,
+      writingHidden: document
+        .querySelector('[data-editor-pane="writing"]')
+        ?.hasAttribute("hidden"),
+    };
+  });
+  expect(state.canceled).toBe(true);
+  expect(state.writingHidden).toBe(true);
+  await expect.poll(() => popup.isClosed()).toBe(false);
+  await popup.close();
+});
+
+test("インライン数式・表示数式を本文と別窓へ挿入できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+  const body = page.locator("[data-body]");
+  await body.fill("本文");
+  await body.focus();
+  await body.evaluate((element) =>
+    (element as HTMLTextAreaElement).setSelectionRange(2, 2),
+  );
+  await page.locator('[data-insert-math="inline"]').click();
+  await expect(body).toHaveValue("本文$ $");
+  await expect
+    .poll(() =>
+      body.evaluate(
+        (element) => (element as HTMLTextAreaElement).selectionStart,
+      ),
+    )
+    .toBe(4);
+
+  await body.focus();
+  await body.evaluate((element) => {
+    const textarea = element as HTMLTextAreaElement;
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  });
+  await page.locator('[data-insert-math="display"]').click();
+  await expect(body).toHaveValue("本文$ $\n$$\n\\boxed{ }\n$$\n");
+
+  const popupPromise = page.waitForEvent("popup");
+  await page
+    .locator('[data-editor-pane="writing"] [data-pane-popout="writing"]')
+    .click();
+  const popup = await popupPromise;
+  const popupBody = popup.locator("[data-body]");
+  await popupBody.fill("別窓本文");
+  await popupBody.focus();
+  await popupBody.evaluate((element) =>
+    (element as HTMLTextAreaElement).setSelectionRange(4, 4),
+  );
+  await popup.locator('[data-insert-math="inline"]').click();
+  await expect(popupBody).toHaveValue("別窓本文$ $");
+  await expect(body).toHaveValue("別窓本文$ $");
+  await popupBody.focus();
+  await popupBody.evaluate((element) => {
+    const textarea = element as HTMLTextAreaElement;
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  });
+  await popup.locator('[data-insert-math="display"]').click();
+  await expect(popupBody).toHaveValue("別窓本文$ $\n$$\n\\boxed{ }\n$$\n");
+  await popup.close();
+});
+
 test("画像参照を含む未保存の変更を公開前に保存してからPRを作成する", async ({
   page,
 }) => {

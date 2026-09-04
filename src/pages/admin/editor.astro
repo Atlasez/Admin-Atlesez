@@ -1713,6 +1713,23 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       popupPanel.addEventListener("change", forwardPopupInput);
       panel.addEventListener("input", forwardSourceInput);
       panel.addEventListener("change", forwardSourceInput);
+      // 別窓では本文枠を複製しているため、複製元のイベントリスナーは引き継がれない。
+      // 数式ボタンは別窓側のカーソル位置を本文側へ移してから、既存の挿入処理を呼び出す。
+      const popupBody = popupPanel.querySelector<HTMLTextAreaElement>("[data-body]");
+      popupPanel.querySelectorAll<HTMLButtonElement>("[data-insert-math]").forEach((button) => button.addEventListener("click", () => {
+        if (!popupBody) return;
+        const start = popupBody.selectionStart ?? popupBody.value.length;
+        const end = popupBody.selectionEnd ?? start;
+        body.focus();
+        body.setSelectionRange(start, end);
+        const mode = button.dataset.insertMath ?? "";
+        root.querySelector<HTMLButtonElement>(`[data-insert-math="${mode}"]`)?.click();
+        const nextStart = body.selectionStart ?? body.value.length;
+        const nextEnd = body.selectionEnd ?? nextStart;
+        syncPopupFields();
+        popupBody.focus();
+        popupBody.setSelectionRange(nextStart, nextEnd);
+      }));
       const popupObserver = new MutationObserver(syncPopupContent);
       popupObserver.observe(panel, { attributes: true, childList: true, characterData: true, subtree: true, attributeFilter: ["aria-pressed", "class", "disabled", "hidden"] });
       syncPopupContent();
@@ -1870,7 +1887,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       setUnsavedChanges(true);
     });
     window.addEventListener("beforeunload", (event) => {
-      closeAllPanePopouts();
+      // beforeunload は、戻る操作で離脱確認が表示される前にも発火する。
+      // ここで別窓を閉じると、ユーザーが離脱をキャンセルしても枠が復元できない。
+      // 実際にページが破棄される場合は pagehide のクリーンアップに任せる。
       if (!hasUnsavedChanges) return;
       event.preventDefault();
       event.returnValue = "";
