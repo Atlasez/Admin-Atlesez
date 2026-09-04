@@ -288,9 +288,9 @@ test("各ジャンル概要で担当メンバーと進捗を確認・更新で�
   await expect(
     mathematics.getByText("山田 花子", { exact: true }),
   ).toBeVisible();
-  await expect(
-    mathematics.getByText("上杉和輝", { exact: true }),
-  ).toBeVisible();
+  await expect(mathematics.getByText("上杉和輝", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(mathematics.locator("img.member-avatar")).toHaveAttribute(
     "src",
     "https://cdn.example.com/yamada.png",

@@ -4630,14 +4630,21 @@ const projectRoleLabel = (role: string) =>
       ? "運営メンバー"
       : role || "担当未設定";
 
-async function projectAssignmentLabels(
+type ProjectAssignmentDetails = {
+  labels: string[];
+  subjectAssignments: string[];
+  workflowSubjects: string[];
+};
+
+async function projectAssignmentDetails(
   env: Env,
   projectId: string,
   email: string,
   role: string,
-): Promise<string[]> {
+): Promise<ProjectAssignmentDetails> {
   const labels = [projectRoleLabel(role)];
-  if (projectId !== "atlas") return labels;
+  if (projectId !== "atlas")
+    return { labels, subjectAssignments: [], workflowSubjects: [] };
   const [permissions, workflowRoles] = await Promise.all([
     env.REPORTS.prepare(
       "SELECT subject FROM report_admin_permissions WHERE email=? ORDER BY subject",
@@ -4666,7 +4673,25 @@ async function projectAssignmentLabels(
           : `${APPLICATION_SUBJECT_LABELS[workflowRole.subject] ?? workflowRole.subject}統括`;
     if (!labels.includes(label)) labels.push(label);
   }
-  return labels;
+  return {
+    labels,
+    subjectAssignments: (permissions.results ?? [])
+      .map((permission) => permission.subject)
+      .filter((subject) => subject !== "*"),
+    workflowSubjects: (workflowRoles.results ?? [])
+      .filter((workflowRole) => workflowRole.role === "subject-coordinator")
+      .map((workflowRole) => workflowRole.subject)
+      .filter((subject) => subject !== "*"),
+  };
+}
+
+async function projectAssignmentLabels(
+  env: Env,
+  projectId: string,
+  email: string,
+  role: string,
+): Promise<string[]> {
+  return (await projectAssignmentDetails(env, projectId, email, role)).labels;
 }
 
 const MAX_SUBJECT_OVERVIEW_PROGRESS_LENGTH = 4_000;
@@ -4679,6 +4704,8 @@ type SubjectOverviewMember = {
   university: string;
   year: string;
   assignments: string[];
+  subjectAssignments: string[];
+  workflowSubjects: string[];
 };
 
 async function genreOverviews(
@@ -4774,15 +4801,20 @@ async function genreOverviews(
       .all<Record<string, unknown>>(),
   ]);
   const memberRows = await Promise.all(
-    (members.results ?? []).map(async (member) => ({
-      ...member,
-      assignments: await projectAssignmentLabels(
+    (members.results ?? []).map(async (member) => {
+      const details = await projectAssignmentDetails(
         env,
         project.id,
         String(member.email ?? ""),
         String(member.role ?? "member"),
-      ),
-    })),
+      );
+      return {
+        ...member,
+        assignments: details.labels,
+        subjectAssignments: details.subjectAssignments,
+        workflowSubjects: details.workflowSubjects,
+      };
+    }),
   );
   return json({
     project,

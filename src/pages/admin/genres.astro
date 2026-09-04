@@ -106,7 +106,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     const count = root.querySelector<HTMLElement>("[data-visible-count]");
     const resultLabel = root.querySelector<HTMLElement>("[data-results-label]");
     const empty = root.querySelector<HTMLElement>("[data-empty-state]");
-    type GenreMember = { email?: string; role?: string; display_name?: string; avatar_url?: string; assignments?: string[] };
+    type GenreMember = { email?: string; role?: string; display_name?: string; avatar_url?: string; assignments?: string[]; subjectAssignments?: string[]; workflowSubjects?: string[] };
     type GenreOverview = { subject?: string; progress?: string; updated_at?: string; updatedAt?: string };
     const subjectNames = new Map(cards.map((card) => [card.id, card.querySelector("h3")?.textContent?.trim() ?? card.id]));
     const progressBySubject = new Map<string, GenreOverview>();
@@ -132,14 +132,20 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       const merged = new Map<string, { name: string; avatar_url?: string; assignments: Set<string> }>();
       overviewMembers.filter((member) => {
         const assignments = member.assignments ?? [];
-        return member.role === "manager" || assignments.includes("全ジャンル管理") || assignments.includes("プロジェクトリーダー") || assignments.includes("全分野統括") || assignments.includes(`${subjectName}担当`) || assignments.includes(`${subjectName}統括`);
+        const hasAssignmentMetadata = Array.isArray(member.subjectAssignments) || Array.isArray(member.workflowSubjects);
+        const explicitlyAssigned = (member.subjectAssignments ?? []).includes(subject) || (member.workflowSubjects ?? []).includes(subject);
+        // 新APIでは分野IDを正本として判定し、全体管理者を各カードへ誤って複製しない。
+        // 旧API/テストfixtureには分野ラベルしかないため、ラベルをフォールバックに使う。
+        return hasAssignmentMetadata
+          ? explicitlyAssigned
+          : assignments.includes(`${subjectName}担当`) || assignments.includes(`${subjectName}統括`);
       }).forEach((member) => {
         const displayName = member.display_name?.trim();
         if (!displayName || displayName === "表示名未設定") return;
         const normalized = normalizeName(displayName);
         const current = merged.get(normalized) ?? { name: displayName, avatar_url: member.avatar_url?.trim() || undefined, assignments: new Set<string>() };
         (member.assignments ?? []).forEach((assignment) => {
-          if (assignment === "運営内運営" || assignment === "全ジャンル管理" || assignment === "プロジェクトリーダー" || assignment === "全分野統括" || assignment === `${subjectName}担当` || assignment === `${subjectName}統括`) {
+          if (assignment === `${subjectName}担当` || assignment === `${subjectName}統括`) {
             current.assignments.add(assignment);
           }
         });
