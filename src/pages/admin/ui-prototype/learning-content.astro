@@ -1,0 +1,590 @@
+---
+import { getCollection } from "astro:content";
+
+const subjects = (await getCollection("subjects"))
+  .sort((a, b) => a.data.order - b.data.order)
+  .map((entry) => ({
+    slug: entry.data.slug,
+    name: entry.data.name.ja,
+    description: entry.data.description.ja,
+    status: entry.data.status,
+    categories: entry.data.categories
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((category) => ({ slug: category.slug, name: category.name.ja })),
+  }));
+
+const articles = (await getCollection("articles"))
+  .filter((entry) => entry.data.locale === "ja")
+  .map((entry) => ({
+    id: entry.id,
+    subject: entry.data.subject,
+    category: entry.data.category,
+    slug: entry.data.slug,
+    title: entry.data.title,
+    summary: entry.data.summary,
+    status: entry.data.status,
+    difficulty: entry.data.difficulty,
+    estimatedMinutes: entry.data.estimatedMinutes,
+    updatedAt: entry.data.updatedAt.toISOString().slice(0, 10),
+    authors: entry.data.authors,
+    tags: entry.data.tags,
+  }))
+  .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+const initialSubject = subjects[0]?.slug ?? "";
+const initialCategory = subjects[0]?.categories[0]?.slug ?? "";
+const initialArticle = articles.find((article) => article.subject === initialSubject) ?? articles[0] ?? null;
+const payload = { subjects, articles };
+---
+
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Atlasコンテンツナビゲーター | UI Prototype</title>
+  </head>
+  <body>
+    <div class="prototype-shell">
+      <aside class="sidebar" aria-label="プロトタイプナビゲーション">
+        <a class="brand" href="/admin/ui-prototype/" aria-label="プロトタイプホームへ戻る">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <span>
+            <strong>Atlasez</strong>
+            <small>運営プロトタイプ</small>
+          </span>
+        </a>
+
+        <div class="side-label">PROTOTYPE</div>
+        <nav class="side-nav">
+          <a href="/admin/ui-prototype/" class="side-item">
+            <span class="side-icon" aria-hidden="true">⌂</span>
+            <span>概要</span>
+          </a>
+          <a href="/admin/ui-prototype/learning-content/" class="side-item is-active" aria-current="page">
+            <span class="side-icon" aria-hidden="true">▤</span>
+            <span>学習コンテンツ</span>
+          </a>
+          <span class="side-item is-disabled" aria-disabled="true">
+            <span class="side-icon" aria-hidden="true">◷</span>
+            <span>公開履歴</span>
+            <small>準備中</small>
+          </span>
+        </nav>
+
+        <div class="sidebar-foot">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>読み取り専用プロトタイプ</span>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="breadcrumbs" aria-label="現在地">
+            <a href="/admin/ui-prototype/">プロトタイプ</a>
+            <span aria-hidden="true">/</span>
+            <strong>学習コンテンツ</strong>
+          </div>
+          <div class="top-actions">
+            <span class="prototype-chip"><span class="chip-dot"></span> LOCAL DATA</span>
+            <button class="icon-button" type="button" aria-label="検索をフォーカス" data-focus-search>⌕</button>
+            <span class="avatar" aria-label="現在のユーザー">UK</span>
+          </div>
+        </header>
+
+        <div class="page-content">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">ATLAS CONTENT MODEL</p>
+              <h1>学習コンテンツ</h1>
+              <p class="lede">学習サイトの分野構造と記事の公開状態を、運営側から同じ文脈で確認します。</p>
+            </div>
+            <div class="heading-meta">
+              <span class="meta-number">{subjects.filter((subject) => subject.status === "published").length}</span>
+              <span>公開分野</span>
+              <span class="meta-divider" aria-hidden="true"></span>
+              <span class="meta-number">{articles.filter((article) => article.status === "published").length}</span>
+              <span>公開記事</span>
+            </div>
+          </div>
+
+          <section class="toolbar" aria-label="記事の絞り込み">
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="article-search" type="search" placeholder="記事タイトル、タグ、概要を検索" autocomplete="off" />
+              <kbd>/</kbd>
+            </label>
+            <label class="select-field">
+              <span class="sr-only">公開状態</span>
+              <select id="status-filter">
+                <option value="all">すべての状態</option>
+                <option value="published">公開済み</option>
+                <option value="in-review">レビュー中</option>
+                <option value="draft">下書き</option>
+              </select>
+            </label>
+            <button class="quiet-button" type="button" data-clear>条件をリセット</button>
+          </section>
+
+          <div class="view-tabs" role="tablist" aria-label="コンテンツ表示">
+            <button class="view-tab is-selected" type="button" role="tab" aria-selected="true" data-view-tab="structure">構造ビュー</button>
+            <button class="view-tab" type="button" role="tab" aria-selected="false" data-view-tab="articles">記事一覧</button>
+          </div>
+
+          <section class="navigator" data-view="structure">
+            <div class="subject-panel panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="panel-kicker">01</span>
+                  <h2>分野</h2>
+                </div>
+                <span class="panel-count" data-subject-count>{subjects.length}</span>
+              </div>
+              <div class="subject-list" role="listbox" aria-label="分野一覧">
+                {
+                  subjects.map((subject, index) => (
+                    <button
+                      class="list-row"
+                      class:is-selected={subject.slug === initialSubject}
+                      class:has-articles={articles.some((article) => article.subject === subject.slug)}
+                      type="button"
+                      role="option"
+                      aria-selected={subject.slug === initialSubject}
+                      data-subject={subject.slug}
+                    >
+                      <span class="row-index">{String(index + 1).padStart(2, "0")}</span>
+                      <span class="row-copy">
+                        <strong>{subject.name}</strong>
+                        <small>{subject.categories.length}カテゴリ · {subject.status === "published" ? "公開中" : "準備中"}</small>
+                      </span>
+                      <span class="row-chevron" aria-hidden="true">›</span>
+                    </button>
+                  ))
+                }
+              </div>
+            </div>
+
+            <div class="category-panel panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="panel-kicker">02</span>
+                  <h2>カテゴリ</h2>
+                </div>
+                <span class="panel-context" data-current-subject>{subjects[0]?.name ?? "—"}</span>
+              </div>
+              <div class="category-list" data-category-list>
+                {
+                  subjects.map((subject) => (
+                    <div class="category-group" data-category-group={subject.slug} hidden={subject.slug !== initialSubject}>
+                      {subject.categories.map((category) => {
+                        const count = articles.filter((article) => article.subject === subject.slug && article.category === category.slug).length;
+                        return (
+                          <button
+                            class="list-row"
+                            class:is-selected={subject.slug === initialSubject && category.slug === initialCategory}
+                            type="button"
+                            data-category={category.slug}
+                            data-subject={subject.slug}
+                            aria-selected={subject.slug === initialSubject && category.slug === initialCategory}
+                          >
+                            <span class="category-marker" aria-hidden="true"></span>
+                            <span class="row-copy">
+                              <strong>{category.name}</strong>
+                              <small>{count}記事</small>
+                            </span>
+                            <span class="row-chevron" aria-hidden="true">›</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))
+                }
+              </div>
+              <div class="category-note">
+                <span class="note-icon" aria-hidden="true">i</span>
+                <span>カテゴリの順序と入口概念は学習サイトの定義を参照します。</span>
+              </div>
+            </div>
+
+            <div class="article-panel panel">
+              <div class="panel-heading">
+                <div>
+                  <span class="panel-kicker">03</span>
+                  <h2>記事</h2>
+                </div>
+                <span class="panel-count" data-article-count>{articles.length}</span>
+              </div>
+              <div class="article-list" id="article-list" aria-live="polite"></div>
+              <div class="empty-state" data-empty hidden>
+                <span class="empty-icon" aria-hidden="true">⌕</span>
+                <strong>記事が見つかりません</strong>
+                <span>検索語または絞り込み条件を変更してください。</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="preview-section" aria-labelledby="preview-title">
+            <div class="preview-heading">
+              <div>
+                <p class="eyebrow">ARTICLE PREVIEW</p>
+                <h2 id="preview-title">学習サイト表示の確認</h2>
+              </div>
+              <span class="preview-route" data-preview-route>/atlas/ja/—/—/—/</span>
+            </div>
+            <div class="preview-grid">
+              <article class="preview-card">
+                <div class="preview-card-top">
+                  <span class="status-label" data-preview-status>—</span>
+                  <span class="preview-updated" data-preview-updated>—</span>
+                </div>
+                <h3 data-preview-title>{initialArticle?.title ?? "記事を選択してください"}</h3>
+                <p data-preview-summary>{initialArticle?.summary ?? "左の分野・カテゴリから記事を選択すると概要を表示します。"}</p>
+                <div class="preview-tags" data-preview-tags>
+                  {initialArticle?.tags.slice(0, 4).map((tag) => <span>{tag}</span>)}
+                </div>
+                <div class="preview-footer">
+                  <span data-preview-meta>{initialArticle ? `${initialArticle.difficulty} · 約${initialArticle.estimatedMinutes}分` : "—"}</span>
+                  <a class="preview-link" data-preview-link href={initialArticle ? `/atlas/ja/${initialArticle.subject}/${initialArticle.category}/${initialArticle.slug}/` : "#"}>学習サイトで開く <span aria-hidden="true">↗</span></a>
+                </div>
+              </article>
+              <aside class="preview-inspector">
+                <div class="inspector-heading">
+                  <span class="inspector-icon" aria-hidden="true">⌘</span>
+                  <div>
+                    <strong>学習サイトとの対応</strong>
+                    <small>読み取り専用の確認情報</small>
+                  </div>
+                </div>
+                <dl class="inspector-list">
+                  <div><dt>分野</dt><dd data-preview-subject>—</dd></div>
+                  <div><dt>カテゴリ</dt><dd data-preview-category>—</dd></div>
+                  <div><dt>著者</dt><dd data-preview-authors>—</dd></div>
+                  <div><dt>概念リンク</dt><dd><span class="accent-dot"></span> 構造データから取得</dd></div>
+                </dl>
+              </aside>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
+
+<script define:vars={{ payload, initialSubject, initialCategory }}>
+  const data = payload;
+  const state = { subject: initialSubject, category: initialCategory, query: "", status: "all", selectedId: "" };
+
+  const categoryButtons = [...document.querySelectorAll("button[data-category]")];
+  const subjectRows = [...document.querySelectorAll(".subject-panel button[data-subject]")];
+  const categoryGroups = [...document.querySelectorAll("[data-category-group]")];
+  const articleList = document.querySelector("#article-list");
+  const articleCount = document.querySelector("[data-article-count]");
+  const emptyState = document.querySelector("[data-empty]");
+  const search = document.querySelector("#article-search");
+  const statusFilter = document.querySelector("#status-filter");
+  const subjectContext = document.querySelector("[data-current-subject]");
+
+  const subjectName = (slug) => data.subjects.find((subject) => subject.slug === slug)?.name ?? "—";
+  const categoryName = (subjectSlug, categorySlug) => data.subjects.find((subject) => subject.slug === subjectSlug)?.categories.find((category) => category.slug === categorySlug)?.name ?? "—";
+  const statusLabel = { published: "公開済み", "in-review": "レビュー中", draft: "下書き" };
+
+  function renderArticles() {
+    const filtered = data.articles.filter((article) => {
+      const matchesSubject = article.subject === state.subject;
+      const matchesCategory = !state.category || article.category === state.category;
+      const haystack = [article.title, article.summary, ...article.tags].join(" ").toLowerCase();
+      const matchesQuery = !state.query || haystack.includes(state.query.toLowerCase());
+      const matchesStatus = state.status === "all" || article.status === state.status;
+      return matchesSubject && matchesCategory && matchesQuery && matchesStatus;
+    });
+
+    articleList.innerHTML = filtered.map((article) => `
+      <button class="article-row${article.id === state.selectedId ? " is-selected" : ""}" type="button" data-article-id="${article.id}">
+        <span class="article-state state-${article.status}" aria-hidden="true"></span>
+        <span class="article-copy"><strong>${article.title}</strong><small>${statusLabel[article.status] ?? article.status} · ${article.updatedAt}</small></span>
+        <span class="article-time">${article.estimatedMinutes}分</span>
+      </button>
+    `).join("");
+    articleCount.textContent = String(filtered.length);
+    emptyState.hidden = filtered.length > 0;
+    articleList.querySelectorAll("[data-article-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.selectedId = button.dataset.articleId;
+        renderArticles();
+        renderPreview(data.articles.find((article) => article.id === state.selectedId));
+      });
+    });
+    if (!state.selectedId && filtered[0]) {
+      state.selectedId = filtered[0].id;
+      renderArticles();
+      renderPreview(filtered[0]);
+    }
+  }
+
+  function renderPreview(article) {
+    if (!article) return;
+    document.querySelector("[data-preview-title]").textContent = article.title;
+    document.querySelector("[data-preview-summary]").textContent = article.summary;
+    document.querySelector("[data-preview-status]").textContent = statusLabel[article.status] ?? article.status;
+    document.querySelector("[data-preview-status]").className = `status-label status-${article.status}`;
+    document.querySelector("[data-preview-updated]").textContent = `更新 ${article.updatedAt}`;
+    document.querySelector("[data-preview-meta]").textContent = `${article.difficulty} · 約${article.estimatedMinutes}分`;
+    document.querySelector("[data-preview-subject]").textContent = subjectName(article.subject);
+    document.querySelector("[data-preview-category]").textContent = categoryName(article.subject, article.category);
+    document.querySelector("[data-preview-authors]").textContent = article.authors.join("、");
+    document.querySelector("[data-preview-route]").textContent = `/atlas/ja/${article.subject}/${article.category}/${article.slug}/`;
+    const link = document.querySelector("[data-preview-link]");
+    link.href = `/atlas/ja/${article.subject}/${article.category}/${article.slug}/`;
+    const tags = document.querySelector("[data-preview-tags]");
+    tags.innerHTML = article.tags.slice(0, 4).map((tag) => `<span>${tag}</span>`).join("");
+  }
+
+  function selectSubject(subject) {
+    const entry = data.subjects.find((item) => item.slug === subject);
+    if (!entry) return;
+    state.subject = subject;
+    state.category = entry.categories[0]?.slug ?? "";
+    state.selectedId = "";
+    subjectRows.forEach((row) => {
+      const selected = row.dataset.subject === subject;
+      row.classList.toggle("is-selected", selected);
+      row.setAttribute("aria-selected", String(selected));
+    });
+    categoryGroups.forEach((group) => { group.hidden = group.dataset.categoryGroup !== subject; });
+    categoryButtons.forEach((button) => {
+      const selected = button.dataset.subject === subject && button.dataset.category === state.category;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-selected", String(selected));
+    });
+    subjectContext.textContent = entry.name;
+    renderArticles();
+  }
+
+  subjectRows.forEach((button) => button.addEventListener("click", () => selectSubject(button.dataset.subject)));
+  categoryButtons.forEach((button) => button.addEventListener("click", () => {
+    if (button.dataset.subject !== state.subject) return;
+    state.category = button.dataset.category;
+    state.selectedId = "";
+    categoryButtons.forEach((item) => {
+      const selected = item === button;
+      item.classList.toggle("is-selected", selected);
+      item.setAttribute("aria-selected", String(selected));
+    });
+    renderArticles();
+  }));
+  search.addEventListener("input", (event) => { state.query = event.target.value.trim(); state.selectedId = ""; renderArticles(); });
+  statusFilter.addEventListener("change", (event) => { state.status = event.target.value; state.selectedId = ""; renderArticles(); });
+  document.querySelector("[data-clear]").addEventListener("click", () => {
+    search.value = "";
+    statusFilter.value = "all";
+    state.query = "";
+    state.status = "all";
+    state.selectedId = "";
+    selectSubject(initialSubject);
+  });
+  document.querySelector("[data-focus-search]").addEventListener("click", () => search.focus());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "/" && document.activeElement.tagName !== "INPUT") { event.preventDefault(); search.focus(); }
+  });
+  document.querySelectorAll("[data-view-tab]").forEach((tab) => tab.addEventListener("click", () => {
+    document.querySelectorAll("[data-view-tab]").forEach((item) => { item.classList.toggle("is-selected", item === tab); item.setAttribute("aria-selected", String(item === tab)); });
+    document.querySelector(".navigator").dataset.view = tab.dataset.viewTab;
+  }));
+
+  selectSubject(initialSubject);
+  state.category = initialCategory;
+  categoryButtons.forEach((button) => {
+    const selected = button.dataset.subject === initialSubject && button.dataset.category === initialCategory;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", String(selected));
+  });
+  renderArticles();
+</script>
+
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #151515;
+    --sidebar: #101112;
+    --surface: #191919;
+    --raised: #1d1d1d;
+    --hover: #202020;
+    --selected: #242424;
+    --text: rgb(255 255 255 / .92);
+    --secondary: rgb(255 255 255 / .63);
+    --muted: rgb(255 255 255 / .44);
+    --border: rgb(255 255 255 / .08);
+    --subtle: rgb(255 255 255 / .05);
+    --blue: oklch(78% .20 259);
+    --green: oklch(80% .19 150);
+    --yellow: oklch(83% .19 85);
+    --red: oklch(72% .20 25);
+    --violet: oklch(77% .22 300);
+    --cyan: oklch(80% .16 195);
+    --sans: var(--font-current, "Hiragino Sans", "Yu Gothic", system-ui, sans-serif);
+    --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+  button, input, select { font: inherit; }
+  button, a { -webkit-tap-highlight-color: transparent; }
+  button { border: 0; color: inherit; cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+  .prototype-shell { min-height: 100vh; display: grid; grid-template-columns: 236px minmax(0, 1fr); }
+  .sidebar { background: var(--sidebar); border-right: 1px solid var(--subtle); padding: 20px 12px 16px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 24px; }
+  .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-weight: 650; background: var(--surface); }
+  .brand strong { display: block; font-size: 14px; font-weight: 600; letter-spacing: .01em; }
+  .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+  .side-label, .eyebrow, .panel-kicker { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .12em; }
+  .side-label { padding: 0 10px 8px; }
+  .side-nav { display: grid; gap: 2px; }
+  .side-item { min-height: 34px; padding: 0 10px; display: flex; align-items: center; gap: 9px; border-radius: 6px; color: var(--secondary); font-size: 13px; }
+  .side-item:hover { background: var(--hover); color: var(--text); }
+  .side-item.is-active { background: var(--selected); color: var(--text); }
+  .side-item.is-disabled { cursor: default; opacity: .52; }
+  .side-item small { margin-left: auto; color: var(--muted); font-size: 10px; }
+  .side-icon { width: 16px; text-align: center; color: var(--muted); font-size: 16px; line-height: 1; }
+  .side-item.is-active .side-icon { color: var(--blue); }
+  .sidebar-foot { margin-top: auto; padding: 14px 10px 0; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--subtle); color: var(--muted); font-size: 11px; }
+  .status-dot, .chip-dot, .accent-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--green); }
+  .workspace { min-width: 0; }
+  .topbar { min-height: 64px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--subtle); }
+  .breadcrumbs { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+  .breadcrumbs a:hover { color: var(--text); }
+  .breadcrumbs strong { color: var(--secondary); font-weight: 500; }
+  .top-actions { display: flex; align-items: center; gap: 10px; }
+  .prototype-chip { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .05em; }
+  .icon-button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; background: transparent; color: var(--secondary); font-size: 20px; }
+  .icon-button:hover { background: var(--hover); color: var(--text); }
+  .avatar { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--secondary); font-size: 10px; font-weight: 600; }
+  .page-content { max-width: 1280px; margin: 0 auto; padding: 32px 28px 56px; }
+  .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 24px; }
+  .eyebrow { margin: 0 0 7px; }
+  h1, h2, h3, p { margin: 0; }
+  h1 { font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: -.02em; }
+  .lede { max-width: 620px; margin-top: 8px; color: var(--secondary); font-size: 13px; }
+  .heading-meta { display: flex; align-items: baseline; gap: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .meta-number { color: var(--text); font-family: var(--mono); font-size: 17px; font-weight: 600; }
+  .meta-divider { width: 1px; height: 16px; margin: 0 10px; background: var(--border); }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-top: 1px solid var(--subtle); border-bottom: 1px solid var(--subtle); }
+  .search-field { height: 36px; min-width: 260px; flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); color: var(--muted); }
+  .search-field:focus-within { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in oklch, var(--blue) 32%, transparent); }
+  .search-field input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
+  .search-field input::placeholder { color: var(--muted); }
+  kbd { padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .select-field select, .quiet-button { height: 36px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); color: var(--secondary); font-size: 12px; }
+  .select-field select { padding: 0 28px 0 10px; }
+  .quiet-button { padding: 0 12px; background: transparent; }
+  .quiet-button:hover { background: var(--hover); color: var(--text); }
+  .view-tabs { display: flex; gap: 4px; padding: 18px 0 12px; }
+  .view-tab { padding: 5px 9px; border-radius: 5px; background: transparent; color: var(--muted); font-size: 12px; }
+  .view-tab:hover { color: var(--secondary); }
+  .view-tab.is-selected { background: var(--selected); color: var(--text); }
+  .navigator { display: grid; grid-template-columns: minmax(190px, .8fr) minmax(210px, .9fr) minmax(280px, 1.3fr); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--border); }
+  .navigator[data-view="articles"] .subject-panel, .navigator[data-view="articles"] .category-panel { display: none; }
+  .navigator[data-view="articles"] { grid-template-columns: minmax(320px, 1fr); }
+  .panel { min-width: 0; min-height: 414px; background: var(--surface); }
+  .panel-heading { min-height: 64px; padding: 14px 16px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--subtle); }
+  .panel-heading h2 { margin-top: 2px; font-size: 14px; font-weight: 600; }
+  .panel-count, .panel-context { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+  .panel-context { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sans); }
+  .subject-list, .category-list, .article-list { padding: 8px; }
+  .list-row { width: 100%; min-height: 52px; padding: 7px 8px; display: flex; align-items: center; gap: 9px; border-radius: 6px; background: transparent; text-align: left; }
+  .list-row:hover { background: var(--hover); }
+  .list-row.is-selected { background: var(--selected); }
+  .row-index { width: 20px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .row-copy { min-width: 0; flex: 1; }
+  .row-copy strong, .row-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-copy strong { color: var(--secondary); font-size: 13px; font-weight: 500; }
+  .list-row.is-selected .row-copy strong { color: var(--text); }
+  .row-copy small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+  .row-chevron { color: var(--muted); font-size: 18px; line-height: 1; }
+  .category-group { display: grid; gap: 2px; }
+  .category-marker { width: 6px; height: 6px; flex: 0 0 auto; border: 1px solid var(--muted); border-radius: 50%; }
+  .category-group .is-selected .category-marker { border-color: var(--blue); background: var(--blue); }
+  .category-note { margin: 4px 16px 16px; padding: 10px 0 0; display: flex; gap: 8px; border-top: 1px solid var(--subtle); color: var(--muted); font-size: 11px; }
+  .note-icon { width: 15px; height: 15px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 50%; color: var(--secondary); font-family: var(--mono); font-size: 10px; }
+  .article-row { width: 100%; min-height: 56px; padding: 8px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--subtle); background: transparent; text-align: left; }
+  .article-row:last-child { border-bottom: 0; }
+  .article-row:hover, .article-row.is-selected { background: var(--hover); }
+  .article-row.is-selected { background: var(--selected); }
+  .article-state { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--muted); }
+  .state-published { background: var(--green); }
+  .state-in-review { background: var(--yellow); }
+  .state-draft { background: var(--muted); }
+  .article-copy { min-width: 0; flex: 1; }
+  .article-copy strong, .article-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .article-copy strong { color: var(--text); font-size: 13px; font-weight: 500; }
+  .article-copy small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+  .article-time { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .empty-state { min-height: 220px; padding: 32px 16px; display: grid; place-items: center; align-content: center; gap: 5px; color: var(--muted); font-size: 12px; text-align: center; }
+  .empty-state strong { color: var(--secondary); font-weight: 500; }
+  .empty-icon { color: var(--muted); font-size: 24px; }
+  .preview-section { margin-top: 32px; }
+  .preview-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+  .preview-heading h2 { font-size: 18px; font-weight: 600; }
+  .preview-route { max-width: 50%; overflow: hidden; color: var(--muted); font-family: var(--mono); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .preview-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, .7fr); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--border); }
+  .preview-card, .preview-inspector { min-width: 0; background: var(--surface); }
+  .preview-card { padding: 22px 24px 18px; }
+  .preview-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .status-label { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--secondary); font-size: 11px; }
+  .status-label.status-published { border-color: color-mix(in oklch, var(--green) 45%, var(--border)); color: var(--green); }
+  .status-label.status-in-review { border-color: color-mix(in oklch, var(--yellow) 45%, var(--border)); color: var(--yellow); }
+  .preview-updated { color: var(--muted); font-size: 11px; }
+  .preview-card h3 { margin-top: 20px; font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+  .preview-card p { max-width: 720px; margin-top: 8px; color: var(--secondary); font-size: 14px; line-height: 1.65; }
+  .preview-tags { min-height: 25px; margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .preview-tags span { padding: 3px 7px; border: 1px solid var(--subtle); border-radius: 4px; color: var(--muted); font-size: 10px; }
+  .preview-footer { margin-top: 24px; padding-top: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--subtle); color: var(--muted); font-size: 11px; }
+  .preview-link { color: var(--blue); font-size: 12px; }
+  .preview-link:hover { color: var(--text); text-decoration: underline; }
+  .preview-inspector { padding: 20px; border-left: 1px solid var(--subtle); }
+  .inspector-heading { display: flex; align-items: center; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--subtle); }
+  .inspector-icon { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 6px; color: var(--cyan); font-family: var(--mono); font-size: 12px; }
+  .inspector-heading strong, .inspector-heading small { display: block; }
+  .inspector-heading strong { font-size: 12px; font-weight: 500; }
+  .inspector-heading small { margin-top: 2px; color: var(--muted); font-size: 10px; }
+  .inspector-list { margin: 4px 0 0; }
+  .inspector-list div { padding: 11px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--subtle); }
+  .inspector-list dt { color: var(--muted); font-size: 11px; }
+  .inspector-list dd { margin: 0; color: var(--secondary); font-size: 11px; text-align: right; }
+  .inspector-list dd .accent-dot { display: inline-block; margin-right: 4px; vertical-align: middle; background: var(--cyan); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  @media (max-width: 980px) {
+    .prototype-shell { grid-template-columns: 56px minmax(0, 1fr); }
+    .sidebar { padding-inline: 8px; }
+    .brand { justify-content: center; padding-inline: 0; }
+    .brand > span:last-child, .side-label, .side-item > span:not(.side-icon), .side-item small, .sidebar-foot span:last-child { display: none; }
+    .side-item { justify-content: center; padding-inline: 0; }
+    .sidebar-foot { justify-content: center; padding-inline: 0; }
+    .topbar { padding-inline: 20px; }
+    .page-content { padding-inline: 20px; }
+    .navigator { grid-template-columns: minmax(170px, .8fr) minmax(190px, .9fr) minmax(250px, 1.3fr); }
+  }
+  @media (max-width: 760px) {
+    .page-heading, .preview-heading { align-items: flex-start; flex-direction: column; }
+    .heading-meta { margin-top: 4px; }
+    .toolbar { flex-wrap: wrap; }
+    .search-field { flex-basis: 100%; }
+    .navigator { grid-template-columns: 1fr 1fr; }
+    .article-panel { grid-column: 1 / -1; }
+    .preview-grid { grid-template-columns: 1fr; }
+    .preview-inspector { border-top: 1px solid var(--subtle); border-left: 0; }
+  }
+  @media (max-width: 520px) {
+    .topbar { min-height: 56px; padding-inline: 16px; }
+    .prototype-chip { display: none; }
+    .page-content { padding: 24px 16px 40px; }
+    h1 { font-size: 23px; }
+    .navigator { display: block; }
+    .panel { min-height: auto; border-bottom: 1px solid var(--border); }
+    .panel:last-child { border-bottom: 0; }
+    .subject-panel, .category-panel { max-height: 260px; overflow: auto; }
+    .article-panel { min-height: 300px; }
+    .preview-card { padding: 18px 16px 16px; }
+    .preview-card h3 { font-size: 19px; }
+  }
+</style>
