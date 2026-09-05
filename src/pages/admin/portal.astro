@@ -39,10 +39,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </section>
       <section class="home-section">
         <div class="section-heading">
-          <div><h2 data-admin-i18n data-admin-ja="自分の未完了タスク" data-admin-en="My open tasks">自分の未完了タスク</h2></div>
+          <div><h2 data-admin-i18n data-admin-ja="自分の未完了タスク" data-admin-en="My open tasks">自分の未完了タスク</h2><small class="todo-section-note" data-todo-summary>読み込み中…</small></div>
           <a href="/admin/member-tasks/" data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="横断タスク管理を開く">→</a>
         </div>
-        <div data-todos>読み込み中…</div>
+        <div class="todo-list" data-todos aria-live="polite">読み込み中…</div>
       </section>
     </div>
 
@@ -144,9 +144,125 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     .calendar-filter-label { flex-basis: 100%; }
   }
 </style>
+<style is:global>
+  /* Dynamically-rendered tasks need explicit global rules: unlike static Astro markup,
+     innerHTML nodes do not receive the page's scope attribute. */
+  .portal .todo-list {
+    display: grid;
+    gap: .65rem;
+  }
+  .portal .todo-section-note {
+    color: var(--text-secondary);
+    display: block;
+    font-size: .72rem;
+    line-height: 1.4;
+    margin-top: .18rem;
+  }
+  .portal .todo-card {
+    align-items: stretch;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: .55rem;
+    color: var(--text-primary);
+    display: grid;
+    gap: .7rem;
+    grid-template-columns: 2.05rem minmax(0, 1fr) auto;
+    min-width: 0;
+    padding: .8rem .75rem;
+    text-decoration: none;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  .portal .todo-card:hover,
+  .portal .todo-card:focus-visible {
+    background: var(--background-inset);
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+  }
+  .portal .todo-card.status-doing { border-left-color: #d4861f; }
+  .portal .todo-card.status-done { border-left-color: var(--success); }
+  .portal .todo-icon {
+    align-items: center;
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 38%, var(--border-default));
+    border-radius: .45rem;
+    color: var(--accent-primary);
+    display: inline-flex;
+    font-size: .9rem;
+    font-weight: 900;
+    height: 2rem;
+    justify-content: center;
+    line-height: 1;
+    width: 2rem;
+  }
+  .portal .status-doing .todo-icon { background: color-mix(in srgb, #d4861f 14%, transparent); border-color: color-mix(in srgb, #d4861f 40%, var(--border-default)); color: #d4861f; }
+  .portal .status-done .todo-icon { background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 40%, var(--border-default)); color: var(--success); }
+  .portal .todo-card-body {
+    display: grid;
+    gap: .22rem;
+    min-width: 0;
+  }
+  .portal .todo-card-top {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+  .portal .todo-kind,
+  .portal .todo-status {
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: .67rem;
+    line-height: 1.2;
+    padding: .18rem .42rem;
+  }
+  .portal .todo-kind { color: var(--text-secondary); }
+  .portal .todo-status { background: color-mix(in srgb, var(--accent-primary) 10%, transparent); border-color: color-mix(in srgb, var(--accent-primary) 34%, var(--border-default)); color: var(--accent-primary); font-weight: 800; }
+  .portal .status-doing .todo-status { background: color-mix(in srgb, #d4861f 10%, transparent); border-color: color-mix(in srgb, #d4861f 34%, var(--border-default)); color: #b56b10; }
+  .portal .status-done .todo-status { background: color-mix(in srgb, var(--success) 10%, transparent); border-color: color-mix(in srgb, var(--success) 34%, var(--border-default)); color: var(--success); }
+  .portal .todo-card strong { font-size: .9rem; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+  .portal .todo-context,
+  .portal .todo-details,
+  .portal .todo-deadline { color: var(--text-secondary); font-size: .74rem; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+  .portal .todo-details { color: var(--text-muted); }
+  .portal .todo-deadline { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .portal .todo-arrow { align-self: center; color: var(--accent-primary); font-size: 1rem; font-weight: 800; padding-inline: .15rem; }
+  .portal .todo-empty {
+    align-items: center;
+    background: var(--background-secondary);
+    border: 1px dashed var(--border-default);
+    border-radius: .55rem;
+    display: grid;
+    gap: .35rem;
+    justify-items: center;
+    padding: 1.1rem .8rem;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .portal .todo-empty::before {
+    align-items: center;
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border-default));
+    border-radius: 50%;
+    color: var(--success);
+    display: inline-flex;
+    font-weight: 900;
+    height: 1.9rem;
+    justify-content: center;
+    content: "✓";
+    width: 1.9rem;
+  }
+  .portal .todo-empty p { color: var(--text-secondary); font-size: .78rem; margin: 0; }
+  @media (max-width: 560px) {
+    .portal .todo-card { grid-template-columns: 2rem minmax(0, 1fr) auto; padding: .7rem .65rem; }
+    .portal .todo-card strong { font-size: .84rem; }
+  }
+</style>
 <script>
   type PortalProject = { id: string; slug?: string; name: string; description?: string | null; role?: string };
-  type PortalTodo = { project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string };
+  type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
   type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; error?: string };
   const initializePortal = () => {
@@ -158,6 +274,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const calendarRange = root.querySelector<HTMLElement>('[data-calendar-range]')!;
     const timezoneNote = root.querySelector<HTMLElement>('[data-calendar-timezone-note]')!;
     const todosView = root.querySelector<HTMLElement>('[data-todos]')!;
+    const todoSummary = root.querySelector<HTMLElement>('[data-todo-summary]')!;
     const managedProjectsView = root.querySelector<HTMLElement>('[data-project-group="managed"]')!;
     const memberProjectsView = root.querySelector<HTMLElement>('[data-project-group="member"]')!;
     const availableProjectsView = root.querySelector<HTMLElement>('[data-project-group="available"]')!;
@@ -177,8 +294,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       return localStorage.getItem('atlasez-admin-language') === 'en' ? 'en' : 'ja';
     };
     const copy = {
-      ja: { noTodos: '未完了のタスクはありません。', status: '状態', today: '今日の予定', noTodayEvents: '今日の予定はありません。', personal: '自分の期限', organization: '同時作業会・交流会', timezone: '表示タイムゾーン' },
-      en: { noTodos: 'There are no open tasks.', status: 'Status', today: "Today's schedule", noTodayEvents: 'There are no events today.', personal: 'My deadline', organization: 'Co-working & social event', timezone: 'Time zone' },
+      ja: { noTodos: '未完了のタスクはありません。', open: '未着手', doing: '進行中', done: '完了', feedback: 'フィードバック依頼', task: 'タスク依頼', openCount: (count: number) => `${count}件を確認`, today: '今日の予定', noTodayEvents: '今日の予定はありません。', personal: '自分の期限', organization: '同時作業会・交流会', timezone: '表示タイムゾーン' },
+      en: { noTodos: 'There are no open tasks.', open: 'Open', doing: 'In progress', done: 'Done', feedback: 'Feedback request', task: 'Task request', openCount: (count: number) => `${count} to review`, today: "Today's schedule", noTodayEvents: 'There are no events today.', personal: 'My deadline', organization: 'Co-working & social event', timezone: 'Time zone' },
     } as const;
     let portalData: PortalData | null = null;
     const timezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
@@ -258,7 +375,24 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       availableProjectsSection.hidden = available.length === 0;
       availableProjectsView.innerHTML = available.map((project) => projectCard(project, true)).join('');
     };
-    const renderTodos = (data: PortalData) => { const language = getLanguage(); const todos = data.todos ?? []; todosView.innerHTML = todos.length ? todos.map((todo) => { const kind = todo.task_kind === 'feedback' ? 'フィードバック依頼' : 'タスク依頼'; return `<article class="todo"><b><span class="todo-kind">${kind}</span>${escapeHtml(todo.title)}</b><small>${escapeHtml(todo.project_name ?? todo.project_id)}${todo.subject ? ` / ${escapeHtml(todo.subject)}` : ''} ・ ${copy[language].status}: ${escapeHtml(todo.status)}</small>${todo.details ? `<small>${escapeHtml(todo.details)}</small>` : ''}</article>`; }).join('') : `<p class="empty">${copy[language].noTodos}</p>`; };
+    const renderTodos = (data: PortalData) => {
+      const language = getLanguage();
+      const todos = data.todos ?? [];
+      todoSummary.textContent = copy[language].openCount(todos.length);
+      if (!todos.length) {
+        todosView.innerHTML = `<div class="todo-empty"><p>${copy[language].noTodos}</p></div>`;
+        return;
+      }
+      const statusLabel = (status: string) => status === 'done' ? copy[language].done : status === 'doing' ? copy[language].doing : copy[language].open;
+      todosView.innerHTML = todos.map((todo) => {
+        const kind = todo.task_kind === 'feedback' ? copy[language].feedback : copy[language].task;
+        const status = todo.status === 'done' ? 'done' : todo.status === 'doing' ? 'doing' : 'open';
+        const context = [todo.project_name ?? todo.project_id, todo.subject].filter(Boolean).join(' / ');
+        const icon = todo.task_kind === 'feedback' ? '↗' : '✓';
+        const due = todo.due_at ? new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: todo.due_timezone || timezone() }).format(new Date(todo.due_at)) : '';
+        return `<a class="todo todo-card status-${status}" href="/admin/member-tasks/" aria-label="${escapeHtml(todo.title)}をタスク管理で開く"><span class="todo-icon" aria-hidden="true">${icon}</span><span class="todo-card-body"><span class="todo-card-top"><span class="todo-kind">${escapeHtml(kind)}</span><span class="todo-status">${escapeHtml(statusLabel(todo.status))}</span></span><strong>${escapeHtml(todo.title)}</strong>${context ? `<span class="todo-context">${escapeHtml(context)}</span>` : ''}${todo.details ? `<span class="todo-details">${escapeHtml(todo.details)}</span>` : ''}${due ? `<span class="todo-deadline">${language === 'ja' ? '期限' : 'Due'}: ${escapeHtml(due)}</span>` : ''}</span><span class="todo-arrow" aria-hidden="true">→</span></a>`;
+      }).join('');
+    };
     const renderPortal = (data: PortalData) => { renderProjects(data); renderCalendar(); renderTodos(data); };
     sourceInputs.forEach((input) => input.addEventListener('change', renderCalendar, { signal: lifecycle.signal }));
     window.addEventListener('atlasez-lang-change', () => { if (portalData) renderPortal(portalData); }, { signal: lifecycle.signal });
