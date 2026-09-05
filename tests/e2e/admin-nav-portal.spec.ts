@@ -3,6 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 type MockOptions = {
   notificationStatus?: number;
   avatarUrl?: string;
+  calendarEvents?: Array<{
+    id: string;
+    kind: "organization" | "personal";
+    title: string;
+    startsAt: string;
+    projectName: string;
+  }>;
   projects?: Array<{
     id: string;
     slug?: string;
@@ -93,7 +100,7 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
           ],
           availableProjects: options.availableProjects ?? [],
           todos: [],
-          calendar: { events: [] },
+          calendar: { events: options.calendarEvents ?? [] },
         }),
       });
       return;
@@ -427,4 +434,43 @@ test("メンバー用サイトの未完了タスクは参加中プロジェク�
   await expect(page.locator("[data-todos] .todo").nth(1)).toContainText(
     "Atlasez運営事務局",
   );
+});
+
+test("カレンダーの表示対象を切り替え、予定行を独立して表示する", async ({
+  page,
+}) => {
+  const now = new Date().toISOString();
+  await mockAdminShell(page, {
+    calendarEvents: [
+      {
+        id: "event-1",
+        kind: "organization",
+        title: "同時作業会",
+        startsAt: now,
+        projectName: "アトラス運営",
+      },
+      {
+        id: "task-1",
+        kind: "personal",
+        title: "記事の確認期限",
+        startsAt: now,
+        projectName: "アトラス学習サイト",
+      },
+    ],
+  });
+
+  await page.goto("admin/portal/");
+  const organization = page.locator('[data-calendar-source="organization"]');
+  const personal = page.locator('[data-calendar-source="personal"]');
+  const agenda = page.locator("[data-calendar-agenda]");
+
+  await expect(organization).toBeChecked();
+  await expect(personal).not.toBeChecked();
+  await expect(agenda).toContainText("同時作業会");
+  await expect(agenda).not.toContainText("記事の確認期限");
+
+  await personal.check();
+  await expect(personal).toBeChecked();
+  await expect(agenda).toContainText("記事の確認期限");
+  await expect(agenda.locator(".calendar-agenda-item")).toHaveCount(2);
 });
