@@ -21,4 +21,12 @@ describe("admin page routes", () => {
     expect(isAdminPagePath("/admin/member-profile/edit/")).toBe(true);
     expect(ADMIN_PAGE_PATHS).not.toContain("/admin/member-profile/edit");
   });
+
+  it("exposes the nested learning content prototype without adding it to top-level navigation", () => {
+    expect(isAdminPagePath("/admin/ui-prototype/learning-content")).toBe(true);
+    expect(isAdminPagePath("/admin/ui-prototype/learning-content/")).toBe(true);
+    expect(ADMIN_PAGE_PATHS).not.toContain(
+      "/admin/ui-prototype/learning-content",
+    );
+  });
 });

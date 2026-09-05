@@ -47,6 +47,8 @@ const adminPagePathSet = new Set(
 const adminNestedPagePathSet = new Set([
   "/admin/member-profile/edit",
   "/admin/member-profile/edit/",
+  "/admin/ui-prototype/learning-content",
+  "/admin/ui-prototype/learning-content/",
 ]);
 
 export const isAdminPagePath = (pathname: string) =>
