@@ -79,7 +79,7 @@ const timezones = getTimeZoneOptions(new Date());
   .member-tasks .create-heading h2, .member-tasks .section-head h2 { color: var(--task-navy); font-size: 1.2rem; margin: .25rem 0 .2rem; }
   .member-tasks .create-heading p { color: #526b80; font-size: .82rem; margin: 0; }
   .member-tasks .required-note { background: #fff; border: 1px solid var(--task-border); border-radius: 999px; color: #526b80; font-size: .72rem; padding: .35rem .6rem; white-space: nowrap; }
-  .member-tasks .create-grid { gap: .85rem; grid-template-columns: 1.05fr 1.55fr 1.2fr 1fr 1.2fr; }
+  .member-tasks .create-grid { align-items: start; gap: .85rem; grid-template-columns: 1.05fr 1.55fr 1.2fr 1fr 1.2fr; }
   .member-tasks label { color: var(--task-navy); font-size: .78rem; gap: .35rem; }
   .member-tasks label > span { font-weight: 900; }
   .member-tasks input, .member-tasks select, .member-tasks textarea { background: #fff; border: 1px solid #b9ccdc; border-radius: .4rem; color: var(--task-navy); min-height: 2.6rem; outline: 0; padding: .6rem .65rem; }
@@ -331,6 +331,11 @@ const timezones = getTimeZoneOptions(new Date());
   .member-tasks select:focus,
   .member-tasks textarea:focus { border-color: var(--task-accent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--task-accent) 20%, transparent); }
   .member-tasks .finder-keyword input { min-height: 2.7rem; }
+  .member-tasks .create-grid > label { align-content: start; }
+  .member-tasks .create-grid input,
+  .member-tasks .create-grid select:not([multiple]) { height: 3rem; min-height: 3rem; }
+  .member-tasks .create-grid select[multiple] { height: 8.7rem; min-height: 8.7rem; }
+  .member-tasks .create-grid select[multiple] option { padding: .42rem .45rem; }
   .member-tasks .finder-submit { gap: .4rem; min-height: 2.7rem; white-space: nowrap; }
   .member-tasks .finder-submit span { font-size: 1.3rem; line-height: .7; }
   .member-tasks .finder-reset {
