@@ -5,7 +5,7 @@ const controls = [
 ];
 ---
 
-<html lang="ja" data-theme="light">
+<html lang="ja" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -43,7 +43,7 @@ const controls = [
               <h2>操作群をひとつの流れに整理</h2>
               <p class="lede">状態・保存・プレビューを分離し、必要な操作だけを短い距離で見つけられるようにした案です。</p>
             </div>
-            <span class="version">v0.1 · desktop</span>
+            <div class="intro-status"><button class="live-toggle is-on" type="button" data-live-toggle aria-pressed="true"><i></i>ライブ動作</button><span class="version">v0.1 · desktop</span></div>
           </div>
 
           <section class="workspace-frame" aria-label="記事編集ヘッダーの提案">
@@ -59,16 +59,16 @@ const controls = [
               <div class="segmented" role="group" aria-label="記事状態">
                 {controls.map((control, index) => <button class:list={["segment", index === 0 && "is-active"]} type="button" data-status={control.id} aria-pressed={index === 0 ? "true" : "false"}><span class="segment-label">{control.label}</span><span class="segment-meta">{control.meta}</span></button>)}
               </div>
-              <div class="status-message"><span class="status-dot is-green"></span><span>自動公開: 接続済み</span></div>
+              <div class="status-message"><span class="status-dot is-green" data-connection-dot></span><span data-connection-label>自動公開: 接続済み</span></div>
               <div class="status-spacer"></div>
               <button class="utility-button" type="button" data-guide>手順 <span aria-hidden="true">↗</span></button>
-              <label class="check-control"><input type="checkbox" checked data-autosave /><span class="fake-check" aria-hidden="true"></span><span>下書きを自動保存</span></label>
+              <label class="check-control"><input type="checkbox" checked data-autosave /><span class="fake-check" aria-hidden="true"></span><span data-autosave-label>下書きを自動保存</span></label>
               <label class="select-control"><span class="sr-only">数式エンジン</span><select><option>KaTeX（高速）</option><option>MathJax</option></select><span class="select-chevron" aria-hidden="true">⌄</span></label>
             </div>
 
             <div class="title-row">
               <div class="title-copy"><h3>統計的機械学習の基礎: 確率モデルと正則化</h3><span>最終更新 2分前 · 下書き</span><span class="created-by">初回作成: <strong>上杉 和輝</strong> · 2026/09/02</span></div>
-              <div class="collab"><div class="history-avatars" aria-label="編集履歴"><button type="button" class="history-avatar avatar-uk" data-editor="上杉 和輝 · 初回作成" title="上杉 和輝 · 初回作成">UK</button><button type="button" class="history-avatar avatar-ms" data-editor="三浦 さき · 3時間前に編集" title="三浦 さき · 3時間前に編集">MS</button><button type="button" class="history-avatar avatar-kt" data-editor="加藤 拓 · 昨日に編集" title="加藤 拓 · 昨日に編集">KT</button></div><button type="button" class="history-link" data-history>編集履歴 <span>3</span></button><span class="collab-separator"></span><span>共同編集 2人</span></div>
+              <div class="collab"><div class="history-avatars" aria-label="編集履歴"><button type="button" class="history-avatar avatar-uk" data-editor="上杉 和輝 · 初回作成" title="上杉 和輝 · 初回作成">UK</button><button type="button" class="history-avatar avatar-ms" data-editor="三浦 さき · 3時間前に編集" title="三浦 さき · 3時間前に編集">MS</button><button type="button" class="history-avatar avatar-kt" data-editor="加藤 拓 · 昨日に編集" title="加藤 拓 · 昨日に編集">KT</button></div><button type="button" class="history-link" data-history>編集履歴 <span>3</span></button><span class="collab-separator"></span><span class="presence" data-presence><span class="presence-dot" data-presence-dot></span><span data-presence-label>同期編集: 1人が接続中</span><span class="person" data-presence-person>上杉和輝</span></span></div>
             </div>
 
             <div class="history-panel is-hidden" data-history-panel><div><strong>編集履歴</strong><span>この下書きに変更を加えたメンバー</span></div><ul><li><span class="history-mini avatar-uk">UK</span><span><strong>上杉 和輝</strong><small>初回作成 · 2026/09/02 09:14</small></span></li><li><span class="history-mini avatar-ms">MS</span><span><strong>三浦 さき</strong><small>本文を編集 · 3時間前</small></span></li><li><span class="history-mini avatar-kt">KT</span><span><strong>加藤 拓</strong><small>コメントを追加 · 昨日</small></span></li></ul></div>
@@ -110,6 +110,10 @@ const controls = [
       const toast = document.querySelector('[data-toast]');
       let toastTimer;
       const showToast = (message) => { if (!toast) return; toast.textContent = message; toast.classList.remove('is-hidden'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.add('is-hidden'), 2200); };
+      const connectionLabel = document.querySelector('[data-connection-label]'); const connectionDot = document.querySelector('[data-connection-dot]'); const presenceLabel = document.querySelector('[data-presence-label]'); const presencePerson = document.querySelector('[data-presence-person]'); const presenceDot = document.querySelector('[data-presence-dot]'); const autosaveLabel = document.querySelector('[data-autosave-label]'); const liveToggle = document.querySelector('[data-live-toggle]'); let live = true; let liveStep = 1; let liveTimer;
+      const liveStates = [{ connection: '自動公開: 接続済み', presence: '同期編集: 1人が接続中', person: '上杉和輝', color: 'green' }, { connection: '自動公開: 同期中…', presence: '同期編集: 2人が接続中', person: '上杉和輝 +1', color: 'blue' }, { connection: '自動公開: 接続済み', presence: '同期編集: 1人が接続中', person: '上杉和輝', color: 'green' }, { connection: '自動公開: 再接続中…', presence: '同期編集: 接続を確認中', person: '再接続', color: 'yellow' }];
+      const tickLive = () => { if (!live) return; const state = liveStates[liveStep % liveStates.length]; liveStep += 1; if (connectionLabel) connectionLabel.textContent = state.connection; if (presenceLabel) presenceLabel.textContent = state.presence; if (presencePerson) presencePerson.textContent = state.person; [connectionDot, presenceDot].forEach((dot) => { if (dot) { dot.classList.remove('is-green', 'is-blue', 'is-yellow'); dot.classList.add(`is-${state.color}`); } }); if (autosaveLabel && document.querySelector('[data-autosave]')?.checked) { autosaveLabel.textContent = '自動保存: 保存済み'; setTimeout(() => { if (autosaveLabel) autosaveLabel.textContent = '下書きを自動保存'; }, 1600); } };
+      liveTimer = setInterval(tickLive, 3200); liveToggle?.addEventListener('click', () => { live = !live; liveToggle.classList.toggle('is-on', live); liveToggle.setAttribute('aria-pressed', String(live)); liveToggle.innerHTML = `<i></i>${live ? 'ライブ動作' : 'ライブ停止'}`; if (live) { tickLive(); liveTimer = setInterval(tickLive, 3200); } else { clearInterval(liveTimer); notify('ライブ動作を停止しました'); } });
       document.querySelector('[data-save]')?.addEventListener('click', () => showToast('保存しました（チェック用）'));
       document.querySelector('[data-feedback]')?.addEventListener('click', () => showToast('フィードバック依頼を作成しました'));
       document.querySelector('[data-guide]')?.addEventListener('click', () => showToast('手順パネルを開く想定です'));
@@ -145,6 +149,19 @@ const controls = [
   .panel-preview { margin: 0 20px 20px; padding: 18px 20px; min-height: 126px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-2); }.editor-line { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 12px; line-height: 1.75; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }.line-number { color: var(--text-3); text-align: right; user-select: none; }.line-text { color: var(--text-2); }.muted-line { color: var(--text-3); }.inline-tag { color: var(--yellow); }.preview-heading { font-size: 14px; font-weight: 620; margin-bottom: 8px; }.panel-preview p { margin: 0; color: var(--text-2); line-height: 1.6; }.is-hidden { display: none !important; }
   .comparison { margin-top: 18px; padding: 18px 2px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; gap: 32px; }.comparison div { display: grid; gap: 7px; }.comparison strong { font-size: 13px; font-weight: 620; }.comparison p { max-width: 510px; margin: 0; color: var(--text-2); line-height: 1.65; font-size: 12px; }.menu-popover { position: fixed; top: 90px; right: 34px; width: 190px; padding: 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); box-shadow: var(--shadow); z-index: 3; }.menu-popover button { width: 100%; height: 31px; border: 0; border-radius: 4px; text-align: left; padding: 0 9px; background: transparent; color: var(--text-2); font-size: 12px; }.menu-popover button:hover { background: var(--surface-3); color: var(--text); }.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow); padding: 9px 13px; color: var(--text-2); font-size: 12px; }.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   @media (max-width: 1180px) { .page-content { padding-inline: 30px; }.status-row { flex-wrap: wrap; }.status-spacer { display: none; }.title-row { align-items: flex-start; flex-direction: column; gap: 12px; padding-block: 15px; }.comparison { flex-direction: column; gap: 12px; } }
+</style>
+
+<style>
+  .intro-status { display: flex; align-items: center; gap: 12px; }
+  .live-toggle { height: 28px; border: 1px solid var(--border); border-radius: 6px; padding: 0 9px; display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--text-3); font-size: 10px; }
+  .live-toggle:hover { background: var(--surface-3); color: var(--text-2); }
+  .live-toggle i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+  .live-toggle.is-on { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, var(--border)); }
+  .live-toggle.is-on i { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 13%, transparent); }
+  .status-dot.is-blue, .presence-dot.is-blue { background: var(--blue); }
+  .status-dot.is-yellow, .presence-dot.is-yellow { background: var(--yellow); }
+  [data-presence-label], [data-connection-label], [data-autosave-label] { transition: color 160ms ease; }
+  .status-message:has(.is-blue) { color: var(--blue); }.status-message:has(.is-yellow) { color: var(--yellow); }
 </style>
 
 <style>
