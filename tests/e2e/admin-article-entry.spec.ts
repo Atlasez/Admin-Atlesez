@@ -123,6 +123,44 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(card).toHaveAttribute("aria-label", /編集中/);
   });
 
+  test("D-3c: 公開済み記事の更新案作成中を一覧のボタンで示す", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.pathname !== "/api/admin/editor/documents")
+        return route.fallback();
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", allSubjects: true },
+          documents: [
+            {
+              id: "update-progress-doc",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "group-definition",
+              title: "更新案作成中の記事",
+              status: "draft",
+              published_at: "2026-08-30T01:34:00.000Z",
+              updated_at: "2026-09-01T01:34:00.000Z",
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=update-progress");
+    const card = page.locator('[data-document-id="update-progress-doc"]');
+    await expect(
+      card.locator('[data-update-proposal-state="in-progress"]'),
+    ).toHaveText("更新案作成中");
+    await expect(card).toContainText("公開済み・運営管理中");
+    await page.screenshot({
+      path: "test-results/admin-articles-update-proposal-in-progress.png",
+      fullPage: true,
+    });
+  });
+
   test("D-3: 原稿一覧を分野とカテゴリで絞り込める", async ({ page }) => {
     await page.route("**/api/admin/editor/documents", async (route) => {
       await route.fulfill({

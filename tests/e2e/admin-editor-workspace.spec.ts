@@ -1082,6 +1082,91 @@ test("E-8: 自動保存設定を利用者のブラウザ単位で保持する", 
   await expect(toggle).not.toBeChecked();
 });
 
+test("自動保存をオフにすると保留中の保存タイマーも実行しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  let documentPatchCount = 0;
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() === "PATCH") documentPatchCount += 1;
+    await route.fallback();
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  const body = page.locator("[data-body]");
+  const bodyEditor = page.locator(".body-codemirror .cm-content").first();
+  if (await bodyEditor.count())
+    await bodyEditor.fill(`${documentItem.body}\n\nタイマー停止の確認`);
+  else await body.fill(`${documentItem.body}\n\nタイマー停止の確認`);
+  await page.locator("[data-autosave-toggle]").uncheck();
+  await page.waitForTimeout(2_300);
+  expect(documentPatchCount).toBe(0);
+});
+
+test("公開済み記事の本文は更新案を作成するまでロックする", async ({ page }) => {
+  const publishedDocument = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: "2026-08-30T01:34:00.000Z",
+  };
+  await mockAdminApi(page, undefined, publishedDocument);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const body = page.locator("[data-body]");
+  const bodySurface = page.locator("[data-body-surface]");
+  const bodyEditor = page.locator(".body-codemirror").first();
+  const bodyEditorContent = bodyEditor.locator(".cm-content");
+  await expect(page.locator("[data-create-update-proposal]")).toBeVisible();
+  await expect(body).toHaveAttribute("readonly", "");
+  if (await bodyEditorContent.count()) {
+    await expect(bodyEditor).toHaveAttribute("data-readonly", "true");
+    await expect(bodyEditorContent).toHaveAttribute("contenteditable", "false");
+    await bodyEditor.click({ position: { x: 180, y: 80 } });
+  } else await bodySurface.click({ position: { x: 180, y: 80 } });
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "公開中の記事を編集するには「更新案を作成」を押してください",
+  );
+  await page.screenshot({
+    path: "test-results/editor-published-body-locked.png",
+    fullPage: true,
+  });
+
+  await page.locator("[data-create-update-proposal]").click();
+  await expect(body).not.toHaveAttribute("readonly");
+  if (await bodyEditorContent.count()) {
+    await expect(bodyEditor).toHaveAttribute("data-readonly", "false");
+    await expect(bodyEditorContent).toHaveAttribute("contenteditable", "true");
+    await page.screenshot({
+      path: "test-results/editor-published-update-proposal.png",
+      fullPage: true,
+    });
+  }
+});
+
+test("記事一覧は保存済みの更新案を作成中として表示する", async ({ page }) => {
+  const publishedUpdateDocument = {
+    ...documentItem,
+    status: "draft" as const,
+    published_at: "2026-08-30T01:34:00.000Z",
+    updated_at: "2026-09-01T01:34:00.000Z",
+  };
+  await mockAdminApi(page, undefined, publishedUpdateDocument);
+  await page.goto("./admin/editor/?new=1");
+
+  const article = page
+    .locator(".outline-article", { hasText: "群の定義" })
+    .first();
+  await expect(article.locator(".outline-status")).toContainText(
+    "更新案作成中",
+  );
+  await expect(article.locator("[data-outline-article]")).toHaveText(
+    "更新案作成中",
+  );
+  await page.screenshot({
+    path: "test-results/editor-article-list-update-in-progress.png",
+    fullPage: true,
+  });
+});
+
 test("保存中の連打は同じ原稿を二重保存しない", async ({ page }) => {
   await mockAdminApi(page);
   let patchCount = 0;
