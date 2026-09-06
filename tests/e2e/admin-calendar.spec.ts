@@ -114,6 +114,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   )!;
   const emptyDate = `${year}-${month}-${String(emptyDay).padStart(2, "0")}`;
   let savedBlock: Record<string, unknown> | undefined;
+  const savedBlocks: Record<string, unknown>[] = [];
 
   await page.route("**/api/admin/operations**", async (route) => {
     const request = route.request();
@@ -123,6 +124,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
       url.pathname.endsWith("/availability-blocks")
     ) {
       savedBlock = request.postDataJSON() as Record<string, unknown>;
+      savedBlocks.push(savedBlock);
       await route.fulfill({ json: { ok: true } });
       return;
     }
@@ -358,4 +360,31 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   });
   expect(String(savedBlock?.startsAt)).toMatch(/Z$/);
   expect(String(savedBlock?.endsAt)).toMatch(/Z$/);
+
+  const weekdayDates = Array.from(
+    { length: new Date(year, now.getMonth() + 1, 0).getDate() },
+    (_, index) => index + 1,
+  )
+    .filter((day) => new Date(year, now.getMonth(), day).getDay() === 2)
+    .map((day) => `${year}-${month}-${String(day).padStart(2, "0")}`);
+  await page.locator('[data-calendar-weekday="2"]').click();
+  await expect(page.locator('[data-calendar-weekday="2"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator("[data-calendar-selection-summary]")).toContainText(
+    `火曜日を${weekdayDates.length}日選択中`,
+  );
+  await expect(page.locator(".calendar-cell--selected")).toHaveCount(
+    weekdayDates.length,
+  );
+  await page.locator("[data-block-kind]").selectOption("available");
+  await page.locator("[data-create-block]").click();
+  await expect.poll(() => savedBlocks.length).toBe(1 + weekdayDates.length);
+  expect(
+    savedBlocks.slice(1).every((block) => block.kind === "available"),
+  ).toBe(true);
+  expect(
+    savedBlocks.slice(1).every((block) => String(block.startsAt).endsWith("Z")),
+  ).toBe(true);
 });
