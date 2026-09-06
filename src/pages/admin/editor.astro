@@ -697,6 +697,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   /* ペインを手動で拡張したときもCodeMirrorを本文欄いっぱいに広げ、末尾の空白を残さない。 */
   .body-editor-surface { display: flex; flex-direction: column; }
   .body-editor-surface :global(.body-codemirror) { flex: 1 1 auto; height: 100% !important; min-height: 0; }
+  .body-editor-surface[data-published-locked="true"] { cursor: not-allowed; }
+  .body-editor-surface[data-published-locked="true"]::after { background: color-mix(in srgb, var(--surface-alt) 90%, transparent); border-bottom: 1px solid var(--border); color: var(--muted); content: "公開中の記事です。編集するには「更新案を作成」を押してください"; font-size: .7rem; left: 0; line-height: 1.35; padding: .35rem .7rem; pointer-events: none; position: absolute; right: 0; text-align: right; top: 0; z-index: 4; }
+  .body-editor-surface[data-published-locked="true"] :global(.body-codemirror .cm-content) { cursor: not-allowed; }
 </style>
 
 <style>
@@ -1287,6 +1290,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const metadata = root.querySelector<HTMLDetailsElement>("[data-metadata]")!;
     const metadataSummary = root.querySelector<HTMLElement>("[data-metadata-summary]")!;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
+    const bodySurface = root.querySelector<HTMLElement>("[data-body-surface]")!;
     const diagnosticsPanel = root.querySelector<HTMLDialogElement>("[data-editor-diagnostics]")!;
     const diagnosticsTrigger = root.querySelector<HTMLButtonElement>("[data-open-diagnostics]")!;
     const diagnosticsTriggerCount = root.querySelector<HTMLElement>("[data-diagnostics-trigger-count]")!;
@@ -1709,6 +1713,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (from.tagName === "INPUT" && (from as HTMLInputElement).type === "checkbox") (to as HTMLInputElement).checked = (from as HTMLInputElement).checked;
         else if (from.tagName === "INPUT" && (from as HTMLInputElement).type === "radio") (to as HTMLInputElement).checked = (from as HTMLInputElement).checked;
         else (to as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value = (from as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value;
+        to.disabled = from.disabled;
+        if ("readOnly" in to && "readOnly" in from) (to as HTMLInputElement | HTMLTextAreaElement).readOnly = (from as HTMLInputElement | HTMLTextAreaElement).readOnly;
+        if (from.matches("[data-body]")) {
+          const host = to.closest<HTMLElement>("[data-body-surface]")?.querySelector<HTMLElement>(".body-codemirror");
+          const locked = from.disabled || ("readOnly" in from && (from as HTMLInputElement | HTMLTextAreaElement).readOnly);
+          host?.setAttribute("aria-disabled", String(locked));
+          host?.querySelector<HTMLElement>(".cm-content")?.setAttribute("contenteditable", String(!locked));
+        }
       };
       const syncPopupFields = () => sourceFields.forEach((field, index) => { if (popupFields[index]) copyField(field, popupFields[index]); });
       const syncPopupContent = () => {
@@ -1895,6 +1907,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const setUpdateProposalState = (active: boolean) => {
       updateProposalActive = loadedDocumentWasPublished && active;
       form.classList.toggle("is-update-proposal", updateProposalActive);
+      const publishedBodyLocked = loadedDocumentWasPublished && !updateProposalActive;
+      bodySurface.dataset.publishedLocked = String(publishedBodyLocked);
+      bodySurface.setAttribute("aria-disabled", String(publishedBodyLocked));
       updateProposalButton.hidden = !loadedDocumentWasPublished;
       updateProposalButton.disabled = updateProposalActive;
       updateProposalButton.textContent = updateProposalActive ? "更新案を作成済み" : "更新案を作成";
@@ -1906,6 +1921,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => {
         if (field.name === "documentId") return;
         const locked = loadedDocumentWasPublished && (!updateProposalActive || field.name === "status" || updateProposalIdentityFields.has(field.name));
+        // 本文はdisabledにせずreadOnlyにする。CodeMirror側でも状態を
+        // 同期するため、クリック時に「更新案を作成」へ案内できる。
+        if (field === body) {
+          field.disabled = false;
+          field.readOnly = publishedBodyLocked;
+          return;
+        }
         field.disabled = locked;
       });
       saveButton.disabled = loadedDocumentWasPublished && !updateProposalActive;
@@ -1921,6 +1943,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       saveMessage.value = "更新案を作成しました。公開中の記事は保持されています。内容を確認して保存してください。";
       updateProposalButton.focus();
     };
+    const showPublishedBodyLockNotice = () => {
+      if (!(loadedDocumentWasPublished && !updateProposalActive)) return;
+      saveMessage.value = "公開中の記事を編集するには「更新案を作成」を押してください。";
+      updateProposalButton.focus({ preventScroll: true });
+    };
+    bodySurface.addEventListener("click", showPublishedBodyLockNotice);
+    bodySurface.addEventListener("focusin", showPublishedBodyLockNotice);
     const setUnsavedChanges = (dirty: boolean) => {
       hasUnsavedChanges = dirty;
     };
@@ -3481,10 +3510,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const saveCurrentDocument = (showProgress = true) => withDocumentSaveLock(async () => {
       window.clearTimeout(autosaveTimer);
+      const requestedId = documentIdForRequest();
+      if (requestedId && loadedDocumentWasPublished && !updateProposalActive) {
+        saveMessage.value = "公開中の記事を編集するには「更新案を作成」を押してください。";
+        updateProposalButton.focus({ preventScroll: true });
+        return requestedId;
+      }
       saveButton.disabled = true;
       try {
         saveMessage.value = "保存中…";
-        const id = documentIdForRequest();
+        const id = requestedId;
         const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
         const data = await read<{ id?: string; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
@@ -3562,32 +3597,59 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     });
     let autosaveTimer: number | undefined;
     let autosaveInFlight = false;
+    let autosaveGeneration = 0;
+    let autosaveAbortController: AbortController | null = null;
     autosaveToggle.checked = localStorage.getItem("atlasez-editor-autosave") !== "off";
+    const cancelAutosave = () => {
+      window.clearTimeout(autosaveTimer);
+      autosaveTimer = undefined;
+      autosaveGeneration += 1;
+      autosaveAbortController?.abort();
+      autosaveAbortController = null;
+    };
     autosaveToggle.addEventListener("change", () => {
       localStorage.setItem("atlasez-editor-autosave", autosaveToggle.checked ? "on" : "off");
-      if (!autosaveToggle.checked) window.clearTimeout(autosaveTimer);
+      if (!autosaveToggle.checked) {
+        cancelAutosave();
+        saveMessage.value = "自動保存をオフにしました。保存するまで変更は保持されます。";
+      }
     });
     const autosaveDraft = async () => {
       const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
-      if (!id || status.value !== "draft" || autosaveInFlight) return;
+      const generation = autosaveGeneration;
+      if (!autosaveToggle.checked || !id || status.value !== "draft" || autosaveInFlight) return;
       autosaveInFlight = true;
+      const controller = new AbortController();
+      autosaveAbortController = controller;
       try {
         await withDocumentSaveLock(async () => {
+          if (!autosaveToggle.checked || generation !== autosaveGeneration) return;
           saveMessage.value = "下書きを自動保存中…";
-          const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
+          const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()), signal: controller.signal });
           if (!response.ok) {
             const data = await read<{ error?: string }>(response);
             throw new Error(data.error ?? "自動保存に失敗しました。");
           }
+          if (!autosaveToggle.checked || generation !== autosaveGeneration) return;
           setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
         });
-      } catch { if (!authRedirecting) saveMessage.value = "自動保存に失敗しました。手動で保存してください。"; }
-      finally { autosaveInFlight = false; }
+      } catch (error) {
+        if (!controller.signal.aborted && autosaveToggle.checked && !authRedirecting)
+          saveMessage.value = error instanceof Error ? error.message : "自動保存に失敗しました。手動で保存してください。";
+      }
+      finally {
+        if (autosaveAbortController === controller) autosaveAbortController = null;
+        autosaveInFlight = false;
+      }
     };
     const scheduleAutosave = () => {
       if (!autosaveToggle.checked || (form.elements.namedItem("documentId") as HTMLInputElement).value === "" || status.value !== "draft") return;
       window.clearTimeout(autosaveTimer);
-      autosaveTimer = window.setTimeout(() => { void autosaveDraft(); }, 2_000);
+      const generation = autosaveGeneration;
+      autosaveTimer = window.setTimeout(() => {
+        autosaveTimer = undefined;
+        if (autosaveToggle.checked && generation === autosaveGeneration) void autosaveDraft();
+      }, 2_000);
     };
     type CollaborationParticipant = { sessionId: string; email: string; displayName: string; field: string };
     let collaborationSocket: WebSocket | null = null;

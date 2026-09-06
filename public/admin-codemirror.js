@@ -1,4 +1,7 @@
 import { basicSetup, EditorView } from "https://esm.sh/codemirror@6.0.2";
+// Match the state module URL used internally by the codemirror bundle so the
+// compartment and EditorView share the same extension registry.
+import { Compartment } from "https://esm.sh/@codemirror/state@^6.0.0?target=es2022";
 import { markdown } from "https://esm.sh/@codemirror/lang-markdown@6.3.4";
 import {
   autocompletion,
@@ -232,6 +235,7 @@ const enhanceBodyEditor = (textarea) => {
     });
   };
 
+  const editableCompartment = new Compartment();
   const view = new EditorView({
     doc: nativeValue(textarea),
     parent: host,
@@ -244,6 +248,7 @@ const enhanceBodyEditor = (textarea) => {
         "aria-label": "本文（Markdown）",
         spellcheck: textarea.spellcheck ? "true" : "false",
       }),
+      editableCompartment.of(EditorView.editable.of(!textarea.disabled && !textarea.readOnly)),
       editorTheme,
       EditorView.updateListener.of((update) => {
         if (syncingFromTextarea) return;
@@ -296,6 +301,16 @@ const enhanceBodyEditor = (textarea) => {
       }),
     ],
   });
+
+  const syncEditableState = () => {
+    const editable = !textarea.disabled && !textarea.readOnly;
+    view.dispatch({ effects: editableCompartment.reconfigure(EditorView.editable.of(editable)) });
+    host.dataset.readonly = String(!editable);
+    host.setAttribute("aria-disabled", String(!editable));
+  };
+  const editableObserver = new MutationObserver(syncEditableState);
+  editableObserver.observe(textarea, { attributes: true, attributeFilter: ["disabled", "readonly"] });
+  syncEditableState();
 
   const forwardMacControlF = (event) => {
     if (/Mac|iPhone|iPad/i.test(navigator.platform) && event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "f") {
@@ -438,6 +453,7 @@ const enhanceBodyEditor = (textarea) => {
   activeEditors.set(textarea, {
     view,
     observer,
+    editableObserver,
     host,
     syncExternalInput,
   });
@@ -450,8 +466,9 @@ const initializeCodeMirror = () => {
 };
 
 const destroyCodeMirror = () => {
-  activeEditors.forEach(({ view, observer, host, syncExternalInput }, textarea) => {
+  activeEditors.forEach(({ view, observer, editableObserver, host, syncExternalInput }, textarea) => {
     observer.disconnect();
+    editableObserver.disconnect();
     textarea.removeEventListener("input", syncExternalInput);
     view.destroy();
     host.remove();
