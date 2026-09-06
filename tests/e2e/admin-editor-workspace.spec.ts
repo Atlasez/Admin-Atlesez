@@ -1142,6 +1142,31 @@ test("公開済み記事の本文は更新案を作成するまでロックす�
   }
 });
 
+test("記事一覧は保存済みの更新案を作成中として表示する", async ({ page }) => {
+  const publishedUpdateDocument = {
+    ...documentItem,
+    status: "draft" as const,
+    published_at: "2026-08-30T01:34:00.000Z",
+    updated_at: "2026-09-01T01:34:00.000Z",
+  };
+  await mockAdminApi(page, undefined, publishedUpdateDocument);
+  await page.goto("./admin/editor/?new=1");
+
+  const article = page
+    .locator(".outline-article", { hasText: "群の定義" })
+    .first();
+  await expect(article.locator(".outline-status")).toContainText(
+    "更新案作成中",
+  );
+  await expect(article.locator("[data-outline-article]")).toHaveText(
+    "更新案作成中",
+  );
+  await page.screenshot({
+    path: "test-results/editor-article-list-update-in-progress.png",
+    fullPage: true,
+  });
+});
+
 test("保存中の連打は同じ原稿を二重保存しない", async ({ page }) => {
   await mockAdminApi(page);
   let patchCount = 0;
