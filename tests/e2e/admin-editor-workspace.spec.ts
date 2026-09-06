@@ -600,6 +600,22 @@ test("本文の:::入力からDirective候補を補完でき、コードフェ�
   await expect(suggestions.locator('[role="option"]').first()).toContainText(
     ":::defi",
   );
+  const suggestionBounds = await suggestions.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(suggestionBounds.top).toBeGreaterThanOrEqual(0);
+  expect(suggestionBounds.bottom).toBeLessThanOrEqual(
+    suggestionBounds.viewportHeight,
+  );
+  await page.screenshot({
+    path: "test-results/editor-directive-suggestions.png",
+    fullPage: true,
+  });
   await body.press("Enter");
   await expect(body).toHaveValue(":::defi ");
   await expect(suggestions).toBeHidden();

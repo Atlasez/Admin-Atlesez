@@ -3206,9 +3206,22 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const rect = directiveTarget.getBoundingClientRect();
       const ownerWindow = directiveTarget.ownerDocument.defaultView ?? window;
       const width = Math.min(Math.max(rect.width, 280), ownerWindow.innerWidth - 24);
+      const viewportPadding = 12;
+      const gap = 6;
       directiveSuggestions.style.width = `${width}px`;
-      directiveSuggestions.style.left = `${Math.min(Math.max(12, rect.left), Math.max(12, ownerWindow.innerWidth - width - 12))}px`;
-      directiveSuggestions.style.top = `${Math.min(rect.bottom + 6, Math.max(12, ownerWindow.innerHeight - 12))}px`;
+      directiveSuggestions.style.left = `${Math.min(Math.max(viewportPadding, rect.left), Math.max(viewportPadding, ownerWindow.innerWidth - width - viewportPadding))}px`;
+
+      // The menu is fixed to the viewport, while the editor can be scrolled.
+      // Clamp it using its own measured height so it never renders off-screen.
+      const menuHeight = directiveSuggestions.getBoundingClientRect().height;
+      const availableBelow = ownerWindow.innerHeight - rect.bottom - gap - viewportPadding;
+      const availableAbove = rect.top - gap - viewportPadding;
+      const placeAbove = availableBelow < menuHeight && availableAbove > availableBelow;
+      const unclampedTop = placeAbove
+        ? rect.top - menuHeight - gap
+        : rect.bottom + gap;
+      const maxTop = Math.max(viewportPadding, ownerWindow.innerHeight - menuHeight - viewportPadding);
+      directiveSuggestions.style.top = `${Math.min(Math.max(viewportPadding, unclampedTop), maxTop)}px`;
     };
     const hideDirectiveSuggestions = () => {
       directiveSuggestions.hidden = true;
