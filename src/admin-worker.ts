@@ -7057,7 +7057,7 @@ async function memberCalendarOverview(
       availabilityBlocks: [],
     });
   const placeholders = projectIds.map(() => "?").join(",");
-  const [events, availability, availabilityBlocks] = await Promise.all([
+  const [events, availability, availabilityBlocks, availabilityRules] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,title,details,starts_at,ends_at,timezone,created_by,created_at
        FROM editorial_events WHERE project_id IN (${placeholders})
@@ -7090,6 +7090,16 @@ async function memberCalendarOverview(
     )
       .bind(scope.email)
       .all<Record<string, unknown>>(),
+    env.REPORTS.prepare(
+      `SELECT r.id,r.email,r.weekday,r.timezone,
+        CASE WHEN lower(r.email)=lower(?) THEN r.label ELSE '' END AS label,
+        r.kind,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name
+       FROM editorial_member_availability_rules r
+       LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(r.email)
+       ORDER BY r.weekday ASC, r.created_at ASC LIMIT 200`,
+    )
+      .bind(scope.email)
+      .all<Record<string, unknown>>(),
   ]);
   const participantsByEvent = new Map<
     string,
@@ -7106,6 +7116,11 @@ async function memberCalendarOverview(
       ...block,
       isSelf:
         String(block.email ?? "").toLowerCase() === scope.email.toLowerCase(),
+    })),
+    availabilityRules: (availabilityRules.results ?? []).map((rule) => ({
+      ...rule,
+      weekday: Number(rule.weekday),
+      isSelf: String(rule.email ?? "").toLowerCase() === scope.email.toLowerCase(),
     })),
     projects,
     events: (events.results ?? []).map((event) => {
@@ -8555,7 +8570,7 @@ async function operationsOverview(
   const memberValues: unknown[] = canSeeAllProjectOperations
     ? []
     : scope.subjects;
-  const [tasks, events, progress, members, availability, availabilityBlocks] =
+  const [tasks, events, progress, members, availability, availabilityBlocks, availabilityRules] =
     await Promise.all([
       env.REPORTS.prepare(
         `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
@@ -8608,6 +8623,16 @@ async function operationsOverview(
       )
         .bind(scope.email, scope.isManager ? 1 : 0)
         .all<Record<string, unknown>>(),
+      env.REPORTS.prepare(
+        `SELECT r.id, r.email, r.weekday, r.timezone,
+        CASE WHEN lower(r.email) = lower(?) OR ? = 1 THEN r.label ELSE '' END AS label,
+        r.kind, COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name
+       FROM editorial_member_availability_rules r
+       LEFT JOIN editorial_member_profiles p ON lower(p.email) = lower(r.email)
+       ORDER BY r.weekday ASC, r.created_at ASC LIMIT 200`,
+      )
+        .bind(scope.email, scope.isManager ? 1 : 0)
+        .all<Record<string, unknown>>(),
     ]);
   const taskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
   const reminderRows = taskRows.length
@@ -8657,6 +8682,11 @@ async function operationsOverview(
       ...block,
       isSelf:
         String(block.email ?? "").toLowerCase() === scope.email.toLowerCase(),
+    })),
+    availabilityRules: (availabilityRules.results ?? []).map((rule) => ({
+      ...rule,
+      weekday: Number(rule.weekday),
+      isSelf: String(rule.email ?? "").toLowerCase() === scope.email.toLowerCase(),
     })),
     events: (events.results ?? []).map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
@@ -9255,6 +9285,64 @@ async function deleteAvailabilityBlock(
     "DELETE FROM editorial_member_availability_blocks WHERE id = ? AND email = ?",
   )
     .bind(blockId, scope.email)
+    .run();
+  return json({ ok: true });
+}
+
+async function createAvailabilityRule(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  let payload: Record<string, unknown>;
+  try {
+    payload = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: "入力内容を読み取れませんでした。" }, 400);
+  }
+  const weekday = Number(payload.weekday);
+  const timezone = text(payload.timezone, 80) || "Asia/Tokyo";
+  const kind = text(payload.kind, 20) || "unavailable";
+  if (
+    !Number.isInteger(weekday) ||
+    weekday < 0 ||
+    weekday > 6 ||
+    !validTimeZone(timezone) ||
+    !["available", "unavailable"].includes(kind)
+  )
+    return json({ error: "曜日、タイムゾーンまたは可否を確認してください。" }, 400);
+  await env.REPORTS.prepare(
+    "INSERT INTO editorial_member_availability_rules (id,email,weekday,timezone,label,kind,created_at) VALUES (?,?,?,?,?,?,?)",
+  )
+    .bind(
+      crypto.randomUUID(),
+      scope.email,
+      weekday,
+      timezone,
+      text(payload.label, 160),
+      kind,
+      new Date().toISOString(),
+    )
+    .run();
+  return json({ ok: true });
+}
+
+async function deleteAvailabilityRule(
+  request: Request,
+  env: Env,
+  ruleId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  await env.REPORTS.prepare(
+    "DELETE FROM editorial_member_availability_rules WHERE id = ? AND email = ?",
+  )
+    .bind(ruleId, scope.email)
     .run();
   return json({ ok: true });
 }
@@ -16743,11 +16831,21 @@ async function handleAdminRequest(
     request.method === "POST"
   )
     return createAvailabilityBlock(request, env);
+  if (
+    url.pathname === "/api/admin/operations/availability-rules" &&
+    request.method === "POST"
+  )
+    return createAvailabilityRule(request, env);
   const availabilityBlockMatch = url.pathname.match(
     /^\/api\/admin\/operations\/availability-blocks\/([0-9a-f-]{36})$/i,
   );
   if (availabilityBlockMatch && request.method === "DELETE")
     return deleteAvailabilityBlock(request, env, availabilityBlockMatch[1]);
+  const availabilityRuleMatch = url.pathname.match(
+    /^\/api\/admin\/operations\/availability-rules\/([0-9a-f-]{36})$/i,
+  );
+  if (availabilityRuleMatch && request.method === "DELETE")
+    return deleteAvailabilityRule(request, env, availabilityRuleMatch[1]);
   const taskMatch = url.pathname.match(
     /^\/api\/admin\/operations\/tasks\/([0-9a-f-]{36})$/i,
   );

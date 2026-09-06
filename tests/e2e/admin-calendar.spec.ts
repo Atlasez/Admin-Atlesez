@@ -114,7 +114,7 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
   )!;
   const emptyDate = `${year}-${month}-${String(emptyDay).padStart(2, "0")}`;
   let savedBlock: Record<string, unknown> | undefined;
-  const savedBlocks: Record<string, unknown>[] = [];
+  let savedRule: Record<string, unknown> | undefined;
 
   await page.route("**/api/admin/operations**", async (route) => {
     const request = route.request();
@@ -124,7 +124,14 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
       url.pathname.endsWith("/availability-blocks")
     ) {
       savedBlock = request.postDataJSON() as Record<string, unknown>;
-      savedBlocks.push(savedBlock);
+      await route.fulfill({ json: { ok: true } });
+      return;
+    }
+    if (
+      request.method() === "POST" &&
+      url.pathname.endsWith("/availability-rules")
+    ) {
+      savedRule = request.postDataJSON() as Record<string, unknown>;
       await route.fulfill({ json: { ok: true } });
       return;
     }
@@ -216,6 +223,20 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
             isSelf: false,
           },
         ],
+        availabilityRules: savedRule
+          ? [
+              {
+                id: "weekday-rule",
+                email: "alice@example.com",
+                display_name: "Alice",
+                weekday: savedRule.weekday,
+                timezone: savedRule.timezone,
+                label: savedRule.label ?? "",
+                kind: savedRule.kind,
+                isSelf: true,
+              },
+            ]
+          : [],
       },
     });
   });
@@ -373,18 +394,18 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
     "true",
   );
   await expect(page.locator("[data-calendar-selection-summary]")).toContainText(
-    `火曜日を${weekdayDates.length}日選択中`,
+    "毎週火曜日の可否を登録します",
   );
   await expect(page.locator(".calendar-cell--selected")).toHaveCount(
     weekdayDates.length,
   );
   await page.locator("[data-block-kind]").selectOption("available");
   await page.locator("[data-create-block]").click();
-  await expect.poll(() => savedBlocks.length).toBe(1 + weekdayDates.length);
-  expect(
-    savedBlocks.slice(1).every((block) => block.kind === "available"),
-  ).toBe(true);
-  expect(
-    savedBlocks.slice(1).every((block) => String(block.startsAt).endsWith("Z")),
-  ).toBe(true);
+  await expect.poll(() => savedRule).toBeDefined();
+  expect(savedRule).toMatchObject({
+    weekday: 2,
+    kind: "available",
+    timezone: "Asia/Kathmandu",
+  });
+  await expect(page.locator("[data-block-list]")).toContainText("毎週火曜日");
 });
