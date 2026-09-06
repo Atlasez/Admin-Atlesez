@@ -67,9 +67,11 @@ const controls = [
             </div>
 
             <div class="title-row">
-              <div class="title-copy"><h3>統計的機械学習の基礎: 確率モデルと正則化</h3><span>最終更新 2分前 · 下書き</span></div>
-              <div class="collab"><span class="presence"><i></i><i></i><i></i></span><span>共同編集 2人</span><span class="collab-separator"></span><span>上杉 和輝</span></div>
+              <div class="title-copy"><h3>統計的機械学習の基礎: 確率モデルと正則化</h3><span>最終更新 2分前 · 下書き</span><span class="created-by">初回作成: <strong>上杉 和輝</strong> · 2026/09/02</span></div>
+              <div class="collab"><div class="history-avatars" aria-label="編集履歴"><button type="button" class="history-avatar avatar-uk" data-editor="上杉 和輝 · 初回作成" title="上杉 和輝 · 初回作成">UK</button><button type="button" class="history-avatar avatar-ms" data-editor="三浦 さき · 3時間前に編集" title="三浦 さき · 3時間前に編集">MS</button><button type="button" class="history-avatar avatar-kt" data-editor="加藤 拓 · 昨日に編集" title="加藤 拓 · 昨日に編集">KT</button></div><button type="button" class="history-link" data-history>編集履歴 <span>3</span></button><span class="collab-separator"></span><span>共同編集 2人</span></div>
             </div>
+
+            <div class="history-panel is-hidden" data-history-panel><div><strong>編集履歴</strong><span>この下書きに変更を加えたメンバー</span></div><ul><li><span class="history-mini avatar-uk">UK</span><span><strong>上杉 和輝</strong><small>初回作成 · 2026/09/02 09:14</small></span></li><li><span class="history-mini avatar-ms">MS</span><span><strong>三浦 さき</strong><small>本文を編集 · 3時間前</small></span></li><li><span class="history-mini avatar-kt">KT</span><span><strong>加藤 拓</strong><small>コメントを追加 · 昨日</small></span></li></ul></div>
 
             <div class="action-row">
               <div class="tab-list" role="tablist" aria-label="編集ビュー">
@@ -113,6 +115,8 @@ const controls = [
       document.querySelector('[data-guide]')?.addEventListener('click', () => showToast('手順パネルを開く想定です'));
       document.querySelector('[data-shortcut]')?.addEventListener('click', () => showToast('操作を検索（⌘K）'));
       document.querySelector('[data-autosave]')?.addEventListener('change', (event) => showToast(event.target.checked ? '自動保存を有効にしました' : '自動保存を無効にしました'));
+      document.querySelectorAll('[data-editor]').forEach((avatar) => avatar.addEventListener('click', () => showToast(avatar.dataset.editor)));
+      const historyPanel = document.querySelector('[data-history-panel]'); document.querySelector('[data-history]')?.addEventListener('click', () => historyPanel?.classList.toggle('is-hidden'));
       document.querySelectorAll('[data-status]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-status]').forEach((item) => { item.classList.toggle('is-active', item === button); item.setAttribute('aria-pressed', item === button ? 'true' : 'false'); }); showToast(`${button.querySelector('.segment-label')?.textContent}を選択しました`); }));
       document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => { const tab = button.dataset.tab; document.querySelectorAll('[data-tab]').forEach((item) => { item.classList.toggle('is-active', item === button); item.setAttribute('aria-selected', item === button ? 'true' : 'false'); }); document.querySelectorAll('[data-panel]').forEach((panel) => panel.classList.toggle('is-hidden', panel.dataset.panel !== tab)); }));
     </script>
@@ -141,4 +145,19 @@ const controls = [
   .panel-preview { margin: 0 20px 20px; padding: 18px 20px; min-height: 126px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-2); }.editor-line { display: grid; grid-template-columns: 28px minmax(0,1fr); gap: 12px; line-height: 1.75; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }.line-number { color: var(--text-3); text-align: right; user-select: none; }.line-text { color: var(--text-2); }.muted-line { color: var(--text-3); }.inline-tag { color: var(--yellow); }.preview-heading { font-size: 14px; font-weight: 620; margin-bottom: 8px; }.panel-preview p { margin: 0; color: var(--text-2); line-height: 1.6; }.is-hidden { display: none !important; }
   .comparison { margin-top: 18px; padding: 18px 2px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; gap: 32px; }.comparison div { display: grid; gap: 7px; }.comparison strong { font-size: 13px; font-weight: 620; }.comparison p { max-width: 510px; margin: 0; color: var(--text-2); line-height: 1.65; font-size: 12px; }.menu-popover { position: fixed; top: 90px; right: 34px; width: 190px; padding: 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); box-shadow: var(--shadow); z-index: 3; }.menu-popover button { width: 100%; height: 31px; border: 0; border-radius: 4px; text-align: left; padding: 0 9px; background: transparent; color: var(--text-2); font-size: 12px; }.menu-popover button:hover { background: var(--surface-3); color: var(--text); }.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); border: 1px solid var(--border); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow); padding: 9px 13px; color: var(--text-2); font-size: 12px; }.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   @media (max-width: 1180px) { .page-content { padding-inline: 30px; }.status-row { flex-wrap: wrap; }.status-spacer { display: none; }.title-row { align-items: flex-start; flex-direction: column; gap: 12px; padding-block: 15px; }.comparison { flex-direction: column; gap: 12px; } }
+</style>
+
+<style>
+  .created-by { color: var(--text-3); font-size: 10px !important; }
+  .created-by strong { color: var(--text-2); font-weight: 600; }
+  .history-avatars { display: inline-flex; align-items: center; }
+  .history-avatar { width: 24px; height: 24px; margin-left: -5px; border: 2px solid var(--surface); border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 8px; font-weight: 700; cursor: pointer; transition: transform 120ms ease; }
+  .history-avatar:first-child { margin-left: 0; }
+  .history-avatar:hover { transform: translateY(-2px); z-index: 1; }
+  .avatar-uk { background: #4b79a7; }.avatar-ms { background: #a45f4f; }.avatar-kt { background: #718e61; }
+  .history-link { border: 0; background: transparent; color: var(--text-2); padding: 0; font-size: 10px; cursor: pointer; }
+  .history-link:hover { color: var(--text); }.history-link span { color: var(--text-3); margin-left: 2px; }
+  .history-panel { margin: 0 20px 14px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-2); display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+  .history-panel > div { display: grid; gap: 3px; min-width: 170px; }.history-panel > div strong { font-size: 12px; }.history-panel > div span { color: var(--text-3); font-size: 10px; }
+  .history-panel ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 16px; }.history-panel li { display: flex; align-items: center; gap: 7px; }.history-mini { width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 8px; font-weight: 700; }.history-panel li > span:last-child { display: grid; gap: 2px; }.history-panel li strong { font-size: 10px; font-weight: 600; }.history-panel li small { color: var(--text-3); font-size: 9px; white-space: nowrap; }
 </style>
