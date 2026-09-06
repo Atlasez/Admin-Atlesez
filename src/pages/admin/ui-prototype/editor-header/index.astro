@@ -1,7 +1,7 @@
 ---
 const statusOptions = [
-  { id: "draft", label: "下書き", detail: "原稿", tone: "neutral" },
-  { id: "unpublished", label: "未公開", detail: "公開", tone: "muted" },
+  { id: "draft", label: "公開準備完了", detail: "原稿", tone: "neutral" },
+  { id: "unpublished", label: "公開済み（変更未反映）", detail: "公開", tone: "muted" },
 ];
 ---
 
@@ -20,7 +20,7 @@ const statusOptions = [
 
       <section class="intro" aria-labelledby="page-title">
         <div><p class="eyebrow">FOCUS AREA · SCREEN 02</p><h1 id="page-title">記事編集ワークスペース</h1><p>状態と操作を同じ帯に詰め込まず、読み順に沿って3つのレイヤーへ整理したチェック案です。</p></div>
-        <div class="intro-tools"><div class="mode-switch" role="tablist" aria-label="状態バリエーション"><button class="mode-button is-active" type="button" data-mode="draft" aria-selected="true">下書き案</button><button class="mode-button" type="button" data-mode="published" aria-selected="false">公開済み案</button></div><button class="outline-button" type="button" data-density>表示密度: 標準</button></div>
+        <div class="intro-tools"><div class="mode-switch" role="tablist" aria-label="状態バリエーション"><button class="mode-button" type="button" data-mode="draft" aria-selected="false">下書き案</button><button class="mode-button is-active" type="button" data-mode="published" aria-selected="true">公開済み案</button></div><button class="outline-button" type="button" data-density>表示密度: 標準</button></div>
       </section>
 
       <section class="editor-card" aria-label="記事編集上部のUI案">
@@ -42,12 +42,12 @@ const statusOptions = [
         </div>
 
         <div class="action-row">
-          <div class="article-meta"><span class="meta-label">記事設定</span><span>数学</span><span class="slash">/</span><span>概要</span><span class="slash">/</span><span>日本語</span><span class="slash">/</span><span data-meta-status>下書き</span><button type="button" class="edit-button" data-edit>編集</button></div>
-          <div class="action-buttons" data-action-set="draft"><button type="button" class="secondary-button" data-feedback>フィードバックを依頼</button><button type="button" class="secondary-button" data-review>フィードバック完了・公開審査へ</button><button type="button" class="primary-button" data-save>保存する</button></div>
-          <div class="action-buttons is-hidden" data-action-set="published"><button type="button" class="primary-button" data-update>更新案を作成</button><button type="button" class="secondary-button" data-feedback>フィードバックを依頼</button><button type="button" class="primary-button" data-retry>公開内容を更新して再試行</button><button type="button" class="danger-button" data-unpublish>公開を取り消す</button><button type="button" class="primary-button" data-save>変更を保存</button></div>
+          <div class="article-meta"><span class="meta-label">記事設定</span><span>数学</span><span class="slash">/</span><span>概要</span><span class="slash">/</span><span>日本語</span><span class="slash">/</span><span data-meta-status>公開準備完了</span><button type="button" class="edit-button" data-edit>編集</button></div>
+          <div class="action-buttons is-hidden" data-action-set="draft"><button type="button" class="secondary-button" data-feedback>フィードバックを依頼</button><button type="button" class="secondary-button" data-review>フィードバック完了・公開審査へ</button><button type="button" class="primary-button" data-save>保存する</button></div>
+          <div class="action-buttons" data-action-set="published"><button type="button" class="primary-button" data-update>更新案を作成</button><button type="button" class="secondary-button" data-feedback>フィードバックを依頼</button><button type="button" class="primary-button" data-retry>公開内容を更新して再試行</button><button type="button" class="danger-button" data-unpublish>公開を取り消す</button><button type="button" class="primary-button" data-save>変更を保存</button></div>
         </div>
 
-        <div class="publish-notice is-hidden" data-published-note><span class="notice-mark">i</span><p>公開中の記事を保持したまま更新案を作成できます。既存原稿を編集して同じ公開先へ更新する場合は「更新案を作成」を選択してください。</p></div>
+        <div class="publish-notice" data-published-note><span class="notice-mark">i</span><p>公開中の記事を保持したまま更新案を作成できます。既存原稿を編集して同じ公開先へ更新する場合は「更新案を作成」を選択してください。</p></div>
 
         <div class="memo-row"><button type="button" class="disclosure" data-memo aria-expanded="false"><span class="triangle">›</span><strong>自分用メモ帳</strong><span class="memo-hint">必要なときだけ開く</span></button><div class="memo-panel is-hidden" data-memo-panel><textarea aria-label="自分用メモ" placeholder="この下書きについてのメモ…">公開前に定義の参照先を確認する。</textarea><button type="button" class="mini-save" data-memo-save>メモを保存</button></div></div>
       </section>
