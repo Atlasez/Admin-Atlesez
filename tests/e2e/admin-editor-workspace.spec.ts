@@ -975,6 +975,26 @@ test("LaTeXコマンド補完と入力補助を使える", async ({ page }) => {
   await expect(body).toHaveValue("\\begin{aligned}\n  \\end{aligned}");
 });
 
+test("本文エディタはMarkdown・:::ブロック・LaTeXを構文色分けする", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const editor = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  await editor.fill(
+    "## 見出し\n\n:::defi 定義\n\n$\\alpha + \\beta$ と $$\\frac{a}{b}$$\n\n<!-- メモ -->",
+  );
+
+  await expect(page.locator(".cm-atlas-directive")).toHaveCount(1);
+  await expect(page.locator(".cm-atlas-math-command")).toHaveCount(3);
+  await expect(page.locator(".cm-atlas-math-delimiter")).toHaveCount(4);
+  await expect(page.locator(".cm-atlas-comment")).toHaveCount(1);
+  await expect(editor).toContainText("見出し");
+});
+
 test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");

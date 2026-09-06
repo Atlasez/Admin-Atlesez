@@ -1,4 +1,7 @@
 import { basicSetup, EditorView } from "https://esm.sh/codemirror@6.0.2";
+import { Decoration } from "https://esm.sh/@codemirror/view@^6.0.0?target=es2022";
+import { HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@^6.0.0?target=es2022";
+import { tags } from "https://esm.sh/@lezer/highlight@^1.0.0?target=es2022";
 // Match the state module URL used internally by the codemirror bundle so the
 // compartment and EditorView share the same extension registry.
 import { Compartment } from "https://esm.sh/@codemirror/state@^6.0.0?target=es2022";
@@ -16,6 +19,118 @@ const valueDescriptor = Object.getOwnPropertyDescriptor(
 );
 const nativeSetRangeText = HTMLTextAreaElement.prototype.setRangeText;
 const nativeSetSelectionRange = HTMLTextAreaElement.prototype.setSelectionRange;
+
+// Keep the editor visually close to VS Code/CloudLaTeX without replacing the
+// existing Markdown parser. The parser supplies the Markdown token classes;
+// this style gives those classes a deliberate, low-noise palette and the
+// decoration pass below fills the gap for Atlas-specific directives and TeX.
+const editorSyntaxStyle = syntaxHighlighting(
+  HighlightStyle.define([
+    { tag: tags.heading, color: "#2563a8", fontWeight: "700" },
+    { tag: tags.heading1, color: "#1d4f82", fontWeight: "700" },
+    { tag: tags.heading2, color: "#2563a8", fontWeight: "700" },
+    { tag: tags.heading3, color: "#326b96", fontWeight: "650" },
+    { tag: tags.emphasis, color: "#8a4b08", fontStyle: "italic" },
+    { tag: tags.strong, color: "#173f69", fontWeight: "700" },
+    { tag: tags.link, color: "#176ea6", textDecoration: "underline" },
+    { tag: tags.url, color: "#2878ab" },
+    { tag: tags.monospace, color: "#7d3f8c" },
+    { tag: tags.quote, color: "#557084" },
+    { tag: tags.comment, color: "#71808c", fontStyle: "italic" },
+    { tag: tags.processingInstruction, color: "#9a5b13" },
+    { tag: tags.meta, color: "#7c4d9e" },
+    { tag: tags.invalid, color: "#b42318", textDecoration: "underline wavy" },
+  ]),
+);
+
+const atlasMark = (className) => Decoration.mark({ class: className });
+
+const atlasSyntaxDecorations = (state) => {
+  const source = state.doc.toString();
+  const marks = [];
+  const fencedRanges = [];
+  const add = (from, to, className) => {
+    if (to > from) marks.push({ from, to, decoration: atlasMark(className) });
+  };
+  const isInFence = (from, to = from) => fencedRanges.some((range) => from < range.to && to > range.from);
+
+  // Identify fenced code first. TeX-looking text inside a code sample should
+  // stay code, just as it does in VS Code and CloudLaTeX.
+  const fencePattern = /^\s{0,3}(`{3,}|~{3,})/gm;
+  let fenceOpen = null;
+  let fenceMatch;
+  while ((fenceMatch = fencePattern.exec(source))) {
+    if (fenceOpen === null) fenceOpen = fenceMatch.index;
+    else {
+      fencedRanges.push({ from: fenceOpen, to: fenceMatch.index + fenceMatch[0].length });
+      fenceOpen = null;
+    }
+  }
+  if (fenceOpen !== null) fencedRanges.push({ from: fenceOpen, to: source.length });
+
+  // Atlas definition/proposition/theorem blocks are not part of CommonMark,
+  // so mark their complete opening/closing lines as a recognisable syntax
+  // token. The body remains ordinary Markdown and stays easy to read.
+  let lineStart = 0;
+  for (const line of source.split("\n")) {
+    const start = lineStart;
+    lineStart += line.length + 1;
+    if (isInFence(start, start + line.length)) continue;
+    if (/^\s*:{3,4}[A-Za-z][A-Za-z0-9_-]*/u.test(line) || /^\s*:{3,4}\s*$/u.test(line)) {
+      add(start, start + line.length, "cm-atlas-directive");
+    }
+  }
+
+  // Highlight TeX delimiters, commands and structural braces separately so
+  // formulas remain readable even when the editor is dense. Multiline display
+  // math is supported for $$...$$ and \\[...\\] forms.
+  const mathPattern = /\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g;
+  let mathMatch;
+  while ((mathMatch = mathPattern.exec(source))) {
+    const from = mathMatch.index;
+    const to = from + mathMatch[0].length;
+    if (isInFence(from, to)) continue;
+    const value = mathMatch[0];
+    const delimiterLength = value.startsWith("$$") || value.startsWith("\\[") || value.startsWith("\\(") ? 2 : 1;
+    const innerStart = from + delimiterLength;
+    const innerEnd = to - delimiterLength;
+    add(from, innerStart, "cm-atlas-math-delimiter");
+    const commandPattern = /\\[A-Za-z][A-Za-z0-9]*/g;
+    let cursor = innerStart;
+    let command;
+    commandPattern.lastIndex = delimiterLength;
+    while ((command = commandPattern.exec(value)) && from + command.index < innerEnd) {
+      const commandFrom = from + command.index;
+      const commandTo = Math.min(commandFrom + command[0].length, innerEnd);
+      if (commandFrom > cursor) add(cursor, commandFrom, "cm-atlas-math");
+      add(commandFrom, commandTo, "cm-atlas-math-command");
+      cursor = commandTo;
+    }
+    if (cursor < innerEnd) add(cursor, innerEnd, "cm-atlas-math");
+    add(to - delimiterLength, to, "cm-atlas-math-delimiter");
+  }
+
+  // HTML comments and YAML/front-matter markers are common in editorial
+  // drafts and benefit from the same quiet metadata treatment.
+  const commentPattern = /<!--[\s\S]*?-->/g;
+  let comment;
+  while ((comment = commentPattern.exec(source))) {
+    if (!isInFence(comment.index, comment.index + comment[0].length)) add(comment.index, comment.index + comment[0].length, "cm-atlas-comment");
+  }
+
+  marks.sort((a, b) => a.from - b.from || a.to - b.to);
+  // RangeSetBuilder (used internally by `of`) expects a monotonic set. Keep
+  // the first token at an overlap boundary rather than drawing two layers on
+  // top of each other, which also avoids flicker while typing delimiters.
+  const nonOverlapping = [];
+  let end = -1;
+  for (const mark of marks) {
+    if (mark.from < end) continue;
+    nonOverlapping.push(mark.decoration.range(mark.from, mark.to));
+    end = mark.to;
+  }
+  return Decoration.set(nonOverlapping);
+};
 
 const mathCompletions = [
   snippetCompletion("\\frac{${numerator}}{${denominator}}", { label: "\\frac", detail: "分数" }),
@@ -242,6 +357,8 @@ const enhanceBodyEditor = (textarea) => {
     extensions: [
       basicSetup,
       markdown(),
+      editorSyntaxStyle,
+      EditorView.decorations.of((viewState) => atlasSyntaxDecorations(viewState.state)),
       EditorView.lineWrapping,
       autocompletion({ override: [completeMath(textarea)], activateOnTyping: true }),
       EditorView.contentAttributes.of({
