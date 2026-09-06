@@ -3272,8 +3272,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       positionDirectiveSuggestions();
       paintDirectiveSelection();
     };
-    body.addEventListener("input", () => showDirectiveSuggestions(body));
-    body.addEventListener("focusin", () => showDirectiveSuggestions(body));
+    body.addEventListener("input", (event) => {
+      const detail = event instanceof CustomEvent && event.detail && typeof event.detail === "object"
+        ? event.detail as { source?: unknown }
+        : null;
+      if (detail?.source === "collaboration") {
+        hideDirectiveSuggestions();
+        return;
+      }
+      showDirectiveSuggestions(body);
+    });
     body.addEventListener("keydown", (event) => {
       if (directiveTarget !== body || directiveSuggestions.hidden || !directiveMatches.length) return;
       if (event.key === "ArrowDown") { event.preventDefault(); directiveIndex = (directiveIndex + 1) % directiveMatches.length; paintDirectiveSelection(); }
@@ -3281,7 +3289,21 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       else if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); chooseDirective(); }
       else if (event.key === "Escape") { event.preventDefault(); hideDirectiveSuggestions(); }
     });
-    body.addEventListener("focusout", () => { directiveHideTimer = window.setTimeout(() => { if (!directiveSuggestions.matches(":hover")) hideDirectiveSuggestions(); }, 140); });
+    const scheduleDirectiveHide = () => {
+      window.clearTimeout(directiveHideTimer);
+      directiveHideTimer = window.setTimeout(() => {
+        if (!directiveSuggestions.matches(":hover")) hideDirectiveSuggestions();
+      }, 140);
+    };
+    // CodeMirror forwards focus/blur to the backing textarea as non-bubbling
+    // events, so focusout alone misses clicks outside the visible editor.
+    body.addEventListener("blur", scheduleDirectiveHide);
+    body.addEventListener("focusout", scheduleDirectiveHide);
+    document.addEventListener("pointerdown", (event) => {
+      const target = event.target;
+      if (directiveSuggestions.hidden || (target instanceof Node && directiveSuggestions.contains(target))) return;
+      hideDirectiveSuggestions();
+    });
     window.addEventListener("resize", positionDirectiveSuggestions, { passive: true });
     window.addEventListener("scroll", positionDirectiveSuggestions, { passive: true });
     const latexCompletionCandidates = [
@@ -3796,7 +3818,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             try {
               element.value = next;
               if (start !== null && end !== null) element.setSelectionRange(Math.min(start, next.length), Math.min(end, next.length));
-              element.dispatchEvent(new Event("input", { bubbles: true }));
+              element.dispatchEvent(new CustomEvent("input", { bubbles: true, detail: { source: "collaboration" } }));
               element.scrollTop = scrollTop;
             } finally {
               collaborationApplyingRemote = false;
