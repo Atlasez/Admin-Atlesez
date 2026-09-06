@@ -600,6 +600,10 @@ test("本文の:::入力からDirective候補を補完でき、コードフェ�
   await expect(suggestions.locator('[role="option"]').first()).toContainText(
     ":::defi",
   );
+  await page.getByRole("heading", { name: "プレビュー" }).click();
+  await expect(suggestions).toBeHidden();
+  await body.fill(":::");
+  await expect(suggestions).toBeVisible();
   const suggestionBounds = await suggestions.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return {
@@ -621,6 +625,46 @@ test("本文の:::入力からDirective候補を補完でき、コードフェ�
   await expect(suggestions).toBeHidden();
 
   await body.fill("```\n:::\n```");
+  await expect(suggestions).toBeHidden();
+});
+
+test("CodeMirror本文から外側をクリックするとDirective候補を閉じる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const editor = page.locator(".body-codemirror .cm-content");
+  const suggestions = page.locator("#article-directive-suggestions");
+  await editor.click();
+  await page.keyboard.type(":::");
+  await expect(suggestions).toBeVisible();
+  await page.getByRole("heading", { name: "プレビュー" }).click();
+  await expect(suggestions).toBeHidden();
+  await page.screenshot({
+    path: "test-results/editor-directive-suggestions-dismissed.png",
+    fullPage: true,
+  });
+});
+
+test("共同編集の初期同期ではDirective候補を自動表示しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const body = page.locator("textarea[data-body]");
+  const suggestions = page.locator("#article-directive-suggestions");
+  await body.evaluate((element) => {
+    (element as HTMLTextAreaElement).value = ":::";
+    element.dispatchEvent(
+      new CustomEvent("input", {
+        bubbles: true,
+        detail: { source: "collaboration" },
+      }),
+    );
+  });
+  await body.focus();
   await expect(suggestions).toBeHidden();
 });
 
