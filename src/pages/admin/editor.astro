@@ -694,6 +694,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .body-editor-surface [data-body] { color: var(--text, #243447); overflow-wrap: anywhere; }
   .body-editor-surface[data-codemirror-ready="true"] [data-body] { color: transparent; }
 
+  /* Markdown is parsed by CodeMirror; Atlas-specific tokens (::: blocks and
+     TeX) are marked by /admin-codemirror.js. Keep the palette close to VS
+     Code/CloudLaTeX: readable neutral text with small, semantic accents. */
+  .body-editor-surface :global(.body-codemirror .cm-atlas-directive) { color: #9a4f0b; font-weight: 700; }
+  .body-editor-surface :global(.body-codemirror .cm-atlas-math) { color: #5c3a8e; }
+  .body-editor-surface :global(.body-codemirror .cm-atlas-math-command) { color: #176ea6; font-weight: 650; }
+  .body-editor-surface :global(.body-codemirror .cm-atlas-math-delimiter) { color: #b05b11; font-weight: 700; }
+  .body-editor-surface :global(.body-codemirror .cm-atlas-comment) { color: #71808c; font-style: italic; }
+  [data-pref-bg="dark"] .body-editor-surface :global(.body-codemirror .cm-atlas-directive) { color: #f4b86a; }
+  [data-pref-bg="dark"] .body-editor-surface :global(.body-codemirror .cm-atlas-math) { color: #c4b5fd; }
+  [data-pref-bg="dark"] .body-editor-surface :global(.body-codemirror .cm-atlas-math-command) { color: #8cc8ff; }
+  [data-pref-bg="dark"] .body-editor-surface :global(.body-codemirror .cm-atlas-math-delimiter) { color: #f6c76a; }
+  [data-pref-bg="dark"] .body-editor-surface :global(.body-codemirror .cm-atlas-comment) { color: #93a4b2; }
+
   /* ペインを手動で拡張したときもCodeMirrorを本文欄いっぱいに広げ、末尾の空白を残さない。 */
   .body-editor-surface { display: flex; flex-direction: column; }
   .body-editor-surface :global(.body-codemirror) { flex: 1 1 auto; height: 100% !important; min-height: 0; }
