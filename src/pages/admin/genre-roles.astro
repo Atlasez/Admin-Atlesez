@@ -6,20 +6,194 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
 
 <AdminLayout title="ジャンル・役割管理" description="アトラスの分野と担当役割">
   <main class="genre-roles" data-genre-roles>
-    <header class="page-heading"><div><p class="eyebrow">ATLAS / OWNERSHIP</p><h1>ジャンル・役割管理</h1><p class="lead">ジャンル・役割ごとの担当者を追加・削除し、運営で使うカスタム項目も管理できます。</p></div><div class="heading-actions"><a href="/admin/manage/?project=atlas">← 管理トップ</a><a class="quiet" href="/admin/permissions/?project=atlas">運営者・担当分野管理</a></div></header>
+    <header class="page-heading"><div><h1>ジャンル・役割管理</h1><p class="lead">ジャンル・役割ごとの担当者を追加・削除し、運営で使うカスタム項目も管理できます。</p></div><div class="heading-actions"><a href="/admin/manage/?project=atlas">← 管理トップ</a><a class="quiet" href="/admin/permissions/?project=atlas">運営者・担当分野管理</a></div></header>
     <section class="management-tools" aria-label="ジャンルと役割の作成">
       <form data-catalog-form><h2>新しいジャンル／役割を作成</h2><div class="form-row"><label>種類<select name="kind"><option value="genre">ジャンル</option><option value="role">役割</option></select></label><label>ID（英数字とハイフン）<input name="slug" required pattern="[a-z0-9-]+" maxlength="80" placeholder="statistics" /></label><label class="wide">表示名<input name="name" required maxlength="120" placeholder="統計チーム" /></label><label class="wide">説明（任意）<input name="description" maxlength="500" placeholder="担当範囲の説明" /></label><button type="submit">作成</button></div><output data-form-message aria-live="polite"></output></form>
       <form data-assignment-form><h2>メンバーをジャンル／役割へ追加</h2><div class="form-row"><label class="wide">メールアドレス<input type="email" name="email" required maxlength="320" placeholder="member@example.com" /></label><label class="wide">対象<select name="catalogId" data-catalog-select required><option value="">読み込み中…</option></select></label><button type="submit">追加</button></div><output data-assignment-message aria-live="polite"></output></form>
     </section>
     <section class="legend" aria-label="役割の説明"><span><i class="dot dot--member"></i>分野担当</span><span><i class="dot dot--lead"></i>分野統括（公開フロー）</span><span><i class="dot dot--manager"></i>運営統括</span><span><i class="dot dot--custom"></i>カスタム項目</span></section>
     <section class="subject-grid" aria-label="分野別の役割"><div class="loading" data-content>分野と担当を読み込んでいます…</div></section>
-    <section class="custom-section" aria-labelledby="custom-heading"><div class="panel-heading"><div><p class="eyebrow">CUSTOM CATALOG</p><h2 id="custom-heading">カスタムジャンル／役割</h2></div><span data-custom-count>—</span></div><div class="custom-grid" data-custom-content><p class="loading">読み込み中…</p></div></section>
+    <section class="custom-section" aria-labelledby="custom-heading"><div class="panel-heading"><h2 id="custom-heading">カスタムジャンル／役割</h2><span data-custom-count>—</span></div><div class="custom-grid" data-custom-content><p class="loading">読み込み中…</p></div></section>
     <output class="message" data-message aria-live="polite"></output>
   </main>
 </AdminLayout>
 
 <style>
   .genre-roles{margin:0 auto;max-width:1250px;padding:0 1.25rem 4rem}.page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.3rem}.eyebrow{color:var(--accent-primary);font-size:.7rem;font-weight:800;letter-spacing:.1em;margin:0}.page-heading h1{font-size:clamp(1.8rem,4vw,2.5rem);margin:.25rem 0 .45rem}.lead{color:var(--text-secondary);line-height:1.7;margin:0}.heading-actions{align-items:flex-end;display:flex;flex-wrap:wrap;gap:.6rem}.heading-actions a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.heading-actions .quiet{border:1px solid var(--border-default);color:var(--text-primary);padding:.5rem .7rem}.management-tools{display:grid;gap:.75rem;grid-template-columns:repeat(2,minmax(0,1fr));margin:1.2rem 0}.management-tools form{background:var(--background-secondary);border:1px solid var(--border-default);padding:.9rem}.management-tools h2{font-size:.9rem;margin:0 0 .65rem}.form-row{align-items:end;display:flex;flex-wrap:wrap;gap:.5rem}.form-row label{color:var(--text-secondary);display:grid;font-size:.68rem;font-weight:800;gap:.25rem;min-width:8rem}.form-row label.wide{flex:1 1 11rem}.form-row input,.form-row select{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;min-height:2.2rem;padding:.4rem .5rem}.form-row button,.action-button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2.2rem;padding:.4rem .65rem}.management-tools output{color:var(--text-secondary);display:block;font-size:.7rem;min-height:1.1rem;padding-top:.45rem}.legend{color:var(--text-secondary);display:flex;flex-wrap:wrap;font-size:.75rem;gap:1rem;margin:1rem 0}.legend span{align-items:center;display:inline-flex;gap:.35rem}.dot{background:var(--text-secondary);border-radius:50%;height:.55rem;width:.55rem}.dot--member{background:#6ba6ff}.dot--lead{background:#ac8cf4}.dot--manager{background:#e8b84a}.dot--custom{background:#67c3ce}.subject-grid,.custom-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}.subject-card,.custom-card{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.65rem;padding:.9rem}.subject-card__heading,.custom-card__heading{align-items:start;display:flex;gap:.5rem;justify-content:space-between}.subject-card h2,.custom-card h3{font-size:1rem;margin:0}.subject-card code,.custom-card code{color:var(--text-secondary);font-size:.68rem}.subject-status{border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.65rem;padding:.18rem .4rem;white-space:nowrap}.subject-description,.custom-description{color:var(--text-secondary);font-size:.78rem;line-height:1.55;margin:0;min-height:2.4em}.role-list,.custom-people{border-top:1px solid var(--border-default);display:grid;gap:.45rem;padding-top:.6rem}.role-row{align-items:start;display:grid;gap:.45rem;grid-template-columns:6.5rem 1fr}.role-label{align-items:center;color:var(--text-secondary);display:flex;font-size:.7rem;gap:.3rem;padding-top:.2rem}.people,.custom-people-list{display:flex;flex-wrap:wrap;gap:.3rem}.person{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);display:inline-flex;gap:.35rem;padding:.28rem .4rem}.person span{font-size:.7rem}.person button,.custom-card button{background:transparent;border:0;color:var(--accent-primary);cursor:pointer;font-size:.65rem;padding:.1rem}.person--lead{border-color:#ac8cf4;color:#ac8cf4}.person--manager{border-color:#e8b84a;color:#e8b84a}.person-remove{color:#e27676!important}.unassigned,.loading{color:var(--text-muted);font-size:.7rem;padding-top:.25rem}.custom-section{border-top:1px solid var(--border-default);margin-top:2rem;padding-top:1.2rem}.panel-heading{align-items:end;display:flex;justify-content:space-between;margin-bottom:.75rem}.panel-heading h2{font-size:1.15rem;margin:.18rem 0 0}.panel-heading>span{color:var(--text-secondary);font-size:.72rem}.custom-card__meta{color:var(--text-secondary);font-size:.7rem}.custom-card__actions{display:flex;justify-content:space-between}.delete-catalog{color:#e27676!important}.message{color:var(--text-secondary);display:block;font-size:.8rem;min-height:1.2rem;padding-top:.7rem}@media(max-width:760px){.genre-roles{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.management-tools{grid-template-columns:1fr}.subject-grid,.custom-grid{grid-template-columns:1fr}}
+</style>
+
+<style is:global>
+  /* 動的に生成するカードはAstroのスコープ属性を持たないため、ここだけ明示的に共有CSSを適用する。 */
+  .genre-roles .subject-grid,
+  .genre-roles .custom-grid {
+    align-items: start;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  }
+
+  .genre-roles .subject-grid [data-content] {
+    display: contents;
+  }
+
+  .genre-roles .subject-card,
+  .genre-roles .custom-card {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.35rem;
+    display: grid;
+    gap: 0.65rem;
+    min-width: 0;
+    padding: 0.9rem;
+  }
+
+  .genre-roles .subject-card__heading,
+  .genre-roles .custom-card__heading {
+    align-items: start;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .genre-roles .subject-card h2,
+  .genre-roles .custom-card h3 {
+    font-size: 1rem;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .genre-roles .subject-card code,
+  .genre-roles .custom-card code {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.68rem;
+    margin-top: 0.2rem;
+    overflow-wrap: anywhere;
+  }
+
+  .genre-roles .subject-status {
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    flex: 0 0 auto;
+    font-size: 0.65rem;
+    padding: 0.18rem 0.4rem;
+    white-space: nowrap;
+  }
+
+  .genre-roles .subject-description,
+  .genre-roles .custom-description {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.55;
+    margin: 0;
+    min-height: 2.4em;
+  }
+
+  .genre-roles .role-list,
+  .genre-roles .custom-people {
+    border-top: 1px solid var(--border-default);
+    display: grid;
+    gap: 0.45rem;
+    padding-top: 0.6rem;
+  }
+
+  .genre-roles .role-row {
+    align-items: start;
+    display: grid;
+    gap: 0.45rem;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+
+  .genre-roles .role-label {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    font-size: 0.7rem;
+    gap: 0.3rem;
+    padding-top: 0.2rem;
+  }
+
+  .genre-roles .people,
+  .genre-roles .custom-people-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .genre-roles .person {
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    display: inline-flex;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.28rem 0.4rem;
+  }
+
+  .genre-roles .person span {
+    font-size: 0.7rem;
+    overflow-wrap: anywhere;
+  }
+
+  .genre-roles .person button,
+  .genre-roles .custom-card button {
+    background: transparent;
+    border: 0;
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: 0.65rem;
+    padding: 0.1rem;
+  }
+
+  .genre-roles .person--lead {
+    border-color: #ac8cf4;
+    color: #ac8cf4;
+  }
+
+  .genre-roles .person--manager {
+    border-color: #e8b84a;
+    color: #e8b84a;
+  }
+
+  .genre-roles .person-remove {
+    color: #e27676 !important;
+  }
+
+  .genre-roles .unassigned,
+  .genre-roles .loading {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    padding-top: 0.25rem;
+  }
+
+  .genre-roles .custom-card__meta {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+  }
+
+  .genre-roles .custom-card__actions {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .genre-roles .delete-catalog {
+    color: #e27676 !important;
+  }
+
+  @media (max-width: 760px) {
+    .genre-roles .subject-grid,
+    .genre-roles .custom-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .genre-roles .role-row {
+      grid-template-columns: 1fr;
+      gap: 0.2rem;
+    }
+  }
 </style>
 
 <script>
