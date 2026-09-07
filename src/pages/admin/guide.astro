@@ -4,8 +4,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 
 <AdminLayout title="作業の進め方" description="アトラス運営者向けの統合マニュアル">
   <main class="guide" id="main">
-    <header class="guide-heading"><div class="guide-breadcrumb"><a href="/admin/atlas/">運営サイト</a><span aria-hidden="true">›</span><span>作業の進め方</span></div><div class="guide-heading-row"><div><p class="guide-kicker">ATLASEZ / GUIDE</p><h1>作業の進め方</h1><p class="guide-subtitle">記事・予定・外部ツールを迷わず使うための運営用マニュアル</p></div><a class="guide-primary-action" href="#start">まず読む <span aria-hidden="true">→</span></a></div></header>
-    <section class="guide-quick-start" aria-label="まず確認すること"><div class="quick-start-heading"><span class="guide-kicker">QUICK START</span><h2>最初に確認する3つ</h2><p>参加直後、記事作業中、困ったときの入口をまとめています。</p></div><div class="quick-start-cards"><a class="quick-card" href="#start"><span class="quick-number">01</span><span><strong>参加後の準備</strong><small>Discord・Drive・担当分野を確認</small></span><span class="quick-arrow" aria-hidden="true">→</span></a><a class="quick-card" href="#flow"><span class="quick-number">02</span><span><strong>記事を進める</strong><small>下書きから公開までの流れ</small></span><span class="quick-arrow" aria-hidden="true">→</span></a><a class="quick-card" href="#links"><span class="quick-number">03</span><span><strong>迷ったとき</strong><small>関連画面と連絡先を確認</small></span><span class="quick-arrow" aria-hidden="true">→</span></a></div></section>
+    <header class="guide-heading"><div class="guide-breadcrumb"><a href="/admin/atlas/">運営サイト</a><span aria-hidden="true">›</span><span>作業の進め方</span></div><div class="guide-heading-row"><div><h1>作業の進め方</h1><p class="guide-subtitle">記事・予定・外部ツールを迷わず使うための運営用マニュアル</p></div><a class="guide-primary-action" href="#start">まず読む <span aria-hidden="true">→</span></a></div></header>
+    <section class="guide-quick-start" aria-label="まず確認すること"><div class="quick-start-heading"><h2>最初に確認する3つ</h2><p>参加直後、記事作業中、困ったときの入口をまとめています。</p></div><div class="quick-start-cards"><a class="quick-card" href="#start"><span class="quick-number">01</span><span><strong>参加後の準備</strong><small>Discord・Drive・担当分野を確認</small></span><span class="quick-arrow" aria-hidden="true">→</span></a><a class="quick-card" href="#flow"><span class="quick-number">02</span><span><strong>記事を進める</strong><small>下書きから公開までの流れ</small></span><span class="quick-arrow" aria-hidden="true">→</span></a><a class="quick-card" href="#links"><span class="quick-number">03</span><span><strong>迷ったとき</strong><small>関連画面と連絡先を確認</small></span><span class="quick-arrow" aria-hidden="true">→</span></a></div></section>
     <div class="guide-grid">
       <aside class="guide-sidebar" aria-label="ガイドの目次"><div class="guide-search"><label for="guide-search-input">このページを検索</label><div><span aria-hidden="true">⌕</span><input id="guide-search-input" type="search" placeholder="キーワードを入力" autocomplete="off" /></div></div><div class="guide-toc-heading"><strong>目次</strong><span data-guide-count>10項目</span></div><nav class="guide-toc" data-guide-toc><a href="#start">はじめに</a><a href="#vision">コンセプト・方針</a><a href="#scope">対象分野</a><a href="#flow">役割と作業の流れ</a><a href="#sessions">同時作業会</a><a href="#discord">Discord</a><a href="#drive">Google Drive</a><a href="#legacy-sites">旧Google Sites方式</a><a href="#math">LaTeX・MathJax</a><a href="#links">リンク集</a></nav><p class="guide-sidebar-note">現在の運営画面・Discord・Google Driveの案内が、このページより新しい場合はそちらを優先してください。</p></aside>
       <article>
@@ -96,14 +96,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     display: flex;
     gap: 1rem;
     justify-content: space-between;
-  }
-
-  .guide .guide-kicker {
-    color: var(--accent-primary);
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    margin: 0;
   }
 
   .guide .guide-heading h1 {
