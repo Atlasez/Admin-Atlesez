@@ -48,3 +48,19 @@ import AdminLayout from "../../../../layouts/AdminLayout.astro";
   .command-item strong { font-size: .78rem; line-height: 1.2; }
   .command-item small { color: #56616a; font-size: .68rem; line-height: 1.2; }
 </style>
+<style is:global>
+  .jr-prototype .breadcrumb { padding-top: .5rem; padding-bottom: .3rem; }
+  .jr-prototype .context { min-height: 60px; }
+  .jr-prototype .status-grid { gap: .55rem; padding: .65rem; }
+  .jr-prototype .status-card { min-height: 112px; padding: .65rem; }
+  .jr-prototype .status-card:nth-child(1) { border-left: 3px solid #d49a00; }
+  .jr-prototype .status-card:nth-child(2) { border-left: 3px solid #2b9a5b; }
+  .jr-prototype .status-card:nth-child(3) { border-left: 3px solid #7656c7; }
+  .jr-prototype .status-card:nth-child(1) .status-dot { background: #d49a00; box-shadow: 0 0 0 3px rgba(212,154,0,.14); }
+  .jr-prototype .status-card:nth-child(2) .status-orb { border-color: rgba(43,154,91,.35); border-top-color: #2b9a5b; }
+  .jr-prototype .status-card:nth-child(3) .status-orb { border-color: rgba(118,86,199,.35); border-top-color: #7656c7; }
+  .jr-prototype .status-card:nth-child(2) > strong { color: #237c4a; }
+  .jr-prototype .status-card:nth-child(3) > strong { color: #6543b2; }
+  .jr-prototype .title-row { min-height: 94px; padding-top: .7rem; padding-bottom: .7rem; }
+  .jr-prototype .controls { min-height: 54px; padding-top: .55rem; padding-bottom: .55rem; }
+</style>
