@@ -2593,6 +2593,60 @@ async function deleteReportAdminPermission(
   return json({ ok: true, provisioning });
 }
 
+/**
+ * 運営メンバーをアトラスの運営対象から外す。プロフィールやDiscordアカウントは残し、
+ * 運営権限・分野統括・カスタム分野の割り当て・アトラス参加だけを削除する。
+ */
+async function removeAtlasMember(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const email = (new URL(request.url).searchParams.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  if (!EMAIL_PATTERN.test(email))
+    return json({ error: "削除するメンバーのメールアドレスを確認してください。" }, 400);
+  if (email === scope.email)
+    return json({ error: "自分自身を運営メンバーから削除することはできません。" }, 400);
+
+  const state = await loadDiscordProvisioningState(env, email);
+  const provisioning = await provisionApplicationDiscordRoles(
+    env,
+    email,
+    [],
+    discordProvisioningAttributes(state.profile),
+    // 既存の手動ロールも同期対象に含め、削除後はDiscordから外す。
+    state.manualAssignments.map((assignment) => ({
+      ...assignment,
+      is_active: 0,
+    })),
+  );
+  if (provisioning.status === "failed") return discordSyncFailure(provisioning);
+
+  await env.REPORTS.batch([
+    env.REPORTS.prepare(
+      "DELETE FROM report_admin_permissions WHERE lower(email)=lower(?)",
+    ).bind(email),
+    env.REPORTS.prepare(
+      "DELETE FROM editorial_workflow_roles WHERE lower(email)=lower(?)",
+    ).bind(email),
+    env.REPORTS.prepare(
+      "DELETE FROM admin_genre_role_assignments WHERE lower(email)=lower(?)",
+    ).bind(email),
+    env.REPORTS.prepare(
+      "DELETE FROM atlasez_project_memberships WHERE project_id='atlas' AND lower(email)=lower(?)",
+    ).bind(email),
+    env.REPORTS.prepare(
+      "DELETE FROM atlasez_member_discord_role_assignments WHERE lower(email)=lower(?)",
+    ).bind(email),
+  ]);
+  return json({ ok: true, email, provisioning });
+}
+
 type GenreRoleCatalogRow = {
   id: string;
   project_id: string;
@@ -16582,6 +16636,11 @@ async function handleAdminRequest(
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
+  if (
+    url.pathname === "/api/admin/member-management" &&
+    request.method === "DELETE"
+  )
+    return removeAtlasMember(request, env);
   if (url.pathname === "/api/admin/genre-role-catalog")
     return genreRoleCatalog(request, env);
   if (url.pathname === "/api/admin/genre-role-catalog/assignments")
