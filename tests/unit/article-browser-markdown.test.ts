@@ -71,6 +71,50 @@ describe("browser article Markdown renderer", () => {
     expect(html.match(/class="katex"/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("keeps explicit folding-title emphasis without making plain titles bold", async () => {
+    const html = await renderArticleMarkdown(
+      [
+        ":::folding **重要な補足**",
+        "",
+        "本文",
+        "",
+        ":::",
+        "",
+        ":::folding 通常の補足",
+        "",
+        "本文",
+        "",
+        ":::",
+      ].join("\n"),
+      { katex: false },
+    );
+
+    expect(html).toContain("<summary><strong>重要な補足</strong></summary>");
+    expect(html).toContain("<summary>通常の補足</summary>");
+    expect(html).not.toContain(
+      "<summary><strong>通常の補足</strong></summary>",
+    );
+  });
+
+  it("continues ordered-list numbering across a display-math block", async () => {
+    const html = await renderArticleMarkdown(
+      [
+        "1. 最初の項目",
+        "2. 次の項目",
+        "",
+        "$$",
+        "x = y",
+        "$$",
+        "",
+        "1. 数式の後の項目",
+      ].join("\n"),
+      { katex: false },
+    );
+
+    expect(html).toContain('<ol start="3">');
+    expect(html).toContain("<li>数式の後の項目</li>");
+  });
+
   it("renders proof and supplement directives as interactive details", async () => {
     const html = await renderArticleMarkdown(
       [

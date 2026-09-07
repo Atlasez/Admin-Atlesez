@@ -77,4 +77,40 @@ describe("article math macros", () => {
     );
     expect(rendered.code).not.toContain("diagram.png?width=60%");
   });
+
+  it("keeps ordered-list numbering and folding-title emphasis in published HTML", async () => {
+    const processor = await createMarkdownProcessor(
+      ARTICLE_MARKDOWN_PROCESSOR_OPTIONS,
+    );
+    const rendered = await processor.render(
+      [
+        "1. 最初の項目",
+        "2. 次の項目",
+        "",
+        "$$",
+        "x = y",
+        "$$",
+        "",
+        "1. 数式の後の項目",
+        "",
+        ":::folding **重要な補足**",
+        "",
+        "本文",
+        "",
+        ":::",
+        "",
+        ":::folding 通常の補足",
+        "",
+        "本文",
+        "",
+        ":::",
+      ].join("\n"),
+    );
+
+    expect(rendered.code).toContain('<ol start="3">');
+    expect(rendered.code).toContain(
+      "<summary><strong>重要な補足</strong></summary>",
+    );
+    expect(rendered.code).toContain("<summary>通常の補足</summary>");
+  });
 });

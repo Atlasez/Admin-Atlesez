@@ -6,7 +6,10 @@ import remarkRehype from "remark-rehype";
 import rehypeRaw from "rehype-raw";
 import rehypeStringify from "rehype-stringify";
 import remarkSmartypants from "remark-smartypants";
-import { remarkArticleDirectives } from "./article-directives.mjs";
+import {
+  remarkArticleDirectives,
+  remarkArticleOrderedListContinuation,
+} from "./article-directives.mjs";
 import { remarkJapaneseStrong } from "./article-japanese-strong.mjs";
 import {
   rehypeArticleKatex,
@@ -293,6 +296,7 @@ export async function renderArticleMarkdown(
     .use(remarkSmartypants)
     .use(remarkArticleDirectives)
     .use(remarkMath)
+    .use(remarkArticleOrderedListContinuation)
     .use(remarkJapaneseStrong)
     .use(remarkArticleMathMacros, customPresets)
     .use(remarkBrowserEditorialAssets)

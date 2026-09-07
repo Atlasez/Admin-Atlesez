@@ -101,6 +101,222 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   @media(max-width:720px){.member-admin{padding:0 .85rem 3rem}.member-admin__header{padding-top:1.25rem}.member-admin__add{display:block;padding:.85rem}.member-admin__add form{display:grid;grid-template-columns:1fr;margin-top:.8rem}.member-admin__add output{display:block;margin-top:.55rem}.member-grid{grid-template-columns:1fr}.member-card{padding:.75rem}.member-card__top{align-items:flex-start}.member-card__role{margin-left:0}.member-card__top{flex-wrap:wrap}.member-card__actions{display:grid;grid-template-columns:1fr 1fr}.member-admin__section-heading{align-items:start;display:block}.member-admin__section-heading span{display:block;margin-top:.25rem}}
 </style>
 
+<style is="global">
+  /* 最終オーバーライド: 画面幅に応じて操作カードを整理し、権限管理を読みやすく保つ。 */
+  .member-admin__header {
+    align-items: center !important;
+    border-left: 3px solid var(--accent-primary) !important;
+    border-top: 1px solid var(--border-default) !important;
+    gap: 1.25rem !important;
+    padding: 1.15rem 1.25rem 1.05rem !important;
+  }
+  .member-admin__header h1 { letter-spacing: -.035em !important; line-height: 1.16 !important; }
+  .member-admin__self-discord { background: var(--accent-primary) !important; border-color: var(--accent-primary) !important; color: var(--on-accent, #fff) !important; }
+  .member-admin__self-discord:hover { background: var(--accent-hover) !important; border-color: var(--accent-hover) !important; }
+  .member-admin__summary {
+    background: color-mix(in srgb, var(--background-primary) 92%, var(--background-secondary)) !important;
+    border: 1px solid color-mix(in srgb, var(--border-default) 78%, transparent) !important;
+    border-radius: .45rem !important;
+    gap: 0 !important;
+    overflow: hidden;
+  }
+  .summary-card { background: transparent !important; padding: .8rem .95rem !important; }
+  .summary-card strong { font-size: 1.45rem !important; font-variant-numeric: tabular-nums; }
+  .member-admin__members, .member-admin__tools { background: var(--background-secondary) !important; border-color: color-mix(in srgb, var(--border-default) 78%, transparent) !important; }
+  .member-toolbar { background: var(--background-primary) !important; border: 1px solid var(--border-default) !important; border-radius: .4rem !important; margin-bottom: .7rem !important; padding: .55rem !important; }
+  .member-toolbar__summary { font-variant-numeric: tabular-nums; }
+  .member-card { box-shadow: 0 1px 3px rgb(0 0 0 / 7%) !important; }
+  .member-card:hover { box-shadow: 0 3px 10px rgb(0 0 0 / 11%) !important; }
+  .member-card__name { font-size: .8rem !important; }
+  .member-card__email, .member-card__discord-heading strong, .member-card__discord-state { font-size: .65rem !important; }
+  .member-admin__workspace { display: grid !important; gap: .7rem !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .member-admin__workspace .action-card { box-shadow: 0 1px 3px rgb(0 0 0 / 6%) !important; }
+  .member-admin__workspace .workflow-role-admin { grid-column: 1 / -1 !important; }
+  .action-card > summary { min-height: 3.55rem !important; padding: .55rem .65rem !important; }
+  .action-card__summary-copy strong { font-size: .8rem !important; }
+  .action-card__summary-status { flex-shrink: 0; white-space: nowrap; }
+  .action-card__step { background: color-mix(in srgb, var(--accent-primary) 14%, transparent) !important; border: 1px solid color-mix(in srgb, var(--accent-primary) 24%, var(--border-default)) !important; color: var(--accent-primary) !important; }
+  @media (max-width: 760px) {
+    .member-admin__header { align-items: flex-start !important; padding: 1rem !important; }
+    .member-admin__header h1 { font-size: 1.42rem !important; line-break: strict; }
+    .member-admin__workspace { grid-template-columns: 1fr !important; }
+    .member-admin__workspace .workflow-role-admin { grid-column: auto !important; }
+  }
+</style>
+
+<style is:global>
+  /* 権限管理の最終レイアウト調整。情報量を保ちつつ、操作面を近づける。 */
+  html:has(.member-admin) {
+    --permissions-panel: color-mix(in srgb, var(--background-primary) 92%, var(--background-secondary));
+    --permissions-panel-hover: color-mix(in srgb, var(--background-secondary) 72%, var(--background-primary));
+    --permissions-line: color-mix(in srgb, var(--border-default) 78%, transparent);
+  }
+
+  .member-admin__header {
+    align-items: center !important;
+    border-left: 3px solid var(--accent-primary) !important;
+    border-top: 1px solid var(--border-default) !important;
+    gap: 1.25rem !important;
+    padding: 1.15rem 1.25rem 1.05rem !important;
+  }
+
+  .member-admin__header h1 {
+    letter-spacing: -.035em !important;
+    line-height: 1.16 !important;
+  }
+
+  .member-admin__header-meta {
+    min-width: 11rem;
+  }
+
+  .member-admin__self-discord {
+    background: var(--accent-primary) !important;
+    border-color: var(--accent-primary) !important;
+    color: var(--on-accent, #fff) !important;
+  }
+
+  .member-admin__self-discord:hover {
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+  }
+
+  .member-admin__summary {
+    background: var(--permissions-panel) !important;
+    border: 1px solid var(--permissions-line) !important;
+    border-radius: .45rem !important;
+    gap: 0 !important;
+    overflow: hidden;
+  }
+
+  .summary-card {
+    background: transparent !important;
+    border-right-color: var(--permissions-line) !important;
+    padding: .8rem .95rem !important;
+  }
+
+  .summary-card strong {
+    font-size: 1.45rem !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .member-admin__members,
+  .member-admin__tools {
+    background: var(--permissions-panel) !important;
+    border-color: var(--permissions-line) !important;
+  }
+
+  .member-admin__section-heading {
+    border-bottom-color: var(--permissions-line) !important;
+  }
+
+  .member-toolbar {
+    background: color-mix(in srgb, var(--background-primary) 68%, var(--background-secondary)) !important;
+    border: 1px solid var(--permissions-line) !important;
+    border-radius: .4rem !important;
+    margin-bottom: .7rem !important;
+    padding: .55rem !important;
+  }
+
+  .member-toolbar__summary {
+    color: var(--text-secondary) !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .member-card {
+    background: var(--background-primary) !important;
+    border-color: var(--permissions-line) !important;
+    border-top-color: color-mix(in srgb, var(--accent-primary) 28%, var(--permissions-line)) !important;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 7%) !important;
+  }
+
+  .member-card:hover {
+    background: var(--permissions-panel-hover) !important;
+    border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--permissions-line)) !important;
+    box-shadow: 0 3px 10px rgb(0 0 0 / 11%) !important;
+  }
+
+  .member-card__name {
+    font-size: .8rem !important;
+  }
+
+  .member-card__email,
+  .member-card__discord-heading strong,
+  .member-card__discord-state {
+    font-size: .65rem !important;
+  }
+
+  .member-card__role {
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent) !important;
+    border-color: color-mix(in srgb, var(--accent-primary) 34%, var(--permissions-line)) !important;
+  }
+
+  .member-admin__workspace {
+    display: grid !important;
+    gap: .7rem !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .member-admin__workspace .action-card {
+    background: var(--background-primary) !important;
+    border-color: var(--permissions-line) !important;
+    border-top-color: color-mix(in srgb, var(--accent-primary) 62%, var(--permissions-line)) !important;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 6%) !important;
+  }
+
+  .member-admin__workspace .action-card:hover,
+  .member-admin__workspace .action-card[open] {
+    background: var(--permissions-panel-hover) !important;
+    border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--permissions-line)) !important;
+  }
+
+  .member-admin__workspace .workflow-role-admin {
+    grid-column: 1 / -1 !important;
+  }
+
+  .action-card > summary {
+    min-height: 3.55rem !important;
+    padding: .55rem .65rem !important;
+  }
+
+  .action-card__summary-copy strong {
+    font-size: .8rem !important;
+  }
+
+  .action-card__step {
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 24%, var(--permissions-line)) !important;
+    color: var(--accent-primary) !important;
+  }
+
+  .member-admin :is(button, input, select, summary, a) {
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  }
+
+  @media (max-width: 760px) {
+    .member-admin__header {
+      align-items: flex-start !important;
+      padding: 1rem !important;
+    }
+
+    .member-admin__header h1 {
+      font-size: 1.42rem !important;
+      line-break: strict;
+    }
+
+    .member-admin__header-meta {
+      min-width: 0;
+    }
+
+    .member-admin__workspace {
+      grid-template-columns: 1fr !important;
+    }
+
+    .member-admin__workspace .workflow-role-admin {
+      grid-column: auto !important;
+    }
+  }
+</style>
+
 <style is:global>
   /* Refero Styles の Apple 系トークンを、権限管理に適用する最終デザインレイヤー。
    * 既存のDOM・API・操作は変えず、余白・階層・コントラストだけを整える。 */
@@ -3475,5 +3691,47 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     .member-card {
       grid-template-areas: "top actions" "access access" "discord discord" !important;
     }
+  }
+</style>
+
+<style is="global">
+  /* 最終オーバーライド: 画面幅に応じて操作カードを整理し、権限管理を読みやすく保つ。 */
+  .member-admin__header {
+    align-items: center !important;
+    border-left: 3px solid var(--accent-primary) !important;
+    border-top: 1px solid var(--border-default) !important;
+    gap: 1.25rem !important;
+    padding: 1.15rem 1.25rem 1.05rem !important;
+  }
+  .member-admin__header h1 { letter-spacing: -.035em !important; line-height: 1.16 !important; }
+  .member-admin__self-discord { background: var(--accent-primary) !important; border-color: var(--accent-primary) !important; color: var(--on-accent, #fff) !important; }
+  .member-admin__self-discord:hover { background: var(--accent-hover) !important; border-color: var(--accent-hover) !important; }
+  .member-admin__summary {
+    background: color-mix(in srgb, var(--background-primary) 92%, var(--background-secondary)) !important;
+    border: 1px solid color-mix(in srgb, var(--border-default) 78%, transparent) !important;
+    border-radius: .45rem !important;
+    gap: 0 !important;
+    overflow: hidden;
+  }
+  .summary-card { background: transparent !important; padding: .8rem .95rem !important; }
+  .summary-card strong { font-size: 1.45rem !important; font-variant-numeric: tabular-nums; }
+  .member-admin__members, .member-admin__tools { background: var(--background-secondary) !important; border-color: color-mix(in srgb, var(--border-default) 78%, transparent) !important; }
+  .member-toolbar { background: var(--background-primary) !important; border: 1px solid var(--border-default) !important; border-radius: .4rem !important; margin-bottom: .7rem !important; padding: .55rem !important; }
+  .member-toolbar__summary { font-variant-numeric: tabular-nums; }
+  .member-card { box-shadow: 0 1px 3px rgb(0 0 0 / 7%) !important; }
+  .member-card:hover { box-shadow: 0 3px 10px rgb(0 0 0 / 11%) !important; }
+  .member-card__name { font-size: .8rem !important; }
+  .member-card__email, .member-card__discord-heading strong, .member-card__discord-state { font-size: .65rem !important; }
+  .member-admin__workspace { display: grid !important; gap: .7rem !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .member-admin__workspace .action-card { box-shadow: 0 1px 3px rgb(0 0 0 / 6%) !important; }
+  .member-admin__workspace .workflow-role-admin { grid-column: 1 / -1 !important; }
+  .action-card > summary { min-height: 3.55rem !important; padding: .55rem .65rem !important; }
+  .action-card__summary-copy strong { font-size: .8rem !important; }
+  .action-card__step { background: color-mix(in srgb, var(--accent-primary) 14%, transparent) !important; border: 1px solid color-mix(in srgb, var(--accent-primary) 24%, var(--border-default)) !important; color: var(--accent-primary) !important; }
+  @media (max-width: 760px) {
+    .member-admin__header { align-items: flex-start !important; padding: 1rem !important; }
+    .member-admin__header h1 { font-size: 1.42rem !important; line-break: strict; }
+    .member-admin__workspace { grid-template-columns: 1fr !important; }
+    .member-admin__workspace .workflow-role-admin { grid-column: auto !important; }
   }
 </style>
