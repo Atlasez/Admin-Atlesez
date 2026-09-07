@@ -4,9 +4,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 
 <AdminLayout title="作業の進め方" description="アトラス運営者向けの統合マニュアル">
   <main class="guide" id="main">
-    <header class="guide-heading"><h1>アトラス運営用ガイド</h1></header>
+    <header class="guide-heading"><div class="guide-breadcrumb"><a href="/admin/atlas/">運営サイト</a><span aria-hidden="true">›</span><span>作業の進め方</span></div><div class="guide-heading-row"><div><p class="guide-kicker">ATLASEZ / GUIDE</p><h1>作業の進め方</h1><p class="guide-subtitle">記事・予定・外部ツールを迷わず使うための運営用マニュアル</p></div><a class="guide-primary-action" href="#start">まず読む <span aria-hidden="true">→</span></a></div></header>
+    <section class="guide-quick-start" aria-label="まず確認すること"><div class="quick-start-heading"><span class="guide-kicker">QUICK START</span><h2>最初に確認する3つ</h2><p>参加直後、記事作業中、困ったときの入口をまとめています。</p></div><div class="quick-start-cards"><a class="quick-card" href="#start"><span class="quick-number">01</span><span><strong>参加後の準備</strong><small>Discord・Drive・担当分野を確認</small></span><span class="quick-arrow" aria-hidden="true">→</span></a><a class="quick-card" href="#flow"><span class="quick-number">02</span><span><strong>記事を進める</strong><small>下書きから公開までの流れ</small></span><span class="quick-arrow" aria-hidden="true">→</span></a><a class="quick-card" href="#links"><span class="quick-number">03</span><span><strong>迷ったとき</strong><small>関連画面と連絡先を確認</small></span><span class="quick-arrow" aria-hidden="true">→</span></a></div></section>
     <div class="guide-grid">
-      <aside aria-label="ガイドの目次"><strong>目次</strong><a href="#start">はじめに</a><a href="#vision">コンセプト・方針</a><a href="#scope">対象分野</a><a href="#flow">役割と作業の流れ</a><a href="#sessions">同時作業会</a><a href="#discord">Discord</a><a href="#drive">Google Drive</a><a href="#legacy-sites">旧Google Sites方式</a><a href="#math">LaTeX・MathJax</a><a href="#links">リンク集</a></aside>
+      <aside class="guide-sidebar" aria-label="ガイドの目次"><div class="guide-search"><label for="guide-search-input">このページを検索</label><div><span aria-hidden="true">⌕</span><input id="guide-search-input" type="search" placeholder="キーワードを入力" autocomplete="off" /></div></div><div class="guide-toc-heading"><strong>目次</strong><span data-guide-count>10項目</span></div><nav class="guide-toc" data-guide-toc><a href="#start">はじめに</a><a href="#vision">コンセプト・方針</a><a href="#scope">対象分野</a><a href="#flow">役割と作業の流れ</a><a href="#sessions">同時作業会</a><a href="#discord">Discord</a><a href="#drive">Google Drive</a><a href="#legacy-sites">旧Google Sites方式</a><a href="#math">LaTeX・MathJax</a><a href="#links">リンク集</a></nav><p class="guide-sidebar-note">現在の運営画面・Discord・Google Driveの案内が、このページより新しい場合はそちらを優先してください。</p></aside>
       <article>
         <section id="start"><h2>はじめに：参加後にすること</h2><ol><li><a href="https://discord.gg/ppaHTKtbek" target="_blank" rel="noreferrer">Discord</a>へ参加し、サーバーの表示名を本名フルネームに設定します。通称名・日常的に使う名前・文化的なニックネームも使えます。姓と名の間は半角スペース、必要なら末尾に読み仮名を付けてください。</li><li>「#はじめに」の案内に従い、運営内運営による確認後に「運営メンバー」ロールを受け取ります。ロール付与後に全チャンネルを閲覧できます。</li><li>「#ロール付与」と所属校向けの詳細ロールから、自分に合うロールを設定します。</li><li>「#自己紹介」で簡単な自己紹介をします。加入手続きが完了して初めて正式参加です。</li><li><a href="https://drive.google.com/drive/folders/1UQAdXMwzOBilPx7JLtTj2-711bIYTu61" target="_blank" rel="noreferrer">Google Drive</a>で「※資料」フォルダと担当分野のフォルダが共有されているか確認します。見られない場合は運営管理者へ連絡してください。</li><li>この運営用サイトをGoogleアカウントで開き、記事編集で自分の担当分野が正しく表示されるか確認します。</li></ol><p class="notice">Discord、Google Drive、この運営用サイトはブックマークしておくことを推奨します。</p></section>
 
@@ -32,6 +33,414 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   </main>
 </AdminLayout>
 
+<script is:inline>
+  const guideSearch = document.querySelector('#guide-search-input');
+  const guideSections = [...document.querySelectorAll('.guide-grid article > section')];
+  const guideLinks = [...document.querySelectorAll('[data-guide-toc] a')];
+  const guideCount = document.querySelector('[data-guide-count]');
+  const normalize = (value) => value.toLocaleLowerCase().replace(/\s+/g, '');
+  const updateGuideFilter = () => {
+    const query = normalize(guideSearch?.value ?? '');
+    let visible = 0;
+    guideSections.forEach((section) => {
+      const match = !query || normalize(section.textContent ?? '').includes(query);
+      section.hidden = !match;
+      if (match) visible += 1;
+    });
+    if (guideCount) guideCount.textContent = query ? `${visible}項目` : `${guideSections.length}項目`;
+  };
+  guideSearch?.addEventListener('input', updateGuideFilter);
+  const observer = new IntersectionObserver((entries) => {
+    const current = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (!current) return;
+    guideLinks.forEach((link) => link.classList.toggle('is-active', link.getAttribute('href') === `#${current.target.id}`));
+  }, { rootMargin: '-15% 0px -70% 0px', threshold: [0, .2, .6] });
+  guideSections.forEach((section) => observer.observe(section));
+</script>
+
 <style>
   .guide { --accent:var(--accent-primary); --border:var(--border-default); --surface:var(--background-primary); --alt:var(--background-secondary); color:var(--text-primary); margin:0 auto; max-width:1100px; padding:0 1.25rem 4rem; }.guide-heading { border-bottom:1px solid var(--border); padding:2rem 0 1.25rem; }.guide-heading p { color:var(--accent); font-size:.78rem; font-weight:800; letter-spacing:.08em; margin:0; }.guide-heading h1 { margin:.3rem 0; }.guide-heading span { color:var(--text-secondary); }.guide-grid { display:grid; gap:2.5rem; grid-template-columns:13rem minmax(0,1fr); padding-top:1.6rem; }.guide-grid aside { align-self:start; border-top:2px solid var(--accent); display:grid; gap:.15rem; padding-top:.6rem; position:sticky; top:1rem; }.guide-grid aside strong { margin-bottom:.35rem; }.guide-grid aside a { color:var(--text-primary); font-size:.88rem; padding:.3rem 0; }.guide-grid article { display:grid; gap:2.2rem; }.guide-grid section { border-top:1px solid var(--border); padding-top:1rem; scroll-margin-top:1rem; }.guide-grid h2 { margin:0 0 .7rem; }.guide-grid h3 { font-size:1rem; margin:1.25rem 0 .4rem; }.guide-grid li,.guide-grid p,.guide-grid dd { line-height:1.8; }.lead { color:var(--accent); font-size:1.12rem; font-weight:800; }.notice { background:var(--alt); border-left:3px solid var(--accent); padding:.65rem .8rem; }.flow { align-items:center; display:flex; flex-wrap:wrap; gap:.5rem; margin:.8rem 0 1rem; }.flow b { background:var(--alt); border:1px solid var(--border); padding:.35rem .55rem; }.flow span { color:var(--accent); } dl { border-top:1px solid var(--border); margin:0; } dt { background:var(--alt); border-bottom:1px solid var(--border); font-weight:800; padding:.55rem .7rem; } dd { border-bottom:1px solid var(--border); margin:0; padding:.55rem .7rem; } code { background:var(--alt); border:1px solid var(--border); overflow-wrap:anywhere; padding:.05rem .2rem; } @media(max-width:760px){.guide-grid{grid-template-columns:1fr}.guide-grid aside{position:static}.guide-heading{padding-top:1.4rem}}
+</style>
+
+<style is:global>
+  .guide {
+    max-width: 1180px;
+    padding: 0 1.25rem 3rem;
+  }
+
+  .guide .guide-heading {
+    border-bottom: 1px solid var(--border-default);
+    padding: 0.6rem 0 1rem;
+  }
+
+  .guide .guide-breadcrumb {
+    align-items: center;
+    display: flex;
+    gap: 0.45rem;
+    margin-bottom: 1rem;
+  }
+
+  .guide .guide-breadcrumb,
+  .guide .guide-breadcrumb span {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+  }
+
+  .guide .guide-breadcrumb a {
+    color: var(--accent-primary);
+    text-decoration: none;
+  }
+
+  .guide .guide-heading-row {
+    align-items: flex-end;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+  }
+
+  .guide .guide-kicker {
+    color: var(--accent-primary);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin: 0;
+  }
+
+  .guide .guide-heading h1 {
+    font-size: clamp(1.6rem, 3vw, 2.25rem);
+    line-height: 1.15;
+    margin: 0.25rem 0 0.2rem;
+  }
+
+  .guide .guide-heading .guide-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    margin: 0;
+  }
+
+  .guide .guide-primary-action {
+    align-items: center;
+    background: var(--accent-primary);
+    border-radius: 0.35rem;
+    color: #fff;
+    display: inline-flex;
+    font-weight: 800;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0 0.8rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .guide .guide-primary-action:hover {
+    filter: brightness(1.08);
+  }
+
+  .guide .guide-quick-start {
+    border-bottom: 1px solid var(--border-default);
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(13rem, 0.75fr) minmax(0, 2fr);
+    padding: 1rem 0 1.1rem;
+  }
+
+  .guide .quick-start-heading {
+    padding: 0.4rem 0;
+  }
+
+  .guide .quick-start-heading h2 {
+    font-size: 1rem;
+    margin: 0.25rem 0;
+  }
+
+  .guide .quick-start-heading p {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .guide .quick-start-cards {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .guide .quick-card {
+    align-items: center;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.4rem;
+    color: var(--text-primary);
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: auto 1fr auto;
+    min-height: 4.4rem;
+    padding: 0.65rem 0.7rem;
+    text-decoration: none;
+  }
+
+  .guide .quick-card:hover {
+    background: color-mix(in srgb, var(--accent-primary) 7%, var(--background-secondary));
+    border-color: var(--accent-primary);
+  }
+
+  .guide .quick-number {
+    color: var(--accent-primary);
+    font: 800 0.72rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .guide .quick-card strong,
+  .guide .quick-card small {
+    display: block;
+  }
+
+  .guide .quick-card strong {
+    font-size: 0.8rem;
+  }
+
+  .guide .quick-card small {
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    line-height: 1.35;
+    margin-top: 0.15rem;
+  }
+
+  .guide .quick-arrow {
+    color: var(--accent-primary);
+    font-size: 1rem;
+  }
+
+  .guide .guide-grid {
+    gap: 1.4rem;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    padding-top: 1rem;
+  }
+
+  .guide .guide-sidebar {
+    align-self: start;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.45rem;
+    border-top: 1px solid var(--border-default);
+    padding: 0.75rem;
+    position: sticky;
+    top: 1rem;
+  }
+
+  .guide .guide-search label {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    margin-bottom: 0.35rem;
+  }
+
+  .guide .guide-search > div {
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.35rem;
+    display: flex;
+    gap: 0.35rem;
+    padding: 0 0.5rem;
+  }
+
+  .guide .guide-search span {
+    color: var(--accent-primary);
+    font-size: 1rem;
+  }
+
+  .guide .guide-search input {
+    background: transparent;
+    border: 0;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.72rem;
+    height: 2.05rem;
+    min-width: 0;
+    outline: 0;
+    width: 100%;
+  }
+
+  .guide .guide-search input:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent-primary) 65%, transparent);
+    outline-offset: 2px;
+  }
+
+  .guide .guide-toc-heading {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin: 1rem 0 0.35rem;
+  }
+
+  .guide .guide-toc-heading strong {
+    font-size: 0.8rem;
+  }
+
+  .guide .guide-toc-heading span {
+    color: var(--text-secondary);
+    font-size: 0.66rem;
+  }
+
+  .guide .guide-toc {
+    display: grid;
+    gap: 0.12rem;
+  }
+
+  .guide .guide-toc a {
+    border-radius: 0.25rem;
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    padding: 0.35rem 0.45rem 0.35rem 0.65rem;
+    position: relative;
+    text-decoration: none;
+  }
+
+  .guide .guide-toc a::before {
+    background: var(--accent-primary);
+    border-radius: 3px;
+    content: "";
+    height: 0;
+    left: 0.25rem;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: height 140ms ease;
+    width: 3px;
+  }
+
+  .guide .guide-toc a:hover,
+  .guide .guide-toc a.is-active {
+    background: color-mix(in srgb, var(--accent-primary) 9%, transparent);
+    color: var(--text-primary);
+  }
+
+  .guide .guide-toc a.is-active::before {
+    height: 1rem;
+  }
+
+  .guide .guide-sidebar-note {
+    border-top: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+    line-height: 1.5;
+    margin: 1rem 0 0;
+    padding-top: 0.75rem;
+  }
+
+  .guide .guide-grid article {
+    display: grid;
+    gap: 1.2rem;
+  }
+
+  .guide .guide-grid section {
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.45rem;
+    padding: 1rem 1.1rem 1.05rem;
+    scroll-margin-top: 1rem;
+  }
+
+  .guide .guide-grid section > h2 {
+    align-items: baseline;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    font-size: 1.12rem;
+    gap: 0.55rem;
+    margin: 0 0 0.65rem;
+    padding-bottom: 0.55rem;
+  }
+
+  .guide .guide-grid article {
+    counter-reset: guide-section;
+  }
+
+  .guide .guide-grid section > h2::before {
+    color: var(--accent-primary);
+    content: counter(guide-section, decimal-leading-zero);
+    counter-increment: guide-section;
+    font: 800 0.7rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .guide .guide-grid section[hidden] {
+    display: none;
+  }
+
+  .guide .guide-grid h3 {
+    font-size: 0.92rem;
+    margin-top: 1rem;
+  }
+
+  .guide .guide-grid li,
+  .guide .guide-grid p,
+  .guide .guide-grid dd {
+    line-height: 1.65;
+  }
+
+  .guide .guide-grid .notice {
+    background: color-mix(in srgb, var(--accent-primary) 7%, var(--background-secondary));
+    border-left: 3px solid var(--accent-primary);
+  }
+
+  .guide .guide-grid .flow {
+    gap: 0.35rem;
+  }
+
+  .guide .guide-grid .flow b {
+    background: var(--background-secondary);
+    border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-default));
+    font-size: 0.75rem;
+    padding: 0.3rem 0.45rem;
+  }
+
+  @media (max-width: 880px) {
+    .guide .guide-quick-start {
+      grid-template-columns: 1fr;
+    }
+
+    .guide .guide-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .guide .guide-sidebar {
+      position: static;
+    }
+
+    .guide .guide-toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.2rem;
+    }
+
+    .guide .guide-toc a {
+      background: var(--background-primary);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .guide {
+      padding-inline: 0.85rem;
+    }
+
+    .guide .guide-heading-row {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .guide .guide-primary-action {
+      align-self: flex-start;
+    }
+
+    .guide .quick-start-cards {
+      grid-template-columns: 1fr;
+    }
+
+    .guide .guide-grid section {
+      padding: 0.8rem 0.75rem;
+    }
+  }
 </style>
