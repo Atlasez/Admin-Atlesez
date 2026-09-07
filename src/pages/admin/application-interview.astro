@@ -6,7 +6,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   <main class="interview-page" data-interview-page>
     <a class="back-link" data-back-link href="/admin/applications/">← 応募一覧へ戻る</a>
     <header>
-      <p class="eyebrow">INTERVIEW REVIEW</p>
       <h1>面談メモ</h1>
       <p class="lead">面談内容と選考結果を記録します。応募者には表示されません。</p>
     </header>
@@ -17,15 +16,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <output class="notice" data-notice aria-live="polite"></output>
     <form class="review-form" data-review-form>
       <section class="form-section" aria-labelledby="meeting-title">
-        <div class="section-heading"><div><p class="eyebrow">MEETING</p><h2 id="meeting-title">面談情報</h2></div><span data-meeting-status>—</span></div>
+        <div class="section-heading"><div><h2 id="meeting-title">面談情報</h2></div><span data-meeting-status>—</span></div>
         <dl class="meeting-summary"><div><dt>日時</dt><dd data-meeting-date>未設定</dd></div><div><dt>形式</dt><dd data-meeting-format>未設定</dd></div><div><dt>Zoom</dt><dd data-meeting-zoom>—</dd></div></dl>
       </section>
       <section class="form-section" aria-labelledby="notes-title">
-        <div class="section-heading"><div><p class="eyebrow">PRIVATE NOTE</p><h2 id="notes-title">面談の内容</h2></div><span>運営内メモ</span></div>
+        <div class="section-heading"><div><h2 id="notes-title">面談の内容</h2></div><span>運営内メモ</span></div>
         <label class="field field--wide">自由メモ<textarea data-notes maxlength="20000" placeholder="面談で確認したこと、本人の希望、気になった点などを入力"></textarea><small>応募者には公開されません。</small></label>
       </section>
       <section class="form-section" aria-labelledby="decision-title">
-        <div class="section-heading"><div><p class="eyebrow">DECISION</p><h2 id="decision-title">担当と採否</h2></div><span>採用確定時に担当を反映</span></div>
+        <div class="section-heading"><div><h2 id="decision-title">担当と採否</h2></div><span>採用確定時に担当を反映</span></div>
         <fieldset class="field-group"><legend>担当分野</legend><p class="field-hint">面談後に担当する分野を選択してください（複数可）。</p><div class="subject-options" data-subject-options><span class="muted">読み込み中…</span></div></fieldset>
         <label class="field">採否<select data-decision><option value="pending">未判定</option><option value="hold">保留</option><option value="accepted">採用</option><option value="rejected">見送り</option></select></label>
         <label class="confirm-check" data-confirm-wrap hidden><input type="checkbox" data-confirm-accept /> <span>採用を確定し、選択した担当分野を応募者の権限へ反映することを確認しました。</span></label>

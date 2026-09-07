@@ -4,7 +4,7 @@ import AdminLayout from "../layouts/AdminLayout.astro";
 interface Props {
   projectSlug: string;
   title: string;
-  eyebrow: string;
+  eyebrow?: string;
   description: string;
 }
 
@@ -15,7 +15,7 @@ const { projectSlug, title, eyebrow, description } = Astro.props;
   <main class="project-operations-home" data-project-home={projectSlug}>
     <header class="project-heading">
       <div>
-        <p>{eyebrow}</p>
+        {eyebrow && <p>{eyebrow}</p>}
         <h1>{title}運営</h1>
         <span>{description}</span>
       </div>
