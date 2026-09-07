@@ -409,13 +409,15 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     }
 
     .guide .guide-toc {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.2rem;
+      display: grid;
+      gap: 0 1rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .guide .guide-toc a {
       background: var(--background-primary);
+      border-bottom: 1px solid var(--border-default);
+      padding: 0.5rem 0.2rem;
     }
   }
 
@@ -439,6 +441,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 
     .guide .guide-grid section {
       padding: 0.8rem 0.75rem;
+    }
+
+    .guide .guide-toc {
+      grid-template-columns: 1fr;
     }
   }
 
