@@ -435,4 +435,79 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       padding: 0.8rem 0.75rem;
     }
   }
+
+  /* 案内ページはダッシュボードではなく、通常の案内文書として見せる。 */
+  .guide .guide-primary-action {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--accent-primary);
+  }
+
+  .guide .guide-primary-action:hover {
+    background: var(--background-secondary);
+    filter: none;
+  }
+
+  .guide .guide-heading .guide-subtitle {
+    color: var(--text-secondary) !important;
+  }
+
+  .guide .guide-quick-start {
+    align-items: center;
+    grid-template-columns: minmax(13rem, 0.75fr) minmax(0, 2fr);
+  }
+
+  .guide .quick-start-cards {
+    gap: 0;
+  }
+
+  .guide .quick-card {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border-default);
+    border-radius: 0;
+    min-height: 3.3rem;
+    padding: 0.55rem 0.35rem;
+  }
+
+  .guide .quick-card:first-child {
+    border-top: 1px solid var(--border-default);
+  }
+
+  .guide .quick-card:hover {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+  }
+
+  .guide .quick-number,
+  .guide .quick-arrow {
+    color: var(--text-secondary);
+  }
+
+  .guide .guide-sidebar {
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--border-default);
+    border-radius: 0;
+    padding: 0.75rem 0;
+  }
+
+  .guide .guide-grid section {
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--border-default);
+    border-radius: 0;
+    padding: 1.1rem 0 1.25rem;
+  }
+
+  .guide .guide-grid section > h2 {
+    border-bottom: 0;
+    font-size: 1.1rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0;
+  }
+
+  .guide .guide-grid section > h2::before {
+    color: var(--text-secondary);
+  }
 </style>
