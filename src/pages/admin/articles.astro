@@ -890,25 +890,34 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         catalogReady = true;
       }
     };
-    const load = async () => {
-      try {
-        const includeArchived = archive.value !== "active";
-        const response = await fetch(`/api/admin/editor/documents${includeArchived ? "?includeArchived=1" : ""}`, { credentials: "same-origin", cache: "no-store" });
-        const catalogPromise = loadCatalog();
-        const contentType = response.headers.get("content-type") ?? "";
-        const data = contentType.includes("application/json") ? await response.json() as { documents?: Article[]; scope?: ArticleScope; error?: string } : {};
-        if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
-        items = data.documents ?? [];
-        scopeEmail = data.scope?.email ?? "";
-        if (data.scope) applySubjectScope(data.scope);
-        // Render the editorial rows immediately. The remote catalog is an
-        // enrichment step and must not block the first useful screen.
-        render();
-        await catalogPromise;
-        render();
-      } catch (error) {
-        list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";
-      }
+    let loadRequest: Promise<void> | null = null;
+    const load = () => {
+      // pageshow and visibility events can arrive together on a cold load.
+      // Share the in-flight request so the same list is not fetched twice.
+      if (loadRequest) return loadRequest;
+      const request = (async () => {
+        try {
+          const includeArchived = archive.value !== "active";
+          const response = await fetch(`/api/admin/editor/documents${includeArchived ? "?includeArchived=1" : ""}`, { credentials: "same-origin", cache: "no-store" });
+          const catalogPromise = loadCatalog();
+          const contentType = response.headers.get("content-type") ?? "";
+          const data = contentType.includes("application/json") ? await response.json() as { documents?: Article[]; scope?: ArticleScope; error?: string } : {};
+          if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
+          items = data.documents ?? [];
+          scopeEmail = data.scope?.email ?? "";
+          if (data.scope) applySubjectScope(data.scope);
+          // Render the editorial rows immediately. The remote catalog is an
+          // enrichment step and must not block the first useful screen.
+          render();
+          await catalogPromise;
+          render();
+        } catch (error) {
+          list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";
+        }
+      })();
+      const wrapped = request.finally(() => { if (loadRequest === wrapped) loadRequest = null; });
+      loadRequest = wrapped;
+      return wrapped;
     };
     const setCatalogFeedback = (message: string, isError = false) => {
       catalogFeedback.textContent = message;
