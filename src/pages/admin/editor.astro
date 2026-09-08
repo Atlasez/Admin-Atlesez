@@ -4055,11 +4055,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // Render the editor list from the first response without waiting for the
       // public catalog (which can be considerably slower on a cold edge).  The
       // catalog then refreshes only the source/outline enrichment in place.
-      populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline();
+      // Starting this request before the outline work is important: rendering
+      // hundreds of planned entries can otherwise delay discovery of the fetch.
       publicCatalogReady = loadPublicCatalog().then(() => {
-        populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); fillOutlineSubjects(); renderAtlasOutline();
+        populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles();
+        window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       });
       void publicCatalogReady.catch(() => undefined);
+      populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments();
+      // Keep the first response path responsive; outline enrichment is useful
+      // but not required to open and edit the selected article.
+      window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       void loadPublicationIntegration();
     };
     const openDocument = async (id: string) => {
