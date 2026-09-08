@@ -275,6 +275,22 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const managesCurrentProject = isManager || managerProjects.includes(state.slug) || (state.slug === 'seminar-platform' && managerProjects.includes('semi-platform'));
       document.querySelectorAll<HTMLElement>('[data-project-manager-only]').forEach((item) => { item.hidden = !managesCurrentProject || item.dataset.adminSite !== state.site; });
     };
+    type AuthStatus = { email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
+    type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
+    let authStatusRequest: Promise<AuthStatusResult> | null = null;
+    const fetchAuthStatus = () => {
+      if (!authStatusRequest) {
+        authStatusRequest = fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' })
+          .then(async (response) => {
+            const contentType = response.headers.get('content-type') ?? '';
+            const data = contentType.includes('application/json') ? await response.json() as AuthStatus : {};
+            return { ok: response.ok, status: response.status, contentType, data };
+          })
+          .catch(() => ({ ok: false, status: 0, contentType: '', data: {} }))
+          .finally(() => { authStatusRequest = null; });
+      }
+      return authStatusRequest;
+    };
     const refreshManagerVisibility = async () => {
       // 遷移後も保持されるナビの権限表示を、毎回サーバーの最新状態へ戻す。
       // 取得に失敗したときは安全側（非表示）にし、次の再試行で復元する。
@@ -282,10 +298,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.documentElement.dataset.adminNavRequest = requestId;
       applyManagerVisibility(false);
       try {
-        const response = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
-        const contentType = response.headers.get('content-type') ?? '';
-        if (requestId !== document.documentElement.dataset.adminNavRequest || !contentType.includes('application/json') || !response.ok) return;
-        const status = await response.json() as { isManager?: boolean; managerProjects?: string[] };
+        const response = await fetchAuthStatus();
+        if (requestId !== document.documentElement.dataset.adminNavRequest || !response.contentType.includes('application/json') || !response.ok) return;
+        const status = response.data;
         if (requestId !== document.documentElement.dataset.adminNavRequest) return;
         applyManagerVisibility(status.isManager === true, status.managerProjects ?? []);
       } catch {
@@ -342,15 +357,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       if (cachedProfile) applyProfile(cachedProfile);
       const loadAccount = async () => {
         try {
-          const statusResponse = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
+          const statusResponse = await fetchAuthStatus();
           if (statusResponse.status === 401) {
             const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
             window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
             return;
           }
-          const statusType = statusResponse.headers.get('content-type') ?? '';
-          if (!statusType.includes('application/json')) throw new Error('認証状態を確認できません。ページを再読み込みしてください。');
-          const status = await statusResponse.json() as { email?: string; isManager?: boolean; error?: string };
+          if (!statusResponse.contentType.includes('application/json')) throw new Error('認証状態を確認できません。ページを再読み込みしてください。');
+          const status = statusResponse.data;
           if (!statusResponse.ok || !status.email) throw new Error(status.error ?? 'ログイン情報を取得できませんでした');
           if (email) { email.title = status.email; }
           const cachedForAccount = cachedProfile?.email === status.email ? cachedProfile : null;
