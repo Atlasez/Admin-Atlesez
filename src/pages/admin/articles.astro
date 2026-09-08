@@ -139,6 +139,10 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     </section>
     <p class="catalog-feedback" data-catalog-feedback role="status" aria-live="polite"></p>
     <section class="list" data-list>原稿一覧を取得しています…</section>
+    <div class="article-pagination" data-article-pagination hidden>
+      <span data-article-pagination-status aria-live="polite"></span>
+      <button type="button" class="article-action" data-article-load-more>次の原稿を読み込む</button>
+    </div>
     <script is:inline type="application/json" data-public-articles set:html={publicArticlesPayload}></script>
   </main>
 </AdminLayout>
@@ -177,6 +181,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     padding: 0.65rem 0.85rem;
     text-decoration: none;
   }
+  .article-pagination { align-items: center; border-top: 1px solid var(--border-default); display: flex; gap: .75rem; justify-content: space-between; margin-top: 1rem; padding-top: .8rem; }
+  .article-pagination[hidden] { display: none; }
+  .article-pagination > span { color: var(--text-secondary); font-size: .76rem; }
+  .article-pagination button { min-height: 2.25rem; }
+  .article-pagination button:disabled { cursor: wait; opacity: .65; }
+  @media (max-width: 640px) { .article-pagination { align-items: stretch; flex-direction: column; } .article-pagination button { width: 100%; } }
   .header-actions {
     align-items: center;
     display: flex;
@@ -622,6 +632,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
+  type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
   type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string};
   type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown};
   type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"};
@@ -647,6 +658,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const catalogDiagnosticsSummary = root.querySelector<HTMLElement>("[data-catalog-diagnostics-summary]")!;
     const catalogDiagnosticsIssues = root.querySelector<HTMLUListElement>("[data-catalog-diagnostics-issues]")!;
     const resetFiltersButton = root.querySelector<HTMLButtonElement>("[data-reset-filters]")!;
+    const pagination = root.querySelector<HTMLElement>("[data-article-pagination]")!;
+    const paginationStatus = root.querySelector<HTMLElement>("[data-article-pagination-status]")!;
+    const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-article-load-more]")!;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
     let catalogSource: "api" | "static" = "static";
@@ -654,6 +668,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
     let scopeEmail = "";
+    let nextCursor: string | null = null;
+    let hasMore = false;
+    let loadedPageCount = 0;
     const filterStorageKey = "atlasez-admin-article-filters";
     const defaultFilterState: ArticleFilterState = { query: "", subject: "all", category: "all", status: "all", publication: "all", management: "all", test: "exclude", workflow: "all", archive: "active" };
 
@@ -850,6 +867,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const updateAction = article.published_at ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(article.id)}&mode=update&from=articles" aria-label="${esc(article.title || "無題の記事")}の${updateActionLabel}" data-update-proposal-state="${updateInProgress ? "in-progress" : "available"}">${updateActionLabel}</a>` : "";
         return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}${article.scheduled_publish_at ? `・公開予約済み ${esc(formatSchedule(article.scheduled_publish_at))}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${formatDate(article.updated_at)}${scheduleSummary}${archiveSummary}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="article-actions"><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${scheduleBadge}${archiveBadge}${isTestTitle(article.title) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み・運営管理中</span>' : ""}</div>${archiveAction}${updateAction}</div></article>`;
       }).join("") : "<p>条件に一致する原稿はありません。</p>";
+      pagination.hidden = !hasMore;
+      paginationStatus.textContent = loadedPageCount ? `${items.length}件を読み込み済み${hasMore ? "・続きがあります" : "・すべて読み込み済み"}` : "";
+      loadMoreButton.disabled = false;
       updateWorkflowButtons();
     };
     const normalizeCatalog = (raw: unknown): PublicArticle[] | null => {
@@ -891,19 +911,35 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }
     };
     let loadRequest: Promise<void> | null = null;
-    const load = () => {
+    const load = (append = false) => {
       // pageshow and visibility events can arrive together on a cold load.
       // Share the in-flight request so the same list is not fetched twice.
       if (loadRequest) return loadRequest;
       const request = (async () => {
         try {
           const includeArchived = archive.value !== "active";
-          const response = await fetch(`/api/admin/editor/documents${includeArchived ? "?includeArchived=1" : ""}`, { credentials: "same-origin", cache: "no-store" });
-          const catalogPromise = loadCatalog();
+          if (!append) {
+            nextCursor = null;
+            hasMore = false;
+            loadedPageCount = 0;
+            items = [];
+          }
+          const params = new URLSearchParams();
+          if (includeArchived) params.set("includeArchived", "1");
+          if (append && nextCursor) params.set("cursor", nextCursor);
+          if (append) params.set("limit", "50");
+          const queryString = params.toString();
+          const endpoint = queryString ? `/api/admin/editor/documents?${queryString}` : "/api/admin/editor/documents";
+          const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store" });
+          const catalogPromise = catalogReady ? Promise.resolve() : loadCatalog();
           const contentType = response.headers.get("content-type") ?? "";
-          const data = contentType.includes("application/json") ? await response.json() as { documents?: Article[]; scope?: ArticleScope; error?: string } : {};
+          const data = contentType.includes("application/json") ? await response.json() as { documents?: Article[]; scope?: ArticleScope; pagination?: ArticlePagination; error?: string } : {};
           if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
-          items = data.documents ?? [];
+          const pageDocuments = data.documents ?? [];
+          items = append ? [...items, ...pageDocuments] : pageDocuments;
+          nextCursor = data.pagination?.nextCursor ?? null;
+          hasMore = Boolean(data.pagination?.hasMore);
+          loadedPageCount += 1;
           scopeEmail = data.scope?.email ?? "";
           if (data.scope) applySubjectScope(data.scope);
           // Render the editorial rows immediately. The remote catalog is an
@@ -1020,6 +1056,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     [query, category, status, publication, test, workflow, archive].forEach((element) => element.addEventListener("input", render));
     archive.addEventListener("change", () => { void load(); });
+    loadMoreButton.addEventListener("click", () => { if (!hasMore || loadMoreButton.disabled) return; loadMoreButton.disabled = true; paginationStatus.textContent = "次の原稿を読み込んでいます…"; void load(true); });
     list.addEventListener("click", async (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-archive-action]");
       if (!button) return;
