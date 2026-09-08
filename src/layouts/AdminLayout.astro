@@ -15,7 +15,12 @@ const { title, description, darkReaderLock = false } = Astro.props;
 <!doctype html>
 <html lang="ja" data-site="atlas">
     <head>
-      <BaseHead title={title} description={description} noindex={true} />
+      <BaseHead
+        title={title}
+        description={description}
+        noindex={true}
+        enableArticleEnhancements={false}
+      />
       {darkReaderLock && <meta name="darkreader-lock" />}
     </head>
   <body>
@@ -23,14 +28,33 @@ const { title, description, darkReaderLock = false } = Astro.props;
     <AdminNav />
     <div class="admin-layout-main"><slot /></div>
     <script>
-      import "../scripts/admin-editor-navigation-guard";
-      import "../scripts/admin-editor-comment-images";
-      import "../scripts/admin-editor-preview-images";
-      import "../scripts/admin-editor-realtime-cursors-yjs";
-      import "../scripts/admin-editor-subject-preview";
-      import "../scripts/admin-editor-math-macros";
-      import "../scripts/admin-editor-collaboration-labels";
+      // Editor-only features are intentionally loaded after the editor route
+      // is present. The article list and operational pages should not pay for
+      // CodeMirror, Yjs, KaTeX authoring, or collaboration observers.
+      const loadEditorFeatures = () => {
+        if (!document.querySelector("[data-editor-workspace]")) return;
+
+        void Promise.all([
+          import("../scripts/admin-editor-navigation-guard"),
+          import("../scripts/admin-editor-comment-images"),
+          import("../scripts/admin-editor-preview-images"),
+          import("../scripts/admin-editor-realtime-cursors-yjs"),
+          import("../scripts/admin-editor-subject-preview"),
+          import("../scripts/admin-editor-math-macros"),
+          import("../scripts/admin-editor-collaboration-labels"),
+        ]);
+
+        if (!document.querySelector('script[data-admin-codemirror]')) {
+          const script = document.createElement("script");
+          script.type = "module";
+          script.src = "/admin-codemirror.js";
+          script.dataset.adminCodemirror = "true";
+          document.head.append(script);
+        }
+      };
+
+      document.addEventListener("astro:page-load", loadEditorFeatures);
+      loadEditorFeatures();
     </script>
-    <script is:inline type="module" src="/admin-codemirror.js"></script>
   </body>
 </html>

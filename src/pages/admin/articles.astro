@@ -650,6 +650,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
     let catalogSource: "api" | "static" = "static";
+    let catalogReady = false;
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
     let scopeEmail = "";
@@ -762,6 +763,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
     const catalogRows = (): CatalogRow[] => {
       const rows: CatalogRow[] = items.map((article) => ({ kind: "editorial", article, publicArticle: publicArticles.find((source) => article.source_article_id === source.articleId || publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`), management: "managed" }));
+      // The document list is useful before the remote catalog responds. Do not
+      // show build-time catalog entries until the current API result is known.
+      if (!catalogReady) return rows;
       const managedKeys = new Set(rows.flatMap((row) => row.publicArticle ? [publicArticleKey(row.publicArticle)] : []));
       for (const publicArticle of publicArticles) {
         const key = publicArticleKey(publicArticle);
@@ -789,7 +793,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const rows = catalogRows();
       const registeredCount = rows.filter((row) => (row.kind === "editorial" && row.publicArticle) || row.kind === "registered").length;
       const unregisteredCount = rows.filter((row) => row.kind === "unregistered").length;
-      catalogSummary.textContent = `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件（${catalogSource === "api" ? "APIカタログ" : "静的データ"}）`;
+      catalogSummary.textContent = catalogReady
+        ? `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件（${catalogSource === "api" ? "APIカタログ" : "静的データ"}）`
+        : "公開記事カタログを確認しています…";
       const filtered = rows.filter((row) => {
         const isUnregistered = row.kind === "unregistered";
         const article = row.kind === "editorial" ? row.article : null;
@@ -880,6 +886,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         publicArticles = [];
         catalogSource = "static";
         setCatalogFeedback(`公開記事カタログAPIに接続できないため、公開記事カタログを表示できません。${error instanceof Error ? `（${error.message}）` : ""}`);
+      } finally {
+        catalogReady = true;
       }
     };
     const load = async () => {
@@ -893,6 +901,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         items = data.documents ?? [];
         scopeEmail = data.scope?.email ?? "";
         if (data.scope) applySubjectScope(data.scope);
+        // Render the editorial rows immediately. The remote catalog is an
+        // enrichment step and must not block the first useful screen.
+        render();
         await catalogPromise;
         render();
       } catch (error) {
