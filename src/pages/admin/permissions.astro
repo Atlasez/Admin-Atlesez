@@ -86,6 +86,16 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         <footer class="member-modal__footer"><output data-member-modal-message aria-live="polite"></output><button type="button" class="member-modal__cancel" data-member-modal-close>閉じる</button><button type="button" class="member-modal__save" data-member-modal-save>保存してDiscordへ同期</button></footer>
       </div>
     </dialog>
+    <dialog class="access-preview-modal" data-access-preview aria-labelledby="access-preview-title">
+      <div class="access-preview-modal__shell">
+        <header class="access-preview-modal__header">
+          <div><p>実効権限</p><h2 id="access-preview-title" data-access-preview-title>アクセス範囲</h2><small data-access-preview-email></small></div>
+          <button type="button" class="member-modal__close" data-access-preview-close aria-label="閉じる">×</button>
+        </header>
+        <div class="access-preview-modal__body" data-access-preview-content></div>
+        <footer class="access-preview-modal__footer"><small>現在の担当・公開フロー設定から計算した表示です。</small><button type="button" class="member-modal__cancel" data-access-preview-close>閉じる</button></footer>
+      </div>
+    </dialog>
   </main>
 </AdminLayout>
 
@@ -98,7 +108,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .workflow-role-admin{border-left:3px solid var(--accent-primary)}.workflow-role-admin small{color:var(--text-secondary);display:block;font-size:.7rem;line-height:1.5;margin-top:.35rem}.workflow-role-list{border-top:1px solid var(--border-default);display:grid;gap:.65rem;grid-column:2/-1;padding-top:.6rem}.workflow-role-summary{color:var(--text-secondary);font-size:.72rem}.workflow-role-summary strong{color:var(--accent-primary)}.workflow-role-group{background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.45rem;padding:.55rem .65rem}.workflow-role-group__heading{align-items:center;display:flex;gap:.5rem;justify-content:space-between}.workflow-role-group__heading h3{font-size:.78rem;margin:0}.workflow-role-group__heading span{color:var(--text-secondary);font-size:.68rem}.workflow-role-assignees{display:flex;flex-wrap:wrap;gap:.35rem}.workflow-role-chip{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);display:inline-flex;gap:.35rem;padding:.35rem .5rem}.workflow-role-chip__identity{display:grid;gap:.08rem}.workflow-role-chip__identity b{font-size:.74rem}.workflow-role-chip__identity small{color:var(--text-secondary);font-size:.64rem;margin:0}.workflow-role-chip button{background:transparent!important;border:0!important;color:var(--accent-primary)!important;min-height:auto!important;padding:.1rem!important}.workflow-role-unassigned{color:var(--text-secondary);font-size:.7rem}.workflow-role-unassigned summary{cursor:pointer;font-weight:800}.workflow-role-unassigned span{display:block;line-height:1.55;margin-top:.35rem}
   .member-interest-picker{border:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:.28rem;padding:.4rem}.member-interest-picker label{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);display:flex;font-size:.68rem;font-weight:700;gap:.25rem;padding:.25rem .4rem}.member-interest-picker input{accent-color:var(--accent-primary);min-height:auto!important;width:auto!important}
   .member-admin__section-heading{align-items:end;display:flex;justify-content:space-between;margin-bottom:.7rem}.member-admin__section-heading h2{font-size:1.2rem;margin:0}.member-admin__section-heading span{color:var(--text-secondary);font-size:.78rem}.member-grid{align-items:start;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}.member-card{align-self:start;background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.7rem;min-width:0;padding:.85rem}.member-card:hover{border-color:var(--accent-primary)}.member-card__top{align-items:center;display:flex;gap:.65rem;min-width:0}.member-avatar{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:50%;display:grid;flex:0 0 2.8rem;height:2.8rem;object-fit:cover;place-items:center;width:2.8rem}.member-avatar--fallback{color:var(--accent-primary);font-size:1rem;font-weight:800}.member-card__identity{min-width:0}.member-card__name{font-size:.98rem;font-weight:800;line-height:1.3}.member-card__email{color:var(--text-secondary);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.member-card__role{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.7rem;margin-left:auto;padding:.22rem .42rem;white-space:nowrap}.member-card__facts{align-self:start;display:flex;flex-wrap:wrap;gap:.35rem}.member-fact{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.7rem;line-height:1.2;padding:.25rem .42rem}.member-fact b{color:var(--accent-primary)}.member-card__actions{align-self:start;display:flex;gap:.4rem}.member-action--sync{flex:1}.member-action--remove{background:transparent!important;border:1px solid var(--border-default)!important;color:var(--text-secondary)!important}.member-empty{border:1px dashed var(--border-default);color:var(--text-secondary);padding:2rem;text-align:center}
-  @media(max-width:720px){.member-admin{padding:0 .85rem 3rem}.member-admin__header{padding-top:1.25rem}.member-admin__add{display:block;padding:.85rem}.member-admin__add form{display:grid;grid-template-columns:1fr;margin-top:.8rem}.member-admin__add output{display:block;margin-top:.55rem}.member-grid{grid-template-columns:1fr}.member-card{padding:.75rem}.member-card__top{align-items:flex-start}.member-card__role{margin-left:0}.member-card__top{flex-wrap:wrap}.member-card__actions{display:grid;grid-template-columns:1fr 1fr}.member-admin__section-heading{align-items:start;display:block}.member-admin__section-heading span{display:block;margin-top:.25rem}}
+  .member-action--preview{background:transparent!important;border:1px solid var(--border-default)!important;color:var(--accent-primary)!important;min-width:6.5rem}.member-action--preview:hover{border-color:var(--accent-primary)!important}
+  .member-card__access-heading{align-items:center;display:flex;gap:.5rem;justify-content:space-between}.member-card__access-heading .member-card__role{margin-left:0;min-width:0;overflow:hidden;text-overflow:ellipsis}.member-card__access-preview{font-size:.68rem!important;min-height:2rem!important;min-width:auto;padding:.3rem .45rem!important;white-space:nowrap}
+  .access-preview-modal{align-items:center;background:transparent;border:0;height:auto;justify-content:center;max-height:calc(100dvh - 2rem);padding:0;width:100%}.access-preview-modal::backdrop{background:rgb(0 0 0 / 55%);backdrop-filter:blur(2px)}.access-preview-modal__shell{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.55rem;box-shadow:0 .8rem 2rem rgb(0 0 0 / 22%);max-height:calc(100dvh - 2rem);max-width:680px;overflow:auto;width:min(100% - 2rem,680px)}.access-preview-modal__header{align-items:start;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:1rem 1.1rem}.access-preview-modal__header p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.08em;margin:0 0 .3rem}.access-preview-modal__header h2{font-size:1.1rem;margin:0}.access-preview-modal__header small{color:var(--text-secondary);font-size:.72rem}.access-preview-modal__body{display:grid;gap:.65rem;padding:1rem 1.1rem}.access-preview-row{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.25rem;padding:.7rem .8rem}.access-preview-row__heading{align-items:center;display:flex;gap:.5rem;justify-content:space-between}.access-preview-row__heading strong{font-size:.8rem}.access-preview-row__heading span{color:var(--success,#63c174);font-size:.7rem;font-weight:800}.access-preview-row p{color:var(--text-secondary);font-size:.76rem;line-height:1.55;margin:0}.access-preview-scope{display:flex;flex-wrap:wrap;gap:.3rem}.access-preview-scope span{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-secondary);font-size:.7rem;padding:.22rem .4rem}.access-preview-modal__footer{align-items:center;border-top:1px solid var(--border-default);display:flex;gap:.8rem;justify-content:space-between;padding:.75rem 1.1rem}.access-preview-modal__footer small{color:var(--text-secondary);font-size:.68rem;line-height:1.4}.access-preview-modal__footer button{width:auto!important}
+  @media(max-width:720px){.member-admin{padding:0 .85rem 3rem}.member-admin__header{padding-top:1.25rem}.member-admin__add{display:block;padding:.85rem}.member-admin__add form{display:grid;grid-template-columns:1fr;margin-top:.8rem}.member-admin__add output{display:block;margin-top:.55rem}.member-grid{grid-template-columns:1fr}.member-card{padding:.75rem}.member-card__top{align-items:flex-start}.member-card__role{margin-left:0}.member-card__top{flex-wrap:wrap}.member-card__actions{display:grid;grid-template-columns:1fr 1fr}.member-admin__section-heading{align-items:start;display:block}.member-admin__section-heading span{display:block;margin-top:.25rem}.access-preview-modal__footer{align-items:stretch;display:grid}.access-preview-modal__footer button{width:100%!important}}
 </style>
 
 <style is="global">
@@ -3306,6 +3319,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const workflowCoordinatorMembers = root.querySelector<HTMLDataListElement>("[data-workflow-coordinator-members]")!;
     let discordRoles: Array<{ discord_role_id: string; name: string; position: number; is_managed: number }> = [];
     let memberRecords: any[] = [];
+    let workflowRoleRecords: any[] = [];
     let memberQuery = "";
     let memberViewFilter = "all";
     const memberModal = root.querySelector<HTMLDialogElement>("[data-member-modal]")!;
@@ -3315,12 +3329,39 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const memberModalMessage = root.querySelector<HTMLOutputElement>("[data-member-modal-message]")!;
     const setMemberModalMessage = (value: string, state: "idle" | "error" = "idle") => { memberModalMessage.value = value; memberModalMessage.dataset.state = state; };
     const memberModalSave = root.querySelector<HTMLButtonElement>("[data-member-modal-save]")!;
+    const accessPreview = root.querySelector<HTMLDialogElement>("[data-access-preview]")!;
+    const accessPreviewTitle = root.querySelector<HTMLElement>("[data-access-preview-title]")!;
+    const accessPreviewEmail = root.querySelector<HTMLElement>("[data-access-preview-email]")!;
+    const accessPreviewContent = root.querySelector<HTMLElement>("[data-access-preview-content]")!;
     let activeMemberEmail = "";
     const discordRoleCount = root.querySelector<HTMLElement>("[data-discord-role-count]")!;
     const discordRoleList = root.querySelector<HTMLElement>("[data-discord-role-list]")!;
     const esc = (value: string) => value.replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char] ?? char));
     const subjectLabels = new Map(Array.from(form.querySelectorAll("option")).map(option => [option.value, option.textContent ?? option.value]));
     const workflowSubjectLabels = new Map(Array.from(subjectLabels.entries()).map(([value, label]) => [value, label.replace(/（担当）$/, "")]));
+    const subjectNames = (values: string[]) => values.map(value => workflowSubjectLabels.get(value) ?? value).filter(Boolean);
+    const scopeMarkup = (values: string[], empty = "なし") => {
+      const unique = Array.from(new Set(values));
+      return unique.length ? `<div class="access-preview-scope">${unique.map(value => `<span>${esc(value)}</span>`).join("")}</div>` : `<p>${esc(empty)}</p>`;
+    };
+    const openAccessPreview = (email: string) => {
+      const member = memberRecords.find(item => String(item.email).toLowerCase() === email.toLowerCase());
+      if (!member) return;
+      const permissions = String(member.subjects ?? "").split(",").filter(Boolean);
+      const allSubjects = permissions.includes("*");
+      const directSubjects = permissions.filter(value => value !== "*");
+      const coordinatorSubjects = workflowRoleRecords.filter(role => String(role.email).toLowerCase() === email.toLowerCase() && role.role === "subject-coordinator" && role.subject && role.subject !== "*").map(role => String(role.subject));
+      const isProjectLeader = workflowRoleRecords.some(role => String(role.email).toLowerCase() === email.toLowerCase() && role.role === "project-leader");
+      const displayName = member.display_name || "表示名未設定";
+      const viewScopes = allSubjects ? ["全分野"] : subjectNames(Array.from(new Set([...directSubjects, ...coordinatorSubjects])));
+      const editScopes = allSubjects ? ["全分野"] : subjectNames(directSubjects);
+      const approvalScopes = allSubjects || isProjectLeader ? ["全分野"] : subjectNames(coordinatorSubjects);
+      accessPreviewTitle.textContent = `${displayName}のアクセス範囲`;
+      accessPreviewEmail.textContent = String(member.email);
+      accessPreviewContent.innerHTML = `<section class="access-preview-row"><div class="access-preview-row__heading"><strong>記事の閲覧・コメント</strong><span>${viewScopes.length ? "許可" : "対象なし"}</span></div>${scopeMarkup(viewScopes, "担当・統括する分野がありません。")}${isProjectLeader && !allSubjects ? `<p>プロジェクトリーダーとして、公開審査中の記事も全分野を確認できます。</p>` : ""}</section><section class="access-preview-row"><div class="access-preview-row__heading"><strong>本文・記事情報の編集</strong><span>${editScopes.length ? "許可" : "対象なし"}</span></div>${scopeMarkup(editScopes, "本文を編集できる分野がありません。分野統括のみの場合は査読結果とコメントを扱えます。")}</section><section class="access-preview-row"><div class="access-preview-row__heading"><strong>公開審査の承認</strong><span>${approvalScopes.length ? "許可" : "対象なし"}</span></div>${scopeMarkup(approvalScopes, "公開審査を承認できる分野がありません。")}${isProjectLeader && !allSubjects ? `<p>プロジェクトリーダーとして最終審査を処理できます。</p>` : ""}</section><section class="access-preview-row"><div class="access-preview-row__heading"><strong>Discord</strong><span>${member.discord_user_id ? "連携済み" : "未連携"}</span></div><p>${member.discord_user_id ? "Discordユーザーと役職同期の対象です。" : "Discord連携前のため、役職同期はできません。"}</p></section>`;
+      if (typeof accessPreview.showModal === "function") accessPreview.showModal();
+      else accessPreview.setAttribute("open", "");
+    };
     const universities = ["北海道大学","東北大学","東京大学","東京科学大学","東京都立大学","早稲田大学","横浜国立大学","静岡大学","新潟大学","岐阜大学","立命館大学","京都大学","大阪大学","大阪公立大学","神戸大学","広島大学","九州大学","長崎大学","東洋大学","UCL","国立台湾大学","山口大学","慶應義塾大学","東京理科大学","中央大学","名古屋大学","筑波大学","名古屋市立大学","名城大学","Korea university, School of biomedical engineering","立教大学","Swarthmore College","北見工業大学","ZEN大学"];
     const years = ["中1","中2","中3","高1","高2","高3","高専1","高専2","高専3","高専4","高専5","B1","B2","B3","B4","M1","M2","D1","D2","D3","教職員・研究者","社会人","その他"];
     const fields = ["漢字","古文","漢文","地理","日本史","世界史","哲学","考古学","数学","物理","化学","地質","気象","海洋","天文","生物","情報","水産学","建築","薬学","中国語（普通話）","台湾華語","言語学","ページデザイン"];
@@ -3371,6 +3412,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const closeMemberModal = () => { if (memberModal.open) memberModal.close(); activeMemberEmail = ""; };
     memberModal.querySelectorAll<HTMLButtonElement>("[data-member-modal-close]").forEach(button => button.addEventListener("click", closeMemberModal));
     memberModal.addEventListener("click", event => { if (event.target === memberModal) closeMemberModal(); });
+    const closeAccessPreview = () => { if (accessPreview.open) accessPreview.close(); };
+    accessPreview.querySelectorAll<HTMLButtonElement>("[data-access-preview-close]").forEach(button => button.addEventListener("click", closeAccessPreview));
+    accessPreview.addEventListener("click", event => { if (event.target === accessPreview) closeAccessPreview(); });
     memberModalContent.addEventListener("input", event => {
       const target = event.target as HTMLInputElement;
       if (!target.matches("[data-modal-role-search]")) return;
@@ -3444,7 +3488,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         const shownRoleLabels = memberRoleLabels.slice(0, 3);
         const roleChips = memberRoleLabels.length ? `${shownRoleLabels.map(name => `<span class="member-role-chip">${esc(name)}</span>`).join("")}${memberRoleLabels.length > shownRoleLabels.length ? `<span class="member-role-chip member-role-chip--more">他${memberRoleLabels.length - shownRoleLabels.length}件</span>` : ""}` : `<span class="member-role-chip member-role-chip--empty">未付与</span>`;
         const displayName = member.display_name || "表示名未設定";
-        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><button type="button" class="member-card__name" data-open-member aria-label="${esc(displayName)}の個人設定を開く">${esc(displayName)}</button><div class="member-card__email">${esc(member.email)}</div></div></div><div class="member-card__access"><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions"><button type="button" class="member-action--edit" data-open-member>設定</button><details class="member-action-menu"><summary aria-label="${esc(displayName)}のその他の操作">•••</summary><div>${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>Discordロールを再同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div></details></div></article>`;
+        return `<article class="member-card" data-email="${esc(member.email)}"><div class="member-card__top">${avatar(member)}<div class="member-card__identity"><button type="button" class="member-card__name" data-open-member aria-label="${esc(displayName)}の個人設定を開く">${esc(displayName)}</button><div class="member-card__email">${esc(member.email)}</div></div></div><div class="member-card__access"><div class="member-card__access-heading"><span class="member-card__role">${esc(roles.join("・") || "担当未設定")}</span><button type="button" class="member-action--preview member-card__access-preview" data-preview-access>実効権限</button></div><div class="member-card__facts"><span class="member-fact"><b>所属</b> ${esc(member.university || "未登録")}</span><span class="member-fact"><b>学年</b> ${esc(member.year || "未登録")}</span><span class="member-fact"><b>分野</b> ${esc(interests.join("・") || "未登録")}</span></div></div><div class="member-card__discord"><div class="member-card__discord-heading"><strong>Discord</strong><span class="member-card__discord-state" data-state="${member.discord_user_id ? "connected" : "unconnected"}">${member.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="member-role-chips">${roleChips}</div></div><div class="member-card__actions"><button type="button" class="member-action--edit" data-open-member>設定</button><details class="member-action-menu"><summary aria-label="${esc(displayName)}のその他の操作">•••</summary><div>${isGlobalManager ? "" : `<button type="button" class="member-action--promote" data-promote-manager>全分野管理者に変更</button>`}<button type="button" class="member-action--sync" data-sync>Discordロールを再同期</button><button type="button" class="member-action--remove" data-remove data-subject="${esc(memberSubjects[0] ?? "")}">権限を削除</button></div></details></div></article>`;
       }).join("") : '<p class="member-empty">登録されている参加者はいません。</p>';
     };
     const discordSyncMessage = (prefix: string, provisioning: any) => { const warnings = Array.isArray(provisioning?.warnings) ? provisioning.warnings.join(" ") : ""; const notices = Array.isArray(provisioning?.notices) ? provisioning.notices.join(" ") : ""; const added = Number(provisioning?.applied ?? 0); const removed = Number(provisioning?.removed ?? 0); return `${prefix} Discord同期: 追加${added}件・削除${removed}件${warnings ? `。${warnings}` : ""}${notices ? `。確認: ${notices}` : ""}`; };
@@ -3473,8 +3517,9 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
           ? `<div class="discord-role-catalog__meta">管理可能 ${manageableRoles.length}件・管理対象外 ${discordRoles.length - manageableRoles.length}件</div><div class="discord-role-catalog__chips">${previewRoles.map(role => `<span>${esc(role.name)}</span>`).join("")}${manageableRoles.length > previewRoles.length ? `<span class="discord-role-catalog__more">ほか${manageableRoles.length - previewRoles.length}件</span>` : ""}</div>`
           : "「既存ロールを読み込む」を押すと一覧を更新します。";
         memberRecords = Array.isArray(data.permissions) ? data.permissions : [];
+        workflowRoleRecords = Array.isArray(data.workflowRoles) ? data.workflowRoles : [];
         render(filteredMembers());
-        renderWorkflowRoles(data.workflowRoles ?? []);
+        renderWorkflowRoles(workflowRoleRecords);
       } finally {
         root.removeAttribute("aria-busy");
       }
@@ -3497,6 +3542,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       const promote = target.closest<HTMLButtonElement>("[data-promote-manager]");
       const sync = target.closest<HTMLButtonElement>("[data-sync]");
       const remove = target.closest<HTMLButtonElement>("[data-remove]");
+      const preview = target.closest<HTMLButtonElement>("[data-preview-access]");
+      if (preview) { openAccessPreview(email); return; }
       if (open) { openMemberModal(email); return; }
       if (promote) {
         if (!confirm(`${email} を全分野管理者に変更しますか？`)) return;

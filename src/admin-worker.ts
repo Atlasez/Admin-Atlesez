@@ -3557,16 +3557,37 @@ async function listEditorialDocuments(
   }
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
   if (!includeArchived) filters.push("archived_at IS NULL");
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const rawCursor = searchParams.get("cursor");
+  if (rawCursor) {
+    const separator = rawCursor.indexOf("|");
+    const cursorUpdatedAt = separator >= 0 ? rawCursor.slice(0, separator) : "";
+    const cursorId = separator >= 0 ? rawCursor.slice(separator + 1) : "";
+    if (cursorUpdatedAt && cursorId) {
+      filters.push("(updated_at < ? OR (updated_at = ? AND id < ?))");
+      values.push(cursorUpdatedAt, cursorUpdatedAt, cursorId);
+    }
+  }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
     `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
       status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, publication_review_stage,
       publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at
-     FROM editorial_documents${where} ORDER BY updated_at DESC LIMIT 200`,
+     FROM editorial_documents${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
   )
-    .bind(...values)
+    .bind(...values, pageLimit + 1)
     .all<Omit<EditorialDocument, "body">>();
-  const documentRows = result.results ?? [];
+  const fetchedRows = result.results ?? [];
+  const hasMore = fetchedRows.length > pageLimit;
+  const documentRows = fetchedRows.slice(0, pageLimit);
+  const lastDocument = documentRows.at(-1);
+  const nextCursor = hasMore && lastDocument
+    ? `${lastDocument.updated_at}|${lastDocument.id}`
+    : null;
   // 査読依頼テーブルは先行環境にも存在するが、古いローカルD1では
   // 未作成の場合があるため、一覧取得自体は依頼情報なしでも継続する。
   const [activeEditorsByDocument, assignmentRows] = await Promise.all([
@@ -3611,6 +3632,7 @@ async function listEditorialDocuments(
       reviewer_email: reviewerByDocument.get(document.id) ?? null,
       active_editors: activeEditorsByDocument.get(document.id) ?? [],
     })),
+    pagination: { limit: pageLimit, nextCursor, hasMore },
     mentionNames: (memberRows.results ?? []).map(
       (member) => member.display_name.trim() || member.email.split("@")[0],
     ),
