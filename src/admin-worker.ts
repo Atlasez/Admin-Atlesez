@@ -1666,6 +1666,7 @@ async function listArticleReports(
       contact: scope.isManager ? report.contact : null,
       can_manage: scope.allSubjects || scope.subjects.includes(report.subject),
     })),
+    reportsTruncated: result.results.length >= 250,
   });
 }
 
