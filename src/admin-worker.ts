@@ -7948,7 +7948,24 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
   const access = await getProjectReviewerScope(request, env, requestedProject);
   if (isResponse(access)) return access;
   const projectSlug = canonicalApplicationProjectSlug(access.project.slug);
-  const rows = await env.REPORTS.prepare(
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const filters = ["a.project_slug = ?"];
+  const bindings: unknown[] = [projectSlug];
+  const rawCursor = searchParams.get("cursor") ?? "";
+  const separator = rawCursor.lastIndexOf("|");
+  const cursorCreatedAt = separator > 0 ? rawCursor.slice(0, separator) : "";
+  const cursorId = separator > 0 ? rawCursor.slice(separator + 1) : "";
+  if (cursorCreatedAt && cursorId) {
+    filters.push("(a.created_at < ? OR (a.created_at = ? AND a.id < ?))");
+    bindings.push(cursorCreatedAt, cursorCreatedAt, cursorId);
+  }
+  const where = filters.join(" AND ");
+  const [rows, summaryRows] = await Promise.all([
+    env.REPORTS.prepare(
     `SELECT a.id,a.name,a.email,a.affiliation_email,a.family_name,a.given_name,a.middle_name,a.nickname,a.family_name_kana,a.given_name_kana,a.form_language,a.interests,a.message,a.status,a.created_at,a.updated_at,a.project_slug,a.project_answers,
       a.affiliation_type,a.institution,a.grade,a.country,a.timezone,
       a.birth_date,a.residence_city,a.current_organizations,a.referral_source,a.motivation_reasons,a.desired_roles,a.interview_availability,a.applicant_questions,
@@ -7964,14 +7981,39 @@ async function listApplications(request: Request, env: Env): Promise<Response> {
      FROM atlasez_member_applications a
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = a.email
      LEFT JOIN atlasez_application_interviews i ON i.application_id = a.id
-     WHERE a.project_slug = ?
-     ORDER BY a.created_at DESC,a.id DESC LIMIT 300`,
-  )
-    .bind(projectSlug)
-    .all<Record<string, unknown>>();
+     WHERE ${where}
+     ORDER BY a.created_at DESC,a.id DESC LIMIT ?`,
+    )
+      .bind(...bindings, pageLimit + 1)
+      .all<Record<string, unknown>>(),
+    env.REPORTS.prepare(
+      `SELECT status,COUNT(*) AS count
+       FROM atlasez_member_applications
+       WHERE project_slug=?
+       GROUP BY status`,
+    )
+      .bind(projectSlug)
+      .all<{ status: string; count: number }>(),
+  ]);
+  const fetchedRows = rows.results ?? [];
+  const hasMore = fetchedRows.length > pageLimit;
+  const applications = fetchedRows.slice(0, pageLimit);
+  const lastApplication = applications.at(-1);
+  const nextCursor = hasMore && lastApplication
+    ? `${String(lastApplication.created_at ?? "")}|${String(lastApplication.id ?? "")}`
+    : null;
+  const summary = { total: 0, new: 0, reviewing: 0, accepted: 0, rejected: 0 };
+  for (const row of summaryRows.results ?? []) {
+    const count = Number(row.count ?? 0);
+    summary.total += Number.isFinite(count) ? count : 0;
+    if (row.status === "new" || row.status === "reviewing" || row.status === "accepted" || row.status === "rejected")
+      summary[row.status] = Number.isFinite(count) ? count : 0;
+  }
   return json({
     project: { slug: projectSlug, name: access.project.name },
-    applications: rows.results,
+    applications,
+    pagination: { limit: pageLimit, nextCursor, hasMore, total: summary.total },
+    summary,
     subjectLabels: APPLICATION_SUBJECT_LABELS,
     formLabels: APPLICATION_FORM_LABELS,
   });
