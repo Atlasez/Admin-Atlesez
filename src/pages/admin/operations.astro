@@ -28,7 +28,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 <AdminLayout title={initialPageTitle} description="運営作業を共有する場所">
   <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined} data-progress-overview={progressOverview ? "true" : undefined}>
     <header>
-      <p class="operations-eyebrow">OPERATIONS / {projectLabel.toUpperCase()}</p>
       <h1 data-project-title>{initialPageTitle}</h1>
       <p class="operations-lede">共有タスクと進捗を、いま必要なものから確認できます。</p>
     </header>

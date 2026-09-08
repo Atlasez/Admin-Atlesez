@@ -125,7 +125,7 @@ const pageLabel = ({
   genres: "各ジャンル概要",
   review: "フィードバック一覧",
   reports: "問題報告",
-  analytics: "閲覧統計",
+  analytics: "学習サイト閲覧統計",
   permissions: "運営者・担当管理",
   guide: "作業の進め方",
   rules: "規則",
@@ -138,7 +138,7 @@ const pageLabel = ({
   procedures: "諸手続き",
   "member-management": "運営メンバー管理",
   "genre-roles": "ジャンル・役割管理",
-  "operations-statistics": "運営内統計",
+  "operations-statistics": "運営メンバー統計",
 } as Record<NonNullable<Props["current"]>, string>)[current];
 const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "student-council", "thinking-cafe", "secretariat"]);
 ---
@@ -213,7 +213,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     applyLanguage(currentLanguage());
 
     type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'student-council' | 'thinking-cafe' | 'secretariat'; slug: string; current: string; home: string; label: string };
-    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-profile/edit': 'プロフィール編集', 'member-profile-edit': 'プロフィール編集', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', progress: '進捗報告', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', procedures: '諸手続き', 'member-management': '運営メンバー管理', 'genre-roles': 'ジャンル・役割管理', 'operations-statistics': '運営内統計', 'co-working': '同時作業会', reports: '問題報告', analytics: '閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', rules: '規則', applications: '運営参加応募', 'application-interview': '面談メモ', introductions: '運営内自己紹介', review: 'フィードバック一覧', 'onboarding-demo': 'オンボーディング紹介' };
+    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-profile/edit': 'プロフィール編集', 'member-profile-edit': 'プロフィール編集', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', progress: '進捗報告', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', procedures: '諸手続き', 'member-management': '運営メンバー管理', 'genre-roles': 'ジャンル・役割管理', 'operations-statistics': '運営メンバー統計', 'co-working': '同時作業会', reports: '問題報告', analytics: '学習サイト閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', rules: '規則', applications: '運営参加応募', 'application-interview': '面談メモ', introductions: '運営内自己紹介', review: 'フィードバック一覧', 'onboarding-demo': 'オンボーディング紹介' };
     const slugForSite = (site: RouteState['site']) => site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : site === 'student-council' ? 'student-council-exchange' : site === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
     const homeForSite = (site: RouteState['site']) => site === 'portal' ? '/admin/portal/' : site === 'secretariat' ? '/admin/secretariat/' : site === 'semi-platform' ? '/admin/semi-platform/' : site === 'student-council' ? '/admin/student-council/' : site === 'thinking-cafe' ? '/admin/thinking-cafe/' : '/admin/atlas/';
     const labelForSite = (site: RouteState['site']) => site === 'portal' ? 'Atlasezメンバー用サイト' : site === 'secretariat' ? 'Atlasez運営事務局' : site === 'semi-platform' ? 'ゼミプラットフォーム' : site === 'student-council' ? '日本生徒会協会' : site === 'thinking-cafe' ? '考えるカフェ' : '学習サイト「アトラス」運営用サイト';

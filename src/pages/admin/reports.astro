@@ -24,13 +24,13 @@ const japanRegionPaths = japanMap.locations
 ---
 
 <AdminLayout
-  title={initialView === "analytics" ? "閲覧統計" : "問題報告"}
+  title={initialView === "analytics" ? "学習サイト閲覧統計" : "問題報告"}
   description={initialView === "analytics" ? "学習サイトの記事閲覧統計" : "運営用の記事問題報告"}
 >
   <section class="admin-reports" data-reports-admin data-initial-view={initialView}>
     <header class="admin-reports-heading">
       <div>
-        <h1>{initialView === "analytics" ? "閲覧統計" : "問題報告"}</h1>
+        <h1>{initialView === "analytics" ? "学習サイト閲覧統計" : "問題報告"}</h1>
       </div>
     </header>
 
@@ -587,9 +587,9 @@ const japanRegionPaths = japanMap.locations
     const queryView = new URLSearchParams(window.location.search).get("view");
     const initialView = root.dataset.initialView === "analytics" || queryView === "analytics" ? "analytics" : "reports";
     if (initialView === "analytics") {
-      root.querySelector<HTMLElement>("h1")?.replaceChildren("閲覧統計");
-      document.title = "閲覧統計";
-      document.querySelector<HTMLElement>("[data-admin-breadcrumbs] [aria-current='page']")?.replaceChildren("閲覧統計");
+      root.querySelector<HTMLElement>("h1")?.replaceChildren("学習サイト閲覧統計");
+      document.title = "学習サイト閲覧統計";
+      document.querySelector<HTMLElement>("[data-admin-breadcrumbs] [aria-current='page']")?.replaceChildren("学習サイト閲覧統計");
     }
     selectView(initialView);
     if (initialView === "reports") {
