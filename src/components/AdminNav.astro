@@ -278,16 +278,24 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     type AuthStatus = { email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
     type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
     let authStatusRequest: Promise<AuthStatusResult> | null = null;
+    let authStatusCache: { value: AuthStatusResult; expiresAt: number } | null = null;
     const fetchAuthStatus = () => {
+      if (authStatusCache && authStatusCache.expiresAt > Date.now()) return Promise.resolve(authStatusCache.value);
       if (!authStatusRequest) {
-        authStatusRequest = fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' })
+        const request = fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' })
           .then(async (response) => {
             const contentType = response.headers.get('content-type') ?? '';
             const data = contentType.includes('application/json') ? await response.json() as AuthStatus : {};
             return { ok: response.ok, status: response.status, contentType, data };
           })
-          .catch(() => ({ ok: false, status: 0, contentType: '', data: {} }))
-          .finally(() => { authStatusRequest = null; });
+          .catch(() => ({ ok: false, status: 0, contentType: '', data: {} }));
+        authStatusRequest = request.then((result) => {
+          // Both the manager visibility and account widgets need the same
+          // response during startup. Keep it briefly without changing the
+          // existing no-store request or longer-term permission freshness.
+          if (result.ok || result.status === 401) authStatusCache = { value: result, expiresAt: Date.now() + 1_000 };
+          return result;
+        }).finally(() => { authStatusRequest = null; });
       }
       return authStatusRequest;
     };
