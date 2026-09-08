@@ -1267,6 +1267,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const staticArticles = initialArticles;
     let articles = initialArticles;
     let publicCatalogSource: "api" | "static" = "static";
+    // The document list and selected document can render from the server response
+    // immediately.  The public catalog is enrichment used by the outline/source
+    // picker, so keep a handle for flows that explicitly need that catalog.
+    let publicCatalogReady: Promise<void> = Promise.resolve();
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
     let activeDocumentId = routeQuery.get("document")?.trim() ?? "";
@@ -1871,6 +1875,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     root.querySelector<HTMLAnchorElement>(".workspace-header nav a")?.addEventListener("click", closeAllPanePopouts);
     window.addEventListener("pagehide", closeAllPanePopouts);
     let documents: Omit<Document, "body">[] = [];
+    let currentDocument: Document | null = null;
     // Keep the list state in sync immediately after the user starts an update
     // proposal. Persisted proposals are also detected from updated_at so the
     // label survives a reload.
@@ -3946,6 +3951,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       openSocket();
     };
     const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
+      currentDocument = item;
       empty.hidden = true; form.hidden = false;
       latestPublicationRealtimeVersion = 0;
       const id = form.elements.namedItem("documentId") as HTMLInputElement;
@@ -4032,7 +4038,30 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
-    const loadDocuments = async () => { const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" }); const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response); if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。"); documents = data.documents ?? []; mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; })); isManager = Boolean(data.scope?.isManager); currentUserEmail = data.scope?.email ?? ""; assignedSubjects = data.scope?.subjects ?? []; root.dataset.manager = String(isManager); newDocumentButton.disabled = !(isManager || assignedSubjects.length); (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager; await loadPublicCatalog(); populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline(); void loadPublicationIntegration(); };
+    const loadDocuments = async () => {
+      const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" });
+      const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response);
+      if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。");
+      documents = data.documents ?? [];
+      mentionMembers.replaceChildren(...(data.mentionNames ?? []).map((name) => { const option = document.createElement("option"); option.value = `@${name}`; return option; }));
+      isManager = Boolean(data.scope?.isManager);
+      currentUserEmail = data.scope?.email ?? "";
+      assignedSubjects = data.scope?.subjects ?? [];
+      root.dataset.manager = String(isManager);
+      newDocumentButton.disabled = !(isManager || assignedSubjects.length);
+      (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager;
+      if (currentDocument) updatePublicationActions(currentDocument);
+
+      // Render the editor list from the first response without waiting for the
+      // public catalog (which can be considerably slower on a cold edge).  The
+      // catalog then refreshes only the source/outline enrichment in place.
+      populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); renderDocuments(); fillOutlineSubjects(); renderAtlasOutline();
+      publicCatalogReady = loadPublicCatalog().then(() => {
+        populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles(); fillOutlineSubjects(); renderAtlasOutline();
+      });
+      void publicCatalogReady.catch(() => undefined);
+      void loadPublicationIntegration();
+    };
     const openDocument = async (id: string) => {
       if (id) activeDocumentId = id;
       saveMessage.value = "原稿を読み込み中…";
@@ -4697,7 +4726,23 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     } else {
       root.setAttribute("data-sticky-toolbar", "");
     }
-    initializeSelects(); void loadDocuments().then(async () => { if (reviewDocumentId) { await openDocument(reviewDocumentId).then(() => loadRevisions(reviewDocumentId)); if (updateModeRequested) beginUpdateProposal(); } else if (sourceArticleId) { const source = articles.find((item) => item.articleId === sourceArticleId); if (!source) throw new Error("指定された公開記事を見つけられませんでした。"); const existing = documentForSourceArticle(source); if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; } else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; } } else if (isNewDocument) emptyDocument(); resetEditorEntryScroll(); restoreInitialEditorScroll(); requestAnimationFrame(() => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); requestAnimationFrame(restoreInitialEditorScroll); }); }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    initializeSelects();
+    void loadDocuments().then(async () => {
+      if (reviewDocumentId) {
+        await openDocument(reviewDocumentId);
+        await loadRevisions(reviewDocumentId);
+        if (updateModeRequested) beginUpdateProposal();
+      } else if (sourceArticleId) {
+        await publicCatalogReady;
+        const source = articles.find((item) => item.articleId === sourceArticleId);
+        if (!source) throw new Error("指定された公開記事を見つけられませんでした。");
+        const existing = documentForSourceArticle(source);
+        if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; }
+        else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; }
+      } else if (isNewDocument) emptyDocument();
+      resetEditorEntryScroll(); restoreInitialEditorScroll();
+      requestAnimationFrame(() => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); requestAnimationFrame(restoreInitialEditorScroll); });
+    }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);
