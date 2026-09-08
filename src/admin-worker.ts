@@ -235,6 +235,11 @@ type EditorialCommentSelection = {
   selection_text: string;
 };
 type EditorialDocumentPayload = {
+  /**
+   * The updated_at value the editor last read.  This is an optimistic
+   * concurrency token; it is intentionally optional for older clients.
+   */
+  baseUpdatedAt?: unknown;
   sourceArticleId?: unknown;
   subject?: unknown;
   category?: unknown;
@@ -3464,6 +3469,10 @@ const storedEditorialLockedRanges = (
 };
 
 const editorialValues = (payload: EditorialDocumentPayload) => {
+  const baseUpdatedAt =
+    typeof payload.baseUpdatedAt === "string" && payload.baseUpdatedAt.trim()
+      ? payload.baseUpdatedAt.trim().slice(0, 64)
+      : null;
   const subject = text(payload.subject, 80);
   const category = text(payload.category, 80);
   const locale = text(payload.locale, 8);
@@ -3506,6 +3515,7 @@ const editorialValues = (payload: EditorialDocumentPayload) => {
   )
     return null;
   return {
+    baseUpdatedAt,
     sourceArticleId,
     subject,
     category,
@@ -10951,7 +10961,7 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT source_article_id, subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references FROM editorial_documents WHERE id = ?",
+    "SELECT source_article_id, subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references, updated_at, updated_by FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
@@ -10979,9 +10989,25 @@ async function updateEditorialDocument(
         | "publication_review_round"
         | "locked_ranges"
         | "article_references"
+        | "updated_at"
+        | "updated_by"
       >
   >();
   if (!existing) return json({ error: "原稿が見つかりません。" }, 404);
+  // The editor sends the last version it read.  Reject stale writes before
+  // any revision is recorded so another author's changes cannot be silently
+  // overwritten after a reconnect, a second tab, or a slow request.
+  if (values.baseUpdatedAt && values.baseUpdatedAt !== existing.updated_at)
+    return json(
+      {
+        error:
+          "他のユーザーが先に更新しました。最新内容を読み込み、変更を確認してから保存してください。",
+        code: "document_conflict",
+        updatedAt: existing.updated_at,
+        updatedBy: existing.updated_by,
+      },
+      409,
+    );
   if (values.status === "approved" && existing.status !== "approved")
     return json(
       {
@@ -11095,14 +11121,14 @@ async function updateEditorialDocument(
         now,
       )
       .run();
-  await env.REPORTS.prepare(
+  const updateResult = (await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
       slug = ?, title = ?, summary = ?, concept_id = ?, concept_name = ?, concept_name_en = ?, concept_is_new = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
       updated_at = ?, reviewed_at = CASE WHEN ? = 'approved' THEN COALESCE(reviewed_at, ?) ELSE NULL END,
       scheduled_publish_at = CASE WHEN ? = 'approved' THEN scheduled_publish_at ELSE NULL END,
       scheduled_publish_claimed_at = CASE WHEN ? = 'approved' THEN scheduled_publish_claimed_at ELSE NULL END,
       publication_review_stage = CASE WHEN ? = 'approved' THEN publication_review_stage ELSE NULL END
-     WHERE id = ?`,
+     WHERE id = ? AND (? IS NULL OR updated_at = ?)`,
   )
     .bind(
       values.sourceArticleId,
@@ -11136,11 +11162,26 @@ async function updateEditorialDocument(
       values.status,
       values.status,
       documentId,
+      values.baseUpdatedAt,
+      values.baseUpdatedAt,
     )
-    .run();
+    .run()) as { meta?: { changes?: number } };
+  // Some D1-compatible test adapters omit `meta`; a real D1 UPDATE always
+  // provides the change count, so only an explicit non-one count is a race.
+  if (typeof updateResult.meta?.changes === "number" && updateResult.meta.changes !== 1)
+    return json(
+      {
+        error:
+          "他のユーザーが先に更新しました。最新内容を読み込み、変更を確認してから保存してください。",
+        code: "document_conflict",
+        updatedAt: existing.updated_at,
+        updatedBy: existing.updated_by,
+      },
+      409,
+    );
   await syncEditorialCollaborationDocument(env, documentId);
   await notifyEditorialDocumentChange(env, documentId);
-  return json({ ok: true });
+  return json({ ok: true, updatedAt: now });
 }
 
 async function listEditorialRevisions(

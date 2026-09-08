@@ -240,6 +240,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 <button type="submit" class="primary-action" data-save-document>保存する</button>
               </div>
               <output class="save-status" data-save-message aria-live="polite">保存状態：原稿を選択してください</output>
+              <div class="document-conflict" data-document-conflict role="alert" aria-live="assertive" hidden>
+                <strong>他のユーザーが先に更新しました。</strong>
+                <span data-document-conflict-message>変更を確認してから保存してください。</span>
+                <button type="button" class="quiet-action" data-reload-conflicted-document>最新内容を読み込む</button>
+              </div>
               <p class="update-proposal-note" data-update-proposal-note hidden aria-live="polite"></p>
             </div>
           </section>
@@ -466,6 +471,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .directive-completion-hint, .latex-completion-hint { color:var(--muted); font-size:.72rem; line-height:1.5; margin:0; }.directive-completion-hint code, .latex-completion-hint code { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; padding:.05rem .2rem; }.directive-completion-hint kbd, .latex-completion-hint kbd { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; font:inherit; margin-left:.18rem; padding:.05rem .25rem; }
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
   .document-toolbar, .pane-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
+  .document-conflict { align-items:center; background:color-mix(in srgb,var(--danger,#d16b6b) 10%,var(--surface-alt)); border:1px solid color-mix(in srgb,var(--danger,#d16b6b) 42%,var(--border)); border-left:3px solid var(--danger,#d16b6b); border-radius:.35rem; color:var(--text); display:flex; flex:1 1 100%; flex-wrap:wrap; font-size:.72rem; gap:.35rem .55rem; line-height:1.45; padding:.42rem .55rem; }
+  .document-conflict[hidden] { display:none; }
+  .document-conflict strong { color:var(--danger,#d16b6b); }
+  .document-conflict button { margin-left:auto; min-height:1.85rem; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:sticky; top:0; z-index:15; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses>span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-statuses [data-publication-run]{border-color:#8aa8c8;color:#24527c;flex:1 1 100%;line-height:1.5;min-width:0;overflow-wrap:anywhere;white-space:normal}.document-statuses [data-publication-run][data-state="failed"],.document-statuses [data-publication-run][data-state="needs_operator"]{border-color:#d9a429;color:#805500}.document-statuses [data-publication-integration][data-state="ready"]{border-color:#83b995;color:#24643a}.document-statuses [data-publication-integration][data-state="error"]{border-color:#d9a429;color:#805500}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .document-statuses [data-publication-run]{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem .45rem}.publication-run-indicator{background:currentColor;border-radius:50%;display:inline-block;flex:0 0 .5rem;height:.5rem;width:.5rem}.document-statuses [data-publication-run][aria-busy="true"]{background:color-mix(in srgb,#e8f3fb 78%,var(--surface-alt));border-color:#72add3;box-shadow:0 0 0 2px color-mix(in srgb,#72add3 22%,transparent);}.document-statuses [data-publication-run][aria-busy="true"] .publication-run-indicator{animation:publication-run-spin .9s linear infinite;background:transparent;border:2px solid currentColor;border-top-color:transparent;box-sizing:border-box;height:.75rem;width:.75rem}.document-statuses [data-publication-run] small{color:inherit;font-size:.64rem;font-weight:700;margin-left:auto;opacity:.78}.document-statuses [data-publication-run][data-state="failed"] .publication-run-indicator,.document-statuses [data-publication-run][data-state="needs_operator"] .publication-run-indicator{background:#c78500}.document-statuses [data-publication-run][data-state="published"] .publication-run-indicator,.document-statuses [data-publication-run][data-state="unpublished"] .publication-run-indicator{background:#31804a}@keyframes publication-run-spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.document-statuses [data-publication-run][aria-busy="true"] .publication-run-indicator{animation:none}}
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
@@ -1368,6 +1377,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const selectionActionText = root.querySelector<HTMLElement>("[data-selection-action-text]")!;
     const selectedRanges = root.querySelector<HTMLElement>("[data-selected-ranges]")!;
     const saveMessage = root.querySelector<HTMLOutputElement>("[data-save-message]")!;
+    const documentConflict = root.querySelector<HTMLElement>("[data-document-conflict]")!;
+    const documentConflictMessage = root.querySelector<HTMLElement>("[data-document-conflict-message]")!;
+    const reloadConflictedDocumentButton = root.querySelector<HTMLButtonElement>("[data-reload-conflicted-document]")!;
     const collaborationStatus = root.querySelector<HTMLElement>("[data-collaboration-status]")!;
     const collaborationState = root.querySelector<HTMLElement>("[data-collaboration-state]")!;
     const collaborationLatency = root.querySelector<HTMLElement>("[data-collaboration-latency]")!;
@@ -3559,7 +3571,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }).filter((range) => after.slice(range.start, range.end) === range.text);
       return true;
     };
-    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
+    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", baseUpdatedAt: persistedDocumentUpdatedAt || undefined, subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
     let documentSaveInFlight: Promise<unknown> | null = null;
     const withDocumentSaveLock = <T,>(operation: () => Promise<T>): Promise<T> => {
       if (documentSaveInFlight) return documentSaveInFlight as Promise<T>;
@@ -3570,6 +3582,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
       );
       return operationPromise;
+    };
+    const markDocumentConflict = (data: { error?: string; updatedAt?: string; updatedBy?: string }) => {
+      documentConflict.dataset.documentId = documentIdForRequest();
+      documentConflictMessage.textContent = data.updatedBy
+        ? `${data.error ?? "他のユーザーが先に更新しました。"}（更新者：${data.updatedBy}）`
+        : (data.error ?? "変更を確認してから保存してください。");
+      documentConflict.hidden = false;
+      setUnsavedChanges(true);
+      saveMessage.value = "競合を検知しました。ローカルの変更は保持しています。";
     };
     const saveCurrentDocument = (showProgress = true) => withDocumentSaveLock(async () => {
       window.clearTimeout(autosaveTimer);
@@ -3584,8 +3605,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         saveMessage.value = "保存中…";
         const id = requestedId;
         const response = await fetch(id ? `/api/admin/editor/documents/${id}` : "/api/admin/editor/documents", { method: id ? "PATCH" : "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()) });
-        const data = await read<{ id?: string; error?: string }>(response);
-        if (!response.ok) throw new Error(data.error ?? "保存できませんでした。");
+        const data = await read<{ id?: string; error?: string; code?: string; updatedAt?: string; updatedBy?: string }>(response);
+        if (!response.ok) {
+          if (response.status === 409 && data.code === "document_conflict") markDocumentConflict(data);
+          throw new Error(data.error ?? "保存できませんでした。");
+        }
         const savedId = id || data.id || "";
         if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
         if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
@@ -3594,6 +3618,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         setUnsavedChanges(false);
         await loadDocuments();
         const refreshed = documents.find((item) => item.id === savedId);
+        persistedDocumentUpdatedAt = data.updatedAt || refreshed?.updated_at || persistedDocumentUpdatedAt;
+        documentConflict.hidden = true;
         if (refreshed) {
           setPublicationState(refreshed);
           updateWorkflow(refreshed.status, Boolean(refreshed.published_at), refreshed.publication_review_stage ?? null, hasUnpublishedPublicationChanges(refreshed));
@@ -3690,10 +3716,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           saveMessage.value = "下書きを自動保存中…";
           const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify(documentPayload()), signal: controller.signal });
           if (!response.ok) {
-            const data = await read<{ error?: string }>(response);
+            const data = await read<{ error?: string; code?: string; updatedAt?: string; updatedBy?: string }>(response);
+            if (response.status === 409 && data.code === "document_conflict") markDocumentConflict(data);
             throw new Error(data.error ?? "自動保存に失敗しました。");
           }
           if (!autosaveToggle.checked || generation !== autosaveGeneration) return;
+          const data = await read<{ updatedAt?: string }>(response.clone());
+          persistedDocumentUpdatedAt = data.updatedAt || persistedDocumentUpdatedAt;
+          documentConflict.hidden = true;
           setUnsavedChanges(false); saveMessage.value = "下書きを自動保存しました。"; await loadDocuments();
         });
       } catch (error) {
@@ -3727,6 +3757,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationApplyingRemote = false;
     let collaborationSessionId = "";
     let persistedDocumentValues = { title: "", summary: "", body: "" };
+    let persistedDocumentUpdatedAt = "";
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
     const setCollaborationConnectionState = (connectionState: "connecting" | "connected" | "reconnecting" | "error", message: string) => {
       collaborationStatus.dataset.state = connectionState;
@@ -3970,6 +4001,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       fillConceptOptions(item.concept_id);
       status.value = item.status; syncStatusControl(item.status); body.value = item.body; documentReferences = normalizeReferences(typeof item.references === "string" ? (() => { try { return JSON.parse(item.references); } catch { return []; } })() : item.references); lockedRanges = validLockedRanges(item.locked_ranges, item.body); previousBodyValue = body.value; renderLockControls(); syncMathPreset(); renderReferenceLibrary(); renderDiagnostics(); persistedWritingMemo = item.writing_memo ?? ""; writingMemo.value = persistedWritingMemo;
       persistedDocumentValues = { title: item.title, summary: item.summary, body: item.body };
+      persistedDocumentUpdatedAt = item.id ? item.updated_at : "";
+      documentConflict.hidden = true;
+      documentConflict.dataset.documentId = item.id;
       const reviewOnly = false;
       form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((field) => { if (field.name !== "documentId" && field.name !== "status") field.disabled = reviewOnly; });
       syncMetadataSummary(); metadata.open = !item.id || metadataMissingCount() > 0;
@@ -4083,6 +4117,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const responseDocumentId = typeof data.document.id === "string" ? data.document.id.trim() : "";
       if (id && loadedDocumentId && responseDocumentId !== loadedDocumentId) void loadMediaAssets(loadedDocumentId);
     };
+    reloadConflictedDocumentButton.addEventListener("click", () => {
+      const id = documentConflict.dataset.documentId || documentIdForRequest();
+      if (!id || !window.confirm("ローカルの未保存変更を破棄して、最新内容を読み込みますか？")) return;
+      reloadConflictedDocumentButton.disabled = true;
+      saveMessage.value = "最新内容を読み込み中…";
+      void openDocument(id)
+        .then(() => loadRevisions(id))
+        .then(() => { documentConflict.hidden = true; })
+        .catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "最新内容を読み込めませんでした。"; })
+        .finally(() => { reloadConflictedDocumentButton.disabled = false; });
+    });
     const reloadComments = async (id: string) => {
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin", cache: "no-store" });
       const data = await read<{ comments?: Comment[]; error?: string }>(response);
