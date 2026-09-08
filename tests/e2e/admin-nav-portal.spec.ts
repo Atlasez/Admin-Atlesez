@@ -254,7 +254,9 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   ).toBeVisible();
 });
 
-test("承認待ちは履歴通知ではなくpending申請の件数を表示する", async ({ page }) => {
+test("承認待ちは履歴通知ではなくpending申請の件数を表示する", async ({
+  page,
+}) => {
   await mockAdminShell(page, { pendingApprovals: 0 });
   await page.route("**/api/admin/notifications", async (route) => {
     await route.fulfill({
@@ -271,7 +273,9 @@ test("承認待ちは履歴通知ではなくpending申請の件数を表示す�
     });
   });
   await page.goto("admin/portal/");
-  await expect(page.locator('[data-summary-value="approvals"]')).toHaveText("0");
+  await expect(page.locator('[data-summary-value="approvals"]')).toHaveText(
+    "0",
+  );
   await expect(page.locator('[data-summary-detail="approvals"]')).toHaveText(
     "承認待ちはありません",
   );
