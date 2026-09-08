@@ -466,7 +466,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
   type PortalNotification = { kind?: string; read?: boolean };
-  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; error?: string };
+  type PortalData = { projects?: PortalProject[]; availableProjects?: PortalProject[]; todos?: PortalTodo[]; calendar?: { rangeStart?: string; rangeEnd?: string; events?: PortalCalendarEvent[] }; notifications?: PortalNotification[]; pendingApprovals?: number; error?: string };
   const initializePortal = () => {
     const root = document.querySelector<HTMLElement>('[data-portal]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -618,8 +618,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       setSummary('due-soon', dueSoon, dueSoon ? '7日以内に期限' : '7日以内の期限はありません', dueSoon ? 'attention' : 'success');
       const notifications = data.notifications ?? [];
       const unread = notifications.filter((item) => !item.read).length;
-      const approvalKinds = new Set(['publication-review', 'publication-ready', 'review', 'application']);
-      const approvals = notifications.filter((item) => item.kind && approvalKinds.has(item.kind)).length;
+      // 承認待ちは通知の残存数ではなく、承認ページと同じ pending 状態の申請数を使う。
+      // 通知は既読・処理済みになっても履歴として残るため、ここで数えると実態とずれる。
+      const approvalCount = Number(data.pendingApprovals ?? 0);
+      const approvals = Number.isFinite(approvalCount) ? Math.max(0, Math.trunc(approvalCount)) : 0;
       setSummary('unread', unread, unread ? '通知を確認' : '未読はありません', unread ? 'attention' : 'success');
       setSummary('approvals', approvals, approvals ? '確認が必要な項目' : '承認待ちはありません', approvals ? 'attention' : 'success');
       const next = (data.calendar?.events ?? []).filter((event) => Number.isFinite(Date.parse(event.startsAt)) && Date.parse(event.startsAt) >= now).sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt))[0];

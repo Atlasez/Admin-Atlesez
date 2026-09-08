@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 type MockOptions = {
   notificationStatus?: number;
+  pendingApprovals?: number;
   avatarUrl?: string;
   calendarEvents?: Array<{
     id: string;
@@ -100,6 +101,7 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
           ],
           availableProjects: options.availableProjects ?? [],
           todos: [],
+          pendingApprovals: options.pendingApprovals ?? 0,
           calendar: { events: options.calendarEvents ?? [] },
         }),
       });
@@ -250,6 +252,29 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   await expect(
     page.getByRole("heading", { name: "自分の未完了タスク" }),
   ).toBeVisible();
+});
+
+test("承認待ちは履歴通知ではなくpending申請の件数を表示する", async ({ page }) => {
+  await mockAdminShell(page, { pendingApprovals: 0 });
+  await page.route("**/api/admin/notifications", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "publication-review-history-12345678",
+            kind: "publication-review",
+            title: "処理済みの公開審査",
+            read: false,
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("admin/portal/");
+  await expect(page.locator('[data-summary-value="approvals"]')).toHaveText("0");
+  await expect(page.locator('[data-summary-detail="approvals"]')).toHaveText(
+    "承認待ちはありません",
+  );
 });
 
 test("参加中のプロジェクトを運営と参加者に分けて表示する", async ({ page }) => {

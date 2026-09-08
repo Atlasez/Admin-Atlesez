@@ -6847,6 +6847,19 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   await ensureAtlasMembership(env, scope);
+  const canReviewProfileRequests =
+    scope.isManager ||
+    (await operationProjectRole(env, scope, "secretariat")) === "manager";
+  const pendingApprovals = canReviewProfileRequests
+    ? await env.REPORTS.prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM editorial_member_profile_change_requests WHERE status='pending') +
+           (SELECT COUNT(*) FROM editorial_project_profile_change_requests WHERE project_id='atlas' AND status='pending')
+           AS count`,
+      )
+        .first<{ count: number }>()
+        .then((row) => Math.max(0, Number(row?.count ?? 0)))
+    : Promise.resolve(0);
   const [projects, availableProjects] = scope.isManager
     ? await Promise.all([
         env.REPORTS.prepare(
@@ -6960,6 +6973,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const personalDeadlines = calendarRows[1].results ?? [];
   return json({
     email: scope.email,
+    pendingApprovals,
     projects: projects.results,
     availableProjects: availableProjects.results,
     todos: todos.results,
