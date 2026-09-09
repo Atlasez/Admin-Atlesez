@@ -128,6 +128,21 @@ test("記事編集の未選択案内が横方向に崩れない", async ({ page 
   expect(layout.sourceWidth).toBeLessThanOrEqual(layout.emptyWidth);
 });
 
+test("記事編集の未選択案内は作成済み記事と矛盾しない", async ({ page }) => {
+  await mockAdminApis(page);
+  await page.goto("admin/editor/");
+  await expect(
+    page.getByRole("heading", { name: "編集する記事を選択" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-workflow-current]")).toHaveText(
+    "記事を選択してください",
+  );
+  await expect(page.locator("[data-save-message]")).toHaveText(
+    "保存状態：記事を選択してください",
+  );
+  await expect(page.locator("body")).not.toContainText("原稿を選んでください");
+});
+
 test("作業の進め方に運営画面のスクリーンショットが表示される", async ({
   page,
 }) => {
