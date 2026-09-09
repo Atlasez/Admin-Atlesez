@@ -31,6 +31,7 @@ const L =
         white: "白",
         soft: "低刺激色",
         dark: "暗色",
+        black: "ブラック",
         lineHeight: "行間",
         wide: "広い",
         motion: "アニメーション",
@@ -52,6 +53,7 @@ const L =
         white: "White",
         soft: "Soft",
         dark: "Dark",
+        black: "Black",
         lineHeight: "Line height",
         wide: "Wide",
         motion: "Animation",
@@ -105,6 +107,7 @@ const groups = [
       { value: "default", label: L.white },
       { value: "soft", label: L.soft },
       { value: "dark", label: L.dark },
+      { value: "black", label: L.black },
     ],
   },
   {
@@ -383,8 +386,18 @@ const groups = [
     const d = document.documentElement;
     for (const [k, attr] of Object.entries(ATTRS)) {
       const v = prefs[k];
-      if (v && v !== "default") d.setAttribute(attr, v);
-      else d.removeAttribute(attr);
+      if (k === "bg" && v === "black") {
+        // 既存の[data-pref-bg="dark"]向けページCSSをそのまま利用し、
+        // 色トークンだけを[data-pref-mode="black"]で差し替える。
+        d.setAttribute(attr, "dark");
+        d.setAttribute("data-pref-mode", "black");
+      } else if (v && v !== "default") {
+        d.setAttribute(attr, v);
+        if (k === "bg") d.removeAttribute("data-pref-mode");
+      } else {
+        d.removeAttribute(attr);
+        if (k === "bg") d.removeAttribute("data-pref-mode");
+      }
     }
   }
 
@@ -430,7 +443,9 @@ const groups = [
         .querySelectorAll<HTMLSelectElement>('select[name="lang"]')
         .forEach(updateLanguageOptionLabels);
       const syncBackgroundChoice = () => {
-        const value = document.documentElement.dataset.prefBg ?? "default";
+        const value = document.documentElement.dataset.prefMode === "black"
+          ? "black"
+          : document.documentElement.dataset.prefBg ?? "default";
         const input = form.querySelector<HTMLInputElement>(
           `input[name="bg"][value="${value}"]`,
         );

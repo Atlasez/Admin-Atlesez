@@ -110,12 +110,46 @@
   --danger: #e27676;
   --warning: #e8b84a;
 }
+
+/*
+ * ブラックモード（OLED/低輝度向け）。
+ * data-pref-bg は既存の暗色向けページ固有CSSとの互換性のため
+ * dark を併記し、黒向けの差分だけを data-pref-mode で上書きする。
+ */
+[data-pref-mode="black"] {
+  color-scheme: dark;
+  --text-primary: #f4f4f4;
+  --text-secondary: #c2c2c2;
+  --text-muted: #8d8d8d;
+  --background-primary: #070707;
+  --background-secondary: #0e0e0e;
+  --background-inset: #151515;
+  --border-default: #272727;
+  --border-strong: #414141;
+  --accent-primary: #8bbcff;
+  --accent-hover: #b2d3ff;
+  --accent-subtle: #172334;
+  --on-accent: #07111e;
+  --link: #9bc9ff;
+  --focus-ring: #ffca72;
+  --success: #75df94;
+  --danger: #ff8585;
+  --warning: #f4c84e;
+}
 [data-site="atlas"][data-pref-bg="dark"],
 [data-pref-bg="dark"] [data-site="atlas"] {
   --accent-primary: #79bce6;
   --accent-hover: #a7d5f2;
   --accent-subtle: #203746;
   --link: #8bc9ed;
+}
+/* 学習サイトのブラックモード差分は暗色サイト差分より後に適用する。 */
+[data-site="atlas"][data-pref-mode="black"],
+[data-pref-mode="black"] [data-site="atlas"] {
+  --accent-primary: #8fc9f5;
+  --accent-hover: #b8ddfb;
+  --accent-subtle: #183041;
+  --link: #a3d6fa;
 }
 
 /* ---------- 表示設定: 高コントラスト ---------- */

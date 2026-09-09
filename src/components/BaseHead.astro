@@ -106,7 +106,14 @@ const ogImage = new URL(
       };
       Object.keys(keys).forEach(function (k) {
         if (prefs[k] && prefs[k] !== "default") {
-          d.setAttribute(keys[k], prefs[k]);
+          // ブラックモードは既存の暗色テーマ用ページ固有CSSも利用しつつ、
+          // トークンだけを黒向けに上書きする。
+          if (k === "bg" && prefs[k] === "black") {
+            d.setAttribute(keys[k], "dark");
+            d.setAttribute("data-pref-mode", "black");
+          } else {
+            d.setAttribute(keys[k], prefs[k]);
+          }
         }
       });
     } catch (e) {
