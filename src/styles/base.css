@@ -332,7 +332,12 @@ details .details-body {
   line-height: 1.45;
   min-height: 2rem;
 }
-:where(.loading, .loading-note, .loading-state, .admin-notification-loading)::before {
+:where(
+  .loading,
+  .loading-note,
+  .loading-state,
+  .admin-notification-loading
+)::before {
   animation: atlasez-loading-spin 0.8s linear infinite;
   border: 2px solid color-mix(in srgb, var(--accent-primary) 24%, transparent);
   border-radius: 50%;
@@ -343,10 +348,17 @@ details .details-body {
   width: 0.78rem;
 }
 @keyframes atlasez-loading-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  :where(.loading, .loading-note, .loading-state, .admin-notification-loading)::before {
+  :where(
+    .loading,
+    .loading-note,
+    .loading-state,
+    .admin-notification-loading
+  )::before {
     animation: none;
   }
 }
