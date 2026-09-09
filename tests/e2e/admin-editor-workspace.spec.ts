@@ -175,6 +175,15 @@ test("既存記事では設定を要約表示し、本文までの占有高を�
   ).toBeLessThan(390);
 });
 
+test("個別記事を開いたときは未選択用の開始パネルを表示しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(page.locator("[data-document-form]")).toBeVisible();
+  await expect(page.locator("[data-editor-empty]")).toBeHidden();
+});
+
 test("本文の数式設定とロック操作は必要なときだけ開く", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
