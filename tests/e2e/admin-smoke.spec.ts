@@ -98,6 +98,7 @@ const pages = [
     "マイページ",
   ],
   ["記事編集", "admin/editor/", "記事編集ワークスペース"],
+  ["作業の進め方", "admin/guide/", "作業の進め方"],
 ] as const;
 
 for (const [label, path, heading] of pages) {
@@ -125,4 +126,24 @@ test("記事編集の未選択案内が横方向に崩れない", async ({ page 
   });
   expect(layout.flexDirection).toBe("column");
   expect(layout.sourceWidth).toBeLessThanOrEqual(layout.emptyWidth);
+});
+
+test("作業の進め方に運営画面のスクリーンショットが表示される", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.goto("admin/guide/");
+  const images = page.locator(".guide-screen img");
+  await expect(images).toHaveCount(3);
+  await expect
+    .poll(() =>
+      images.evaluateAll((elements) =>
+        elements.every(
+          (element) =>
+            (element as HTMLImageElement).complete &&
+            (element as HTMLImageElement).naturalWidth > 0,
+        ),
+      ),
+    )
+    .toBe(true);
 });

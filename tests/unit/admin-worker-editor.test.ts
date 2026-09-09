@@ -178,6 +178,30 @@ describe("admin worker editor APIs", () => {
     await expect(response.text()).resolves.toContain("completion module");
   });
 
+  it("serves the operations guide screen captures", async () => {
+    let requestedPath = "";
+    const assetEnv = {
+      ...emptyEnv,
+      ASSETS: {
+        fetch: async (request: Request) => {
+          requestedPath = new URL(request.url).pathname;
+          return new Response("png image", {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          });
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/admin-guide/portal.png"),
+      assetEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(requestedPath).toBe("/admin-guide/portal.png");
+    await expect(response.text()).resolves.toBe("png image");
+  });
+
   it("returns JSON for unexpected API failures instead of a Cloudflare HTML error", async () => {
     const brokenEnv = {
       ...emptyEnv,
