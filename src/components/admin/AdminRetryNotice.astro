@@ -6,8 +6,8 @@
 <style>
   .admin-retry-notice {
     align-items: center;
-    background: color-mix(in srgb, #e27676 9%, var(--background-secondary));
-    border: 1px solid color-mix(in srgb, #e27676 42%, var(--border-default));
+    background: color-mix(in srgb, var(--danger) 9%, var(--background-secondary));
+    border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--border-default));
     color: var(--text-primary);
     display: flex;
     flex-wrap: wrap;
@@ -27,7 +27,7 @@
 
   .admin-retry-notice button {
     background: var(--background-primary);
-    border: 1px solid color-mix(in srgb, #e27676 62%, var(--border-default));
+    border: 1px solid color-mix(in srgb, var(--danger) 62%, var(--border-default));
     color: var(--text-primary);
     cursor: pointer;
     font: inherit;
@@ -39,8 +39,8 @@
 
   .admin-retry-notice button:hover:not(:disabled),
   .admin-retry-notice button:focus-visible {
-    border-color: #e27676;
-    color: #e27676;
+    border-color: var(--danger);
+    color: var(--danger);
   }
 
   .admin-retry-notice button:disabled { cursor: wait; opacity: .65; }

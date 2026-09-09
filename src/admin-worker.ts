@@ -1884,6 +1884,10 @@ async function listReportAdminPermissions(
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const searchParams = new URL(request.url).searchParams;
+  // 大規模な名簿を表示する画面だけが limit/cursor を指定する。
+  // 既存の権限・統計画面はパラメータなしで全件を必要とするため、
+  // パラメータなしの呼び出しは従来どおり全件を返す。
+  const paginated = searchParams.has("limit");
   const requestedLimit = Number(searchParams.get("limit") ?? "100");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
@@ -1892,12 +1896,14 @@ async function listReportAdminPermissions(
   const cursorSeparator = cursor.indexOf("|");
   const cursorName = cursorSeparator >= 0 ? cursor.slice(0, cursorSeparator) : "";
   const cursorEmail = cursorSeparator >= 0 ? cursor.slice(cursorSeparator + 1) : "";
-  const cursorFilter = cursorName && cursorEmail
+  const cursorFilter = paginated && cursorName && cursorEmail
     ? `AND (COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') > ? OR (COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') = ? AND lower(p.email) > lower(?)))`
     : "";
-  const cursorValues = cursorName && cursorEmail
+  const cursorValues = paginated && cursorName && cursorEmail
     ? [cursorName, cursorName, cursorEmail]
     : [];
+  const memberLimitClause = paginated ? " LIMIT ?" : "";
+  const memberLimitValue = paginated ? pageLimit + 1 : undefined;
   const result = await env.REPORTS.prepare(
     `SELECT p.email,
       GROUP_CONCAT(DISTINCT p.subject) AS subjects,
@@ -1912,8 +1918,8 @@ async function listReportAdminPermissions(
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = p.email
      ${cursorFilter}
      GROUP BY p.email, m.display_name, m.university, m.year, m.interests
-     ORDER BY display_name, p.email LIMIT ?`,
-  ).bind(...cursorValues, pageLimit + 1).all<{
+     ORDER BY display_name, lower(p.email)${memberLimitClause}`,
+  ).bind(...cursorValues, ...(memberLimitValue === undefined ? [] : [memberLimitValue])).all<{
     email: string;
     subjects: string;
     display_name: string;
@@ -1960,8 +1966,10 @@ async function listReportAdminPermissions(
     ]);
   }
   const fetchedPermissions = result.results ?? [];
-  const hasMore = fetchedPermissions.length > pageLimit;
-  const pagePermissions = fetchedPermissions.slice(0, pageLimit);
+  const hasMore = paginated && fetchedPermissions.length > pageLimit;
+  const pagePermissions = paginated
+    ? fetchedPermissions.slice(0, pageLimit)
+    : fetchedPermissions;
   const lastPermission = pagePermissions.at(-1);
   const nextCursor = hasMore && lastPermission
     ? `${lastPermission.display_name}|${lastPermission.email}`
@@ -2022,7 +2030,9 @@ async function listReportAdminPermissions(
   }
   return json({
     permissions,
-    pagination: { limit: pageLimit, nextCursor, hasMore, total: Math.max(0, Number(totalRow?.count ?? 0)) },
+    ...(paginated
+      ? { pagination: { limit: pageLimit, nextCursor, hasMore, total: Math.max(0, Number(totalRow?.count ?? 0)) } }
+      : {}),
     workflowRoles: workflowRoles.results,
     discordRoles: discordRoles.results,
     discordAssignments: discordAssignments.results,
@@ -5019,6 +5029,71 @@ async function projectAssignmentDetails(
   };
 }
 
+/**
+ * 名簿ページ用の一括取得版。ページ内の各メンバーごとに権限テーブルを
+ * 読みに行くと、50件表示で最大100回の追加クエリが発生するため、
+ * カーソルページ単位で2クエリにまとめる。
+ */
+async function projectAssignmentDetailsBatch(
+  env: Env,
+  projectId: string,
+  members: Array<{ email: string; role: string }>,
+): Promise<Map<string, ProjectAssignmentDetails>> {
+  const details = new Map<string, ProjectAssignmentDetails>();
+  for (const member of members) {
+    details.set(member.email.toLowerCase(), {
+      labels: [projectRoleLabel(member.role)],
+      subjectAssignments: [],
+      workflowSubjects: [],
+    });
+  }
+  if (projectId !== "atlas" || members.length === 0) return details;
+
+  const placeholders = members.map(() => "?").join(",");
+  const emails = members.map((member) => member.email.toLowerCase());
+  const [permissions, workflowRoles] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT lower(email) AS email, subject
+       FROM report_admin_permissions
+       WHERE lower(email) IN (${placeholders}) ORDER BY email, subject`,
+    )
+      .bind(...emails)
+      .all<{ email: string; subject: string }>(),
+    env.REPORTS.prepare(
+      `SELECT lower(email) AS email, role, subject
+       FROM editorial_workflow_roles
+       WHERE lower(email) IN (${placeholders}) ORDER BY email, role, subject`,
+    )
+      .bind(...emails)
+      .all<{ email: string; role: string; subject: string }>(),
+  ]);
+  for (const permission of permissions.results ?? []) {
+    const current = details.get(permission.email.toLowerCase());
+    if (!current) continue;
+    const label =
+      permission.subject === "*"
+        ? "全ジャンル管理"
+        : `${APPLICATION_SUBJECT_LABELS[permission.subject] ?? permission.subject}担当`;
+    if (!current.labels.includes(label)) current.labels.push(label);
+    if (permission.subject !== "*") current.subjectAssignments.push(permission.subject);
+  }
+  for (const workflowRole of workflowRoles.results ?? []) {
+    const current = details.get(workflowRole.email.toLowerCase());
+    if (!current) continue;
+    const label =
+      workflowRole.role === "project-leader"
+        ? "プロジェクトリーダー"
+        : workflowRole.subject === "*"
+          ? "全分野統括"
+          : `${APPLICATION_SUBJECT_LABELS[workflowRole.subject] ?? workflowRole.subject}統括`;
+    if (!current.labels.includes(label)) current.labels.push(label);
+    if (workflowRole.role === "subject-coordinator" && workflowRole.subject !== "*") {
+      current.workflowSubjects.push(workflowRole.subject);
+    }
+  }
+  return details;
+}
+
 async function projectAssignmentLabels(
   env: Env,
   projectId: string,
@@ -5147,7 +5222,7 @@ async function genreOverviews(
        FROM candidate_members m
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
        WHERE 1=1 ${cursorFilter}
-       ORDER BY display_name,m.email${memberLimitClause}`,
+       ORDER BY display_name,lower(m.email)${memberLimitClause}`,
     )
       .bind(project.id, ...cursorValues, ...(memberLimitValue === undefined ? [] : [memberLimitValue]))
       .all<Omit<SubjectOverviewMember, "assignments">>(),
@@ -5165,22 +5240,27 @@ async function genreOverviews(
   const nextMemberCursor = hasMoreMembers && lastMember
     ? `${lastMember.display_name}|${lastMember.email}`
     : null;
-  const memberRows = await Promise.all(
-    pageMembers.map(async (member) => {
-      const details = await projectAssignmentDetails(
-        env,
-        project.id,
-        String(member.email ?? ""),
-        String(member.role ?? "member"),
-      );
-      return {
-        ...member,
-        assignments: details.labels,
-        subjectAssignments: details.subjectAssignments,
-        workflowSubjects: details.workflowSubjects,
-      };
-    }),
+  const assignmentDetails = await projectAssignmentDetailsBatch(
+    env,
+    project.id,
+    pageMembers.map((member) => ({
+      email: String(member.email ?? ""),
+      role: String(member.role ?? "member"),
+    })),
   );
+  const memberRows = pageMembers.map((member) => {
+    const details = assignmentDetails.get(String(member.email ?? "").toLowerCase()) ?? {
+      labels: [projectRoleLabel(String(member.role ?? "member"))],
+      subjectAssignments: [],
+      workflowSubjects: [],
+    };
+    return {
+      ...member,
+      assignments: details.labels,
+      subjectAssignments: details.subjectAssignments,
+      workflowSubjects: details.workflowSubjects,
+    };
+  });
   return json({
     project,
     scope: {
