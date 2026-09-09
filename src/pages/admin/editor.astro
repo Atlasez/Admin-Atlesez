@@ -795,6 +795,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 </style>
 
 <style is:global>
+  /* 補助見出しは日本語のページ名だけを表示し、英語の小見出しは使わない。 */
+  .math-preset-dialog-header .eyebrow,
+  .reference-library-header .eyebrow,
+  .editor-diagnostics-header .eyebrow,
+  .authoring-help-head .eyebrow {
+    display: none;
+  }
+</style>
+
+<style is:global>
   /* 公開数学記事の定義・命題枠と同じ見た目を、動的プレビューにも適用する。 */
   .article-preview .defi,
   .article-preview .math-definition {
