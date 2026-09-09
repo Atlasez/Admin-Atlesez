@@ -3324,6 +3324,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </style>
 
 <script>
+    import { lockAdminForm } from "../../scripts/admin-form-submit-lock";
   const initializeMemberAdmin = () => {
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root && root.dataset.initialized !== "true") {
@@ -3581,7 +3582,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     workflowRoleForm.querySelector<HTMLSelectElement>('select[name="subject"]')?.addEventListener("change", updateWorkflowRoleSelection);
     updateWorkflowRoleSelection();
     workflowRoleForm.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(workflowRoleForm); const selectedSubjects = values.getAll("subject").map(value => String(value)).filter(Boolean); const submit = workflowRoleForm.querySelector<HTMLButtonElement>('button[type="submit"]'); if (!selectedSubjects.length) return; if (submit) { submit.disabled = true; submit.textContent = "割り当て中…"; } const response = await fetch("/api/admin/editorial-workflow-roles", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),role:"subject-coordinator",subjects:selectedSubjects})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? `${selectedSubjects.length}分野の分野統括を追加しました。` : (data.error ?? "分野統括を追加できませんでした。"); if (response.ok) { workflowRoleForm.reset(); updateWorkflowRoleSelection(); await load(); } if (submit) { submit.disabled = false; submit.textContent = "統括を追加"; } });
-    form.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(form); const selectedSubjects = values.getAll("subject"); const response = await fetch("/api/admin/report-admin-permissions", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),subjects:selectedSubjects})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage(`${selectedSubjects.length}件の担当権限を追加しました。`, data.provisioning) : (data.error ?? "追加できませんでした。"); if (response.ok) { form.reset(); await load(); } });
+    form.addEventListener("submit", async event => { event.preventDefault(); const values = new FormData(form); const selectedSubjects = values.getAll("subject"); const release = lockAdminForm(form, "追加中…"); try { const response = await fetch("/api/admin/report-admin-permissions", {method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({email:values.get("email"),subjects:selectedSubjects})}); const data = await response.json().catch(() => ({})); message.value = response.ok ? discordSyncMessage(`${selectedSubjects.length}件の担当権限を追加しました。`, data.provisioning) : (data.error ?? "追加できませんでした。"); if (response.ok) { form.reset(); await load(); } } catch (error) { message.value = error instanceof Error ? error.message : "追加できませんでした。"; } finally { release(); } });
     list.addEventListener("click", async event => {
       const target = event.target as HTMLElement;
       const card = target.closest<HTMLElement>("[data-email]");
