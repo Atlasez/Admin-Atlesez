@@ -149,7 +149,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     </header>
 
     <section class="workflow-guide" data-status-workflow aria-label="開いている原稿の進捗">
-      <p>現在の状態：<strong data-workflow-current>原稿を選択してください</strong><small data-workflow-help>原稿を書いたら、まず「下書きを保存」します。</small></p>
+      <p>現在の状態：<strong data-workflow-current>記事を選択してください</strong><small data-workflow-help>保存済みの記事を開くか、新規記事を作成します。</small></p>
       <ol aria-label="原稿の公開までの進捗">
         <li data-workflow-step="draft"><b>1</b><span>執筆・保存</span></li>
         <li data-workflow-step="in-review"><b>2</b><span>フィードバック</span></li>
@@ -161,8 +161,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     </section>
 
     <div class="workspace-grid">
-      <aside class="document-sidebar" aria-label="原稿一覧" hidden>
-        <button type="button" class="sidebar-collapse-toggle" data-sidebar-collapse aria-expanded="true" aria-label="原稿一覧を閉じる" title="原稿一覧を閉じる">‹ 原稿一覧を閉じる</button>
+      <aside class="document-sidebar" aria-label="作成済みの記事一覧" hidden>
+        <button type="button" class="sidebar-collapse-toggle" data-sidebar-collapse aria-expanded="true" aria-label="作成済みの記事一覧を閉じる" title="作成済みの記事一覧を閉じる">‹ 作成済みの記事一覧を閉じる</button>
+        <div class="document-list-heading"><h2>作成済みの記事</h2><span data-document-count aria-live="polite"></span></div>
         <div class="document-list" data-document-list aria-live="polite"></div>
         <section class="atlas-outline-panel" aria-labelledby="atlas-outline-heading">
           <div class="atlas-outline-heading">
@@ -183,8 +184,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
       <section class="editor-panel" aria-label="原稿編集">
         <div class="empty-state" data-editor-empty>
-          <h2>原稿を選んでください</h2>
-          <p>新規原稿を作るか、学習サイトの公開記事を運営管理へ登録すると、ここで執筆とプレビューを始められます。</p>
+          <h2>編集する記事を選択</h2>
+          <p>左の作成済みの記事から開くか、新規記事を作成してください。公開記事を登録して編集を始めることもできます。</p>
           <div class="editor-start-actions">
             <button type="button" class="primary-action" data-new-document>新規原稿を作成</button>
             <div class="source-picker" aria-label="公開済み記事を編集">
@@ -239,7 +240,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 <button type="button" class="withdraw-action" data-unpublish-document hidden>公開を取り消す</button>
                 <button type="submit" class="primary-action" data-save-document>保存する</button>
               </div>
-              <output class="save-status" data-save-message aria-live="polite">保存状態：原稿を選択してください</output>
+              <output class="save-status" data-save-message aria-live="polite">保存状態：記事を選択してください</output>
               <div class="document-conflict" data-document-conflict role="alert" aria-live="assertive" hidden>
                 <strong>他のユーザーが先に更新しました。</strong>
                 <span data-document-conflict-message>変更を確認してから保存してください。</span>
@@ -443,6 +444,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 3.2rem minmax(0, 1fr); }.editor-workspace.sidebar-collapsed .document-sidebar { padding:.45rem; }.editor-workspace.sidebar-collapsed .document-sidebar > :not(.sidebar-collapse-toggle) { display:none; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { align-items:center; display:flex; font-size:1.05rem; height:2.35rem; justify-content:center; overflow:visible; padding:0; white-space:nowrap; width:2.35rem; }
   .sidebar-heading { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
   .sidebar-heading strong { display: block; font-size: .9rem; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .document-list-heading { align-items: baseline; border-bottom: 1px solid var(--border); display: flex; gap: .5rem; justify-content: space-between; padding: .1rem 0 .45rem; }
+  .document-list-heading h2 { color: var(--text); font-size: .9rem; margin: 0; }
+  .document-list-heading span { color: var(--muted); font-size: .7rem; font-weight: 700; }
   button { font: inherit; }
   .primary-action, .quiet-action { border-radius: .45rem; cursor: pointer; font-size: .82rem; font-weight: 800; min-height: 2.35rem; padding: .42rem .68rem; }
   .primary-action { background: var(--accent); border: 1px solid var(--accent); color: white; }
@@ -1301,6 +1305,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const empty = root.querySelector<HTMLElement>("[data-editor-empty]")!;
     const list = root.querySelector<HTMLElement>("[data-document-list]")!;
+    const documentCount = root.querySelector<HTMLElement>("[data-document-count]")!;
     const outlineSubject = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
     const outlineCategory = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
     const outlineList = root.querySelector<HTMLElement>("[data-atlas-outline]")!;
@@ -4037,7 +4042,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       heading.textContent = source ? `${source.title}（運営管理へ登録）` : "新規原稿";
     };
     const openOutlineDocument = (document: Omit<Document, "body">) => { void openDocument(document.id).then(() => loadRevisions(document.id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); };
-    const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || item.id, item])).values()]; list.innerHTML = unique.length ? unique.map((item) => { const learningSitePublished = !item.published_at && learningSiteHasPublishedSource(item.source_article_id); const publicationLabel = item.published_at ? '<span class="document-card-publication">公開済み・運営管理中</span>' : learningSitePublished ? '<span class="document-card-publication document-card-publication-source">学習サイト公開済み</span>' : '<span class="document-card-publication">未公開</span>'; const publicationDescription = item.published_at ? "公開済み・運営管理中" : learningSitePublished ? "学習サイト公開済み" : "未公開"; return `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}・${publicationDescription}の原稿を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span>${publicationLabel}</button>`; }).join("") : '<p class="comment-empty">まだ保存された原稿はありません。</p>'; };
+    const renderDocuments = () => { const unique = [...new Map(documents.map((item) => [item.source_article_id || item.id, item])).values()]; documentCount.textContent = unique.length ? `${unique.length}件` : ""; list.innerHTML = unique.length ? unique.map((item) => { const learningSitePublished = !item.published_at && learningSiteHasPublishedSource(item.source_article_id); const publicationLabel = item.published_at ? '<span class="document-card-publication">公開済み・運営管理中</span>' : learningSitePublished ? '<span class="document-card-publication document-card-publication-source">学習サイト公開済み</span>' : '<span class="document-card-publication">未公開</span>'; const publicationDescription = item.published_at ? "公開済み・運営管理中" : learningSitePublished ? "学習サイト公開済み" : "未公開"; return `<button class="document-card" type="button" data-document-id="${item.id}" aria-label="${esc(item.subject)} / ${esc(item.category)}・${statusLabel[item.status]}・${publicationDescription}の記事を開く"><small>${esc(item.subject)} / ${esc(item.category)}</small><span class="state state-${item.status}">${statusLabel[item.status]}</span>${publicationLabel}</button>`; }).join("") : '<p class="comment-empty">まだ保存された記事はありません。</p>'; };
     const allowedOutlineSubjects = () => subjects.filter((item) => assignedSubjects.length ? assignedSubjects.includes(item.slug) : isManager);
     const documentForSourceArticle = (article: SourceArticle) => documents.find((item) => item.source_article_id === article.articleId) ?? documents.find((item) => item.subject === article.subject && item.category === article.category && item.slug === article.slug);
     const documentForPlannedArticle = (item: PlannedArticle) => documents.find((document) => document.subject === item.subject && document.category === item.category && document.title === item.title);
