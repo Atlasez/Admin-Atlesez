@@ -3534,9 +3534,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       if (!append) list.innerHTML = '<p class="loading-state">参加者一覧を読み込んでいます…</p>';
       else memberLoadMore.disabled = true;
       try {
-        const params = new URLSearchParams({ limit: "100" });
-        if (append && memberNextCursor) params.set("cursor", memberNextCursor);
-        const response = await fetch(`/api/admin/report-admin-permissions?${params.toString()}`, {credentials:"same-origin", cache:"no-store"});
+        const endpoint = append && memberNextCursor
+          ? `/api/admin/report-admin-permissions?limit=100&cursor=${encodeURIComponent(memberNextCursor)}`
+          : "/api/admin/report-admin-permissions";
+        const response = await fetch(endpoint, {credentials:"same-origin", cache:"no-store"});
         const data = await response.json().catch(() => ({}));
         if (response.status === 403) {
           list.textContent = "このページは全分野管理者のみ利用できます。";
