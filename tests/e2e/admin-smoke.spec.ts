@@ -97,6 +97,7 @@ const pages = [
     "admin/workspace/?project=secretariat",
     "マイページ",
   ],
+  ["記事編集", "admin/editor/", "記事編集ワークスペース"],
 ] as const;
 
 for (const [label, path, heading] of pages) {
@@ -109,3 +110,19 @@ for (const [label, path, heading] of pages) {
     ).toBeVisible();
   });
 }
+
+test("記事編集の未選択案内が横方向に崩れない", async ({ page }) => {
+  await mockAdminApis(page);
+  await page.goto("admin/editor/");
+  const layout = await page.locator("[data-editor-empty]").evaluate((empty) => {
+    const sourcePicker = empty.querySelector<HTMLElement>(".source-picker");
+    const style = getComputedStyle(empty);
+    return {
+      flexDirection: style.flexDirection,
+      emptyWidth: empty.getBoundingClientRect().width,
+      sourceWidth: sourcePicker?.getBoundingClientRect().width ?? 0,
+    };
+  });
+  expect(layout.flexDirection).toBe("column");
+  expect(layout.sourceWidth).toBeLessThanOrEqual(layout.emptyWidth);
+});
