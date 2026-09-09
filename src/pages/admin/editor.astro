@@ -4810,7 +4810,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     background: var(--surface-alt);
     border: 1px solid #d9a429;
     border-radius: .45rem;
-    left: 0;
     max-width: min(26rem, calc(100vw - 2rem));
     min-width: 0;
     padding: .2rem .35rem;
@@ -4820,6 +4819,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     z-index: 30;
   }
   .publication-diagnostic summary {
+    /* summaryだけを固定して、画面下部の診断をクリックしても
+       ブラウザがページ全体を自動スクロールしないようにする。 */
+    position: fixed;
+    top: 6.5rem;
+    left: max(1rem, calc((100vw - 78rem) / 2 + 1rem));
     color: #805500;
     cursor: pointer;
     font-size: .62rem;
@@ -4860,7 +4864,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
   .publication-diagnostic[hidden] { display: none; }
   @media (max-width: 700px) {
-    .publication-diagnostic { max-width: calc(100vw - 1.6rem); width: calc(100vw - 1.6rem); }
+    .publication-diagnostic {
+      max-width: calc(100vw - 1.6rem);
+      width: calc(100vw - 1.6rem);
+    }
+    .publication-diagnostic summary {
+      left: .8rem;
+      top: 5.75rem;
+    }
   }
 </style>
 
