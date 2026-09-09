@@ -47,7 +47,11 @@ jobs:
       - name: 内部リンク検証
         run: node scripts/check-links.mjs dist "$BASE_PATH"
       - name: Playwrightブラウザ導入
-        run: npx playwright install --with-deps chromium
+        run: |
+          # ubuntu-latestには不要なGoogle Chrome apt sourceが登録されており、
+          # 配布元の一時的なハッシュ不一致でPlaywright導入全体が失敗することがある。
+          sudo find /etc/apt/sources.list.d -maxdepth 1 -type f -exec grep -Il 'dl.google.com' {} \; -delete
+          npx playwright install --with-deps chromium
       - name: E2E・アクセシビリティ検査 (Playwright + axe)
         run: npx playwright test
         env:
