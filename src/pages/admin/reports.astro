@@ -37,7 +37,6 @@ const japanRegionPaths = japanMap.locations
     <section class="analytics-panel" id="analytics-panel" data-admin-view-panel="analytics" data-analytics-admin aria-labelledby="analytics-heading" hidden={initialView !== "analytics"}>
       <div class="analytics-heading">
         <div>
-          <p class="eyebrow">匿名集計</p>
           <h2 id="analytics-heading">記事の閲覧統計</h2>
           <p>個人情報を保存せず、閲覧・15秒以上の滞在・本文の90%到達を日別に集計します。</p>
         </div>
@@ -53,7 +52,7 @@ const japanRegionPaths = japanMap.locations
       <div class="analytics-geo-grid">
         <section class="analytics-geo-card" aria-labelledby="search-country-heading">
           <div class="analytics-geo-heading">
-            <div><p class="eyebrow">学習サイト流入</p><h3 id="search-country-heading">学習サイトへの検索流入（国別）</h3></div>
+            <div><h3 id="search-country-heading">学習サイトへの検索流入（国別）</h3></div>
             <a class="button button-outline analytics-gsc-button" href="/auth/google/search-console?days=30" data-gsc-import hidden>Search Consoleから更新</a>
           </div>
           <p class="analytics-geo-description">Google検索から学習サイトへ流入したクリック・表示回数を国別に表示します。Search Consoleは国単位までのため、地図は国の範囲を塗り分け、都市を示す丸印は表示しません。</p>
@@ -61,7 +60,7 @@ const japanRegionPaths = japanMap.locations
           <div class="geo-layout"><div class="world-map" data-search-country-map role="img" aria-label="学習サイトへの検索流入国別地図"><svg viewBox={worldMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="1010" height="666"></rect><g class="map-countries" set:html={worldCountryPaths}></g></svg></div><ol class="geo-list" data-search-country-list></ol></div>
         </section>
         <section class="analytics-geo-card" aria-labelledby="japan-region-heading">
-          <div class="analytics-geo-heading"><div><p class="eyebrow">実際の閲覧地域</p><h3 id="japan-region-heading">日本国内の閲覧地域（都道府県別）</h3></div></div>
+          <div class="analytics-geo-heading"><div><h3 id="japan-region-heading">日本国内の閲覧地域（都道府県別）</h3></div></div>
           <p class="analytics-geo-description">記事の閲覧イベントをCloudflareの推定地域で日別集計しています。IPアドレス・市区町村名・緯度経度は保存せず、都道府県相当の地域コードだけを扱います。</p>
           <output class="analytics-gsc-status" data-japan-region-status>閲覧地域の統計を読み込み中です…</output>
           <div class="geo-layout"><div class="japan-map" data-japan-region-map role="img" aria-label="日本国内の閲覧地域別地図"><svg viewBox={japanMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="438" height="516"></rect><g class="japan-regions" set:html={japanRegionPaths}></g><g class="map-bubbles" data-japan-map-bubbles></g></svg></div><ol class="geo-list" data-japan-region-list></ol></div>
@@ -69,7 +68,7 @@ const japanRegionPaths = japanMap.locations
       </div>
 
       <section class="analytics-query-card" aria-labelledby="search-query-heading">
-        <div class="analytics-geo-heading"><div><p class="eyebrow">検索語</p><h3 id="search-query-heading">検索された単語</h3></div><span class="analytics-privacy-note">運営メンバー向け</span></div>
+        <div class="analytics-geo-heading"><div><h3 id="search-query-heading">検索された単語</h3></div><span class="analytics-privacy-note">運営メンバー向け</span></div>
         <p class="analytics-geo-description">Google検索で学習サイトに流入した検索語の上位100件です。Search Consoleの仕様により、匿名化された検索語などは表示されない場合があります。</p>
         <output class="analytics-gsc-status" data-search-query-status>Search Consoleの検索語を読み込み中です…</output>
         <div class="analytics-table-wrap"><table class="analytics-table analytics-query-table"><thead><tr><th>検索語</th><th>クリック</th><th>表示</th><th>CTR</th><th>平均掲載順位</th></tr></thead><tbody data-search-query-list></tbody></table></div>

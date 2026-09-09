@@ -23,7 +23,7 @@ const { title, description, darkReaderLock = false } = Astro.props;
       />
       {darkReaderLock && <meta name="darkreader-lock" />}
     </head>
-  <body>
+  <body data-admin-shell>
     <ClientRouter />
     <AdminNav />
     <div class="admin-layout-main"><slot /></div>
