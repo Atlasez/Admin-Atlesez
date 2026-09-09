@@ -55,7 +55,7 @@ const projectLabel = selectedProject?.[1] ?? "";
         <button type="button" class="button button--quiet navigator-button" data-next-application aria-label="次の応募者">次へ →</button>
       </div>
     </section>
-    <div class="application-list" data-list hidden={!selectedProject}>読み込み中…</div>
+    <div class="application-list loading-state" data-list hidden={!selectedProject}>読み込み中…</div>
     <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title" hidden={!selectedProject}>
       <h2 id="accept-dialog-title">受入を確定しますか？</h2>
       <p>「はい」を押すと、プロジェクト参加を登録し、応募者本人へ受入承認メールを送信します。本人にはプロフィール入力も案内されます。管理権限は別途「運営者・担当管理」から付与してください。</p>
@@ -651,7 +651,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     const applicationOptionLabel=(application:any)=>`${displayName(application)}｜${application.email||'メール未設定'}`;
     const renderNavigator=()=>{if(!visibleApplications.length){navigator.hidden=true;return}const selectedIndex=Math.max(0,visibleApplications.findIndex(application=>application.id===selectedApplicationId));const selected=visibleApplications[selectedIndex];selectedApplicationId=selected.id;applicationSelect.innerHTML=visibleApplications.map(application=>`<option value="${esc(application.id)}">${esc(applicationOptionLabel(application))}</option>`).join('');applicationSelect.value=selectedApplicationId;applicationPosition.textContent=`${selectedIndex+1} / ${visibleApplications.length}人`;previousApplication.disabled=selectedIndex===0;nextApplication.disabled=selectedIndex===visibleApplications.length-1;navigator.hidden=false};
     const applicationCreatedAt=(application:any)=>{const timestamp=Date.parse(application.created_at??'');return Number.isFinite(timestamp)?timestamp:0};
-    const render=(items:any[])=>{visibleApplications=items.filter(matches).sort((a,b)=>applicationCreatedAt(b)-applicationCreatedAt(a));if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
+    const render=(items:any[])=>{list.classList.remove('loading-state');visibleApplications=items.filter(matches).sort((a,b)=>applicationCreatedAt(b)-applicationCreatedAt(a));if(!visibleApplications.some(application=>application.id===selectedApplicationId))selectedApplicationId=visibleApplications[0]?.id??'';renderNavigator();const selected=visibleApplications.find(application=>application.id===selectedApplicationId);list.innerHTML=selected?applicationCard(selected):'<p class="application-empty">条件に一致する応募はありません。</p>'};
     const refresh=()=>render(applications);
     const resetSelectionAndRefresh=()=>{selectedApplicationId='';refresh()};
     const schedulePrefetch=()=>{if(prefetchScheduled||!hasMore)return;prefetchScheduled=true;const run=()=>{prefetchScheduled=false;if(!loadingPage&&hasMore)void load(true)};const idle=(window as Window & {requestIdleCallback?: (callback:()=>void,options?:{timeout:number})=>number}).requestIdleCallback;if(idle)idle(run,{timeout:1200});else window.setTimeout(run,250)};

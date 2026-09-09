@@ -1857,6 +1857,19 @@ async function listReportAdminPermissions(
 ): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "100");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 100;
+  const cursor = searchParams.get("cursor") ?? "";
+  const cursorSeparator = cursor.indexOf("|");
+  const cursorName = cursorSeparator >= 0 ? cursor.slice(0, cursorSeparator) : "";
+  const cursorEmail = cursorSeparator >= 0 ? cursor.slice(cursorSeparator + 1) : "";
+  const cursorFilter = cursorName && cursorEmail
+    ? `AND (COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') > ? OR (COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') = ? AND lower(p.email) > lower(?)))`
+    : "";
+  const cursorValues = cursorName && cursorEmail ? [cursorName, cursorName, cursorEmail] : [];
   const result = await env.REPORTS.prepare(
     `SELECT p.email,
       GROUP_CONCAT(DISTINCT p.subject) AS subjects,
@@ -1869,9 +1882,10 @@ async function listReportAdminPermissions(
      FROM report_admin_permissions p
      LEFT JOIN editorial_member_profiles m ON m.email = p.email
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = p.email
+     ${cursorFilter}
      GROUP BY p.email, m.display_name, m.university, m.year, m.interests
-     ORDER BY display_name, p.email`,
-  ).all<{
+     ORDER BY display_name, p.email LIMIT ?`,
+  ).bind(...cursorValues, pageLimit + 1).all<{
     email: string;
     subjects: string;
     display_name: string;
@@ -1881,7 +1895,7 @@ async function listReportAdminPermissions(
     avatar_url: string;
     discord_user_id: string;
   }>();
-  const [workflowRoles, discordRoles, discordAssignments] = await Promise.all([
+  const [workflowRoles, discordRoles, discordAssignments, totalRow] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT r.email, r.role, r.subject,
          COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') AS display_name
@@ -1905,6 +1919,9 @@ async function listReportAdminPermissions(
        WHERE is_active = 1
        ORDER BY email, discord_role_id`,
     ).all<{ email: string; discord_role_id: string }>(),
+    env.REPORTS.prepare(
+      "SELECT COUNT(DISTINCT lower(email)) AS count FROM report_admin_permissions",
+    ).first<{ count: number }>(),
   ]);
   const assignmentsByEmail = new Map<string, string[]>();
   for (const assignment of discordAssignments.results ?? []) {
@@ -1914,7 +1931,14 @@ async function listReportAdminPermissions(
       assignment.discord_role_id,
     ]);
   }
-  const permissions = (result.results ?? []).map((member) => ({
+  const fetchedPermissions = result.results ?? [];
+  const hasMore = fetchedPermissions.length > pageLimit;
+  const pagePermissions = fetchedPermissions.slice(0, pageLimit);
+  const lastPermission = pagePermissions.at(-1);
+  const nextCursor = hasMore && lastPermission
+    ? `${lastPermission.display_name}|${lastPermission.email}`
+    : null;
+  const permissions = pagePermissions.map((member) => ({
     ...member,
     discord_role_ids: (assignmentsByEmail.get(member.email.toLowerCase()) ?? []).join(","),
   }));
@@ -1970,10 +1994,78 @@ async function listReportAdminPermissions(
   }
   return json({
     permissions,
+    pagination: { limit: pageLimit, nextCursor, hasMore, total: Math.max(0, Number(totalRow?.count ?? 0)) },
     workflowRoles: workflowRoles.results,
     discordRoles: discordRoles.results,
     discordAssignments: discordAssignments.results,
   });
+}
+
+type PermissionAuditAction = "grant" | "replace" | "revoke";
+
+const recordPermissionAudit = async (
+  env: Env,
+  actorEmail: string,
+  targetEmail: string,
+  action: PermissionAuditAction,
+  beforeSubjects: string[],
+  afterSubjects: string[],
+) => {
+  // 監査履歴の保存失敗で権限変更そのものをロールバックさせない。
+  // 古いローカルD1（0098未適用）でも既存操作を継続できるようにする。
+  await env.REPORTS.prepare(
+    `INSERT INTO admin_permission_audit_log
+     (id,actor_email,target_email,action,before_subjects,after_subjects,created_at)
+     VALUES (?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      actorEmail,
+      targetEmail,
+      action,
+      [...new Set(beforeSubjects)].sort().join(","),
+      [...new Set(afterSubjects)].sort().join(","),
+      new Date().toISOString(),
+    )
+    .run()
+    .catch(() => undefined);
+};
+
+async function listPermissionAudit(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const requestedLimit = Number(new URL(request.url).searchParams.get("limit") ?? "30");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 30;
+  const rows = await env.REPORTS.prepare(
+    `SELECT id,actor_email,target_email,action,before_subjects,after_subjects,created_at
+     FROM admin_permission_audit_log
+     ORDER BY created_at DESC,id DESC LIMIT ?`,
+  )
+    .bind(limit)
+    .all<{
+      id: string;
+      actor_email: string;
+      target_email: string;
+      action: PermissionAuditAction;
+      before_subjects: string;
+      after_subjects: string;
+      created_at: string;
+    }>()
+    .catch(() => ({ results: [] as Array<{
+      id: string;
+      actor_email: string;
+      target_email: string;
+      action: PermissionAuditAction;
+      before_subjects: string;
+      after_subjects: string;
+      created_at: string;
+    }> }));
+  return json({ entries: rows.results ?? [] });
 }
 
 async function createEditorialWorkflowRole(
@@ -2503,6 +2595,7 @@ async function createReportAdminPermission(
     allSubjects: normalizedSubjects.includes("*"),
     isManager: normalizedSubjects.includes("*"),
   });
+  await recordPermissionAudit(env, scope.email, email, "grant", [], normalizedSubjects);
   return json({ ok: true, provisioning }, 201);
 }
 
@@ -2560,6 +2653,7 @@ async function updateReportAdminPermissions(
     allSubjects: normalizedSubjects.includes("*"),
     isManager: normalizedSubjects.includes("*"),
   });
+  await recordPermissionAudit(env, scope.email, email, "replace", state.subjects, normalizedSubjects);
   return json({ ok: true, provisioning });
 }
 
@@ -2596,6 +2690,7 @@ async function deleteReportAdminPermission(
   )
     .bind(email, subject)
     .run();
+  await recordPermissionAudit(env, scope.email, email, "revoke", state.subjects, subjects);
   return json({ ok: true, provisioning });
 }
 
@@ -6844,6 +6939,22 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
   });
 }
 
+const countPendingProfileApprovals = async (env: Env) => {
+  const [memberRequests, atlasRequests] = await Promise.all([
+    env.REPORTS.prepare(
+      "SELECT COUNT(*) AS count FROM editorial_member_profile_change_requests WHERE status='pending'",
+    ).first<{ count: number }>(),
+    env.REPORTS.prepare(
+      "SELECT COUNT(*) AS count FROM editorial_project_profile_change_requests WHERE project_id='atlas' AND status='pending'",
+    ).first<{ count: number }>(),
+  ]);
+  const normalizeCount = (value: unknown) => {
+    const count = Number(value ?? 0);
+    return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+  };
+  return normalizeCount(memberRequests?.count) + normalizeCount(atlasRequests?.count);
+};
+
 async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -6852,14 +6963,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
   const pendingApprovals = canReviewProfileRequests
-    ? await env.REPORTS.prepare(
-        `SELECT
-           (SELECT COUNT(*) FROM editorial_member_profile_change_requests WHERE status='pending') +
-           (SELECT COUNT(*) FROM editorial_project_profile_change_requests WHERE project_id='atlas' AND status='pending')
-           AS count`,
-      )
-        .first<{ count: number }>()
-        .then((row) => Math.max(0, Number(row?.count ?? 0)))
+    ? countPendingProfileApprovals(env)
     : Promise.resolve(0);
   const [projects, availableProjects] = scope.isManager
     ? await Promise.all([
@@ -7539,9 +7643,11 @@ async function listProfileChangeRequests(
       ? atlasStatement.all<Record<string, unknown>>()
       : atlasStatement.bind(requestedStatus).all<Record<string, unknown>>(),
   ]);
+  const pendingApprovals = await countPendingProfileApprovals(env);
   return json({
     requests: result.results ?? [],
     atlasInternalBioRequests: atlasResult.results ?? [],
+    pendingApprovals,
     reviewer: scope.email,
   });
 }
@@ -16757,6 +16863,8 @@ async function handleAdminRequest(
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
+  if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
+    return listPermissionAudit(request, env);
   if (
     url.pathname === "/api/admin/member-management" &&
     request.method === "DELETE"
