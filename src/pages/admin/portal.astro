@@ -38,6 +38,11 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </a>
     </section>
 
+    <div class="portal-load-error error-state" data-portal-error role="alert" hidden>
+      <span data-portal-error-message>ポータル情報を読み込めませんでした。</span>
+      <button type="button" data-portal-retry>再試行</button>
+    </div>
+
     <section class="project-entry" aria-labelledby="projects-entry-heading">
       <div class="project-entry-heading">
         <h2 id="projects-entry-heading" data-admin-i18n data-admin-ja="参加中のプロジェクト" data-admin-en="Your projects">参加中のプロジェクト</h2>
@@ -102,6 +107,11 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .portal-summary-item small { color: var(--text-muted); font-size: .68rem; line-height: 1.35; min-height: 1.35em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .portal-summary-item[data-summary-state="attention"] strong { color: var(--warning); }
   .portal-summary-item[data-summary-state="success"] strong { color: var(--success); }
+  .portal-load-error { align-items: center; gap: .8rem; justify-content: space-between; margin: -0.5rem 0 1rem; padding: .7rem .85rem; }
+  .portal-load-error[hidden] { display: none; }
+  .portal-load-error button { background: var(--accent-primary); border: 1px solid var(--accent-primary); border-radius: var(--radius); color: #fff; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 800; min-height: 2.2rem; padding: .42rem .75rem; white-space: nowrap; }
+  .portal-load-error button:hover { filter: brightness(1.08); }
+  .portal-load-error button:disabled { cursor: wait; opacity: .7; }
   .project-entry { border: 1px solid var(--border-default); display: grid; gap: 1.25rem; margin: 1.5rem 0; padding: 1.25rem; }
   .project-entry h2 { font-size: 1.2rem; margin: .25rem 0 .35rem; }
   .project-entry-heading p { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; margin: 0; }
@@ -176,6 +186,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   @media (max-width: 520px) {
     .portal > header { align-items: start; flex-direction: column; }
     .application-link { align-self: stretch; text-align: center; }
+    .portal-load-error { align-items: stretch; flex-direction: column; }
+    .portal-load-error button { width: 100%; }
   }
   @media (max-width: 520px) {
     .project-entry-cards { grid-template-columns: 1fr; }
@@ -478,6 +490,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const todosView = root.querySelector<HTMLElement>('[data-todos]')!;
     const todoSummary = root.querySelector<HTMLElement>('[data-todo-summary]')!;
     const summary = root.querySelector<HTMLElement>('[data-portal-summary]')!;
+    const portalError = root.querySelector<HTMLElement>('[data-portal-error]')!;
+    const portalErrorMessage = root.querySelector<HTMLElement>('[data-portal-error-message]')!;
+    const portalRetry = root.querySelector<HTMLButtonElement>('[data-portal-retry]')!;
     const managedProjectsView = root.querySelector<HTMLElement>('[data-project-group="managed"]')!;
     const memberProjectsView = root.querySelector<HTMLElement>('[data-project-group="member"]')!;
     const availableProjectsView = root.querySelector<HTMLElement>('[data-project-group="available"]')!;
@@ -649,29 +664,70 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       notificationButton?.click();
     }, { signal: lifecycle.signal });
     window.addEventListener('atlasez-lang-change', () => { if (portalData) renderPortal(portalData); }, { signal: lifecycle.signal });
-    void Promise.all([
-      fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-        const contentType = response.headers.get('content-type') ?? '';
-        const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
-        if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。ページを再読み込みしてください。');
-        return data;
-      }),
-      fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-        if (!response.ok) return { notifications: [], notificationsUnavailable: true } as PortalData;
-        const data = await response.json() as PortalData;
-        return { notifications: data.notifications ?? [], notificationsTruncated: data.notificationsTruncated === true } as PortalData;
-      }),
-    ]).then(([data, notificationData]) => {
-      portalData = { ...data, ...notificationData };
-      renderPortal(portalData);
-    }).catch((error) => {
-      const message = error instanceof Error ? error.message : 'Homeを読み込めませんでした。';
-      managedProjectsView.innerHTML = `<p class="project-empty">${escapeHtml(message)}</p>`;
-      memberProjectsView.innerHTML = `<p class="project-empty">${escapeHtml(message)}</p>`;
+    const setLoadingState = () => {
+      portalError.hidden = true;
+      portalRetry.disabled = false;
+      portalRetry.textContent = '再試行';
+      managedProjectsView.classList.add('loading-state');
+      memberProjectsView.classList.add('loading-state');
+      managedProjectsView.innerHTML = '<p class="loading-state">読み込み中…</p>';
+      memberProjectsView.innerHTML = '<p class="loading-state">読み込み中…</p>';
       availableProjectsSection.hidden = true;
-      calendarAgenda.textContent = message;
-      todosView.textContent = message;
-    });
+      calendarAgenda.hidden = false;
+      calendarAgenda.innerHTML = '<p class="loading-state">読み込み中…</p>';
+      todosView.classList.add('loading-state');
+      todosView.innerHTML = '<p class="loading-state">読み込み中…</p>';
+    };
+    const setLoadError = (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Homeを読み込めませんでした。';
+      portalErrorMessage.textContent = message;
+      portalError.hidden = false;
+      portalRetry.disabled = false;
+      portalRetry.textContent = '再試行';
+      managedProjectsView.classList.remove('loading-state');
+      memberProjectsView.classList.remove('loading-state');
+      managedProjectsView.innerHTML = '<p class="project-empty">データを読み込めませんでした。</p>';
+      memberProjectsView.innerHTML = '<p class="project-empty">データを読み込めませんでした。</p>';
+      availableProjectsSection.hidden = true;
+      calendarAgenda.hidden = false;
+      calendarAgenda.innerHTML = '<p class="calendar-agenda-empty">データを読み込めませんでした。</p>';
+      todosView.classList.remove('loading-state');
+      todosView.innerHTML = '<p class="empty">データを読み込めませんでした。</p>';
+    };
+    const loadPortal = async () => {
+      if (lifecycle.signal.aborted) return;
+      setLoadingState();
+      portalRetry.disabled = true;
+      portalRetry.textContent = '再試行中…';
+      try {
+        const [data, notificationData] = await Promise.all([
+          fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+            const contentType = response.headers.get('content-type') ?? '';
+            const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
+            if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。');
+            return data;
+          }),
+          fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+            if (!response.ok) return { notifications: [], notificationsUnavailable: true } as PortalData;
+            const data = await response.json() as PortalData;
+            return { notifications: data.notifications ?? [], notificationsTruncated: data.notificationsTruncated === true } as PortalData;
+          }),
+        ]);
+        if (lifecycle.signal.aborted) return;
+        portalData = { ...data, ...notificationData };
+        renderPortal(portalData);
+        portalError.hidden = true;
+      } catch (error) {
+        if (!lifecycle.signal.aborted) setLoadError(error);
+      } finally {
+        if (!lifecycle.signal.aborted) {
+          portalRetry.disabled = false;
+          portalRetry.textContent = '再試行';
+        }
+      }
+    };
+    portalRetry.addEventListener('click', () => { void loadPortal(); }, { signal: lifecycle.signal });
+    void loadPortal();
   };
   document.addEventListener('astro:page-load', initializePortal);
   initializePortal();
