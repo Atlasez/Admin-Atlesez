@@ -1,6 +1,7 @@
 ---
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { genreLabel } from "../../lib/taxonomy";
 
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order);
@@ -90,10 +91,13 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
         <p class="empty-state" data-empty-state hidden>条件に一致する分野はありません。</p>
       </div>
     </section>
+    <AdminRetryNotice />
   </main>
 </AdminLayout>
 
 <script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+
   (() => {
     const root = document.querySelector<HTMLElement>("[data-genres-page]");
     if (!root || root.dataset.bound === "true") return;
@@ -206,7 +210,10 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
 
     const renderOverviews = () => cards.forEach((card) => { renderMembers(card); renderProgress(card); });
 
-    const loadOverviews = async () => {
+    let loadOverviews: () => Promise<void>;
+    const retry = createAdminLoadRetry(root, () => loadOverviews(), "ジャンル概要を読み込めませんでした。");
+    loadOverviews = async () => {
+      retry.begin();
       try {
         const response = await fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" });
         const data = await response.json() as { members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string };
@@ -220,6 +227,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
         progressBySubject.clear();
         (data.overviews ?? []).forEach((overview) => { if (overview.subject) progressBySubject.set(overview.subject, overview); });
         renderOverviews();
+        retry.success();
       } catch (error) {
         membersLoaded = true;
         cards.forEach((card) => {
@@ -236,6 +244,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
           }
           if (progressView) progressView.textContent = error instanceof Error ? error.message : "進捗を読み込めませんでした。";
         });
+        retry.fail(error);
       }
     };
 

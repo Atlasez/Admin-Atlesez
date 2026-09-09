@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 ---
 
 <AdminLayout title="諸手続き" description="アトラス学習サイトの活動休止・退会手続き">
@@ -65,6 +66,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <section class="history" aria-labelledby="history-heading">
       <div class="history-heading"><div><h2 id="history-heading">過去の申請</h2></div><span>最新20件</span></div>
       <div data-history><p class="empty">申請履歴を読み込んでいます…</p></div>
+      <AdminRetryNotice />
     </section>
   </main>
 </AdminLayout>
@@ -302,6 +304,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 </style>
 
 <script>
+import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
 import { readAdminApiJson } from "../../lib/admin-api";
 
 type ProcedureRequest = { procedure_type: "pause" | "withdrawal"; effective_from: string; effective_until?: string; reason: string; status: string; created_at: string };
@@ -318,9 +321,11 @@ const initialize = () => {
     if (!requests.length) { history.innerHTML = '<p class="empty">まだ申請履歴はありません。</p>'; return; }
     history.innerHTML = `<div class="history-list">${requests.map((item) => { const type = item.procedure_type === "pause" ? "活動休止" : "退会"; const date = item.effective_until ? `${item.effective_from}〜${item.effective_until}` : item.effective_from; return `<div class="history-row"><span class="history-type history-type--${item.procedure_type}">${type}</span><span class="history-detail">${escapeHtml(date)} ・ ${escapeHtml(item.reason)}</span><span class="history-status">${escapeHtml(statusLabel[item.status] ?? item.status)}</span></div>`; }).join("")}</div>`;
   };
-  const load = async () => { try { const response = await fetch("/api/admin/member-procedures?project=atlas", { credentials: "same-origin", cache: "no-store" }); const data = await readAdminApiJson<ProcedureResponse>(response, "申請履歴を読み込めませんでした。"); if (!response.ok) throw new Error(data.error); renderHistory(data.requests ?? []); } catch (error) { history.innerHTML = `<p class="error">${error instanceof Error ? error.message : "申請履歴を読み込めませんでした。"}</p>`; } };
+  let load: () => Promise<void>;
+  const retry = createAdminLoadRetry(root, () => load(), "申請履歴を読み込めませんでした。");
+  load = async () => { retry.begin(); try { const response = await fetch("/api/admin/member-procedures?project=atlas", { credentials: "same-origin", cache: "no-store" }); const data = await readAdminApiJson<ProcedureResponse>(response, "申請履歴を読み込めませんでした。"); if (!response.ok) throw new Error(data.error); renderHistory(data.requests ?? []); retry.success(); } catch (error) { history.innerHTML = `<p class="error">${error instanceof Error ? error.message : "申請履歴を読み込めませんでした。"}</p>`; retry.fail(error); throw error; } };
   root.querySelectorAll<HTMLFormElement>("[data-procedure-form]").forEach((form) => { form.addEventListener("submit", async (event) => { event.preventDefault(); const button = form.querySelector<HTMLButtonElement>("button"); const output = form.querySelector<HTMLOutputElement>("[data-form-message]")!; const values = Object.fromEntries(new FormData(form).entries()); const payload = { type: values.type, effectiveFrom: values.effectiveFrom, effectiveUntil: values.effectiveUntil ?? "", reason: values.reason, note: values.note ?? "", confirm: form.querySelector<HTMLInputElement>("[name=confirm]")?.checked ?? false }; button!.disabled = true; output.textContent = "送信しています…"; try { const response = await fetch("/api/admin/member-procedures?project=atlas", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const data = await readAdminApiJson<ProcedureResponse>(response, "申請を送信できませんでした。"); if (!response.ok) throw new Error(data.error); output.textContent = "申請を受け付けました。運営の確認をお待ちください。"; form.reset(); await load(); } catch (error) { output.textContent = error instanceof Error ? error.message : "申請を送信できませんでした。"; } finally { button!.disabled = false; } }); });
-  void load();
+  void load().catch(() => undefined);
 };
 document.addEventListener("astro:page-load", initialize); initialize();
 </script>

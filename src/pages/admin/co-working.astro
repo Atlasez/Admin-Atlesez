@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { atlasRecurringSessions } from "../../lib/co-working-schedule";
 const requestedProject = Astro.url.searchParams.get("project");
 const operationProject = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
@@ -32,6 +33,7 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
         <a href={`/admin/operations/?project=${operationProject}`}>タスク管理・日程へ</a>
       </div>
       <div class="event-list" data-event-list aria-live="polite"><p class="loading-state">読み込み中…</p></div>
+      <AdminRetryNotice />
       <p class="empty" data-event-empty hidden>登録された同時作業会はありません。</p>
     </section>
     <p class="scope-note">開催場所は日程の詳細欄に記録してください。イベントの作成・参加可否の登録は、既存のタスク管理・カレンダーページで行えます。</p>
@@ -69,6 +71,8 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
   }
 </style>
 <script>
+  import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+
   type CoWorkingEvent = {
     title?: string;
     starts_at?: string;
@@ -87,13 +91,21 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
     const formatDate = (value: string) => new Intl.DateTimeFormat('ja-JP', { dateStyle: 'full', timeStyle: 'short' }).format(new Date(value));
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
-    void fetch(`/api/admin/operations?project=${encodeURIComponent(projectId)}`, { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+    let loadEvents: () => Promise<void>;
+    const retry = createAdminLoadRetry(root, () => loadEvents(), '日程を読み込めませんでした。');
+    loadEvents = async () => {
+      retry.begin();
+      list.hidden = false;
+      empty.hidden = true;
+      list.innerHTML = '<p class="loading-state">読み込み中…</p>';
+      try {
+        const response = await fetch(`/api/admin/operations?project=${encodeURIComponent(projectId)}`, { credentials: 'same-origin', cache: 'no-store' });
       const contentType = response.headers.get('content-type') ?? '';
       const data = contentType.includes('application/json') ? await response.json() as OperationsResponse : null;
       if (!response.ok || !data) throw new Error(data?.error ?? '日程を読み込めませんでした。');
       const now = Date.now();
       const events = (data.events ?? []).filter((event) => event.starts_at && new Date(event.starts_at).getTime() >= now).sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime());
-      if (!events.length) { list.hidden = true; empty.hidden = false; return; }
+      if (!events.length) { list.hidden = true; empty.hidden = false; retry.success(); return; }
       list.innerHTML = events.map((event) => {
         const counts = event.availabilityCounts ?? {};
         const availability = '参加 ' + (counts.available ?? 0) + ' / 未定 ' + (counts.maybe ?? 0) + ' / 不参加 ' + (counts.unavailable ?? 0);
@@ -101,9 +113,14 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
         const end = event.ends_at ? ' 〜 ' + formatDate(event.ends_at) : '';
         return '<article class="event-card"><strong>' + escapeHtml(event.title ?? '同時作業会') + '</strong><time datetime="' + escapeHtml(event.starts_at!) + '">' + escapeHtml(formatDate(event.starts_at!)) + escapeHtml(end) + '</time>' + (description ? '<small>' + escapeHtml(description) + '</small>' : '') + '<span class="availability">' + escapeHtml(availability) + '</span></article>';
       }).join('');
-    }).catch((error) => {
-      list.textContent = error instanceof Error ? error.message : '日程を読み込めませんでした。';
-    });
+        retry.success();
+      } catch (error) {
+        list.textContent = error instanceof Error ? error.message : '日程を読み込めませんでした。';
+        retry.fail(error);
+        throw error;
+      }
+    };
+    void loadEvents().catch(() => undefined);
   };
   document.addEventListener('astro:page-load', initializeCoWorking);
   initializeCoWorking();
