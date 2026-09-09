@@ -13,7 +13,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   <main class="genres" id="main" data-genres-page>
     <header class="genres-hero">
       <div class="hero-heading">
-        <div class="eyebrow-row"><span class="eyebrow">アトラス / 構成管理</span><span class="hero-caption">学習サイトの構造を確認</span></div>
+        <div class="hero-caption">学習サイトの構造を確認</div>
         <h1>各ジャンル概要</h1>
         <p>アトラスに登録されている分野の構成、担当メンバー、進捗、カテゴリを一つの画面で確認できます。</p>
       </div>
@@ -32,7 +32,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
 
     <section class="genres-workspace" aria-label="分野の詳細">
       <aside class="index-panel">
-        <div class="panel-heading"><div><span class="panel-kicker">ナビゲーション</span><h2>分野一覧</h2></div><span class="result-count" data-visible-count>{subjects.length}件</span></div>
+        <div class="panel-heading"><div><h2>分野一覧</h2></div><span class="result-count" data-visible-count>{subjects.length}件</span></div>
         <label class="search-field"><span class="search-icon" aria-hidden="true">⌕</span><span class="visually-hidden">分野を検索</span><input type="search" placeholder="分野名・IDで検索" data-genre-search /></label>
         <div class="filter-row" role="group" aria-label="公開状態で絞り込む">
           <button type="button" class="filter-button is-active" data-filter="all" aria-pressed="true">すべて</button>
@@ -46,7 +46,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       </aside>
 
       <div class="content-panel">
-        <header class="content-heading"><div><span class="panel-kicker">分野詳細</span><h2>学習領域</h2></div><span class="content-count" data-results-label>{subjects.length}件を表示</span></header>
+        <header class="content-heading"><div><h2>学習領域</h2></div><span class="content-count" data-results-label>{subjects.length}件を表示</span></header>
         <div class="genre-grid">
           {subjects.map((subject) => (
             <article id={subject.data.slug} class="genre-card" data-genre-card data-status={subject.data.status} data-search={(subject.data.name.ja + " " + subject.data.slug + " " + genreLabel(subject.data.genre, "ja")).toLowerCase()}>

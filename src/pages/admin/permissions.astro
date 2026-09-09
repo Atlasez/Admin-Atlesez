@@ -30,7 +30,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     </section>
 
     <section class="member-admin__members" aria-labelledby="member-list-title">
-      <div class="member-admin__section-heading"><div><p class="member-admin__eyebrow">運営メンバー</p><h2 id="member-list-title">参加者一覧</h2><small>参加者を選択すると、権限・プロフィール・Discord役職をまとめて編集できます。</small></div><span class="member-admin__count" data-member-count></span></div>
+      <div class="member-admin__section-heading"><div><h2 id="member-list-title">参加者一覧</h2><small>参加者を選択すると、運営権限・プロフィール・Discord役職をまとめて編集できます。</small></div><span class="member-admin__count" data-member-count></span></div>
       <div class="member-toolbar" aria-label="参加者の検索と絞り込み">
         <label class="member-toolbar__search">参加者を検索<input type="search" data-member-search placeholder="名前・メールアドレスで検索" autocomplete="off" /></label>
         <label>表示を絞り込む<select data-member-filter><option value="all">すべての参加者</option><option value="unconnected">Discord未連携</option><option value="no-roles">Discord役職なし</option><option value="has-roles">Discord役職あり</option></select></label>
@@ -43,7 +43,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     </section>
 
     <section class="member-admin__tools" aria-labelledby="admin-tools-title">
-      <div class="member-admin__section-heading"><div><p class="member-admin__eyebrow">管理ツール</p><h2 id="admin-tools-title">追加・連携・公開フロー</h2><small>必要な項目だけを開いて操作できます。Discord側のロール定義は変更しません。</small></div></div>
+      <div class="member-admin__section-heading"><div><h2 id="admin-tools-title">追加・連携・公開フロー</h2><small>必要な項目だけを開いて操作できます。Discord側のロール定義は変更しません。</small></div></div>
       <output class="member-admin__global-message" data-message aria-live="polite"></output>
       <div class="member-admin__workspace">
         <details class="member-admin__add action-card action-card--primary">
@@ -74,7 +74,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
             <p class="action-card__description">「執筆完了」後の公開審査を担当します。同じ分野に複数人、1人に複数分野を割り当てられます。</p>
             <form data-add-workflow-role>
               <label>担当者のメールアドレス<input type="email" name="email" required maxlength="320" list="workflow-coordinator-members" placeholder="coordinator@example.com" /><datalist id="workflow-coordinator-members" data-workflow-coordinator-members></datalist><small>既存メンバーは候補から選べます。</small></label>
-              <label class="workflow-role-field--subjects">統括する分野（複数選択可）<select name="subject" multiple required size="5" aria-describedby="workflow-role-subject-help">{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}</option>)}</select><small id="workflow-role-subject-help">Ctrl（Windows）または⌘（Mac）を押しながら複数選択できます。</small><output data-workflow-role-selection aria-live="polite">0分野を選択中</output></label>
+              <label class="workflow-role-field--subjects">統括する分野（複数選択可）<select name="subject" multiple required size="5" aria-describedby="workflow-role-subject-help">{subjects.map(s => <option value={s.data.slug}>{s.data.name.ja}</option>)}</select><small id="workflow-role-subject-help">チェックを入れて複数の分野を選択できます。</small><output data-workflow-role-selection aria-live="polite">0分野を選択中</output></label>
               <button type="submit" class="button-primary">統括を追加</button>
             </form>
             <div class="workflow-role-list loading-state" data-workflow-role-list><small>読み込み中…</small></div>

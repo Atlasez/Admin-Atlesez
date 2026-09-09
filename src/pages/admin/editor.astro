@@ -407,7 +407,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       <form method="dialog" data-review-request-form>
         <p class="eyebrow">フィードバック依頼</p>
         <h2 id="review-request-title">フィードバックを誰に依頼しますか？</h2>
-        <label>依頼先<select data-review-request-assignee multiple size="7" required aria-describedby="review-request-assignee-help"><option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option></select><small id="review-request-assignee-help">複数人を選ぶには Ctrl（Windows）または⌘（Mac）を押しながら選択してください。「担当者全員」と個別担当者は同時に選べません。</small></label>
+        <label>依頼先<select data-review-request-assignee multiple size="7" required aria-describedby="review-request-assignee-help"><option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option></select><small id="review-request-assignee-help">チェックを入れて複数人を選択できます。「担当者全員」と個別担当者は同時に選べません。</small></label>
         <label>依頼内容・備考<textarea data-review-request-note maxlength="2000" rows="5" placeholder="重点的に確認してほしい点や期限など"></textarea></label>
         <output data-review-request-message aria-live="polite"></output>
         <div class="approval-actions"><button type="button" data-review-request-cancel class="quiet-action">キャンセル</button><button type="submit" value="request" class="primary-action">フィードバックを依頼する</button></div>
@@ -4810,7 +4810,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     background: var(--surface-alt);
     border: 1px solid #d9a429;
     border-radius: .45rem;
-    left: 0;
     max-width: min(26rem, calc(100vw - 2rem));
     min-width: 0;
     padding: .2rem .35rem;
@@ -4820,6 +4819,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     z-index: 30;
   }
   .publication-diagnostic summary {
+    /* summaryだけを固定して、画面下部の診断をクリックしても
+       ブラウザがページ全体を自動スクロールしないようにする。 */
+    position: fixed;
+    top: 6.5rem;
+    left: max(1rem, calc((100vw - 78rem) / 2 + 1rem));
     color: #805500;
     cursor: pointer;
     font-size: .62rem;
@@ -4860,7 +4864,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
   .publication-diagnostic[hidden] { display: none; }
   @media (max-width: 700px) {
-    .publication-diagnostic { max-width: calc(100vw - 1.6rem); width: calc(100vw - 1.6rem); }
+    .publication-diagnostic {
+      max-width: calc(100vw - 1.6rem);
+      width: calc(100vw - 1.6rem);
+    }
+    .publication-diagnostic summary {
+      left: .8rem;
+      top: 5.75rem;
+    }
   }
 </style>
 

@@ -5,17 +5,17 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 <AdminLayout title="メンバー情報の承認" description="メンバー情報とアトラス運営内自己紹介の変更申請を処理します">
   <main class="profile-requests" data-profile-requests>
     <header class="approval-hero">
-      <div><p class="approval-eyebrow">運営事務局</p><h1>メンバー情報の承認</h1><p class="approval-lead">共通プロフィールと学習サイト「アトラス」の運営内自己紹介を、ここでまとめて確認・承認できます。</p></div>
+      <div><h1>メンバー情報の承認</h1><p class="approval-lead">共通プロフィールと学習サイト「アトラス」の運営内自己紹介を、ここでまとめて確認・承認できます。</p></div>
       <div class="approval-hero-mark" aria-hidden="true">✓</div>
     </header>
     <section class="approval-toolbar" aria-label="申請一覧の操作">
-      <div class="toolbar-heading"><div><p class="approval-eyebrow">承認対象</p><h2>メンバー情報と運営内自己紹介</h2></div><output class="request-count" data-count aria-live="polite">読み込み中…</output></div>
+      <div class="toolbar-heading"><div><h2>メンバー情報と運営内自己紹介</h2></div><output class="request-count" data-count aria-live="polite">読み込み中…</output></div>
       <div class="status-tabs" role="group" aria-label="申請状態"><button type="button" class="status-tab is-selected" data-status="pending" aria-pressed="true"><span class="status-dot pending-dot" aria-hidden="true"></span>承認待ち</button><button type="button" class="status-tab" data-status="all" aria-pressed="false"><span class="status-dot all-dot" aria-hidden="true"></span>すべて</button></div>
     </section>
     <output class="approval-message" data-message aria-live="polite"></output>
     <div class="request-groups">
-      <section class="request-group" aria-labelledby="common-profile-heading"><header class="request-group-heading"><div><p class="approval-eyebrow">共通プロフィール</p><h2 id="common-profile-heading">メンバー情報の変更</h2></div><output class="request-count" data-common-count aria-live="polite">読み込み中…</output></header><div class="request-list" data-list aria-label="メンバー情報変更申請一覧"><p class="loading-state">申請を読み込んでいます…</p></div></section>
-      <section class="request-group" aria-labelledby="atlas-profile-heading"><header class="request-group-heading"><div><p class="approval-eyebrow">学習サイト「アトラス」</p><h2 id="atlas-profile-heading">運営内自己紹介の変更</h2></div><output class="request-count" data-atlas-count aria-live="polite">読み込み中…</output></header><div class="request-list" data-atlas-list aria-label="アトラス運営内自己紹介変更申請一覧"><p class="loading-state">申請を読み込んでいます…</p></div></section>
+      <section class="request-group" aria-labelledby="common-profile-heading"><header class="request-group-heading"><div><h2 id="common-profile-heading">メンバー情報の変更</h2></div><output class="request-count" data-common-count aria-live="polite">読み込み中…</output></header><div class="request-list" data-list aria-label="メンバー情報変更申請一覧"><p class="loading-state">申請を読み込んでいます…</p></div></section>
+      <section class="request-group" aria-labelledby="atlas-profile-heading"><header class="request-group-heading"><div><h2 id="atlas-profile-heading">運営内自己紹介の変更</h2></div><output class="request-count" data-atlas-count aria-live="polite">読み込み中…</output></header><div class="request-list" data-atlas-list aria-label="アトラス運営内自己紹介変更申請一覧"><p class="loading-state">申請を読み込んでいます…</p></div></section>
     </div>
   </main>
 </AdminLayout>

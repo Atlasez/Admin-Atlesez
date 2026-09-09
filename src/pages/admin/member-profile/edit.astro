@@ -6,7 +6,7 @@ const memberYears = ["中1","中2","中3","高1","高2","高3","高専1","高専
 ---
 <AdminLayout title="プロフィール編集" description="メンバー基本情報の変更を申請します">
   <main class="profile-edit" data-profile-edit>
-    <header><a href="/admin/member-profile/">← マイページに戻る</a><p class="eyebrow">メンバー情報</p><h1>プロフィール編集</h1><p>変更内容は運営事務局の承認後に反映されます。</p></header>
+    <header><a href="/admin/member-profile/">← マイページに戻る</a><h1>プロフィール編集</h1><p>変更内容は運営事務局の承認後に反映されます。</p></header>
     <section class="edit-card"><div class="avatar-row"><div class="avatar-preview" data-avatar-preview aria-hidden="true">A</div><label>プロフィール画像<input type="file" accept="image/png,image/jpeg,image/webp" data-avatar-file /><small>PNG・JPEG・WebP、2MB以下</small></label></div><div class="form-grid">
       <label>氏名<input data-display-name maxlength="120" required /></label><label>学校・所属<input data-university maxlength="200" /></label>
       <label>学年等<select data-year><option value="">選択してください</option>{memberYears.map((year)=><option value={year}>{year}</option>)}</select></label>

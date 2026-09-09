@@ -546,4 +546,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-nav .notification-read-label { align-self: center; color: var(--text-secondary); flex: 0 0 auto; font-size: .68rem; font-weight: 700; margin-right: .4rem; }
   .admin-nav .admin-notification-empty { display: block; padding: 1.25rem .8rem; text-align: center; }
   .admin-nav [data-manager-only][hidden] { display: none !important; }
+  /* 管理画面の共通クロームは低彩度・単色で統一する。 */
+  .admin-nav .admin-account-avatar { background: var(--background-secondary); color: var(--text-primary); }
+  .admin-breadcrumbs { flex-wrap: nowrap; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .admin-breadcrumbs > * { overflow: hidden; text-overflow: ellipsis; }
+  /* 選択中のナビは青い面や下線で主張せず、隣接面の差だけで示す。 */
+  .admin-nav nav > a[aria-current="page"] { background: color-mix(in srgb, var(--text-primary) 6%, transparent); border-bottom-color: transparent; color: var(--text-primary); }
+  .admin-nav nav > a:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); border-bottom-color: transparent; color: var(--text-primary); }
 </style>
