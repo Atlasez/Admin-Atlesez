@@ -1,0 +1,47 @@
+<div class="admin-retry-notice" data-admin-load-error hidden role="alert" aria-live="assertive">
+  <span data-admin-load-error-message>情報を読み込めませんでした。</span>
+  <button type="button" data-admin-retry>再試行</button>
+</div>
+
+<style>
+  .admin-retry-notice {
+    align-items: center;
+    background: color-mix(in srgb, #e27676 9%, var(--background-secondary));
+    border: 1px solid color-mix(in srgb, #e27676 42%, var(--border-default));
+    color: var(--text-primary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .7rem;
+    justify-content: space-between;
+    margin-top: .7rem;
+    padding: .65rem .75rem;
+  }
+
+  .admin-retry-notice[hidden] { display: none; }
+
+  .admin-retry-notice span {
+    color: var(--text-secondary);
+    font-size: .78rem;
+    line-height: 1.5;
+  }
+
+  .admin-retry-notice button {
+    background: var(--background-primary);
+    border: 1px solid color-mix(in srgb, #e27676 62%, var(--border-default));
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: .76rem;
+    font-weight: 750;
+    min-height: 2rem;
+    padding: .35rem .65rem;
+  }
+
+  .admin-retry-notice button:hover:not(:disabled),
+  .admin-retry-notice button:focus-visible {
+    border-color: #e27676;
+    color: #e27676;
+  }
+
+  .admin-retry-notice button:disabled { cursor: wait; opacity: .65; }
+</style>

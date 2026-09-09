@@ -1,0 +1,100 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const mockAdminApis = async (page: Page) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    const payload = (() => {
+      switch (url.pathname) {
+        case "/api/admin/auth-status":
+          return { email: "smoke@example.com", isManager: true };
+        case "/api/admin/profile":
+          return { profile: { display_name: "スモーク確認" } };
+        case "/api/admin/notifications":
+          return { notifications: [] };
+        case "/api/admin/portal":
+          return {
+            projects: [],
+            availableProjects: [],
+            todos: [],
+            pendingApprovals: 0,
+            calendar: { events: [] },
+          };
+        case "/api/admin/genre-overviews":
+          return {
+            members: [],
+            overviews: [],
+            editableSubjects: [],
+            canEditAll: true,
+          };
+        case "/api/admin/genre-role-catalog":
+          return { catalog: [], assignments: [] };
+        case "/api/admin/member-tasks":
+          return {
+            scope: { email: "smoke@example.com" },
+            projects: [],
+            members: [],
+            tasks: [],
+          };
+        case "/api/admin/operations":
+          return { events: [] };
+        case "/api/admin/member-procedures":
+          return { requests: [] };
+        case "/api/admin/applications":
+          return {
+            applications: [],
+            pagination: { hasMore: false, nextCursor: null },
+            summary: {
+              total: 0,
+              new: 0,
+              reviewing: 0,
+              accepted: 0,
+              rejected: 0,
+            },
+          };
+        case "/api/admin/editor/documents":
+          return {
+            documents: [],
+            pagination: { hasMore: false, nextCursor: null },
+            scope: { email: "smoke@example.com", subjects: [] },
+          };
+        case "/api/admin/editor/catalog":
+          return { catalog: [] };
+        case "/api/admin/profile-change-requests":
+          return { requests: [] };
+        case "/api/admin/report-admin-permissions":
+          return { permissions: [] };
+        default:
+          return {};
+      }
+    })();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(payload),
+    });
+  });
+};
+
+const pages = [
+  ["ポータル", "admin/portal/", "Atlasezメンバー用サイト"],
+  ["記事一覧", "admin/articles/", "編集・フィードバック"],
+  ["ジャンル概要", "admin/genres/", "各ジャンル概要"],
+  ["ジャンル・役割管理", "admin/genre-roles/", "ジャンル・役割管理"],
+  ["タスク管理", "admin/member-tasks/", "タスク管理"],
+  ["同時作業会", "admin/co-working/", "同時作業会"],
+  ["諸手続き", "admin/procedures/", "諸手続き"],
+  ["応募管理", "admin/applications/", "応募管理"],
+  ["問題報告", "admin/reports/", "問題報告"],
+  ["運営メンバー管理", "admin/member-management/", "運営メンバー管理"],
+] as const;
+
+for (const [label, path, heading] of pages) {
+  test(`管理画面スモーク: ${label}`, async ({ page }) => {
+    await mockAdminApis(page);
+    const response = await page.goto(path);
+    expect(response?.status(), `${path} のHTML応答`).toBeLessThan(500);
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toBeVisible();
+  });
+}

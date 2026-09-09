@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 const applicationProjects = [
   ["atlas", "学習サイト「アトラス」"],
   ["thinking-cafe", "考えるカフェ"],
@@ -56,6 +57,7 @@ const projectLabel = selectedProject?.[1] ?? "";
       </div>
     </section>
     <div class="application-list loading-state" data-list hidden={!selectedProject}>読み込み中…</div>
+    <AdminRetryNotice />
     <dialog class="accept-dialog" data-accept-dialog aria-labelledby="accept-dialog-title" hidden={!selectedProject}>
       <h2 id="accept-dialog-title">受入を確定しますか？</h2>
       <p>「はい」を押すと、プロジェクト参加を登録し、応募者本人へ受入承認メールを送信します。本人にはプロフィール入力も案内されます。管理権限は別途「運営者・担当管理」から付与してください。</p>
@@ -591,6 +593,8 @@ const projectLabel = selectedProject?.[1] ?? "";
   }
 </style>
 <script>
+  import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+
   const initializeApplications=()=>{const root=document.querySelector<HTMLElement>('[data-applications]');
   if(root && root.dataset.initialized !== 'true'){root.dataset.initialized='true';
     const esc=(value:unknown)=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]??char));
@@ -655,7 +659,9 @@ const projectLabel = selectedProject?.[1] ?? "";
     const refresh=()=>render(applications);
     const resetSelectionAndRefresh=()=>{selectedApplicationId='';refresh()};
     const schedulePrefetch=()=>{if(prefetchScheduled||!hasMore)return;prefetchScheduled=true;const run=()=>{prefetchScheduled=false;if(!loadingPage&&hasMore)void load(true)};const idle=(window as Window & {requestIdleCallback?: (callback:()=>void,options?:{timeout:number})=>number}).requestIdleCallback;if(idle)idle(run,{timeout:1200});else window.setTimeout(run,250)};
-    const load=async(append=false)=>{if(loadingPage||append&&!nextCursor)return;loadingPage=true;try{const params=new URLSearchParams({project:projectSlug});if(append){params.set('cursor',nextCursor??'');params.set('limit','50')}const response=await fetch(`/api/admin/applications?${params.toString()}`,{credentials:'same-origin',cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??subjectLabels;formLabels=data.formLabels??formLabels;const page=Array.isArray(data.applications)?data.applications:[];applications=append?[...applications,...page]:page;nextCursor=data.pagination?.nextCursor??null;hasMore=Boolean(data.pagination?.hasMore);summaryTotals=data.summary&&typeof data.summary==='object'?{...summaryTotals,...data.summary}:summaryFromApplications();renderSummary();refresh();schedulePrefetch()}catch(error){if(!append){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}}finally{loadingPage=false}};
+    let load: (append?: boolean) => Promise<void>;
+    const retry = createAdminLoadRetry(root, () => load(), '応募一覧を読み込めませんでした。');
+    load=async(append=false)=>{if(loadingPage||append&&!nextCursor)return;loadingPage=true;retry.begin();try{const params=new URLSearchParams({project:projectSlug});if(append){params.set('cursor',nextCursor??'');params.set('limit','50')}const response=await fetch(`/api/admin/applications?${params.toString()}`,{credentials:'same-origin',cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error??'読み込めませんでした。');subjectLabels=data.subjectLabels??subjectLabels;formLabels=data.formLabels??formLabels;const page=Array.isArray(data.applications)?data.applications:[];applications=append?[...applications,...page]:page;nextCursor=data.pagination?.nextCursor??null;hasMore=Boolean(data.pagination?.hasMore);summaryTotals=data.summary&&typeof data.summary==='object'?{...summaryTotals,...data.summary}:summaryFromApplications();renderSummary();refresh();schedulePrefetch();retry.success()}catch(error){if(!append){navigator.hidden=true;list.textContent=error instanceof Error?error.message:'読み込めませんでした。'}retry.fail(error);throw error}finally{loadingPage=false}};
     search.addEventListener('input',resetSelectionAndRefresh);statusFilter.addEventListener('change',resetSelectionAndRefresh);clearFilter?.addEventListener('click',()=>{search.value='';statusFilter.value='all';resetSelectionAndRefresh()});
     applicationSelect.addEventListener('change',()=>{selectedApplicationId=applicationSelect.value;refresh()});
     previousApplication.addEventListener('click',()=>{const index=visibleApplications.findIndex(application=>application.id===selectedApplicationId);if(index>0){selectedApplicationId=visibleApplications[index-1].id;refresh()}});
@@ -669,7 +675,7 @@ const projectLabel = selectedProject?.[1] ?? "";
     acceptConfirm.addEventListener('click',()=>{const id=pendingAcceptanceId;pendingAcceptanceId='';acceptDialog.close();if(id)void update(id,'accepted',acceptConfirm)});
     root.addEventListener('click',event=>{const target=event.target as HTMLElement;const retryButton=target.closest<HTMLButtonElement>('[data-retry]');if(retryButton){void retryDiscord(retryButton.dataset.retry??'',retryButton);return}const saveButton=target.closest<HTMLButtonElement>('[data-interview-save]');if(saveButton){void interviewRequest(saveButton.dataset.interviewSave??'','save',saveButton);return}const notifyButton=target.closest<HTMLButtonElement>('[data-interview-notify]');if(notifyButton)void interviewRequest(notifyButton.dataset.interviewNotify??'','notify',notifyButton)});
     root.addEventListener('change',event=>{const format=(event.target as HTMLElement).closest<HTMLSelectElement>('[data-interview-format]');if(!format)return;format.closest<HTMLElement>('.interview-panel')?.setAttribute('data-mode',format.value)});
-    if(projectSlug) void load();
+    if(projectSlug) void load().catch(() => undefined);
   }};
   document.addEventListener('astro:page-load',initializeApplications);
   initializeApplications();
