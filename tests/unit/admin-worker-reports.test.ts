@@ -122,6 +122,7 @@ describe("reports and statistics access", () => {
         contact: string | null;
         can_manage: boolean;
       }>;
+      pagination: { hasMore: boolean; nextCursor: string | null };
     };
     expect(reportData.reports.map((item) => item.subject)).toEqual([
       "mathematics",
@@ -134,6 +135,11 @@ describe("reports and statistics access", () => {
     expect(reportData.reports.every((item) => item.contact === null)).toBe(
       true,
     );
+    expect(reportData.pagination).toEqual({
+      hasMore: false,
+      nextCursor: null,
+      limit: 100,
+    });
 
     const analytics = await worker.fetch(
       request("/api/admin/article-analytics?days=30"),
