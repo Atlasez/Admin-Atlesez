@@ -407,7 +407,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       <form method="dialog" data-review-request-form>
         <p class="eyebrow">フィードバック依頼</p>
         <h2 id="review-request-title">フィードバックを誰に依頼しますか？</h2>
-        <label>依頼先<select data-review-request-assignee multiple size="7" required aria-describedby="review-request-assignee-help"><option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option></select><small id="review-request-assignee-help">複数人を選ぶには Ctrl（Windows）または⌘（Mac）を押しながら選択してください。「担当者全員」と個別担当者は同時に選べません。</small></label>
+        <label>依頼先<select data-review-request-assignee multiple size="7" required aria-describedby="review-request-assignee-help"><option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option></select><small id="review-request-assignee-help">チェックを入れて複数人を選択できます。「担当者全員」と個別担当者は同時に選べません。</small></label>
         <label>依頼内容・備考<textarea data-review-request-note maxlength="2000" rows="5" placeholder="重点的に確認してほしい点や期限など"></textarea></label>
         <output data-review-request-message aria-live="polite"></output>
         <div class="approval-actions"><button type="button" data-review-request-cancel class="quiet-action">キャンセル</button><button type="submit" value="request" class="primary-action">フィードバックを依頼する</button></div>
