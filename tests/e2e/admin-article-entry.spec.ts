@@ -88,11 +88,15 @@ test.describe("A/D 原稿一覧の作業導線", () => {
           textAlign: style.textAlign,
           borderTopWidth: style.borderTopWidth,
           borderTopColor: style.borderTopColor,
+          borderColor: style.borderColor,
         };
       });
     expect(workflowCardStyle.textAlign).toBe("center");
     expect(workflowCardStyle.borderTopWidth).toBe("1px");
-    expect(workflowCardStyle.borderTopColor).not.toBe("rgb(23, 110, 166)");
+    expect(workflowCardStyle.borderTopColor).toBe(
+      workflowCardStyle.borderColor,
+    );
+    expect(workflowCardStyle.borderColor).not.toBe("rgb(255, 255, 255)");
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
