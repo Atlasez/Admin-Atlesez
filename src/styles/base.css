@@ -132,7 +132,7 @@ hr {
 /* ボタン */
 .button,
 button.button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
@@ -318,4 +318,47 @@ details .details-body {
   background: var(--border-strong);
   border: 2px solid var(--background-secondary);
   border-radius: 999px;
+}
+
+/* 共通ローディング状態
+   ページごとに異なる「読み込み中…」表示を作らず、同じ小さなスピナーと
+   余白・文字階層を使う。動的に差し替えられる一覧では loading クラスを
+   完了時に外すこと。 */
+:where(.loading, .loading-note, .loading-state, .admin-notification-loading) {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  gap: 0.5rem;
+  line-height: 1.45;
+  min-height: 2rem;
+}
+:where(
+  .loading,
+  .loading-note,
+  .loading-state,
+  .admin-notification-loading
+)::before {
+  animation: atlasez-loading-spin 0.8s linear infinite;
+  border: 2px solid color-mix(in srgb, var(--accent-primary) 24%, transparent);
+  border-radius: 50%;
+  border-top-color: var(--accent-primary);
+  content: "";
+  flex: 0 0 0.78rem;
+  height: 0.78rem;
+  width: 0.78rem;
+}
+@keyframes atlasez-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    .loading,
+    .loading-note,
+    .loading-state,
+    .admin-notification-loading
+  )::before {
+    animation: none;
+  }
 }

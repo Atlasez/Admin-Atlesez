@@ -1666,6 +1666,7 @@ async function listArticleReports(
       contact: scope.isManager ? report.contact : null,
       can_manage: scope.allSubjects || scope.subjects.includes(report.subject),
     })),
+    reportsTruncated: result.results.length >= 250,
   });
 }
 
@@ -16236,7 +16237,7 @@ async function adminNotifications(
         created_at: string;
       }>(),
   ]);
-  const notifications = [
+  const sortedNotifications = [
     ...(commentRows.results ?? []).map((item) => ({
       id: `comment-${item.id}`,
       kind: "comment",
@@ -16334,9 +16335,9 @@ async function adminNotifications(
         href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
         updatedAt: item.remind_at,
       })),
-  ]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 20);
+  ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const notificationsTruncated = sortedNotifications.length > 20;
+  const notifications = sortedNotifications.slice(0, 20);
   const readIds = notifications.length
     ? await env.REPORTS.prepare(
         `SELECT notification_id FROM admin_notification_reads WHERE email = ? AND notification_id IN (${notifications.map(() => "?").join(",")})`,
@@ -16352,6 +16353,7 @@ async function adminNotifications(
       ...item,
       read: read.has(item.id),
     })),
+    notificationsTruncated,
   });
 }
 
