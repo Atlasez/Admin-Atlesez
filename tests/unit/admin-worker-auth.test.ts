@@ -250,6 +250,38 @@ describe("applicant stage server-side access", () => {
     });
   });
 
+  it("keeps the legacy full-list response when permissions pagination is not requested", async () => {
+    const queries: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        return new Statement(query);
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as Record<string, unknown>;
+    expect(data).not.toHaveProperty("pagination");
+    const permissionQuery = queries.find((query) =>
+      query.includes("GROUP_CONCAT(DISTINCT p.subject)"),
+    );
+    expect(permissionQuery).toBeDefined();
+    expect(permissionQuery).not.toContain("LIMIT ?");
+  });
+
   it("requires an authenticated Google session before accepting an application", async () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/apply", {

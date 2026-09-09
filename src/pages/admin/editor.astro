@@ -420,6 +420,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     </dialog>
   </main>
 
+  <script is:inline>
+    // エディタ機能の遅延ロードに失敗しても、未選択画面は操作可能にする。
+    (() => {
+      const revealEmptyEditor = () => {
+        const query = new URLSearchParams(window.location.search);
+        if (query.has("new") || query.has("document") || query.has("sourceArticle")) return;
+        document.querySelector("[data-editor-workspace]")?.removeAttribute("data-editor-starting");
+      };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", revealEmptyEditor, { once: true });
+      else revealEmptyEditor();
+      document.addEventListener("astro:page-load", revealEmptyEditor);
+    })();
+  </script>
+
   <script is:inline id="editor-source-data" type="application/json" set:html={editorData}></script>
 </AdminLayout>
 
@@ -4795,6 +4809,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     } else {
       root.setAttribute("data-sticky-toolbar", "");
     }
+    // 記事未選択時は空状態を即時表示する。初期データ取得が遅い場合でも
+    // パネル全体を不可視にせず、新規作成・公開記事登録へすぐ進めるようにする。
+    if (!reviewDocumentId && !sourceArticleId && !isNewDocument) root.removeAttribute("data-editor-starting");
     initializeSelects();
     void loadDocuments().then(async () => {
       if (reviewDocumentId) {
