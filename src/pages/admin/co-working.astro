@@ -31,7 +31,7 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
         <div><p class="section-kicker">日程</p><h2>開催予定</h2></div>
         <a href={`/admin/operations/?project=${operationProject}`}>タスク管理・日程へ</a>
       </div>
-      <div class="event-list" data-event-list aria-live="polite">読み込み中…</div>
+      <div class="event-list" data-event-list aria-live="polite"><p class="loading-state">読み込み中…</p></div>
       <p class="empty" data-event-empty hidden>登録された同時作業会はありません。</p>
     </section>
     <p class="scope-note">開催場所は日程の詳細欄に記録してください。イベントの作成・参加可否の登録は、既存のタスク管理・カレンダーページで行えます。</p>

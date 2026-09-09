@@ -11,7 +11,7 @@ if (project === "atlas") return Astro.redirect("/admin/profile-requests/?section
     <header><h1>運営内自己紹介の承認</h1></header>
     <div class="filters"><label>状態<select data-status><option value="pending">承認待ち</option><option value="approved">承認済み</option><option value="rejected">却下済み</option><option value="all">すべて</option></select></label></div>
     <output data-message aria-live="polite"></output>
-    <section data-list aria-label="変更申請一覧"><p>読み込み中…</p></section>
+    <section data-list aria-label="変更申請一覧"><p class="loading-state">読み込み中…</p></section>
   </main>
 </AdminLayout>
 

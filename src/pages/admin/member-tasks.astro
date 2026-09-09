@@ -41,7 +41,7 @@ const timezones = getTimeZoneOptions(new Date());
 
     <section class="task-section">
       <div class="section-head"><div><h2>参加中のプロジェクトのタスク</h2><p class="result-summary" data-result-count>0件</p></div><div class="filters" role="group" aria-label="タスクの表示対象"><button type="button" class="is-selected" aria-pressed="true" data-filter="assigned">自分がこなす</button><button type="button" aria-pressed="false" data-filter="created">自分が依頼</button><button type="button" aria-pressed="false" data-filter="all">すべて</button></div></div>
-      <div data-list>読み込み中…</div>
+      <div data-list><p class="loading-state">読み込み中…</p></div>
     </section>
   </main>
 </AdminLayout>
