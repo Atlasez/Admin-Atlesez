@@ -29,6 +29,7 @@
     "test": "vitest run",
     "audit:math": "node scripts/audit-math.mjs",
     "test:e2e": "playwright test",
+    "test:e2e:admin-live": "playwright test tests/e2e/admin-production-smoke.spec.ts",
     "astro": "astro",
     "check:i18n": "node --experimental-strip-types scripts/check-ui-translations.mjs"
   },
