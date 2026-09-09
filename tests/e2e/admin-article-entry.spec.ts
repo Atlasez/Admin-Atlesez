@@ -80,6 +80,19 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-workflow-filter]")).toHaveValue("all");
     await expect(page.locator(".article-view-tabs")).toHaveCount(0);
     await expect(page.locator(".header-actions")).toHaveCount(0);
+    const workflowCardStyle = await page
+      .locator(".workflow-actions > :first-child")
+      .evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          textAlign: style.textAlign,
+          borderTopWidth: style.borderTopWidth,
+          borderTopColor: style.borderTopColor,
+        };
+      });
+    expect(workflowCardStyle.textAlign).toBe("center");
+    expect(workflowCardStyle.borderTopWidth).toBe("1px");
+    expect(workflowCardStyle.borderTopColor).not.toBe("rgb(23, 110, 166)");
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
