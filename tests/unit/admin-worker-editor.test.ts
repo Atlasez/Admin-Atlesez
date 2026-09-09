@@ -55,6 +55,35 @@ const githubWebhookSignature = async (secret: string, body: string) => {
 };
 
 describe("admin worker editor APIs", () => {
+  it("returns the numeric pending approval count in the portal overview", async () => {
+    const portalEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("editorial_member_profile_change_requests"))
+              return { count: 2 } as T;
+            if (query.includes("editorial_project_profile_change_requests"))
+              return { count: 1 } as T;
+            return null;
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/portal"),
+      portalEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      pendingApprovals: 3,
+    });
+  });
+
   it("interprets datetime-local publication schedules as Japan time", () => {
     expect(scheduledPublicationEpoch("2026-09-01T12:00")).toBe(
       Date.parse("2026-09-01T03:00:00.000Z"),
