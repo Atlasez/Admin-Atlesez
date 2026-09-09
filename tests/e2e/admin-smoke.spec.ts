@@ -84,8 +84,19 @@ const pages = [
   ["同時作業会", "admin/co-working/", "同時作業会"],
   ["諸手続き", "admin/procedures/", "諸手続き"],
   ["応募管理", "admin/applications/", "応募管理"],
+  [
+    "面談メモ",
+    "admin/application-interview/?application=smoke&project=atlas",
+    "面談メモ",
+  ],
   ["問題報告", "admin/reports/", "問題報告"],
   ["運営メンバー管理", "admin/member-management/", "運営メンバー管理"],
+  ["メンバー情報の承認", "admin/profile-requests/", "メンバー情報の承認"],
+  [
+    "プロジェクトマイページ",
+    "admin/workspace/?project=secretariat",
+    "マイページ",
+  ],
 ] as const;
 
 for (const [label, path, heading] of pages) {
