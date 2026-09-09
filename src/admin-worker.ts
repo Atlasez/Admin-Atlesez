@@ -1895,7 +1895,9 @@ async function listReportAdminPermissions(
   const cursorFilter = cursorName && cursorEmail
     ? `AND (COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') > ? OR (COALESCE(NULLIF(TRIM(m.display_name), ''), '表示名未設定') = ? AND lower(p.email) > lower(?)))`
     : "";
-  const cursorValues = cursorName && cursorEmail ? [cursorName, cursorName, cursorEmail] : [];
+  const cursorValues = cursorName && cursorEmail
+    ? [cursorName, cursorName, cursorEmail]
+    : [];
   const result = await env.REPORTS.prepare(
     `SELECT p.email,
       GROUP_CONCAT(DISTINCT p.subject) AS subjects,
@@ -5095,6 +5097,27 @@ async function genreOverviews(
     return json({ ok: true, subject, progress, updatedBy: scope.email, updatedAt });
   }
 
+  const searchParams = new URL(request.url).searchParams;
+  // 大規模な名簿を利用する画面だけが limit/cursor を指定する。既存の
+  // 集計画面はパラメータを指定しないため、これまで通り全件を返す。
+  const paginated = searchParams.has("limit");
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 50;
+  const rawCursor = searchParams.get("cursor") ?? "";
+  const cursorSeparator = rawCursor.indexOf("|");
+  const cursorName = cursorSeparator >= 0 ? rawCursor.slice(0, cursorSeparator) : "";
+  const cursorEmail = cursorSeparator >= 0 ? rawCursor.slice(cursorSeparator + 1) : "";
+  const cursorFilter = paginated && cursorName && cursorEmail
+    ? `AND (COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') > ? OR
+       (COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') = ? AND lower(m.email) > lower(?)))`
+    : "";
+  const cursorValues = paginated && cursorName && cursorEmail
+    ? [cursorName, cursorName, cursorEmail]
+    : [];
+  const memberLimitClause = paginated ? " LIMIT ?" : "";
+  const memberLimitValue = paginated ? pageLimit + 1 : undefined;
   const [members, overviews] = await Promise.all([
     env.REPORTS.prepare(
       `WITH raw_members AS (
@@ -5116,16 +5139,17 @@ async function genreOverviews(
         WHERE trim(email)<>''
         GROUP BY lower(email)
       )
-      SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
+       SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
         COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
         COALESCE(p.avatar_url,'') AS avatar_url,
         COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year,
         COALESCE(p.country,'') AS country
        FROM candidate_members m
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
-       ORDER BY display_name,m.email`,
+       WHERE 1=1 ${cursorFilter}
+       ORDER BY display_name,m.email${memberLimitClause}`,
     )
-      .bind(project.id)
+      .bind(project.id, ...cursorValues, ...(memberLimitValue === undefined ? [] : [memberLimitValue]))
       .all<Omit<SubjectOverviewMember, "assignments">>(),
     env.REPORTS.prepare(
       `SELECT subject,progress,updated_by,updated_at
@@ -5134,8 +5158,15 @@ async function genreOverviews(
       .bind(project.id)
       .all<Record<string, unknown>>(),
   ]);
+  const fetchedMembers = members.results ?? [];
+  const pageMembers = paginated ? fetchedMembers.slice(0, pageLimit) : fetchedMembers;
+  const hasMoreMembers = paginated && fetchedMembers.length > pageLimit;
+  const lastMember = pageMembers.at(-1);
+  const nextMemberCursor = hasMoreMembers && lastMember
+    ? `${lastMember.display_name}|${lastMember.email}`
+    : null;
   const memberRows = await Promise.all(
-    (members.results ?? []).map(async (member) => {
+    pageMembers.map(async (member) => {
       const details = await projectAssignmentDetails(
         env,
         project.id,
@@ -5160,6 +5191,9 @@ async function genreOverviews(
     },
     members: memberRows,
     overviews: overviews.results ?? [],
+    ...(paginated
+      ? { pagination: { limit: pageLimit, nextCursor: nextMemberCursor, hasMore: hasMoreMembers } }
+      : {}),
     editableSubjects: (overviews.results ?? [])
       .map((row) => String(row.subject ?? ""))
       .filter((subject) => canEditSubject(subject)),

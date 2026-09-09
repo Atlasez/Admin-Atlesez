@@ -308,7 +308,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .genres-hero { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2rem 0 1.25rem; }
   .eyebrow-row { align-items: center; display: flex; flex-wrap: wrap; gap: .9rem; }
   .eyebrow, .panel-kicker { color: var(--accent-primary); font-size: .68rem; font-weight: 800; letter-spacing: .08em; }
-  .hero-caption { color: var(--text-muted); font-size: .68rem; }
+  .hero-caption { color: var(--text-secondary); font-size: .68rem; }
   .genres-hero h1 { color: var(--text-primary); font-size: clamp(1.9rem, 3.4vw, 2.55rem); font-weight: 650; letter-spacing: -.04em; line-height: 1.25; margin: .3rem 0 .45rem; }
   .genres-hero p { color: var(--text-secondary); font-size: .84rem; line-height: 1.6; margin: 0; max-width: 42rem; }
   .hero-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; }
@@ -324,13 +324,13 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .metric { border-right: 1px solid var(--border-default); display: grid; gap: .2rem; padding: .85rem 1rem; }
   .metric:first-child { padding-left: 0; }
   .metric:last-child { border-right: 0; }
-  .metric span, .metric small { color: var(--text-muted); font-size: .67rem; }
+  .metric span, .metric small { color: var(--text-secondary); font-size: .67rem; }
   .metric strong { color: var(--text-primary); font-size: 1.45rem; font-weight: 650; letter-spacing: -.04em; line-height: 1; }
   .genres-workspace { align-items: start; display: grid; gap: 1rem; grid-template-columns: 15rem minmax(0, 1fr); padding-top: 1.25rem; }
   .index-panel { align-self: start; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .55rem; padding: .9rem; position: sticky; top: 5.4rem; }
   .panel-heading, .content-heading { align-items: end; display: flex; justify-content: space-between; }
   .panel-heading h2, .content-heading h2 { color: var(--text-primary); font-size: 1.05rem; font-weight: 600; letter-spacing: -.03em; margin: .35rem 0 0; }
-  .result-count, .content-count { color: var(--text-muted); font-family: var(--font-mono); font-size: .66rem; }
+  .result-count, .content-count { color: var(--text-secondary); font-family: var(--font-mono); font-size: .66rem; }
   .search-field { align-items: center; background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .35rem; color: var(--text-muted); display: flex; gap: .45rem; margin-top: .75rem; padding: .5rem .6rem; }
   .search-field:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--accent-subtle); }
   .search-icon { font-size: 1.1rem; line-height: .8; }
@@ -343,7 +343,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .subject-index a { align-items: center; border-left: 1px solid transparent; color: var(--text-secondary); display: flex; font-size: .74rem; gap: .45rem; min-width: 0; padding: .35rem .45rem; text-decoration: none; }
   .subject-index a:hover, .subject-index a:focus-visible { background: var(--background-secondary); border-left-color: var(--accent-primary); color: var(--text-primary); }
   .subject-index a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .subject-index a small { color: var(--text-muted); font-family: var(--font-mono); font-size: .6rem; margin-left: auto; }
+  .subject-index a small { color: var(--text-secondary); font-family: var(--font-mono); font-size: .6rem; margin-left: auto; }
   .subject-index a i, .status i { background: var(--text-muted); border-radius: 50%; display: inline-block; flex: 0 0 auto; height: .4rem; width: .4rem; }
   .subject-index a i[data-status="published"], .status[data-status="published"] i { background: var(--success); }
   .index-note { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-size: .62rem; gap: .35rem; margin: 1rem 0 0; }
@@ -358,7 +358,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .genre-card[hidden], .subject-index a[hidden] { display: none; }
   .genre-heading { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
   .genre-title { min-width: 0; }
-  .genre-meta { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-size: .65rem; gap: .55rem; }
+  .genre-meta { align-items: center; color: var(--text-secondary); display: flex; flex-wrap: wrap; font-size: .65rem; gap: .55rem; }
   .genre-meta > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .status { align-items: center; border: 1px solid var(--border-default); border-radius: .3rem; color: var(--text-secondary); display: inline-flex; font-size: .62rem; gap: .35rem; padding: .18rem .4rem; }
   .status[data-status="published"] { border-color: color-mix(in srgb, var(--success) 48%, var(--border-default)); color: var(--success); }
@@ -368,7 +368,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .genre-description { color: var(--text-secondary); font-size: .76rem; line-height: 1.55; margin: 0; min-height: 2.35em; }
   .genre-stats { display: grid; gap: .4rem; grid-template-columns: minmax(0, 1fr) 6.5rem; margin: 0; }
   .genre-stats div { background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .3rem; display: grid; gap: .15rem; min-width: 0; padding: .45rem .55rem; }
-  .genre-stats dt, .category-heading > span { color: var(--text-muted); font-size: .62rem; }
+  .genre-stats dt, .category-heading > span { color: var(--text-secondary); font-size: .62rem; }
   .genre-stats dd { color: var(--text-primary); font-size: .73rem; font-weight: 700; margin: 0; min-width: 0; }
   .genre-stats dd code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .genre-stats dd span { color: var(--text-secondary); font-size: .62rem; font-weight: 400; margin-left: .2rem; }
@@ -378,12 +378,12 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .category-block ul { display: grid; gap: .3rem; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
   .category-block li { background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .3rem; display: grid; gap: .1rem; min-width: 0; padding: .38rem .45rem; }
   .category-block li strong { color: var(--text-primary); font-size: .67rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .category-block code { color: var(--text-muted); font-size: .58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .category-block code { color: var(--text-secondary); font-size: .58rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty-categories { color: var(--text-muted); font-size: .72rem; margin: 0; }
   .genre-people, .genre-progress { border-top: 1px solid var(--border-default); display: grid; gap: .5rem; padding-top: .75rem; }
   .section-heading { align-items: center; display: flex; gap: .6rem; justify-content: space-between; }
   .section-heading h4 { color: var(--text-primary); font-size: .74rem; margin: 0; }
-  .section-heading > span { color: var(--text-muted); font-family: var(--font-mono); font-size: .58rem; white-space: nowrap; }
+  .section-heading > span { color: var(--text-secondary); font-family: var(--font-mono); font-size: .58rem; white-space: nowrap; }
   .member-list { display: grid; gap: .3rem; }
   .member-item { align-items: baseline; background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .3rem; display: flex; gap: .45rem; justify-content: space-between; min-width: 0; padding: .38rem .45rem; }
   .member-avatar { border: 1px solid var(--border-default); border-radius: 50%; flex: 0 0 1.35rem; height: 1.35rem; object-fit: cover; width: 1.35rem; }
@@ -398,7 +398,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .progress-form textarea:focus { border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--accent-subtle); outline: 0; }
   .progress-form-actions { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
   .progress-form output { color: var(--text-secondary); font-size: .62rem; line-height: 1.35; }
-  .progress-form button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: #090a0c; cursor: pointer; font: inherit; font-size: .65rem; font-weight: 800; padding: .42rem .55rem; }
+  .progress-form button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: var(--on-accent); cursor: pointer; font: inherit; font-size: .65rem; font-weight: 800; padding: .42rem .55rem; }
   .progress-form button:hover { background: var(--accent-hover); }
   .progress-form button:disabled { cursor: wait; opacity: .65; }
   .genre-actions { align-items: center; border-top: 1px solid var(--border-default); display: flex; flex-wrap: wrap; gap: .8rem 1rem; margin-top: auto; padding-top: .75rem; }
