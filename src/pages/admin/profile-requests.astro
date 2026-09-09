@@ -25,6 +25,86 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .approval-feedback{align-items:center;display:flex;gap:.75rem;min-height:1.35rem;padding:.75rem 0 0}.approval-message{color:#a24424;display:block;flex:1 1 auto;font-size:.76rem;min-height:1.35rem;padding:0}.approval-retry{background:#176ea6;border:1px solid #176ea6;border-radius:.28rem;color:#fff;cursor:pointer;font:inherit;font-size:.75rem;font-weight:900;min-height:2.2rem;padding:.4rem .75rem;white-space:nowrap}.approval-retry:hover{background:#0e5686}.approval-retry:disabled{cursor:wait;opacity:.7}
 </style>
 
+<style is:global>
+  /* 管理画面の共通ダークテーマ。申請画面だけ旧ライト配色を残さない。 */
+  [data-pref-bg="dark"] .profile-requests {
+    background: var(--background-primary);
+    color: var(--text-primary);
+  }
+  [data-pref-bg="dark"] .profile-requests .approval-hero,
+  [data-pref-bg="dark"] .profile-requests .approval-toolbar,
+  [data-pref-bg="dark"] .profile-requests .request-group-heading {
+    border-color: var(--border-default);
+  }
+  [data-pref-bg="dark"] .profile-requests .approval-hero h1,
+  [data-pref-bg="dark"] .profile-requests .toolbar-heading h2,
+  [data-pref-bg="dark"] .profile-requests .request-group-heading h2,
+  [data-pref-bg="dark"] .profile-requests .person-name,
+  [data-pref-bg="dark"] .profile-requests .review-heading h3 {
+    color: var(--text-primary);
+  }
+  [data-pref-bg="dark"] .profile-requests .approval-lead,
+  [data-pref-bg="dark"] .profile-requests .request-meta,
+  [data-pref-bg="dark"] .profile-requests .request-count,
+  [data-pref-bg="dark"] .profile-requests .review-heading p,
+  [data-pref-bg="dark"] .profile-requests .review label,
+  [data-pref-bg="dark"] .profile-requests .processed-note,
+  [data-pref-bg="dark"] .profile-requests .info-panel dt {
+    color: var(--text-secondary);
+  }
+  [data-pref-bg="dark"] .profile-requests .status-tab {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    box-shadow: none;
+    color: var(--text-secondary);
+  }
+  [data-pref-bg="dark"] .profile-requests .status-tab.is-selected,
+  [data-pref-bg="dark"] .profile-requests .approve,
+  [data-pref-bg="dark"] .profile-requests .approval-retry {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--on-accent);
+  }
+  [data-pref-bg="dark"] .profile-requests .request-card,
+  [data-pref-bg="dark"] .profile-requests .request-card-header,
+  [data-pref-bg="dark"] .profile-requests .request-summary,
+  [data-pref-bg="dark"] .profile-requests .info-panel,
+  [data-pref-bg="dark"] .profile-requests .empty-state,
+  [data-pref-bg="dark"] .profile-requests .loading-state {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+    box-shadow: none;
+  }
+  [data-pref-bg="dark"] .profile-requests .info-panel.proposed {
+    background: var(--background-inset);
+    border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-default));
+  }
+  [data-pref-bg="dark"] .profile-requests .info-panel-heading,
+  [data-pref-bg="dark"] .profile-requests .request-summary,
+  [data-pref-bg="dark"] .profile-requests .processed-note {
+    border-color: var(--border-default);
+  }
+  [data-pref-bg="dark"] .profile-requests .info-panel-heading h3,
+  [data-pref-bg="dark"] .profile-requests .request-summary-value,
+  [data-pref-bg="dark"] .profile-requests .info-panel dd {
+    color: var(--text-primary);
+  }
+  [data-pref-bg="dark"] .profile-requests .review-panel {
+    background: var(--background-inset);
+    border-color: var(--border-default);
+  }
+  [data-pref-bg="dark"] .profile-requests .review-note {
+    background: var(--background-primary);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+  }
+  [data-pref-bg="dark"] .profile-requests .reject {
+    background: transparent;
+    border-color: var(--danger) !important;
+    color: #e27676;
+  }
+</style>
+
 <script>
   import { readAdminApiJson } from "../../lib/admin-api";
   import { renderSafeLinks } from "../../lib/safe-links";
