@@ -204,12 +204,15 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.querySelectorAll<HTMLButtonElement>('[data-project-previous]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '前のプロジェクト' : 'Previous project'));
       document.querySelectorAll<HTMLButtonElement>('[data-project-next]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '次のプロジェクト' : 'Next project'));
     };
-    const applyTheme = (dark: boolean, persist = false) => {
-      document.documentElement.dataset.prefBg = dark ? 'dark' : '';
+    const applyTheme = (mode: string | undefined, persist = false) => {
+      const normalized = mode === 'black' ? 'black' : mode === 'dark' ? 'dark' : '';
+      document.documentElement.dataset.prefBg = normalized ? 'dark' : '';
+      if (normalized === 'black') document.documentElement.dataset.prefMode = 'black';
+      else document.documentElement.removeAttribute('data-pref-mode');
       const preferences = readPreferences();
-      if (persist) { if (dark) preferences.bg = 'dark'; else delete preferences.bg; localStorage.setItem(preferencesKey, JSON.stringify(preferences)); }
+      if (persist) { if (normalized) preferences.bg = normalized; else delete preferences.bg; localStorage.setItem(preferencesKey, JSON.stringify(preferences)); }
     };
-    applyTheme(readPreferences().bg === 'dark');
+    applyTheme(readPreferences().bg);
     applyLanguage(currentLanguage());
 
     type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'student-council' | 'thinking-cafe' | 'secretariat'; slug: string; current: string; home: string; label: string };
@@ -318,7 +321,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     if (document.documentElement.dataset.adminNavLifecycleBound !== 'true') {
       document.documentElement.dataset.adminNavLifecycleBound = 'true';
       window.addEventListener('atlasez-lang-change', () => { applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
-      document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg === 'dark'); applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
+      document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg); applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
       document.addEventListener('astro:page-load', () => { syncRouteChrome(); void refreshManagerVisibility(); });
     }
     void refreshManagerVisibility();
