@@ -131,13 +131,14 @@ hr {
 
 /* 運営サイトの補助見出しは日本語の見出しに統合する。
    青い英語ラベルや eyebrow/kicker は新設・再表示しない。 */
-[data-admin-shell] :is(
-  [class*="eyebrow"],
-  [class*="kicker"],
-  .section-kicker,
-  .app-kicker,
-  .operations-eyebrow
-) {
+[data-admin-shell]
+  :is(
+    [class*="eyebrow"],
+    [class*="kicker"],
+    .section-kicker,
+    .app-kicker,
+    .operations-eyebrow
+  ) {
   display: none !important;
 }
 
