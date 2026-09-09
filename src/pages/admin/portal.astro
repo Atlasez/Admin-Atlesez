@@ -46,11 +46,11 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       <div class="project-entry-groups">
         <section class="project-group" aria-labelledby="managed-projects-heading">
           <header class="project-group-heading"><h3 id="managed-projects-heading" data-admin-i18n data-admin-ja="運営として参加中" data-admin-en="As an operator">運営として参加中</h3><span data-project-count="managed">—</span></header>
-          <div class="project-entry-cards" data-project-group="managed"><p class="project-empty loading-state" data-admin-i18n data-admin-ja="読み込み中…" data-admin-en="Loading…">読み込み中…</p></div>
+          <div class="project-entry-cards" data-project-group="managed"><p class="project-empty" data-admin-i18n data-admin-ja="読み込み中…" data-admin-en="Loading…">読み込み中…</p></div>
         </section>
         <section class="project-group" aria-labelledby="member-projects-heading">
           <header class="project-group-heading"><h3 id="member-projects-heading" data-admin-i18n data-admin-ja="参加者として参加中" data-admin-en="As a participant">参加者として参加中</h3><span data-project-count="member">—</span></header>
-          <div class="project-entry-cards" data-project-group="member"><p class="project-empty loading-state" data-admin-i18n data-admin-ja="読み込み中…" data-admin-en="Loading…">読み込み中…</p></div>
+          <div class="project-entry-cards" data-project-group="member"><p class="project-empty" data-admin-i18n data-admin-ja="読み込み中…" data-admin-en="Loading…">読み込み中…</p></div>
         </section>
       </div>
     </section>
@@ -70,7 +70,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
           <div><h2 data-admin-i18n data-admin-ja="自分の未完了タスク" data-admin-en="My open tasks">自分の未完了タスク</h2><small class="todo-section-note" data-todo-summary>読み込み中…</small></div>
           <a href="/admin/member-tasks/" data-admin-i18n data-admin-ja="→" data-admin-en="→" aria-label="横断タスク管理を開く">→</a>
         </div>
-        <div class="todo-list loading-state" data-todos aria-live="polite">読み込み中…</div>
+        <div class="todo-list" data-todos aria-live="polite">読み込み中…</div>
       </section>
     </div>
 
@@ -659,10 +659,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
         if (!response.ok) return { notifications: [], notificationsUnavailable: true } as PortalData;
         const data = await response.json() as PortalData;
-        return {
-          notifications: data.notifications ?? [],
-          notificationsTruncated: data.notificationsTruncated === true,
-        } as PortalData;
+        return { notifications: data.notifications ?? [], notificationsTruncated: data.notificationsTruncated === true } as PortalData;
       }),
     ]).then(([data, notificationData]) => {
       portalData = { ...data, ...notificationData };
