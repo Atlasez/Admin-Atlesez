@@ -268,6 +268,39 @@ test("運営事務局でプロフィール変更を承認できる", async ({ pa
   expect(action).toBe("approve");
 });
 
+test("承認一覧の読み込みエラーから再試行できる", async ({ page }) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "承認担当" } } }),
+  );
+  let calls = 0;
+  await page.route("**/api/admin/profile-change-requests?**", async (route) => {
+    calls += 1;
+    if (calls === 1) {
+      await route.fulfill({
+        status: 503,
+        json: { error: "一時的に申請を読み込めません。" },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: { requests: [], atlasInternalBioRequests: [], pendingApprovals: 0 },
+    });
+  });
+
+  await page.goto("admin/profile-requests/");
+  const retry = page.locator("[data-retry]");
+  await expect(retry).toBeVisible();
+  await expect(page.locator("[data-message]")).toContainText(
+    "一時的に申請を読み込めません。",
+  );
+
+  await retry.click();
+  await expect(retry).toBeHidden();
+  await expect(page.locator("[data-count]")).toHaveText("0件");
+  expect(calls).toBe(2);
+});
+
 test("運営事務局でプロフィール変更を却下できる", async ({ page }) => {
   await baseAdminMocks(page);
   await page.route("**/api/admin/profile", (route) =>

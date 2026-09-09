@@ -6988,9 +6988,12 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const canReviewProfileRequests =
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
+  // Keep the portal summary in sync with the approval queue API.  Returning
+  // the promise here serializes it as an object instead of the actual count,
+  // which made the portal show a value different from the review screen.
   const pendingApprovals = canReviewProfileRequests
-    ? countPendingProfileApprovals(env)
-    : Promise.resolve(0);
+    ? await countPendingProfileApprovals(env)
+    : 0;
   const [projects, availableProjects] = scope.isManager
     ? await Promise.all([
         env.REPORTS.prepare(

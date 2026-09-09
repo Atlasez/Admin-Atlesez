@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 type MockOptions = {
   notificationStatus?: number;
   pendingApprovals?: number;
+  portalFailureOnce?: boolean;
   avatarUrl?: string;
   calendarEvents?: Array<{
     id: string;
@@ -27,6 +28,7 @@ type MockOptions = {
 };
 
 async function mockAdminShell(page: Page, options: MockOptions = {}) {
+  let portalCalls = 0;
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/admin/auth-status") {
@@ -87,6 +89,15 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
       return;
     }
     if (url.pathname === "/api/admin/portal") {
+      portalCalls += 1;
+      if (options.portalFailureOnce && portalCalls === 1) {
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "一時的に読み込めません。" }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -278,6 +289,21 @@ test("承認待ちは履歴通知ではなくpending申請の件数を表示す�
   );
   await expect(page.locator('[data-summary-detail="approvals"]')).toHaveText(
     "承認待ちはありません",
+  );
+});
+
+test("ポータルの読み込みエラーから再試行できる", async ({ page }) => {
+  await mockAdminShell(page, { portalFailureOnce: true });
+
+  await page.goto("admin/portal/");
+  const error = page.locator("[data-portal-error]");
+  await expect(error).toBeVisible();
+  await expect(error).toContainText("一時的に読み込めません。");
+
+  await error.getByRole("button", { name: "再試行" }).click();
+  await expect(error).toBeHidden();
+  await expect(page.locator('[data-summary-value="approvals"]')).toHaveText(
+    "0",
   );
 });
 
