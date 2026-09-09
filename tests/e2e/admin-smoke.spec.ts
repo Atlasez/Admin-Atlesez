@@ -131,9 +131,9 @@ test("記事編集の未選択案内が横方向に崩れない", async ({ page 
 test("記事編集の未選択案内は作成済み記事と矛盾しない", async ({ page }) => {
   await mockAdminApis(page);
   await page.goto("admin/editor/");
-  await expect(
-    page.getByRole("heading", { name: "編集する記事を選択" }),
-  ).toBeVisible();
+  await expect(page.locator("[data-editor-empty]")).toBeVisible();
+  await expect(page.locator("[data-editor-empty] h2")).toHaveCount(0);
+  await expect(page.locator("[data-editor-empty] > p")).toHaveCount(0);
   await expect(page.locator("[data-workflow-current]")).toHaveText(
     "記事を選択してください",
   );
