@@ -1645,28 +1645,54 @@ async function listArticleReports(
     : null;
   if (requested !== "all" && !status)
     return json({ error: "状態を確認してください。" }, 400);
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "100");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 100;
+  const cursorParts = (searchParams.get("cursor") ?? "").split("|");
+  const parsedCursorRank = cursorParts.length === 3 ? Number(cursorParts[0]) : NaN;
+  const cursorRank = Number.isInteger(parsedCursorRank) && parsedCursorRank >= 0 && parsedCursorRank <= 2
+    ? parsedCursorRank
+    : null;
+  const cursorCreatedAt = cursorParts.length === 3 ? cursorParts[1] : "";
+  const cursorId = cursorParts.length === 3 ? cursorParts[2] : "";
   const select = `SELECT id, article_title, article_url, article_id, subject, category, report_type, details,
       contact, locale, status, admin_note, created_at, updated_at FROM article_reports`;
-  const order = ` ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, created_at DESC LIMIT 250`;
+  const order = ` ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, created_at DESC, id DESC LIMIT ?`;
   const filters: string[] = [];
   const values: unknown[] = [];
   if (status) {
     filters.push("status = ?");
     values.push(status);
   }
+  if (cursorRank !== null && cursorCreatedAt && cursorId) {
+    filters.push(
+      `(CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END > ? OR (CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END = ? AND (created_at < ? OR (created_at = ? AND id < ?))))`,
+    );
+    values.push(Number(cursorRank), Number(cursorRank), cursorCreatedAt, cursorCreatedAt, cursorId);
+  }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const statement = env.REPORTS.prepare(`${select}${where}${order}`);
   const result = values.length
-    ? await statement.bind(...values).all<ArticleReport>()
-    : await statement.all<ArticleReport>();
+    ? await statement.bind(...values, pageLimit + 1).all<ArticleReport>()
+    : await statement.bind(pageLimit + 1).all<ArticleReport>();
+  const fetchedReports = result.results ?? [];
+  const hasMore = fetchedReports.length > pageLimit;
+  const reports = fetchedReports.slice(0, pageLimit);
+  const lastReport = reports.at(-1);
+  const nextCursor = hasMore && lastReport
+    ? `${lastReport.status === "new" ? 0 : lastReport.status === "reviewing" ? 1 : 2}|${lastReport.created_at}|${lastReport.id}`
+    : null;
   // 問題内容は全運営者が確認できるが、送信者の連絡先は全分野管理者だけに開示する。
   return json({
-    reports: result.results.map((report) => ({
+    reports: reports.map((report) => ({
       ...report,
       contact: scope.isManager ? report.contact : null,
       can_manage: scope.allSubjects || scope.subjects.includes(report.subject),
     })),
-    reportsTruncated: result.results.length >= 250,
+    reportsTruncated: hasMore,
+    pagination: { limit: pageLimit, nextCursor, hasMore },
   });
 }
 

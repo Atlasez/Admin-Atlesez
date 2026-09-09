@@ -92,7 +92,11 @@ const japanRegionPaths = japanMap.locations
       <output class="report-count" data-report-count></output>
     </div>
     <p class="report-feedback" data-report-feedback aria-live="polite">読み込み中です…</p>
-    <div class="report-list" data-report-list></div>
+    <div class="report-list" data-report-list aria-live="polite" aria-busy="true"></div>
+    <div class="report-pagination" data-report-pagination hidden>
+      <span data-report-pagination-summary></span>
+      <button class="button button-outline" type="button" data-report-load-more>さらに読み込む</button>
+    </div>
     </section>
   </section>
 </AdminLayout>
@@ -207,6 +211,9 @@ const japanRegionPaths = japanMap.locations
   .report-list :global(.report-card[data-status="reviewing"] .status-badge) { background: #fff4d6; color: #9a6400; }
   .report-list :global(.report-card[data-status="resolved"] .status-badge) { background: #e4f5ea; color: #267143; }
   .report-list :global(.report-empty) { color: var(--muted); padding: 2.5rem 2rem; text-align: center; }
+  .report-pagination { align-items: center; display: flex; gap: .7rem; justify-content: center; margin-top: .8rem; }
+  .report-pagination[hidden] { display: none; }
+  .report-pagination span { color: var(--muted); font-size: .75rem; }
   @media (max-width: 700px) {
     .admin-reports { padding: 1.5rem 1rem 3rem; }
     .admin-reports-heading { display: grid; gap: 1rem; }
@@ -251,6 +258,9 @@ const japanRegionPaths = japanMap.locations
     const list = root.querySelector<HTMLElement>("[data-report-list]")!;
     const feedback = root.querySelector<HTMLElement>("[data-report-feedback]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-report-count]")!;
+    const reportPagination = root.querySelector<HTMLElement>("[data-report-pagination]")!;
+    const reportPaginationSummary = root.querySelector<HTMLElement>("[data-report-pagination-summary]")!;
+    const reportLoadMore = root.querySelector<HTMLButtonElement>("[data-report-load-more]")!;
     const permissionPanel = root.querySelector<HTMLElement>("[data-permission-admin]");
     const permissionForm = root.querySelector<HTMLFormElement>("[data-permission-form]");
     const permissionList = root.querySelector<HTMLElement>("[data-permission-list]");
@@ -496,10 +506,12 @@ const japanRegionPaths = japanMap.locations
       }
     };
 
-    const render = (reports: Report[]) => {
-      count.value = `${reports.length} 件`;
-      if (!reports.length) { list.innerHTML = '<p class="report-empty">該当する報告はありません。</p>'; return; }
-      list.innerHTML = reports.map((report) => {
+    let reportNextCursor: string | null = null;
+    let reportLoaded = 0;
+    let reportLoading = false;
+    const render = (reports: Report[], append = false) => {
+      if (!reports.length && !append) { list.innerHTML = '<p class="report-empty">該当する報告はありません。</p>'; return; }
+      const markup = reports.map((report) => {
         const url = safeUrl(report.article_url);
         return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
           <summary class="report-summary">
@@ -514,22 +526,37 @@ const japanRegionPaths = japanMap.locations
           </div>
         </details>`;
       }).join("");
+      if (append) list.insertAdjacentHTML("beforeend", markup);
+      else list.innerHTML = markup;
     };
 
-    const load = async () => {
+    const load = async (append = false) => {
+      if (reportLoading || (append && !reportNextCursor)) return;
+      reportLoading = true;
       feedback.textContent = "読み込み中です…";
+      list.setAttribute("aria-busy", "true");
+      reportLoadMore.disabled = true;
       try {
-        const response = await fetch(`/api/admin/article-reports?status=${encodeURIComponent(filter.value)}`, { credentials: "same-origin" });
-        const data = await readApiResponse<{ reports?: Report[]; reportsTruncated?: boolean; error?: string }>(response);
+        const query = new URLSearchParams({ status: filter.value });
+        if (append && reportNextCursor) query.set("cursor", reportNextCursor);
+        const response = await fetch(`/api/admin/article-reports?${query.toString()}`, { credentials: "same-origin" });
+        const data = await readApiResponse<{ reports?: Report[]; reportsTruncated?: boolean; pagination?: { nextCursor?: string | null; hasMore?: boolean }; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "読み込めませんでした。");
         const reports = data.reports ?? [];
-        render(reports);
-        count.value = data.reportsTruncated ? `${reports.length}件以上` : `${reports.length} 件`;
-        feedback.textContent = data.reportsTruncated ? "表示上限に達しています。絞り込みで対象を減らしてください。" : "";
-      } catch (error) { list.innerHTML = ""; count.value = ""; feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
+        render(reports, append);
+        reportLoaded = append ? reportLoaded + reports.length : reports.length;
+        reportNextCursor = data.pagination?.nextCursor ?? null;
+        const hasMore = Boolean(data.pagination?.hasMore ?? data.reportsTruncated);
+        count.value = hasMore ? `${reportLoaded}件以上` : `${reportLoaded} 件`;
+        reportPagination.hidden = !reportNextCursor;
+        reportPaginationSummary.textContent = hasMore ? `${reportLoaded}件を表示中` : "すべて表示済み";
+        feedback.textContent = "";
+      } catch (error) { if (!append) { list.innerHTML = ""; count.value = ""; reportPagination.hidden = true; } feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
+      finally { reportLoading = false; reportLoadMore.disabled = false; list.setAttribute("aria-busy", "false"); }
     };
-    filter.addEventListener("change", load);
-    root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", load);
+    filter.addEventListener("change", () => { reportNextCursor = null; reportLoaded = 0; void load(); });
+    root.querySelector<HTMLButtonElement>("[data-reports-refresh]")!.addEventListener("click", () => { reportNextCursor = null; reportLoaded = 0; void load(); });
+    reportLoadMore.addEventListener("click", () => { void load(true); });
     analyticsDays?.addEventListener("change", () => loadAllAnalytics());
     analyticsMore?.addEventListener("click", () => { const opening = analyticsMore.getAttribute("aria-expanded") !== "true"; analyticsList?.querySelectorAll<HTMLTableRowElement>("[data-analytics-rest]").forEach((row) => { row.hidden = !opening; }); analyticsMore.setAttribute("aria-expanded", String(opening)); analyticsMore.textContent = opening ? "上位10件だけ表示" : "残りを表示"; });
     root.querySelector<HTMLButtonElement>("[data-analytics-refresh]")?.addEventListener("click", () => loadAllAnalytics());
