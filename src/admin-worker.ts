@@ -17425,6 +17425,7 @@ async function handleAdminRequest(
   // site pages remain unreachable from this Worker.
   if (
     url.pathname.startsWith("/_astro/") ||
+    url.pathname.startsWith("/admin-guide/") ||
     url.pathname.startsWith("/images/") ||
     url.pathname.startsWith("/data/") ||
     url.pathname === "/build-info.json" ||
