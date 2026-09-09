@@ -105,6 +105,10 @@
   --on-accent: #10151a;
   --link: #8db4d6;
   --focus-ring: #e8a45c;
+  /* 暗色面でも状態色は小さく鮮明に見えるよう、意味色だけ輝度を確保する。 */
+  --success: #72c98b;
+  --danger: #e27676;
+  --warning: #e8b84a;
 }
 [data-site="atlas"][data-pref-bg="dark"],
 [data-pref-bg="dark"] [data-site="atlas"] {
