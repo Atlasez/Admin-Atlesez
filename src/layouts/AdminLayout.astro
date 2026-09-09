@@ -28,6 +28,10 @@ const { title, description, darkReaderLock = false } = Astro.props;
     <AdminNav />
     <div class="admin-layout-main"><slot /></div>
     <script>
+      // Native multi-selects remain the submission source of truth, while a
+      // checkbox presentation makes assignment forms discoverable on touch.
+      void import("../scripts/admin-multi-select");
+
       // Editor-only features are intentionally loaded after the editor route
       // is present. The article list and operational pages should not pay for
       // CodeMirror, Yjs, KaTeX authoring, or collaboration observers.

@@ -141,6 +141,73 @@ hr {
   display: none !important;
 }
 
+/* 複数選択はCtrl/⌘依存にせず、タッチでも判別できるチェックボックスで
+   操作する。元のselectは値の送信と既存スクリプトの互換性のため残す。 */
+[data-admin-shell] .admin-multi-select {
+  display: grid;
+  gap: 0.4rem;
+}
+[data-admin-shell] .admin-multi-select-native {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+[data-admin-shell] .admin-multi-select-options {
+  display: grid;
+  gap: 0.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.2rem;
+}
+[data-admin-shell] .admin-multi-select-option {
+  align-items: center;
+  background: var(--background-secondary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  padding: 0.38rem 0.5rem;
+}
+[data-admin-shell] .admin-multi-select-option:hover {
+  border-color: var(--accent-primary);
+}
+[data-admin-shell] .admin-multi-select-option input {
+  accent-color: var(--accent-primary);
+  flex: 0 0 auto;
+  margin: 0;
+  min-height: auto;
+  width: auto;
+}
+[data-admin-shell] .admin-multi-select-footer {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+}
+[data-admin-shell] .admin-multi-select-count {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+[data-admin-shell] .admin-multi-select-clear {
+  background: transparent;
+  border: 0;
+  color: var(--accent-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.2rem 0;
+}
+[data-admin-shell] .admin-multi-select-clear:hover {
+  text-decoration: underline;
+}
+
 /* ボタン */
 .button,
 button.button {
