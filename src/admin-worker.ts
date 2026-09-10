@@ -1202,6 +1202,18 @@ type AdminScopeRequirement = {
   subjectError?: string;
 };
 
+// 一つのリクエスト内で権限判定を何度も行うAPI（ポータルの集計など）では、
+// 基本スコープの解決結果を共有する。判定ロジックは一箇所のまま、D1照会だけを省く。
+const adminScopeCache = new WeakMap<Request, Promise<AdminScope | Response>>();
+
+const resolveCachedAdminScope = (request: Request, env: Env) => {
+  const cached = adminScopeCache.get(request);
+  if (cached) return cached;
+  const pending = resolveAdminScope(request, env);
+  adminScopeCache.set(request, pending);
+  return pending;
+};
+
 /**
  * 既存API互換の既定入口。要件なしでも共通の権限パイプラインを通し、
  * 将来の境界チェックをページごとに実装し直さないようにする。
@@ -1227,7 +1239,7 @@ async function requireAdminScope(
   requirements: AdminScopeRequirement = {},
   preloadedScope?: AdminScope,
 ): Promise<AdminScope | Response> {
-  const scope = preloadedScope ?? (await resolveAdminScope(request, env));
+  const scope = preloadedScope ?? (await resolveCachedAdminScope(request, env));
   if (isResponse(scope)) return scope;
 
   if (requirements.requireGlobal && !scope.allSubjects)
