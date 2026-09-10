@@ -514,19 +514,37 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         { label: "操作履歴", detail: "変更イベントを確認", href: "/admin/audit-log/" },
         { label: "表示設定を開く", detail: "テーマ・文字サイズ・コントラスト", run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
       ];
+      type CommandHistory = { label: string; detail: string; href?: string; count: number; lastUsed: number };
+      const historyKey = "atlasez-command-history";
+      const readHistory = (): CommandHistory[] => {
+        try {
+          const value = JSON.parse(window.localStorage.getItem(historyKey) ?? "[]") as unknown;
+          return Array.isArray(value) ? value.filter((item): item is CommandHistory => Boolean(item && typeof item === "object" && typeof (item as CommandHistory).label === "string" && typeof (item as CommandHistory).count === "number" && typeof (item as CommandHistory).lastUsed === "number")).slice(0, 8) : [];
+        } catch { return []; }
+      };
+      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => ({ label: item.label, detail: `最近使った操作・${item.count}回`, ...(item.href ? { href: item.href } : {}) }));
+      const recordUsage = (command: Command) => {
+        try {
+          const now = Date.now();
+          const history = readHistory().filter((item) => item.href !== command.href || item.label !== command.label);
+          const previous = readHistory().find((item) => item.href === command.href && item.label === command.label);
+          history.unshift({ label: command.label, detail: command.detail, ...(command.href ? { href: command.href } : {}), count: (previous?.count ?? 0) + 1, lastUsed: now });
+          window.localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 8)));
+        } catch { /* localStorageが無効でも操作自体は継続 */ }
+      };
       let commands = [...staticCommands];
       let activeIndex = 0;
       let searchTimer: number | undefined;
       const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
       const close = () => { if (dialog.open) dialog.close(); };
-      const run = (command: Command) => { close(); if (command.href) void navigate(command.href); else command.run?.(); };
+      const run = (command: Command) => { recordUsage(command); close(); if (command.href) void navigate(command.href); else command.run?.(); };
       const render = () => {
         list.innerHTML = commands.length ? commands.map((command, index) => `<button type="button" class="admin-command-item${index === activeIndex ? " is-active" : ""}" role="option" aria-selected="${index === activeIndex}" data-command-index="${index}"><strong>${escape(command.label)}</strong><small>${escape(command.detail)}</small></button>`).join("") : `<p class="admin-command-empty">一致する項目はありません。</p>`;
         list.querySelectorAll<HTMLButtonElement>("[data-command-index]").forEach((item) => item.addEventListener("click", () => run(commands[Number(item.dataset.commandIndex ?? 0)])));
       };
       const search = async () => {
         const query = input.value.trim();
-        if (query.length < 2) { commands = [...staticCommands]; activeIndex = 0; render(); return; }
+        if (query.length < 2) { commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
         const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query));
         try {
           const response = await fetch(`/api/admin/command-search?q=${encodeURIComponent(query)}`, { credentials: "same-origin", cache: "no-store" });
@@ -535,7 +553,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           commands = [...local, ...remote]; activeIndex = 0; render();
         } catch { commands = local; activeIndex = 0; render(); }
       };
-      const open = () => { if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...staticCommands]; activeIndex = 0; render(); input.focus(); };
+      const open = () => { if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
       button.addEventListener("click", open);
       input.addEventListener("input", () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void search(), 120); });
       input.addEventListener("keydown", (event) => {
