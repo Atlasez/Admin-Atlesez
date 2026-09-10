@@ -128,6 +128,18 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
     page.getByRole("heading", { name: "アクションセンター" }),
   ).toBeVisible();
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
+  await expect(
+    page
+      .locator("[data-action-items] .action-item")
+      .first()
+      .locator(".item-kind-icon"),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("[data-action-items] .action-item")
+      .first()
+      .locator(".item-priority-dot"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "着手" }).click();
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await page.getByRole("button", { name: "完了・履歴" }).click();
