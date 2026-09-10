@@ -1,0 +1,69 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { ADMIN_UPDATES } from "../../data/admin-updates";
+
+const kinds = [...new Set(ADMIN_UPDATES.map((update) => update.kind))];
+const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
+---
+
+<AdminLayout title="アップデート履歴" description="運営サイトの更新履歴">
+  <main class="update-history" data-update-history>
+    <header class="page-heading"><div><h1>アップデート履歴</h1></div><a href="/admin/atlas/">← 管理トップ</a></header>
+    <section class="history-summary" aria-label="更新履歴の概要">
+      <div><span>掲載件数</span><strong>{ADMIN_UPDATES.length}</strong></div>
+      <div><span>機能追加</span><strong>{ADMIN_UPDATES.filter((update) => update.kind === "機能追加").length}</strong></div>
+      <div><span>改善・運用</span><strong>{ADMIN_UPDATES.filter((update) => update.kind === "改善" || update.kind === "運用").length}</strong></div>
+      <div><span>最終更新</span><strong>{ADMIN_UPDATES[0]?.date.replaceAll("-", "/") ?? "—"}</strong></div>
+    </section>
+    <section class="history-panel" aria-labelledby="history-list-heading">
+      <div class="panel-heading"><h2 id="history-list-heading">変更内容</h2><output data-result-count aria-live="polite">{ADMIN_UPDATES.length}件</output></div>
+      <form class="history-filters" data-history-filters role="search">
+        <label class="search-field">キーワード<input type="search" name="q" placeholder="変更内容・バージョンを検索" autocomplete="off" /></label>
+        <label>種別<select name="kind"><option value="all">すべての種別</option>{kinds.map((kind) => <option value={kind}>{kind}</option>)}</select></label>
+        <label>対象<select name="project"><option value="all">全プロジェクト</option>{projects.map((project) => <option value={project}>{project}</option>)}</select></label>
+        <button type="reset" class="reset-button">条件をリセット</button>
+      </form>
+      <div class="history-list" data-history-list aria-live="polite">
+        {ADMIN_UPDATES.map((update) => <button class="history-row" type="button" data-history-row data-kind={update.kind} data-project={update.project} data-search={`${update.version} ${update.title} ${update.summary} ${update.project} ${update.author}`} data-version={update.version} data-date={update.date} data-title={update.title} data-summary={update.summary} data-author={update.author} data-href={update.href ?? ""}><time datetime={update.date}>{update.date.replaceAll("-", "/")}<small>{update.version}</small></time><span class:list={["history-icon", update.tone]} aria-hidden="true">↗</span><span class="history-copy"><strong>{update.title}</strong><small>{update.summary}</small></span><span class:list={["history-kind", update.tone]}>{update.kind}</span><span class="history-project">{update.project}</span><span class="row-chevron" aria-hidden="true">›</span></button>)}
+        <p class="empty-state" data-empty-state hidden>条件に一致する更新履歴はありません。</p>
+      </div>
+    </section>
+    <dialog class="history-dialog" data-history-dialog aria-labelledby="history-dialog-title">
+      <form method="dialog" class="dialog-close-form"><button class="dialog-close" aria-label="詳細を閉じる">×</button></form>
+      <p class="dialog-kicker" data-dialog-version></p><h2 id="history-dialog-title" data-dialog-title>更新内容</h2>
+      <dl class="dialog-meta"><div><dt>日付</dt><dd data-dialog-date>—</dd></div><div><dt>種別</dt><dd data-dialog-kind>—</dd></div><div><dt>対象</dt><dd data-dialog-project>—</dd></div><div><dt>担当</dt><dd data-dialog-author>—</dd></div></dl>
+      <p class="dialog-summary" data-dialog-summary></p><div class="dialog-actions"><a class="dialog-link" data-dialog-link hidden>関連画面を開く →</a><button type="submit" class="dialog-secondary">閉じる</button></div>
+    </dialog>
+  </main>
+</AdminLayout>
+
+<script>
+  const initializeUpdateHistory = () => {
+    const root = document.querySelector<HTMLElement>("[data-update-history]");
+    if (!root || root.dataset.initialized === "true") return;
+    root.dataset.initialized = "true";
+    const form = root.querySelector<HTMLFormElement>("[data-history-filters]")!;
+    const rows = [...root.querySelectorAll<HTMLButtonElement>("[data-history-row]")];
+    const count = root.querySelector<HTMLOutputElement>("[data-result-count]")!;
+    const empty = root.querySelector<HTMLElement>("[data-empty-state]")!;
+    const dialog = root.querySelector<HTMLDialogElement>("[data-history-dialog]")!;
+    const value = (selector: string) => root.querySelector<HTMLElement>(selector)!;
+    const filter = () => {
+      const data = new FormData(form);
+      const query = String(data.get("q") ?? "").trim().toLocaleLowerCase("ja-JP");
+      const kind = String(data.get("kind") ?? "all");
+      const project = String(data.get("project") ?? "all");
+      let visible = 0;
+      rows.forEach((row) => { const matches = (!query || String(row.dataset.search).toLocaleLowerCase("ja-JP").includes(query)) && (kind === "all" || row.dataset.kind === kind) && (project === "all" || row.dataset.project === project); row.hidden = !matches; if (matches) visible += 1; });
+      count.value = `${visible}件`; empty.hidden = visible !== 0;
+    };
+    form.addEventListener("input", filter); form.addEventListener("change", filter); form.addEventListener("reset", () => requestAnimationFrame(filter));
+    rows.forEach((row) => row.addEventListener("click", () => { value("[data-dialog-version]").textContent = `${row.dataset.version} · ${row.dataset.date?.replaceAll("-", "/") ?? ""}`; value("[data-dialog-title]").textContent = row.dataset.title ?? "更新内容"; value("[data-dialog-date]").textContent = row.dataset.date?.replaceAll("-", "/") ?? "—"; value("[data-dialog-kind]").textContent = row.dataset.kind ?? "—"; value("[data-dialog-project]").textContent = row.dataset.project ?? "—"; value("[data-dialog-author]").textContent = row.dataset.author ?? "—"; value("[data-dialog-summary]").textContent = row.dataset.summary ?? ""; const link = root.querySelector<HTMLAnchorElement>("[data-dialog-link]")!; link.hidden = !row.dataset.href; if (row.dataset.href) link.href = row.dataset.href; if (typeof dialog.showModal === "function") dialog.showModal(); }));
+    filter();
+  };
+  document.addEventListener("astro:page-load", initializeUpdateHistory); initializeUpdateHistory();
+</script>
+
+<style>
+  .update-history{margin:0 auto;max-width:1120px;padding:0 1.25rem 4rem}.page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.25rem}.page-heading h1{font-size:clamp(1.8rem,4vw,2.5rem);margin:0}.page-heading>a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.history-summary{display:grid;gap:.7rem;grid-template-columns:repeat(4,minmax(0,1fr));margin:1.15rem 0}.history-summary>div{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.25rem;padding:.8rem}.history-summary span{color:var(--text-secondary);font-size:.72rem}.history-summary strong{font-size:1.25rem;font-variant-numeric:tabular-nums}.history-panel{border:1px solid var(--border-default);padding:1rem}.panel-heading{align-items:center;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;padding-bottom:.7rem}.panel-heading h2{font-size:1.1rem;margin:0}.panel-heading output{color:var(--text-secondary);font-size:.75rem}.history-filters{align-items:end;display:grid;gap:.6rem;grid-template-columns:minmax(14rem,1fr) 10rem 12rem auto;padding:1rem 0}.history-filters label{color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.3rem}.history-filters input,.history-filters select{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);font:inherit;min-height:2.35rem;padding:.45rem .55rem}.reset-button,.dialog-secondary{background:transparent;border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-secondary);cursor:pointer;font:inherit;font-size:.72rem;min-height:2.35rem;padding:.45rem .65rem}.reset-button:hover{border-color:var(--accent-primary);color:var(--text-primary)}.history-list{border-bottom:1px solid var(--border-default);border-top:1px solid var(--border-default)}.history-row{align-items:center;background:transparent;border:0;border-bottom:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;display:grid;gap:.8rem;grid-template-columns:7.2rem 2rem minmax(0,1fr) 5.2rem 9rem 1rem;min-height:4.5rem;padding:.65rem .4rem;text-align:left;width:100%}.history-row:hover{background:var(--background-secondary)}.history-row[hidden]{display:none}.history-row time{color:var(--text-secondary);display:grid;font-size:.72rem;gap:.2rem;white-space:nowrap}.history-row time small{color:var(--text-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.68rem}.history-icon{align-items:center;border:1px solid currentColor;border-radius:.3rem;display:flex;font-size:.9rem;height:1.8rem;justify-content:center;width:1.8rem}.history-icon.blue,.history-kind.blue{color:#6ba6ff}.history-icon.green,.history-kind.green{color:#72c98b}.history-icon.violet,.history-kind.violet{color:#ac8cf4}.history-icon.amber,.history-kind.amber{color:#e8b84a}.history-icon.cyan,.history-kind.cyan{color:#67c3ce}.history-copy{min-width:0}.history-copy strong{display:block;font-size:.84rem;font-weight:800}.history-copy small{color:var(--text-secondary);display:block;font-size:.73rem;line-height:1.5;margin-top:.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.history-kind,.history-project{font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-chevron{color:var(--accent-primary);font-size:1.2rem}.empty-state{color:var(--text-secondary);margin:0;padding:2.5rem;text-align:center}.history-dialog{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.5rem;color:var(--text-primary);max-width:34rem;padding:1.25rem;width:calc(100% - 2rem)}.history-dialog::backdrop{background:rgb(0 0 0 / .55)}.dialog-close-form{display:flex;justify-content:flex-end}.dialog-close{background:transparent;border:0;color:var(--text-secondary);cursor:pointer;font-size:1.25rem}.dialog-kicker{color:var(--text-secondary);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;margin:.2rem 0}.history-dialog h2{font-size:1.25rem;margin:.3rem 0 1rem}.dialog-meta{border-bottom:1px solid var(--border-default);border-top:1px solid var(--border-default);display:grid;gap:.6rem;grid-template-columns:repeat(2,1fr);margin:0;padding:.8rem 0}.dialog-meta div{display:grid;gap:.15rem}.dialog-meta dt{color:var(--text-secondary);font-size:.68rem;font-weight:800}.dialog-meta dd{font-size:.78rem;margin:0}.dialog-summary{font-size:.82rem;line-height:1.7;margin:1rem 0}.dialog-actions{display:flex;gap:.5rem;justify-content:flex-end}.dialog-link{border:1px solid var(--accent-primary);border-radius:.3rem;color:var(--accent-primary);font-size:.74rem;font-weight:800;padding:.5rem .7rem;text-decoration:none}@media(max-width:760px){.update-history{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.history-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.history-filters{grid-template-columns:1fr 1fr}.history-filters .search-field{grid-column:1/-1}.history-row{gap:.55rem;grid-template-columns:5.4rem 1.8rem minmax(0,1fr) 1rem}.history-kind,.history-project{display:none}}@media(max-width:420px){.history-filters{grid-template-columns:1fr}.history-filters .search-field{grid-column:auto}}
+</style>

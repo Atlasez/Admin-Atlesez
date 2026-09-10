@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "onboarding-demo";
+  current?: "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "onboarding-demo" | "update-history";
   site?: "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -72,8 +72,10 @@ const routeCurrent = normalizedPath === "/admin/portal"
                         ? "analytics"
                       : normalizedPath === "/admin/permissions"
                         ? "permissions"
-                        : normalizedPath === "/admin/guide"
+                          : normalizedPath === "/admin/guide"
                           ? "guide"
+                          : normalizedPath === "/admin/update-history"
+                            ? "update-history"
                           : normalizedPath === "/admin/rules"
                             ? "rules"
                           : normalizedPath === "/admin/onboarding-demo"
@@ -139,6 +141,7 @@ const pageLabel = ({
   "member-management": "運営メンバー管理",
   "genre-roles": "ジャンル・役割管理",
   "operations-statistics": "運営メンバー統計",
+  "update-history": "アップデート履歴",
 } as Record<NonNullable<Props["current"]>, string>)[current];
 const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "student-council", "thinking-cafe", "secretariat"]);
 ---
