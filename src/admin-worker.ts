@@ -8542,23 +8542,43 @@ async function listProjectIntroductions(
     new URL(request.url).searchParams.get("project") ?? "atlas";
   const project = await resolveOperationProject(env, scope, requestedProject);
   if (isResponse(project)) return project;
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "100");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 100;
+  const rawCursor = searchParams.get("cursor") ?? "";
+  const separator = rawCursor.lastIndexOf("|");
+  const cursorName = separator > 0 ? decodeURIComponent(rawCursor.slice(0, separator)) : "";
+  const cursorEmail = separator > 0 ? decodeURIComponent(rawCursor.slice(separator + 1)) : "";
+  const filters = ["m.project_id=?"];
+  const bindings: unknown[] = [project.id];
+  const displayNameExpression = "COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定')";
+  if (cursorName && cursorEmail) {
+    filters.push(`(${displayNameExpression} > ? OR (${displayNameExpression} = ? AND m.email > ?))`);
+    bindings.push(cursorName, cursorName, cursorEmail);
+  }
   const members = await env.REPORTS.prepare(
     `SELECT m.email,m.role,
-      COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
+      ${displayNameExpression} AS display_name,
       COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year,
       COALESCE(p.avatar_url,'') AS avatar_url,
       COALESCE(pp.internal_bio,'') AS internal_bio,pp.updated_at
      FROM atlasez_project_memberships m
      LEFT JOIN editorial_member_profiles p ON p.email=m.email
-     LEFT JOIN editorial_project_member_profiles pp
+      LEFT JOIN editorial_project_member_profiles pp
        ON pp.project_id=m.project_id AND pp.email=m.email
-     WHERE m.project_id=?
-     ORDER BY display_name,m.email`,
+     WHERE ${filters.join(" AND ")}
+     ORDER BY display_name,m.email
+     LIMIT ?`,
   )
-    .bind(project.id)
+    .bind(...bindings, limit + 1)
     .all<Record<string, unknown>>();
+  const fetchedMembers = members.results ?? [];
+  const hasMore = fetchedMembers.length > limit;
+  const memberRows = fetchedMembers.slice(0, limit);
   const entries = await Promise.all(
-    (members.results ?? []).map(async (member) => ({
+    memberRows.map(async (member) => ({
       ...member,
       assignments: await projectAssignmentLabels(
         env,
@@ -8568,7 +8588,11 @@ async function listProjectIntroductions(
       ),
     })),
   );
-  return json({ project, entries });
+  const lastEntry = memberRows.at(-1);
+  const nextCursor = hasMore && lastEntry
+    ? `${encodeURIComponent(String(lastEntry.display_name ?? ""))}|${encodeURIComponent(String(lastEntry.email ?? ""))}`
+    : null;
+  return json({ project, entries, pagination: { limit, nextCursor, hasMore } });
 }
 
 async function listProjectProfileChangeRequests(
