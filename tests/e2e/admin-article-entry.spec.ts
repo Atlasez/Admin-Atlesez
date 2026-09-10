@@ -14,10 +14,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       groups.nth(2).getByRole("link", { name: /諸手続きを開く/ }),
     ).toHaveAttribute("href", "/admin/procedures/?project=atlas");
-    await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(2);
+    await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(1);
     await expect(
       groups.nth(3).getByRole("link", { name: /操作履歴を開く/ }),
-    ).toHaveAttribute("href", "/admin/audit-log/");
+    ).toHaveCount(0);
     await expect(
       groups.nth(2).getByRole("link", { name: /規則を開く/ }),
     ).toHaveAttribute("href", "/admin/rules/");
@@ -45,6 +45,16 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("link", { name: /アップデート履歴を開く/ }),
     ).toHaveAttribute("href", "/admin/update-history/");
+  });
+
+  test("操作履歴と状態遷移は管理トップから開く", async ({ page }) => {
+    await page.goto("admin/manage/?project=atlas");
+    await expect(
+      page.getByRole("link", { name: /操作履歴を開く/ }),
+    ).toHaveAttribute("href", "/admin/audit-log/");
+    await expect(
+      page.getByRole("link", { name: /状態遷移を開く/ }),
+    ).toHaveAttribute("href", "/admin/workflow/");
   });
 
   test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
