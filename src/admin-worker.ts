@@ -8082,6 +8082,8 @@ type ActionCenterAction = {
   fromState: string;
   toState: string;
   label: string;
+  /** 表示時点の更新時刻。状態遷移APIで古い表示からの上書きを拒否する。 */
+  expectedUpdatedAt?: string;
 };
 
 type ActionCenterItem = {
@@ -8115,13 +8117,14 @@ const actionCenterPriority = (dueAt: string | null, updatedAt: string, now = Dat
   return "normal";
 };
 
-const actionCenterTransition = (entityType: WorkflowEntityType, entityId: string, fromState: string): ActionCenterAction[] =>
+const actionCenterTransition = (entityType: WorkflowEntityType, entityId: string, fromState: string, expectedUpdatedAt?: string): ActionCenterAction[] =>
   workflowTransitionsFor(entityType, fromState).map((transition) => ({
     entityType,
     entityId,
     fromState,
     toState: transition.to,
     label: transition.label,
+    ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
   }));
 
 /**
@@ -8265,7 +8268,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: row.project_name || projectNames.get(row.project_id) || row.project_id,
       subject: row.subject,
       read: false,
-      actions: actionCenterTransition("task", row.id, row.status),
+      actions: actionCenterTransition("task", row.id, row.status, row.updated_at),
     });
   }
   for (const row of documentRows.results ?? []) {
@@ -8285,7 +8288,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: "アトラス",
       subject: row.subject,
       read: false,
-      actions: canStartReview ? actionCenterTransition("document", row.id, "draft") : canDecide ? actionCenterTransition("document", row.id, "in-review") : [],
+      actions: canStartReview ? actionCenterTransition("document", row.id, "draft", row.updated_at) : canDecide ? actionCenterTransition("document", row.id, "in-review", row.updated_at) : [],
     });
   }
   for (const row of applicationRows.results ?? []) {
@@ -8302,7 +8305,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: APPLICATION_FORM_LABELS[row.project_slug] ?? row.project_slug,
       subject: null,
       read: false,
-      actions: actionCenterTransition("application", row.id, row.status),
+      actions: actionCenterTransition("application", row.id, row.status, row.updated_at || row.created_at),
     });
   }
   for (const row of memberApprovalRows.results ?? []) {
