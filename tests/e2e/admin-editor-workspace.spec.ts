@@ -184,6 +184,27 @@ test("個別記事を開いたときは未選択用の開始パネルを表示�
   await expect(page.locator("[data-editor-empty]")).toBeHidden();
 });
 
+test("記事の初回作成者と編集者アイコンを表示し、プレビューを章単位で折りたためる", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-document-creator]")).toHaveText(
+    "初回作成者：alice",
+  );
+  await expect(
+    page.locator("[data-document-editors] .document-editor-avatar"),
+  ).toHaveCount(1);
+  await expect(page.locator(".preview-chapter")).toHaveCount(1);
+  await expect(page.locator(".preview-chapter > summary")).toHaveText("群");
+  await page.locator(".preview-chapter > summary").click();
+  await expect(page.locator(".preview-chapter")).not.toHaveAttribute(
+    "open",
+    "",
+  );
+});
+
 test("本文の数式設定とロック操作は必要なときだけ開く", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
