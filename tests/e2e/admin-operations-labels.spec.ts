@@ -13,6 +13,7 @@ async function mockOperationsApi(page: Page) {
       due_timezone: "Asia/Tokyo",
       details: "",
       reminders: [],
+      created_at: "2026-09-01T00:00:00.000Z",
     },
   ];
   await page.route("**/api/admin/operations**", async (route) => {
@@ -66,12 +67,7 @@ test("T-1/T-2/T-5: タスク管理の初期表示が仕様どおりになる", a
   await expect(
     page.getByRole("heading", { level: 2, name: "タスク一覧" }),
   ).toBeVisible();
-  await expect(
-    page.getByText(
-      "表示対象を切り替えると、一覧に表示するタスクが変わります。",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(page.getByLabel("完了済みを表示")).toBeVisible();
   await expect(page.locator("[data-task-list]")).toContainText("既存のタスク");
 
   const dialog = page.locator("[data-task-create-dialog]");
