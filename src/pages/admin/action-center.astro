@@ -37,7 +37,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
-  type Action = { entityType: string; entityId: string; fromState: string; toState: string; label: string };
+  type Action = { entityType: string; entityId: string; fromState: string; toState: string; label: string; expectedUpdatedAt?: string };
   type Item = { id: string; kind: string; title: string; detail: string; href: string; status: string; priority: string; updatedAt: string; dueAt: string | null; project: string | null; subject: string | null; read: boolean; groupCount?: number; notificationIds?: string[]; actions: Action[] };
   type Payload = { items?: Item[]; history?: Item[]; counts?: { today?: number; dueSoon?: number; unread?: number; approvals?: number; assigned?: number }; generatedAt?: string };
 

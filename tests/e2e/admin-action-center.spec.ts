@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function mockShell(page: Page) {
+async function mockShell(page: Page, onTransition?: (body: unknown) => void) {
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/admin/auth-status") {
@@ -53,6 +53,7 @@ async function mockShell(page: Page) {
                   fromState: "open",
                   toState: "doing",
                   label: "着手",
+                  expectedUpdatedAt: "2026-09-10T00:00:00.000Z",
                 },
               ],
             },
@@ -95,6 +96,7 @@ async function mockShell(page: Page) {
       return;
     }
     if (url.pathname === "/api/admin/workflow/transition") {
+      onTransition?.(route.request().postDataJSON());
       await route.fulfill({ json: { ok: true, status: "doing" } });
       return;
     }
@@ -122,7 +124,10 @@ async function mockShell(page: Page) {
 }
 
 test("アクションセンターで絞り込みと状態変更を操作できる", async ({ page }) => {
-  await mockShell(page);
+  let transitionBody: Record<string, unknown> | null = null;
+  await mockShell(page, (body) => {
+    transitionBody = body as Record<string, unknown>;
+  });
   await page.goto("admin/action-center/");
   await expect(
     page.getByRole("heading", { name: "アクションセンター" }),
@@ -149,6 +154,9 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
       .locator(".item-priority-dot"),
   ).toBeVisible();
   await page.getByRole("button", { name: "着手" }).click();
+  expect(transitionBody).toMatchObject({
+    expectedUpdatedAt: "2026-09-10T00:00:00.000Z",
+  });
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await page.getByRole("button", { name: "完了・履歴" }).click();
   await expect(page.locator("[data-action-items]")).toContainText("完了タスク");
