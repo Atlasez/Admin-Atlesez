@@ -15,8 +15,12 @@ class ReportsStatement {
       return { results: [{ subject: "mathematics" }] as T[] };
     if (this.query.includes("FROM article_reports"))
       return { results: this.db.reports as T[] };
-    if (this.query.includes("FROM article_analytics_daily"))
-      return { results: this.db.analytics as T[] };
+    if (this.query.includes("FROM article_analytics_daily")) {
+      const rows = this.query.includes("subject IN")
+        ? this.db.analytics.filter((row) => row.subject === "mathematics")
+        : this.db.analytics;
+      return { results: rows as T[] };
+    }
     return { results: [] as T[] };
   }
   async first<T>() {
@@ -109,7 +113,7 @@ const env = (db: ReportsDb) => ({
 });
 
 describe("reports and statistics access", () => {
-  it("allows a normal operator to read all subjects while preserving write scope", async () => {
+  it("limits article analytics to the operator's assigned subjects", async () => {
     const db = new ReportsDb();
     const reports = await worker.fetch(
       request("/api/admin/article-reports"),
@@ -146,14 +150,25 @@ describe("reports and statistics access", () => {
       env(db) as never,
     );
     expect(analytics.status).toBe(200);
-    expect((await analytics.json()).articles).toHaveLength(2);
+    const analyticsData = (await analytics.json()) as {
+      articles: Array<{ subject: string }>;
+      scope: { allSubjects: boolean; subjects: string[] };
+    };
+    expect(analyticsData.articles).toHaveLength(1);
+    expect(analyticsData.scope).toEqual({
+      allSubjects: false,
+      subjects: ["mathematics"],
+    });
     expect(
       db.queries.some(
         (query) =>
           query.includes("FROM article_analytics_daily") &&
-          !query.includes("subject IN"),
+          query.includes("subject IN"),
       ),
     ).toBe(true);
+    expect(db.bindings.some((values) => values.includes("mathematics"))).toBe(
+      true,
+    );
   });
 
   it("returns 401 without an operator identity", async () => {
