@@ -16,6 +16,42 @@ export interface AdminUpdate {
 /** 運営サイトで共有する更新履歴。新しい項目を先頭に追加する。 */
 export const ADMIN_UPDATES: readonly AdminUpdate[] = [
   {
+    version: "v2.9.3",
+    date: "2026-09-10",
+    title: "操作履歴を一元化",
+    summary:
+      "記事の更新・承認・公開、権限変更、メンバー削除を実行者と日時つきで確認できるようにしました。",
+    kind: "機能追加",
+    project: "運営サイト",
+    tone: "blue",
+    author: "運営チーム",
+    href: "/admin/audit-log/",
+  },
+  {
+    version: "v2.9.2",
+    date: "2026-09-10",
+    title: "タスク一覧の処理導線を改善",
+    summary:
+      "未対応タスクを優先し、完了済みの表示切り替え、新着表示、記事編集への導線を追加しました。",
+    kind: "改善",
+    project: "アトラス",
+    tone: "green",
+    author: "運営チーム",
+    href: "/admin/operations/?project=atlas",
+  },
+  {
+    version: "v2.9.1",
+    date: "2026-09-10",
+    title: "管理メニューを整理",
+    summary:
+      "アップデート履歴を運営情報から管理トップへ移し、管理機能から見つけやすくしました。",
+    kind: "改善",
+    project: "運営サイト",
+    tone: "violet",
+    author: "運営チーム",
+    href: "/admin/manage/?project=atlas",
+  },
+  {
     version: "v2.8.0",
     date: "2026-07-31",
     title: "記事執筆フローを更新",

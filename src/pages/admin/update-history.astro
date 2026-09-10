@@ -10,10 +10,10 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
   <main class="update-history" data-update-history>
     <header class="page-heading"><div><h1>アップデート履歴</h1></div><a href="/admin/atlas/">← 管理トップ</a></header>
     <section class="history-summary" aria-label="更新履歴の概要">
-      <div><span>掲載件数</span><strong>{ADMIN_UPDATES.length}</strong></div>
-      <div><span>機能追加</span><strong>{ADMIN_UPDATES.filter((update) => update.kind === "機能追加").length}</strong></div>
-      <div><span>改善・運用</span><strong>{ADMIN_UPDATES.filter((update) => update.kind === "改善" || update.kind === "運用").length}</strong></div>
-      <div><span>最終更新</span><strong>{ADMIN_UPDATES[0]?.date.replaceAll("-", "/") ?? "—"}</strong></div>
+      <div><span>掲載件数</span><strong data-summary-total>{ADMIN_UPDATES.length}</strong></div>
+      <div><span>機能追加</span><strong data-summary-features>{ADMIN_UPDATES.filter((update) => update.kind === "機能追加").length}</strong></div>
+      <div><span>改善・運用</span><strong data-summary-improvements>{ADMIN_UPDATES.filter((update) => update.kind === "改善" || update.kind === "運用").length}</strong></div>
+      <div><span>最終更新</span><strong data-summary-latest>{ADMIN_UPDATES[0]?.date.replaceAll("-", "/") ?? "—"}</strong></div>
     </section>
     <section class="history-panel" aria-labelledby="history-list-heading">
       <div class="panel-heading"><h2 id="history-list-heading">変更内容</h2><output data-result-count aria-live="polite">{ADMIN_UPDATES.length}件</output></div>
@@ -43,11 +43,14 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
     if (!root || root.dataset.initialized === "true") return;
     root.dataset.initialized = "true";
     const form = root.querySelector<HTMLFormElement>("[data-history-filters]")!;
-    const rows = [...root.querySelectorAll<HTMLButtonElement>("[data-history-row]")];
+    let rows = [...root.querySelectorAll<HTMLButtonElement>("[data-history-row]")];
+    const list = root.querySelector<HTMLElement>("[data-history-list]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-result-count]")!;
-    const empty = root.querySelector<HTMLElement>("[data-empty-state]")!;
     const dialog = root.querySelector<HTMLDialogElement>("[data-history-dialog]")!;
     const value = (selector: string) => root.querySelector<HTMLElement>(selector)!;
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>\'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character] ?? character));
+    const openRow = (row: HTMLButtonElement) => { value("[data-dialog-version]").textContent = `${row.dataset.version} · ${row.dataset.date?.replaceAll("-", "/") ?? ""}`; value("[data-dialog-title]").textContent = row.dataset.title ?? "更新内容"; value("[data-dialog-date]").textContent = row.dataset.date?.replaceAll("-", "/") ?? "—"; value("[data-dialog-kind]").textContent = row.dataset.kind ?? "—"; value("[data-dialog-project]").textContent = row.dataset.project ?? "—"; value("[data-dialog-author]").textContent = row.dataset.author ?? "—"; value("[data-dialog-summary]").textContent = row.dataset.summary ?? ""; const link = root.querySelector<HTMLAnchorElement>("[data-dialog-link]")!; link.hidden = !row.dataset.href; if (row.dataset.href) link.href = row.dataset.href; if (typeof dialog.showModal === "function") dialog.showModal(); };
+    const bindRows = () => { rows = [...root.querySelectorAll<HTMLButtonElement>("[data-history-row]")]; rows.forEach((row) => row.addEventListener("click", () => openRow(row))); };
     const filter = () => {
       const data = new FormData(form);
       const query = String(data.get("q") ?? "").trim().toLocaleLowerCase("ja-JP");
@@ -55,11 +58,40 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
       const project = String(data.get("project") ?? "all");
       let visible = 0;
       rows.forEach((row) => { const matches = (!query || String(row.dataset.search).toLocaleLowerCase("ja-JP").includes(query)) && (kind === "all" || row.dataset.kind === kind) && (project === "all" || row.dataset.project === project); row.hidden = !matches; if (matches) visible += 1; });
-      count.value = `${visible}件`; empty.hidden = visible !== 0;
+      count.value = `${visible}件`;
+      const empty = root.querySelector<HTMLElement>("[data-empty-state]");
+      if (empty) empty.hidden = visible !== 0;
     };
     form.addEventListener("input", filter); form.addEventListener("change", filter); form.addEventListener("reset", () => requestAnimationFrame(filter));
-    rows.forEach((row) => row.addEventListener("click", () => { value("[data-dialog-version]").textContent = `${row.dataset.version} · ${row.dataset.date?.replaceAll("-", "/") ?? ""}`; value("[data-dialog-title]").textContent = row.dataset.title ?? "更新内容"; value("[data-dialog-date]").textContent = row.dataset.date?.replaceAll("-", "/") ?? "—"; value("[data-dialog-kind]").textContent = row.dataset.kind ?? "—"; value("[data-dialog-project]").textContent = row.dataset.project ?? "—"; value("[data-dialog-author]").textContent = row.dataset.author ?? "—"; value("[data-dialog-summary]").textContent = row.dataset.summary ?? ""; const link = root.querySelector<HTMLAnchorElement>("[data-dialog-link]")!; link.hidden = !row.dataset.href; if (row.dataset.href) link.href = row.dataset.href; if (typeof dialog.showModal === "function") dialog.showModal(); }));
+    bindRows();
     filter();
+    void fetch("/api/admin/update-history?limit=30", { credentials: "same-origin", cache: "no-store" }).then(async (response) => {
+      if (!response.ok) return;
+      const data = await response.json() as { entries?: Array<Record<string, unknown>> };
+      const entries = Array.isArray(data.entries) ? data.entries : [];
+      if (!entries.length) return;
+      const kindSelect = form.elements.namedItem("kind") as HTMLSelectElement | null;
+      const projectSelect = form.elements.namedItem("project") as HTMLSelectElement | null;
+      const ensureOptions = (select: HTMLSelectElement | null, key: "kind" | "project") => {
+        if (!select) return;
+        const known = new Set([...select.options].map((option) => option.value));
+        entries.map((entry) => String(entry[key] ?? "")).filter(Boolean).forEach((optionValue) => {
+          if (known.has(optionValue)) return;
+          select.add(new Option(optionValue, optionValue));
+        });
+      };
+      ensureOptions(kindSelect, "kind");
+      ensureOptions(projectSelect, "project");
+      const featureCount = entries.filter((entry) => entry.kind === "機能追加").length;
+      const improvementCount = entries.filter((entry) => entry.kind === "改善" || entry.kind === "運用").length;
+      root.querySelector<HTMLElement>("[data-summary-total]")!.textContent = String(entries.length);
+      root.querySelector<HTMLElement>("[data-summary-features]")!.textContent = String(featureCount);
+      root.querySelector<HTMLElement>("[data-summary-improvements]")!.textContent = String(improvementCount);
+      root.querySelector<HTMLElement>("[data-summary-latest]")!.textContent = String(entries[0]?.date ?? "—").replaceAll("-", "/");
+      list.innerHTML = `${entries.map((entry) => `<button class="history-row" type="button" data-history-row data-kind="${escape(entry.kind)}" data-project="${escape(entry.project)}" data-search="${escape(`${entry.version ?? ""} ${entry.title ?? ""} ${entry.summary ?? ""} ${entry.project ?? ""} ${entry.author ?? ""}`)}" data-version="${escape(entry.version)}" data-date="${escape(entry.date)}" data-title="${escape(entry.title)}" data-summary="${escape(entry.summary)}" data-author="${escape(entry.author)}" data-href="${escape(entry.href)}"><time datetime="${escape(entry.date)}">${escape(String(entry.date ?? "").replaceAll("-", "/"))}<small>${escape(entry.version)}</small></time><span class="history-icon ${escape(entry.tone)}" aria-hidden="true">↗</span><span class="history-copy"><strong>${escape(entry.title)}</strong><small>${escape(entry.summary)}</small></span><span class="history-kind ${escape(entry.tone)}">${escape(entry.kind)}</span><span class="history-project">${escape(entry.project)}</span><span class="row-chevron" aria-hidden="true">›</span></button>`).join("")}<p class="empty-state" data-empty-state hidden>条件に一致する更新履歴はありません。</p>`;
+      bindRows();
+      filter();
+    }).catch(() => undefined);
   };
   document.addEventListener("astro:page-load", initializeUpdateHistory); initializeUpdateHistory();
 </script>

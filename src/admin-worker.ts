@@ -2335,6 +2335,59 @@ async function listAdminAuditLog(
   });
 }
 
+type GithubCommitSummary = {
+  sha?: string;
+  html_url?: string;
+  commit?: { message?: string; author?: { name?: string; date?: string } };
+  author?: { login?: string } | null;
+};
+
+async function listAdminUpdateHistory(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const requestedLimit = Number(new URL(request.url).searchParams.get("limit") ?? "30");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 50)
+    : 30;
+  const auth = await githubToken(env).catch(() => null);
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Admin-Atlesez";
+  const headers = auth
+    ? githubApiHeaders(auth.token, "atlasez-admin-update-history")
+    : { accept: "application/vnd.github+json", "user-agent": "atlasez-admin-update-history", "x-github-api-version": "2022-11-28" };
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/commits?per_page=${limit}`,
+    { headers },
+  );
+  if (!response.ok)
+    return json({ error: "GitHubの更新履歴を取得できませんでした。" }, 502);
+  const commits = (await response.json().catch(() => [])) as GithubCommitSummary[];
+  const entries = commits
+    .filter((commit) => commit.sha && commit.commit?.message)
+    .map((commit) => {
+      const messageLines = String(commit.commit?.message ?? "").split("\n");
+      const title = messageLines[0].trim();
+      const prefix = title.match(/^(feat|fix|perf|refactor|docs|chore|test|style)(?:\([^)]*\))?!?:/i)?.[1]?.toLowerCase();
+      const kind = prefix === "feat" ? "機能追加" : prefix === "docs" || prefix === "test" ? "運用" : prefix === "chore" ? "データ" : "改善";
+      const tone = prefix === "feat" ? "blue" : prefix === "fix" || prefix === "perf" ? "green" : prefix === "refactor" ? "violet" : prefix === "docs" ? "amber" : "cyan";
+      const date = String(commit.commit?.author?.date ?? "").slice(0, 10);
+      return {
+        version: `commit ${(commit.sha ?? "").slice(0, 7)}`,
+        date,
+        title: title.replace(/^(feat|fix|perf|refactor|docs|chore|test|style)(?:\([^)]*\))?!?:\s*/i, ""),
+        summary: messageLines.slice(1).join(" ").trim() || "リポジトリへの変更を反映しました。",
+        kind,
+        project: "運営サイト",
+        tone,
+        author: commit.author?.login || commit.commit?.author?.name || "運営チーム",
+        href: commit.html_url,
+      };
+    });
+  return json({ entries });
+}
+
 async function createEditorialWorkflowRole(
   request: Request,
   env: Env,
@@ -17311,6 +17364,8 @@ async function handleAdminRequest(
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
     return listAdminAuditLog(request, env);
+  if (url.pathname === "/api/admin/update-history" && request.method === "GET")
+    return listAdminUpdateHistory(request, env);
   if (
     url.pathname === "/api/admin/member-management" &&
     request.method === "DELETE"
