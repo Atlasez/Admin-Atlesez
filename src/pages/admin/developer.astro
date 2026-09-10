@@ -1,0 +1,105 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+---
+
+<AdminLayout title="開発者向け診断" description="運営サイトの接続・ビルド・データ状態を確認します">
+  <main class="developer-page" data-developer-page>
+    <header class="developer-heading">
+      <div>
+        <h1>開発者向け診断</h1>
+        <p>運営画面を変更せず、配信・接続・データの状態だけを確認します。</p>
+      </div>
+      <a href="/admin/manage/?project=atlas">管理トップへ戻る</a>
+    </header>
+
+    <section class="diagnostic-panel" aria-labelledby="diagnostic-heading">
+      <div class="panel-heading">
+        <div><h2 id="diagnostic-heading">現在の状態</h2><p data-diagnostic-generated>未確認</p></div>
+        <button type="button" data-diagnostic-retry>再確認</button>
+      </div>
+      <div class="diagnostic-state" data-diagnostic-state role="status" aria-live="polite">確認しています…</div>
+      <div class="diagnostic-list" data-diagnostic-list hidden></div>
+    </section>
+
+    <section class="tool-panel" aria-labelledby="tool-heading">
+      <div class="panel-heading"><div><h2 id="tool-heading">検証用ページ</h2><p>本番の運営導線には表示しない、確認用のページです。</p></div></div>
+      <div class="tool-links">
+        <a href="/admin/ui-prototype/">UIプロトタイプ</a>
+        <a href="/admin/onboarding-demo/">オンボーディング紹介</a>
+        <a href="/admin/audit-log/">操作履歴</a>
+        <a href="/admin/update-history/">アップデート履歴</a>
+      </div>
+    </section>
+
+    <section class="notes-panel" aria-labelledby="notes-heading">
+      <h2 id="notes-heading">運用上の注意</h2>
+      <ul>
+        <li>ここでは設定値そのものや秘密情報は表示しません。</li>
+        <li>異常がある場合は、表示された項目と時刻を添えて報告してください。</li>
+        <li>本番への変更はGitHubのmainへのPRとWorkers Buildsだけで行います。</li>
+      </ul>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .developer-page { margin: 0 auto; max-width: 980px; padding: 0 1.25rem 4rem; }
+  .developer-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2rem 0 1.25rem; }
+  .developer-heading h1 { font-size: clamp(1.7rem, 3vw, 2.2rem); letter-spacing: -.025em; margin: 0; }
+  .developer-heading p { color: var(--text-secondary); font-size: .82rem; margin: .45rem 0 0; }
+  .developer-heading a { color: var(--accent-primary); font-size: .78rem; font-weight: 750; text-decoration: none; white-space: nowrap; }
+  .diagnostic-panel, .tool-panel, .notes-panel { background: var(--background-secondary); border: 1px solid var(--border-default); margin-top: 1rem; padding: 1rem; }
+  .panel-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
+  .panel-heading h2, .notes-panel h2 { font-size: 1rem; margin: 0; }
+  .panel-heading p { color: var(--text-secondary); font-size: .72rem; margin: .3rem 0 0; }
+  .panel-heading button { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); cursor: pointer; font: inherit; font-size: .72rem; padding: .4rem .65rem; }
+  .panel-heading button:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .diagnostic-state { color: var(--text-secondary); font-size: .78rem; padding: 1.5rem .5rem; }
+  .diagnostic-state[data-state="error"] { color: var(--danger); }
+  .diagnostic-list { border-top: 1px solid var(--border-default); margin-top: .8rem; }
+  .diagnostic-row { align-items: center; border-bottom: 1px solid var(--border-default); display: grid; gap: .7rem; grid-template-columns: 9rem 5rem minmax(0, 1fr) auto; min-height: 3.2rem; padding: .55rem .2rem; }
+  .diagnostic-label { font-size: .78rem; font-weight: 700; }
+  .diagnostic-status { font-size: .7rem; font-weight: 800; }
+  .diagnostic-status[data-status="ok"] { color: var(--success); }
+  .diagnostic-status[data-status="warning"] { color: var(--warning); }
+  .diagnostic-status[data-status="error"] { color: var(--danger); }
+  .diagnostic-detail { color: var(--text-secondary); font-size: .74rem; overflow-wrap: anywhere; }
+  .diagnostic-duration { color: var(--text-muted); font-size: .68rem; font-variant-numeric: tabular-nums; }
+  .tool-links { display: grid; gap: .5rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: .8rem; }
+  .tool-links a { border: 1px solid var(--border-default); color: var(--text-primary); font-size: .78rem; padding: .65rem .7rem; text-decoration: none; }
+  .tool-links a:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .notes-panel ul { color: var(--text-secondary); font-size: .76rem; line-height: 1.7; margin: .7rem 0 0; padding-left: 1.2rem; }
+  @media (max-width: 680px) { .developer-page { padding: 0 .8rem 3rem; } .developer-heading { align-items: start; display: grid; } .diagnostic-row { grid-template-columns: 1fr auto; } .diagnostic-status { grid-column: 2; grid-row: 1; } .diagnostic-detail { grid-column: 1 / -1; } .diagnostic-duration { grid-column: 2; grid-row: 2; } .tool-links { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 420px) { .tool-links { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+  const initializeDeveloperPage = () => {
+    const root = document.querySelector<HTMLElement>('[data-developer-page]');
+    if (!root || root.dataset.initialized === 'true') return;
+    root.dataset.initialized = 'true';
+    const state = root.querySelector<HTMLElement>('[data-diagnostic-state]')!;
+    const list = root.querySelector<HTMLElement>('[data-diagnostic-list]')!;
+    const generated = root.querySelector<HTMLElement>('[data-diagnostic-generated]')!;
+    const retry = root.querySelector<HTMLButtonElement>('[data-diagnostic-retry]')!;
+    const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] ?? character));
+    const load = async () => {
+      root.setAttribute('aria-busy', 'true');
+      state.dataset.state = 'loading'; state.textContent = '確認しています…'; state.hidden = false; list.hidden = true; retry.disabled = true;
+      try {
+        const response = await fetch('/api/admin/developer/diagnostics', { credentials: 'same-origin', cache: 'no-store' });
+        const data = await response.json() as { error?: string; generatedAt?: string; checks?: Array<{ id: string; label: string; status: string; detail: string; durationMs?: number }>; build?: Record<string, unknown> | null };
+        if (!response.ok) throw new Error(data.error || '診断情報を取得できませんでした。');
+        const checks = Array.isArray(data.checks) ? data.checks : [];
+        list.innerHTML = checks.map((check) => `<div class="diagnostic-row"><span class="diagnostic-label">${escape(check.label)}</span><span class="diagnostic-status" data-status="${escape(check.status)}">${check.status === 'ok' ? '正常' : check.status === 'warning' ? '確認が必要' : 'エラー'}</span><span class="diagnostic-detail">${escape(check.detail)}</span>${check.durationMs !== undefined ? `<span class="diagnostic-duration">${escape(check.durationMs)}ms</span>` : ''}</div>`).join('');
+        generated.textContent = data.generatedAt ? `最終確認：${new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(data.generatedAt))}` : '確認済み';
+        state.hidden = true; list.hidden = false;
+      } catch (error) { state.dataset.state = 'error'; state.textContent = error instanceof Error ? error.message : '診断情報を取得できませんでした。'; generated.textContent = '確認に失敗'; }
+      finally { retry.disabled = false; root.removeAttribute('aria-busy'); }
+    };
+    retry.addEventListener('click', () => void load());
+    void load();
+  };
+  document.addEventListener('astro:page-load', initializeDeveloperPage);
+  initializeDeveloperPage();
+</script>
