@@ -4560,13 +4560,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     });
     reviewButton.addEventListener("click", () => { void (async () => {
       reviewRequestMessage.value = "依頼先を読み込み中…";
-      const response = await fetch("/api/admin/editor/review-requests", { credentials: "same-origin", cache: "no-store" });
+      const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      const response = await fetch(`/api/admin/editor/review-requests?documentId=${encodeURIComponent(documentId)}`, { credentials: "same-origin", cache: "no-store" });
       const data = await read<{ reviewers?: Array<{ email:string; displayName:string; subjects:string[] }>; requests?: Array<{ id:string; reviewer_email?:string|null }>; error?:string }>(response);
       if (!response.ok) throw new Error(data.error ?? "依頼先を読み込めませんでした。");
       const currentSubject = subject.value;
       const reviewers = (data.reviewers ?? []).filter((reviewer) => reviewer.subjects.includes("*") || reviewer.subjects.includes(currentSubject));
       reviewRequestAssignee.innerHTML = '<option value="" disabled>担当者を選択</option><option value="*">この分野の担当者全員</option>' + reviewers.map((reviewer) => `<option value="${esc(reviewer.email)}">${esc(reviewer.displayName)}</option>`).join("");
-      const currentRequest = data.requests?.find((item) => item.id === (form.elements.namedItem("documentId") as HTMLInputElement).value);
+      const currentRequest = data.requests?.find((item) => item.id === documentId);
       const selectedEmails = new Set((currentRequest?.reviewer_email ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
       [...reviewRequestAssignee.options].forEach((option) => { option.selected = selectedEmails.has(option.value.toLowerCase()); });
       reviewRequestMessage.value = "";

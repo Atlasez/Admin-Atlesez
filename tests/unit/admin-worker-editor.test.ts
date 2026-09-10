@@ -438,6 +438,94 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("loads only the selected review request with the scoped binding order", async () => {
+    let documentQuery = "";
+    let documentBindings: unknown[] = [];
+    class ScopedStatement extends EmptyStatement {
+      bind(...values: unknown[]) {
+        if (this.query.includes("FROM editorial_documents d")) {
+          documentQuery = this.query;
+          documentBindings = values;
+        }
+        return super.bind(...values);
+      }
+
+      async all<T>() {
+        if (this.query.includes("SELECT subject FROM report_admin_permissions"))
+          return { results: [{ subject: "mathematics" }] as T[] };
+        if (
+          this.query.includes(
+            "SELECT role, subject FROM editorial_workflow_roles",
+          )
+        )
+          return { results: [] as T[] };
+        if (this.query.includes("FROM editorial_documents d"))
+          return {
+            results: [
+              {
+                id: "doc-1",
+                subject: "mathematics",
+                category: "algebra",
+                title: "原稿",
+                updated_by: "member@example.com",
+                updated_at: "2026-09-10T00:00:00.000Z",
+                reviewer_email: "reviewer@example.com",
+                request_note: "確認してください",
+                requester_display_name: "作成者",
+                reviewer_display_name: "担当者",
+              },
+            ] as T[],
+          };
+        if (this.query.includes("FROM report_admin_permissions p"))
+          return {
+            results: [
+              {
+                email: "reviewer@example.com",
+                display_name: "担当者",
+                subjects: "mathematics",
+              },
+            ] as T[],
+          };
+        return { results: [] as T[] };
+      }
+    }
+
+    const response = await worker.fetch(
+      new Request(
+        "http://admin.example/api/admin/editor/review-requests?documentId=doc-1",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "member@example.com",
+          },
+        },
+      ),
+      {
+        ...emptyEnv,
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: {
+          ...emptyEnv.REPORTS,
+          prepare: (query: string) => new ScopedStatement(query),
+        },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      requests: Array<{ id: string; reviewer_email: string }>;
+    };
+    expect(data.requests).toHaveLength(1);
+    expect(data.requests[0]).toMatchObject({
+      id: "doc-1",
+      reviewer_email: "reviewer@example.com",
+    });
+    expect(documentQuery).toContain("AND d.id = ?");
+    expect(documentBindings).toEqual([
+      "mathematics",
+      "doc-1",
+      "member@example.com",
+    ]);
+  });
+
   it("does not add out-of-scope subject-coordinator documents to the editor list", async () => {
     const documentQueries: string[] = [];
     class ScopedStatement extends EmptyStatement {

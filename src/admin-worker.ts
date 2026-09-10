@@ -13224,6 +13224,14 @@ async function listEditorialReviewRequests(
     ? ""
     : ` WHERE p.subject = '*' OR p.subject IN (${scope.subjects.map(() => "?").join(",")})`;
   const subjectValues = scope.allSubjects ? [] : scope.subjects;
+  // 編集中の原稿から開く依頼ダイアログでは対象原稿だけを取得する。
+  // documentIdがない既存呼び出しは一覧互換のため従来どおり全件を返す。
+  const documentId = text(
+    new URL(request.url).searchParams.get("documentId"),
+    80,
+  ).trim();
+  const documentFilter = documentId ? " AND d.id = ?" : "";
+  const documentValues = documentId ? [documentId] : [];
   const [result, reviewerResult] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT d.id, d.subject, d.category, d.title, d.updated_by, d.updated_at,
@@ -13235,11 +13243,12 @@ async function listEditorialReviewRequests(
        LEFT JOIN editorial_review_assignments r ON r.document_id = d.id
        LEFT JOIN editorial_member_profiles requester ON requester.email = d.updated_by
        LEFT JOIN editorial_member_profiles reviewer ON reviewer.email = r.reviewer_email
-       WHERE d.status = 'in-review'${subjectFilter}
+       WHERE d.status = 'in-review'${subjectFilter}${documentFilter}
        ORDER BY CASE WHEN lower(r.reviewer_email) = lower(?) THEN 0 WHEN r.reviewer_email IS NULL THEN 2 ELSE 1 END,
                 d.updated_at ASC LIMIT 100`,
     )
-      .bind(scope.email, ...subjectValues)
+      // SQL内のプレースホルダー順（分野、対象原稿、担当者）に合わせる。
+      .bind(...subjectValues, ...documentValues, scope.email)
       .all<{
         id: string;
         subject: string;
