@@ -2302,6 +2302,59 @@ async function listWorkflowTransitions(request: Request, env: Env): Promise<Resp
   });
 }
 
+/**
+ * 状態イベントと現在レコードのずれを検出する読み取り専用の診断API。
+ * 自動修復は行わず、管理者が確認してから個別の遷移APIを再実行できるようにする。
+ */
+async function workflowDiagnostics(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const rows = await env.REPORTS.prepare(
+    `SELECT e.id,e.entity_type,e.entity_id,e.from_state,e.to_state,e.actor_email,e.created_at,
+       CASE e.entity_type
+         WHEN 'task' THEN t.status
+         WHEN 'document' THEN d.status
+         WHEN 'application' THEN a.status
+         WHEN 'approval' THEN r.status
+       END AS current_state,
+       CASE e.entity_type
+         WHEN 'task' THEN t.id
+         WHEN 'document' THEN d.id
+         WHEN 'application' THEN a.id
+         WHEN 'approval' THEN r.id
+       END AS current_id
+     FROM workflow_transition_events e
+     LEFT JOIN editorial_tasks t ON e.entity_type='task' AND t.id=e.entity_id
+     LEFT JOIN editorial_documents d ON e.entity_type='document' AND d.id=e.entity_id
+     LEFT JOIN atlasez_member_applications a ON e.entity_type='application' AND a.id=e.entity_id
+     LEFT JOIN editorial_member_profile_change_requests r ON e.entity_type='approval' AND r.id=e.entity_id
+     WHERE current_id IS NULL OR current_state != e.to_state
+     ORDER BY e.created_at DESC LIMIT 100`,
+  ).all<{
+    id: string;
+    entity_type: WorkflowEntityType;
+    entity_id: string;
+    from_state: string;
+    to_state: string;
+    actor_email: string;
+    created_at: string;
+    current_state: string | null;
+    current_id: string | null;
+  }>().catch(() => ({ results: [] as Array<Record<string, unknown>> }));
+  const issues = (rows.results ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    entityType: String(row.entity_type ?? ""),
+    entityId: String(row.entity_id ?? ""),
+    fromState: String(row.from_state ?? ""),
+    expectedState: String(row.to_state ?? ""),
+    currentState: row.current_state ? String(row.current_state) : null,
+    actorEmail: String(row.actor_email ?? ""),
+    createdAt: String(row.created_at ?? ""),
+    kind: row.current_id ? "state_mismatch" : "missing_entity",
+  }));
+  return json({ generatedAt: new Date().toISOString(), issues, checkedEvents: issues.length, scope: { email: scope.email } });
+}
+
 type WorkflowTransitionPayload = {
   entityType?: unknown;
   entityId?: unknown;
@@ -7664,6 +7717,47 @@ const countPendingProfileApprovals = async (env: Env) => {
   return normalizeCount(memberRequests?.count) + normalizeCount(atlasRequests?.count);
 };
 
+type WorkflowSummary = {
+  pendingApprovals: number;
+  taskSummary: { openCount: number; dueToday: number; dueSoon: number };
+};
+
+/** ポータルと状態遷移画面で共有する集計。画面ごとの個別カウントを禁止する。 */
+const getWorkflowSummary = async (
+  env: Env,
+  scope: AdminScope,
+  projectIds: string[],
+  includeApprovals: boolean,
+): Promise<WorkflowSummary> => {
+  const taskScopeSql = projectIds.length
+    ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
+       AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
+       AND t.status != 'done' AND t.archived_at IS NULL`
+    : "0=1";
+  const taskBindings = projectIds.length ? [...projectIds, scope.email, scope.email] : [];
+  const [taskSummary, pendingApprovals] = await Promise.all([
+    projectIds.length
+      ? env.REPORTS.prepare(
+          `SELECT COUNT(*) AS open_count,
+             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) <= datetime('now','start of day','+1 day','-1 second') THEN 1 ELSE 0 END) AS due_today,
+             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) > datetime('now','start of day','+1 day') AND datetime(t.due_at) <= datetime('now','+7 days') THEN 1 ELSE 0 END) AS due_soon
+           FROM editorial_tasks t WHERE ${taskScopeSql}`,
+        )
+          .bind(...taskBindings)
+          .first<{ open_count: number; due_today: number; due_soon: number }>()
+      : Promise.resolve({ open_count: 0, due_today: 0, due_soon: 0 }),
+    includeApprovals ? countPendingProfileApprovals(env) : Promise.resolve(0),
+  ]);
+  return {
+    pendingApprovals: Number(pendingApprovals ?? 0),
+    taskSummary: {
+      openCount: Number(taskSummary?.open_count ?? 0),
+      dueToday: Number(taskSummary?.due_today ?? 0),
+      dueSoon: Number(taskSummary?.due_soon ?? 0),
+    },
+  };
+};
+
 async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -7671,12 +7765,6 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const canReviewProfileRequests =
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
-  // Keep the portal summary in sync with the approval queue API.  Returning
-  // the promise here serializes it as an object instead of the actual count,
-  // which made the portal show a value different from the review screen.
-  const pendingApprovals = canReviewProfileRequests
-    ? await countPendingProfileApprovals(env)
-    : 0;
   const [projects, availableProjects] = scope.isManager
     ? await Promise.all([
         env.REPORTS.prepare(
@@ -7708,35 +7796,24 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     name: string;
   }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
+  const workflowSummary = await getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests);
   const taskScopeSql = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
        AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
        AND t.status != 'done' AND t.archived_at IS NULL`
     : "0=1";
-  const taskScopeBindings = projectIds.length
-    ? [...projectIds, scope.email, scope.email]
-    : [];
-  const [todos, taskSummary] = projectIds.length
-    ? await Promise.all([
-        env.REPORTS.prepare(
-          `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
-             p.name AS project_name
-           FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
-           WHERE ${taskScopeSql}
-           ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
-        )
-          .bind(...taskScopeBindings)
-          .all(),
-        env.REPORTS.prepare(
-          `SELECT COUNT(*) AS open_count,
-             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) <= datetime('now','start of day','+1 day','-1 second') THEN 1 ELSE 0 END) AS due_today,
-             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) > datetime('now','start of day','+1 day') AND datetime(t.due_at) <= datetime('now','+7 days') THEN 1 ELSE 0 END) AS due_soon
-           FROM editorial_tasks t WHERE ${taskScopeSql}`,
-        )
-          .bind(...taskScopeBindings)
-          .first<{ open_count: number; due_today: number; due_soon: number }>(),
-      ])
-    : [{ results: [] }, { open_count: 0, due_today: 0, due_soon: 0 }];
+  const taskScopeBindings = projectIds.length ? [...projectIds, scope.email, scope.email] : [];
+  const todos = projectIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
+           p.name AS project_name
+         FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
+         WHERE ${taskScopeSql}
+         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+      )
+        .bind(...taskScopeBindings)
+        .all()
+    : { results: [] as Array<Record<string, unknown>> };
   const rangeStart = new Date();
   rangeStart.setMonth(rangeStart.getMonth() - 2, 1);
   rangeStart.setHours(0, 0, 0, 0);
@@ -7806,14 +7883,12 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const personalDeadlines = calendarRows[1].results ?? [];
   return json({
     email: scope.email,
-    pendingApprovals,
+    pendingApprovals: workflowSummary.pendingApprovals,
     projects: projects.results,
     availableProjects: availableProjects.results,
     todos: todos.results,
     taskSummary: {
-      openCount: Number(taskSummary?.open_count ?? 0),
-      dueToday: Number(taskSummary?.due_today ?? 0),
-      dueSoon: Number(taskSummary?.due_soon ?? 0),
+      ...workflowSummary.taskSummary,
     },
     calendar: {
       rangeStart: rangeStart.toISOString(),
@@ -17884,6 +17959,8 @@ async function handleAdminRequest(
     return listAdminAuditLog(request, env);
   if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
     return listWorkflowTransitions(request, env);
+  if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
+    return workflowDiagnostics(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
     return transitionWorkflow(request, env);
   if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
