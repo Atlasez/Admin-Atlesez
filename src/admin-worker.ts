@@ -2156,9 +2156,15 @@ type AdminAuditAction =
   | "permission_revoked"
   | "member_removed"
   | "task_archived"
-  | "task_restored";
+  | "task_restored"
+  | "workflow_transition";
 
-type AdminAuditTarget = "article" | "permission" | "member" | "task";
+type AdminAuditTarget =
+  | "article"
+  | "permission"
+  | "member"
+  | "task"
+  | "workflow";
 
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   article_created: "記事を作成",
@@ -2172,6 +2178,7 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   member_removed: "運営メンバーを削除",
   task_archived: "タスクをアーカイブ",
   task_restored: "タスクを復元",
+  workflow_transition: "状態を変更",
 }[action] ?? action);
 
 const recordAdminAudit = async (
@@ -2204,6 +2211,159 @@ const recordAdminAudit = async (
     .run()
     .catch(() => undefined);
 };
+
+const recordWorkflowEvent = async (
+  env: Env,
+  event: {
+    entityType: WorkflowEntityType | string;
+    entityId: string;
+    fromState: string;
+    toState: string;
+    actorEmail: string;
+    idempotencyKey?: string;
+    expectedUpdatedAt?: string | null;
+    metadata?: Record<string, unknown>;
+    createdAt?: string;
+  },
+) => {
+  await env.REPORTS.prepare(
+    `INSERT INTO workflow_transition_events
+      (id,entity_type,entity_id,from_state,to_state,actor_email,idempotency_key,expected_updated_at,metadata_json,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      event.entityType,
+      event.entityId,
+      event.fromState,
+      event.toState,
+      event.actorEmail,
+      event.idempotencyKey ?? crypto.randomUUID(),
+      event.expectedUpdatedAt ?? null,
+      JSON.stringify(event.metadata ?? {}),
+      event.createdAt ?? new Date().toISOString(),
+    )
+    .run()
+    .catch(() => undefined);
+};
+
+type WorkflowEntityType = "task" | "document" | "application" | "approval";
+type WorkflowTransition = {
+  entityType: WorkflowEntityType;
+  from: string;
+  to: string;
+  label: string;
+  requiredRole: "assignee" | "manager" | "reviewer";
+};
+
+/**
+ * 状態遷移の正本。画面ごとに許可状態を再定義せず、APIと管理画面が
+ * 同じカタログを参照する。新しい状態はここへ追加し、UI側へ直接書かない。
+ */
+const WORKFLOW_TRANSITIONS: WorkflowTransition[] = [
+  { entityType: "task", from: "open", to: "doing", label: "着手", requiredRole: "assignee" },
+  { entityType: "task", from: "doing", to: "done", label: "完了", requiredRole: "assignee" },
+  { entityType: "task", from: "done", to: "open", label: "再開", requiredRole: "assignee" },
+  { entityType: "document", from: "draft", to: "in-review", label: "査読を依頼", requiredRole: "reviewer" },
+  { entityType: "document", from: "in-review", to: "approved", label: "承認", requiredRole: "reviewer" },
+  { entityType: "application", from: "new", to: "reviewing", label: "確認を開始", requiredRole: "manager" },
+  { entityType: "application", from: "reviewing", to: "accepted", label: "受け入れ", requiredRole: "manager" },
+  { entityType: "application", from: "reviewing", to: "rejected", label: "見送り", requiredRole: "manager" },
+  { entityType: "approval", from: "pending", to: "approved", label: "承認", requiredRole: "reviewer" },
+  { entityType: "approval", from: "pending", to: "rejected", label: "却下", requiredRole: "reviewer" },
+];
+
+const workflowTransitionsFor = (entityType: WorkflowEntityType, from: string) =>
+  WORKFLOW_TRANSITIONS.filter((transition) => transition.entityType === entityType && transition.from === from);
+
+const workflowTransitionPolicyError = (role: WorkflowTransition["requiredRole"]) =>
+  role === "manager" ? "運営内運営のみ状態を変更できます。" : role === "reviewer" ? "担当査読者のみ状態を変更できます。" : "担当者のみ状態を変更できます。";
+
+async function listWorkflowTransitions(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const [taskCounts, documentCounts, applicationCounts, approvalCounts] = await Promise.all([
+    env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_tasks WHERE archived_at IS NULL GROUP BY status").all<{ state: string; count: number }>(),
+    env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_documents WHERE archived_at IS NULL GROUP BY status").all<{ state: string; count: number }>().catch(() => ({ results: [] as Array<{ state: string; count: number }> })),
+    env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM atlasez_member_applications GROUP BY status").all<{ state: string; count: number }>().catch(() => ({ results: [] as Array<{ state: string; count: number }> })),
+    env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_member_profile_change_requests GROUP BY status").all<{ state: string; count: number }>().catch(() => ({ results: [] as Array<{ state: string; count: number }> })),
+  ]);
+  const counts = (rows: Array<{ state: string; count: number }>) => Object.fromEntries((rows ?? []).map((row) => [row.state, Number(row.count ?? 0)]));
+  return json({
+    generatedAt: new Date().toISOString(),
+    transitions: WORKFLOW_TRANSITIONS,
+    entities: {
+      task: { label: "タスク", states: ["open", "doing", "done"], counts: counts(taskCounts.results ?? []) },
+      document: { label: "記事", states: ["draft", "in-review", "approved"], counts: counts(documentCounts.results ?? []) },
+      application: { label: "応募", states: ["new", "reviewing", "accepted", "rejected"], counts: counts(applicationCounts.results ?? []) },
+      approval: { label: "承認申請", states: ["pending", "approved", "rejected"], counts: counts(approvalCounts.results ?? []) },
+    },
+    scope: { email: scope.email, isManager: scope.isManager },
+  });
+}
+
+type WorkflowTransitionPayload = {
+  entityType?: unknown;
+  entityId?: unknown;
+  fromState?: unknown;
+  toState?: unknown;
+  expectedUpdatedAt?: unknown;
+  idempotencyKey?: unknown;
+};
+
+/** タスク状態変更の共通実装。既存PATCHからも呼び出し、二重送信と古い更新を防ぐ。 */
+async function transitionTaskState(
+  _request: Request,
+  env: Env,
+  taskId: string,
+  scope: AdminScope,
+  payload: WorkflowTransitionPayload,
+): Promise<Response> {
+  const fromState = text(payload.fromState, 20);
+  const toState = text(payload.toState, 20);
+  const expectedUpdatedAt = text(payload.expectedUpdatedAt, 80) || null;
+  const idempotencyKey = text(payload.idempotencyKey, 120) || crypto.randomUUID();
+  if (!fromState || !toState) return json({ error: "変更前後の状態を指定してください。" }, 400);
+  if (fromState !== toState && !workflowTransitionsFor("task", fromState).some((item) => item.to === toState))
+    return json({ error: "許可されていない状態遷移です。", code: "INVALID_TRANSITION" }, 400);
+  const replay = await env.REPORTS.prepare(
+    "SELECT entity_id,from_state,to_state,created_at FROM workflow_transition_events WHERE actor_email=? AND idempotency_key=?",
+  ).bind(scope.email, idempotencyKey).first<{ entity_id: string; from_state: string; to_state: string; created_at: string }>().catch(() => null);
+  if (replay)
+    return json({ ok: true, replayed: true, transition: { entityId: replay.entity_id, fromState: replay.from_state, toState: replay.to_state, createdAt: replay.created_at } });
+  const task = await env.REPORTS.prepare(
+    "SELECT project_id,subject,assignee_email,task_kind,title,created_by,status,updated_at,archived_at FROM editorial_tasks WHERE id=?",
+  ).bind(taskId).first<{ project_id: string; subject: string | null; assignee_email: string | null; task_kind: string; title: string; created_by: string; status: string; updated_at: string; archived_at: string | null }>();
+  if (!task) return json({ error: "タスクが見つかりません。" }, 404);
+  const project = await resolveOperationProject(env, scope, task.project_id);
+  if (isResponse(project)) return project;
+  if (!scope.isManager && !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) && task.created_by !== scope.email)
+    return json({ error: workflowTransitionPolicyError("assignee"), code: "FORBIDDEN_TRANSITION" }, 403);
+  if (task.status !== fromState)
+    return json({ error: "他の更新が先に反映されています。再読み込みしてから再試行してください。", code: "STALE_STATE", currentState: task.status, updatedAt: task.updated_at }, 409);
+  if (expectedUpdatedAt && task.updated_at !== expectedUpdatedAt)
+    return json({ error: "古い編集内容です。再読み込みしてから再試行してください。", code: "STALE_STATE", currentState: task.status, updatedAt: task.updated_at }, 409);
+  const now = new Date().toISOString();
+  const update = await env.REPORTS.prepare(
+    "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=? AND status=? AND updated_at=?",
+  ).bind(toState, now, taskId, fromState, task.updated_at).run();
+  if (!Number((update as { meta?: { changes?: number } }).meta?.changes ?? 0)) return json({ error: "同時更新を検知しました。最新状態を読み込んでください。", code: "STALE_STATE" }, 409);
+  await recordWorkflowEvent(env, { entityType: "task", entityId: taskId, fromState, toState, actorEmail: scope.email, idempotencyKey, expectedUpdatedAt, metadata: { projectId: task.project_id }, createdAt: now });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", taskId, task.title, `タスクの状態を変更：${task.title}`, { entityType: "task", fromState, toState, projectId: task.project_id, idempotencyKey });
+  return json({ ok: true, replayed: false, transition: { entityType: "task", entityId: taskId, fromState, toState, updatedAt: now, idempotencyKey } });
+}
+
+async function transitionWorkflow(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  let payload: WorkflowTransitionPayload;
+  try { payload = (await request.json()) as WorkflowTransitionPayload; } catch { return json({ error: "入力内容を読み取れませんでした。" }, 400); }
+  const entityType = text(payload.entityType, 20) as WorkflowEntityType;
+  const entityId = text(payload.entityId, 80);
+  if (entityType !== "task" || !entityId) return json({ error: "現在はタスクの状態変更に対応しています。", code: "UNSUPPORTED_ENTITY" }, 400);
+  return transitionTaskState(request, env, entityId, scope, payload);
+}
 
 const recordPermissionAudit = async (
   env: Env,
@@ -8360,6 +8520,8 @@ async function reviewProfileChangeRequest(
       ).bind(now, row.task_id),
     );
   await env.REPORTS.batch(statements);
+  await recordWorkflowEvent(env, { entityType: "approval", entityId: requestId, fromState: "pending", toState: status, actorEmail: scope.email, metadata: { requestType: "member-profile", applicantEmail: String(row.email ?? "") }, createdAt: now });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, String(row.proposed_display_name ?? row.email ?? requestId), `メンバー情報申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status });
   return json({ ok: true, status });
 }
 
@@ -8718,6 +8880,8 @@ async function reviewProjectProfileChangeRequest(
       ).bind(now, row.task_id),
     );
   await env.REPORTS.batch(statements);
+  await recordWorkflowEvent(env, { entityType: "approval", entityId: requestId, fromState: "pending", toState: status, actorEmail: scope.email, metadata: { requestType: "project-profile", projectId: project.id, applicantEmail: String(row.email ?? "") }, createdAt: now });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", requestId, String(row.email ?? requestId), `運営内自己紹介申請を${status === "approved" ? "承認" : "却下"}`, { entityType: "approval", fromState: "pending", toState: status, projectId: project.id });
   return json({ ok: true, status });
 }
 
@@ -8829,6 +8993,8 @@ async function updateApplication(
   let payload: {
     status?: unknown;
     desiredSubjects?: unknown;
+    idempotencyKey?: unknown;
+    expectedUpdatedAt?: unknown;
     reminderAction?: unknown;
     reminders?: unknown;
     reminderEmail?: unknown;
@@ -8877,11 +9043,15 @@ async function updateApplication(
     );
   const now = new Date().toISOString();
   if (status !== "accepted") {
-    await env.REPORTS.prepare(
-      "UPDATE atlasez_member_applications SET status=?,updated_at=? WHERE id=?",
+    const updated = await env.REPORTS.prepare(
+      "UPDATE atlasez_member_applications SET status=?,updated_at=? WHERE id=? AND status=?",
     )
-      .bind(status, now, id)
+      .bind(status, now, id, application.status)
       .run();
+    if (!Number((updated as { meta?: { changes?: number } }).meta?.changes ?? 0))
+      return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE" }, 409);
+    await recordWorkflowEvent(env, { entityType: "application", entityId: id, fromState: application.status, toState: status, actorEmail: scope.email, idempotencyKey: text(payload.idempotencyKey, 120) || undefined, expectedUpdatedAt: text(payload.expectedUpdatedAt, 80) || null, metadata: { projectSlug: application.project_slug }, createdAt: now });
+    await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: status, projectSlug: application.project_slug });
     return json({ ok: true, status });
   }
 
@@ -8974,6 +9144,9 @@ async function updateApplication(
       500,
     );
   }
+
+  await recordWorkflowEvent(env, { entityType: "application", entityId: id, fromState: application.status, toState: "accepted", actorEmail: scope.email, idempotencyKey: text(payload.idempotencyKey, 120) || undefined, expectedUpdatedAt: text(payload.expectedUpdatedAt, 80) || null, metadata: { projectSlug: application.project_slug }, createdAt: now });
+  await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: "accepted", projectSlug: application.project_slug });
 
   const discord = await provisionAcceptedApplication(env, id);
   let acceptanceEmailQueued = false;
@@ -10003,6 +10176,8 @@ async function updateTask(
   let payload: {
     status?: unknown;
     archived?: unknown;
+    expectedUpdatedAt?: unknown;
+    idempotencyKey?: unknown;
     reminderAction?: unknown;
     reminders?: unknown;
     reminderEmail?: unknown;
@@ -10050,6 +10225,17 @@ async function updateTask(
     task.created_by !== scope.email
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
+  // 状態変更だけは共通Workflow APIへ委譲する。既存のリマインダー・
+  // アーカイブ更新は下の互換処理を維持し、段階的に移行できるようにする。
+  if (requestedStatus !== null && requestedArchived === null && !reminderAction)
+    return transitionTaskState(request, env, taskId, scope, {
+      entityType: "task",
+      entityId: taskId,
+      fromState: task.status,
+      toState: requestedStatus,
+      expectedUpdatedAt: payload.expectedUpdatedAt,
+      idempotencyKey: payload.idempotencyKey,
+    });
   const now = new Date().toISOString();
   const effectiveStatus = requestedStatus ?? task.status;
   if (requestedArchived === true && effectiveStatus !== "done")
@@ -17696,6 +17882,10 @@ async function handleAdminRequest(
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
     return listAdminAuditLog(request, env);
+  if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
+    return listWorkflowTransitions(request, env);
+  if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
+    return transitionWorkflow(request, env);
   if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
     return developerDiagnostics(request, env);
   if (url.pathname === "/api/admin/update-history" && request.method === "GET")

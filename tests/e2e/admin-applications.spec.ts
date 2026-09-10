@@ -176,11 +176,12 @@ test("応募管理の導線は現在のプロジェクトに引き継がれる",
   await expect(page.locator("main header p")).toHaveText(
     "ゼミプラットフォーム",
   );
-  await expect(page.locator("a[data-manager-only]")).toBeVisible();
-  await expect(page.locator("a[data-manager-only]")).toHaveAttribute(
-    "href",
-    "/admin/permissions/?project=seminar-platform",
-  );
+  await expect(
+    page.locator('a[data-manager-only][href*="permissions"]'),
+  ).toBeVisible();
+  await expect(
+    page.locator('a[data-manager-only][href*="permissions"]'),
+  ).toHaveAttribute("href", "/admin/permissions/?project=seminar-platform");
   await expect(page.locator("a[data-project-manager-only]")).toHaveAttribute(
     "href",
     "/admin/applications/?project=seminar-platform",

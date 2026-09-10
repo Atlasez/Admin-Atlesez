@@ -11,8 +11,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     <section class="audit-panel" aria-labelledby="audit-list-title">
       <form class="audit-filters" data-audit-filters role="search">
         <label class="audit-search">検索<input type="search" name="q" placeholder="実行者・対象・内容を検索" autocomplete="off" /></label>
-        <label>操作<select name="action"><option value="">すべて</option><option value="article_created">記事を作成</option><option value="article_updated">記事を更新</option><option value="article_approved">記事を承認</option><option value="article_published">記事を公開</option><option value="article_unpublished">記事の公開を取り消し</option><option value="permission_granted">権限を付与</option><option value="permission_replaced">権限を変更</option><option value="permission_revoked">権限を削除</option><option value="member_removed">運営メンバーを削除</option><option value="task_archived">タスクをアーカイブ</option><option value="task_restored">タスクを復元</option></select></label>
-        <label>対象<select name="targetType"><option value="">すべて</option><option value="article">記事</option><option value="permission">権限</option><option value="member">メンバー</option><option value="task">タスク</option></select></label>
+        <label>操作<select name="action"><option value="">すべて</option><option value="article_created">記事を作成</option><option value="article_updated">記事を更新</option><option value="article_approved">記事を承認</option><option value="article_published">記事を公開</option><option value="article_unpublished">記事の公開を取り消し</option><option value="permission_granted">権限を付与</option><option value="permission_replaced">権限を変更</option><option value="permission_revoked">権限を削除</option><option value="member_removed">運営メンバーを削除</option><option value="task_archived">タスクをアーカイブ</option><option value="task_restored">タスクを復元</option><option value="workflow_transition">状態を変更</option></select></label>
+        <label>対象<select name="targetType"><option value="">すべて</option><option value="article">記事</option><option value="permission">権限</option><option value="member">メンバー</option><option value="task">タスク</option><option value="workflow">状態遷移</option></select></label>
         <button type="reset" class="audit-reset">条件をリセット</button>
       </form>
       <div class="audit-toolbar"><h2 id="audit-list-title">記録</h2><output data-audit-count aria-live="polite">読み込み中…</output></div>
@@ -45,7 +45,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const dialog = root.querySelector<HTMLDialogElement>("[data-audit-dialog]")!;
     const escape = (value: unknown) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[character] ?? character));
     const formatDate = (value: string) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(date); };
-    const targetLabel = (type: string) => ({ article: "記事", permission: "権限", member: "メンバー", task: "タスク" }[type] ?? type);
+    const targetLabel = (type: string) => ({ article: "記事", permission: "権限", member: "メンバー", task: "タスク", workflow: "状態遷移" }[type] ?? type);
     let nextCursor = "";
     let loading = false;
     const bindRows = () => list.querySelectorAll<HTMLButtonElement>("[data-audit-entry]").forEach((button) => button.addEventListener("click", () => {

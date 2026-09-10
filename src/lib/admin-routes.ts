@@ -14,6 +14,7 @@ const adminPageNames = [
   "calendar",
   "genres",
   "manage",
+  "workflow",
   "review",
   "reports",
   "analytics",
