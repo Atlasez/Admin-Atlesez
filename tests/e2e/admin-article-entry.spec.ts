@@ -10,7 +10,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(groups).toHaveCount(4);
     await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
-    await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(6);
+    await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(5);
     await expect(
       groups.nth(2).getByRole("link", { name: /諸手続きを開く/ }),
     ).toHaveAttribute("href", "/admin/procedures/?project=atlas");
@@ -32,6 +32,16 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("link", { name: /閲覧統計を開く/ }),
     ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: /アップデート履歴を開く/ }),
+    ).toHaveCount(0);
+  });
+
+  test("アップデート履歴は管理トップから開く", async ({ page }) => {
+    await page.goto("admin/manage/?project=atlas");
+    await expect(
+      page.getByRole("link", { name: /アップデート履歴を開く/ }),
+    ).toHaveAttribute("href", "/admin/update-history/");
   });
 
   test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
