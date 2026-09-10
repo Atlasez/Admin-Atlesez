@@ -8020,6 +8020,378 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   });
 }
 
+type ActionCenterAction = {
+  entityType: WorkflowEntityType;
+  entityId: string;
+  fromState: string;
+  toState: string;
+  label: string;
+};
+
+type ActionCenterItem = {
+  id: string;
+  kind: "task" | "document" | "application" | "approval" | "notification";
+  title: string;
+  detail: string;
+  href: string;
+  status: string;
+  priority: "urgent" | "due-soon" | "new" | "normal" | "read";
+  updatedAt: string;
+  dueAt: string | null;
+  project: string | null;
+  subject: string | null;
+  read: boolean;
+  groupCount?: number;
+  notificationIds?: string[];
+  archived?: boolean;
+  actions: ActionCenterAction[];
+};
+
+const actionCenterPriority = (dueAt: string | null, updatedAt: string, now = Date.now()): ActionCenterItem["priority"] => {
+  if (dueAt) {
+    const due = Date.parse(dueAt);
+    if (Number.isFinite(due)) {
+      if (due <= now) return "urgent";
+      if (due <= now + 7 * 24 * 60 * 60 * 1_000) return "due-soon";
+    }
+  }
+  if (Date.parse(updatedAt) >= now - 24 * 60 * 60 * 1_000) return "new";
+  return "normal";
+};
+
+const actionCenterTransition = (entityType: WorkflowEntityType, entityId: string, fromState: string): ActionCenterAction[] =>
+  workflowTransitionsFor(entityType, fromState).map((transition) => ({
+    entityType,
+    entityId,
+    fromState,
+    toState: transition.to,
+    label: transition.label,
+  }));
+
+/**
+ * 記事・タスク・応募・承認・通知を同じ契約で返す作業受信箱。
+ * 画面ごとに件数や権限を再計算せず、ここをアクションセンターの正本にする。
+ */
+async function actionCenterOverview(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const now = Date.now();
+  const secretariatRole = scope.isManager ? "manager" : await operationProjectRole(env, scope, "secretariat");
+  const canReviewApplications = scope.isManager || secretariatRole === "manager";
+  const projectRows = scope.isManager
+    ? await env.REPORTS.prepare("SELECT id,slug,name FROM atlasez_projects ORDER BY name").all<{ id: string; slug: string; name: string }>()
+    : await env.REPORTS.prepare(
+        `SELECT p.id,p.slug,p.name FROM atlasez_projects p
+         JOIN atlasez_project_memberships m ON m.project_id=p.id
+         WHERE lower(m.email)=lower(?) ORDER BY p.name`,
+      ).bind(scope.email).all<{ id: string; slug: string; name: string }>();
+  const projects = projectRows.results ?? [];
+  const projectIds = projects.map((project) => project.id).filter(Boolean);
+  const projectNames = new Map(projects.map((project) => [project.id, project.name || project.slug]));
+  const taskPredicate = projectIds.length
+    ? `t.project_id IN (${projectIds.map(() => "?").join(",")}) AND ${scope.isManager
+      ? "1=1"
+      : "(lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))"}`
+    : "0=1";
+  const taskBindings = projectIds.length
+    ? [...projectIds, ...(scope.isManager ? [] : [scope.email, scope.email, scope.email])]
+    : [];
+  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows] = await Promise.all([
+    env.REPORTS.prepare(
+      `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
+              COALESCE(p.name,t.project_id) AS project_name
+         FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
+        WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'
+        ORDER BY CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+    ).bind(...taskBindings).all<{
+      id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
+      status: string; due_at: string | null; updated_at: string; project_name: string;
+    }>(),
+    env.REPORTS.prepare(
+      `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
+              d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
+         FROM editorial_documents d
+        WHERE d.archived_at IS NULL AND (
+          lower(d.created_by)=lower(?) OR
+          EXISTS (SELECT 1 FROM editorial_review_assignments ra WHERE ra.document_id=d.id AND lower(ra.reviewer_email)=lower(?)) OR
+          EXISTS (SELECT 1 FROM editorial_review_assignment_recipients rr WHERE rr.document_id=d.id AND lower(rr.reviewer_email)=lower(?)) OR
+          (d.publication_review_stage='subject-coordinator' AND EXISTS (SELECT 1 FROM editorial_workflow_roles wr WHERE wr.role='subject-coordinator' AND lower(wr.email)=lower(?) AND (wr.subject=d.subject OR wr.subject='*'))) OR
+          (d.publication_review_stage='project-leader' AND EXISTS (SELECT 1 FROM editorial_workflow_roles wr WHERE wr.role='project-leader' AND lower(wr.email)=lower(?)))
+        )
+        ORDER BY CASE WHEN d.scheduled_publish_at IS NULL THEN 1 ELSE 0 END,d.scheduled_publish_at,d.updated_at DESC LIMIT 100`,
+    ).bind(scope.email, scope.email, scope.email, scope.email, scope.email).all<{
+      id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
+      scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
+    }>().catch(() => ({ results: [] as Array<{
+      id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
+      scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
+    }> })),
+    canReviewApplications
+      ? env.REPORTS.prepare(
+          `SELECT id,name,email,project_slug,status,created_at,updated_at FROM atlasez_member_applications
+            WHERE status IN ('new','reviewing') ORDER BY created_at DESC LIMIT 80`,
+        ).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }),
+    scope.isManager || secretariatRole === "manager"
+      ? env.REPORTS.prepare(
+          `SELECT r.id,r.email,r.proposed_display_name AS display_name,r.submitted_at,r.status
+             FROM editorial_member_profile_change_requests r WHERE r.status='pending'
+            ORDER BY r.submitted_at DESC LIMIT 50`,
+        ).all<{ id: string; email: string; display_name: string; submitted_at: string; status: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }),
+    scope.isManager || secretariatRole === "manager"
+      ? env.REPORTS.prepare(
+          `SELECT r.id,r.email,r.project_id,r.submitted_at,r.status
+             FROM editorial_project_profile_change_requests r WHERE r.status='pending'
+            ORDER BY r.submitted_at DESC LIMIT 50`,
+        ).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
+    adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env),
+    env.REPORTS.prepare(
+      `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,t.archived_at,
+              COALESCE(p.name,t.project_id) AS project_name
+         FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
+        WHERE ${taskPredicate} AND (t.status='done' OR t.archived_at IS NOT NULL)
+        ORDER BY t.updated_at DESC LIMIT 50`,
+    ).bind(...taskBindings).all<{
+      id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
+      status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string;
+    }>(),
+    env.REPORTS.prepare(
+      `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
+              d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
+         FROM editorial_documents d
+        WHERE d.archived_at IS NOT NULL OR d.published_at IS NOT NULL OR d.status='approved'
+        ORDER BY d.updated_at DESC LIMIT 50`,
+    ).bind().all<{
+      id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
+      scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
+    }>().catch(() => ({ results: [] as Array<{
+      id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
+      scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
+    }> })),
+    canReviewApplications
+      ? env.REPORTS.prepare(
+          `SELECT id,name,email,project_slug,status,created_at,updated_at FROM atlasez_member_applications
+            WHERE status IN ('accepted','rejected') ORDER BY updated_at DESC LIMIT 50`,
+        ).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }),
+    scope.isManager || secretariatRole === "manager"
+      ? env.REPORTS.prepare(
+          `SELECT r.id,r.email,r.proposed_display_name AS display_name,r.submitted_at,r.status
+             FROM editorial_member_profile_change_requests r WHERE r.status IN ('approved','rejected')
+            ORDER BY r.submitted_at DESC LIMIT 50`,
+        ).all<{ id: string; email: string; display_name: string; submitted_at: string; status: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }),
+    scope.isManager || secretariatRole === "manager"
+      ? env.REPORTS.prepare(
+          `SELECT r.id,r.email,r.project_id,r.submitted_at,r.status
+             FROM editorial_project_profile_change_requests r WHERE r.status IN ('approved','rejected')
+            ORDER BY r.submitted_at DESC LIMIT 50`,
+        ).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
+  ]);
+  const notificationData = notificationResponse.ok
+    ? await notificationResponse.json().catch(() => ({})) as { notifications?: Array<Record<string, unknown>>; unreadNotificationsCount?: number }
+    : {};
+  const items: ActionCenterItem[] = [];
+  for (const row of taskRows.results ?? []) {
+    items.push({
+      id: `task:${row.id}`,
+      kind: "task",
+      title: row.title,
+      detail: row.details?.split("\n")[0] || (row.task_kind === "feedback" ? "フィードバック依頼を確認してください。" : "タスクを確認してください。"),
+      href: row.task_kind === "feedback" ? "/admin/operations/?project=atlas" : `/admin/operations/?project=${encodeURIComponent(row.project_id)}`,
+      status: row.status,
+      priority: actionCenterPriority(row.due_at, row.updated_at, now),
+      updatedAt: row.updated_at,
+      dueAt: row.due_at,
+      project: row.project_name || projectNames.get(row.project_id) || row.project_id,
+      subject: row.subject,
+      read: false,
+      actions: actionCenterTransition("task", row.id, row.status),
+    });
+  }
+  for (const row of documentRows.results ?? []) {
+    const dueAt = row.scheduled_publish_at;
+    const canStartReview = row.status === "draft" && row.created_by.toLowerCase() === scope.email.toLowerCase();
+    const canDecide = row.status === "in-review" && Boolean(row.publication_review_stage);
+    items.push({
+      id: `document:${row.id}`,
+      kind: "document",
+      title: row.title,
+      detail: row.publication_review_stage ? `公開審査：${row.publication_review_stage}` : row.summary || "記事の状態を確認してください。",
+      href: `/admin/editor/?document=${encodeURIComponent(row.id)}`,
+      status: row.scheduled_publish_at ? "scheduled" : row.status,
+      priority: actionCenterPriority(dueAt, row.updated_at, now),
+      updatedAt: row.updated_at,
+      dueAt,
+      project: "アトラス",
+      subject: row.subject,
+      read: false,
+      actions: canStartReview ? actionCenterTransition("document", row.id, "draft") : canDecide ? actionCenterTransition("document", row.id, "in-review") : [],
+    });
+  }
+  for (const row of applicationRows.results ?? []) {
+    items.push({
+      id: `application:${row.id}`,
+      kind: "application",
+      title: `応募：${APPLICATION_FORM_LABELS[row.project_slug] ?? row.project_slug}`,
+      detail: `${row.name}（${row.email}）の応募を確認してください。`,
+      href: `/admin/applications/?project=${encodeURIComponent(row.project_slug)}`,
+      status: row.status,
+      priority: row.status === "new" ? "new" : actionCenterPriority(null, row.updated_at, now),
+      updatedAt: row.updated_at || row.created_at,
+      dueAt: null,
+      project: APPLICATION_FORM_LABELS[row.project_slug] ?? row.project_slug,
+      subject: null,
+      read: false,
+      actions: actionCenterTransition("application", row.id, row.status),
+    });
+  }
+  for (const row of memberApprovalRows.results ?? []) {
+    items.push({
+      id: `approval:${row.id}`,
+      kind: "approval",
+      title: `メンバー情報の承認：${row.display_name || row.email}`,
+      detail: `${row.email}のプロフィール変更を確認してください。`,
+      href: "/admin/profile-requests/",
+      status: row.status,
+      priority: "new",
+      updatedAt: row.submitted_at,
+      dueAt: null,
+      project: "運営事務局",
+      subject: null,
+      read: false,
+      actions: actionCenterTransition("approval", row.id, "pending"),
+    });
+  }
+  for (const row of projectApprovalRows.results ?? []) {
+    items.push({
+      id: `approval:${row.id}`,
+      kind: "approval",
+      title: `運営内自己紹介の承認：${row.email}`,
+      detail: `${row.project_id}のプロフィール変更を確認してください。`,
+      href: `/admin/project-profile-requests/?project=${encodeURIComponent(row.project_id)}`,
+      status: row.status,
+      priority: "new",
+      updatedAt: row.submitted_at,
+      dueAt: null,
+      project: row.project_id,
+      subject: null,
+      read: false,
+      actions: actionCenterTransition("approval", row.id, "pending"),
+    });
+  }
+  const history: ActionCenterItem[] = [];
+  for (const row of taskHistoryRows.results ?? []) {
+    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/operations/?project=${encodeURIComponent(row.project_id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
+  }
+  for (const row of documentHistoryRows.results ?? []) {
+    const permitted = scope.isManager || row.created_by.toLowerCase() === scope.email.toLowerCase();
+    if (!permitted) continue;
+    history.push({ id: `document:${row.id}`, kind: "document", title: row.title, detail: row.archived_at ? "アーカイブ済みの記事です。" : row.published_at ? "公開済みの記事です。" : "承認済みの記事です。", href: `/admin/editor/?document=${encodeURIComponent(row.id)}`, status: row.archived_at ? "archived" : row.published_at ? "published" : "approved", priority: "read", updatedAt: row.updated_at, dueAt: null, project: "アトラス", subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
+  }
+  for (const row of applicationHistoryRows.results ?? []) {
+    history.push({ id: `application:${row.id}`, kind: "application", title: `応募：${APPLICATION_FORM_LABELS[row.project_slug] ?? row.project_slug}`, detail: `${row.name}（${row.email}）の応募は${row.status === "accepted" ? "受け入れ済み" : "見送り済み"}です。`, href: `/admin/applications/?project=${encodeURIComponent(row.project_slug)}`, status: row.status, priority: "read", updatedAt: row.updated_at || row.created_at, dueAt: null, project: APPLICATION_FORM_LABELS[row.project_slug] ?? row.project_slug, subject: null, read: true, actions: [] });
+  }
+  for (const row of memberApprovalHistoryRows.results ?? []) {
+    history.push({ id: `approval:${row.id}`, kind: "approval", title: `メンバー情報の承認：${row.display_name || row.email}`, detail: `${row.email}のプロフィール変更は${row.status === "approved" ? "承認済み" : "却下済み"}です。`, href: "/admin/profile-requests/", status: row.status, priority: "read", updatedAt: row.submitted_at, dueAt: null, project: "運営事務局", subject: null, read: true, actions: [] });
+  }
+  for (const row of projectApprovalHistoryRows.results ?? []) {
+    history.push({ id: `approval:${row.id}`, kind: "approval", title: `運営内自己紹介の承認：${row.email}`, detail: `${row.project_id}のプロフィール変更は${row.status === "approved" ? "承認済み" : "却下済み"}です。`, href: `/admin/project-profile-requests/?project=${encodeURIComponent(row.project_id)}`, status: row.status, priority: "read", updatedAt: row.submitted_at, dueAt: null, project: row.project_id, subject: null, read: true, actions: [] });
+  }
+  const groupedNotifications = new Map<string, ActionCenterItem>();
+  for (const raw of notificationData.notifications ?? []) {
+    const id = String(raw.id ?? "");
+    const kind = String(raw.kind ?? "notification");
+    const title = String(raw.title ?? "通知");
+    const href = String(raw.href ?? "/admin/portal/");
+    const key = `${kind}|${title}|${href}`;
+    const existing = groupedNotifications.get(key);
+    if (existing) {
+      existing.groupCount = (existing.groupCount ?? 1) + 1;
+      existing.notificationIds = [...(existing.notificationIds ?? []), id];
+      continue;
+    }
+    const updatedAt = String(raw.updatedAt ?? new Date().toISOString());
+    const read = raw.read === true;
+    groupedNotifications.set(key, {
+      id: `notification:${id}`,
+      kind: "notification",
+      title,
+      detail: String(raw.detail ?? "通知を確認してください。"),
+      href,
+      status: read ? "read" : "unread",
+      priority: read ? "read" : "new",
+      updatedAt,
+      dueAt: null,
+      project: null,
+      subject: null,
+      read,
+      groupCount: 1,
+      notificationIds: id ? [id] : [],
+      actions: [],
+    });
+  }
+  items.push(...groupedNotifications.values());
+  const sortItems = (rows: ActionCenterItem[]) => rows.sort((a, b) => {
+    const priorityRank = { urgent: 0, "due-soon": 1, new: 2, normal: 3, read: 4 };
+    return priorityRank[a.priority] - priorityRank[b.priority] || b.updatedAt.localeCompare(a.updatedAt);
+  });
+  sortItems(items);
+  sortItems(history);
+  return json({
+    generatedAt: new Date().toISOString(),
+    items,
+    history: history.slice(0, 100),
+    counts: {
+      today: items.filter((item) => item.priority === "urgent" || (item.dueAt && item.dueAt.slice(0, 10) === new Date().toISOString().slice(0, 10))).length,
+      dueSoon: items.filter((item) => item.priority === "due-soon").length,
+      unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
+      approvals: items.filter((item) => item.kind === "approval").length,
+      assigned: items.filter((item) => item.kind !== "notification").length,
+    },
+    scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects, projects: projectIds },
+  });
+}
+
+/** ヘッダーの⌘Kから使う横断検索。本文全量は返さず、候補と遷移先だけを返す。 */
+async function adminCommandSearch(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const query = text(new URL(request.url).searchParams.get("q"), 120).trim();
+  if (query.length < 2) return json({ results: [] });
+  const needle = `%${query.replace(/[\\%_]/g, "\\$&").replace(/'/g, "''")}%`;
+  const taskRows = scope.isManager
+    ? env.REPORTS.prepare(
+        `SELECT t.id,t.title,t.details,t.status,t.updated_at,t.project_id,COALESCE(p.name,t.project_id) AS project_name
+           FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
+          WHERE t.archived_at IS NULL AND (t.title LIKE ? ESCAPE '\\' OR t.details LIKE ? ESCAPE '\\')
+          ORDER BY t.updated_at DESC LIMIT 8`,
+      ).bind(needle, needle).all<{ id: string; title: string; details: string; status: string; updated_at: string; project_id: string; project_name: string }>()
+    : env.REPORTS.prepare(
+        `SELECT t.id,t.title,t.details,t.status,t.updated_at,t.project_id,COALESCE(p.name,t.project_id) AS project_name
+           FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
+          WHERE t.archived_at IS NULL AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0)
+            AND (t.title LIKE ? ESCAPE '\\' OR t.details LIKE ? ESCAPE '\\')
+          ORDER BY t.updated_at DESC LIMIT 8`,
+      ).bind(scope.email, scope.email, scope.email, needle, needle).all<{ id: string; title: string; details: string; status: string; updated_at: string; project_id: string; project_name: string }>();
+  const [tasks, documents] = await Promise.all([
+    taskRows,
+    env.REPORTS.prepare(
+      `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
+        WHERE archived_at IS NULL AND (lower(created_by)=lower(?) OR title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
+        ORDER BY updated_at DESC LIMIT 8`,
+    ).bind(scope.email, needle, needle).all<{ id: string; title: string; summary: string; status: string; subject: string; updated_at: string }>(),
+  ]);
+  const results = [
+    ...(documents.results ?? []).map((row) => ({ type: "記事", title: row.title, detail: `${row.subject} ／ ${row.status}`, href: `/admin/editor/?document=${encodeURIComponent(row.id)}`, updatedAt: row.updated_at })),
+    ...(tasks.results ?? []).map((row) => ({ type: "タスク", title: row.title, detail: `${row.project_name} ／ ${row.status}`, href: `/admin/operations/?project=${encodeURIComponent(row.project_id)}`, updatedAt: row.updated_at })),
+  ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12);
+  return json({ query, results });
+}
+
 type MemberProcedureType = "pause" | "withdrawal";
 
 async function memberProcedureRequests(
@@ -17659,8 +18031,12 @@ async function adminNotifications(
         updatedAt: item.remind_at,
       })),
   ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const notificationsTruncated = sortedNotifications.length > 20;
-  const notifications = sortedNotifications.slice(0, 20);
+  const requestedLimit = Number(new URL(request.url).searchParams.get("limit") ?? "20");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 20;
+  const notificationsTruncated = sortedNotifications.length > limit;
+  const notifications = sortedNotifications.slice(0, limit);
   // 画面には最新20件だけを返すが、未読件数は全候補を対象に集計する。
   // 表示用の上限をそのまま件数に使うと、古い未読がある場合にポータルの数字がずれる。
   const readNotificationIds = sortedNotifications.map((item) => item.id);
@@ -18257,6 +18633,10 @@ async function handleAdminRequest(
     );
   if (url.pathname === "/api/admin/portal" && request.method === "GET")
     return portalOverview(request, env);
+  if (url.pathname === "/api/admin/action-center" && request.method === "GET")
+    return actionCenterOverview(request, env);
+  if (url.pathname === "/api/admin/command-search" && request.method === "GET")
+    return adminCommandSearch(request, env);
   if (url.pathname === "/api/admin/member-procedures")
     return memberProcedureRequests(request, env);
   if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
