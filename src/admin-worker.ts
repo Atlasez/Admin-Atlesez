@@ -1202,6 +1202,18 @@ type AdminScopeRequirement = {
   subjectError?: string;
 };
 
+// 一つのリクエスト内で権限判定を何度も行うAPI（ポータルの集計など）では、
+// 基本スコープの解決結果を共有する。判定ロジックは一箇所のまま、D1照会だけを省く。
+const adminScopeCache = new WeakMap<Request, Promise<AdminScope | Response>>();
+
+const resolveCachedAdminScope = (request: Request, env: Env) => {
+  const cached = adminScopeCache.get(request);
+  if (cached) return cached;
+  const pending = resolveAdminScope(request, env);
+  adminScopeCache.set(request, pending);
+  return pending;
+};
+
 /**
  * 既存API互換の既定入口。要件なしでも共通の権限パイプラインを通し、
  * 将来の境界チェックをページごとに実装し直さないようにする。
@@ -1227,7 +1239,7 @@ async function requireAdminScope(
   requirements: AdminScopeRequirement = {},
   preloadedScope?: AdminScope,
 ): Promise<AdminScope | Response> {
-  const scope = preloadedScope ?? (await resolveAdminScope(request, env));
+  const scope = preloadedScope ?? (await resolveCachedAdminScope(request, env));
   if (isResponse(scope)) return scope;
 
   if (requirements.requireGlobal && !scope.allSubjects)
@@ -7908,7 +7920,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            p.name AS project_name
          FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
          WHERE ${taskScopeSql}
-         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 50`,
       )
         .bind(...taskScopeBindings)
         .all()
@@ -7936,7 +7948,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            JOIN atlasez_projects p ON p.id = e.project_id
            WHERE e.project_id IN (${projectIds.map(() => "?").join(",")})
              AND substr(e.starts_at, 1, 10) >= ? AND substr(e.starts_at, 1, 10) <= ?
-           ORDER BY e.starts_at ASC LIMIT 300`,
+           ORDER BY e.starts_at ASC LIMIT 120`,
         )
           .bind(...projectIds, rangeStartKey, rangeEndKey)
           .all<{
@@ -7958,7 +7970,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
              AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done' AND t.archived_at IS NULL
              AND t.due_at IS NOT NULL
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
-           ORDER BY t.due_at ASC LIMIT 300`,
+           ORDER BY t.due_at ASC LIMIT 120`,
         )
           .bind(
             ...projectIds,
@@ -8102,7 +8114,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
               COALESCE(p.name,t.project_id) AS project_name
          FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
         WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'
-        ORDER BY CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+        ORDER BY CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 50`,
     ).bind(...taskBindings).all<{
       id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
       status: string; due_at: string | null; updated_at: string; project_name: string;
@@ -8377,13 +8389,38 @@ async function adminCommandSearch(request: Request, env: Env): Promise<Response>
             AND (t.title LIKE ? ESCAPE '\\' OR t.details LIKE ? ESCAPE '\\')
           ORDER BY t.updated_at DESC LIMIT 8`,
       ).bind(scope.email, scope.email, scope.email, needle, needle).all<{ id: string; title: string; details: string; status: string; updated_at: string; project_id: string; project_name: string }>();
+  const documentSearch = scope.isManager
+    ? {
+        query: `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
+          WHERE archived_at IS NULL AND (title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
+          ORDER BY updated_at DESC LIMIT 8`,
+        bindings: [needle, needle],
+      }
+    : {
+        // 検索結果も記事一覧と同じ担当範囲で絞る。作成者本人の原稿は
+        // 担当分野が未設定でも編集を継続できるように残すが、他人の
+        // 担当外記事をタイトル検索だけで返さない。
+        query: `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
+          WHERE archived_at IS NULL
+            AND (lower(created_by)=lower(?)${
+              scope.subjects.length
+                ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
+                : ""
+            })
+            AND (title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
+          ORDER BY updated_at DESC LIMIT 8`,
+        bindings: [scope.email, ...scope.subjects, needle, needle],
+      };
   const [tasks, documents] = await Promise.all([
     taskRows,
-    env.REPORTS.prepare(
-      `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
-        WHERE archived_at IS NULL AND (lower(created_by)=lower(?) OR title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
-        ORDER BY updated_at DESC LIMIT 8`,
-    ).bind(scope.email, needle, needle).all<{ id: string; title: string; summary: string; status: string; subject: string; updated_at: string }>(),
+    env.REPORTS.prepare(documentSearch.query).bind(...documentSearch.bindings).all<{
+      id: string;
+      title: string;
+      summary: string;
+      status: string;
+      subject: string;
+      updated_at: string;
+    }>(),
   ]);
   const results = [
     ...(documents.results ?? []).map((row) => ({ type: "記事", title: row.title, detail: `${row.subject} ／ ${row.status}`, href: `/admin/editor/?document=${encodeURIComponent(row.id)}`, updatedAt: row.updated_at })),
@@ -8483,10 +8520,10 @@ async function memberTasksOverview(
   if (!projectIds.length) return json({ projects: [], tasks: [], members: [] });
   const searchParams = new URL(request.url).searchParams;
   const includeArchived = searchParams.get("includeArchived") === "1";
-  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
   const pageLimit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
-    : 200;
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
   type MemberTaskCursor = { status: number; archived: number; due: number; dueAt: string; updatedAt: string; id: string };
   let taskCursor: MemberTaskCursor | null = null;
   const rawTaskCursor = searchParams.get("cursor");
@@ -8567,10 +8604,10 @@ async function memberCalendarOverview(
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   const searchParams = new URL(request.url).searchParams;
-  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
   const pageLimit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
-    : 200;
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
   let eventCursor: { startsAt: string; id: string } | null = null;
   const rawEventCursor = searchParams.get("cursor");
   if (rawEventCursor) {

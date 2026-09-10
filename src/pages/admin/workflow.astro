@@ -1,9 +1,10 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 ---
 
 <AdminLayout title="状態遷移" description="記事・タスク・応募の状態遷移を確認">
-  <main class="workflow-page" data-workflow-page aria-busy="true">
+  <main class="workflow-page" data-workflow-page data-admin-load-surface aria-busy="true">
     <header class="workflow-heading">
       <div>
         <h1>状態遷移</h1>
@@ -13,7 +14,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     </header>
     <section class="workflow-panel" aria-labelledby="workflow-summary-title">
       <div class="workflow-toolbar"><h2 id="workflow-summary-title">現在の状態</h2><output data-workflow-updated aria-live="polite">読み込み中…</output></div>
-      <div class="workflow-error" data-workflow-error role="alert" hidden><span data-workflow-error-text>読み込めませんでした。</span><button type="button" data-workflow-retry>再試行</button></div>
+      <AdminRetryNotice message="状態遷移を読み込めませんでした。" />
       <div class="workflow-entities" data-workflow-entities></div>
     </section>
     <section class="workflow-panel" aria-labelledby="workflow-rules-title">
@@ -29,6 +30,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 </AdminLayout>
 
 <script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   const initWorkflowPage = () => {
     const root = document.querySelector<HTMLElement>("[data-workflow-page]");
     if (!root || root.dataset.initialized === "true") return;
@@ -36,15 +38,13 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const entities = root.querySelector<HTMLElement>("[data-workflow-entities]")!;
     const rules = root.querySelector<HTMLElement>("[data-workflow-rules]")!;
     const updated = root.querySelector<HTMLOutputElement>("[data-workflow-updated]")!;
-    const error = root.querySelector<HTMLElement>("[data-workflow-error]")!;
-    const errorText = root.querySelector<HTMLElement>("[data-workflow-error-text]")!;
-    const retry = root.querySelector<HTMLButtonElement>("[data-workflow-retry]")!;
     const diagnostics = root.querySelector<HTMLElement>("[data-workflow-diagnostics]")!;
     const diagnosticsUpdated = root.querySelector<HTMLOutputElement>("[data-workflow-diagnostics-updated]")!;
     const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character] ?? character));
     const labels: Record<string, string> = { open: "未着手", doing: "進行中", done: "完了", draft: "下書き", "in-review": "査読中", approved: "承認済み", new: "新規", reviewing: "確認中", accepted: "受け入れ", rejected: "見送り", pending: "承認待ち" };
+    let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
     const load = async () => {
-      root.setAttribute("aria-busy", "true"); error.hidden = true; retry.disabled = true; updated.value = "読み込み中…";
+      retryController?.begin(); updated.value = "読み込み中…";
       try {
         const [response, diagnosticsResponse] = await Promise.all([
           fetch("/api/admin/workflow/transitions", { credentials: "same-origin", cache: "no-store" }),
@@ -82,10 +82,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
           diagnostics.innerHTML = `<p class="workflow-diagnostics-warning">整合性チェックを実行できませんでした。</p>`;
           diagnosticsUpdated.value = "確認失敗";
         }
-      } catch (loadError) { errorText.textContent = loadError instanceof Error ? loadError.message : "状態遷移を読み込めませんでした。"; error.hidden = false; }
-      finally { root.removeAttribute("aria-busy"); retry.disabled = false; }
+        retryController?.success();
+      } catch (loadError) { retryController?.fail(loadError); }
     };
-    retry.addEventListener("click", () => void load());
+    retryController = createAdminLoadRetry(root, () => load(), "状態遷移を読み込めませんでした。");
     void load();
   };
   document.addEventListener("astro:page-load", initWorkflowPage); initWorkflowPage();

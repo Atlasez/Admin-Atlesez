@@ -2,9 +2,10 @@
 interface Props {
   scope?: string;
   message?: string;
+  legacyRetry?: boolean;
 }
 
-const { scope, message = "情報を読み込めませんでした。" } = Astro.props;
+const { scope, message = "情報を読み込めませんでした。", legacyRetry = false } = Astro.props;
 ---
 
 <div
@@ -17,7 +18,7 @@ const { scope, message = "情報を読み込めませんでした。" } = Astro.
   aria-live="assertive"
 >
   <span data-admin-load-error-message>{message}</span>
-  <button type="button" data-admin-retry>再試行</button>
+  <button type="button" data-admin-retry data-retry={legacyRetry ? "" : undefined}>再試行</button>
 </div>
 
 <style>
