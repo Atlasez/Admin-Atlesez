@@ -1,8 +1,9 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 ---
 <AdminLayout title="Atlasezメンバー用サイト" description="Atlasezの全プロジェクトへの入口">
-  <main class="portal" data-portal>
+  <main class="portal" data-portal data-admin-load-surface aria-busy="true">
     <header>
       <div>
         <h1 data-admin-i18n data-admin-ja="Atlasezメンバー用サイト" data-admin-en="Atlasez member site">Atlasezメンバー用サイト</h1>
@@ -38,10 +39,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </a>
     </section>
 
-    <div class="portal-load-error error-state" data-portal-error data-admin-load-error role="alert" hidden>
-      <span data-portal-error-message data-admin-load-error-message>ポータル情報を読み込めませんでした。</span>
-      <button type="button" data-portal-retry data-admin-retry>再試行</button>
-    </div>
+    <AdminRetryNotice message="ポータル情報を読み込めませんでした。" legacyPortal />
 
     <section class="project-entry" aria-labelledby="projects-entry-heading">
       <div class="project-entry-heading">
@@ -109,11 +107,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .portal-summary-item small { color: var(--text-muted); font-size: .68rem; line-height: 1.35; min-height: 1.35em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .portal-summary-item[data-summary-state="attention"] strong { color: var(--success); }
   .portal-summary-item[data-summary-state="success"] strong { color: var(--success); }
-  .portal-load-error { align-items: center; gap: .8rem; justify-content: space-between; margin: -0.5rem 0 1rem; padding: .7rem .85rem; }
-  .portal-load-error[hidden] { display: none; }
-  .portal-load-error button { background: var(--accent-primary); border: 1px solid var(--accent-primary); border-radius: var(--radius); color: #fff; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 800; min-height: 2.2rem; padding: .42rem .75rem; white-space: nowrap; }
-  .portal-load-error button:hover { filter: brightness(1.08); }
-  .portal-load-error button:disabled { cursor: wait; opacity: .7; }
   .project-entry { border: 1px solid var(--border-default); display: grid; gap: 1.25rem; margin: 1.5rem 0; padding: 1.25rem; }
   .project-entry h2 { font-size: 1.2rem; margin: .25rem 0 .35rem; }
   .project-entry-heading p { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; margin: 0; }
@@ -188,8 +181,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   @media (max-width: 520px) {
     .portal > header { align-items: start; flex-direction: column; }
     .application-link { align-self: stretch; text-align: center; }
-    .portal-load-error { align-items: stretch; flex-direction: column; }
-    .portal-load-error button { width: 100%; }
   }
   @media (max-width: 520px) {
     .project-entry-cards { grid-template-columns: 1fr; }
