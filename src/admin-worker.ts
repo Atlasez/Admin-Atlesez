@@ -1126,7 +1126,11 @@ async function getAuthenticatedAtlasezAccount(
   }
 }
 
-async function getAdminScope(
+/**
+ * 権限判定の実装本体。公開APIから直接呼び出さず、必ず
+ * `getAdminScope()`（= requireAdminScope の既定入口）を経由する。
+ */
+async function resolveAdminScope(
   request: Request,
   env: Env,
 ): Promise<AdminScope | Response> {
@@ -1199,6 +1203,17 @@ type AdminScopeRequirement = {
 };
 
 /**
+ * 既存API互換の既定入口。要件なしでも共通の権限パイプラインを通し、
+ * 将来の境界チェックをページごとに実装し直さないようにする。
+ */
+async function getAdminScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  return requireAdminScope(request, env);
+}
+
+/**
  * 管理APIの認証・分野・プロジェクト境界を一つの入口で検証する。
  *
  * 既存の読み取りAPIは `getAdminScope()` のまま全分野を返すものもあるが、
@@ -1212,7 +1227,7 @@ async function requireAdminScope(
   requirements: AdminScopeRequirement = {},
   preloadedScope?: AdminScope,
 ): Promise<AdminScope | Response> {
-  const scope = preloadedScope ?? (await getAdminScope(request, env));
+  const scope = preloadedScope ?? (await resolveAdminScope(request, env));
   if (isResponse(scope)) return scope;
 
   if (requirements.requireGlobal && !scope.allSubjects)
@@ -7739,17 +7754,41 @@ async function memberTasksOverview(
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   if (!projectIds.length) return json({ projects: [], tasks: [], members: [] });
-  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+  const searchParams = new URL(request.url).searchParams;
+  const includeArchived = searchParams.get("includeArchived") === "1";
+  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 200;
+  type MemberTaskCursor = { status: number; archived: number; due: number; dueAt: string; updatedAt: string; id: string };
+  let taskCursor: MemberTaskCursor | null = null;
+  const rawTaskCursor = searchParams.get("cursor");
+  if (rawTaskCursor) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(rawTaskCursor)) as Partial<MemberTaskCursor>;
+      if (Number.isInteger(parsed.status) && Number.isInteger(parsed.archived) && Number.isInteger(parsed.due) && typeof parsed.dueAt === "string" && typeof parsed.updatedAt === "string" && typeof parsed.id === "string" && parsed.id) {
+        taskCursor = { status: Number(parsed.status), archived: Number(parsed.archived), due: Number(parsed.due), dueAt: parsed.dueAt, updatedAt: parsed.updatedAt, id: parsed.id };
+      }
+    } catch { taskCursor = null; }
+  }
   const placeholders = projectIds.map(() => "?").join(",");
+  const statusRank = "CASE status WHEN 'done' THEN 1 ELSE 0 END";
+  const archivedRank = "CASE WHEN archived_at IS NOT NULL THEN 1 ELSE 0 END";
+  const dueRank = "CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END";
+  const taskCursorCondition = taskCursor
+    ? `(${statusRank} > ? OR (${statusRank} = ? AND (${archivedRank} > ? OR (${archivedRank} = ? AND (${dueRank} > ? OR (${dueRank} = ? AND (COALESCE(due_at, '') > ? OR (COALESCE(due_at, '') = ? AND (updated_at < ? OR (updated_at = ? AND id < ?)))))))))`
+    : "";
+  const taskCursorValues = taskCursor
+    ? [taskCursor.status, taskCursor.status, taskCursor.archived, taskCursor.archived, taskCursor.due, taskCursor.due, taskCursor.dueAt, taskCursor.dueAt, taskCursor.updatedAt, taskCursor.updatedAt, taskCursor.id]
+    : [];
   const [tasks, members] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
         created_by,created_at,updated_at,archived_at,archived_by,archive_expires_at FROM editorial_tasks
-       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}
-       ORDER BY status='done',archived_at IS NOT NULL,CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,
-        due_at ASC,updated_at DESC LIMIT 500`,
+       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
+       ORDER BY ${statusRank},${archivedRank},${dueRank},COALESCE(due_at, '') ASC,updated_at DESC,id DESC LIMIT ?`,
     )
-      .bind(...projectIds)
+      .bind(...projectIds, ...taskCursorValues, pageLimit + 1)
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT m.project_id,m.email,
@@ -7767,7 +7806,10 @@ async function memberTasksOverview(
       .filter((project) => project.role === "manager")
       .map((project) => project.id),
   );
-  const visibleTasks = (tasks.results ?? []).filter(
+  const fetchedTasks = tasks.results ?? [];
+  const hasMoreTasks = fetchedTasks.length > pageLimit;
+  const pageTasks = fetchedTasks.slice(0, pageLimit);
+  const visibleTasks = pageTasks.filter(
     (task) =>
       managerProjects.has(String(task.project_id)) ||
       taskAssignedTo(task.assignee_email, scope.email, task.task_kind) ||
@@ -7775,11 +7817,16 @@ async function memberTasksOverview(
       task.subject === null ||
       scope.subjects.includes(String(task.subject ?? "")),
   );
+  const lastTask = pageTasks.at(-1);
+  const nextTaskCursor = hasMoreTasks && lastTask
+    ? encodeURIComponent(JSON.stringify({ status: lastTask.status === "done" ? 1 : 0, archived: lastTask.archived_at ? 1 : 0, due: !lastTask.due_at ? 1 : 0, dueAt: String(lastTask.due_at ?? ""), updatedAt: String(lastTask.updated_at ?? ""), id: String(lastTask.id ?? "") }))
+    : null;
   return json({
     scope: { email: scope.email, isManager: scope.isManager },
     projects,
     tasks: visibleTasks,
     members: members.results ?? [],
+    pagination: { limit: pageLimit, nextCursor: nextTaskCursor, hasMore: hasMoreTasks },
   });
 }
 
@@ -9338,7 +9385,47 @@ async function operationsOverview(
   const projectRole = await operationProjectRole(env, scope, project.id);
   const canSeeAllProjectOperations =
     scope.allSubjects || projectRole === "manager";
-  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+  const searchParams = new URL(request.url).searchParams;
+  const includeArchived = searchParams.get("includeArchived") === "1";
+  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 200;
+  type OperationTaskCursor = {
+    status: number;
+    archived: number;
+    due: number;
+    dueAt: string;
+    updatedAt: string;
+    id: string;
+  };
+  let taskCursor: OperationTaskCursor | null = null;
+  const rawTaskCursor = searchParams.get("cursor");
+  if (rawTaskCursor) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(rawTaskCursor)) as Partial<OperationTaskCursor>;
+      if (
+        Number.isInteger(parsed.status) &&
+        Number.isInteger(parsed.archived) &&
+        Number.isInteger(parsed.due) &&
+        typeof parsed.dueAt === "string" &&
+        typeof parsed.updatedAt === "string" &&
+        typeof parsed.id === "string" &&
+        parsed.id
+      ) {
+        taskCursor = {
+          status: Number(parsed.status),
+          archived: Number(parsed.archived),
+          due: Number(parsed.due),
+          dueAt: parsed.dueAt,
+          updatedAt: parsed.updatedAt,
+          id: parsed.id,
+        };
+      }
+    } catch {
+      taskCursor = null;
+    }
+  }
   const filters = canSeeAllProjectOperations
     ? ["project_id = ?"]
     : [
@@ -9351,9 +9438,16 @@ async function operationsOverview(
   const values: unknown[] = canSeeAllProjectOperations
     ? [project.id]
     : [project.id, scope.email, scope.email, scope.email, ...scope.subjects];
+  const statusRank = "CASE status WHEN 'done' THEN 1 ELSE 0 END";
+  const archivedRank = "CASE WHEN archived_at IS NOT NULL THEN 1 ELSE 0 END";
+  const dueRank = "CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END";
+  const taskCursorCondition = taskCursor
+    ? `(${statusRank} > ? OR (${statusRank} = ? AND (${archivedRank} > ? OR (${archivedRank} = ? AND (${dueRank} > ? OR (${dueRank} = ? AND (COALESCE(due_at, '') > ? OR (COALESCE(due_at, '') = ? AND (updated_at < ? OR (updated_at = ? AND id < ?)))))))))`
+    : "";
+  if (taskCursor) values.push(taskCursor.status, taskCursor.status, taskCursor.archived, taskCursor.archived, taskCursor.due, taskCursor.due, taskCursor.dueAt, taskCursor.dueAt, taskCursor.updatedAt, taskCursor.updatedAt, taskCursor.id);
   const where = filters.length
-    ? ` WHERE ${filters.join(" AND ")}${includeArchived ? "" : " AND archived_at IS NULL"}`
-    : includeArchived ? "" : " WHERE archived_at IS NULL";
+    ? ` WHERE ${filters.join(" AND ")}${includeArchived ? "" : " AND archived_at IS NULL"}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}`
+    : includeArchived ? (taskCursorCondition ? ` WHERE ${taskCursorCondition}` : "") : ` WHERE archived_at IS NULL${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}`;
   const memberWhere = canSeeAllProjectOperations
     ? ""
     : ` WHERE subject = '*' OR subject IN (${scope.subjects.map(() => "?").join(",")})`;
@@ -9363,9 +9457,9 @@ async function operationsOverview(
   const [tasks, events, progress, members, availability, availabilityBlocks, availabilityRules] =
     await Promise.all([
       env.REPORTS.prepare(
-        `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at, archived_at, archived_by, archive_expires_at FROM editorial_tasks${where} ORDER BY status = 'done', archived_at IS NOT NULL, CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+        `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at, archived_at, archived_by, archive_expires_at FROM editorial_tasks${where} ORDER BY ${statusRank}, ${archivedRank}, ${dueRank}, COALESCE(due_at, '') ASC, updated_at DESC, id DESC LIMIT ?`,
       )
-        .bind(...values)
+        .bind(...values, pageLimit + 1)
         .all(),
       env.REPORTS.prepare(
         `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ? ORDER BY starts_at ASC LIMIT 60`,
@@ -9424,7 +9518,20 @@ async function operationsOverview(
         .bind(scope.email, scope.isManager ? 1 : 0)
         .all<Record<string, unknown>>(),
     ]);
-  const taskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
+  const fetchedTaskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
+  const hasMoreTasks = fetchedTaskRows.length > pageLimit;
+  const taskRows = fetchedTaskRows.slice(0, pageLimit);
+  const lastTask = taskRows.at(-1);
+  const nextTaskCursor = hasMoreTasks && lastTask
+    ? encodeURIComponent(JSON.stringify({
+        status: lastTask.status === "done" ? 1 : 0,
+        archived: lastTask.archived_at ? 1 : 0,
+        due: !lastTask.due_at ? 1 : 0,
+        dueAt: String(lastTask.due_at ?? ""),
+        updatedAt: String(lastTask.updated_at ?? ""),
+        id: String(lastTask.id ?? ""),
+      }))
+    : null;
   const reminderRows = taskRows.length
     ? await env.REPORTS.prepare(
         `SELECT id,task_id,remind_at,remind_at_utc,timezone,label,notified_at,relative_kind,relative_amount,relative_unit,relative_start
@@ -9468,6 +9575,7 @@ async function operationsOverview(
           : null,
       reminders: remindersByTask.get(String(task.id)) ?? [],
     })),
+    pagination: { limit: pageLimit, nextCursor: nextTaskCursor, hasMore: hasMoreTasks },
     availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
       ...block,
       isSelf:

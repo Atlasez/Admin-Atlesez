@@ -40,6 +40,7 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
   await expect(page.getByText("運用データベース")).toBeVisible();
   await expect(page.getByText("正常")).toBeVisible();
   await expect(page.getByText("確認が必要")).toBeVisible();
+  await expect(page.getByText("2ms")).toBeVisible();
   await page.getByRole("button", { name: "再確認" }).click();
   await expect.poll(() => requests).toBe(2);
 });
