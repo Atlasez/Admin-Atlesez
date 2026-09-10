@@ -7908,7 +7908,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            p.name AS project_name
          FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
          WHERE ${taskScopeSql}
-         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 50`,
       )
         .bind(...taskScopeBindings)
         .all()
@@ -7936,7 +7936,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            JOIN atlasez_projects p ON p.id = e.project_id
            WHERE e.project_id IN (${projectIds.map(() => "?").join(",")})
              AND substr(e.starts_at, 1, 10) >= ? AND substr(e.starts_at, 1, 10) <= ?
-           ORDER BY e.starts_at ASC LIMIT 300`,
+           ORDER BY e.starts_at ASC LIMIT 120`,
         )
           .bind(...projectIds, rangeStartKey, rangeEndKey)
           .all<{
@@ -7958,7 +7958,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
              AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done' AND t.archived_at IS NULL
              AND t.due_at IS NOT NULL
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
-           ORDER BY t.due_at ASC LIMIT 300`,
+           ORDER BY t.due_at ASC LIMIT 120`,
         )
           .bind(
             ...projectIds,
@@ -8102,7 +8102,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
               COALESCE(p.name,t.project_id) AS project_name
          FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
         WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'
-        ORDER BY CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+        ORDER BY CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 50`,
     ).bind(...taskBindings).all<{
       id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
       status: string; due_at: string | null; updated_at: string; project_name: string;

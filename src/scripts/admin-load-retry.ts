@@ -51,11 +51,19 @@ export const createAdminLoadRetry = (
   const begin = () => {
     notice.hidden = true;
     button.disabled = true;
+    const emptyState = surface.querySelector<HTMLElement>(
+      "[data-admin-empty-state]",
+    );
+    if (emptyState) emptyState.hidden = true;
     setState("loading");
   };
   const success = () => {
     notice.hidden = true;
     button.disabled = false;
+    const emptyState = surface.querySelector<HTMLElement>(
+      "[data-admin-empty-state]",
+    );
+    if (emptyState) emptyState.hidden = true;
     setState("ready");
     retrying = false;
   };
