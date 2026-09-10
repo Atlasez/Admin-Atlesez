@@ -130,6 +130,11 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   await expect(
     page.getByRole("button", { name: "未対応", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  page.once("dialog", (dialog) => dialog.accept("未対応の確認"));
+  await page.getByRole("button", { name: "表示を保存", exact: true }).click();
+  await expect(
+    page.locator('[data-action-saved-view] option[value]:not([value=""])'),
+  ).toHaveText("未対応の確認");
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await expect(
     page

@@ -20,6 +20,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         <button type="button" class="filter-button" data-action-filter="unread" aria-pressed="false">未読通知</button>
         <button type="button" class="filter-button" data-action-filter="assigned" aria-pressed="false">自分の担当</button>
         <button type="button" class="filter-button" data-action-filter="history" aria-pressed="false">完了・履歴</button>
+        <label class="saved-view"><span class="visually-hidden">保存ビュー</span><select data-action-saved-view aria-label="保存ビュー"><option value="">保存ビュー</option></select></label>
+        <button type="button" class="filter-button save-view-button" data-action-save-view>表示を保存</button>
       </div>
       <output data-action-updated aria-live="polite">読み込み中…</output>
     </div>
@@ -49,6 +51,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const updated = root.querySelector<HTMLOutputElement>("[data-action-updated]")!;
     const count = root.querySelector<HTMLElement>("[data-action-count]")!;
     const listHeading = root.querySelector<HTMLElement>("[data-action-list-heading]")!;
+    const savedView = root.querySelector<HTMLSelectElement>("[data-action-saved-view]")!;
+    const saveViewButton = root.querySelector<HTMLButtonElement>("[data-action-save-view]")!;
     const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
     const formatTime = (value: string) => value ? new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "";
     const statusLabels: Record<string, string> = { open: "未着手", doing: "進行中", done: "完了", archived: "アーカイブ済み", draft: "下書き", "in-review": "査読中", approved: "承認済み", published: "公開済み", scheduled: "予約投稿", new: "新規", reviewing: "確認中", accepted: "受け入れ済み", rejected: "却下", pending: "承認待ち", unread: "未読", read: "既読" };
@@ -126,6 +130,34 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       root.querySelectorAll<HTMLButtonElement>("[data-action-filter]").forEach((button) => { const active = button.dataset.actionFilter === filter; button.classList.toggle("is-active", active); button.setAttribute("aria-pressed", String(active)); });
       renderItems();
     };
+    const savedViewsKey = "atlasez-admin-action-center-views";
+    const readSavedViews = (): Array<{ id: string; label: string; filter: string }> => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(savedViewsKey) ?? "[]");
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((view): view is { id: string; label: string; filter: string } =>
+          view && typeof view.id === "string" && typeof view.label === "string" && typeof view.filter === "string" && ["all", "action", "urgent", "unread", "assigned", "history"].includes(view.filter),
+        ).slice(0, 8);
+      } catch { return []; }
+    };
+    const renderSavedViews = () => {
+      savedView.innerHTML = `<option value="">保存ビュー</option>${readSavedViews().map((view) => `<option value="${escape(view.id)}">${escape(view.label)}</option>`).join("")}`;
+      savedView.value = "";
+    };
+    savedView.addEventListener("change", () => {
+      const selected = readSavedViews().find((view) => view.id === savedView.value);
+      if (selected) setFilter(selected.filter);
+      savedView.value = "";
+    });
+    saveViewButton.addEventListener("click", () => {
+      const label = window.prompt("この表示の名前を入力してください。", filter === "action" ? "未対応" : filter === "history" ? "完了・履歴" : "アクション表示");
+      if (!label?.trim()) return;
+      const views = readSavedViews().filter((view) => view.label !== label.trim());
+      views.unshift({ id: crypto.randomUUID(), label: label.trim().slice(0, 40), filter });
+      try { localStorage.setItem(savedViewsKey, JSON.stringify(views.slice(0, 8))); } catch { /* 保存できない環境でも通常の絞り込みは継続する */ }
+      renderSavedViews();
+    });
+    renderSavedViews();
     const load = async () => {
       controller?.abort(); controller = new AbortController();
       retryController?.begin(); refresh.disabled = true; updated.value = "読み込み中…";
@@ -187,6 +219,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .action-filters { display: flex; flex-wrap: wrap; gap: .35rem; }
   .filter-button { color: var(--text-secondary); min-height: 2rem; }
   .filter-button.is-active { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--on-accent); }
+  .saved-view { display: inline-flex; }
+  .saved-view select { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .35rem; color: var(--text-secondary); font: inherit; font-size: .72rem; min-height: 2rem; padding: .25rem .55rem; }
+  .saved-view select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .save-view-button { color: var(--text-secondary); }
   .action-center-toolbar output { color: var(--text-secondary); font-size: .7rem; white-space: nowrap; }
   .action-error { align-items: center; background: color-mix(in srgb, var(--danger) 10%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 34%, var(--border-default)); display: flex; gap: .8rem; justify-content: space-between; margin-top: .8rem; padding: .65rem .75rem; }
   .action-error[hidden] { display: none !important; }
