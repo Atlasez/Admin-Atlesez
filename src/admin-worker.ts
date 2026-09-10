@@ -8389,13 +8389,38 @@ async function adminCommandSearch(request: Request, env: Env): Promise<Response>
             AND (t.title LIKE ? ESCAPE '\\' OR t.details LIKE ? ESCAPE '\\')
           ORDER BY t.updated_at DESC LIMIT 8`,
       ).bind(scope.email, scope.email, scope.email, needle, needle).all<{ id: string; title: string; details: string; status: string; updated_at: string; project_id: string; project_name: string }>();
+  const documentSearch = scope.isManager
+    ? {
+        query: `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
+          WHERE archived_at IS NULL AND (title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
+          ORDER BY updated_at DESC LIMIT 8`,
+        bindings: [needle, needle],
+      }
+    : {
+        // 検索結果も記事一覧と同じ担当範囲で絞る。作成者本人の原稿は
+        // 担当分野が未設定でも編集を継続できるように残すが、他人の
+        // 担当外記事をタイトル検索だけで返さない。
+        query: `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
+          WHERE archived_at IS NULL
+            AND (lower(created_by)=lower(?)${
+              scope.subjects.length
+                ? ` OR subject IN (${scope.subjects.map(() => "?").join(",")})`
+                : ""
+            })
+            AND (title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
+          ORDER BY updated_at DESC LIMIT 8`,
+        bindings: [scope.email, ...scope.subjects, needle, needle],
+      };
   const [tasks, documents] = await Promise.all([
     taskRows,
-    env.REPORTS.prepare(
-      `SELECT id,title,summary,status,subject,updated_at FROM editorial_documents
-        WHERE archived_at IS NULL AND (lower(created_by)=lower(?) OR title LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')
-        ORDER BY updated_at DESC LIMIT 8`,
-    ).bind(scope.email, needle, needle).all<{ id: string; title: string; summary: string; status: string; subject: string; updated_at: string }>(),
+    env.REPORTS.prepare(documentSearch.query).bind(...documentSearch.bindings).all<{
+      id: string;
+      title: string;
+      summary: string;
+      status: string;
+      subject: string;
+      updated_at: string;
+    }>(),
   ]);
   const results = [
     ...(documents.results ?? []).map((row) => ({ type: "記事", title: row.title, detail: `${row.subject} ／ ${row.status}`, href: `/admin/editor/?document=${encodeURIComponent(row.id)}`, updatedAt: row.updated_at })),
