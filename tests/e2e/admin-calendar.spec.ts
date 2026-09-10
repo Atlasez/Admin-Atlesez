@@ -86,6 +86,54 @@ test("予定の取得に失敗してもカレンダーを表示する", async ({
   );
 });
 
+test("横断カレンダーは予定をカーソルで追加読み込みできる", async ({ page }) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({ json: { email: "manager@example.com", isManager: true } }),
+  );
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  let requests = 0;
+  await page.route("**/api/admin/member-calendar**", async (route) => {
+    requests += 1;
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    await route.fulfill({
+      json: {
+        scope: { email: "manager@example.com", isManager: false },
+        projects: [{ id: "atlas", name: "アトラス", role: "member" }],
+        events: [
+          {
+            id: cursor ? "event-next" : "event-first",
+            title: cursor ? "追加予定" : "最初の予定",
+            starts_at: "2026-09-10T10:00:00.000Z",
+            ends_at: null,
+            timezone: "Asia/Tokyo",
+            participants: [],
+            availabilityCounts: { available: 0, maybe: 0, unavailable: 0 },
+          },
+        ],
+        availabilityBlocks: [],
+        availabilityRules: [],
+        eventPagination: cursor
+          ? { limit: 1, nextCursor: null, hasMore: false }
+          : { limit: 1, nextCursor: "event-cursor-1", hasMore: true },
+      },
+    });
+  });
+
+  await page.goto("admin/member-calendar/");
+  await expect(page.locator("[data-event-list]")).toContainText("最初の予定");
+  const loadMore = page.getByRole("button", { name: "さらに予定を読み込む" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(page.locator("[data-event-list]")).toContainText("追加予定");
+  await expect(loadMore).toBeHidden();
+  expect(requests).toBe(2);
+});
+
 test("カレンダーで複数地域・タイムゾーン・可否期間を操作できる", async ({
   page,
 }) => {
