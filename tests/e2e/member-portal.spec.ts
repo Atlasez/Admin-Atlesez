@@ -290,7 +290,7 @@ test("横断カレンダーでプロジェクト日程と参加可否を扱え�
   await page.route("**/api/admin/operations/events/*/availability", (route) =>
     route.fulfill({ json: { ok: true } }),
   );
-  await page.route("**/api/admin/member-calendar", (route) =>
+  await page.route("**/api/admin/member-calendar**", (route) =>
     route.fulfill({
       json: {
         scope: { email: "manager@example.com", isManager: false },
