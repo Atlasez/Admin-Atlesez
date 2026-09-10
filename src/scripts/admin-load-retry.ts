@@ -13,7 +13,10 @@ export const createAdminLoadRetry = (
     "[data-admin-load-error-message]",
   );
   const button = root.querySelector<HTMLButtonElement>("[data-admin-retry]");
-  const surface: Element = root.querySelector<HTMLElement>("[data-admin-load-surface]") ?? notice?.parentElement ?? (root as Element);
+  const surface: Element =
+    root.querySelector<HTMLElement>("[data-admin-load-surface]") ??
+    notice?.parentElement ??
+    (root as Element);
   let retrying = false;
 
   if (!notice || !message || !button) {
