@@ -1770,6 +1770,17 @@ async function listArticleReports(
   const order = ` ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, created_at DESC, id DESC LIMIT ?`;
   const filters: string[] = [];
   const values: unknown[] = [];
+  // 問題報告も記事一覧・閲覧統計と同じ担当分野境界で返す。
+  // 全分野管理者だけが全分野を横断して確認でき、担当者には担当外の
+  // 記事タイトルや本文・連絡先の存在自体を知らせない。
+  if (!scope.allSubjects) {
+    if (scope.subjects.length) {
+      filters.push(`subject IN (${scope.subjects.map(() => "?").join(",")})`);
+      values.push(...scope.subjects);
+    } else {
+      filters.push("0=1");
+    }
+  }
   if (status) {
     filters.push("status = ?");
     values.push(status);

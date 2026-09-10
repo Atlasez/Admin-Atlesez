@@ -13,8 +13,12 @@ class ReportsStatement {
   async all<T>() {
     if (this.query.includes("FROM report_admin_permissions"))
       return { results: [{ subject: "mathematics" }] as T[] };
-    if (this.query.includes("FROM article_reports"))
-      return { results: this.db.reports as T[] };
+    if (this.query.includes("FROM article_reports")) {
+      const reports = this.query.includes("subject IN")
+        ? this.db.reports.filter((row) => row.subject === "mathematics")
+        : this.db.reports;
+      return { results: reports as T[] };
+    }
     if (this.query.includes("FROM article_analytics_daily")) {
       const rows = this.query.includes("subject IN")
         ? this.db.analytics.filter((row) => row.subject === "mathematics")
@@ -130,12 +134,8 @@ describe("reports and statistics access", () => {
     };
     expect(reportData.reports.map((item) => item.subject)).toEqual([
       "mathematics",
-      "physics",
     ]);
-    expect(reportData.reports.map((item) => item.can_manage)).toEqual([
-      true,
-      false,
-    ]);
+    expect(reportData.reports.map((item) => item.can_manage)).toEqual([true]);
     expect(reportData.reports.every((item) => item.contact === null)).toBe(
       true,
     );
@@ -144,6 +144,13 @@ describe("reports and statistics access", () => {
       nextCursor: null,
       limit: 100,
     });
+    expect(
+      db.queries.some(
+        (query) =>
+          query.includes("FROM article_reports") &&
+          query.includes("subject IN"),
+      ),
+    ).toBe(true);
 
     const analytics = await worker.fetch(
       request("/api/admin/article-analytics?days=30"),
