@@ -37,6 +37,8 @@ const mockAdminApis = async (page: Page) => {
           };
         case "/api/admin/operations":
           return { events: [] };
+        case "/api/admin/progress":
+          return { progress: [] };
         case "/api/admin/member-procedures":
           return { requests: [] };
         case "/api/admin/applications":
@@ -91,6 +93,7 @@ const pages = [
   ],
   ["問題報告", "admin/reports/", "問題報告"],
   ["運営メンバー管理", "admin/member-management/", "運営メンバー管理"],
+  ["運営メンバー統計", "admin/operations-statistics/", "運営メンバー統計"],
   ["メンバー情報の承認", "admin/profile-requests/", "メンバー情報の承認"],
   [
     "プロジェクトマイページ",
@@ -141,6 +144,35 @@ test("記事編集の未選択案内は作成済み記事と矛盾しない", as
     "保存状態：記事を選択してください",
   );
   await expect(page.locator("body")).not.toContainText("原稿を選んでください");
+});
+
+test("運営メンバー統計は共通のエラー状態から再試行できる", async ({ page }) => {
+  await mockAdminApis(page);
+  let genreRequests = 0;
+  await page.route("**/api/admin/genre-overviews*", async (route) => {
+    genreRequests += 1;
+    if (genreRequests === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "一時的に利用できません。" }),
+      });
+      return;
+    }
+    await route.fulfill({
+      json: { members: [], overviews: [] },
+    });
+  });
+  await page.goto("admin/operations-statistics/");
+  const root = page.locator("[data-operations-statistics]");
+  await expect(root).toHaveAttribute("aria-busy", "false");
+  const notice = root.locator("[data-admin-load-error]");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("一時的に利用できません。");
+  await notice.getByRole("button", { name: "再試行" }).click();
+  await expect(root.locator("[data-admin-empty-state]")).toBeVisible();
+  await expect(root).toHaveAttribute("data-admin-load-state", "empty");
+  expect(genreRequests).toBe(2);
 });
 
 test("作業の進め方に運営画面のスクリーンショットが表示される", async ({
