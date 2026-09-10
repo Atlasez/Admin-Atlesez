@@ -2139,9 +2139,11 @@ type AdminAuditAction =
   | "permission_granted"
   | "permission_replaced"
   | "permission_revoked"
-  | "member_removed";
+  | "member_removed"
+  | "task_archived"
+  | "task_restored";
 
-type AdminAuditTarget = "article" | "permission" | "member";
+type AdminAuditTarget = "article" | "permission" | "member" | "task";
 
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   article_created: "記事を作成",
@@ -2153,6 +2155,8 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   permission_replaced: "権限を変更",
   permission_revoked: "権限を削除",
   member_removed: "運営メンバーを削除",
+  task_archived: "タスクをアーカイブ",
+  task_restored: "タスクを復元",
 }[action] ?? action);
 
 const recordAdminAudit = async (
@@ -7438,7 +7442,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
          FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
          WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
            AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
-           AND t.status != 'done'
+           AND t.status != 'done' AND t.archived_at IS NULL
          ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
       )
         .bind(...projectIds, scope.email, scope.email)
@@ -7486,7 +7490,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            FROM editorial_tasks t
            JOIN atlasez_projects p ON p.id = t.project_id
            WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
-             AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done'
+             AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done' AND t.archived_at IS NULL
              AND t.due_at IS NOT NULL
              AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
            ORDER BY t.due_at ASC LIMIT 300`,
@@ -7637,13 +7641,14 @@ async function memberTasksOverview(
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   if (!projectIds.length) return json({ projects: [], tasks: [], members: [] });
+  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
   const placeholders = projectIds.map(() => "?").join(",");
   const [tasks, members] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
-        created_by,created_at,updated_at FROM editorial_tasks
-       WHERE project_id IN (${placeholders})
-       ORDER BY status='done',CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,
+        created_by,created_at,updated_at,archived_at,archived_by,archive_expires_at FROM editorial_tasks
+       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}
+       ORDER BY status='done',archived_at IS NOT NULL,CASE WHEN due_at IS NULL OR due_at='' THEN 1 ELSE 0 END,
         due_at ASC,updated_at DESC LIMIT 500`,
     )
       .bind(...projectIds)
@@ -9235,6 +9240,7 @@ async function operationsOverview(
   const projectRole = await operationProjectRole(env, scope, project.id);
   const canSeeAllProjectOperations =
     scope.allSubjects || projectRole === "manager";
+  const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
   const filters = canSeeAllProjectOperations
     ? ["project_id = ?"]
     : [
@@ -9247,7 +9253,9 @@ async function operationsOverview(
   const values: unknown[] = canSeeAllProjectOperations
     ? [project.id]
     : [project.id, scope.email, scope.email, scope.email, ...scope.subjects];
-  const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
+  const where = filters.length
+    ? ` WHERE ${filters.join(" AND ")}${includeArchived ? "" : " AND archived_at IS NULL"}`
+    : includeArchived ? "" : " WHERE archived_at IS NULL";
   const memberWhere = canSeeAllProjectOperations
     ? ""
     : ` WHERE subject = '*' OR subject IN (${scope.subjects.map(() => "?").join(",")})`;
@@ -9257,7 +9265,7 @@ async function operationsOverview(
   const [tasks, events, progress, members, availability, availabilityBlocks, availabilityRules] =
     await Promise.all([
       env.REPORTS.prepare(
-        `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at FROM editorial_tasks${where} ORDER BY status = 'done', CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
+        `SELECT id, project_id, subject, assignee_email, task_kind, title, details, status, due_at, due_timezone, reminder_at, reminder_repeat, reminder_email, created_by, created_at, updated_at, archived_at, archived_by, archive_expires_at FROM editorial_tasks${where} ORDER BY status = 'done', archived_at IS NOT NULL, CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at ASC, updated_at DESC LIMIT 200`,
       )
         .bind(...values)
         .all(),
@@ -9709,6 +9717,7 @@ async function updateTask(
     return json({ error: "この送信元からは受け付けられません。" }, 403);
   let payload: {
     status?: unknown;
+    archived?: unknown;
     reminderAction?: unknown;
     reminders?: unknown;
     reminderEmail?: unknown;
@@ -9720,15 +9729,19 @@ async function updateTask(
   }
   const requestedStatus =
     payload.status === undefined ? null : text(payload.status, 20);
+  const requestedArchived =
+    payload.archived === undefined ? null : payload.archived === true;
+  if (payload.archived !== undefined && typeof payload.archived !== "boolean")
+    return json({ error: "アーカイブ状態を確認してください。" }, 400);
   const reminderAction = text(payload.reminderAction, 30);
   if (requestedStatus !== null && !taskStatus.has(requestedStatus))
     return json({ error: "状態を確認してください。" }, 400);
   if (reminderAction && reminderAction !== "replace")
     return json({ error: "リマインダーの更新方法を確認してください。" }, 400);
-  if (requestedStatus === null && !reminderAction)
+  if (requestedStatus === null && requestedArchived === null && !reminderAction)
     return json({ error: "更新内容を指定してください。" }, 400);
   const task = await env.REPORTS.prepare(
-    "SELECT project_id,subject,assignee_email,task_kind,created_by,due_at,due_timezone FROM editorial_tasks WHERE id=?",
+    "SELECT project_id,subject,assignee_email,task_kind,title,created_by,due_at,due_timezone,status,archived_at FROM editorial_tasks WHERE id=?",
   )
     .bind(taskId)
     .first<{
@@ -9736,9 +9749,12 @@ async function updateTask(
       subject: string | null;
       assignee_email: string | null;
       task_kind: string;
+      title: string;
       created_by: string;
       due_at: string | null;
       due_timezone: string;
+      status: string;
+      archived_at: string | null;
     }>();
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
   const project = await resolveOperationProject(env, scope, task.project_id);
@@ -9750,6 +9766,30 @@ async function updateTask(
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
   const now = new Date().toISOString();
+  const effectiveStatus = requestedStatus ?? task.status;
+  if (requestedArchived === true && effectiveStatus !== "done")
+    return json({ error: "完了したタスクだけアーカイブできます。" }, 400);
+  const shouldUpdateArchive = requestedArchived !== null || requestedStatus !== null;
+  const archiveAt = requestedArchived === true || (requestedArchived === null && requestedStatus === "done" && task.archived_at)
+    ? (task.archived_at ?? now)
+    : null;
+  const archiveBy = archiveAt ? (task.archived_at ? null : scope.email) : null;
+  const archiveExpiresAt = archiveAt
+    ? new Date(new Date(archiveAt).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+  const taskStateStatement = shouldUpdateArchive
+    ? env.REPORTS.prepare(
+        "UPDATE editorial_tasks SET status=?,archived_at=?,archived_by=CASE WHEN ? IS NULL THEN NULL ELSE COALESCE(archived_by,?) END,archive_expires_at=?,updated_at=? WHERE id=?",
+      ).bind(
+        effectiveStatus,
+        archiveAt,
+        archiveAt,
+        archiveBy ?? scope.email,
+        archiveExpiresAt,
+        now,
+        taskId,
+      )
+    : null;
   if (reminderAction === "replace") {
     const reminderEmail = text(payload.reminderEmail, 254).toLowerCase();
     if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
@@ -9805,12 +9845,7 @@ async function updateTask(
         taskId,
       ),
     ];
-    if (requestedStatus !== null)
-      statements.push(
-        env.REPORTS.prepare(
-          "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
-        ).bind(requestedStatus, now, taskId),
-      );
+    if (taskStateStatement) statements.push(taskStateStatement);
     statements.push(
       ...reminderRows.map((reminder) =>
         env.REPORTS.prepare(
@@ -9833,14 +9868,22 @@ async function updateTask(
       ),
     );
     await env.REPORTS.batch(statements);
-  } else if (requestedStatus !== null) {
-    await env.REPORTS.prepare(
-      "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=?",
-    )
-      .bind(requestedStatus, now, taskId)
-      .run();
+  } else if (taskStateStatement) {
+    await taskStateStatement.run();
   }
-  return json({ ok: true });
+  if (requestedArchived !== null && requestedArchived !== Boolean(task.archived_at)) {
+    await recordAdminAudit(
+      env,
+      scope.email,
+      requestedArchived ? "task_archived" : "task_restored",
+      "task",
+      taskId,
+      task.title,
+      `${requestedArchived ? "タスクをアーカイブ" : "タスクを復元"}：${task.title}`,
+      { projectId: task.project_id, status: effectiveStatus },
+    );
+  }
+  return json({ ok: true, archived: Boolean(archiveAt) });
 }
 
 async function updateEventAvailability(
@@ -16745,7 +16788,7 @@ async function adminNotifications(
       `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
-         WHERE t.status != 'done' AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
+         WHERE t.status != 'done' AND t.archived_at IS NULL AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
          ORDER BY r.remind_at ASC LIMIT 50`,
     )
@@ -16767,7 +16810,7 @@ async function adminNotifications(
        FROM editorial_tasks t
        LEFT JOIN atlasez_projects p ON p.id=t.project_id
        LEFT JOIN editorial_feedback_task_links feedback_link ON feedback_link.task_id=t.id
-       WHERE t.status != 'done' AND ${
+       WHERE t.status != 'done' AND t.archived_at IS NULL AND ${
          scope.isManager
            ? "1=1"
            : `(lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))${
@@ -17909,6 +17952,33 @@ async function handleAdminRequest(
   return new Response("Not found", { status: 404 });
 }
 
+const COMPLETED_TASK_ARCHIVE_AFTER_DAYS = 30;
+const TASK_ARCHIVE_RETENTION_DAYS = 90;
+
+/** 完了から一定期間経ったタスクを監査可能なアーカイブへ退避する。 */
+async function archiveStaleCompletedTasks(env: Env) {
+  const now = new Date();
+  const cutoff = new Date(
+    now.getTime() - COMPLETED_TASK_ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const archivedAt = now.toISOString();
+  const expiresAt = new Date(
+    now.getTime() + TASK_ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  try {
+    await env.REPORTS.prepare(
+      `UPDATE editorial_tasks
+          SET archived_at=?,archived_by='system',archive_expires_at=?,updated_at=?
+        WHERE status='done' AND archived_at IS NULL AND updated_at<=?`,
+    )
+      .bind(archivedAt, expiresAt, archivedAt, cutoff)
+      .run();
+  } catch (error) {
+    // 移行前の環境でも他の定期処理を止めない。
+    console.warn("task archive sweep skipped", error);
+  }
+}
+
 export default {
   async fetch(
     request: Request,
@@ -17957,6 +18027,7 @@ export default {
         Promise.all([
           progressEditorialPublicationRuns(env),
           dispatchDueTaskReminders(env),
+          archiveStaleCompletedTasks(env),
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
           syncDiscordRolesToAdmin(env),
@@ -17973,6 +18044,7 @@ export default {
         syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
         dispatchDueTaskReminders(env),
+        archiveStaleCompletedTasks(env),
         dispatchApplicationEmails(env),
         dispatchPendingDiscordProvisioning(env),
         dispatchScheduledEditorialPublications(env),
