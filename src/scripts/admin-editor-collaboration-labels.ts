@@ -42,7 +42,6 @@ function installStyles(doc: Document): void {
 function initializeCollaborationLabels(): void {
   const root = document.querySelector<HTMLElement>("[data-editor-workspace]");
   const list = root?.querySelector<HTMLElement>("[data-collaboration-participants]");
-  const state = root?.querySelector<HTMLElement>("[data-collaboration-state]");
   if (!root || !list || list.dataset.clearCollaborationLabelsReady === "true") {
     return;
   }
@@ -91,12 +90,6 @@ function initializeCollaborationLabels(): void {
         chip.classList.remove("is-editing");
       }
 
-      // The editor's primary renderer counts socket-level participants. Always
-      // overwrite that value with the number of unique people actually shown.
-      const uniqueCount = list.children.length;
-      if (state && uniqueCount > 0) {
-        state.textContent = `同時編集：${uniqueCount}人が接続中`;
-      }
     } finally {
       updating = false;
     }

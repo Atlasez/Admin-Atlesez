@@ -2556,7 +2556,7 @@ test("共同編集の本文を低遅延で反映し、受信側から重複自�
     .toBeGreaterThanOrEqual(2);
   await expect(page.locator("[data-collaboration-status]")).toHaveAttribute(
     "data-state",
-    "connected",
+    "syncing",
   );
 
   await page.waitForTimeout(50);
@@ -2586,7 +2586,7 @@ test("共同編集の本文を低遅延で反映し、受信側から重複自�
     "Alice",
   );
   await expect(page.locator("[data-collaboration-state]")).toContainText(
-    "1人が接続中",
+    "同期中",
   );
 
   const source = new Y.Doc();
@@ -2619,6 +2619,10 @@ test("共同編集の本文を低遅延で反映し、受信側から重複自�
   });
   await expect(page.locator("[data-save-message]")).toContainText(
     "リアルタイム同期",
+  );
+  await expect(page.locator("[data-collaboration-status]")).toHaveAttribute(
+    "data-state",
+    "synced",
   );
   await page.waitForTimeout(2_200);
   expect(patchCount).toBe(0);
