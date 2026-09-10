@@ -166,6 +166,60 @@ test("運営内自己紹介一覧はプロジェクトの承認済み情報を�
   await expect(page.getByText("数学担当", { exact: true })).toBeVisible();
 });
 
+test("運営内自己紹介一覧は続きのメンバーをカーソルで追加表示できる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({ json: { email: "alice@example.com", isManager: false } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "山田 花子" } } }),
+  );
+  await page.route("**/api/admin/project-introductions?**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (requestUrl.searchParams.has("cursor")) {
+      await route.fulfill({
+        json: {
+          entries: [
+            {
+              display_name: "鈴木 次郎",
+              university: "東京大学",
+              assignments: ["数学担当"],
+            },
+          ],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        entries: [
+          {
+            display_name: "山田 花子",
+            university: "既存大学",
+            assignments: ["国語担当"],
+          },
+        ],
+        pagination: { hasMore: true, nextCursor: "cursor-token" },
+      },
+    });
+  });
+
+  await page.goto("admin/introductions/?project=atlas");
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "さらに読み込む" }).click();
+  await expect(page.getByRole("heading", { name: "鈴木 次郎" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeHidden();
+});
+
 test("プロジェクト運営は運営内自己紹介を承認・却下できる", async ({ page }) => {
   await page.route("**/api/admin/auth-status", (route) =>
     route.fulfill({
