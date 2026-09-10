@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { getCollection } from "astro:content";
 
 const subjects = (await getCollection("subjects"))
@@ -71,7 +72,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       </label>
       <label class="filter-control">
         <span>分野</span>
-        <select data-subject>
+        <select data-subject disabled aria-busy="true">
           <option value="all">すべての分野</option>
           {subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}
         </select>
@@ -138,7 +139,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <output data-count></output>
     </section>
     <p class="catalog-feedback" data-catalog-feedback role="status" aria-live="polite"></p>
-    <section class="list" data-list>原稿一覧を取得しています…</section>
+    <section class="list loading-state" data-list data-admin-load-surface>原稿一覧を取得しています…</section>
+    <p class="article-scope-note" data-scope-note role="status" aria-live="polite">担当範囲を確認しています…</p>
+    <AdminRetryNotice />
     <div class="article-pagination" data-article-pagination hidden>
       <span data-article-pagination-status aria-live="polite"></span>
       <button type="button" class="article-action" data-article-load-more>次の原稿を読み込む</button>
@@ -184,6 +187,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article-pagination { align-items: center; border-top: 1px solid var(--border-default); display: flex; gap: .75rem; justify-content: space-between; margin-top: 1rem; padding-top: .8rem; }
   .article-pagination[hidden] { display: none; }
   .article-pagination > span { color: var(--text-secondary); font-size: .76rem; }
+  .article-scope-note { color: var(--text-secondary); font-size: .76rem; margin: .65rem 0 0; min-height: 1.2rem; }
+  .article-scope-note::before { color: var(--accent-primary); content: "●"; font-size: .6rem; margin-right: .4rem; vertical-align: .08em; }
   .article-pagination button { min-height: 2.25rem; }
   .article-pagination button:disabled { cursor: wait; opacity: .65; }
   @media (max-width: 640px) { .article-pagination { align-items: stretch; flex-direction: column; } .article-pagination button { width: 100%; } }
@@ -629,6 +634,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   }
 </style>
 <script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
@@ -652,6 +658,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const archive = root.querySelector<HTMLSelectElement>("[data-archive]")!;
     const count = root.querySelector<HTMLOutputElement>("[data-count]")!;
     const catalogSummary = root.querySelector<HTMLElement>("[data-catalog-summary]")!;
+    const scopeNote = root.querySelector<HTMLElement>("[data-scope-note]")!;
     const catalogFeedback = root.querySelector<HTMLElement>("[data-catalog-feedback]")!;
     const catalogDiagnosticsButton = root.querySelector<HTMLButtonElement>("[data-run-catalog-diagnostics]")!;
     const catalogDiagnostics = root.querySelector<HTMLDetailsElement>("[data-catalog-diagnostics]")!;
@@ -661,6 +668,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const pagination = root.querySelector<HTMLElement>("[data-article-pagination]")!;
     const paginationStatus = root.querySelector<HTMLElement>("[data-article-pagination-status]")!;
     const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-article-load-more]")!;
+    const subjectOptions = [...subject.options].map((option) => ({ value: option.value, label: option.textContent ?? "", subjects: option.dataset.subjects }));
+    let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
     let catalogSource: "api" | "static" = "static";
@@ -668,6 +677,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
     let scopeEmail = "";
+    let articleScope: ArticleScope | null = null;
     let nextCursor: string | null = null;
     let hasMore = false;
     let loadedPageCount = 0;
@@ -753,22 +763,35 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }
     };
     const applySubjectScope = (scope: ArticleScope) => {
+      articleScope = scope;
       const directSubjects = Array.isArray(scope.subjects) ? scope.subjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const coordinatorSubjects = Array.isArray(scope.coordinatorSubjects) ? scope.coordinatorSubjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const unrestricted = Boolean(scope.allSubjects || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
+      const subjectLabels = new Map(subjectOptions.map((option) => [option.value, option.label]));
+      const requestedSubject = subject.value;
       if (unrestricted) {
-        for (const option of subject.options) {
-          option.hidden = false;
-          option.disabled = false;
-        }
+        subject.replaceChildren(...subjectOptions.map((option) => new Option(option.value === "all" ? "すべての分野（全権限）" : option.label, option.value)));
+        subject.value = subjectOptions.some((option) => option.value === requestedSubject) ? requestedSubject : "all";
+        subject.disabled = false;
+        subject.removeAttribute("aria-busy");
+        scopeNote.textContent = "担当範囲：全分野（管理権限）";
         return;
       }
       const allowedSubjects = new Set([...directSubjects, ...coordinatorSubjects]);
+      const scopedValues = [...allowedSubjects].filter((value) => subjectLabels.has(value));
+      const scopedOptions = scopedValues.map((value) => new Option(subjectLabels.get(value) ?? value, value));
+      const outOfScopeOptions = subjectOptions.filter((option) => option.value !== "all" && !allowedSubjects.has(option.value)).map((option) => new Option(option.label, option.value));
+      subject.replaceChildren(new Option(scopedOptions.length ? "すべての分野" : "担当分野がありません", "all"), ...scopedOptions, ...outOfScopeOptions);
       for (const option of subject.options) {
         const allowed = option.value === "all" || allowedSubjects.has(option.value);
         option.hidden = !allowed;
         option.disabled = !allowed;
       }
+      subject.disabled = false;
+      subject.removeAttribute("aria-busy");
+      subject.value = allowedSubjects.has(requestedSubject) ? requestedSubject : "all";
+      const scopeNames = scopedOptions.map((option) => option.textContent ?? option.value);
+      scopeNote.textContent = scopeNames.length ? `担当範囲：${scopeNames.join("、")}（${scopeNames.length}分野）` : "担当範囲：担当分野が登録されていません";
       if (subject.value !== "all" && !allowedSubjects.has(subject.value)) {
         subject.value = "all";
         category.value = "all";
@@ -784,7 +807,13 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       // show build-time catalog entries until the current API result is known.
       if (!catalogReady) return rows;
       const managedKeys = new Set(rows.flatMap((row) => row.publicArticle ? [publicArticleKey(row.publicArticle)] : []));
-      for (const publicArticle of publicArticles) {
+      const scopeAllowsSubject = (value: string) => {
+        if (!articleScope) return false;
+        if (articleScope.allSubjects || articleScope.isProjectLeader || (articleScope.subjects === undefined && articleScope.coordinatorSubjects === undefined)) return true;
+        const allowed = new Set([...(articleScope.subjects ?? []), ...(articleScope.coordinatorSubjects ?? [])]);
+        return allowed.has(value);
+      };
+      for (const publicArticle of publicArticles.filter((article) => scopeAllowsSubject(article.subject))) {
         const key = publicArticleKey(publicArticle);
         if (managedKeys.has(key)) continue;
         if (registeredPublicArticleIds.has(key)) rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key), management: "managed" });
@@ -804,6 +833,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       return Number.isFinite(updatedAt) && Number.isFinite(publishedAt) && updatedAt > publishedAt;
     };
     const render = () => {
+      list.classList.remove("loading-state", "error-state");
       saveFilterState();
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
@@ -917,6 +947,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       if (loadRequest) return loadRequest;
       const request = (async () => {
         try {
+          retry?.begin();
+          if (!append) list.classList.add("loading-state");
           const includeArchived = archive.value !== "active";
           if (!append) {
             nextCursor = null;
@@ -941,20 +973,26 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           hasMore = Boolean(data.pagination?.hasMore);
           loadedPageCount += 1;
           scopeEmail = data.scope?.email ?? "";
-          if (data.scope) applySubjectScope(data.scope);
+          if (!data.scope) throw new Error("担当範囲を確認できませんでした。ページを再読み込みしてください。");
+          applySubjectScope(data.scope);
           // Render the editorial rows immediately. The remote catalog is an
           // enrichment step and must not block the first useful screen.
           render();
           await catalogPromise;
           render();
+          retry?.success();
         } catch (error) {
+          list.classList.remove("loading-state");
+          list.classList.add("error-state");
           list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";
+          retry?.fail(error);
         }
       })();
       const wrapped = request.finally(() => { if (loadRequest === wrapped) loadRequest = null; });
       loadRequest = wrapped;
       return wrapped;
     };
+    retry = createAdminLoadRetry(root, () => load(), "原稿一覧を読み込めませんでした。");
     const setCatalogFeedback = (message: string, isError = false) => {
       catalogFeedback.textContent = message;
       catalogFeedback.classList.toggle("is-error", isError);

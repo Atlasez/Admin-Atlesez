@@ -38,9 +38,9 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       </a>
     </section>
 
-    <div class="portal-load-error error-state" data-portal-error role="alert" hidden>
-      <span data-portal-error-message>ポータル情報を読み込めませんでした。</span>
-      <button type="button" data-portal-retry>再試行</button>
+    <div class="portal-load-error error-state" data-portal-error data-admin-load-error role="alert" hidden>
+      <span data-portal-error-message data-admin-load-error-message>ポータル情報を読み込めませんでした。</span>
+      <button type="button" data-portal-retry data-admin-retry>再試行</button>
     </div>
 
     <section class="project-entry" aria-labelledby="projects-entry-heading">
@@ -476,6 +476,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   }
 </style>
 <script>
+  import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
   type PortalProject = { id: string; slug?: string; name: string; description?: string | null; role?: string };
   type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
@@ -503,6 +504,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     const memberProjectCount = root.querySelector<HTMLElement>('[data-project-count="member"]')!;
     const sourceInputs = [...root.querySelectorAll<HTMLInputElement>('[data-calendar-source]')];
     const lifecycle = new AbortController();
+    let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     document.addEventListener('astro:before-swap', () => lifecycle.abort(), { once: true, signal: lifecycle.signal });
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] ?? character);
     type PortalLanguage = 'ja' | 'en';
@@ -698,6 +700,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     };
     const loadPortal = async () => {
       if (lifecycle.signal.aborted) return;
+      retry?.begin();
       setLoadingState();
       portalRetry.disabled = true;
       portalRetry.textContent = '再試行中…';
@@ -719,8 +722,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         portalData = { ...data, ...notificationData };
         renderPortal(portalData);
         portalError.hidden = true;
+        retry?.success();
       } catch (error) {
-        if (!lifecycle.signal.aborted) setLoadError(error);
+        if (!lifecycle.signal.aborted) {
+          setLoadError(error);
+          retry?.fail(error);
+        }
       } finally {
         if (!lifecycle.signal.aborted) {
           portalRetry.disabled = false;
@@ -728,7 +735,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         }
       }
     };
-    portalRetry.addEventListener('click', () => { void loadPortal(); }, { signal: lifecycle.signal });
+    retry = createAdminLoadRetry(root, () => loadPortal(), 'ポータル情報を読み込めませんでした。');
     void loadPortal();
   };
   document.addEventListener('astro:page-load', initializePortal);

@@ -13,6 +13,10 @@ export const createAdminLoadRetry = (
     "[data-admin-load-error-message]",
   );
   const button = root.querySelector<HTMLButtonElement>("[data-admin-retry]");
+  const surface: Element =
+    root.querySelector<HTMLElement>("[data-admin-load-surface]") ??
+    notice?.parentElement ??
+    (root as Element);
   let retrying = false;
 
   if (!notice || !message || !button) {
@@ -25,17 +29,20 @@ export const createAdminLoadRetry = (
 
   const begin = () => {
     notice.hidden = true;
-    button.disabled = false;
+    button.disabled = true;
+    surface.setAttribute("aria-busy", "true");
   };
   const success = () => {
     notice.hidden = true;
     button.disabled = false;
+    surface.setAttribute("aria-busy", "false");
     retrying = false;
   };
   const fail = (error: unknown) => {
     message.textContent = messageFor(error, fallback);
     notice.hidden = false;
     button.disabled = false;
+    surface.setAttribute("aria-busy", "false");
     retrying = false;
   };
 
@@ -43,9 +50,11 @@ export const createAdminLoadRetry = (
     if (retrying) return;
     retrying = true;
     button.disabled = true;
+    surface.setAttribute("aria-busy", "true");
     message.textContent = "再試行中…";
     void load().catch(fail);
   });
 
+  begin();
   return { begin, success, fail };
 };
