@@ -18722,6 +18722,19 @@ async function handleAdminRequest(
   }
   if (url.pathname === "/api/admin/auth-status" && request.method === "GET")
     return adminAuthStatus(request, env);
+
+  // すべての管理APIは、個別ハンドラの処理へ入る前に共通の管理スコープを
+  // 解決する。各ハンドラはプロジェクト・分野・操作種別に応じた追加境界を
+  // 引き続き検証するが、ここで認証・基本的な管理権限のチェック漏れを防ぐ。
+  // auth-status と profile は、受入済みメンバー自身にも利用を許可する既存の
+  // 専用スコープを持つため、この共通ゲートの対象外とする。
+  if (
+    url.pathname.startsWith("/api/admin/") &&
+    url.pathname !== "/api/admin/profile"
+  ) {
+    const baselineScope = await getAdminScope(request, env);
+    if (isResponse(baselineScope)) return baselineScope;
+  }
   if (url.pathname === "/api/admin/notifications" && request.method === "GET")
     return adminNotifications(request, env);
   if (
