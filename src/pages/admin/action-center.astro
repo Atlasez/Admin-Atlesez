@@ -28,8 +28,22 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
     <AdminRetryNotice message="アクションを読み込めませんでした。" />
 
+    <div class="action-undo" data-action-undo hidden role="status" aria-live="polite">
+      <span data-action-undo-message></span>
+      <button type="button" class="item-action" data-action-undo-button>元に戻す</button>
+    </div>
+
     <section class="action-list" aria-labelledby="action-list-heading">
-      <div class="section-heading"><h2 id="action-list-heading" data-action-list-heading>対応が必要な項目</h2><span data-action-count>—</span></div>
+      <div class="section-heading">
+        <h2 id="action-list-heading" data-action-list-heading>対応が必要な項目</h2>
+        <div class="section-heading-actions"><label class="select-visible"><input type="checkbox" data-action-select-visible />表示中を選択</label><span data-action-count>—</span></div>
+      </div>
+      <div class="action-bulkbar" data-action-bulkbar hidden role="toolbar" aria-label="選択項目の一括操作">
+        <span data-action-selected-count>0件選択</span>
+        <select data-action-bulk-action aria-label="一括操作" disabled><option value="">一括操作…</option></select>
+        <button type="button" class="item-action" data-action-bulk-apply disabled>適用</button>
+        <button type="button" class="item-action" data-action-clear-selection>選択解除</button>
+      </div>
       <div class="action-items" data-action-items aria-live="polite"></div>
     </section>
   </main>
@@ -51,6 +65,15 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const updated = root.querySelector<HTMLOutputElement>("[data-action-updated]")!;
     const count = root.querySelector<HTMLElement>("[data-action-count]")!;
     const listHeading = root.querySelector<HTMLElement>("[data-action-list-heading]")!;
+    const selectVisible = root.querySelector<HTMLInputElement>("[data-action-select-visible]")!;
+    const bulkBar = root.querySelector<HTMLElement>("[data-action-bulkbar]")!;
+    const selectedCount = root.querySelector<HTMLElement>("[data-action-selected-count]")!;
+    const bulkAction = root.querySelector<HTMLSelectElement>("[data-action-bulk-action]")!;
+    const bulkApply = root.querySelector<HTMLButtonElement>("[data-action-bulk-apply]")!;
+    const clearSelection = root.querySelector<HTMLButtonElement>("[data-action-clear-selection]")!;
+    const undoBar = root.querySelector<HTMLElement>("[data-action-undo]")!;
+    const undoMessage = root.querySelector<HTMLElement>("[data-action-undo-message]")!;
+    const undoButton = root.querySelector<HTMLButtonElement>("[data-action-undo-button]")!;
     const savedView = root.querySelector<HTMLSelectElement>("[data-action-saved-view]")!;
     const saveViewButton = root.querySelector<HTMLButtonElement>("[data-action-save-view]")!;
     const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
@@ -61,6 +84,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const priorityLabels: Record<string, string> = { urgent: "今日対応", "due-soon": "期限間近", new: "新着" };
     const statusTone = (status: string) => status === "done" || status === "approved" || status === "published" || status === "accepted" ? "success" : status === "rejected" ? "danger" : status === "unread" || status === "open" || status === "pending" ? "attention" : "neutral";
     let payload: Payload = {};
+    const selected = new Map<string, Item>();
+    type UndoEntry = { action: Action; expectedUpdatedAt?: string };
+    let undoEntries: UndoEntry[] = [];
     // アクションセンターは、日常の作業に直結する未対応項目を初期表示する。
     // 完了済みを確認する場合は「完了・履歴」を明示的に選択する。
     let filter = "action";
@@ -90,11 +116,40 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         setFilter(filterMap[key ?? ""] ?? "all");
       }));
     };
+    const actionKey = (action: Action) => `${action.entityType}:${action.fromState}:${action.toState}:${action.label}`;
+    const renderBulkBar = () => {
+      const rows = filteredItems();
+      for (const id of [...selected.keys()]) if (!rows.some((item) => item.id === id)) selected.delete(id);
+      const selectedRows = rows.filter((item) => selected.has(item.id));
+      selectedCount.textContent = `${selectedRows.length}件選択`;
+      bulkBar.hidden = selectedRows.length === 0;
+      selectVisible.checked = rows.length > 0 && selectedRows.length === rows.length;
+      selectVisible.indeterminate = selectedRows.length > 0 && selectedRows.length < rows.length;
+      const common = new Map<string, { action: Action; count: number }>();
+      if (selectedRows.length) {
+        const first = selectedRows[0];
+        for (const action of first.actions ?? []) common.set(actionKey(action), { action, count: 1 });
+        for (const row of selectedRows.slice(1)) {
+          const keys = new Set((row.actions ?? []).map(actionKey));
+          for (const key of [...common.keys()]) {
+            const entry = common.get(key);
+            if (!entry || !keys.has(key)) common.delete(key);
+            else entry.count += 1;
+          }
+        }
+      }
+      const previous = bulkAction.value;
+      bulkAction.innerHTML = `<option value="">一括操作…</option>${[...common.values()].map(({ action }) => `<option value="${escape(actionKey(action))}">${escape(action.label)}（${selectedRows.length}件）</option>`).join("")}`;
+      bulkAction.value = [...common.keys()].includes(previous) ? previous : "";
+      bulkAction.disabled = common.size === 0;
+      bulkApply.disabled = !bulkAction.value || common.size === 0;
+    };
     const renderItems = () => {
       const rows = filteredItems();
       count.textContent = `${rows.length}件`;
       if (!rows.length) {
         itemsNode.innerHTML = `<div class="action-empty"><strong>${filter === "history" ? "完了・アーカイブ済みの項目はありません。" : "対応が必要な項目はありません。"}</strong><span>${filter === "history" ? "対応を完了するとここに表示されます。" : "新しい項目が追加されるとここに表示されます。"}</span></div>`;
+        renderBulkBar();
         return;
       }
       itemsNode.innerHTML = rows.map((item) => {
@@ -103,8 +158,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         const group = item.groupCount && item.groupCount > 1 ? `<span class="item-group">同じ通知 ${item.groupCount}件</span>` : "";
         const readButton = item.kind === "notification" && !item.read ? `<button type="button" class="item-read" data-read-notification='${escape(JSON.stringify(item.notificationIds ?? [item.id.replace(/^notification:/, "")]))}'>既読にする</button>` : "";
         const tone = statusTone(item.status);
+        const isSelected = selected.has(item.id);
         return `<article class="action-item priority-${escape(item.priority)} status-${tone} ${item.read ? "is-read" : "is-unread"}">
-          <div class="item-leading" aria-hidden="true"><span class="item-kind-icon">${escape(kindIcons[item.kind] ?? "・")}</span><span class="item-priority-dot"></span></div>
+          <div class="item-leading"><input class="item-select" type="checkbox" data-action-select="${escape(item.id)}" ${isSelected ? "checked" : ""} aria-label="${escape(item.title)}を選択" /><span class="item-kind-icon" aria-hidden="true">${escape(kindIcons[item.kind] ?? "・")}</span><span class="item-priority-dot" aria-hidden="true"></span></div>
           <div class="item-main"><div class="item-top"><span class="item-kind">${escape(kindLabels[item.kind] ?? item.kind)}</span><span class="item-status">${escape(statusLabels[item.status] ?? item.status)}</span>${priorityLabels[item.priority] ? `<span class="item-priority">${escape(priorityLabels[item.priority])}</span>` : ""}</div>
             <a class="item-title" href="${escape(item.href)}">${escape(item.title)}</a><p>${escape(item.detail)}</p>
             <div class="item-meta"><span>${escape(item.project ?? "")}</span>${item.subject ? `<span>${escape(item.subject)}</span>` : ""}<time datetime="${escape(item.updatedAt)}">${escape(formatTime(item.updatedAt))}</time>${due}${group}</div>
@@ -123,9 +179,17 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         try { ids = JSON.parse(button.dataset.readNotification ?? "[]") as string[]; } catch { ids = []; }
         void markRead(ids).catch(() => { button.textContent = "既読にできません"; });
       }));
+      itemsNode.querySelectorAll<HTMLInputElement>("[data-action-select]").forEach((checkbox) => checkbox.addEventListener("change", () => {
+        const item = rows.find((candidate) => candidate.id === checkbox.dataset.actionSelect);
+        if (!item) return;
+        if (checkbox.checked) selected.set(item.id, item); else selected.delete(item.id);
+        renderBulkBar();
+      }));
+      renderBulkBar();
     };
     const setFilter = (next: string) => {
       filter = next;
+      selected.clear();
       listHeading.textContent = filter === "history" ? "完了・アーカイブ済み" : "対応が必要な項目";
       root.querySelectorAll<HTMLButtonElement>("[data-action-filter]").forEach((button) => { const active = button.dataset.actionFilter === filter; button.classList.toggle("is-active", active); button.setAttribute("aria-pressed", String(active)); });
       renderItems();
@@ -178,16 +242,74 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       if (!response.ok) throw new Error("通知を既読にできませんでした。");
       await load();
     };
+    const postTransition = async (action: Action) => {
+      const response = await fetch("/api/admin/workflow/transition", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...action, idempotencyKey: crypto.randomUUID() }) });
+      const result = await response.json().catch(() => ({})) as { error?: string; transition?: { updatedAt?: string } };
+      if (!response.ok) throw new Error(result.error || "状態を変更できませんでした。");
+      return result;
+    };
+    const offerUndo = (entries: UndoEntry[]) => {
+      undoEntries = entries
+        .filter((entry) => entry.action.entityType === "task" && entry.action.toState === "done")
+        .map((entry) => ({
+          expectedUpdatedAt: entry.expectedUpdatedAt,
+          action: { ...entry.action, fromState: "done", toState: "open", label: "再開" },
+        }));
+      if (!undoEntries.length) { undoBar.hidden = true; return; }
+      undoMessage.textContent = `${undoEntries.length}件を完了にしました。`;
+      undoBar.hidden = false;
+    };
     const performTransition = async (action: Action, button: HTMLButtonElement) => {
       if (action.toState === "rejected" && !window.confirm("この項目を見送りますか？")) return;
       button.disabled = true;
       try {
-        const response = await fetch("/api/admin/workflow/transition", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...action, idempotencyKey: crypto.randomUUID() }) });
-        const result = await response.json().catch(() => ({})) as { error?: string };
-        if (!response.ok) throw new Error(result.error || "状態を変更できませんでした。");
+        const result = await postTransition(action);
+        offerUndo([{ action, expectedUpdatedAt: result.transition?.updatedAt }]);
         await load();
       } catch (transitionError) { button.disabled = false; button.textContent = transitionError instanceof Error ? transitionError.message : "変更失敗"; }
     };
+    bulkAction.addEventListener("change", () => { bulkApply.disabled = !bulkAction.value; });
+    clearSelection.addEventListener("click", () => { selected.clear(); renderItems(); });
+    selectVisible.addEventListener("change", () => {
+      const rows = filteredItems();
+      if (selectVisible.checked) rows.forEach((item) => selected.set(item.id, item)); else selected.clear();
+      renderItems();
+    });
+    bulkApply.addEventListener("click", async () => {
+      const rows = filteredItems().filter((item) => selected.has(item.id));
+      const key = bulkAction.value;
+      if (!key || !rows.length) return;
+      const actions = rows.map((item) => (item.actions ?? []).find((action) => actionKey(action) === key)).filter((action): action is Action => Boolean(action));
+      if (!actions.length) return;
+      if (actions.some((action) => action.toState === "rejected") && !window.confirm(`${actions.length}件を見送りますか？`)) return;
+      bulkApply.disabled = true;
+      const undo: UndoEntry[] = [];
+      let failed = 0;
+      for (const action of actions) {
+        try {
+          const result = await postTransition(action);
+          undo.push({ action, expectedUpdatedAt: result.transition?.updatedAt });
+        } catch { failed += 1; }
+      }
+      selected.clear();
+      offerUndo(undo);
+      await load();
+      if (failed) updated.value = `${failed}件は状態が変わっているため適用できませんでした。`;
+    });
+    undoButton.addEventListener("click", async () => {
+      if (!undoEntries.length || !window.confirm(`${undoEntries.length}件を元に戻しますか？`)) return;
+      undoButton.disabled = true;
+      const entries = [...undoEntries];
+      let failed = 0;
+      for (const entry of entries) {
+        try { await postTransition({ ...entry.action, expectedUpdatedAt: entry.expectedUpdatedAt }); } catch { failed += 1; }
+      }
+      undoEntries = [];
+      undoBar.hidden = true;
+      undoButton.disabled = false;
+      await load();
+      if (failed) updated.value = `${failed}件は最新状態が異なるため元に戻せませんでした。`;
+    });
     root.querySelectorAll<HTMLButtonElement>("[data-action-filter]").forEach((button) => button.addEventListener("click", () => setFilter(button.dataset.actionFilter ?? "all")));
     retryController = createAdminLoadRetry(root, () => load(), "アクションを読み込めませんでした。");
     refresh.addEventListener("click", () => void load());
@@ -228,10 +350,19 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .action-error[hidden] { display: none !important; }
   .action-error span { font-size: .75rem; }
   .action-error button { background: transparent; border: 1px solid var(--border-default); border-radius: .3rem; color: var(--text-primary); cursor: pointer; font: inherit; font-size: .7rem; padding: .35rem .6rem; }
+  .action-undo { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-strong); border-radius: .35rem; color: var(--text-secondary); display: flex; font-size: .74rem; gap: .7rem; justify-content: space-between; margin-top: .8rem; padding: .55rem .7rem; }
+  .action-undo[hidden], .action-bulkbar[hidden] { display: none !important; }
   .action-list { margin-top: 1rem; }
   .section-heading { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; justify-content: space-between; padding: .2rem 0 .65rem; }
   .section-heading h2 { font-size: 1rem; margin: 0; }
+  .section-heading-actions { align-items: center; display: flex; gap: .8rem; }
   .section-heading span { color: var(--text-secondary); font-size: .72rem; }
+  .select-visible { align-items: center; color: var(--text-secondary); display: inline-flex; font-size: .68rem; gap: .35rem; white-space: nowrap; }
+  .select-visible input, .item-select { accent-color: var(--accent-primary); block-size: 1rem; inline-size: 1rem; }
+  .action-bulkbar { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); display: flex; flex-wrap: wrap; gap: .5rem; margin: .6rem 0 .4rem; padding: .45rem .6rem; }
+  .action-bulkbar > span { color: var(--text-secondary); font-size: .7rem; font-weight: 700; margin-right: auto; }
+  .action-bulkbar select { background: var(--background-inset); border: 1px solid var(--border-default); border-radius: .35rem; color: var(--text-primary); font: inherit; font-size: .72rem; min-height: 2.2rem; padding: .35rem .55rem; }
+  .action-bulkbar select:focus-visible, .select-visible input:focus-visible, .item-select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .action-items { border-top: 0; display: grid; gap: 0; padding-top: .45rem; }
   .action-item { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .45rem; display: grid; gap: .8rem; grid-template-columns: 2rem minmax(0, 1fr) auto; min-width: 0; padding: .7rem .8rem; transition: background .16s ease, border-color .16s ease; }
   .action-item + .action-item { margin-top: .45rem; }

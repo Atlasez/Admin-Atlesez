@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function mockShell(page: Page, onTransition?: (body: unknown) => void) {
+async function mockShell(
+  page: Page,
+  onTransition?: (body: unknown) => void,
+  includeBulkTasks = false,
+) {
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/admin/auth-status") {
@@ -22,6 +26,77 @@ async function mockShell(page: Page, onTransition?: (body: unknown) => void) {
       return;
     }
     if (url.pathname === "/api/admin/action-center") {
+      const firstTask = {
+        id: "task:task-1",
+        kind: "task",
+        title: "定義を確認",
+        detail: "フィードバックを確認してください。",
+        href: "/admin/operations/?project=atlas",
+        status: "open",
+        priority: "urgent",
+        updatedAt: "2026-09-10T00:00:00.000Z",
+        dueAt: "2026-09-10T01:00:00.000Z",
+        project: "アトラス",
+        subject: "数学",
+        read: false,
+        actions: [
+          {
+            entityType: "task",
+            entityId: "task-1",
+            fromState: "open",
+            toState: "doing",
+            label: "着手",
+            expectedUpdatedAt: "2026-09-10T00:00:00.000Z",
+          },
+        ],
+      };
+      const bulkTask = {
+        ...firstTask,
+        id: "task:task-2",
+        title: "命題を確認",
+        status: "doing",
+        priority: "normal",
+        updatedAt: "2026-09-10T00:05:00.000Z",
+        dueAt: null,
+        actions: [
+          {
+            entityType: "task",
+            entityId: "task-2",
+            fromState: "doing",
+            toState: "done",
+            label: "完了",
+            expectedUpdatedAt: "2026-09-10T00:05:00.000Z",
+          },
+        ],
+      };
+      const notification = {
+        id: "notification:n-1",
+        kind: "notification",
+        title: "新しいコメント",
+        detail: "本文へのコメントがあります。",
+        href: "/admin/editor/?document=doc-1",
+        status: "unread",
+        priority: "new",
+        updatedAt: "2026-09-10T00:00:00.000Z",
+        dueAt: null,
+        project: null,
+        subject: null,
+        read: false,
+        notificationIds: ["n-1"],
+        actions: [],
+      };
+      const items = includeBulkTasks
+        ? [
+            {
+              ...bulkTask,
+              id: "task:task-1",
+              title: "定義を確認",
+              actions: [{ ...bulkTask.actions[0], entityId: "task-1" }],
+            },
+            bulkTask,
+            notification,
+          ]
+        : [firstTask, notification];
       await route.fulfill({
         json: {
           generatedAt: "2026-09-10T00:00:00.000Z",
@@ -32,48 +107,7 @@ async function mockShell(page: Page, onTransition?: (body: unknown) => void) {
             approvals: 0,
             assigned: 1,
           },
-          items: [
-            {
-              id: "task:task-1",
-              kind: "task",
-              title: "定義を確認",
-              detail: "フィードバックを確認してください。",
-              href: "/admin/operations/?project=atlas",
-              status: "open",
-              priority: "urgent",
-              updatedAt: "2026-09-10T00:00:00.000Z",
-              dueAt: "2026-09-10T01:00:00.000Z",
-              project: "アトラス",
-              subject: "数学",
-              read: false,
-              actions: [
-                {
-                  entityType: "task",
-                  entityId: "task-1",
-                  fromState: "open",
-                  toState: "doing",
-                  label: "着手",
-                  expectedUpdatedAt: "2026-09-10T00:00:00.000Z",
-                },
-              ],
-            },
-            {
-              id: "notification:n-1",
-              kind: "notification",
-              title: "新しいコメント",
-              detail: "本文へのコメントがあります。",
-              href: "/admin/editor/?document=doc-1",
-              status: "unread",
-              priority: "new",
-              updatedAt: "2026-09-10T00:00:00.000Z",
-              dueAt: null,
-              project: null,
-              subject: null,
-              read: false,
-              notificationIds: ["n-1"],
-              actions: [],
-            },
-          ],
+          items,
           history: [
             {
               id: "task:done-1",
@@ -97,7 +131,13 @@ async function mockShell(page: Page, onTransition?: (body: unknown) => void) {
     }
     if (url.pathname === "/api/admin/workflow/transition") {
       onTransition?.(route.request().postDataJSON());
-      await route.fulfill({ json: { ok: true, status: "doing" } });
+      await route.fulfill({
+        json: {
+          ok: true,
+          status: "doing",
+          transition: { updatedAt: "2026-09-10T02:00:00.000Z" },
+        },
+      });
       return;
     }
     if (url.pathname === "/api/admin/command-search") {
@@ -172,4 +212,36 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(dialog).toContainText("群の定義");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
+});
+
+test("選択したタスクを一括完了し、直後に元へ戻せる", async ({ page }) => {
+  const transitionBodies: Array<Record<string, unknown>> = [];
+  await mockShell(
+    page,
+    (body) => transitionBodies.push(body as Record<string, unknown>),
+    true,
+  );
+  await page.goto("admin/action-center/");
+  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(3);
+  await page.locator('[data-action-select="task:task-1"]').check();
+  await page.locator('[data-action-select="task:task-2"]').check();
+  await expect(page.locator("[data-action-bulkbar]")).toBeVisible();
+  await page
+    .locator("[data-action-bulk-action]")
+    .selectOption({ label: "完了（2件）" });
+  await page.getByRole("button", { name: "適用", exact: true }).click();
+  await expect(page.locator("[data-action-undo]")).toContainText(
+    "2件を完了にしました。",
+  );
+  expect(
+    transitionBodies.filter((body) => body.toState === "done"),
+  ).toHaveLength(2);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "元に戻す", exact: true }).click();
+  await expect(page.locator("[data-action-undo]")).toBeHidden();
+  expect(
+    transitionBodies.filter(
+      (body) => body.fromState === "done" && body.toState === "open",
+    ),
+  ).toHaveLength(2);
 });
