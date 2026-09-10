@@ -3,6 +3,7 @@ Total output lines: 3362
 
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { getCollection } from "astro:content";
 const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.data.order);
 ---
@@ -29,7 +30,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       <div class="permission-audit__list loading-state" data-permission-audit-list aria-live="polite">読み込み中…</div>
     </section>
 
-    <section class="member-admin__members" aria-labelledby="member-list-title">
+    <section class="member-admin__members" data-admin-load-surface aria-labelledby="member-list-title">
       <div class="member-admin__section-heading"><div><h2 id="member-list-title">参加者一覧</h2><small>参加者を選択すると、運営権限・プロフィール・Discord役職をまとめて編集できます。</small></div><span class="member-admin__count" data-member-count></span></div>
       <div class="member-toolbar" aria-label="参加者の検索と絞り込み">
         <label class="member-toolbar__search">参加者を検索<input type="search" data-member-search placeholder="名前・メールアドレスで検索" autocomplete="off" /></label>
@@ -38,7 +39,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         <span class="member-toolbar__summary" data-member-filter-summary aria-live="polite"></span>
       </div>
       <div class="member-list-heading" aria-hidden="true"><span>参加者</span><span>運営権限・登録情報</span><span>Discord</span><span>操作</span></div>
-      <div class="member-grid loading-state" data-member-list>読み込み中…</div>
+      <div class="member-grid loading-state" data-member-list>読み込み中…<span data-admin-load-skeleton hidden aria-hidden="true"></span></div>
+      <AdminRetryNotice scope="members" message="参加者一覧を読み込めませんでした。" />
       <div class="member-list-pagination" data-member-pagination hidden><span data-member-pagination-summary></span><button type="button" class="member-toolbar__reset" data-member-load-more>さらに読み込む</button></div>
     </section>
 
@@ -3325,6 +3327,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 
 <script>
     import { lockAdminForm } from "../../scripts/admin-form-submit-lock";
+    import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   const initializeMemberAdmin = () => {
   const root = document.querySelector<HTMLElement>("[data-member-admin]");
   if (root && root.dataset.initialized !== "true") {
@@ -3356,6 +3359,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     let memberNextCursor: string | null = null;
     let memberTotal = 0;
     let memberLoading = false;
+    let memberRetry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const memberModal = root.querySelector<HTMLDialogElement>("[data-member-modal]")!;
     const memberModalTitle = root.querySelector<HTMLElement>("[data-member-modal-title]")!;
     const memberModalEmail = root.querySelector<HTMLElement>("[data-member-modal-email]")!;
@@ -3531,6 +3535,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const load = async (append = false) => {
       if (memberLoading || (append && !memberNextCursor)) return;
       memberLoading = true;
+      memberRetry?.begin();
       root.setAttribute("aria-busy", "true");
       if (!append) list.innerHTML = '<p class="loading-state">参加者一覧を読み込んでいます…</p>';
       else memberLoadMore.disabled = true;
@@ -3544,6 +3549,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
           list.textContent = "このページは全分野管理者のみ利用できます。";
           form.hidden = true;
           workflowRoleForm.hidden = true;
+          memberRetry?.success();
           return;
         }
         if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。");
@@ -3567,12 +3573,21 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
         renderWorkflowRoles(workflowRoleRecords);
         memberPagination.hidden = !memberNextCursor;
         memberPaginationSummary.textContent = `${memberRecords.length} / ${memberTotal}名を読み込み済み`;
+        memberRetry?.setState(memberRecords.length ? "ready" : "empty");
+      } catch (error) {
+        if (!append) {
+          list.innerHTML = '<p class="admin-empty-state" data-admin-empty-state>参加者一覧を読み込めませんでした。</p>';
+          count.textContent = "—";
+          memberPagination.hidden = true;
+        }
+        memberRetry?.fail(error);
       } finally {
         memberLoading = false;
         memberLoadMore.disabled = false;
         root.removeAttribute("aria-busy");
       }
     };
+    memberRetry = createAdminLoadRetry(root, () => load(), "参加者一覧を読み込めませんでした。", { scope: "members" });
     memberLoadMore.addEventListener("click", () => { void load(true); });
     memberSearch.addEventListener("input", () => { memberQuery = memberSearch.value; render(filteredMembers()); });
     memberFilter.addEventListener("change", () => { memberViewFilter = memberFilter.value; render(filteredMembers()); });

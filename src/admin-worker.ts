@@ -1183,6 +1183,91 @@ async function getAdminScope(
   };
 }
 
+type AdminScopeRequirement = {
+  /** 全分野の管理権限（権限表の `*` または主管理者）を要求する。 */
+  requireGlobal?: boolean;
+  /** 指定プロジェクトへの所属を要求する。 */
+  projectId?: string;
+  /** プロジェクト内の運営内運営権限を要求する。 */
+  projectRole?: "manager";
+  /** 指定分野への担当権限を要求する。 */
+  subject?: string;
+  globalError?: string;
+  projectError?: string;
+  projectRoleError?: string;
+  subjectError?: string;
+};
+
+/**
+ * 管理APIの認証・分野・プロジェクト境界を一つの入口で検証する。
+ *
+ * 既存の読み取りAPIは `getAdminScope()` のまま全分野を返すものもあるが、
+ * 書き込みやプロジェクト固有のAPIはこのポリシー関数を使うことで、
+ * ページごとの判定漏れを防ぐ。レスポンス文言は既存API互換のため
+ * 呼び出し側から上書きできる。
+ */
+async function requireAdminScope(
+  request: Request,
+  env: Env,
+  requirements: AdminScopeRequirement = {},
+  preloadedScope?: AdminScope,
+): Promise<AdminScope | Response> {
+  const scope = preloadedScope ?? (await getAdminScope(request, env));
+  if (isResponse(scope)) return scope;
+
+  if (requirements.requireGlobal && !scope.allSubjects)
+    return json(
+      {
+        error:
+          requirements.globalError ??
+          "この操作は全分野管理者のみ利用できます。",
+      },
+      403,
+    );
+
+  if (requirements.projectId) {
+    const role = await operationProjectRole(
+      env,
+      scope,
+      requirements.projectId,
+    );
+    if (!role)
+      return json(
+        {
+          error:
+            requirements.projectError ??
+            "このプロジェクトのメンバーではありません。",
+        },
+        403,
+      );
+    if (requirements.projectRole === "manager" && role !== "manager")
+      return json(
+        {
+          error:
+            requirements.projectRoleError ??
+            "このプロジェクトの運営内運営のみ利用できます。",
+        },
+        403,
+      );
+  }
+
+  if (
+    requirements.subject &&
+    !scope.allSubjects &&
+    !scope.subjects.includes(requirements.subject)
+  )
+    return json(
+      {
+        error:
+          requirements.subjectError ??
+          "この分野を操作する権限がありません。",
+      },
+      403,
+    );
+
+  return scope;
+}
+
 const isResponse = <T>(value: T | Response): value is Response =>
   value instanceof Response;
 
@@ -1514,14 +1599,10 @@ async function getGlobalAdminScope(
   request: Request,
   env: Env,
 ): Promise<AdminScope | Response> {
-  const scope = await getAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  if (!scope.allSubjects)
-    return json(
-      { error: "担当分野の設定は全分野管理者のみ変更できます。" },
-      403,
-    );
-  return scope;
+  return requireAdminScope(request, env, {
+    requireGlobal: true,
+    globalError: "担当分野の設定は全分野管理者のみ変更できます。",
+  });
 }
 
 const isSameOrigin = (request: Request) => {
@@ -1637,7 +1718,7 @@ async function listArticleReports(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await requireAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const requested = new URL(request.url).searchParams.get("status") ?? "all";
   const status = REPORT_STATUSES.has(requested as ReportStatus)
@@ -1839,7 +1920,7 @@ async function updateArticleReport(
   env: Env,
   reportId: string,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await requireAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -1862,8 +1943,16 @@ async function updateArticleReport(
     .bind(reportId)
     .first<{ subject: string }>();
   if (!report) return json({ error: "報告が見つかりません。" }, 404);
-  if (!scope.allSubjects && !scope.subjects.includes(report.subject))
-    return json({ error: "この分野の報告を更新する権限がありません。" }, 403);
+  const reportScope = await requireAdminScope(
+    request,
+    env,
+    {
+      subject: report.subject,
+      subjectError: "この分野の報告を更新する権限がありません。",
+    },
+    scope,
+  );
+  if (isResponse(reportScope)) return reportScope;
   await env.REPORTS.prepare(
     `UPDATE article_reports SET status = ?, admin_note = ?, updated_at = ? WHERE id = ?`,
   )
@@ -5285,12 +5374,11 @@ async function getSecretariatReviewerScope(
   request: Request,
   env: Env,
 ): Promise<AdminScope | Response> {
-  const scope = await getAdminScope(request, env);
-  if (isResponse(scope)) return scope;
-  const role = await operationProjectRole(env, scope, "secretariat");
-  if (role !== "manager")
-    return json({ error: "運営事務局の承認担当者のみ利用できます。" }, 403);
-  return scope;
+  return requireAdminScope(request, env, {
+    projectId: "secretariat",
+    projectRole: "manager",
+    projectRoleError: "運営事務局の承認担当者のみ利用できます。",
+  });
 }
 
 /** プロジェクト単位のAPI境界。管理者でも、存在しないプロジェクトは開けない。 */
@@ -5334,13 +5422,14 @@ async function getProjectReviewerScope(
   await ensureAtlasMembership(env, scope);
   const project = await resolveOperationProject(env, scope, requestedProject);
   if (isResponse(project)) return project;
-  const role = await operationProjectRole(env, scope, project.id);
-  if (role !== "manager")
-    return json(
-      { error: "このプロジェクトの運営内運営のみ利用できます。" },
-      403,
-    );
-  return { scope, project };
+  const reviewerScope = await requireAdminScope(
+    request,
+    env,
+    { projectId: project.id, projectRole: "manager" },
+    scope,
+  );
+  if (isResponse(reviewerScope)) return reviewerScope;
+  return { scope: reviewerScope, project };
 }
 
 async function postDiscordWebhook(url: string | undefined, content: string) {

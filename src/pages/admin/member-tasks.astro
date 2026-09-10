@@ -418,12 +418,13 @@ const timezones = getTimeZoneOptions(new Date());
 </script>
 <style is:global>
   /*
-   * ブラックモードでは、このページに残る旧ライトテーマの値を
+   * 暗色・ブラックモードでは、このページに残る旧ライトテーマの値を
    * トークンへ戻す。タスク管理は過去のレイアウト調整で複数の
    * スタイルブロックを持つため、最後にテーマ専用の差分を置いて
    * 白い面が後勝ちしないようにする。
    */
-  [data-pref-mode="black"] .member-tasks {
+  html[data-pref-bg="dark"] .member-tasks,
+  html[data-pref-mode="black"] .member-tasks {
     --task-blue: var(--accent-primary);
     --task-blue-dark: var(--accent-hover);
     --task-navy: var(--text-primary);
@@ -433,7 +434,14 @@ const timezones = getTimeZoneOptions(new Date());
     background: var(--background-primary);
     color: var(--text-primary);
   }
-  [data-pref-mode="black"] .member-tasks :is(
+  html[data-pref-bg="dark"] .member-tasks :is(
+    section.create-task,
+    section.task-section,
+    .task,
+    .required-note,
+    .project-filters label
+  ),
+  html[data-pref-mode="black"] .member-tasks :is(
     section.create-task,
     section.task-section,
     .task,
@@ -443,23 +451,41 @@ const timezones = getTimeZoneOptions(new Date());
     background: var(--background-secondary);
     border-color: var(--border-default);
   }
-  [data-pref-mode="black"] .member-tasks section.create-task {
+  html[data-pref-bg="dark"] .member-tasks section.create-task,
+  html[data-pref-mode="black"] .member-tasks section.create-task {
     background: var(--background-inset);
   }
-  [data-pref-mode="black"] .member-tasks :is(input, select, textarea) {
+  html[data-pref-bg="dark"] .member-tasks :is(input, select, textarea),
+  html[data-pref-mode="black"] .member-tasks :is(input, select, textarea) {
     background: var(--background-primary);
     border-color: var(--border-default);
     color: var(--text-primary);
   }
-  [data-pref-mode="black"] .member-tasks .project-filters label:has(input:checked) {
+  html[data-pref-bg="dark"] .member-tasks .project-filters label:has(input:checked),
+  html[data-pref-mode="black"] .member-tasks .project-filters label:has(input:checked) {
     background: color-mix(in srgb, var(--accent-primary) 14%, var(--background-secondary));
   }
-  [data-pref-mode="black"] .member-tasks .badge {
+  html[data-pref-bg="dark"] .member-tasks .badge,
+  html[data-pref-mode="black"] .member-tasks .badge {
     background: var(--background-inset);
     border-color: var(--border-default);
     color: var(--text-secondary);
   }
-  [data-pref-mode="black"] .member-tasks :is(
+  html[data-pref-bg="dark"] .member-tasks :is(
+    .task-page-header p:not(.eyebrow),
+    .create-heading p,
+    .result-summary,
+    .actions output,
+    .filter-panel-heading span,
+    .required-note,
+    .task p,
+    .status-control > span,
+    .project-filters label,
+    .summary-card span,
+    .summary-card small,
+    label small
+  ),
+  html[data-pref-mode="black"] .member-tasks :is(
     .task-page-header p:not(.eyebrow),
     .create-heading p,
     .result-summary,
