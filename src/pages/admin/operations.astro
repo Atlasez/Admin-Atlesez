@@ -93,6 +93,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         </div>
         <div class="task-view-tools">
           <label><input type="checkbox" data-task-show-completed />完了済みを表示</label>
+          <label><input type="checkbox" data-task-show-archived />アーカイブ済みを表示</label>
           <span data-task-summary aria-live="polite"></span>
         </div>
         <div data-task-list aria-live="polite"></div>
@@ -1256,6 +1257,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .task-title { min-width: 0; }
   .task-title b { display: block; margin-top: .2rem; }
   .task-new { background: color-mix(in srgb, var(--accent-primary) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent-primary) 45%, transparent); border-radius: 999px; color: var(--accent-primary); display: inline-block; font-size: .62rem; font-weight: 800; letter-spacing: .02em; padding: .12rem .38rem; vertical-align: middle; }
+  .task-archived-label { background: color-mix(in srgb, var(--text-secondary) 12%, transparent); border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); display: inline-block; font-size: .62rem; font-weight: 700; padding: .12rem .38rem; vertical-align: middle; }
+  .task-archive-button { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-secondary); cursor: pointer; font-size: .7rem; margin-top: .65rem; padding: .3rem .55rem; }
+  .task-archive-button:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .task-workspace .task-item.is-archived { opacity: .62; }
   .task-meta { align-items: center; color: var(--text-secondary); display: flex; flex-wrap: wrap; font-size: .7rem; gap: .28rem .65rem; line-height: 1.45; margin-top: .62rem; }
   .task-meta > span + span::before { color: var(--text-muted); content: "·"; margin-right: .65rem; }
   .task-details { color: var(--text-secondary); font-size: .74rem; line-height: 1.55; margin: .62rem 0 0; white-space: pre-line; }
@@ -1299,6 +1304,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const progress = get<HTMLTextAreaElement>('[data-progress]');
     const tasks = get<HTMLElement>('[data-task-list]');
     const taskShowCompleted = get<HTMLInputElement>('[data-task-show-completed]');
+    const taskShowArchived = get<HTMLInputElement>('[data-task-show-archived]');
     const taskSummary = get<HTMLElement>('[data-task-summary]');
     const events = get<HTMLElement>('[data-event-list]');
     const reports = get<HTMLElement>('[data-progress-list]');
@@ -1616,7 +1622,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       renderProgressReports();
       const taskAssignedTo = (item: Record<string, any>) => { const assignee = String(item.assignee_email ?? '').trim().toLowerCase(), email = String(data.scope.email ?? '').toLowerCase(); return (item.task_kind === 'feedback' && assignee === '*') || assignee.split(',').map((value: string) => value.trim()).includes(email); };
       const taskKindLabel = (item: Record<string, any>) => item.task_kind === 'feedback' ? 'フィードバック依頼' : 'タスク依頼';
-      const allVisibleTasks = (data.tasks ?? []).filter((item) => taskFilter === 'all' || (taskFilter === 'assigned' ? taskAssignedTo(item) : item.created_by === data.scope.email));
+      const allVisibleTasks = (data.tasks ?? []).filter((item) => (taskShowArchived.checked || !item.archived_at) && (taskFilter === 'all' || (taskFilter === 'assigned' ? taskAssignedTo(item) : item.created_by === data.scope.email)));
       const visibleTasks = allVisibleTasks
         .filter((item) => taskShowCompleted.checked || item.status !== 'done')
         .sort((left, right) => {
@@ -1626,7 +1632,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           return Date.parse(String(right.created_at ?? '')) - Date.parse(String(left.created_at ?? ''));
         });
       const recentCutoff = Date.now() - 72 * 60 * 60 * 1000;
-      taskSummary.textContent = `${visibleTasks.length}件表示${allVisibleTasks.length !== visibleTasks.length ? `（完了済み${allVisibleTasks.length - visibleTasks.length}件を非表示）` : ''}`;
+      const archivedCount = (data.tasks ?? []).filter((item) => item.archived_at).length;
+      taskSummary.textContent = `${visibleTasks.length}件表示${allVisibleTasks.length !== visibleTasks.length ? `（完了済み${allVisibleTasks.length - visibleTasks.length}件を非表示）` : ''}${archivedCount && !taskShowArchived.checked ? `・アーカイブ${archivedCount}件` : ''}`;
       tasks.innerHTML = visibleTasks.map((item) => {
         const assigned = taskAssignedTo(item);
         const assignee = String(item.assignee_email ?? '').trim();
@@ -1635,7 +1642,13 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const isNew = Number.isFinite(createdAt) && createdAt >= recentCutoff;
         const editorMatch = String(item.details ?? '').match(/\/admin\/editor\/\?document=([0-9a-f-]{36})/i);
         const editorLink = editorMatch ? `<a class="task-open-editor" href="/admin/editor/?document=${escapeHtml(editorMatch[1])}">記事を開く →</a>` : '';
-        return `<article class="item task-item ${item.status === 'done' ? 'is-done' : ''}"><div class="task-row"><div class="task-title"><span class="task-kind-label">${escapeHtml(taskKindLabel(item))}</span>${isNew ? '<span class="task-new">新着</span>' : ''}<b>${escapeHtml(String(item.title ?? ''))}</b></div><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><div class="task-meta"><span class="task-role">${assigned ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span><span>${escapeHtml(String(item.subject || '全体'))}</span><span>担当：${escapeHtml(assigneeLabel)}</span>${item.created_by ? `<span>依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}</span>` : ''}${item.due_at ? `<span>期限：${escapeHtml(String(item.due_at).replace('T',' '))}</span>` : ''}${item.created_at ? `<span>受信：${escapeHtml(formatDate(String(item.created_at)))}</span>` : ''}</div>${item.details ? `<p class="task-details">${escapeHtml(String(item.details).replace(/\n\n記事編集画面:.*/, ''))}</p>` : ''}${editorLink}${taskReminderEditor(item)}</article>`;
+        const archived = Boolean(item.archived_at);
+        const archiveAction = archived
+          ? `<button type="button" class="task-archive-button" data-task-archive="${escapeHtml(String(item.id))}" data-archive-next="false">復元</button>`
+          : item.status === 'done'
+            ? `<button type="button" class="task-archive-button" data-task-archive="${escapeHtml(String(item.id))}" data-archive-next="true">アーカイブ</button>`
+            : '';
+        return `<article class="item task-item ${item.status === 'done' ? 'is-done' : ''} ${archived ? 'is-archived' : ''}"><div class="task-row"><div class="task-title"><span class="task-kind-label">${escapeHtml(taskKindLabel(item))}</span>${isNew ? '<span class="task-new">新着</span>' : ''}${archived ? '<span class="task-archived-label">アーカイブ済み</span>' : ''}<b>${escapeHtml(String(item.title ?? ''))}</b></div><select aria-label="${escapeHtml(String(item.title ?? 'タスク'))}の状態" data-task-status="${escapeHtml(String(item.id))}"><option value="open" ${item.status === 'open' ? 'selected' : ''}>未着手</option><option value="doing" ${item.status === 'doing' ? 'selected' : ''}>進行中</option><option value="done" ${item.status === 'done' ? 'selected' : ''}>完了</option></select></div><div class="task-meta"><span class="task-role">${assigned ? '自分がこなす' : item.created_by === data.scope.email ? '自分が依頼' : 'すべて'}</span><span>${escapeHtml(String(item.subject || '全体'))}</span><span>担当：${escapeHtml(assigneeLabel)}</span>${item.created_by ? `<span>依頼者：${escapeHtml(String(item.created_by === data.scope.email ? '自分' : item.created_by))}</span>` : ''}${item.due_at ? `<span>期限：${escapeHtml(String(item.due_at).replace('T',' '))}</span>` : ''}${item.created_at ? `<span>受信：${escapeHtml(formatDate(String(item.created_at)))}</span>` : ''}</div>${item.details ? `<p class="task-details">${escapeHtml(String(item.details).replace(/\n\n記事編集画面:.*/, ''))}</p>` : ''}${editorLink}${archiveAction}${taskReminderEditor(item)}</article>`;
       }).join('') || '<p class="task-empty">この条件に未対応のタスクはありません。</p>';
       tasks.querySelectorAll('small').forEach((small) => {
         small.childNodes.forEach((node) => {
@@ -1657,7 +1670,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLElement>('[data-block-list]').innerHTML = ruleItems + blockItems || '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { retry?.begin(); data = memberPage ? await api<OperationData>('/api/admin/member-calendar') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}`); render(); retry?.success(); };
+    const load = async () => { retry?.begin(); data = memberPage ? await api<OperationData>('/api/admin/member-calendar') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}`); render(); retry?.success(); };
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
     let activeAvailabilityTrigger: HTMLButtonElement | null = null;
     const closeAvailabilityPopover = (restoreFocus = false) => {
@@ -1725,6 +1738,17 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     get<HTMLButtonElement>('[data-create-event]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, eventFeedback, async () => { const eventTimezone = get<HTMLInputElement>('[data-event-timezone]').value || 'Asia/Tokyo'; await api('/api/admin/operations/events', 'POST', { projectId, title: get<HTMLInputElement>('[data-event-title]').value, startsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-event-start]').value, eventTimezone), endsAt: localDateTimeToInstant(get<HTMLInputElement>('[data-event-end]').value, eventTimezone), details: get<HTMLInputElement>('[data-event-details]').value, timezone: eventTimezone }); }, '日程を追加しました。'); });
     root.querySelectorAll<HTMLButtonElement>('[data-task-filter]').forEach((button) => button.addEventListener('click', () => { taskFilter = (button.dataset.taskFilter as typeof taskFilter) || 'assigned'; root.querySelectorAll<HTMLButtonElement>('[data-task-filter]').forEach((item) => { const active = item === button; item.classList.toggle('is-selected', active); item.setAttribute('aria-pressed', String(active)); }); render(); }));
     taskShowCompleted.addEventListener('change', () => render());
+    taskShowArchived.addEventListener('change', () => void load());
+    tasks.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-task-archive]');
+      if (!button) return;
+      const archive = button.dataset.archiveNext === 'true';
+      if (archive && !window.confirm('完了タスクを一覧からアーカイブします。監査履歴は保持されます。')) return;
+      button.disabled = true;
+      void api(`/api/admin/operations/tasks/${encodeURIComponent(button.dataset.taskArchive || '')}`, 'PATCH', { archived: archive })
+        .then(() => load())
+        .catch((error) => { taskListFeedback.value = error instanceof Error ? error.message : 'タスクを更新できませんでした。'; button.disabled = false; });
+    });
     createBlockButton.addEventListener('click', (event) => {
       const button = event.currentTarget as HTMLButtonElement;
       void runButtonAction(button, blockFeedback, async () => {

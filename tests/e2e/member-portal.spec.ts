@@ -126,7 +126,7 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
       .status;
     await route.fulfill({ json: { ok: true } });
   });
-  await page.route("**/api/admin/member-tasks", (route) =>
+  await page.route("**/api/admin/member-tasks**", (route) =>
     route.fulfill({
       json: {
         scope: { email: "manager@example.com" },
@@ -183,6 +183,57 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
   await firstTask.getByRole("button", { name: "状態を保存" }).click();
   await updateRequest;
   expect(updatedStatus).toBe("done");
+});
+
+test("完了タスクをアーカイブし、必要なときに復元できる", async ({ page }) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  let archived = false;
+  await page.route("**/api/admin/operations/tasks/*", async (route) => {
+    const body = route.request().postDataJSON() as { archived?: boolean };
+    archived = body.archived === true;
+    await route.fulfill({ json: { ok: true, archived } });
+  });
+  await page.route("**/api/admin/member-tasks**", async (route) => {
+    const includeArchived =
+      new URL(route.request().url()).searchParams.get("includeArchived") ===
+      "1";
+    await route.fulfill({
+      json: {
+        scope: { email: "manager@example.com" },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        members: [],
+        tasks:
+          includeArchived || !archived
+            ? [
+                {
+                  id: "done-1",
+                  project_id: "atlas",
+                  title: "完了済みタスク",
+                  status: "done",
+                  created_by: "manager@example.com",
+                  assignee_email: "manager@example.com",
+                  ...(archived
+                    ? { archived_at: "2026-09-01T00:00:00.000Z" }
+                    : {}),
+                },
+              ]
+            : [],
+      },
+    });
+  });
+  await page.goto("admin/member-tasks/");
+  const task = page.locator(".task").filter({ hasText: "完了済みタスク" });
+  await expect(task.getByRole("button", { name: "アーカイブ" })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await task.getByRole("button", { name: "アーカイブ" }).click();
+  await expect(page.getByText("完了済みタスク")).toHaveCount(0);
+  await page.getByLabel("アーカイブ済みを表示").check();
+  await expect(page.getByText("アーカイブ済み")).toBeVisible();
+  await page.getByRole("button", { name: "復元" }).click();
+  expect(archived).toBe(false);
 });
 
 test("横断カレンダーでプロジェクト日程と参加可否を扱える", async ({ page }) => {
