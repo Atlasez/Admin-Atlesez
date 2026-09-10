@@ -84,6 +84,43 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("counts pending project profile approvals across projects", async () => {
+    const queries: string[] = [];
+    const portalEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("editorial_member_profile_change_requests"))
+              return { count: 0 } as T;
+            if (query.includes("editorial_project_profile_change_requests"))
+              return { count: 2 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/portal"),
+      portalEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      pendingApprovals: 2,
+    });
+    expect(
+      queries.find((query) =>
+        query.includes("editorial_project_profile_change_requests"),
+      ),
+    ).not.toContain("project_id='atlas'");
+  });
+
   it("interprets datetime-local publication schedules as Japan time", () => {
     expect(scheduledPublicationEpoch("2026-09-01T12:00")).toBe(
       Date.parse("2026-09-01T03:00:00.000Z"),

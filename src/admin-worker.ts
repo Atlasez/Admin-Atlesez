@@ -7813,19 +7813,19 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
 }
 
 const countPendingProfileApprovals = async (env: Env) => {
-  const [memberRequests, atlasRequests] = await Promise.all([
+  const [memberRequests, projectRequests] = await Promise.all([
     env.REPORTS.prepare(
       "SELECT COUNT(*) AS count FROM editorial_member_profile_change_requests WHERE status='pending'",
     ).first<{ count: number }>(),
     env.REPORTS.prepare(
-      "SELECT COUNT(*) AS count FROM editorial_project_profile_change_requests WHERE project_id='atlas' AND status='pending'",
+      "SELECT COUNT(*) AS count FROM editorial_project_profile_change_requests WHERE status='pending'",
     ).first<{ count: number }>(),
   ]);
   const normalizeCount = (value: unknown) => {
     const count = Number(value ?? 0);
     return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
   };
-  return normalizeCount(memberRequests?.count) + normalizeCount(atlasRequests?.count);
+  return normalizeCount(memberRequests?.count) + normalizeCount(projectRequests?.count);
 };
 
 type WorkflowSummary = {
