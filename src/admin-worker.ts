@@ -8147,6 +8147,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const now = Date.now();
+  // 初期表示は未対応項目だけを返し、完了履歴は明示的に選択されたときだけ取得する。
+  // 履歴は5種類のテーブルを横断するため、毎回同時取得すると件数が少なくても待ち時間が増える。
+  const historyOnly = new URL(request.url).searchParams.get("view") === "history";
   const secretariatRole = scope.isManager ? "manager" : await operationProjectRole(env, scope, "secretariat");
   const canReviewApplications = scope.isManager || secretariatRole === "manager";
   const projectRows = scope.isManager
@@ -8171,7 +8174,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     ? [...projectIds, ...(scope.isManager ? [] : [scope.email, scope.email, scope.email])]
     : [];
   const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary] = await Promise.all([
-    env.REPORTS.prepare(
+    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
               COALESCE(p.name,t.project_id) AS project_name
          FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
@@ -8181,7 +8184,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
       status: string; due_at: string | null; updated_at: string; project_name: string;
     }>(),
-    env.REPORTS.prepare(
+    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string; scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string }> }) : env.REPORTS.prepare(
       `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
          FROM editorial_documents d
@@ -8200,28 +8203,28 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
     }> })),
-    canReviewApplications
+    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }) : canReviewApplications
       ? env.REPORTS.prepare(
           `SELECT id,name,email,project_slug,status,created_at,updated_at FROM atlasez_member_applications
             WHERE status IN ('new','reviewing') ORDER BY created_at DESC LIMIT 80`,
         ).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }),
-    scope.isManager || secretariatRole === "manager"
+    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }) : scope.isManager || secretariatRole === "manager"
       ? env.REPORTS.prepare(
           `SELECT r.id,r.email,r.proposed_display_name AS display_name,r.submitted_at,r.status
              FROM editorial_member_profile_change_requests r WHERE r.status='pending'
             ORDER BY r.submitted_at DESC LIMIT 50`,
         ).all<{ id: string; email: string; display_name: string; submitted_at: string; status: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }),
-    scope.isManager || secretariatRole === "manager"
+    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }) : scope.isManager || secretariatRole === "manager"
       ? env.REPORTS.prepare(
           `SELECT r.id,r.email,r.project_id,r.submitted_at,r.status
              FROM editorial_project_profile_change_requests r WHERE r.status='pending'
             ORDER BY r.submitted_at DESC LIMIT 50`,
         ).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
-    adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env),
-    env.REPORTS.prepare(
+    historyOnly ? Promise.resolve(json({ notifications: [], unreadNotificationsCount: 0 })) : adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env),
+    historyOnly ? env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,t.archived_at,
               COALESCE(p.name,t.project_id) AS project_name
          FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
@@ -8230,8 +8233,8 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     ).bind(...taskBindings).all<{
       id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
       status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string;
-    }>(),
-    env.REPORTS.prepare(
+    }>() : Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string }> }),
+    historyOnly ? env.REPORTS.prepare(
       `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
          FROM editorial_documents d
@@ -8243,26 +8246,29 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     }>().catch(() => ({ results: [] as Array<{
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
-    }> })),
-    canReviewApplications
+    }> })) : Promise.resolve({ results: [] as Array<{ id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string; scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string }> }),
+    historyOnly ? canReviewApplications
       ? env.REPORTS.prepare(
           `SELECT id,name,email,project_slug,status,created_at,updated_at FROM atlasez_member_applications
             WHERE status IN ('accepted','rejected') ORDER BY updated_at DESC LIMIT 50`,
         ).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> })
       : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }),
-    scope.isManager || secretariatRole === "manager"
+    historyOnly ? scope.isManager || secretariatRole === "manager"
       ? env.REPORTS.prepare(
           `SELECT r.id,r.email,r.proposed_display_name AS display_name,r.submitted_at,r.status
              FROM editorial_member_profile_change_requests r WHERE r.status IN ('approved','rejected')
             ORDER BY r.submitted_at DESC LIMIT 50`,
         ).all<{ id: string; email: string; display_name: string; submitted_at: string; status: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> })
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }),
-    scope.isManager || secretariatRole === "manager"
+    historyOnly ? scope.isManager || secretariatRole === "manager"
       ? env.REPORTS.prepare(
           `SELECT r.id,r.email,r.project_id,r.submitted_at,r.status
              FROM editorial_project_profile_change_requests r WHERE r.status IN ('approved','rejected')
             ORDER BY r.submitted_at DESC LIMIT 50`,
         ).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>()
+      : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> })
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
     workflowSummaryPromise,
   ]);
@@ -8417,6 +8423,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   sortItems(items);
   sortItems(history);
   return json({
+    view: historyOnly ? "history" : "action",
     generatedAt: new Date().toISOString(),
     items,
     history: history.slice(0, 100),

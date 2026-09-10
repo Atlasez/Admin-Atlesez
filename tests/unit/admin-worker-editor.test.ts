@@ -151,6 +151,72 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("loads action-center history queries only for the history view", async () => {
+    const actionQueries: string[] = [];
+    const actionEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          actionQueries.push(query);
+          return new EmptyStatement(query);
+        },
+      },
+    };
+    const actionResponse = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionEnv as never,
+    );
+    expect(actionResponse.status).toBe(200);
+    await expect(actionResponse.json()).resolves.toMatchObject({
+      view: "action",
+    });
+    expect(
+      actionQueries.some((query) =>
+        query.includes("t.status='done' OR t.archived_at IS NOT NULL"),
+      ),
+    ).toBe(false);
+    expect(
+      actionQueries.some((query) =>
+        query.includes(
+          "d.archived_at IS NOT NULL OR d.published_at IS NOT NULL",
+        ),
+      ),
+    ).toBe(false);
+
+    const historyQueries: string[] = [];
+    const historyEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          historyQueries.push(query);
+          return new EmptyStatement(query);
+        },
+      },
+    };
+    const historyResponse = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center?view=history"),
+      historyEnv as never,
+    );
+    expect(historyResponse.status).toBe(200);
+    await expect(historyResponse.json()).resolves.toMatchObject({
+      view: "history",
+    });
+    expect(
+      historyQueries.some((query) =>
+        query.includes("t.status='done' OR t.archived_at IS NOT NULL"),
+      ),
+    ).toBe(true);
+    expect(
+      historyQueries.some((query) =>
+        query.includes(
+          "d.archived_at IS NOT NULL OR d.published_at IS NOT NULL",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   it("interprets datetime-local publication schedules as Japan time", () => {
     expect(scheduledPublicationEpoch("2026-09-01T12:00")).toBe(
       Date.parse("2026-09-01T03:00:00.000Z"),
