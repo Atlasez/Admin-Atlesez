@@ -416,6 +416,66 @@ const timezones = getTimeZoneOptions(new Date());
     list.addEventListener('click',async event=>{const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-save-status]');if(!button)return;const id=button.dataset.saveStatus??'',status=list.querySelector<HTMLSelectElement>(`[data-task-status="${CSS.escape(id)}"]`)?.value;button.disabled=true;const response=await fetch(`/api/admin/operations/tasks/${encodeURIComponent(id)}`,{method:'PATCH',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({status})}),result=await response.json() as {error?:string};message.value=response.ok?'状態を更新しました。':result.error??'更新できませんでした。';button.disabled=false;if(response.ok)await load()});
     void load().catch(error=>message.value=error instanceof Error?error.message:'読み込めませんでした。')};document.addEventListener('astro:page-load',initialize);initialize();
 </script>
+<style is:global>
+  /*
+   * ブラックモードでは、このページに残る旧ライトテーマの値を
+   * トークンへ戻す。タスク管理は過去のレイアウト調整で複数の
+   * スタイルブロックを持つため、最後にテーマ専用の差分を置いて
+   * 白い面が後勝ちしないようにする。
+   */
+  [data-pref-mode="black"] .member-tasks {
+    --task-blue: var(--accent-primary);
+    --task-blue-dark: var(--accent-hover);
+    --task-navy: var(--text-primary);
+    --task-border: var(--border-default);
+    --task-soft: var(--background-secondary);
+    --task-card-bg: var(--background-secondary);
+    background: var(--background-primary);
+    color: var(--text-primary);
+  }
+  [data-pref-mode="black"] .member-tasks :is(
+    section.create-task,
+    section.task-section,
+    .task,
+    .required-note,
+    .project-filters label
+  ) {
+    background: var(--background-secondary);
+    border-color: var(--border-default);
+  }
+  [data-pref-mode="black"] .member-tasks section.create-task {
+    background: var(--background-inset);
+  }
+  [data-pref-mode="black"] .member-tasks :is(input, select, textarea) {
+    background: var(--background-primary);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+  }
+  [data-pref-mode="black"] .member-tasks .project-filters label:has(input:checked) {
+    background: color-mix(in srgb, var(--accent-primary) 14%, var(--background-secondary));
+  }
+  [data-pref-mode="black"] .member-tasks .badge {
+    background: var(--background-inset);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
+  }
+  [data-pref-mode="black"] .member-tasks :is(
+    .task-page-header p:not(.eyebrow),
+    .create-heading p,
+    .result-summary,
+    .actions output,
+    .filter-panel-heading span,
+    .required-note,
+    .task p,
+    .status-control > span,
+    .project-filters label,
+    .summary-card span,
+    .summary-card small,
+    label small
+  ) {
+    color: var(--text-secondary);
+  }
+</style>
 <script>
   (() => {
     const attachTaskFinder = () => {
