@@ -7839,21 +7839,47 @@ async function memberCalendarOverview(
   await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+    : 200;
+  let eventCursor: { startsAt: string; id: string } | null = null;
+  const rawEventCursor = searchParams.get("cursor");
+  if (rawEventCursor) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(rawEventCursor)) as {
+        startsAt?: unknown;
+        id?: unknown;
+      };
+      if (typeof parsed.startsAt === "string" && typeof parsed.id === "string" && parsed.startsAt && parsed.id)
+        eventCursor = { startsAt: parsed.startsAt, id: parsed.id };
+    } catch {
+      eventCursor = null;
+    }
+  }
   if (!projectIds.length)
     return json({
       scope: { email: scope.email, isManager: false },
       projects: [],
       events: [],
+      eventPagination: { limit: pageLimit, nextCursor: null, hasMore: false },
       availabilityBlocks: [],
     });
   const placeholders = projectIds.map(() => "?").join(",");
+  const eventCursorCondition = eventCursor
+    ? " AND (starts_at > ? OR (starts_at = ? AND id > ?))"
+    : "";
+  const eventValues = eventCursor
+    ? [...projectIds, eventCursor.startsAt, eventCursor.startsAt, eventCursor.id]
+    : projectIds;
   const [events, availability, availabilityBlocks, availabilityRules] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,title,details,starts_at,ends_at,timezone,created_by,created_at
-       FROM editorial_events WHERE project_id IN (${placeholders})
-       ORDER BY starts_at ASC LIMIT 600`,
+       FROM editorial_events WHERE project_id IN (${placeholders})${eventCursorCondition}
+       ORDER BY starts_at ASC,id ASC LIMIT ?`,
     )
-      .bind(...projectIds)
+      .bind(...eventValues, pageLimit + 1)
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT a.event_id,a.email,a.availability,
@@ -7891,6 +7917,13 @@ async function memberCalendarOverview(
       .bind(scope.email)
       .all<Record<string, unknown>>(),
   ]);
+  const fetchedEvents = events.results ?? [];
+  const hasMoreEvents = fetchedEvents.length > pageLimit;
+  const eventRows = fetchedEvents.slice(0, pageLimit);
+  const lastEvent = eventRows.at(-1);
+  const nextEventCursor = hasMoreEvents && lastEvent
+    ? encodeURIComponent(JSON.stringify({ startsAt: String(lastEvent.starts_at ?? ""), id: String(lastEvent.id ?? "") }))
+    : null;
   const participantsByEvent = new Map<
     string,
     Array<{ email: string; availability: string; display_name: string }>
@@ -7913,7 +7946,7 @@ async function memberCalendarOverview(
       isSelf: String(rule.email ?? "").toLowerCase() === scope.email.toLowerCase(),
     })),
     projects,
-    events: (events.results ?? []).map((event) => {
+    events: eventRows.map((event) => {
       const participants = participantsByEvent.get(String(event.id)) ?? [];
       return {
         ...event,
@@ -7937,6 +7970,7 @@ async function memberCalendarOverview(
         })),
       };
     }),
+    eventPagination: { limit: pageLimit, nextCursor: nextEventCursor, hasMore: hasMoreEvents },
   });
 }
 

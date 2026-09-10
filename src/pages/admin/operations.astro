@@ -308,6 +308,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           aria-live="polite"
         ></output>
         <div data-event-list aria-live="polite"></div>
+        <div class="event-pagination" data-event-pagination hidden>
+          <span data-event-pagination-summary></span>
+          <button type="button" data-event-load-more>さらに予定を読み込む</button>
+        </div>
         <details class="availability-blocks" data-block-editor>
           <summary>自分の可否期間を登録</summary>
           <p>
@@ -1277,6 +1281,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .task-pagination button { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); cursor: pointer; font-size: .72rem; padding: .45rem .7rem; }
   .task-pagination button:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--accent-primary); }
   .task-pagination button:disabled { cursor: wait; opacity: .6; }
+  .event-pagination { align-items: center; display: flex; gap: .7rem; justify-content: center; margin: .9rem 0; }
+  .event-pagination[hidden] { display: none; }
+  .event-pagination span { color: var(--text-secondary); font-size: .72rem; font-variant-numeric: tabular-nums; }
+  .event-pagination button { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); cursor: pointer; font-size: .72rem; padding: .45rem .7rem; }
+  .event-pagination button:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .event-pagination button:disabled { cursor: wait; opacity: .6; }
   .task-workspace .task-row b { font-size: .88rem; letter-spacing: -.01em; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
   .task-workspace .task-row select { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); flex: 0 0 auto; font-size: .72rem; min-width: 5.8rem; padding: .38rem .45rem; }
   .task-workspace .item > small { color: var(--text-secondary); display: block; font-size: .72rem; line-height: 1.55; margin-top: .58rem; overflow-wrap: anywhere; }
@@ -1305,7 +1315,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
   type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
   type AvailabilityRule = { id: string; email?: string; display_name?: string; weekday: number; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
-  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
+  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; eventPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
   const initializeOperations = () => {
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -1320,6 +1330,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const taskShowArchived = get<HTMLInputElement>('[data-task-show-archived]');
     const taskSummary = get<HTMLElement>('[data-task-summary]');
     const events = get<HTMLElement>('[data-event-list]');
+    const eventPagination = get<HTMLElement>('[data-event-pagination]');
+    const eventPaginationSummary = get<HTMLElement>('[data-event-pagination-summary]');
+    const eventLoadMore = get<HTMLButtonElement>('[data-event-load-more]');
     const reports = get<HTMLElement>('[data-progress-list]');
     const progressSubject = get<HTMLSelectElement>('[data-progress-subject]');
     const progressProjectFilter = get<HTMLSelectElement>('[data-progress-project-filter]');
@@ -1369,6 +1382,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
     let taskNextCursor: string | null = null;
     let taskLoadingMore = false;
+    let eventNextCursor: string | null = null;
+    let eventLoadingMore = false;
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const renderHolidayTags = () => {
       holidayTags.innerHTML = [...holidayCountry.selectedOptions].map((option) => `<button type="button" data-remove-holiday="${escapeHtml(option.value)}" aria-label="${escapeHtml(option.textContent || option.value)}を外す">${escapeHtml(option.textContent || option.value)} ×</button>`).join('') || '<span>祝日を表示しない</span>';
@@ -1681,6 +1696,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const summary = availabilitySummary(`${item.title}の参加状況`, participants, item.availabilityCounts);
         return `<article class="item"><div class="event-heading"><b>${escapeHtml(item.title)}</b>${data.scope.isManager ? `<button type="button" class="event-delete" data-delete-event="${escapeHtml(item.id)}">この日程を削除</button>` : ''}</div><small>${formatDate(item.starts_at)}${item.ends_at ? ` 〜 ${formatDate(item.ends_at)}` : ''}</small><div class="availability">${Object.entries(availabilityLabels).map(([value, label]) => `<button type="button" class="${item.availability === value ? 'is-selected' : ''}" aria-pressed="${item.availability === value}" data-availability="${value}" data-event="${escapeHtml(item.id)}">${label}${item.availability === value ? ' ✓' : ''}</button>`).join('')}</div><div class="participant-summary">${summary || '<span>まだ参加登録はありません。</span>'}</div></article>`;
       }).join('') || '<p>登録された日程はありません。</p>';
+      eventPagination.hidden = !memberPage || !eventNextCursor;
+      eventPaginationSummary.textContent = eventNextCursor ? `${data.events?.length ?? 0}件を読み込み済み` : '';
+      eventLoadMore.disabled = eventLoadingMore;
+      eventLoadMore.textContent = eventLoadingMore ? '読み込み中…' : 'さらに予定を読み込む';
       const blocks = data.availabilityBlocks ?? [];
       const ownBlocks = blocks.filter((item) => item.isSelf);
       const ownRules = (data.availabilityRules ?? []).filter((item) => item.isSelf);
@@ -1689,7 +1708,17 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLElement>('[data-block-list]').innerHTML = ruleItems + blockItems || '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { retry?.begin(); data = memberPage ? await api<OperationData>('/api/admin/member-calendar') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=200`); taskNextCursor = data.pagination?.nextCursor ?? null; render(); retry?.success(); };
+    const load = async () => { retry?.begin(); data = memberPage ? await api<OperationData>('/api/admin/member-calendar?limit=200') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=200`); taskNextCursor = data.pagination?.nextCursor ?? null; eventNextCursor = data.eventPagination?.nextCursor ?? null; render(); retry?.success(); };
+    eventLoadMore.addEventListener('click', async () => {
+      if (eventLoadingMore || !eventNextCursor || !memberPage) return;
+      eventLoadingMore = true; render();
+      try {
+        const page = await api<OperationData>(`/api/admin/member-calendar?limit=200&cursor=${encodeURIComponent(eventNextCursor)}`);
+        data = { ...data, events: [...(data.events ?? []), ...(page.events ?? [])] };
+        eventNextCursor = page.eventPagination?.nextCursor ?? null;
+      } catch (error) { eventFeedback.value = error instanceof Error ? error.message : '追加の予定を読み込めませんでした。'; }
+      finally { eventLoadingMore = false; render(); }
+    });
     taskLoadMore.addEventListener('click', async () => {
       if (taskLoadingMore || !taskNextCursor || memberPage || progressOnly) return;
       taskLoadingMore = true; render();
