@@ -1,5 +1,22 @@
-<div class="admin-retry-notice" data-admin-load-error hidden role="alert" aria-live="assertive">
-  <span data-admin-load-error-message>情報を読み込めませんでした。</span>
+---
+interface Props {
+  scope?: string;
+  message?: string;
+}
+
+const { scope, message = "情報を読み込めませんでした。" } = Astro.props;
+---
+
+<div
+  class="admin-retry-notice"
+  data-admin-load-error
+  data-admin-load-error-scope={scope}
+  data-admin-load-state="error"
+  hidden
+  role="alert"
+  aria-live="assertive"
+>
+  <span data-admin-load-error-message>{message}</span>
   <button type="button" data-admin-retry>再試行</button>
 </div>
 

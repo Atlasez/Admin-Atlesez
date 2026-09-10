@@ -1,5 +1,6 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import japanMap from "@svg-maps/japan";
 import worldMap from "@svg-maps/world";
 
@@ -34,7 +35,7 @@ const japanRegionPaths = japanMap.locations
       </div>
     </header>
 
-    <section class="analytics-panel" id="analytics-panel" data-admin-view-panel="analytics" data-analytics-admin aria-labelledby="analytics-heading" hidden={initialView !== "analytics"}>
+    <section class="analytics-panel" id="analytics-panel" data-admin-view-panel="analytics" data-analytics-admin data-admin-load-surface aria-labelledby="analytics-heading" hidden={initialView !== "analytics"}>
       <div class="analytics-heading">
         <div>
           <h2 id="analytics-heading">記事の閲覧統計</h2>
@@ -46,6 +47,8 @@ const japanRegionPaths = japanMap.locations
         </div>
       </div>
       <output class="analytics-summary" data-analytics-summary>読み込み中です…</output>
+      <div class="admin-loading-skeleton" data-admin-load-skeleton hidden aria-hidden="true"></div>
+      <AdminRetryNotice scope="analytics" message="閲覧統計を読み込めませんでした。" />
       <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>記事</th><th>閲覧</th><th>読まれた</th><th>90%到達</th></tr></thead><tbody data-analytics-list></tbody></table></div>
       <button class="button button-outline analytics-more" type="button" data-analytics-more hidden>残りを表示</button>
 
@@ -76,7 +79,7 @@ const japanRegionPaths = japanMap.locations
       </section>
     </section>
 
-    <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" aria-label="記事の問題報告" hidden={initialView !== "reports"}>
+    <section class="reports-panel" id="reports-panel" data-admin-view-panel="reports" data-admin-load-surface aria-label="記事の問題報告" hidden={initialView !== "reports"}>
     <div class="report-controls">
       <label>
         表示する状態
@@ -91,7 +94,9 @@ const japanRegionPaths = japanMap.locations
       <output class="report-count" data-report-count></output>
     </div>
     <p class="report-feedback" data-report-feedback aria-live="polite">読み込み中です…</p>
-    <div class="report-list" data-report-list aria-live="polite" aria-busy="true"></div>
+    <div data-admin-load-skeleton hidden aria-hidden="true"></div>
+    <div class="report-list" data-report-list data-admin-load-surface aria-live="polite" aria-busy="true"></div>
+    <AdminRetryNotice scope="reports" message="問題報告を読み込めませんでした。" />
     <div class="report-pagination" data-report-pagination hidden>
       <span data-report-pagination-summary></span>
       <button class="button button-outline" type="button" data-report-load-more>さらに読み込む</button>
@@ -234,6 +239,8 @@ const japanRegionPaths = japanMap.locations
 </style>
 
 <script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+
   type ReportStatus = "new" | "reviewing" | "resolved";
   type Report = {
     id: string; article_title: string; article_url: string; report_type: string;
@@ -308,6 +315,8 @@ const japanRegionPaths = japanMap.locations
       root.dataset.adminActiveView = view;
       viewPanels.forEach((panel) => { panel.hidden = panel.dataset.adminViewPanel !== view; });
     };
+    let reportsRetry: ReturnType<typeof createAdminLoadRetry> | null = null;
+    let analyticsRetry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const renderAnalytics = (articles: Analytics[], days: number) => {
       if (!analyticsList || !analyticsSummary) return;
       const totals = articles.reduce(
@@ -323,7 +332,7 @@ const japanRegionPaths = japanMap.locations
       const maximum = Math.max(...sorted.map((article) => article.views), 1);
       analyticsList.innerHTML = sorted.length
         ? sorted.map((article, index) => `<tr${index >= 10 ? " data-analytics-rest hidden" : ""}><td>${escapeHtml(article.article_title)}<span class="analytics-meta">${escapeHtml(article.subject)} / ${escapeHtml(article.category)}</span></td><td><span class="analytics-number">${article.views.toLocaleString()}<span class="analytics-bar" style="--bar:${Math.max(2, article.views / maximum * 100)}%"></span></span></td><td>${article.engaged_reads.toLocaleString()}</td><td>${article.completed_reads.toLocaleString()}</td></tr>`).join("")
-        : '<tr><td colspan="4" class="report-empty">この期間の統計はまだありません。</td></tr>';
+        : '<tr><td colspan="4" class="admin-empty-state" data-admin-empty-state>この期間の統計はまだありません。</td></tr>';
       if (analyticsMore) { analyticsMore.hidden = sorted.length <= 10; analyticsMore.textContent = "残りを表示"; analyticsMore.setAttribute("aria-expanded", "false"); }
     };
     const countryNames: Record<string, string> = {
@@ -457,15 +466,18 @@ const japanRegionPaths = japanMap.locations
     };
     const loadAnalytics = async () => {
       if (!analyticsDays || !analyticsSummary) return;
+      analyticsRetry?.begin();
       analyticsSummary.value = "読み込み中です…";
       try {
         const response = await fetch(`/api/admin/article-analytics?days=${encodeURIComponent(analyticsDays.value)}`, { credentials: "same-origin" });
         const data = await readApiResponse<{ articles?: Analytics[]; days?: number; error?: string }>(response);
         if (!response.ok) throw new Error(data.error ?? "統計を読み込めませんでした。");
         renderAnalytics(data.articles ?? [], data.days ?? Number(analyticsDays.value));
+        analyticsRetry?.setState(data.articles?.length ? "ready" : "empty");
       } catch (error) {
         analyticsSummary.value = error instanceof Error ? error.message : "統計を読み込めませんでした。";
         if (analyticsList) analyticsList.innerHTML = "";
+        analyticsRetry?.fail(error);
       }
     };
     const loadAuthStatus = async () => {
@@ -509,7 +521,11 @@ const japanRegionPaths = japanMap.locations
     let reportLoaded = 0;
     let reportLoading = false;
     const render = (reports: Report[], append = false) => {
-      if (!reports.length && !append) { list.innerHTML = '<p class="report-empty">該当する報告はありません。</p>'; return; }
+      if (!reports.length && !append) {
+        list.innerHTML = '<p class="admin-empty-state" data-admin-empty-state>該当する報告はありません。</p>';
+        reportsRetry?.setState("empty");
+        return;
+      }
       const markup = reports.map((report) => {
         const url = safeUrl(report.article_url);
         return `<details class="report-card" data-status="${report.status}" data-report-id="${report.id}">
@@ -532,6 +548,7 @@ const japanRegionPaths = japanMap.locations
     const load = async (append = false) => {
       if (reportLoading || (append && !reportNextCursor)) return;
       reportLoading = true;
+      reportsRetry?.begin();
       feedback.textContent = "読み込み中です…";
       list.setAttribute("aria-busy", "true");
       reportLoadMore.disabled = true;
@@ -550,7 +567,8 @@ const japanRegionPaths = japanMap.locations
         reportPagination.hidden = !reportNextCursor;
         reportPaginationSummary.textContent = hasMore ? `${reportLoaded}件を表示中` : "すべて表示済み";
         feedback.textContent = "";
-      } catch (error) { if (!append) { list.innerHTML = ""; count.value = ""; reportPagination.hidden = true; } feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; }
+        if (reports.length || append) reportsRetry?.success();
+      } catch (error) { if (!append) { list.innerHTML = ""; count.value = ""; reportPagination.hidden = true; } feedback.textContent = error instanceof Error ? error.message : "読み込めませんでした。"; reportsRetry?.fail(error); }
       finally { reportLoading = false; reportLoadMore.disabled = false; list.setAttribute("aria-busy", "false"); }
     };
     filter.addEventListener("change", () => { reportNextCursor = null; reportLoaded = 0; void load(); });
@@ -606,7 +624,7 @@ const japanRegionPaths = japanMap.locations
       } catch (error) { feedback.textContent = error instanceof Error ? error.message : "保存できませんでした。"; }
       finally { button.disabled = false; button.textContent = "保存"; }
     });
-    const loadAllAnalytics = () => { void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); void loadJapanRegionAnalytics(); };
+    const loadAllAnalytics = () => { analyticsRetry?.begin(); void loadAnalytics(); void loadSearchConsoleAnalytics(); void loadSearchQueryAnalytics(); void loadJapanRegionAnalytics(); };
     const syncSearchConsoleLink = () => { if (searchConsoleImport) searchConsoleImport.href = `/auth/google/search-console?days=${encodeURIComponent(analyticsDays?.value ?? "30")}`; };
     analyticsDays?.addEventListener("change", syncSearchConsoleLink);
     syncSearchConsoleLink();
@@ -621,6 +639,8 @@ const japanRegionPaths = japanMap.locations
       document.querySelector<HTMLElement>("[data-admin-breadcrumbs] [aria-current='page']")?.replaceChildren("学習サイト閲覧統計");
     }
     selectView(initialView);
+    reportsRetry = createAdminLoadRetry(root, () => load(), "問題報告を読み込めませんでした。", { scope: "reports" });
+    analyticsRetry = createAdminLoadRetry(root, () => loadAnalytics(), "閲覧統計を読み込めませんでした。", { scope: "analytics" });
     if (initialView === "reports") {
       void load();
       void loadPermissions();
