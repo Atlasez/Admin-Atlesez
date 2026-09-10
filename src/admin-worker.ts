@@ -1126,7 +1126,11 @@ async function getAuthenticatedAtlasezAccount(
   }
 }
 
-async function getAdminScope(
+/**
+ * 権限判定の実装本体。公開APIから直接呼び出さず、必ず
+ * `getAdminScope()`（= requireAdminScope の既定入口）を経由する。
+ */
+async function resolveAdminScope(
   request: Request,
   env: Env,
 ): Promise<AdminScope | Response> {
@@ -1199,6 +1203,17 @@ type AdminScopeRequirement = {
 };
 
 /**
+ * 既存API互換の既定入口。要件なしでも共通の権限パイプラインを通し、
+ * 将来の境界チェックをページごとに実装し直さないようにする。
+ */
+async function getAdminScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  return requireAdminScope(request, env);
+}
+
+/**
  * 管理APIの認証・分野・プロジェクト境界を一つの入口で検証する。
  *
  * 既存の読み取りAPIは `getAdminScope()` のまま全分野を返すものもあるが、
@@ -1212,7 +1227,7 @@ async function requireAdminScope(
   requirements: AdminScopeRequirement = {},
   preloadedScope?: AdminScope,
 ): Promise<AdminScope | Response> {
-  const scope = preloadedScope ?? (await getAdminScope(request, env));
+  const scope = preloadedScope ?? (await resolveAdminScope(request, env));
   if (isResponse(scope)) return scope;
 
   if (requirements.requireGlobal && !scope.allSubjects)
