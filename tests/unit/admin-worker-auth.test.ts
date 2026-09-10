@@ -206,6 +206,33 @@ describe("admin logout contract", () => {
   });
 });
 
+describe("admin API scope gate", () => {
+  it("rejects authenticated users without an admin scope before handler-specific work", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/google-accounts", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "member@example.com",
+        },
+      }),
+      env("cloudflare-access") as never,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "この管理画面の閲覧権限が設定されていません。",
+    });
+  });
+
+  it("keeps the member profile endpoint on its self-service scope", async () => {
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/profile"),
+      stageEnv("accepted", false, true) as never,
+    );
+
+    expect(response.status).toBe(200);
+  });
+});
+
 describe("applicant stage server-side access", () => {
   it("keeps the designated primary admin in the admin stage if the seed row is missing", async () => {
     const rootPage = await worker.fetch(
