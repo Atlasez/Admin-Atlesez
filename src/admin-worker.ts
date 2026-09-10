@@ -2315,19 +2315,20 @@ async function workflowDiagnostics(request: Request, env: Env): Promise<Response
          WHEN 'task' THEN t.status
          WHEN 'document' THEN d.status
          WHEN 'application' THEN a.status
-         WHEN 'approval' THEN r.status
+         WHEN 'approval' THEN COALESCE(r.status, pr.status)
        END AS current_state,
        CASE e.entity_type
          WHEN 'task' THEN t.id
          WHEN 'document' THEN d.id
          WHEN 'application' THEN a.id
-         WHEN 'approval' THEN r.id
+         WHEN 'approval' THEN COALESCE(r.id, pr.id)
        END AS current_id
      FROM workflow_transition_events e
      LEFT JOIN editorial_tasks t ON e.entity_type='task' AND t.id=e.entity_id
      LEFT JOIN editorial_documents d ON e.entity_type='document' AND d.id=e.entity_id
      LEFT JOIN atlasez_member_applications a ON e.entity_type='application' AND a.id=e.entity_id
      LEFT JOIN editorial_member_profile_change_requests r ON e.entity_type='approval' AND r.id=e.entity_id
+     LEFT JOIN editorial_project_profile_change_requests pr ON e.entity_type='approval' AND pr.id=e.entity_id
      WHERE current_id IS NULL OR current_state != e.to_state
      ORDER BY e.created_at DESC LIMIT 100`,
   ).all<{
@@ -2353,6 +2354,38 @@ async function workflowDiagnostics(request: Request, env: Env): Promise<Response
     kind: row.current_id ? "state_mismatch" : "missing_entity",
   }));
   return json({ generatedAt: new Date().toISOString(), issues, checkedEvents: issues.length, scope: { email: scope.email } });
+}
+
+/** 診断結果を確認した管理者だけが、許可済みの遷移として再同期できる。 */
+async function repairWorkflowIssue(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as { eventId?: unknown; confirm?: unknown } | null;
+  const eventId = text(payload?.eventId, 80);
+  if (!eventId || payload?.confirm !== true) return json({ error: "修復対象を確認してください。" }, 400);
+  const event = await env.REPORTS.prepare(
+    "SELECT entity_type,entity_id,to_state FROM workflow_transition_events WHERE id=?",
+  ).bind(eventId).first<{ entity_type: WorkflowEntityType; entity_id: string; to_state: string }>();
+  if (!event) return json({ error: "状態イベントが見つかりません。" }, 404);
+  let currentState: string | null = null;
+  if (event.entity_type === "task") currentState = (await env.REPORTS.prepare("SELECT status FROM editorial_tasks WHERE id=?").bind(event.entity_id).first<{ status: string }>())?.status ?? null;
+  if (event.entity_type === "document") currentState = (await env.REPORTS.prepare("SELECT status FROM editorial_documents WHERE id=?").bind(event.entity_id).first<{ status: string }>())?.status ?? null;
+  if (event.entity_type === "application") currentState = (await env.REPORTS.prepare("SELECT status FROM atlasez_member_applications WHERE id=?").bind(event.entity_id).first<{ status: string }>())?.status ?? null;
+  if (event.entity_type === "approval") {
+    currentState = (await env.REPORTS.prepare("SELECT status FROM editorial_member_profile_change_requests WHERE id=?").bind(event.entity_id).first<{ status: string }>())?.status ?? null;
+    if (!currentState) currentState = (await env.REPORTS.prepare("SELECT status FROM editorial_project_profile_change_requests WHERE id=?").bind(event.entity_id).first<{ status: string }>())?.status ?? null;
+  }
+  if (!currentState) return json({ error: "対象データが存在しないため自動修復できません。", code: "MISSING_ENTITY" }, 409);
+  if (currentState === event.to_state) return json({ ok: true, alreadySynchronized: true, currentState });
+  const forwarded = new Request(request.url, {
+    method: "POST",
+    headers: { ...Object.fromEntries(request.headers), "content-type": "application/json" },
+    body: JSON.stringify({ entityType: event.entity_type, entityId: event.entity_id, fromState: currentState, toState: event.to_state, idempotencyKey: `repair:${eventId}` }),
+  });
+  const response = await transitionWorkflow(forwarded, env);
+  if (response.ok) await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", event.entity_id, event.entity_id, `状態を再同期：${event.entity_id}`, { repairEventId: eventId, fromState: currentState, toState: event.to_state });
+  return response;
 }
 
 type WorkflowTransitionPayload = {
@@ -2414,8 +2447,74 @@ async function transitionWorkflow(request: Request, env: Env): Promise<Response>
   try { payload = (await request.json()) as WorkflowTransitionPayload; } catch { return json({ error: "入力内容を読み取れませんでした。" }, 400); }
   const entityType = text(payload.entityType, 20) as WorkflowEntityType;
   const entityId = text(payload.entityId, 80);
-  if (entityType !== "task" || !entityId) return json({ error: "現在はタスクの状態変更に対応しています。", code: "UNSUPPORTED_ENTITY" }, 400);
-  return transitionTaskState(request, env, entityId, scope, payload);
+  const fromState = text(payload.fromState, 20);
+  const toState = text(payload.toState, 20);
+  if (!entityId || !fromState || !toState)
+    return json({ error: "対象と変更前後の状態を指定してください。" }, 400);
+  if (!workflowTransitionsFor(entityType, fromState).some((item) => item.to === toState))
+    return json({ error: "許可されていない状態遷移です。", code: "INVALID_TRANSITION" }, 400);
+  if (entityType === "task") return transitionTaskState(request, env, entityId, scope, payload);
+
+  // 他のエンティティも既存の副作用（通知・所属作成・審査記録）を持つ
+  // 正規ハンドラへ委譲し、入口だけをこのAPIに統一する。
+  const idempotencyKey = text(payload.idempotencyKey, 120) || crypto.randomUUID();
+  const replay = await env.REPORTS.prepare(
+    "SELECT entity_id,from_state,to_state,created_at FROM workflow_transition_events WHERE actor_email=? AND idempotency_key=?",
+  ).bind(scope.email, idempotencyKey).first<{ entity_id: string; from_state: string; to_state: string; created_at: string }>().catch(() => null);
+  if (replay)
+    return json({ ok: true, replayed: true, transition: { entityType, entityId: replay.entity_id, fromState: replay.from_state, toState: replay.to_state, createdAt: replay.created_at } });
+
+  const body = entityType === "document"
+    ? JSON.stringify({ decision: toState === "approved" ? "approved" : undefined, idempotencyKey, expectedUpdatedAt: payload.expectedUpdatedAt })
+    : entityType === "approval"
+      ? JSON.stringify({ action: toState === "approved" ? "approve" : "reject", idempotencyKey })
+      : JSON.stringify({ status: toState, idempotencyKey, expectedUpdatedAt: payload.expectedUpdatedAt });
+  const forwardedHeaders = new Headers(request.headers);
+  forwardedHeaders.set("content-type", "application/json");
+  const forwardedUrl = new URL(request.url);
+  let response: Response;
+  if (entityType === "application") {
+    const application = await env.REPORTS.prepare("SELECT project_slug,status FROM atlasez_member_applications WHERE id=?").bind(entityId).first<{ project_slug: string; status: string }>();
+    if (!application) return json({ error: "応募が見つかりません。" }, 404);
+    if (application.status !== fromState) return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE", currentState: application.status }, 409);
+    if (!forwardedUrl.searchParams.get("project")) forwardedUrl.searchParams.set("project", application.project_slug);
+    response = await updateApplication(new Request(forwardedUrl, { method: "POST", headers: forwardedHeaders, body }), env, entityId, undefined);
+  } else if (entityType === "document") {
+    const document = await env.REPORTS.prepare(`${editorialDocumentSelect} WHERE id=?`).bind(entityId).first<EditorialDocument>();
+    if (!document) return json({ error: "原稿が見つかりません。" }, 404);
+    if (document.status !== fromState) return json({ error: "原稿の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE", currentState: document.status }, 409);
+    response = toState === "approved"
+      ? await decidePublicationReview(new Request(forwardedUrl, { method: "POST", headers: forwardedHeaders, body }), env, entityId)
+      : await startPublicationReview(new Request(forwardedUrl, { method: "POST", headers: forwardedHeaders, body }), env, entityId);
+  } else {
+    const memberRequest = await env.REPORTS.prepare("SELECT status FROM editorial_member_profile_change_requests WHERE id=?").bind(entityId).first<{ status: string }>();
+    const projectRequest = memberRequest ? null : await env.REPORTS.prepare("SELECT project_id,status FROM editorial_project_profile_change_requests WHERE id=?").bind(entityId).first<{ project_id: string; status: string }>();
+    const current = memberRequest ?? projectRequest;
+    if (!current) return json({ error: "承認申請が見つかりません。" }, 404);
+    if (current.status !== fromState) return json({ error: "承認申請の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE", currentState: current.status }, 409);
+    if (projectRequest && !forwardedUrl.searchParams.get("project")) forwardedUrl.searchParams.set("project", projectRequest.project_id);
+    response = memberRequest
+      ? await reviewProfileChangeRequest(new Request(forwardedUrl, { method: "POST", headers: forwardedHeaders, body }), env, entityId)
+      : await reviewProjectProfileChangeRequest(new Request(forwardedUrl, { method: "POST", headers: forwardedHeaders, body }), env, entityId);
+  }
+  if (response.ok) {
+    const result = await response.clone().json().catch(() => null) as { status?: unknown } | null;
+    const resultingState = text(result?.status, 20);
+    if (resultingState === toState) {
+      await recordWorkflowEvent(env, {
+        entityType,
+        entityId,
+        fromState,
+        toState,
+        actorEmail: scope.email,
+        idempotencyKey,
+        expectedUpdatedAt: text(payload.expectedUpdatedAt, 80) || null,
+        metadata: { via: "workflow-api" },
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+  return response;
 }
 
 const recordPermissionAudit = async (
@@ -9083,7 +9182,7 @@ async function updateApplication(
   if (!["new", "reviewing", "accepted", "rejected"].includes(status))
     return json({ error: "状態を確認してください。" }, 400);
   const application = await env.REPORTS.prepare(
-    `SELECT name,nickname,email,status,project_slug,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note
+    `SELECT name,nickname,email,status,project_slug,family_name,given_name,middle_name,family_name_kana,given_name_kana,form_language,institution,grade,affiliation_type,country,timezone,desired_subjects,availability_note,updated_at
      FROM atlasez_member_applications WHERE id=? AND project_slug=?`,
   )
     .bind(id, applicationProjectSlug)
@@ -9106,8 +9205,17 @@ async function updateApplication(
       timezone: string;
       desired_subjects: string;
       availability_note: string;
+      updated_at: string;
     }>();
   if (!application) return json({ error: "応募が見つかりません。" }, 404);
+  const idempotencyKey = text(payload.idempotencyKey, 120) || crypto.randomUUID();
+  const replay = await env.REPORTS.prepare(
+    "SELECT from_state,to_state,created_at FROM workflow_transition_events WHERE actor_email=? AND idempotency_key=?",
+  ).bind(scope.email, idempotencyKey).first<{ from_state: string; to_state: string; created_at: string }>().catch(() => null);
+  if (replay) return json({ ok: true, status: replay.to_state, replayed: true, transition: { entityType: "application", entityId: id, fromState: replay.from_state, toState: replay.to_state, createdAt: replay.created_at } });
+  const expectedUpdatedAt = text(payload.expectedUpdatedAt, 80);
+  if (expectedUpdatedAt && expectedUpdatedAt !== application.updated_at)
+    return json({ error: "応募の情報が先に更新されています。再読み込みしてから再試行してください。", code: "STALE_STATE", currentState: application.status, updatedAt: application.updated_at }, 409);
   if (application.status === "accepted" && status !== "accepted")
     return json(
       {
@@ -9119,13 +9227,13 @@ async function updateApplication(
   const now = new Date().toISOString();
   if (status !== "accepted") {
     const updated = await env.REPORTS.prepare(
-      "UPDATE atlasez_member_applications SET status=?,updated_at=? WHERE id=? AND status=?",
+      "UPDATE atlasez_member_applications SET status=?,updated_at=? WHERE id=? AND status=? AND updated_at=?",
     )
-      .bind(status, now, id, application.status)
+      .bind(status, now, id, application.status, application.updated_at)
       .run();
     if (!Number((updated as { meta?: { changes?: number } }).meta?.changes ?? 0))
       return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE" }, 409);
-    await recordWorkflowEvent(env, { entityType: "application", entityId: id, fromState: application.status, toState: status, actorEmail: scope.email, idempotencyKey: text(payload.idempotencyKey, 120) || undefined, expectedUpdatedAt: text(payload.expectedUpdatedAt, 80) || null, metadata: { projectSlug: application.project_slug }, createdAt: now });
+    await recordWorkflowEvent(env, { entityType: "application", entityId: id, fromState: application.status, toState: status, actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: expectedUpdatedAt || null, metadata: { projectSlug: application.project_slug }, createdAt: now });
     await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: status, projectSlug: application.project_slug });
     return json({ ok: true, status });
   }
@@ -9205,12 +9313,15 @@ async function updateApplication(
       now,
     ),
     env.REPORTS.prepare(
-      `UPDATE atlasez_member_applications SET status='accepted',provisioning_status=?,provisioning_error='',accepted_by=?,updated_at=? WHERE id=?`,
-    ).bind(verifiedDiscord ? "pending" : "skipped", scope.email, now, id),
+      `UPDATE atlasez_member_applications SET status='accepted',provisioning_status=?,provisioning_error='',accepted_by=?,updated_at=? WHERE id=? AND status=? AND updated_at=?`,
+    ).bind(verifiedDiscord ? "pending" : "skipped", scope.email, now, id, application.status, application.updated_at),
   ];
   // D1 batchは一括トランザクション。所属・プロフィール・応募状態の一部だけが残るのを防ぐ。
   try {
-    await env.REPORTS.batch(statements);
+    const batchResults = await env.REPORTS.batch(statements);
+    const applicationUpdate = batchResults.at(-1) as { meta?: { changes?: number } } | undefined;
+    if (typeof applicationUpdate?.meta?.changes === "number" && applicationUpdate.meta.changes !== 1)
+      return json({ error: "応募の状態が先に更新されています。再読み込みしてください。", code: "STALE_STATE" }, 409);
   } catch {
     return json(
       {
@@ -9220,7 +9331,7 @@ async function updateApplication(
     );
   }
 
-  await recordWorkflowEvent(env, { entityType: "application", entityId: id, fromState: application.status, toState: "accepted", actorEmail: scope.email, idempotencyKey: text(payload.idempotencyKey, 120) || undefined, expectedUpdatedAt: text(payload.expectedUpdatedAt, 80) || null, metadata: { projectSlug: application.project_slug }, createdAt: now });
+  await recordWorkflowEvent(env, { entityType: "application", entityId: id, fromState: application.status, toState: "accepted", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: expectedUpdatedAt || null, metadata: { projectSlug: application.project_slug }, createdAt: now });
   await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", id, application.name || application.email, `応募の状態を変更：${application.name || application.email}`, { entityType: "application", fromState: application.status, toState: "accepted", projectSlug: application.project_slug });
 
   const discord = await provisionAcceptedApplication(env, id);
@@ -12297,6 +12408,8 @@ async function updateEditorialDocument(
       },
       400,
     );
+  if (existing.status !== values.status && !workflowTransitionsFor("document", existing.status).some((item) => item.to === values.status))
+    return json({ error: "許可されていない記事状態の変更です。公開審査の操作から進めてください。", code: "INVALID_TRANSITION" }, 409);
   const now = new Date().toISOString();
   const previous = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
@@ -12398,6 +12511,17 @@ async function updateEditorialDocument(
     `記事を更新：${values.title}`,
     { changedFields, statusBefore: existing.status, statusAfter: values.status },
   );
+  if (existing.status !== values.status)
+    await recordWorkflowEvent(env, {
+      entityType: "document",
+      entityId: documentId,
+      fromState: existing.status,
+      toState: values.status,
+      actorEmail: scope.email,
+      expectedUpdatedAt: values.baseUpdatedAt || null,
+      metadata: { via: "editor-save" },
+      createdAt: now,
+    });
   await syncEditorialCollaborationDocument(env, documentId);
   await notifyEditorialDocumentChange(env, documentId);
   return json({ ok: true, updatedAt: now });
@@ -15858,6 +15982,8 @@ async function startPublicationReview(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const transitionPayload = (await request.clone().json().catch(() => null)) as { idempotencyKey?: unknown } | null;
+  const idempotencyKey = text(transitionPayload?.idempotencyKey, 120) || crypto.randomUUID();
   const document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
   )
@@ -15902,6 +16028,8 @@ async function startPublicationReview(
   )
     .bind(stage, round, now, scope.email, documentId)
     .run();
+  if (document.status !== "in-review")
+    await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "in-review", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: document.updated_at, metadata: { stage }, createdAt: now });
   await notifyEditorialDocumentChange(env, documentId);
   const recipients = stage === "subject-coordinator" ? coordinators : leaders;
   const recipientLabel =
@@ -15910,7 +16038,7 @@ async function startPublicationReview(
     env.DISCORD_ATLAS_WEBHOOK_URL,
     `公開審査依頼（${recipientLabel}）：${document.title}\n${document.subject} / ${documentId}`,
   );
-  return json({ ok: true, stage, round, recipients, recipientLabel });
+  return json({ ok: true, status: "in-review", stage, round, recipients, recipientLabel });
 }
 
 async function decidePublicationReview(
@@ -15925,9 +16053,11 @@ async function decidePublicationReview(
   const payload = (await request.json().catch(() => null)) as {
     decision?: unknown;
     note?: unknown;
+    idempotencyKey?: unknown;
   } | null;
   const decision = text(payload?.decision, 20);
   const note = text(payload?.note, 2_000);
+  const idempotencyKey = text(payload?.idempotencyKey, 120) || crypto.randomUUID();
   if (decision !== "approved" && decision !== "rejected")
     return json({ error: "審査結果を選択してください。" }, 400);
   const document = await env.REPORTS.prepare(
@@ -15984,6 +16114,7 @@ async function decidePublicationReview(
   await env.REPORTS.prepare(
     "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
   ).bind(now, now, scope.email, documentId).run();
+  await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: document.updated_at, metadata: { reviewStage: stage }, createdAt: now });
   await notifyEditorialDocumentChange(env, documentId);
   await recordAdminAudit(
     env,
@@ -17961,6 +18092,8 @@ async function handleAdminRequest(
     return listWorkflowTransitions(request, env);
   if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
     return workflowDiagnostics(request, env);
+  if (url.pathname === "/api/admin/workflow/repair" && request.method === "POST")
+    return repairWorkflowIssue(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
     return transitionWorkflow(request, env);
   if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
