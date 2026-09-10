@@ -186,4 +186,18 @@ describe("reports and statistics access", () => {
     );
     expect(response.status).toBe(401);
   });
+
+  it("does not expose site-wide region or search-query statistics to a subject-scoped operator", async () => {
+    const db = new ReportsDb();
+    const paths = [
+      "/api/admin/article-analytics-regions?days=30",
+      "/api/admin/search-console-country-analytics",
+      "/api/admin/search-console-query-analytics",
+    ];
+
+    for (const path of paths) {
+      const response = await worker.fetch(request(path), env(db) as never);
+      expect(response.status, path).toBe(403);
+    }
+  });
 });
