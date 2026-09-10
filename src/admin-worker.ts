@@ -1817,19 +1817,31 @@ async function listArticleAnalytics(
   const since = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1_000)
     .toISOString()
     .slice(0, 10);
+  // 担当者には担当分野の記事だけを返す。全分野管理者だけが全分野を
+  // 横断して閲覧できるよう、集計SQLの段階で境界を適用する。
+  const subjectFilter = scope.allSubjects
+    ? ""
+    : scope.subjects.length
+      ? ` AND subject IN (${scope.subjects.map(() => "?").join(",")})`
+      : " AND 0=1";
+  const analyticsBindings: unknown[] = [since, ...scope.subjects];
   const result = await env.REPORTS.prepare(
     `SELECT article_id, MAX(article_title) AS article_title, subject, category,
         SUM(views) AS views, SUM(engaged_reads) AS engaged_reads,
         SUM(completed_reads) AS completed_reads
      FROM article_analytics_daily
-     WHERE day >= ?
+     WHERE day >= ?${subjectFilter}
      GROUP BY article_id, subject, category
      ORDER BY completed_reads DESC, engaged_reads DESC, views DESC, article_title ASC
      LIMIT 50`,
   )
-    .bind(since)
+    .bind(...analyticsBindings)
     .all<ArticleAnalytics>();
-  return json({ days, articles: result.results });
+  return json({
+    days,
+    articles: result.results,
+    scope: { allSubjects: scope.allSubjects, subjects: scope.subjects },
+  });
 }
 
 async function listArticleAnalyticsRegions(
