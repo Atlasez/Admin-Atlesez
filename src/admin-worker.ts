@@ -8147,6 +8147,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   const projects = projectRows.results ?? [];
   const projectIds = projects.map((project) => project.id).filter(Boolean);
   const projectNames = new Map(projects.map((project) => [project.id, project.name || project.slug]));
+  // ポータルと同じ集計関数を使い、承認待ち件数が一覧取得上限で欠落しないようにする。
+  // このPromiseは一覧クエリと並行して開始し、追加の待ち時間を発生させない。
+  const workflowSummaryPromise = getWorkflowSummary(env, scope, projectIds, canReviewApplications);
   const taskPredicate = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")}) AND ${scope.isManager
       ? "1=1"
@@ -8155,7 +8158,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   const taskBindings = projectIds.length
     ? [...projectIds, ...(scope.isManager ? [] : [scope.email, scope.email, scope.email])]
     : [];
-  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows] = await Promise.all([
+  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
               COALESCE(p.name,t.project_id) AS project_name
@@ -8249,6 +8252,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
             ORDER BY r.submitted_at DESC LIMIT 50`,
         ).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
+    workflowSummaryPromise,
   ]);
   const notificationData = notificationResponse.ok
     ? await notificationResponse.json().catch(() => ({})) as { notifications?: Array<Record<string, unknown>>; unreadNotificationsCount?: number }
@@ -8408,7 +8412,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       today: items.filter((item) => item.priority === "urgent" || (item.dueAt && item.dueAt.slice(0, 10) === new Date().toISOString().slice(0, 10))).length,
       dueSoon: items.filter((item) => item.priority === "due-soon").length,
       unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
-      approvals: items.filter((item) => item.kind === "approval").length,
+      approvals: workflowSummary.pendingApprovals,
       assigned: items.filter((item) => item.kind !== "notification").length,
     },
     scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects, projects: projectIds },
