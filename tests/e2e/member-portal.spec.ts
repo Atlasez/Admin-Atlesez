@@ -115,6 +115,37 @@ test("APIがHTMLエラーを返してもJSON解析例外を画面へ表示しな
   );
 });
 
+test("マイページの読み込み失敗から共通の再試行で復帰できる", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  let attempts = 0;
+  await page.route("**/api/admin/profile", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({ status: 503, json: { error: "一時的な障害" } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        email: "retry@example.com",
+        profile: { display_name: "再試行メンバー" },
+      },
+    });
+  });
+
+  await page.goto("admin/member-profile/");
+  const notice = page.locator("[data-admin-load-error]");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("一時的な障害");
+  await notice.getByRole("button", { name: "再試行" }).click();
+  await expect(
+    page.getByRole("heading", { name: "再試行メンバー" }),
+  ).toBeVisible();
+  await expect(notice).toBeHidden();
+  expect(attempts).toBeGreaterThanOrEqual(2);
+});
+
 test("横断タスク管理で複数プロジェクトを一覧・更新できる", async ({ page }) => {
   await baseAdminMocks(page);
   await page.route("**/api/admin/profile", (route) =>
