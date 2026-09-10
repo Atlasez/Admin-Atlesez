@@ -438,7 +438,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 </AdminLayout>
 
 <style>
-  .editor-workspace { --surface: var(--background-primary); --surface-alt: var(--background-secondary); --border: var(--border-default); --text: var(--text-primary); --muted: var(--text-secondary); --accent: var(--accent-primary); box-sizing: border-box; margin: 0 auto; max-width: 1500px; overflow-anchor: none; padding: 0 clamp(1rem, 3vw, 2.5rem) 4rem; }
+  .editor-workspace { --surface: var(--admin-surface); --surface-alt: var(--admin-surface-raised); --border: var(--admin-border); --text: var(--admin-text); --muted: var(--admin-text-muted); --accent: var(--admin-accent); box-sizing: border-box; margin: 0 auto; max-width: 1500px; overflow-anchor: none; padding: 0 clamp(1rem, 3vw, 2.5rem) 4rem; }
   html:has(.editor-workspace), body:has(.editor-workspace) { overflow-anchor: none; }
   .editor-workspace[data-editor-starting] .editor-panel { min-height: 32rem; position: relative; visibility: hidden; }
   .editor-workspace[data-editor-starting] .document-toolbar { position: static; }
@@ -5078,7 +5078,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .review-panel .comment-actions .comment-action-unacknowledge { color: #8a5b14; }
   .review-panel .comment-actions .comment-action-resolve { color: #23643d; }
   .review-panel .comment-actions button.is-acted-by-me { background: var(--accent-subtle, #e8f3fb); box-shadow: inset 0 0 0 1px var(--accent, #176ea6); }
-  .comment-action-history-tooltip { background:var(--surface,#fff); border:1px solid var(--border,#d5dde2); border-radius:.45rem; box-shadow:0 .45rem 1.2rem rgb(24 32 39 / .2); color:var(--text,#182027); font-size:.74rem; font-weight:700; max-width:min(24rem,calc(100vw - 1rem)); padding:.42rem .6rem; pointer-events:none; position:fixed; z-index:90; }
+  .comment-action-history-tooltip { background:var(--surface); border:1px solid var(--border); border-radius:.45rem; box-shadow:0 .45rem 1.2rem rgb(24 32 39 / .2); color:var(--text); font-size:.74rem; font-weight:700; max-width:min(24rem,calc(100vw - 1rem)); padding:.42rem .6rem; pointer-events:none; position:fixed; z-index:90; }
   .comment-action-history-tooltip[hidden] { display:none; }
   .review-panel .comment-actions button:disabled { cursor:not-allowed; opacity:.62; }
   .review-panel .comment-reply .comment-content { font-size:.78rem; line-height:1.55; }
@@ -5087,18 +5087,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .review-panel .reply-quote-button { align-self: start; background: var(--surface, #fff); border: 1px solid var(--border, #d5dde2); border-radius: 999px; color: var(--accent, #2f6fa5); font-size: .74rem; font-weight: 800; padding: .32rem .58rem; width: auto; }.review-panel .reply-quote-button:hover { border-color: var(--accent, #2f6fa5); background: var(--accent-subtle, #e8f3fb); }
   .review-panel .comment-quote button { background:transparent; border:0; color:var(--accent,#176ea6); cursor:pointer; display:block; font:inherit; font-size:.68rem; font-weight:800; margin:.3rem 0 0; padding:0; }
   .comment-mention { background:color-mix(in srgb,var(--accent,#176ea6) 15%,transparent); border-radius:.2rem; color:var(--accent,#176ea6); font-weight:800; padding:0 .12rem; }
-  .mention-suggestions { background:var(--surface,#fff); border:1px solid var(--border,#d5dde2); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:15rem; overflow:auto; padding:.3rem; position:fixed; z-index:80; }
+  .mention-suggestions { background:var(--surface); border:1px solid var(--border); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:15rem; overflow:auto; padding:.3rem; position:fixed; z-index:80; }
   .mention-suggestions[hidden] { display:none; }
-  .mention-suggestions button { background:transparent; border:0; border-radius:.35rem; color:var(--text,#182027); cursor:pointer; display:block; font:inherit; font-size:.82rem; padding:.45rem .55rem; text-align:left; width:100%; }
+  .mention-suggestions button { background:transparent; border:0; border-radius:.35rem; color:var(--text); cursor:pointer; display:block; font:inherit; font-size:.82rem; padding:.45rem .55rem; text-align:left; width:100%; }
   .mention-suggestions button:hover,.mention-suggestions button.is-active { background:var(--accent-subtle,#e5f2fa); color:var(--accent,#176ea6); }
-  .directive-suggestions { background:var(--surface,#fff); border:1px solid var(--border,#d5dde2); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:18rem; overflow:auto; padding:.3rem; position:fixed; z-index:80; }
+  .directive-suggestions { background:var(--surface); border:1px solid var(--border); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:18rem; overflow:auto; padding:.3rem; position:fixed; z-index:80; }
   .directive-suggestions[hidden] { display:none; }
-  .directive-suggestions button { align-items:baseline; background:transparent; border:0; border-radius:.35rem; color:var(--text,#182027); cursor:pointer; display:flex; font:inherit; gap:.6rem; padding:.45rem .55rem; text-align:left; width:100%; }
+  .directive-suggestions button { align-items:baseline; background:transparent; border:0; border-radius:.35rem; color:var(--text); cursor:pointer; display:flex; font:inherit; gap:.6rem; padding:.45rem .55rem; text-align:left; width:100%; }
   .directive-suggestions button strong { color:var(--accent,#176ea6); font-family:var(--font-mono,monospace); font-size:.8rem; }
   .directive-suggestions button small { color:var(--muted,#56616a); font-size:.72rem; }
-  .latex-suggestions { background:var(--surface,#fff); border:1px solid var(--border,#d5dde2); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:18rem; overflow:auto; padding:.3rem; position:fixed; z-index:81; }
+  .latex-suggestions { background:var(--surface); border:1px solid var(--border); border-radius:.55rem; box-shadow:0 .55rem 1.4rem rgb(24 32 39 / .2); display:grid; gap:.15rem; max-height:18rem; overflow:auto; padding:.3rem; position:fixed; z-index:81; }
   .latex-suggestions[hidden] { display:none; }
-  .latex-suggestions button { align-items:baseline; background:transparent; border:0; border-radius:.35rem; color:var(--text,#182027); cursor:pointer; display:flex; font:inherit; gap:.6rem; justify-content:space-between; padding:.45rem .55rem; text-align:left; width:100%; }
+  .latex-suggestions button { align-items:baseline; background:transparent; border:0; border-radius:.35rem; color:var(--text); cursor:pointer; display:flex; font:inherit; gap:.6rem; justify-content:space-between; padding:.45rem .55rem; text-align:left; width:100%; }
   .latex-suggestions button:hover,.latex-suggestions button.is-active { background:var(--accent-subtle,#e5f2fa); color:var(--accent,#176ea6); }
   .latex-suggestions button strong { font-family:var(--font-mono,monospace); font-size:.8rem; white-space:nowrap; }
   .latex-suggestions button small { color:var(--muted,#56616a); font-size:.72rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

@@ -108,7 +108,7 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 </AdminLayout>
 
 <style is:global>
-  .member-admin{box-sizing:border-box;margin:0 auto;max-width:1180px;padding:0 1.25rem 4rem;color:var(--text-primary)}
+  .member-admin{--member-surface:var(--admin-surface);--member-surface-raised:var(--admin-surface-raised);--member-border:var(--admin-border);--member-text:var(--admin-text);--member-muted:var(--admin-text-muted);--member-accent:var(--admin-accent);box-sizing:border-box;margin:0 auto;max-width:1180px;padding:0 1.25rem 4rem;color:var(--member-text)}
   .member-admin *{box-sizing:border-box}.member-admin__header{border-bottom:1px solid var(--border-default);padding:2rem 0 1.2rem}.member-admin__header p,.member-admin__section-heading p{color:var(--accent-primary);font-size:.74rem;font-weight:800;letter-spacing:.09em;margin:0 0 .35rem}.member-admin__header h1{font-size:clamp(1.65rem,3vw,2.2rem);margin:0}.member-admin__header span{color:var(--text-secondary);display:block;font-size:.88rem;line-height:1.6;margin-top:.5rem}
   .member-admin__add{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.8rem;grid-template-columns:185px 1fr;margin:1.2rem 0 1.5rem;padding:.9rem 1rem}.member-admin__add p{color:var(--accent-primary);font-size:.72rem;font-weight:800;letter-spacing:.08em;margin:0 0 .2rem}.member-admin__add h2{font-size:1rem;margin:0}.member-admin__add form{align-items:end;display:grid;gap:.55rem;grid-template-columns:minmax(0,1fr) minmax(160px,.7fr) auto}.member-admin__add label{align-self:start;color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.28rem}.member-admin input,.member-admin select{appearance:auto;background:var(--background-primary)!important;border:1px solid var(--border-default)!important;border-radius:0!important;color:var(--text-primary)!important;font:inherit!important;line-height:1.2!important;min-height:2.35rem!important;outline:none;padding:.45rem .55rem!important;width:100%!important}.member-admin input:focus,.member-admin select:focus{border-color:var(--accent-primary)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary) 18%,transparent)}.member-admin button{appearance:none;border-radius:0!important;cursor:pointer;font:inherit!important;font-size:.78rem!important;font-weight:800!important;line-height:1.2!important;min-height:2.35rem!important;padding:.45rem .65rem!important}.member-admin__add button,.member-action--sync,.member-modal__save{background:var(--accent-primary)!important;border:1px solid var(--accent-primary)!important;color:#fff!important}.member-admin__add output{color:var(--text-secondary);font-size:.78rem;grid-column:2/-1;min-height:1em}
   .member-admin__add select[multiple]{min-height:7.2rem!important}.discord-role-catalog{border-left:3px solid var(--accent-primary)}.discord-role-catalog small{color:var(--text-secondary);display:block;font-size:.7rem;line-height:1.5;margin-top:.35rem}.discord-role-catalog__body{align-items:start;display:grid;gap:.35rem;min-width:0}.discord-role-catalog__body strong{color:var(--accent-primary);font-size:.8rem}.discord-role-catalog__body span{color:var(--text-secondary);font-size:.72rem;line-height:1.55;max-height:5.3rem;overflow:auto}
@@ -728,7 +728,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
 
 <style is:global>
   /* 運営者管理は、操作の確実性を優先したトランザクションUIに統一する。 */
-  html:has(.member-admin):not([data-pref-bg="dark"]) {
+  /* ブラックモードも暗色テーマの一種。ライト用の固定値を適用しない。 */
+  html:has(.member-admin):not([data-pref-bg="dark"]):not([data-pref-mode="black"]) {
     --text-primary: #17324d !important;
     --text-secondary: #526779 !important;
     --background-primary: #ffffff !important;
@@ -742,8 +743,8 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     --link: #075a91 !important;
     color-scheme: light;
   }
-  html:not([data-pref-bg="dark"]) body:has(.member-admin) { background: #f3f7fb; color: #17324d; }
-  html:not([data-pref-bg="dark"]) body:has(.member-admin) .admin-layout-main { background: #f3f7fb; }
+  html:not([data-pref-bg="dark"]):not([data-pref-mode="black"]) body:has(.member-admin) { background: #f3f7fb; color: #17324d; }
+  html:not([data-pref-bg="dark"]):not([data-pref-mode="black"]) body:has(.member-admin) .admin-layout-main { background: #f3f7fb; }
   .member-admin { max-width: 1240px; padding: 2rem 1.25rem 5rem; }
   .member-admin__header { align-items: center; background: #fff; border: 1px solid #cddce7; border-top: 4px solid #075a91; box-shadow: 0 2px 8px rgb(18 62 91 / 6%); display: flex; gap: 1.5rem; justify-content: space-between; margin: 0 0 1.25rem; padding: 1.35rem 1.5rem 1.2rem; }
   .member-admin__eyebrow { color: #075a91 !important; font-size: .7rem !important; font-weight: 900 !important; letter-spacing: .1em; margin: 0 0 .3rem !important; }

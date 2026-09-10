@@ -39,6 +39,18 @@
   --focus-ring: #b3560e;
   --danger: #a03123;
   --success: #2c6e49;
+  --warning: #a66a00;
+
+  /* 運営サイト共通の意味別エイリアス。
+     ページ固有CSSはこれらを参照し、ライト/ダーク/ブラックの面と文字を
+     個別に再定義しない。フォールバックの白背景によるテーマ漏れを防ぐ。 */
+  --surface: var(--background-primary);
+  --surface-alt: var(--background-secondary);
+  --surface-inset: var(--background-inset);
+  --border: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --accent: var(--accent-primary);
 
   /* 余白・寸法
      一覧性を優先し、space-4 以上を段階的に圧縮している。
