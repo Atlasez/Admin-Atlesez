@@ -2302,6 +2302,59 @@ async function listWorkflowTransitions(request: Request, env: Env): Promise<Resp
   });
 }
 
+/**
+ * 状態イベントと現在レコードのずれを検出する読み取り専用の診断API。
+ * 自動修復は行わず、管理者が確認してから個別の遷移APIを再実行できるようにする。
+ */
+async function workflowDiagnostics(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const rows = await env.REPORTS.prepare(
+    `SELECT e.id,e.entity_type,e.entity_id,e.from_state,e.to_state,e.actor_email,e.created_at,
+       CASE e.entity_type
+         WHEN 'task' THEN t.status
+         WHEN 'document' THEN d.status
+         WHEN 'application' THEN a.status
+         WHEN 'approval' THEN r.status
+       END AS current_state,
+       CASE e.entity_type
+         WHEN 'task' THEN t.id
+         WHEN 'document' THEN d.id
+         WHEN 'application' THEN a.id
+         WHEN 'approval' THEN r.id
+       END AS current_id
+     FROM workflow_transition_events e
+     LEFT JOIN editorial_tasks t ON e.entity_type='task' AND t.id=e.entity_id
+     LEFT JOIN editorial_documents d ON e.entity_type='document' AND d.id=e.entity_id
+     LEFT JOIN atlasez_member_applications a ON e.entity_type='application' AND a.id=e.entity_id
+     LEFT JOIN editorial_member_profile_change_requests r ON e.entity_type='approval' AND r.id=e.entity_id
+     WHERE current_id IS NULL OR current_state != e.to_state
+     ORDER BY e.created_at DESC LIMIT 100`,
+  ).all<{
+    id: string;
+    entity_type: WorkflowEntityType;
+    entity_id: string;
+    from_state: string;
+    to_state: string;
+    actor_email: string;
+    created_at: string;
+    current_state: string | null;
+    current_id: string | null;
+  }>().catch(() => ({ results: [] as Array<Record<string, unknown>> }));
+  const issues = (rows.results ?? []).map((row) => ({
+    id: String(row.id ?? ""),
+    entityType: String(row.entity_type ?? ""),
+    entityId: String(row.entity_id ?? ""),
+    fromState: String(row.from_state ?? ""),
+    expectedState: String(row.to_state ?? ""),
+    currentState: row.current_state ? String(row.current_state) : null,
+    actorEmail: String(row.actor_email ?? ""),
+    createdAt: String(row.created_at ?? ""),
+    kind: row.current_id ? "state_mismatch" : "missing_entity",
+  }));
+  return json({ generatedAt: new Date().toISOString(), issues, checkedEvents: issues.length, scope: { email: scope.email } });
+}
+
 type WorkflowTransitionPayload = {
   entityType?: unknown;
   entityId?: unknown;
@@ -17884,6 +17937,8 @@ async function handleAdminRequest(
     return listAdminAuditLog(request, env);
   if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
     return listWorkflowTransitions(request, env);
+  if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
+    return workflowDiagnostics(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
     return transitionWorkflow(request, env);
   if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
