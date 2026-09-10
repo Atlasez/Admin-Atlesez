@@ -179,7 +179,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .summary-item:first-child { border-left: 0; }
   .summary-item:hover, .summary-item:focus-visible { background: var(--background-inset); outline: 0; }
   .summary-item span { color: var(--text-secondary); font-size: .68rem; font-weight: 800; }
-  .summary-item strong { color: var(--success); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1; }
+  .summary-item strong { color: var(--text-primary); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1; }
   .summary-item small { color: var(--text-muted); font-size: .66rem; line-height: 1.35; }
   .summary-item[data-summary-filter="urgent"] strong, .summary-item[data-summary-filter="approvals"] strong { color: var(--warning); }
   .summary-item[data-summary-filter="unread"] strong { color: var(--accent-primary); }
@@ -206,10 +206,10 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
   .status-success .item-kind-icon { color: var(--success); }
   .status-attention .item-kind-icon { color: var(--warning); }
   .status-danger .item-kind-icon { color: var(--danger); }
-  .item-priority-dot { background: var(--accent-primary); border-radius: 50%; height: .36rem; width: .36rem; }
-  .priority-urgent .item-priority-dot { background: var(--danger); }
+  .item-priority-dot { background: var(--border-strong); border-radius: 50%; height: .36rem; width: .36rem; }
+  .priority-urgent .item-priority-dot { background: var(--warning); }
   .priority-due-soon .item-priority-dot { background: var(--warning); }
-  .priority-new .item-priority-dot { background: var(--success); }
+  .priority-new .item-priority-dot { background: var(--accent-primary); }
   .item-main { min-width: 0; }
   .item-top, .item-meta, .item-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .35rem; }
   .item-kind, .item-status, .item-priority, .item-group, .item-due { border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); font-size: .64rem; line-height: 1.2; padding: .18rem .4rem; }
