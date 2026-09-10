@@ -8184,6 +8184,18 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   const taskBindings = projectIds.length
     ? [...projectIds, ...(scope.isManager ? [] : [scope.email, scope.email, scope.email])]
     : [];
+  // 完了履歴も未対応一覧と同じ原稿の可視範囲に限定する。履歴だけ全件を
+  // 返すと、担当外分野のタイトルや更新者がアクションセンターから漏れる。
+  const documentVisibilitySql = scope.isManager
+    ? "1=1"
+    : `(lower(d.created_by)=lower(?) OR
+          EXISTS (SELECT 1 FROM editorial_review_assignments ra WHERE ra.document_id=d.id AND lower(ra.reviewer_email)=lower(?)) OR
+          EXISTS (SELECT 1 FROM editorial_review_assignment_recipients rr WHERE rr.document_id=d.id AND lower(rr.reviewer_email)=lower(?)) OR
+          (d.publication_review_stage='subject-coordinator' AND EXISTS (SELECT 1 FROM editorial_workflow_roles wr WHERE wr.role='subject-coordinator' AND lower(wr.email)=lower(?) AND (wr.subject=d.subject OR wr.subject='*'))) OR
+          (d.publication_review_stage='project-leader' AND EXISTS (SELECT 1 FROM editorial_workflow_roles wr WHERE wr.role='project-leader' AND lower(wr.email)=lower(?))))`;
+  const documentVisibilityBindings = scope.isManager
+    ? []
+    : [scope.email, scope.email, scope.email, scope.email, scope.email];
   const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary] = await Promise.all([
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
@@ -8199,15 +8211,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
          FROM editorial_documents d
-        WHERE d.archived_at IS NULL AND (
-          lower(d.created_by)=lower(?) OR
-          EXISTS (SELECT 1 FROM editorial_review_assignments ra WHERE ra.document_id=d.id AND lower(ra.reviewer_email)=lower(?)) OR
-          EXISTS (SELECT 1 FROM editorial_review_assignment_recipients rr WHERE rr.document_id=d.id AND lower(rr.reviewer_email)=lower(?)) OR
-          (d.publication_review_stage='subject-coordinator' AND EXISTS (SELECT 1 FROM editorial_workflow_roles wr WHERE wr.role='subject-coordinator' AND lower(wr.email)=lower(?) AND (wr.subject=d.subject OR wr.subject='*'))) OR
-          (d.publication_review_stage='project-leader' AND EXISTS (SELECT 1 FROM editorial_workflow_roles wr WHERE wr.role='project-leader' AND lower(wr.email)=lower(?)))
-        )
+        WHERE d.archived_at IS NULL AND ${documentVisibilitySql}
         ORDER BY CASE WHEN d.scheduled_publish_at IS NULL THEN 1 ELSE 0 END,d.scheduled_publish_at,d.updated_at DESC LIMIT 100`,
-    ).bind(scope.email, scope.email, scope.email, scope.email, scope.email).all<{
+    ).bind(...documentVisibilityBindings).all<{
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
     }>().catch(() => ({ results: [] as Array<{
@@ -8246,12 +8252,12 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string;
     }>() : Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string }> }),
     historyOnly ? env.REPORTS.prepare(
-      `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
+        `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
          FROM editorial_documents d
-        WHERE d.archived_at IS NOT NULL OR d.published_at IS NOT NULL OR d.status='approved'
+        WHERE (${documentVisibilitySql}) AND (d.archived_at IS NOT NULL OR d.published_at IS NOT NULL OR d.status='approved')
         ORDER BY d.updated_at DESC LIMIT 50`,
-    ).bind().all<{
+    ).bind(...documentVisibilityBindings).all<{
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
     }>().catch(() => ({ results: [] as Array<{
