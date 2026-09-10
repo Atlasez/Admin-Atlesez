@@ -10,11 +10,14 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(groups).toHaveCount(4);
     await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
-    await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(5);
+    await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(4);
     await expect(
       groups.nth(2).getByRole("link", { name: /諸手続きを開く/ }),
     ).toHaveAttribute("href", "/admin/procedures/?project=atlas");
-    await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(1);
+    await expect(groups.nth(3).locator(".project-links > a")).toHaveCount(2);
+    await expect(
+      groups.nth(3).getByRole("link", { name: /操作履歴を開く/ }),
+    ).toHaveAttribute("href", "/admin/audit-log/");
     await expect(
       groups.nth(2).getByRole("link", { name: /規則を開く/ }),
     ).toHaveAttribute("href", "/admin/rules/");
@@ -33,7 +36,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       page.getByRole("link", { name: /閲覧統計を開く/ }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("link", { name: /アップデート履歴を開く/ }),
+      groups.nth(2).getByRole("link", { name: /操作履歴を開く/ }),
     ).toHaveCount(0);
   });
 
