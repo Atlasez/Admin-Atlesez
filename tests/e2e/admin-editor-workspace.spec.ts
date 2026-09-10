@@ -1312,7 +1312,9 @@ test("V-2: フィードバック担当者と依頼内容を選んで保存でき
   page,
 }) => {
   await mockAdminApi(page);
-  await page.route("**/api/admin/editor/review-requests", async (route) => {
+  let reviewRequestUrl = "";
+  await page.route("**/api/admin/editor/review-requests**", async (route) => {
+    reviewRequestUrl = route.request().url();
     await route.fulfill({
       json: {
         reviewers: [
@@ -1365,6 +1367,9 @@ test("V-2: フィードバック担当者と依頼内容を選んで保存でき
       reviewerEmails: ["bob@example.com"],
       note: "定義と例を重点確認してください",
     });
+  expect(new URL(reviewRequestUrl).searchParams.get("documentId")).toBe(
+    "doc-1",
+  );
   await expect(page.locator("[data-save-message]")).toHaveText(
     "フィードバックを依頼しました。",
   );
@@ -1372,7 +1377,7 @@ test("V-2: フィードバック担当者と依頼内容を選んで保存でき
 
 test("V-3: 依頼先未選択でもキャンセルできる", async ({ page }) => {
   await mockAdminApi(page);
-  await page.route("**/api/admin/editor/review-requests", async (route) => {
+  await page.route("**/api/admin/editor/review-requests**", async (route) => {
     await route.fulfill({
       json: {
         reviewers: [
