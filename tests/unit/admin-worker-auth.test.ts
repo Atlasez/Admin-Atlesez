@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
 class Statement {
@@ -351,6 +351,86 @@ describe("applicant stage server-side access", () => {
         query.includes("FROM admin_permission_audit_log"),
       ),
     ).toContain("LIMIT ?");
+  });
+
+  it("paginates GitHub update history by page and reports continuation", async () => {
+    const requests: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("SELECT subject FROM report_admin_permissions")
+            ? { results: [{ subject: "*" }] as T[] }
+            : { results: [] as T[] };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      requests.push(String(input));
+      return new Response(
+        JSON.stringify([
+          {
+            sha: "abcdef1234567",
+            html_url: "https://github.com/Atlasez/Admin-Atlesez/commit/abcdef1",
+            commit: {
+              message: "perf: 履歴を段階取得",
+              author: { name: "運営チーム", date: "2026-09-10T03:00:00.000Z" },
+            },
+            author: { login: "atlasez" },
+          },
+          {
+            sha: "123456789abcd",
+            html_url: "https://github.com/Atlasez/Admin-Atlesez/commit/1234567",
+            commit: {
+              message: "fix: 表示を安定化",
+              author: { name: "運営チーム", date: "2026-09-09T03:00:00.000Z" },
+            },
+            author: { login: "atlasez" },
+          },
+        ]),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    try {
+      const response = await worker.fetch(
+        new Request(
+          "https://admin.example/api/admin/update-history?limit=2&page=3",
+          {
+            headers: {
+              "Cf-Access-Authenticated-User-Email": "admin@example.com",
+            },
+          },
+        ),
+        {
+          ADMIN_AUTH_MODE: "cloudflare-access",
+          REPORTS: reports,
+          ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+        } as never,
+      );
+
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as {
+        entries: Array<{ title: string }>;
+        pagination: {
+          page: number;
+          limit: number;
+          hasMore: boolean;
+          nextPage: number | null;
+        };
+      };
+      expect(data.entries).toHaveLength(2);
+      expect(data.entries[0]?.title).toBe("履歴を段階取得");
+      expect(data.pagination).toEqual({
+        page: 3,
+        limit: 2,
+        hasMore: true,
+        nextPage: 4,
+      });
+      expect(requests[0]).toContain("per_page=2&page=3");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("requires an authenticated Google session before accepting an application", async () => {
