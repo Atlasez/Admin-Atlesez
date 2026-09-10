@@ -14,9 +14,9 @@ test("アップデート履歴を絞り込み、詳細を開ける", async ({ pa
 
   await page.getByText("記事執筆フローを更新").click();
   await expect(page.locator("[data-history-dialog]")).toBeVisible();
-  await expect(
-    page.locator("[data-dialog-title]"),
-  ).toHaveText("記事執筆フローを更新");
+  await expect(page.locator("[data-dialog-title]")).toHaveText(
+    "記事執筆フローを更新",
+  );
   await page.getByRole("button", { name: "詳細を閉じる" }).click();
   await expect(page.locator("[data-history-dialog]")).not.toBeVisible();
 
