@@ -2820,17 +2820,22 @@ async function listAdminUpdateHistory(
 ): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const requestedLimit = Number(new URL(request.url).searchParams.get("limit") ?? "30");
+  const params = new URL(request.url).searchParams;
+  const requestedLimit = Number(params.get("limit") ?? "30");
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 50)
     : 30;
+  const requestedPage = Number(params.get("page") ?? "1");
+  const page = Number.isFinite(requestedPage)
+    ? Math.min(Math.max(Math.trunc(requestedPage), 1), 100)
+    : 1;
   const auth = await githubToken(env).catch(() => null);
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Admin-Atlesez";
   const headers = auth
     ? githubApiHeaders(auth.token, "atlasez-admin-update-history")
     : { accept: "application/vnd.github+json", "user-agent": "atlasez-admin-update-history", "x-github-api-version": "2022-11-28" };
   const response = await fetch(
-    `https://api.github.com/repos/${repository}/commits?per_page=${limit}`,
+    `https://api.github.com/repos/${repository}/commits?per_page=${limit}&page=${page}`,
     { headers },
   );
   if (!response.ok)
@@ -2857,7 +2862,15 @@ async function listAdminUpdateHistory(
         href: commit.html_url,
       };
     });
-  return json({ entries });
+  return json({
+    entries,
+    pagination: {
+      page,
+      limit,
+      hasMore: commits.length === limit,
+      nextPage: commits.length === limit ? page + 1 : null,
+    },
+  });
 }
 
 async function createEditorialWorkflowRole(
