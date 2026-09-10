@@ -30,7 +30,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   <main class="operations" data-operations data-member-mode={memberMode ? "true" : undefined} data-progress-only={progressOnly ? "true" : undefined} data-progress-overview={progressOverview ? "true" : undefined}>
     <header>
       <h1 data-project-title>{initialPageTitle}</h1>
-      <p class="operations-lede">共有タスクと進捗を、いま必要なものから確認できます。</p>
     </header>
     <AdminRetryNotice />
     <div class="grid" data-admin-load-surface>

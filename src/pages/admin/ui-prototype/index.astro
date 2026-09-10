@@ -506,7 +506,6 @@ const updateHistory = [
               <div>
                 <p data-home-eyebrow>学習サイト運営</p>
                 <h1 data-home-title>Atlasホーム</h1>
-                <span class="home-description" data-home-description>執筆・レビューで、今日対応する仕事を確認できます。</span>
               </div>
               <div class="heading-status" aria-label="ワークスペースの状態">
                 <span aria-hidden="true"></span>
@@ -627,7 +626,6 @@ const updateHistory = [
 
           <section class="prototype-view hub-view" data-view="portal" aria-labelledby="portal-heading" hidden>
             <div class="page-heading"><div><p>Atlasez</p><h1 id="portal-heading">運営ポータル</h1></div><button class="quiet-action" type="button" data-portal-apply>応募フォームを確認</button></div>
-            <p class="view-lede">参加中のプロジェクト、横断タスク、同時作業会をまとめて確認できます。</p>
             <div class="hub-project-grid">{projectEntries.map((project) => <button class="hub-project-card" type="button" data-project-hub={project.name}><span class="hub-project-status"><i></i>{project.status}</span><strong>{project.name}</strong><small>{project.note}</small><span class="row-chevron">›</span></button>)}</div>
             <div class="hub-columns"><section class="hub-panel"><div class="section-title"><h2>今日の予定</h2><button type="button" data-hub-calendar>カレンダーを開く</button></div>{calendarEvents.slice(0, 2).map((event) => <button class="hub-event-row" type="button" data-detail-type="calendar" data-detail-title={event.title} data-detail-meta={`${event.project} · ${event.place}`} data-detail-status="開催予定" data-detail-owner="参加者募集中" data-detail-updated={event.date}><time>{event.date}<small>{event.time}</small></time><span class="list-main"><strong>{event.title}</strong><small>{event.project} · {event.place}</small></span><span class="row-chevron">›</span></button>)}</section><section class="hub-panel"><div class="section-title"><h2>未完了タスク</h2><button type="button" data-hub-tasks>タスクを開く</button></div>{taskQueue.filter((item) => item.tone !== "done").slice(0, 3).map((item) => <button class="hub-task-row" type="button" data-detail-type="task" data-detail-title={item.title} data-detail-meta={`${item.project} · ${item.kind}`} data-detail-status={item.status} data-detail-owner={item.assignee} data-detail-updated={item.due}><i class:list={["status-dot", item.tone === "doing" ? "in-review" : "open"]}></i><span class="list-main"><strong>{item.title}</strong><small>{item.project} · {item.assignee}</small></span><span class="list-meta"><small>期限</small>{item.due}</span></button>)}</section></div>
           </section>
@@ -658,14 +656,12 @@ const updateHistory = [
 
           <section class="prototype-view hub-view" data-view="approvals" aria-labelledby="approvals-heading" hidden>
             <div class="page-heading"><div><p>運営事務局</p><h1 id="approvals-heading">メンバー情報の承認</h1></div><button class="quiet-action" type="button" data-approval-refresh>一覧を更新</button></div>
-            <p class="view-lede">共通プロフィールと各プロジェクトの運営内自己紹介の変更を確認します。</p>
             <div class="prototype-toolbar"><button class="filter-chip active" type="button" data-approval-filter="pending">承認待ち <span>2</span></button><button class="filter-chip" type="button" data-approval-filter="all">すべて <span>3</span></button><button class="filter-chip" type="button" data-approval-filter="approved">承認済み <span>1</span></button></div>
             <div class="approval-prototype-list">{approvalQueue.map((request, index) => <article class="approval-prototype-card" data-approval-card data-approval-status={request.tone}><div class="application-identity"><span class="profile-avatar-small">{request.name.slice(0, 1)}</span><div><strong>{request.name}</strong><small>{request.email}</small><small>{request.kind} · {request.submitted}</small></div></div><div class="approval-change"><span class="panel-kicker">変更内容</span><p>{request.summary}</p></div><span class:list={["application-status", request.tone]}>{request.status}</span>{request.tone === "pending" ? <div class="approval-actions"><button class="modal-primary" type="button" data-approval-action="approve" data-approval-index={index}>承認</button><button class="quiet-action" type="button" data-approval-action="reject" data-approval-index={index}>却下</button></div> : <span class="approval-processed">処理済み</span>}</article>)}</div>
           </section>
 
           <section class="prototype-view hub-view" data-view="management" aria-labelledby="management-heading" hidden>
             <div class="page-heading"><div><p>管理 / Atlas</p><h1 id="management-heading">管理トップ</h1></div><span class="view-badge">管理者専用</span></div>
-            <p class="view-lede">運営設定、応募、権限、統計をまとめて管理します。操作結果はこのプロトタイプ内だけに保存されます。</p>
             <div class="management-tool-grid">{managementTools.map((tool, index) => <button class="management-tool-card" type="button" data-management-tool={index}><span class:list={["management-tool-icon", tool.tone]}>{index + 1}</span><span><strong>{tool.title}</strong><small>{tool.detail}</small></span><span class="row-chevron">›</span></button>)}</div>
             <section class="management-role-panel"><div class="section-title"><h2>運営ロールの状態</h2><button type="button" data-management-audit>運用事前チェック</button></div><div class="management-role-grid"><div><b>3</b><span>参加者</span></div><div><b>2</b><span>Discord連携済み</span></div><div><b>4</b><span>担当分野</span></div><div><b>1</b><span>承認待ち</span></div></div></section>
           </section>
@@ -729,7 +725,6 @@ const updateHistory = [
               <div><p>運営 / アトラス</p><h1 id="tasks-heading">タスク管理</h1></div>
               <button class="modal-primary" type="button" data-task-create-prototype>タスクを追加</button>
             </div>
-            <p class="view-lede">参加中のプロジェクトを横断して、担当・期限・進捗を確認できます。</p>
             <div class="task-summary-strip" aria-label="タスクの概要"><span><b>4</b>表示中</span><span><b>2</b>未着手</span><span><b>1</b>進行中</span><span><b>1</b>完了</span></div>
             <div class="prototype-toolbar" role="toolbar" aria-label="タスクの表示対象">
               <button class="filter-chip active" type="button" data-filter-group="task" data-filter-value="all">すべて <span>4</span></button>
@@ -756,7 +751,6 @@ const updateHistory = [
               <div class="calendar-page-actions"><button class="quiet-action" type="button" data-calendar-availability>可否を登録</button><button class="modal-primary" type="button" data-calendar-add>日程を追加</button><button class="icon-button" type="button" data-calendar-settings aria-label="カレンダー設定">⚙</button></div>
             </div>
             <div class="calendar-month-bar"><button class="icon-button" type="button" data-calendar-prev aria-label="前の月">‹</button><strong data-calendar-month>2026年7月</strong><button class="icon-button" type="button" data-calendar-next aria-label="次の月">›</button><span data-calendar-timezone-label>Asia/Tokyo</span><div class="calendar-view-switch"><button type="button" class="filter-chip active" data-calendar-view="month">月</button><button type="button" class="filter-chip" data-calendar-view="week">週</button><button type="button" class="filter-chip" data-calendar-view="agenda">予定一覧</button></div></div>
-            <p class="view-lede">同時作業会・交流会の日程と、参加可能な時間を確認できます。</p>
             <div class="calendar-grid" data-calendar-grid aria-label="日程カレンダー"></div>
             <div class="calendar-legend"><span><i class="calendar-legend-dot is-today"></i>今日</span><span><i class="calendar-legend-dot is-event"></i>予定あり</span><span><i class="calendar-legend-dot is-availability"></i>可否登録</span></div>
             <div class="calendar-event-list" aria-label="開催予定">
@@ -784,14 +778,12 @@ const updateHistory = [
 
           <section class="prototype-view" data-view="genres" data-workspace-scope="Atlas" aria-labelledby="genres-heading" hidden>
             <div class="page-heading"><div><p>管理 / アトラス</p><h1 id="genres-heading">ジャンル</h1></div><span class="view-badge">{publishedSubjectCount}公開分野</span></div>
-            <p class="view-lede">学習サイト「アトラス」の分野とカテゴリ構成を確認できます。</p>
             <label class="prototype-search-field"><span>分野を検索</span><input type="search" placeholder="例：数学、物理" data-genre-search /></label>
             <div class="genre-grid" aria-label="公開中の分野">{genreEntries.map((genre) => <button class="genre-card" type="button" data-genre-card data-genre-name={genre.name} data-detail-type="genre" data-detail-title={genre.name} data-detail-meta={`${genre.categories}カテゴリ · ${genre.articles}公開記事`} data-detail-status="公開中" data-detail-owner="Atlas編集部" data-detail-updated="現在"><strong>{genre.name}</strong><small>{genre.categories}カテゴリ · {genre.articles}公開記事</small><span>›</span></button>)}</div>
           </section>
 
           <section class="prototype-view" data-view="analytics" data-workspace-scope="Atlas" aria-labelledby="analytics-heading" hidden>
             <div class="page-heading"><div><p>管理 / アトラス</p><h1 id="analytics-heading">閲覧統計</h1></div><button class="icon-button" type="button" data-analytics-refresh aria-label="閲覧統計を更新">↻</button></div>
-            <p class="view-lede">個人情報を保存せず、閲覧・15秒以上の滞在・本文の90%到達を集計します。</p>
             <div class="analytics-range" role="toolbar" aria-label="閲覧統計の期間"><button class="filter-chip" type="button" data-analytics-range="7">直近7日</button><button class="filter-chip active" type="button" data-analytics-range="30">直近30日</button><button class="filter-chip" type="button" data-analytics-range="90">直近90日</button></div>
             <div class="analytics-metrics"><div><span>閲覧</span><strong>12,480</strong><small>+8.4%</small></div><div><span>読まれた</span><strong>8,912</strong><small>71.4%</small></div><div><span>90%到達</span><strong>5,438</strong><small>43.6%</small></div></div>
             <div class="section-title"><h2>よく読まれた記事</h2><span>匿名集計</span></div><div class="analytics-table"><div class="analytics-row analytics-header"><span>記事</span><span>閲覧</span><span>読まれた</span><span>90%到達</span></div>{["条件付き期待値", "Hoeffding inequality", "運動量と力積", "群の準同型"].map((title, index) => <button class="analytics-row" type="button" data-detail-type="analytics" data-detail-title={title} data-detail-meta="アトラス公開記事の閲覧統計" data-detail-status="集計済み" data-detail-owner="匿名集計" data-detail-updated="直近30日"><strong>{title}</strong><span>{(3420 - index * 530).toLocaleString()}</span><span>{(2410 - index * 360).toLocaleString()}</span><span>{(78 - index * 6)}%</span></button>)}</div>
@@ -799,7 +791,6 @@ const updateHistory = [
 
           <section class="prototype-view hub-view" data-view="history" aria-labelledby="history-heading" hidden>
             <div class="page-heading"><div><p>管理 / Atlasez</p><h1 id="history-heading">アップデート履歴</h1></div><button class="quiet-action" type="button" data-history-refresh>履歴を更新</button></div>
-            <p class="view-lede">運営サイトと管理画面の変更を、バージョン・対象プロジェクトごとに確認できます。</p>
             <div class="history-summary-strip"><span><b>{updateHistory.length}</b>直近の更新</span><span><b>3</b>機能追加</span><span><b>2</b>改善・運用</span><span>最終更新 <b>7/31</b></span></div>
             <div class="prototype-toolbar history-toolbar" role="toolbar" aria-label="アップデート履歴の絞り込み"><label class="inline-search">キーワード<input type="search" placeholder="変更内容・バージョンを検索" data-history-search /></label><select class="toolbar-select" data-history-kind aria-label="変更種別"><option value="all">すべての種別</option><option value="機能追加">機能追加</option><option value="改善">改善</option><option value="データ">データ</option><option value="運用">運用</option><option value="分析">分析</option></select><select class="toolbar-select" data-history-project aria-label="対象プロジェクト"><option value="all">全プロジェクト</option><option value="アトラス">アトラス</option><option value="運営事務局">運営事務局</option><option value="Atlasez運営事務局">Atlasez運営事務局</option></select></div>
             <div class="history-list" aria-label="アップデート履歴">{updateHistory.map((item) => <button class="history-row" type="button" data-history-row data-history-kind-value={item.kind} data-history-project-value={item.project} data-history-text={`${item.version} ${item.title} ${item.summary} ${item.project}`} data-detail-type="history" data-detail-title={`${item.version} · ${item.title}`} data-detail-meta={`${item.date} · ${item.project}`} data-detail-status={item.kind} data-detail-owner={item.author} data-detail-updated={item.date}><time>{item.date}<small>{item.version}</small></time><span class:list={["history-icon", item.tone]} aria-hidden="true">↗</span><span class="list-main"><strong>{item.title}</strong><small>{item.summary}</small></span><span class:list={["history-kind", item.tone]}>{item.kind}</span><span class="row-chevron">›</span></button>)}</div>
@@ -807,7 +798,6 @@ const updateHistory = [
 
           <section class="prototype-view" data-view="permissions" aria-labelledby="permissions-heading" hidden>
             <div class="page-heading"><div><p>管理</p><h1 id="permissions-heading">権限</h1></div><button class="modal-primary" type="button" data-permission-invite>運営者を追加</button></div>
-            <p class="view-lede">運営メンバーの担当分野とDiscord連携状況を確認します。</p>
             <div class="permission-list" aria-label="運営メンバー一覧">{permissionMembers.map((member) => <button class="permission-row" type="button" data-detail-type="permission" data-detail-title={member.name} data-detail-meta={`${member.email} · ${member.scope}`} data-detail-status={member.role} data-detail-owner="Atlasez運営" data-detail-updated="現在"><span class="permission-avatar">{member.name.slice(0, 2)}</span><span class="list-main"><strong>{member.name}</strong><small>{member.email}</small></span><span class="permission-scope"><b>{member.role}</b><small>{member.scope}</small></span><span class="row-chevron">›</span></button>)}</div>
           </section>
 
@@ -984,7 +974,6 @@ const updateHistory = [
       const workspaceButton = document.querySelector<HTMLButtonElement>("[data-workspace-menu]");
       const homeEyebrow = document.querySelector<HTMLElement>("[data-home-eyebrow]");
       const homeTitle = document.querySelector<HTMLElement>("[data-home-title]");
-      const homeDescription = document.querySelector<HTMLElement>("[data-home-description]");
       const searchButton = document.querySelector<HTMLButtonElement>("[data-search-open]");
       const notificationButton = document.querySelector<HTMLButtonElement>("[data-notification-menu]");
       let popoverAnchor: HTMLElement | null = null;
@@ -1282,23 +1271,20 @@ const updateHistory = [
         setNavOpen(false);
       };
 
-      const workspaceHomeCopy: Record<string, { eyebrow: string; title: string; description: string; role: string }> = {
+      const workspaceHomeCopy: Record<string, { eyebrow: string; title: string; role: string }> = {
         Atlas: {
           eyebrow: "学習サイト運営",
           title: "Atlasホーム",
-          description: "執筆・レビューで、今日対応する仕事を確認できます。",
           role: "Atlas運営",
         },
         運営事務局: {
           eyebrow: "組織運営",
           title: "運営事務局ホーム",
-          description: "承認と全体タスクを、優先度の高い順に確認できます。",
           role: "事務局運営",
         },
         ゼミプラットフォーム: {
           eyebrow: "プロジェクト運営",
           title: "ゼミプラットフォームホーム",
-          description: "直近の日程と共有タスクに絞って、活動の流れを確認できます。",
           role: "ゼミ運営",
         },
       };
@@ -1310,7 +1296,6 @@ const updateHistory = [
         workspaceButton?.setAttribute("aria-label", `現在のワークスペース: ${currentWorkspace}`);
         if (homeEyebrow) homeEyebrow.textContent = copy.eyebrow;
         if (homeTitle) homeTitle.textContent = copy.title;
-        if (homeDescription) homeDescription.textContent = copy.description;
         document.querySelectorAll<HTMLElement>("[data-workspace-scope]").forEach((element) => {
           if (element.dataset.view) return;
           element.hidden = element.dataset.workspaceScope !== currentWorkspace;

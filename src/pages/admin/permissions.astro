@@ -13,7 +13,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
       <div>
         <p class="member-admin__eyebrow">権限管理</p>
         <h1>運営者・担当分野管理</h1>
-        <p class="member-admin__lead">参加者を選び、運営権限・担当分野・Discord役職を個人単位で管理します。</p>
       </div>
       <div class="member-admin__header-meta"><span>管理者専用</span><a class="member-admin__self-discord" href="/auth/discord/start?returnTo=%2Fadmin%2Fpermissions%2F%3Fproject%3Datlas">自分のDiscordを連携</a><small>個人設定の保存時にDiscordへ同期します</small></div>
     </header>
