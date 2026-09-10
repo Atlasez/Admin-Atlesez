@@ -127,6 +127,9 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   await expect(
     page.getByRole("heading", { name: "アクションセンター" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "未対応", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await expect(
     page
