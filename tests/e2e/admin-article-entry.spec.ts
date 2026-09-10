@@ -48,6 +48,11 @@ test.describe("A/D 原稿一覧の作業導線", () => {
   });
 
   test("操作履歴と状態遷移は管理トップから開く", async ({ page }) => {
+    await page.route("**/api/admin/auth-status", (route) =>
+      route.fulfill({
+        json: { email: "manager@example.com", isManager: true },
+      }),
+    );
     await page.goto("admin/manage/?project=atlas");
     await expect(
       page.getByRole("link", { name: /操作履歴を開く/ }),
