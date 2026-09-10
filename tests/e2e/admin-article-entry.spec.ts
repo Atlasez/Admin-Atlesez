@@ -345,6 +345,33 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator("[data-status]")).toHaveValue("all");
     await expect(page.locator("[data-test]")).toHaveValue("exclude");
     await expect(page.locator("[data-archive]")).toHaveValue("active");
+    await expect(page.locator("[data-scope-note]")).toHaveText("担当範囲：数学（1分野）");
+  });
+
+  test("D-3d: 原稿一覧の取得失敗を共通の再試行導線で復旧できる", async ({ page }) => {
+    let attempts = 0;
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "一時的な障害" }) });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", subjects: ["mathematics"], coordinatorSubjects: [], allSubjects: false },
+          documents: [{ id: "retry-doc", subject: "mathematics", category: "algebra", title: "再試行で表示される記事", status: "draft", updated_at: "2026-09-01T00:00:00.000Z", published_at: null }],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=retry");
+    await expect(page.locator("[data-admin-load-error]")).toBeVisible();
+    await expect(page.locator("[data-admin-load-surface]")).toHaveAttribute("aria-busy", "false");
+    await page.getByRole("button", { name: "再試行" }).click();
+    await expect(page.locator('[data-document-id="retry-doc"]')).toContainText("再試行で表示される記事");
+    await expect(page.locator("[data-admin-load-error]")).toBeHidden();
+    await expect(page.locator("[data-admin-load-surface]")).toHaveAttribute("aria-busy", "false");
   });
 
   test("D-4: 下書きをアーカイブし、30日以内なら一覧から復元できる", async ({
