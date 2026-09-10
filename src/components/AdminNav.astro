@@ -511,7 +511,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         { label: "タスク管理", detail: "担当タスクと期限", href: "/admin/operations/?project=atlas" },
         { label: "カレンダー", detail: "予定と締切", href: "/admin/calendar/?project=atlas" },
         { label: "管理トップ", detail: "設定・権限・状態遷移", href: "/admin/manage/?project=atlas" },
-        { label: "操作履歴", detail: "変更イベントを確認", href: "/admin/audit-log/" },
         { label: "表示設定を開く", detail: "テーマ・文字サイズ・コントラスト", run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
       ];
       type CommandHistory = { label: string; detail: string; href?: string; count: number; lastUsed: number };

@@ -33,14 +33,21 @@ test("開発者向け診断は状態を一覧表示し、再確認できる", as
     });
   });
 
-  await page.goto("admin/developer/");
+  await page.goto("admin/developer/?mode=developer");
   await expect(
-    page.getByRole("heading", { name: "開発者向け診断" }),
+    page.getByRole("heading", { name: "開発者モード" }),
   ).toBeVisible();
   await expect(page.getByText("運用データベース")).toBeVisible();
   await expect(page.getByText("正常")).toBeVisible();
   await expect(page.getByText("確認が必要")).toBeVisible();
   await expect(page.getByText("2ms")).toBeVisible();
+  await expect(page.getByRole("link", { name: "操作履歴" })).toHaveAttribute(
+    "href",
+    "/admin/audit-log/",
+  );
+  await expect(
+    page.getByRole("link", { name: "状態遷移・整合性" }),
+  ).toHaveAttribute("href", "/admin/workflow/");
   await page.getByRole("button", { name: "再確認" }).click();
   await expect.poll(() => requests).toBe(2);
 });
