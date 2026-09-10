@@ -17,7 +17,6 @@ const projectLabel = selectedProject?.[1] ?? "";
     <header>
       <p>運営参加応募</p>
       <h1>{selectedProject ? `${projectLabel}：応募管理` : "応募管理"}</h1>
-      <span>{selectedProject ? "このプロジェクトに届いた応募だけを表示しています。" : "応募管理を表示するプロジェクトを選択してください。"}</span>
     </header>
     <section class="project-picker" hidden={Boolean(selectedProject)} aria-labelledby="project-picker-title">
       <p>プロジェクトを選択</p>

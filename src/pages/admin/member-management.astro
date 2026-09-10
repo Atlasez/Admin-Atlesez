@@ -5,7 +5,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <AdminLayout title="運営メンバー管理" description="アトラス運営メンバーの名簿">
   <main class="member-management" data-member-management>
-    <header class="page-heading"><div><h1>運営メンバー管理</h1><p class="lead">アトラスに参加している運営メンバーを、名簿またはタイルで確認できます。</p></div><a href="/admin/manage/?project=atlas">← 管理トップ</a></header>
+    <header class="page-heading"><div><h1>運営メンバー管理</h1></div><a href="/admin/manage/?project=atlas">← 管理トップ</a></header>
     <section class="toolbar" aria-label="名簿の表示設定"><label class="search">検索<input type="search" data-search placeholder="名前・メール・担当分野" /></label><div class="view-switch" role="group" aria-label="表示形式"><button type="button" data-view="list" aria-pressed="true">一覧</button><button type="button" data-view="tiles" aria-pressed="false">タイル</button></div><span data-count>読み込み中…</span><button type="button" class="load-more" data-load-more hidden>さらに読み込む</button></section>
     <section class="member-list-view" data-list-view aria-label="運営メンバー一覧"><div class="table-wrap"><table><thead><tr><th>メンバー</th><th>所属</th><th>役割</th><th>担当分野</th><th>最終確認</th><th>操作</th></tr></thead><tbody data-table-body><tr><td colspan="6">読み込み中…</td></tr></tbody></table></div></section>
     <section class="member-tile-view" data-tile-view aria-label="運営メンバーのタイル表示" hidden><div class="tile-grid" data-tile-grid></div></section>

@@ -3,7 +3,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 ---
 <AdminLayout title="マイページ" description="メンバー情報を確認します">
   <main class="member-profile" data-member-profile>
-    <header class="page-heading"><div><h1>マイページ</h1><p class="lead">登録されている情報を確認できます。変更は専用の編集ページから申請してください。</p></div><a class="edit-link" href="/admin/member-profile/edit/">プロフィールを編集</a></header>
+    <header class="page-heading"><div><h1>マイページ</h1></div><a class="edit-link" href="/admin/member-profile/edit/">プロフィールを編集</a></header>
     <section class="profile-card" aria-labelledby="profile-heading">
       <div class="profile-top"><div class="avatar" data-avatar aria-hidden="true">A</div><div><h2 id="profile-heading" data-name>読み込み中…</h2><small data-email></small></div></div>
       <section class="discord-card" aria-labelledby="discord-heading"><div class="discord-card__heading"><div><h2 id="discord-heading">Discord連携</h2></div><span class="discord-card__status" data-discord-status data-state="unconnected">未連携</span></div><p data-discord-description>Discordサーバー参加に必要な本人同意を行えます。</p><a class="discord-card__action" data-discord-link href="/auth/discord/start?returnTo=%2Fadmin%2Fmember-profile%2F">Discordと連携</a><output data-discord-message aria-live="polite"></output></section>

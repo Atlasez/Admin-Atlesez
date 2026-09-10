@@ -41,9 +41,10 @@ test("ワークスペース切り替えで記事執筆UIをAtlasだけに表示�
   await expect(
     page.getByRole("heading", { name: "運営事務局ホーム" }),
   ).toBeVisible();
+  // ページ見出し直下の説明文は表示しない。見出しと実際の作業項目だけを確認する。
   await expect(
     page.getByText("承認と全体タスクを、優先度の高い順に確認できます。"),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^記事 5$/ })).toBeHidden();
   await expect(page.getByRole("button", { name: /^レビュー 3$/ })).toBeHidden();
   await expect(page.getByRole("button", { name: /^問題報告 2$/ })).toBeHidden();

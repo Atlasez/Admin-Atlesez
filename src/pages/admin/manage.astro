@@ -7,7 +7,7 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
 
 <AdminLayout title="管理トップ" description="管理機能の入口">
   <main class="management-home" data-management-home data-project={project}>
-    <header><p>{projectLabel}</p><h1>管理トップ</h1><span>このプロジェクトの運営設定と応募を管理します。</span></header>
+    <header><p>{projectLabel}</p><h1>管理トップ</h1></header>
     <section aria-label="管理機能">
       <a href={`/admin/permissions/?project=${project}`} data-manager-only data-admin-site={projectSite} hidden><strong>運営者・担当管理</strong><ul class="role-tags"><li>統括</li><li>運営内運営</li></ul><span aria-label="運営者・担当管理を開く">→</span></a>
       {project === "atlas" && <a href="/admin/member-management/?project=atlas"><strong>運営メンバー管理</strong><ul class="role-tags"><li>名簿</li><li>担当確認</li></ul><span aria-label="運営メンバー管理を開く">→</span></a>}
