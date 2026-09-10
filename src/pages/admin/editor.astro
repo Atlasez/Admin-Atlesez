@@ -5159,10 +5159,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   [data-pref-bg="dark"] .math-preset-dialog [data-custom-preset-label],
   [data-pref-bg="dark"] .math-preset-dialog [data-custom-preset-macros] { color: #fff; -webkit-text-fill-color: #fff; caret-color: #fff; opacity: 1; }
   .revision-workspace { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--accent); margin: 1rem .8rem; padding: 1rem; }
-  .document-provenance { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: .68rem; gap: .35rem .65rem; margin-top: .35rem; min-height: 1.5rem; }
+  .document-provenance { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: .62rem; gap: .2rem .5rem; margin-top: .2rem; min-height: 1.1rem; }
   .document-provenance > span:not(.document-editor-stack) { white-space: nowrap; }
   .document-editor-stack { align-items: center; display: inline-flex; gap: .15rem; margin-left: .15rem; }
-  .document-editor-avatar { align-items: center; background: var(--accent-subtle, #e8f3fb); border: 1px solid color-mix(in srgb, var(--accent, #176ea6) 45%, var(--border)); border-radius: 50%; color: var(--accent, #176ea6); display: inline-flex; font-size: .58rem; font-weight: 900; height: 1.35rem; justify-content: center; width: 1.35rem; }
+  .document-editor-avatar { align-items: center; background: var(--accent-subtle, #e8f3fb); border: 1px solid color-mix(in srgb, var(--accent, #176ea6) 45%, var(--border)); border-radius: 50%; color: var(--accent, #176ea6); display: inline-flex; font-size: .52rem; font-weight: 900; height: 1.1rem; justify-content: center; width: 1.1rem; }
   .preview-chapter { border-bottom: 1px solid var(--border); margin: 0; }
   .preview-chapter:last-child { border-bottom: 0; }
   .preview-chapter > summary { color: var(--text); cursor: pointer; font-size: 1.25rem; font-weight: 800; list-style-position: outside; margin: 1.3rem 0 .65rem; padding: .25rem .25rem .35rem 0; }
@@ -5170,6 +5170,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .preview-chapter-body { padding-bottom: .5rem; }
   .preview-deferred { align-items: center; color: var(--muted); display: flex; min-height: 12rem; justify-content: center; margin: 0; }
   .preview-area[data-preview-loading="true"] { contain: content; }
+  @media (min-width: 900px) {
+    .editor-workspace .document-toolbar > div:first-child { align-items: center; column-gap: .7rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+    .editor-workspace .document-toolbar > div:first-child > .document-statuses { grid-column: 1 / -1; }
+    .editor-workspace .document-toolbar > div:first-child > h2 { grid-column: 1; grid-row: 2; }
+    .editor-workspace .document-toolbar > div:first-child > .document-provenance { grid-column: 2; grid-row: 2; justify-content: end; margin-top: 0; }
+    .editor-workspace .document-provenance .document-updated { display: none; }
+  }
+  @media (max-width: 899px) {
+    .editor-workspace .document-provenance { margin-top: .2rem; }
+  }
   .revision-workspace h3 { margin: 0; }
   .revision-workspace > p { color: var(--muted); margin: .35rem 0 .75rem; }
   .feedback-request-history { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
