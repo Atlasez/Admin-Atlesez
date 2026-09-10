@@ -227,6 +227,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 <span data-collaboration-state>接続中</span>
                 <small data-collaboration-latency hidden></small>
                 <div data-collaboration-participants aria-label="同時編集中のメンバー"></div>
+                <button type="button" class="collaboration-retry" data-collaboration-retry hidden>再接続</button>
               </div>
               <div class="document-actions">
                 <button type="button" class="primary-action" data-create-update-proposal hidden>更新案を作成</button>
@@ -1314,6 +1315,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const externalStatementIds = [...new Set(articles.flatMap((article) => [...article.body.matchAll(/\{#([A-Za-z][A-Za-z0-9_-]*)\}/g)].map((match) => match[1].toLowerCase())))];
     const form = root.querySelector<HTMLFormElement>("[data-document-form]")!;
     let activeDocumentId = routeQuery.get("document")?.trim() ?? "";
+    let documentLoadGeneration = 0;
     const documentIdForRequest = () => {
       const input = form.elements.namedItem("documentId") as HTMLInputElement;
       const value = input.value.trim();
@@ -1416,6 +1418,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const collaborationState = root.querySelector<HTMLElement>("[data-collaboration-state]")!;
     const collaborationLatency = root.querySelector<HTMLElement>("[data-collaboration-latency]")!;
     const collaborationParticipants = root.querySelector<HTMLElement>("[data-collaboration-participants]")!;
+    const collaborationRetryButton = root.querySelector<HTMLButtonElement>("[data-collaboration-retry]")!;
     const heading = root.querySelector<HTMLElement>("[data-document-heading]")!;
     const state = root.querySelector<HTMLElement>("[data-document-state]")!;
     const publicationState = root.querySelector<HTMLElement>("[data-publication-state]")!;
@@ -2076,6 +2079,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/publication-review`, { credentials: "same-origin", cache: "no-store" });
       const stateData = await read<{ stage?: Document["publication_review_stage"]; canCompleteWriting?: boolean; canDecide?: boolean; managerOverride?: boolean; feedbackTaskTotal?: number; feedbackTaskDone?: number; feedbackComplete?: boolean; error?: string }>(response);
       if (!response.ok) throw new Error(stateData.error ?? "公開審査状態を読み込めませんでした。");
+      const loadedId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      if (loadedId !== documentId) return;
       const stage = stateData.stage ?? null;
       const currentItem = documents.find((document) => document.id === documentId) ?? item;
       if (currentItem) {
@@ -2247,6 +2252,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
           if (currentDocumentId !== item.id) return;
           const refreshed = data.document;
+          const refreshedVersion = Date.parse(refreshed.updated_at);
+          if (Number.isFinite(refreshedVersion) && refreshedVersion < latestPublicationRealtimeVersion) return;
+          if (Number.isFinite(refreshedVersion) && refreshedVersion > latestPublicationRealtimeVersion) latestPublicationRealtimeVersion = refreshedVersion;
           const index = documents.findIndex((document) => document.id === item.id);
           if (index >= 0) documents[index] = refreshed;
           setPublicationState(refreshed);
@@ -3605,14 +3613,40 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", baseUpdatedAt: persistedDocumentUpdatedAt || undefined, subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
     let documentSaveInFlight: Promise<unknown> | null = null;
+    let documentSaveQueued = false;
     let collaborationSaveState: { failed: () => void; succeeded: () => void } = { failed: () => undefined, succeeded: () => undefined };
     const withDocumentSaveLock = <T,>(operation: () => Promise<T>): Promise<T> => {
-      if (documentSaveInFlight) return documentSaveInFlight as Promise<T>;
+      if (documentSaveInFlight) {
+        // Coalesce duplicate clicks, while remembering that a newer edit
+        // arrived during the request so it can be persisted after completion.
+        documentSaveQueued = true;
+        return documentSaveInFlight as Promise<T>;
+      }
       const operationPromise = operation();
       documentSaveInFlight = operationPromise;
       void operationPromise.then(
-        () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
-        () => { if (documentSaveInFlight === operationPromise) documentSaveInFlight = null; },
+        () => {
+          if (documentSaveInFlight !== operationPromise) return;
+          documentSaveInFlight = null;
+          if (documentSaveQueued) {
+            documentSaveQueued = false;
+            queueMicrotask(() => {
+              const id = documentIdForRequest();
+              if (id && hasUnsavedChanges && documentConflict.hidden) void saveCurrentDocument(false).catch(() => undefined);
+            });
+          }
+        },
+        () => {
+          if (documentSaveInFlight !== operationPromise) return;
+          documentSaveInFlight = null;
+          if (documentSaveQueued) {
+            documentSaveQueued = false;
+            queueMicrotask(() => {
+              const id = documentIdForRequest();
+              if (id && hasUnsavedChanges && documentConflict.hidden) void saveCurrentDocument(false).catch(() => undefined);
+            });
+          }
+        },
       );
       return operationPromise;
     };
@@ -3792,11 +3826,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let collaborationHeartbeatTimer: number | undefined;
     let collaborationPongTimer: number | undefined;
     let collaborationHeartbeatNow: (() => void) | null = null;
+    let collaborationReconnectNow: (() => void) | null = null;
     let collaborationGeneration = 0;
     let collaborationApplyingRemote = false;
     let collaborationSessionId = "";
     let collaborationSyncTimer: number | undefined;
     let collaborationInitialSyncTimer: number | undefined;
+    let collaborationSaveFailed = false;
     let persistedDocumentValues = { title: "", summary: "", body: "" };
     let persistedDocumentUpdatedAt = "";
     const collaborationFieldLabels: Record<string, string> = { title: "タイトル", summary: "要約", body: "本文" };
@@ -3815,19 +3851,29 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationStatus.title = detail || collaborationStateLabels[connectionState];
       collaborationStatus.setAttribute("aria-label", `リアルタイム接続：${collaborationStateLabels[connectionState]}${detail ? `（${detail}）` : ""}`);
       if (connectionState !== "synced") collaborationLatency.hidden = true;
+      collaborationRetryButton.hidden = connectionState !== "disconnected" && connectionState !== "save-error";
+      collaborationRetryButton.textContent = connectionState === "save-error" ? "保存を再試行" : "再接続";
+      collaborationRetryButton.setAttribute("aria-label", connectionState === "save-error" ? "保存を再試行" : "リアルタイム接続を再試行");
     };
     const markCollaborationSynced = (detail = "") => {
       window.clearTimeout(collaborationSyncTimer);
       window.clearTimeout(collaborationInitialSyncTimer);
       collaborationSyncTimer = undefined;
       collaborationInitialSyncTimer = undefined;
-      if (!collaborationStatus.hidden && collaborationSocket?.readyState === WebSocket.OPEN) setCollaborationConnectionState("synced", detail);
+      if (!collaborationStatus.hidden && collaborationSocket?.readyState === WebSocket.OPEN) {
+        if (collaborationSaveFailed) setCollaborationConnectionState("save-error", "変更の保存に失敗しました。再試行してください");
+        else setCollaborationConnectionState("synced", detail);
+      }
     };
     collaborationSaveState = {
       failed: () => {
+        collaborationSaveFailed = true;
         if (!collaborationStatus.hidden) setCollaborationConnectionState("save-error", "変更を保存できませんでした。再試行してください");
       },
-      succeeded: () => markCollaborationSynced(),
+      succeeded: () => {
+        collaborationSaveFailed = false;
+        markCollaborationSynced();
+      },
     };
     const renderCollaborationParticipants = (participants: CollaborationParticipant[]) => {
       const normalized = participants.filter((participant) => participant && typeof participant.displayName === "string");
@@ -3860,6 +3906,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationAbort = null;
       collaborationSocket?.close();
       collaborationSocket = null;
+      collaborationReconnectNow = null;
       collaborationDocument?.destroy();
       collaborationDocument = null;
       collaborationDocumentId = "";
@@ -3867,6 +3914,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationParticipants.replaceChildren();
       collaborationLatency.hidden = true;
       collaborationHeartbeatNow = null;
+      collaborationSaveFailed = false;
     };
     const replaceSharedText = (shared: Y.Text, next: string) => {
       const previous = shared.toString();
@@ -3913,6 +3961,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationDocument = yDocument;
       collaborationAbort = new AbortController();
       let reconnectAttempt = 0;
+      let connectedAt = 0;
+      let stableConnectionTimer: number | undefined;
       let fieldsBound = false;
       let skipNextBodyInput = false;
       const bindFields = () => {
@@ -3992,7 +4042,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         };
         collaborationHeartbeatNow = sendHeartbeat;
         socket.addEventListener("open", () => {
-          reconnectAttempt = 0;
+          connectedAt = Date.now();
+          window.clearTimeout(stableConnectionTimer);
+          // Keep the backoff attempt across short-lived connections. Reset it
+          // only after a stable connection so a flapping network cannot cause
+          // a tight reconnect loop.
+          stableConnectionTimer = window.setTimeout(() => {
+            if (generation === collaborationGeneration && collaborationSocket === socket && socket.readyState === WebSocket.OPEN) reconnectAttempt = 0;
+          }, 10_000);
           setCollaborationConnectionState("syncing", "共有ドキュメントを同期しています…");
           if (fieldsBound) socket.send(Y.encodeStateAsUpdate(yDocument));
           window.clearTimeout(collaborationInitialSyncTimer);
@@ -4042,9 +4099,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           if (generation !== collaborationGeneration || collaborationSocket !== socket) return;
           stopCollaborationHeartbeat();
           collaborationHeartbeatNow = null;
+          window.clearTimeout(stableConnectionTimer);
           setCollaborationConnectionState("disconnected", "接続が一時的に切れました");
-          const delay = Math.min(4_000, 250 * 2 ** reconnectAttempt);
-          reconnectAttempt += 1;
+          if (!navigator.onLine) return;
+          const stable = connectedAt > 0 && Date.now() - connectedAt >= 10_000;
+          if (stable) reconnectAttempt = 0;
+          const baseDelay = Math.min(30_000, 250 * 2 ** Math.min(reconnectAttempt, 7));
+          const jitter = Math.round(baseDelay * (Math.random() * 0.4 - 0.2));
+          const delay = Math.max(250, baseDelay + jitter);
+          reconnectAttempt = Math.min(8, reconnectAttempt + 1);
           collaborationReconnectTimer = window.setTimeout(openSocket, delay);
         });
         socket.addEventListener("error", () => { setCollaborationConnectionState("disconnected", "接続エラーが発生しました"); });
@@ -4054,6 +4117,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         window.clearTimeout(collaborationReconnectTimer);
         openSocket();
       };
+      collaborationReconnectNow = reconnectNow;
       window.addEventListener("online", reconnectNow, { signal: collaborationAbort.signal });
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) return;
@@ -4062,10 +4126,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }, { signal: collaborationAbort.signal });
       openSocket();
     };
+    collaborationRetryButton.addEventListener("click", () => {
+      if (collaborationStatus.dataset.state === "save-error") {
+        void saveCurrentDocument(false).catch((error: unknown) => {
+          saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。";
+        });
+        return;
+      }
+      collaborationReconnectNow?.();
+    });
     const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
       currentDocument = item;
       empty.hidden = true; form.hidden = false;
       latestPublicationRealtimeVersion = 0;
+      collaborationSaveFailed = false;
       const id = form.elements.namedItem("documentId") as HTMLInputElement;
       id.value = item.id; id.dataset.sourceArticleId = item.source_article_id ?? "";
       subject.value = item.subject; fillCategories(item.category); category.value = item.category;
@@ -4185,10 +4259,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const openDocument = async (id: string) => {
       if (id) activeDocumentId = id;
+      const loadGeneration = ++documentLoadGeneration;
       saveMessage.value = "原稿を読み込み中…";
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" });
       const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response);
       if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。");
+      // A slower response for a previously selected article must never replace
+      // the article the user has opened most recently.
+      if (loadGeneration !== documentLoadGeneration || (id && activeDocumentId !== id)) return;
       expandedReplyThreadIds.clear();
       setDocument(data.document, data.comments ?? []);
       // 一部の認証付きレスポンス／古いキャッシュでは本文は返るのに
@@ -4225,6 +4303,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (!response.ok || !data.document) throw new Error(data.error ?? "ワークフロー状態を読み込めませんでした。");
         const currentDocumentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
         if (currentDocumentId !== id) return;
+        const refreshedVersion = Date.parse(data.document.updated_at);
+        if (Number.isFinite(refreshedVersion) && refreshedVersion < latestPublicationRealtimeVersion) return;
+        if (Number.isFinite(refreshedVersion) && refreshedVersion > latestPublicationRealtimeVersion) latestPublicationRealtimeVersion = refreshedVersion;
         const index = documents.findIndex((item) => item.id === id);
         if (index >= 0) documents[index] = data.document;
         setPublicationState(data.document);
@@ -4990,6 +5071,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .collaboration-status [data-collaboration-participants] { display:flex; flex:0 1 auto; gap:.2rem; min-width:0; }
   .collaboration-status [data-collaboration-participants]:empty { display:none; }
   .collaboration-status [data-collaboration-participants] span { background:var(--accent-subtle); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border)); border-radius:999px; color:var(--accent); font-size:.61rem; font-weight:800; max-width:8rem; overflow:hidden; padding:.1rem .3rem; text-overflow:ellipsis; white-space:nowrap; }
+  .collaboration-retry { background:transparent; border:1px solid var(--border); border-radius:.3rem; color:var(--text); cursor:pointer; font-size:.6rem; font-weight:800; line-height:1.2; padding:.16rem .34rem; white-space:nowrap; }
+  .collaboration-retry:hover { background:var(--surface-alt); border-color:var(--accent); }
+  .collaboration-retry:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
   @keyframes collaboration-pulse { from { opacity:.35; transform:scale(.78); } to { opacity:1; transform:scale(1); } }
   @media (prefers-reduced-motion:reduce) { .collaboration-status .collaboration-indicator { animation:none!important; } }
   .editor-workspace .writing-area .locked-range-markup mark.locked-range-mark { background-color:#fee2e2 !important; border-left:3px solid #ef4444 !important; border-radius:.16em; box-shadow:inset 0 0 0 1px rgb(239 68 68 / .2); color:inherit; padding:.03em .1em; }
