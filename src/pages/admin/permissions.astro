@@ -27,6 +27,10 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     <section class="permission-audit" aria-labelledby="permission-audit-title">
       <div class="member-admin__section-heading"><div><h2 id="permission-audit-title">権限変更履歴</h2><small>誰が、誰のアクセス範囲を変更したかを直近30件まで表示します。</small></div></div>
       <div class="permission-audit__list loading-state" data-permission-audit-list aria-live="polite">読み込み中…</div>
+      <div class="permission-audit__pagination" data-permission-audit-pagination hidden>
+        <span data-permission-audit-summary aria-live="polite"></span>
+        <button type="button" data-permission-audit-load-more>さらに読み込む</button>
+      </div>
     </section>
 
     <section class="member-admin__members" data-admin-load-surface aria-labelledby="member-list-title">
@@ -132,13 +136,19 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   .permission-audit__entry span small { color: var(--text-muted); }
   .permission-audit__entry time { text-align: right; }
   .permission-audit__empty { color: var(--text-secondary); font-size: .74rem; margin: 0; padding: .4rem 0; }
+  .permission-audit__pagination { align-items: center; display: flex; gap: .65rem; justify-content: center; margin-top: .7rem; }
+  .permission-audit__pagination[hidden] { display: none; }
+  .permission-audit__pagination span { color: var(--text-secondary); font-size: .7rem; font-variant-numeric: tabular-nums; }
+  .permission-audit__pagination button { background: transparent; border: 1px solid var(--border-default); border-radius: .3rem; color: var(--text-secondary); cursor: pointer; font: inherit; font-size: .7rem; padding: .42rem .65rem; }
+  .permission-audit__pagination button:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--text-primary); }
+  .permission-audit__pagination button:disabled { cursor: wait; opacity: .6; }
   .member-list-pagination { align-items: center; display: flex; gap: .65rem; justify-content: center; margin-top: .8rem; }
   .member-list-pagination[hidden] { display: none; }
   .member-list-pagination-summary { color: var(--text-secondary); font-size: .7rem; }
   @media (max-width: 620px) {
     .permission-audit__entry { grid-template-columns: 1fr; }
     .permission-audit__entry time { text-align: left; }
-    .member-list-pagination { align-items: stretch; flex-direction: column; }
+    .member-list-pagination, .permission-audit__pagination { align-items: stretch; flex-direction: column; }
   }
 </style>
 
@@ -3646,22 +3656,48 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
     const list = document.querySelector<HTMLElement>("[data-permission-audit-list]");
     if (!list || list.dataset.ready === "true") return;
     list.dataset.ready = "true";
+    const pagination = document.querySelector<HTMLElement>("[data-permission-audit-pagination]");
+    const summary = document.querySelector<HTMLElement>("[data-permission-audit-summary]");
+    const loadMore = document.querySelector<HTMLButtonElement>("[data-permission-audit-load-more]");
     const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '\"':"&quot;", "'":"&#39;" }[char] ?? char));
     const actionLabel = (value: string) => value === "grant" ? "権限を付与" : value === "revoke" ? "権限を削除" : "権限を置換";
-    void fetch("/api/admin/permission-audit?limit=30", { credentials: "same-origin", cache: "no-store" })
-      .then(async (response) => {
+    let nextCursor = "";
+    let loading = false;
+    let loadedCount = 0;
+    const renderEntries = (entries: Array<{ action?: string; actor_email?: string; target_email?: string; before_subjects?: string; after_subjects?: string; created_at?: string }>) => entries.map((entry) => {
+      const before = String(entry.before_subjects ?? "").trim() || "なし";
+      const after = String(entry.after_subjects ?? "").trim() || "なし";
+      const time = entry.created_at ? new Date(entry.created_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "—";
+      return `<div class="permission-audit__entry"><strong>${escape(actionLabel(String(entry.action ?? "replace")))}</strong><span>${escape(entry.target_email)}<small>（実行者: ${escape(entry.actor_email)}）</small><br><small>${escape(before)} → ${escape(after)}</small></span><time datetime="${escape(entry.created_at)}">${escape(time)}</time></div>`;
+    }).join("");
+    const fetchPage = async (append = false) => {
+      if (loading || (append && !nextCursor)) return;
+      loading = true;
+      if (loadMore) { loadMore.disabled = true; loadMore.textContent = "読み込み中…"; }
+      try {
+        const query = new URLSearchParams({ limit: "30" });
+        if (append) query.set("cursor", nextCursor);
+        const response = await fetch(`/api/admin/permission-audit?${query.toString()}`, { credentials: "same-origin", cache: "no-store" });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error ?? "履歴を読み込めませんでした。");
         const entries = Array.isArray(data.entries) ? data.entries : [];
         list.classList.remove("loading-state");
-        list.innerHTML = entries.length ? entries.map((entry: { action?: string; actor_email?: string; target_email?: string; before_subjects?: string; after_subjects?: string; created_at?: string }) => {
-          const before = String(entry.before_subjects ?? "").trim() || "なし";
-          const after = String(entry.after_subjects ?? "").trim() || "なし";
-          const time = entry.created_at ? new Date(entry.created_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "—";
-          return `<div class="permission-audit__entry"><strong>${escape(actionLabel(String(entry.action ?? "replace")))}</strong><span>${escape(entry.target_email)}<small>（実行者: ${escape(entry.actor_email)}）</small><br><small>${escape(before)} → ${escape(after)}</small></span><time datetime="${escape(entry.created_at)}">${escape(time)}</time></div>`;
-        }).join("") : '<p class="permission-audit__empty">権限変更履歴はまだありません。</p>';
-      })
-      .catch((error) => { list.classList.remove("loading-state"); list.innerHTML = `<p class="permission-audit__empty">${escape(error instanceof Error ? error.message : "履歴を読み込めませんでした。")}</p>`; });
+        if (append) list.insertAdjacentHTML("beforeend", renderEntries(entries));
+        else list.innerHTML = entries.length ? renderEntries(entries) : '<p class="permission-audit__empty">権限変更履歴はまだありません。</p>';
+        loadedCount += entries.length;
+        nextCursor = String(data.pagination?.nextCursor ?? "");
+        if (summary) summary.textContent = loadedCount ? `${loadedCount}件を表示中` : "";
+        if (pagination) pagination.hidden = !nextCursor;
+      } catch (error) {
+        list.classList.remove("loading-state");
+        if (!loadedCount) list.innerHTML = `<p class="permission-audit__empty">${escape(error instanceof Error ? error.message : "履歴を読み込めませんでした。")}</p>`;
+      } finally {
+        loading = false;
+        if (loadMore) { loadMore.disabled = false; loadMore.textContent = "さらに読み込む"; }
+      }
+    };
+    loadMore?.addEventListener("click", () => void fetchPage(true));
+    void fetchPage();
   };
   document.addEventListener("astro:page-load", initializePermissionAudit);
   initializePermissionAudit();

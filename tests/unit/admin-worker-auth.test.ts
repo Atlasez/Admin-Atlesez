@@ -282,6 +282,77 @@ describe("applicant stage server-side access", () => {
     expect(permissionQuery).not.toContain("LIMIT ?");
   });
 
+  it("paginates permission audit entries with a stable cursor", async () => {
+    const queries: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        const statement = new Statement(query);
+        statement.all = async <T>() => {
+          if (query.includes("SELECT subject FROM report_admin_permissions"))
+            return { results: [{ subject: "*" }] as T[] };
+          if (
+            query.includes("SELECT role, subject FROM editorial_workflow_roles")
+          )
+            return { results: [] as T[] };
+          if (query.includes("FROM admin_permission_audit_log"))
+            return {
+              results: [
+                {
+                  id: "audit-2",
+                  actor_email: "admin@example.com",
+                  target_email: "member@example.com",
+                  action: "grant",
+                  before_subjects: "",
+                  after_subjects: "mathematics",
+                  created_at: "2026-09-10T02:00:00.000Z",
+                },
+                {
+                  id: "audit-1",
+                  actor_email: "admin@example.com",
+                  target_email: "member@example.com",
+                  action: "revoke",
+                  before_subjects: "mathematics",
+                  after_subjects: "",
+                  created_at: "2026-09-10T01:00:00.000Z",
+                },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/permission-audit?limit=1", {
+        headers: { "Cf-Access-Authenticated-User-Email": "admin@example.com" },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      entries: Array<{ id: string }>;
+      pagination: { hasMore: boolean; nextCursor: string | null };
+    };
+    expect(data.entries).toHaveLength(1);
+    expect(data.entries[0]?.id).toBe("audit-2");
+    expect(data.pagination.hasMore).toBe(true);
+    expect(data.pagination.nextCursor).toBe(
+      "2026-09-10T02%3A00%3A00.000Z|audit-2",
+    );
+    expect(
+      queries.find((query) =>
+        query.includes("FROM admin_permission_audit_log"),
+      ),
+    ).toContain("LIMIT ?");
+  });
+
   it("requires an authenticated Google session before accepting an application", async () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/apply", {

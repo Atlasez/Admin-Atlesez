@@ -2581,16 +2581,37 @@ async function listPermissionAudit(
 ): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  const requestedLimit = Number(new URL(request.url).searchParams.get("limit") ?? "30");
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "30");
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 30;
+  const rawCursor = text(searchParams.get("cursor"), 240).trim();
+  const cursorSeparator = rawCursor.lastIndexOf("|");
+  let cursorCreatedAt = "";
+  let cursorId = "";
+  if (cursorSeparator > 0) {
+    try {
+      cursorCreatedAt = decodeURIComponent(rawCursor.slice(0, cursorSeparator));
+      cursorId = decodeURIComponent(rawCursor.slice(cursorSeparator + 1));
+    } catch {
+      cursorCreatedAt = "";
+      cursorId = "";
+    }
+  }
+  const cursorFilter = cursorCreatedAt && cursorId
+    ? " WHERE (created_at < ? OR (created_at = ? AND id < ?))"
+    : "";
+  const cursorValues = cursorCreatedAt && cursorId
+    ? [cursorCreatedAt, cursorCreatedAt, cursorId]
+    : [];
   const rows = await env.REPORTS.prepare(
     `SELECT id,actor_email,target_email,action,before_subjects,after_subjects,created_at
      FROM admin_permission_audit_log
+     ${cursorFilter}
      ORDER BY created_at DESC,id DESC LIMIT ?`,
   )
-    .bind(limit)
+    .bind(...cursorValues, limit + 1)
     .all<{
       id: string;
       actor_email: string;
@@ -2609,7 +2630,17 @@ async function listPermissionAudit(
       after_subjects: string;
       created_at: string;
     }> }));
-  return json({ entries: rows.results ?? [] });
+  const allEntries = rows.results ?? [];
+  const entries = allEntries.slice(0, limit);
+  const lastEntry = entries.at(-1);
+  const hasMore = allEntries.length > limit;
+  const nextCursor = hasMore && lastEntry
+    ? `${encodeURIComponent(lastEntry.created_at)}|${encodeURIComponent(lastEntry.id)}`
+    : null;
+  return json({
+    entries,
+    pagination: { limit, nextCursor, hasMore },
+  });
 }
 
 async function listAdminAuditLog(
