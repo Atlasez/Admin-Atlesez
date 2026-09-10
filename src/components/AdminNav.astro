@@ -160,7 +160,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   </div>
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
-      <a class="admin-action-center-link" href="/admin/action-center/" data-admin-page="action-center" aria-current={current === "action-center" ? "page" : undefined}>アクションセンター</a>
+      <a class="admin-action-center-link" href="/admin/action-center/" data-admin-page="action-center" aria-current={current === "action-center" ? "page" : undefined} aria-label="アクションセンター" title="アクションセンター"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>対応</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
       <a href="/admin/member-calendar/" data-admin-site="portal" data-admin-page="member-calendar" hidden={site !== "portal"} aria-current={current === "member-calendar" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/member-profile/" data-admin-site="portal" data-admin-page="member-profile" hidden={site !== "portal"} aria-current={current === "member-profile" ? "page" : undefined}>マイページ</a>
@@ -675,4 +675,27 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   /* 選択中のナビは青い面や下線で主張せず、隣接面の差だけで示す。 */
   .admin-nav nav > a[aria-current="page"] { background: color-mix(in srgb, var(--text-primary) 6%, transparent); border-bottom-color: transparent; color: var(--text-primary); }
   .admin-nav nav > a:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); border-bottom-color: transparent; color: var(--text-primary); }
+  /* 全体の入口は残しつつ、通常のページタブより控えめなユーティリティボタンとして表示する。 */
+  .admin-nav nav > .admin-action-center-link {
+    align-self: center;
+    border: 1px solid var(--border-default) !important;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: .72rem;
+    gap: .3rem;
+    height: 2.1rem;
+    margin-right: .2rem;
+    padding: 0 .55rem;
+  }
+  .admin-nav nav > .admin-action-center-link svg { fill: none; height: .9rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: .9rem; }
+  .admin-nav nav > .admin-action-center-link:hover,
+  .admin-nav nav > .admin-action-center-link[aria-current="page"] {
+    background: var(--background-secondary);
+    border-color: var(--border-strong) !important;
+    color: var(--text-primary);
+  }
+  .admin-nav nav > .admin-action-center-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+  @media (max-width: 980px) {
+    .admin-nav nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
+  }
 </style>
