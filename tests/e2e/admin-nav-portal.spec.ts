@@ -2,7 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 type MockOptions = {
   notificationStatus?: number;
+  unreadNotificationsCount?: number;
   pendingApprovals?: number;
+  taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number };
   portalFailureOnce?: boolean;
   avatarUrl?: string;
   calendarEvents?: Array<{
@@ -74,6 +76,9 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
                     read: false,
                   },
                 ],
+                notificationsTruncated:
+                  (options.unreadNotificationsCount ?? 0) > 20,
+                unreadNotificationsCount: options.unreadNotificationsCount,
               }
             : { error: "SQL: no such table: internal_notifications" },
         ),
@@ -112,6 +117,7 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
           ],
           availableProjects: options.availableProjects ?? [],
           todos: [],
+          taskSummary: options.taskSummary,
           pendingApprovals: options.pendingApprovals ?? 0,
           calendar: { events: options.calendarEvents ?? [] },
         }),
@@ -289,6 +295,23 @@ test("承認待ちは履歴通知ではなくpending申請の件数を表示す�
   );
   await expect(page.locator('[data-summary-detail="approvals"]')).toHaveText(
     "承認待ちはありません",
+  );
+});
+
+test("ポータルのサマリーは表示上限を超えたタスク・通知も正確に表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page, {
+    taskSummary: { openCount: 127, dueToday: 4, dueSoon: 9 },
+    unreadNotificationsCount: 23,
+  });
+  await page.goto("admin/portal/");
+  await expect(page.locator("[data-todo-summary]")).toHaveText("127件を確認");
+  await expect(page.locator('[data-summary-value="today"]')).toHaveText("4");
+  await expect(page.locator('[data-summary-value="due-soon"]')).toHaveText("9");
+  await expect(page.locator('[data-summary-value="unread"]')).toHaveText("23");
+  await expect(page.locator('[data-summary-detail="unread"]')).toHaveText(
+    "通知を確認",
   );
 });
 
