@@ -396,6 +396,68 @@ test("運営事務局でプロフィール変更を承認できる", async ({ pa
   expect(action).toBe("approve");
 });
 
+test("承認一覧はカーソルで追加の申請を読み込める", async ({ page }) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "承認担当" } } }),
+  );
+  const requestUrls: string[] = [];
+  let calls = 0;
+  await page.route("**/api/admin/profile-change-requests?**", async (route) => {
+    calls += 1;
+    requestUrls.push(route.request().url());
+    if (calls === 1) {
+      await route.fulfill({
+        json: {
+          requests: [
+            {
+              id: "88888888-8888-4888-8888-888888888888",
+              email: "first@example.com",
+              proposed_display_name: "最初の申請",
+              status: "approved",
+              submitted_at: "2026-08-22T10:00:00.000Z",
+            },
+          ],
+          atlasInternalBioRequests: [],
+          pagination: {
+            nextCursor:
+              "1|2026-08-22T10:00:00.000Z|88888888-8888-4888-8888-888888888888",
+            hasMore: true,
+          },
+          atlasPagination: { nextCursor: null, hasMore: false },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        requests: [
+          {
+            id: "99999999-9999-4999-8999-999999999999",
+            email: "second@example.com",
+            proposed_display_name: "追加の申請",
+            status: "approved",
+            submitted_at: "2026-08-21T10:00:00.000Z",
+          },
+        ],
+        atlasInternalBioRequests: [],
+        pagination: { nextCursor: null, hasMore: false },
+        atlasPagination: { nextCursor: null, hasMore: false },
+      },
+    });
+  });
+
+  await page.goto("admin/profile-requests/?status=all");
+  await expect(page.getByRole("heading", { name: "最初の申請" })).toBeVisible();
+  const loadMore = page.getByRole("button", { name: "さらに読み込む" });
+  await expect(loadMore).toHaveCount(1);
+  await loadMore.click();
+  await expect(page.getByRole("heading", { name: "追加の申請" })).toBeVisible();
+  expect(requestUrls[1]).toContain(
+    "cursor=1%7C2026-08-22T10%3A00%3A00.000Z%7C88888888-8888-4888-8888-888888888888",
+  );
+});
+
 test("承認一覧の読み込みエラーから再試行できる", async ({ page }) => {
   await baseAdminMocks(page);
   await page.route("**/api/admin/profile", (route) =>

@@ -217,6 +217,70 @@ describe("admin worker editor APIs", () => {
     ).toBe(true);
   });
 
+  it("uses bounded cursor pages for profile change requests", async () => {
+    const queries: string[] = [];
+    const bindings: unknown[][] = [];
+    class CursorStatement extends EmptyStatement {
+      bind(...values: unknown[]) {
+        bindings.push(values);
+        return super.bind(...values);
+      }
+    }
+    const profileEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          return new CursorStatement(query);
+        },
+      },
+    };
+
+    const firstPage = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/profile-change-requests?status=all&limit=50",
+      ),
+      profileEnv as never,
+    );
+    expect(firstPage.status).toBe(200);
+    expect(
+      queries.filter((query) =>
+        query.includes("editorial_member_profile_change_requests"),
+      )[0],
+    ).toContain("LIMIT ?");
+    expect(
+      queries.filter((query) =>
+        query.includes("editorial_project_profile_change_requests"),
+      )[0],
+    ).toContain("LIMIT ?");
+    expect(bindings.filter((values) => values.length === 1)).toHaveLength(2);
+    expect(
+      bindings
+        .filter((values) => values.length === 1)
+        .every(([limit]) => limit === 51),
+    ).toBe(true);
+
+    queries.length = 0;
+    bindings.length = 0;
+    const nextPage = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/profile-change-requests?status=all&limit=50&cursor=0%7C2026-01-01T00%3A00%3A00.000Z%7C00000000-0000-0000-0000-000000000001",
+      ),
+      profileEnv as never,
+    );
+    expect(nextPage.status).toBe(200);
+    expect(
+      queries.some(
+        (query) =>
+          query.includes("r.submitted_at < ?") && query.includes("LIMIT ?"),
+      ),
+    ).toBe(true);
+    expect(
+      bindings.some((values) => values.length === 6 && values.at(-1) === 51),
+    ).toBe(true);
+  });
+
   it("interprets datetime-local publication schedules as Japan time", () => {
     expect(scheduledPublicationEpoch("2026-09-01T12:00")).toBe(
       Date.parse("2026-09-01T03:00:00.000Z"),

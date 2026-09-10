@@ -9057,17 +9057,97 @@ async function saveMyProfile(request: Request, env: Env): Promise<Response> {
   });
 }
 
+type ProfileChangeRequestCursor = {
+  statusRank: number;
+  submittedAt: string;
+  id: string;
+};
+
+const parseProfileChangeRequestCursor = (
+  raw: string | null,
+): ProfileChangeRequestCursor | null => {
+  if (!raw) return null;
+  const parts = raw.split("|");
+  if (parts.length !== 3) return null;
+  const statusRank = Number(parts[0]);
+  const submittedAt = parts[1] ?? "";
+  const id = parts[2] ?? "";
+  if (
+    !Number.isInteger(statusRank) ||
+    statusRank < 0 ||
+    statusRank > 1 ||
+    !submittedAt ||
+    !id
+  )
+    return null;
+  return { statusRank, submittedAt, id };
+};
+
+const profileChangeRequestCursor = (
+  row: Record<string, unknown>,
+): string =>
+  `${row.status === "pending" ? 0 : 1}|${String(row.submitted_at ?? "")}|${String(row.id ?? "")}`;
+
 async function listProfileChangeRequests(
   request: Request,
   env: Env,
 ): Promise<Response> {
   const scope = await getSecretariatReviewerScope(request, env);
   if (isResponse(scope)) return scope;
-  const requestedStatus =
-    new URL(request.url).searchParams.get("status") ?? "pending";
+  const searchParams = new URL(request.url).searchParams;
+  const requestedStatus = searchParams.get("status") ?? "pending";
   if (!new Set(["pending", "approved", "rejected", "all"]).has(requestedStatus))
     return json({ error: "申請状態を確認してください。" }, 400);
-  const where = requestedStatus === "all" ? "" : "WHERE r.status=?";
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const cursor = parseProfileChangeRequestCursor(searchParams.get("cursor"));
+  const atlasCursor = parseProfileChangeRequestCursor(
+    searchParams.get("atlasCursor"),
+  );
+  const statusRank = "CASE r.status WHEN 'pending' THEN 0 ELSE 1 END";
+  const cursorCondition = (value: ProfileChangeRequestCursor | null) =>
+    value
+      ? `(${statusRank} > ? OR (${statusRank} = ? AND (r.submitted_at < ? OR (r.submitted_at = ? AND r.id < ?))))`
+      : "";
+  const profileFilters: string[] = [];
+  const profileValues: unknown[] = [];
+  if (requestedStatus !== "all") {
+    profileFilters.push("r.status=?");
+    profileValues.push(requestedStatus);
+  }
+  const profileCursorFilter = cursorCondition(cursor);
+  if (profileCursorFilter) {
+    profileFilters.push(profileCursorFilter);
+    profileValues.push(
+      cursor?.statusRank,
+      cursor?.statusRank,
+      cursor?.submittedAt,
+      cursor?.submittedAt,
+      cursor?.id,
+    );
+  }
+  const profileWhere = profileFilters.length
+    ? `WHERE ${profileFilters.join(" AND ")}`
+    : "";
+  const atlasFilters = ["r.project_id='atlas'"];
+  const atlasValues: unknown[] = [];
+  if (requestedStatus !== "all") {
+    atlasFilters.push("r.status=?");
+    atlasValues.push(requestedStatus);
+  }
+  const atlasCursorFilter = cursorCondition(atlasCursor);
+  if (atlasCursorFilter) {
+    atlasFilters.push(atlasCursorFilter);
+    atlasValues.push(
+      atlasCursor?.statusRank,
+      atlasCursor?.statusRank,
+      atlasCursor?.submittedAt,
+      atlasCursor?.submittedAt,
+      atlasCursor?.id,
+    );
+  }
   const profileStatement = env.REPORTS.prepare(
     `SELECT r.*,COALESCE(p.avatar_url,'') AS avatar_url,
       p.display_name AS current_display_name,p.university AS current_university,
@@ -9075,8 +9155,8 @@ async function listProfileChangeRequests(
       p.country AS current_country,p.timezone AS current_timezone,p.bio AS current_bio
      FROM editorial_member_profile_change_requests r
      LEFT JOIN editorial_member_profiles p ON p.email=r.email
-     ${where}
-     ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC LIMIT 300`,
+     ${profileWhere}
+     ORDER BY ${statusRank},r.submitted_at DESC,r.id DESC LIMIT ?`,
   );
   const atlasStatement = env.REPORTS.prepare(
     `SELECT r.*,COALESCE(NULLIF(TRIM(p.display_name),''),r.email) AS display_name,
@@ -9085,23 +9165,47 @@ async function listProfileChangeRequests(
      LEFT JOIN editorial_member_profiles p ON p.email=r.email
      LEFT JOIN editorial_project_member_profiles pp
        ON pp.project_id=r.project_id AND pp.email=r.email
-     WHERE r.project_id='atlas' ${requestedStatus === "all" ? "" : "AND r.status=?"}
-     ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC LIMIT 300`,
+     WHERE ${atlasFilters.join(" AND ")}
+     ORDER BY ${statusRank},r.submitted_at DESC,r.id DESC LIMIT ?`,
   );
   const [result, atlasResult] = await Promise.all([
-    requestedStatus === "all"
-      ? profileStatement.all<Record<string, unknown>>()
-      : profileStatement.bind(requestedStatus).all<Record<string, unknown>>(),
-    requestedStatus === "all"
-      ? atlasStatement.all<Record<string, unknown>>()
-      : atlasStatement.bind(requestedStatus).all<Record<string, unknown>>(),
+    profileStatement
+      .bind(...profileValues, pageLimit + 1)
+      .all<Record<string, unknown>>(),
+    atlasStatement
+      .bind(...atlasValues, pageLimit + 1)
+      .all<Record<string, unknown>>(),
   ]);
+  const profileRows = result.results ?? [];
+  const atlasRows = atlasResult.results ?? [];
+  const requests = profileRows.slice(0, pageLimit);
+  const atlasInternalBioRequests = atlasRows.slice(0, pageLimit);
+  const profileHasMore = profileRows.length > pageLimit;
+  const atlasHasMore = atlasRows.length > pageLimit;
   const pendingApprovals = await countPendingProfileApprovals(env);
   return json({
-    requests: result.results ?? [],
-    atlasInternalBioRequests: atlasResult.results ?? [],
+    requests,
+    atlasInternalBioRequests,
     pendingApprovals,
     reviewer: scope.email,
+    pagination: {
+      limit: pageLimit,
+      nextCursor:
+        profileHasMore && requests.at(-1)
+          ? profileChangeRequestCursor(requests.at(-1) as Record<string, unknown>)
+          : null,
+      hasMore: profileHasMore,
+    },
+    atlasPagination: {
+      limit: pageLimit,
+      nextCursor:
+        atlasHasMore && atlasInternalBioRequests.at(-1)
+          ? profileChangeRequestCursor(
+              atlasInternalBioRequests.at(-1) as Record<string, unknown>,
+            )
+          : null,
+      hasMore: atlasHasMore,
+    },
   });
 }
 
@@ -9425,7 +9529,18 @@ async function listProjectProfileChangeRequests(
   const requestedStatus = parsed.searchParams.get("status") ?? "pending";
   if (!new Set(["pending", "approved", "rejected", "all"]).has(requestedStatus))
     return json({ error: "申請状態を確認してください。" }, 400);
+  const requestedLimit = Number(parsed.searchParams.get("limit") ?? "50");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const cursor = parseProfileChangeRequestCursor(
+    parsed.searchParams.get("cursor"),
+  );
+  const statusRank = "CASE r.status WHEN 'pending' THEN 0 ELSE 1 END";
   const statusFilter = requestedStatus === "all" ? "" : "AND r.status=?";
+  const cursorFilter = cursor
+    ? `AND (${statusRank} > ? OR (${statusRank} = ? AND (r.submitted_at < ? OR (r.submitted_at = ? AND r.id < ?))))`
+    : "";
   const statement = env.REPORTS.prepare(
     `SELECT r.*,COALESCE(NULLIF(TRIM(p.display_name),''),r.email) AS display_name,
       COALESCE(pp.internal_bio,'') AS current_internal_bio
@@ -9433,20 +9548,38 @@ async function listProjectProfileChangeRequests(
      LEFT JOIN editorial_member_profiles p ON p.email=r.email
      LEFT JOIN editorial_project_member_profiles pp
        ON pp.project_id=r.project_id AND pp.email=r.email
-     WHERE r.project_id=? ${statusFilter}
-     ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.submitted_at DESC
-     LIMIT 300`,
+     WHERE r.project_id=? ${statusFilter} ${cursorFilter}
+     ORDER BY ${statusRank},r.submitted_at DESC,r.id DESC
+     LIMIT ?`,
   );
-  const result =
-    requestedStatus === "all"
-      ? await statement.bind(reviewer.project.id).all<Record<string, unknown>>()
-      : await statement
-          .bind(reviewer.project.id, requestedStatus)
-          .all<Record<string, unknown>>();
+  const values: unknown[] = [reviewer.project.id];
+  if (requestedStatus !== "all") values.push(requestedStatus);
+  if (cursor)
+    values.push(
+      cursor.statusRank,
+      cursor.statusRank,
+      cursor.submittedAt,
+      cursor.submittedAt,
+      cursor.id,
+    );
+  const result = await statement
+    .bind(...values, pageLimit + 1)
+    .all<Record<string, unknown>>();
+  const rows = result.results ?? [];
+  const requests = rows.slice(0, pageLimit);
+  const hasMore = rows.length > pageLimit;
   return json({
     project: reviewer.project,
     reviewer: reviewer.scope.email,
-    requests: result.results ?? [],
+    requests,
+    pagination: {
+      limit: pageLimit,
+      nextCursor:
+        hasMore && requests.at(-1)
+          ? profileChangeRequestCursor(requests.at(-1) as Record<string, unknown>)
+          : null,
+      hasMore,
+    },
   });
 }
 
