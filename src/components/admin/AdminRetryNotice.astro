@@ -3,9 +3,15 @@ interface Props {
   scope?: string;
   message?: string;
   legacyRetry?: boolean;
+  legacyPortal?: boolean;
 }
 
-const { scope, message = "情報を読み込めませんでした。", legacyRetry = false } = Astro.props;
+const {
+  scope,
+  message = "情報を読み込めませんでした。",
+  legacyRetry = false,
+  legacyPortal = false,
+} = Astro.props;
 ---
 
 <div
@@ -13,12 +19,13 @@ const { scope, message = "情報を読み込めませんでした。", legacyRet
   data-admin-load-error
   data-admin-load-error-scope={scope}
   data-admin-load-state="error"
+  data-portal-error={legacyPortal ? "" : undefined}
   hidden
   role="alert"
   aria-live="assertive"
 >
-  <span data-admin-load-error-message>{message}</span>
-  <button type="button" data-admin-retry data-retry={legacyRetry ? "" : undefined}>再試行</button>
+  <span data-admin-load-error-message data-portal-error-message={legacyPortal ? "" : undefined}>{message}</span>
+  <button type="button" data-admin-retry data-portal-retry={legacyPortal ? "" : undefined} data-retry={legacyRetry ? "" : undefined}>再試行</button>
 </div>
 
 <style>
