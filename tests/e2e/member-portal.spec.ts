@@ -313,6 +313,51 @@ test("横断タスク管理はカーソルで追加読み込みできる", async
   await expect(loadMore).toBeHidden();
 });
 
+test("タスク一覧の再読み込み要求をまとめ、最新の条件だけを反映する", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  const requests: string[] = [];
+  await page.route("**/api/admin/member-tasks**", async (route) => {
+    const url = route.request().url();
+    requests.push(url);
+    if (requests.length === 1)
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    const includeArchived =
+      new URL(url).searchParams.get("includeArchived") === "1";
+    await route.fulfill({
+      json: {
+        scope: { email: "manager@example.com" },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        members: [],
+        tasks: includeArchived
+          ? [
+              {
+                id: "archived-task",
+                project_id: "atlas",
+                title: "アーカイブ済み",
+                status: "done",
+                archived_at: "2026-09-01T00:00:00.000Z",
+                created_by: "manager@example.com",
+                assignee_email: "manager@example.com",
+              },
+            ]
+          : [],
+      },
+    });
+  });
+  await page.goto("admin/member-tasks/");
+  await page.getByLabel("アーカイブ済みを表示").check();
+  await expect(
+    page.getByRole("heading", { name: "アーカイブ済み", exact: true }),
+  ).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(new URL(requests[1]).searchParams.get("includeArchived")).toBe("1");
+});
+
 test("横断カレンダーでプロジェクト日程と参加可否を扱える", async ({ page }) => {
   await baseAdminMocks(page);
   await page.route("**/api/admin/profile", (route) =>
