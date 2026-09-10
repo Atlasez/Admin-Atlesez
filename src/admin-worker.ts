@@ -7717,6 +7717,47 @@ const countPendingProfileApprovals = async (env: Env) => {
   return normalizeCount(memberRequests?.count) + normalizeCount(atlasRequests?.count);
 };
 
+type WorkflowSummary = {
+  pendingApprovals: number;
+  taskSummary: { openCount: number; dueToday: number; dueSoon: number };
+};
+
+/** ポータルと状態遷移画面で共有する集計。画面ごとの個別カウントを禁止する。 */
+const getWorkflowSummary = async (
+  env: Env,
+  scope: AdminScope,
+  projectIds: string[],
+  includeApprovals: boolean,
+): Promise<WorkflowSummary> => {
+  const taskScopeSql = projectIds.length
+    ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
+       AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
+       AND t.status != 'done' AND t.archived_at IS NULL`
+    : "0=1";
+  const taskBindings = projectIds.length ? [...projectIds, scope.email, scope.email] : [];
+  const [taskSummary, pendingApprovals] = await Promise.all([
+    projectIds.length
+      ? env.REPORTS.prepare(
+          `SELECT COUNT(*) AS open_count,
+             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) <= datetime('now','start of day','+1 day','-1 second') THEN 1 ELSE 0 END) AS due_today,
+             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) > datetime('now','start of day','+1 day') AND datetime(t.due_at) <= datetime('now','+7 days') THEN 1 ELSE 0 END) AS due_soon
+           FROM editorial_tasks t WHERE ${taskScopeSql}`,
+        )
+          .bind(...taskBindings)
+          .first<{ open_count: number; due_today: number; due_soon: number }>()
+      : Promise.resolve({ open_count: 0, due_today: 0, due_soon: 0 }),
+    includeApprovals ? countPendingProfileApprovals(env) : Promise.resolve(0),
+  ]);
+  return {
+    pendingApprovals: Number(pendingApprovals ?? 0),
+    taskSummary: {
+      openCount: Number(taskSummary?.open_count ?? 0),
+      dueToday: Number(taskSummary?.due_today ?? 0),
+      dueSoon: Number(taskSummary?.due_soon ?? 0),
+    },
+  };
+};
+
 async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -7724,12 +7765,6 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const canReviewProfileRequests =
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
-  // Keep the portal summary in sync with the approval queue API.  Returning
-  // the promise here serializes it as an object instead of the actual count,
-  // which made the portal show a value different from the review screen.
-  const pendingApprovals = canReviewProfileRequests
-    ? await countPendingProfileApprovals(env)
-    : 0;
   const [projects, availableProjects] = scope.isManager
     ? await Promise.all([
         env.REPORTS.prepare(
@@ -7761,35 +7796,24 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     name: string;
   }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
+  const workflowSummary = await getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests);
   const taskScopeSql = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
        AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
        AND t.status != 'done' AND t.archived_at IS NULL`
     : "0=1";
-  const taskScopeBindings = projectIds.length
-    ? [...projectIds, scope.email, scope.email]
-    : [];
-  const [todos, taskSummary] = projectIds.length
-    ? await Promise.all([
-        env.REPORTS.prepare(
-          `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
-             p.name AS project_name
-           FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
-           WHERE ${taskScopeSql}
-           ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
-        )
-          .bind(...taskScopeBindings)
-          .all(),
-        env.REPORTS.prepare(
-          `SELECT COUNT(*) AS open_count,
-             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) <= datetime('now','start of day','+1 day','-1 second') THEN 1 ELSE 0 END) AS due_today,
-             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) > datetime('now','start of day','+1 day') AND datetime(t.due_at) <= datetime('now','+7 days') THEN 1 ELSE 0 END) AS due_soon
-           FROM editorial_tasks t WHERE ${taskScopeSql}`,
-        )
-          .bind(...taskScopeBindings)
-          .first<{ open_count: number; due_today: number; due_soon: number }>(),
-      ])
-    : [{ results: [] }, { open_count: 0, due_today: 0, due_soon: 0 }];
+  const taskScopeBindings = projectIds.length ? [...projectIds, scope.email, scope.email] : [];
+  const todos = projectIds.length
+    ? await env.REPORTS.prepare(
+        `SELECT t.id,t.project_id,t.subject,t.assignee_email,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
+           p.name AS project_name
+         FROM editorial_tasks t JOIN atlasez_projects p ON p.id=t.project_id
+         WHERE ${taskScopeSql}
+         ORDER BY CASE WHEN t.due_at IS NULL OR t.due_at='' THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 100`,
+      )
+        .bind(...taskScopeBindings)
+        .all()
+    : { results: [] as Array<Record<string, unknown>> };
   const rangeStart = new Date();
   rangeStart.setMonth(rangeStart.getMonth() - 2, 1);
   rangeStart.setHours(0, 0, 0, 0);
@@ -7859,14 +7883,12 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   const personalDeadlines = calendarRows[1].results ?? [];
   return json({
     email: scope.email,
-    pendingApprovals,
+    pendingApprovals: workflowSummary.pendingApprovals,
     projects: projects.results,
     availableProjects: availableProjects.results,
     todos: todos.results,
     taskSummary: {
-      openCount: Number(taskSummary?.open_count ?? 0),
-      dueToday: Number(taskSummary?.due_today ?? 0),
-      dueSoon: Number(taskSummary?.due_soon ?? 0),
+      ...workflowSummary.taskSummary,
     },
     calendar: {
       rangeStart: rangeStart.toISOString(),
