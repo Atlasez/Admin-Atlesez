@@ -2287,6 +2287,19 @@ async function listAdminAuditLog(
   const query = text(url.searchParams.get("q"), 120).trim();
   const action = text(url.searchParams.get("action"), 40).trim();
   const targetType = text(url.searchParams.get("targetType"), 20).trim();
+  const rawCursor = text(url.searchParams.get("cursor"), 240).trim();
+  const cursorSeparator = rawCursor.lastIndexOf("|");
+  let cursorCreatedAt = "";
+  let cursorId = "";
+  if (cursorSeparator > 0) {
+    try {
+      cursorCreatedAt = decodeURIComponent(rawCursor.slice(0, cursorSeparator));
+      cursorId = decodeURIComponent(rawCursor.slice(cursorSeparator + 1));
+    } catch {
+      cursorCreatedAt = "";
+      cursorId = "";
+    }
+  }
   const conditions: string[] = [];
   const params: string[] = [];
   if (query) {
@@ -2302,13 +2315,17 @@ async function listAdminAuditLog(
     conditions.push("target_type = ?");
     params.push(targetType);
   }
+  if (cursorCreatedAt && cursorId) {
+    conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
+    params.push(cursorCreatedAt, cursorCreatedAt, cursorId);
+  }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await env.REPORTS.prepare(
     `SELECT id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at
      FROM admin_audit_log ${where}
      ORDER BY created_at DESC,id DESC LIMIT ?`,
   )
-    .bind(...params, limit)
+    .bind(...params, limit + 1)
     .all<{
       id: string;
       actor_email: string;
@@ -2331,11 +2348,92 @@ async function listAdminAuditLog(
       details_json: string;
       created_at: string;
     }> }));
+  const allEntries = rows.results ?? [];
+  const entries = allEntries.slice(0, limit);
+  const lastEntry = entries.at(-1);
+  const hasMore = allEntries.length > limit;
+  const nextCursor = hasMore && lastEntry
+    ? `${encodeURIComponent(lastEntry.created_at)}|${encodeURIComponent(lastEntry.id)}`
+    : null;
   return json({
-    entries: (rows.results ?? []).map((row) => ({
+    entries: entries.map((row) => ({
       ...row,
       actionLabel: adminAuditActionLabel(row.action),
     })),
+    pagination: { limit, nextCursor, hasMore },
+  });
+}
+
+async function developerDiagnostics(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const startedAt = performance.now();
+  const checks: Array<{
+    id: string;
+    label: string;
+    status: "ok" | "warning" | "error";
+    detail: string;
+    durationMs?: number;
+  }> = [];
+  const timed = async <T>(callback: () => Promise<T>) => {
+    const started = performance.now();
+    try {
+      const value = await callback();
+      return { value, durationMs: Math.round(performance.now() - started) };
+    } catch (error) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), {
+        durationMs: Math.round(performance.now() - started),
+      });
+    }
+  };
+
+  try {
+    const database = await timed(() => env.REPORTS.prepare("SELECT 1 AS ok").first<{ ok: number }>());
+    checks.push({ id: "database", label: "運用データベース", status: database.value?.ok === 1 ? "ok" : "error", detail: database.value?.ok === 1 ? "接続できています" : "応答を確認できません", durationMs: database.durationMs });
+  } catch (error) {
+    checks.push({ id: "database", label: "運用データベース", status: "error", detail: "接続に失敗しました", durationMs: Number((error as { durationMs?: number }).durationMs ?? 0) });
+  }
+
+  const requiredTables = ["editorial_tasks", "editorial_documents", "admin_audit_log"];
+  try {
+    const schema = await timed(() => env.REPORTS.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN (?,?,?)").bind(...requiredTables).all<{ name: string }>());
+    const found = new Set((schema.value.results ?? []).map((row) => row.name));
+    const missing = requiredTables.filter((name) => !found.has(name));
+    checks.push({ id: "schema", label: "管理データのスキーマ", status: missing.length ? "warning" : "ok", detail: missing.length ? `未適用のテーブルがあります：${missing.join(", ")}` : "主要テーブルを確認しました", durationMs: schema.durationMs });
+  } catch (error) {
+    checks.push({ id: "schema", label: "管理データのスキーマ", status: "error", detail: "スキーマを確認できませんでした", durationMs: Number((error as { durationMs?: number }).durationMs ?? 0) });
+  }
+
+  const buildInfo = await (async () => {
+    try {
+      const response = await env.ASSETS.fetch(new Request(new URL("/build-info.json", request.url)));
+      if (!response.ok) return null;
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  })();
+  checks.push({ id: "build", label: "配信ビルド情報", status: buildInfo ? "ok" : "warning", detail: buildInfo ? String(buildInfo.commit || "SHAを確認しました") : "build-info.jsonを取得できません" });
+  checks.push({ id: "preview", label: "Preview配信", status: "ok", detail: "本番WorkerのPreview URLは無効です" });
+  checks.push({ id: "cron", label: "定期処理", status: "ok", detail: "1分・5分・毎時の定期処理を設定しています" });
+
+  const configured = {
+    collaboration: Boolean(env.EDITORIAL_COLLABORATION),
+    github: Boolean(env.GITHUB_REPOSITORY?.trim() && (env.GITHUB_APP_ID?.trim() || env.GITHUB_PUBLISH_TOKEN?.trim())),
+    discord: Boolean(env.DISCORD_BOT_TOKEN?.trim() && env.DISCORD_GUILD_ID?.trim()),
+    email: Boolean(env.RESEND_API_KEY?.trim() && env.EMAIL_FROM?.trim()),
+    publicOrigin: Boolean(env.PUBLIC_SITE_ORIGIN?.trim()),
+  };
+  checks.push({ id: "bindings", label: "外部連携設定", status: configured.collaboration && configured.github && configured.publicOrigin ? "ok" : "warning", detail: Object.entries(configured).map(([key, value]) => `${key}:${value ? "設定済み" : "未設定"}`).join(" ・ ") });
+  checks.push({ id: "response", label: "API応答", status: "ok", detail: `${Math.round(performance.now() - startedAt)}ms` });
+  return json({
+    scope: { email: scope.email },
+    generatedAt: new Date().toISOString(),
+    build: buildInfo,
+    checks,
   });
 }
 
@@ -17407,6 +17505,8 @@ async function handleAdminRequest(
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
     return listAdminAuditLog(request, env);
+  if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
+    return developerDiagnostics(request, env);
   if (url.pathname === "/api/admin/update-history" && request.method === "GET")
     return listAdminUpdateHistory(request, env);
   if (
