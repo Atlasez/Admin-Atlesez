@@ -174,20 +174,6 @@ const timezones = getTimeZoneOptions(new Date());
   }
 </style>
 <style is:global>
-  /* Keep the transaction controls crisp even when the shell theme changes. */
-  .member-tasks .filters { background: var(--task-soft); border: 1px solid var(--task-border); border-radius: .5rem; gap: .25rem; padding: .25rem; }
-  .member-tasks .filters button { background: transparent; border: 0; border-radius: .35rem; color: #526b80; font-size: .8rem; font-weight: 900; min-height: 2.35rem; padding: .5rem .8rem; }
-  .member-tasks .filters button.is-selected { background: var(--task-blue); color: #fff; }
-  .member-tasks .project-filters { gap: .45rem; margin: 0; padding: 0; }
-  .member-tasks .project-filters label { background: #fff; border: 1px solid #b9ccdc; border-radius: 999px; color: #526b80; padding: .45rem .7rem; }
-  .member-tasks .project-filters label:has(input:checked) { background: #eaf4fc; border-color: var(--task-blue); color: var(--task-blue); font-weight: 900; }
-  .member-tasks .project-filters input { accent-color: var(--task-blue); }
-  .member-tasks .task { background: #fff; border: 1px solid var(--task-border); border-left: 4px solid var(--task-blue); border-radius: .55rem; padding: 1rem 1.05rem; }
-  .member-tasks .task-actions { min-width: 10.5rem; }
-  .member-tasks .task-actions select { min-height: 2.45rem; }
-  .member-tasks .status-button { background: var(--task-blue); border-color: var(--task-blue); min-height: 2.45rem; }
-</style>
-<style is:global>
   /* JR東日本の「条件をまとめて探す」構成を、既存のタスク操作に合わせた密度で再現する。 */
   .member-tasks {
     --task-accent: var(--accent-primary);
@@ -417,20 +403,24 @@ const timezones = getTimeZoneOptions(new Date());
     void load().catch(error=>message.value=error instanceof Error?error.message:'読み込めませんでした。')};document.addEventListener('astro:page-load',initialize);initialize();
 </script>
 <style is:global>
-  /*
-   * 暗色・ブラックモードでは、このページに残る旧ライトテーマの値を
-   * トークンへ戻す。タスク管理は過去のレイアウト調整で複数の
-   * スタイルブロックを持つため、最後にテーマ専用の差分を置いて
-   * 白い面が後勝ちしないようにする。
-   */
+  /* ページ固有の色名は運営サイト共通トークンへ集約する。 */
+  .member-tasks {
+    --task-blue: var(--admin-accent);
+    --task-blue-dark: var(--admin-accent-hover);
+    --task-navy: var(--admin-text);
+    --task-border: var(--admin-border);
+    --task-soft: var(--admin-surface-raised);
+    --task-card-bg: var(--admin-surface-raised);
+  }
+  /* 旧ライトテーマの後勝ち指定を暗色/ブラック時だけ共通面へ戻す。 */
   html[data-pref-bg="dark"] .member-tasks,
   html[data-pref-mode="black"] .member-tasks {
-    --task-blue: var(--accent-primary);
-    --task-blue-dark: var(--accent-hover);
-    --task-navy: var(--text-primary);
-    --task-border: var(--border-default);
-    --task-soft: var(--background-secondary);
-    --task-card-bg: var(--background-secondary);
+    --task-blue: var(--admin-accent);
+    --task-blue-dark: var(--admin-accent-hover);
+    --task-navy: var(--admin-text);
+    --task-border: var(--admin-border);
+    --task-soft: var(--admin-surface-raised);
+    --task-card-bg: var(--admin-surface-raised);
     background: var(--background-primary);
     color: var(--text-primary);
   }
