@@ -231,9 +231,55 @@ test("完了タスクをアーカイブし、必要なときに復元できる",
   await task.getByRole("button", { name: "アーカイブ" }).click();
   await expect(page.getByText("完了済みタスク")).toHaveCount(0);
   await page.getByLabel("アーカイブ済みを表示").check();
-  await expect(page.getByText("アーカイブ済み")).toBeVisible();
+  await expect(page.getByText("アーカイブ済み", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "復元" }).click();
   expect(archived).toBe(false);
+});
+
+test("横断タスク管理はカーソルで追加読み込みできる", async ({ page }) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  await page.route("**/api/admin/member-tasks**", async (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    const task = cursor
+      ? {
+          id: "member-task-next",
+          project_id: "atlas",
+          title: "追加ページのタスク",
+          status: "open",
+          assignee_email: "manager@example.com",
+          created_by: "manager@example.com",
+        }
+      : {
+          id: "member-task-first",
+          project_id: "atlas",
+          title: "最初のタスク",
+          status: "open",
+          assignee_email: "manager@example.com",
+          created_by: "manager@example.com",
+        };
+    await route.fulfill({
+      json: {
+        scope: { email: "manager@example.com" },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        members: [],
+        tasks: [task],
+        pagination: cursor
+          ? { limit: 1, nextCursor: null, hasMore: false }
+          : { limit: 1, nextCursor: "member-cursor-1", hasMore: true },
+      },
+    });
+  });
+
+  await page.goto("admin/member-tasks/");
+  await expect(page.locator("[data-list]")).toContainText("最初のタスク");
+  const loadMore = page.getByRole("button", { name: "さらに読み込む" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(page.locator("[data-list]")).toContainText("追加ページのタスク");
+  await expect(loadMore).toBeHidden();
 });
 
 test("横断カレンダーでプロジェクト日程と参加可否を扱える", async ({ page }) => {
