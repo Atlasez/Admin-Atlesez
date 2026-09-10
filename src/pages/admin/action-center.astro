@@ -14,8 +14,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
     <div class="action-center-toolbar" role="toolbar" aria-label="表示する項目">
       <div class="action-filters" role="group" aria-label="項目の絞り込み">
-        <button type="button" class="filter-button is-active" data-action-filter="all" aria-pressed="true">すべて</button>
-        <button type="button" class="filter-button" data-action-filter="action" aria-pressed="false">未対応</button>
+        <button type="button" class="filter-button" data-action-filter="all" aria-pressed="false">すべて</button>
+        <button type="button" class="filter-button is-active" data-action-filter="action" aria-pressed="true">未対応</button>
         <button type="button" class="filter-button" data-action-filter="urgent" aria-pressed="false">今日・期限間近</button>
         <button type="button" class="filter-button" data-action-filter="unread" aria-pressed="false">未読通知</button>
         <button type="button" class="filter-button" data-action-filter="assigned" aria-pressed="false">自分の担当</button>
@@ -57,7 +57,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const priorityLabels: Record<string, string> = { urgent: "今日対応", "due-soon": "期限間近", new: "新着" };
     const statusTone = (status: string) => status === "done" || status === "approved" || status === "published" || status === "accepted" ? "success" : status === "rejected" ? "danger" : status === "unread" || status === "open" || status === "pending" ? "attention" : "neutral";
     let payload: Payload = {};
-    let filter = "all";
+    // アクションセンターは、日常の作業に直結する未対応項目を初期表示する。
+    // 完了済みを確認する場合は「完了・履歴」を明示的に選択する。
+    let filter = "action";
     let controller: AbortController | null = null;
     let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
 
