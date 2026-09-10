@@ -32,6 +32,9 @@ const adminPageNames = [
   "member-management",
   "genre-roles",
   "operations-statistics",
+  "developer",
+  "audit-log",
+  "update-history",
   "onboarding-demo",
   "ui-prototype",
 ] as const;

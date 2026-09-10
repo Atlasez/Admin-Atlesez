@@ -18990,6 +18990,18 @@ async function handleAdminRequest(
       "/admin/applications/",
       "/admin/onboarding-demo",
       "/admin/onboarding-demo/",
+      "/admin/developer",
+      "/admin/developer/",
+      "/admin/audit-log",
+      "/admin/audit-log/",
+      "/admin/update-history",
+      "/admin/update-history/",
+      "/admin/workflow",
+      "/admin/workflow/",
+      "/admin/ui-prototype",
+      "/admin/ui-prototype/",
+      "/admin/ui-prototype/learning-content",
+      "/admin/ui-prototype/learning-content/",
     ]);
     if (managerPages.has(url.pathname)) {
       const managerScope =

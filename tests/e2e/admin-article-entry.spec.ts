@@ -40,14 +40,9 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ).toHaveCount(0);
   });
 
-  test("アップデート履歴は管理トップから開く", async ({ page }) => {
-    await page.goto("admin/manage/?project=atlas");
-    await expect(
-      page.getByRole("link", { name: /アップデート履歴を開く/ }),
-    ).toHaveAttribute("href", "/admin/update-history/");
-  });
-
-  test("操作履歴と状態遷移は管理トップから開く", async ({ page }) => {
+  test("低頻度の監査機能は管理トップから隠し、開発者モードへまとめる", async ({
+    page,
+  }) => {
     await page.route("**/api/admin/auth-status", (route) =>
       route.fulfill({
         json: { email: "manager@example.com", isManager: true },
@@ -55,11 +50,20 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     );
     await page.goto("admin/manage/?project=atlas");
     await expect(
-      page.getByRole("link", { name: /操作履歴を開く/ }),
-    ).toHaveAttribute("href", "/admin/audit-log/");
+      page.locator('main.management-home a[href="/admin/audit-log/"]'),
+    ).toHaveCount(0);
     await expect(
-      page.getByRole("link", { name: /状態遷移を開く/ }),
-    ).toHaveAttribute("href", "/admin/workflow/");
+      page.locator('main.management-home a[href="/admin/update-history/"]'),
+    ).toHaveCount(0);
+    await expect(
+      page.locator('main.management-home a[href="/admin/workflow/"]'),
+    ).toHaveCount(0);
+    await expect(page.locator("details.developer-entry")).toBeVisible();
+    await expect(
+      page.locator(
+        'details.developer-entry a[href="/admin/developer/?mode=developer"]',
+      ),
+    ).toHaveAttribute("href", "/admin/developer/?mode=developer");
   });
 
   test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
