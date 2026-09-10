@@ -11,12 +11,12 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     </header>
 
     <section class="portal-summary" aria-label="ポータルの概要" data-portal-summary>
-      <a class="portal-summary-item portal-summary-item--action" href="/admin/member-tasks/">
+      <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
         <span class="portal-summary-label">今日の要対応</span>
         <strong data-summary-value="today">—</strong>
         <small data-summary-detail="today">期限のあるタスクを確認</small>
       </a>
-      <a class="portal-summary-item portal-summary-item--action" href="/admin/member-tasks/">
+      <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
         <span class="portal-summary-label">期限が近いタスク</span>
         <strong data-summary-value="due-soon">—</strong>
         <small data-summary-detail="due-soon">7日以内の期限</small>
@@ -26,7 +26,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
         <strong data-summary-value="unread">—</strong>
         <small data-summary-detail="unread">通知を確認</small>
       </button>
-      <a class="portal-summary-item portal-summary-item--action" href="/admin/profile-requests/">
+      <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
         <span class="portal-summary-label">承認待ち</span>
         <strong data-summary-value="approvals">—</strong>
         <small data-summary-detail="approvals">確認が必要な項目</small>

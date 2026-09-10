@@ -4,6 +4,7 @@ const adminPageNames = [
   "member-tasks",
   "member-calendar",
   "portal",
+  "action-center",
   "atlas",
   "semi-platform",
   "applications",
