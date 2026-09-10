@@ -2130,6 +2130,62 @@ async function listReportAdminPermissions(
 
 type PermissionAuditAction = "grant" | "replace" | "revoke";
 
+type AdminAuditAction =
+  | "article_created"
+  | "article_updated"
+  | "article_approved"
+  | "article_published"
+  | "article_unpublished"
+  | "permission_granted"
+  | "permission_replaced"
+  | "permission_revoked"
+  | "member_removed";
+
+type AdminAuditTarget = "article" | "permission" | "member";
+
+const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
+  article_created: "記事を作成",
+  article_updated: "記事を更新",
+  article_approved: "記事を承認",
+  article_published: "記事を公開",
+  article_unpublished: "記事の公開を取り消し",
+  permission_granted: "権限を付与",
+  permission_replaced: "権限を変更",
+  permission_revoked: "権限を削除",
+  member_removed: "運営メンバーを削除",
+}[action] ?? action);
+
+const recordAdminAudit = async (
+  env: Env,
+  actorEmail: string,
+  action: AdminAuditAction,
+  targetType: AdminAuditTarget,
+  targetId: string,
+  targetLabel: string,
+  summary: string,
+  details: Record<string, unknown> = {},
+) => {
+  // 監査記録の失敗で本来の操作を失敗させない。旧D1にも安全にデプロイできる。
+  await env.REPORTS.prepare(
+    `INSERT INTO admin_audit_log
+     (id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      actorEmail,
+      action,
+      targetType,
+      targetId,
+      targetLabel,
+      summary,
+      JSON.stringify(details),
+      new Date().toISOString(),
+    )
+    .run()
+    .catch(() => undefined);
+};
+
 const recordPermissionAudit = async (
   env: Env,
   actorEmail: string,
@@ -2156,6 +2212,24 @@ const recordPermissionAudit = async (
     )
     .run()
     .catch(() => undefined);
+  const actionMap: Record<PermissionAuditAction, AdminAuditAction> = {
+    grant: "permission_granted",
+    replace: "permission_replaced",
+    revoke: "permission_revoked",
+  };
+  await recordAdminAudit(
+    env,
+    actorEmail,
+    actionMap[action],
+    "permission",
+    targetEmail,
+    targetEmail,
+    `${adminAuditActionLabel(actionMap[action])}：${targetEmail}`,
+    {
+      beforeSubjects: [...new Set(beforeSubjects)].sort(),
+      afterSubjects: [...new Set(afterSubjects)].sort(),
+    },
+  );
 };
 
 async function listPermissionAudit(
@@ -2193,6 +2267,72 @@ async function listPermissionAudit(
       created_at: string;
     }> }));
   return json({ entries: rows.results ?? [] });
+}
+
+async function listAdminAuditLog(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const url = new URL(request.url);
+  const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const query = text(url.searchParams.get("q"), 120).trim();
+  const action = text(url.searchParams.get("action"), 40).trim();
+  const targetType = text(url.searchParams.get("targetType"), 20).trim();
+  const conditions: string[] = [];
+  const params: string[] = [];
+  if (query) {
+    conditions.push("(actor_email LIKE ? OR target_label LIKE ? OR summary LIKE ? OR target_id LIKE ?)");
+    const pattern = `%${query}%`;
+    params.push(pattern, pattern, pattern, pattern);
+  }
+  if (action) {
+    conditions.push("action = ?");
+    params.push(action);
+  }
+  if (targetType) {
+    conditions.push("target_type = ?");
+    params.push(targetType);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = await env.REPORTS.prepare(
+    `SELECT id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at
+     FROM admin_audit_log ${where}
+     ORDER BY created_at DESC,id DESC LIMIT ?`,
+  )
+    .bind(...params, limit)
+    .all<{
+      id: string;
+      actor_email: string;
+      action: AdminAuditAction;
+      target_type: AdminAuditTarget;
+      target_id: string;
+      target_label: string;
+      summary: string;
+      details_json: string;
+      created_at: string;
+    }>()
+    .catch(() => ({ results: [] as Array<{
+      id: string;
+      actor_email: string;
+      action: AdminAuditAction;
+      target_type: AdminAuditTarget;
+      target_id: string;
+      target_label: string;
+      summary: string;
+      details_json: string;
+      created_at: string;
+    }> }));
+  return json({
+    entries: (rows.results ?? []).map((row) => ({
+      ...row,
+      actionLabel: adminAuditActionLabel(row.action),
+    })),
+  });
 }
 
 async function createEditorialWorkflowRole(
@@ -2872,6 +3012,16 @@ async function removeAtlasMember(
       "DELETE FROM atlasez_member_discord_role_assignments WHERE lower(email)=lower(?)",
     ).bind(email),
   ]);
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "member_removed",
+    "member",
+    email,
+    email,
+    `運営メンバーを削除：${email}`,
+    { email, removedScopes: state.subjects, discordSync: provisioning.status },
+  );
   return json({ ok: true, email, provisioning });
 }
 
@@ -11333,6 +11483,16 @@ async function createEditorialDocument(
       JSON.stringify(values.references ?? []),
     )
     .run();
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "article_created",
+    "article",
+    id,
+    values.title,
+    `記事を作成：${values.title}`,
+    { subject: values.subject, category: values.category, locale: values.locale, status: values.status },
+  );
   return json({ ok: true, id }, 201);
 }
 
@@ -11574,6 +11734,28 @@ async function updateEditorialDocument(
       },
       409,
     );
+  const changedFields = [
+    ["title", existing.title, values.title],
+    ["summary", existing.summary, values.summary],
+    ["body", existing.body, values.body],
+    ["writingMemo", existing.writing_memo, values.writingMemo],
+    ["subject", existing.subject, values.subject],
+    ["category", existing.category, values.category],
+    ["locale", existing.locale, values.locale],
+    ["slug", existing.slug, values.slug],
+    ["status", existing.status, values.status],
+    ["latexEngine", existing.latex_engine, values.latexEngine],
+  ].filter(([, before, after]) => before !== after).map(([field]) => field);
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "article_updated",
+    "article",
+    documentId,
+    values.title,
+    `記事を更新：${values.title}`,
+    { changedFields, statusBefore: existing.status, statusAfter: values.status },
+  );
   await syncEditorialCollaborationDocument(env, documentId);
   await notifyEditorialDocumentChange(env, documentId);
   return json({ ok: true, updatedAt: now });
@@ -14835,6 +15017,16 @@ async function publishEditorialDocument(
     });
     return json({ error: failure.message, publicationRun: await getLatestEditorialPublicationRun(env, documentId), diagnosticUrl: failure.diagnosticUrl }, publicationFailureStatus(failure));
   }
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "article_published",
+    "article",
+    documentId,
+    document.title,
+    `記事の公開処理を開始：${document.title}`,
+    { publicationRunId: claim.run.id, pullRequestNumber: result.pullRequestNumber, status: "pending" },
+  );
   return json({
     ok: true,
     pending: true,
@@ -15151,6 +15343,16 @@ async function decidePublicationReview(
     "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
   ).bind(now, now, scope.email, documentId).run();
   await notifyEditorialDocumentChange(env, documentId);
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "article_approved",
+    "article",
+    documentId,
+    document.title,
+    `記事を承認：${document.title}`,
+    { reviewStage: stage, reviewRound: document.publication_review_round, note: reviewNote },
+  );
   return json({ ok: true, status: "approved", stage: null, approvedForPublication: true });
 }
 
@@ -15297,6 +15499,16 @@ async function unpublishEditorialDocument(
     });
     return json({ error: failure.message, publicationRun: await getLatestEditorialPublicationRun(env, documentId), diagnosticUrl: failure.diagnosticUrl }, publicationFailureStatus(failure));
   }
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "article_unpublished",
+    "article",
+    documentId,
+    document.title,
+    `記事の公開取り消し処理を開始：${document.title}`,
+    { publicationRunId: claim.run.id, pullRequestNumber: result.pullRequestNumber, status: "pending" },
+  );
   return json({
     ok: true,
     pending: true,
@@ -17097,6 +17309,8 @@ async function handleAdminRequest(
   }
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
+  if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
+    return listAdminAuditLog(request, env);
   if (
     url.pathname === "/api/admin/member-management" &&
     request.method === "DELETE"
