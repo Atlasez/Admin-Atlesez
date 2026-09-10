@@ -1499,6 +1499,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       return data;
     };
     let data: OperationData = { scope: { isManager: false } };
+    let loadVersion = 0;
     let month = new Date(); month = new Date(month.getFullYear(), month.getMonth(), 1);
     let calendarSelectionStart = '';
     let calendarSelectionEnd = '';
@@ -1708,12 +1709,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLElement>('[data-block-list]').innerHTML = ruleItems + blockItems || '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { retry?.begin(); data = memberPage ? await api<OperationData>('/api/admin/member-calendar?limit=200') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=200`); taskNextCursor = data.pagination?.nextCursor ?? null; eventNextCursor = data.eventPagination?.nextCursor ?? null; render(); retry?.success(); };
+    const load = async () => { retry?.begin(); const requestVersion = ++loadVersion; data = memberPage ? await api<OperationData>('/api/admin/member-calendar?limit=50') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=50`); if (requestVersion !== loadVersion) return; taskNextCursor = data.pagination?.nextCursor ?? null; eventNextCursor = data.eventPagination?.nextCursor ?? null; render(); retry?.success(); };
     eventLoadMore.addEventListener('click', async () => {
       if (eventLoadingMore || !eventNextCursor || !memberPage) return;
       eventLoadingMore = true; render();
       try {
-        const page = await api<OperationData>(`/api/admin/member-calendar?limit=200&cursor=${encodeURIComponent(eventNextCursor)}`);
+        const page = await api<OperationData>(`/api/admin/member-calendar?limit=50&cursor=${encodeURIComponent(eventNextCursor)}`);
         data = { ...data, events: [...(data.events ?? []), ...(page.events ?? [])] };
         eventNextCursor = page.eventPagination?.nextCursor ?? null;
       } catch (error) { eventFeedback.value = error instanceof Error ? error.message : '追加の予定を読み込めませんでした。'; }
@@ -1723,7 +1724,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       if (taskLoadingMore || !taskNextCursor || memberPage || progressOnly) return;
       taskLoadingMore = true; render();
       try {
-        const page = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=200&cursor=${encodeURIComponent(taskNextCursor)}`);
+        const page = await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=50&cursor=${encodeURIComponent(taskNextCursor)}`);
         data = { ...data, tasks: [...(data.tasks ?? []), ...(page.tasks ?? [])] };
         taskNextCursor = page.pagination?.nextCursor ?? null;
       } catch (error) { taskListFeedback.value = error instanceof Error ? error.message : '追加のタスクを読み込めませんでした。'; }

@@ -1,9 +1,10 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 ---
 
 <AdminLayout title="アクションセンター" description="運営で対応が必要な項目をまとめて確認">
-  <main class="action-center" data-action-center aria-busy="true">
+  <main class="action-center" data-action-center data-admin-load-surface aria-busy="true">
     <header class="action-center-heading">
       <h1>アクションセンター</h1>
       <button class="refresh-button" type="button" data-action-refresh>更新</button>
@@ -23,10 +24,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       <output data-action-updated aria-live="polite">読み込み中…</output>
     </div>
 
-    <div class="action-error" data-action-error role="alert" hidden>
-      <span data-action-error-text>アクションを読み込めませんでした。</span>
-      <button type="button" data-action-retry>再試行</button>
-    </div>
+    <AdminRetryNotice message="アクションを読み込めませんでした。" />
 
     <section class="action-list" aria-labelledby="action-list-heading">
       <div class="section-heading"><h2 id="action-list-heading" data-action-list-heading>対応が必要な項目</h2><span data-action-count>—</span></div>
@@ -36,6 +34,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 </AdminLayout>
 
 <script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   type Action = { entityType: string; entityId: string; fromState: string; toState: string; label: string };
   type Item = { id: string; kind: string; title: string; detail: string; href: string; status: string; priority: string; updatedAt: string; dueAt: string | null; project: string | null; subject: string | null; read: boolean; groupCount?: number; notificationIds?: string[]; actions: Action[] };
   type Payload = { items?: Item[]; history?: Item[]; counts?: { today?: number; dueSoon?: number; unread?: number; approvals?: number; assigned?: number }; generatedAt?: string };
@@ -46,9 +45,6 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     root.dataset.initialized = "true";
     const itemsNode = root.querySelector<HTMLElement>("[data-action-items]")!;
     const summaryNode = root.querySelector<HTMLElement>("[data-action-summary]")!;
-    const errorNode = root.querySelector<HTMLElement>("[data-action-error]")!;
-    const errorText = root.querySelector<HTMLElement>("[data-action-error-text]")!;
-    const retry = root.querySelector<HTMLButtonElement>("[data-action-retry]")!;
     const refresh = root.querySelector<HTMLButtonElement>("[data-action-refresh]")!;
     const updated = root.querySelector<HTMLOutputElement>("[data-action-updated]")!;
     const count = root.querySelector<HTMLElement>("[data-action-count]")!;
@@ -63,6 +59,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     let payload: Payload = {};
     let filter = "all";
     let controller: AbortController | null = null;
+    let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
 
     const filteredItems = () => (filter === "history" ? (payload.history ?? []) : (payload.items ?? [])).filter((item) => {
       if (filter === "action") return item.kind !== "notification" || !item.read;
@@ -129,16 +126,16 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
     };
     const load = async () => {
       controller?.abort(); controller = new AbortController();
-      root.setAttribute("aria-busy", "true"); errorNode.hidden = true; retry.disabled = true; refresh.disabled = true; updated.value = "読み込み中…";
+      retryController?.begin(); refresh.disabled = true; updated.value = "読み込み中…";
       try {
         const response = await fetch("/api/admin/action-center", { credentials: "same-origin", cache: "no-store", signal: controller.signal });
         const data = await response.json().catch(() => ({})) as Payload & { error?: string };
         if (!response.ok) throw new Error(data.error || "アクションを読み込めませんでした。");
-        payload = data; renderSummary(); renderItems(); updated.value = data.generatedAt ? `更新：${formatTime(data.generatedAt)}` : "更新済み";
+        payload = data; renderSummary(); renderItems(); updated.value = data.generatedAt ? `更新：${formatTime(data.generatedAt)}` : "更新済み"; retryController?.success();
       } catch (loadError) {
         if (loadError instanceof DOMException && loadError.name === "AbortError") return;
-        errorText.textContent = loadError instanceof Error ? loadError.message : "アクションを読み込めませんでした。"; errorNode.hidden = false;
-      } finally { root.removeAttribute("aria-busy"); retry.disabled = false; refresh.disabled = false; }
+        retryController?.fail(loadError);
+      } finally { refresh.disabled = false; }
     };
     const markRead = async (ids: string[]) => {
       ids = ids.filter(Boolean);
@@ -158,7 +155,8 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
       } catch (transitionError) { button.disabled = false; button.textContent = transitionError instanceof Error ? transitionError.message : "変更失敗"; }
     };
     root.querySelectorAll<HTMLButtonElement>("[data-action-filter]").forEach((button) => button.addEventListener("click", () => setFilter(button.dataset.actionFilter ?? "all")));
-    retry.addEventListener("click", () => void load()); refresh.addEventListener("click", () => void load());
+    retryController = createAdminLoadRetry(root, () => load(), "アクションを読み込めませんでした。");
+    refresh.addEventListener("click", () => void load());
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void load(); });
     window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 45_000);
     void load();

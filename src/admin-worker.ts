@@ -8483,10 +8483,10 @@ async function memberTasksOverview(
   if (!projectIds.length) return json({ projects: [], tasks: [], members: [] });
   const searchParams = new URL(request.url).searchParams;
   const includeArchived = searchParams.get("includeArchived") === "1";
-  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
   const pageLimit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
-    : 200;
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
   type MemberTaskCursor = { status: number; archived: number; due: number; dueAt: string; updatedAt: string; id: string };
   let taskCursor: MemberTaskCursor | null = null;
   const rawTaskCursor = searchParams.get("cursor");
@@ -8567,10 +8567,10 @@ async function memberCalendarOverview(
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   const searchParams = new URL(request.url).searchParams;
-  const requestedLimit = Number(searchParams.get("limit") ?? "200");
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
   const pageLimit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
-    : 200;
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
   let eventCursor: { startsAt: string; id: string } | null = null;
   const rawEventCursor = searchParams.get("cursor");
   if (rawEventCursor) {
