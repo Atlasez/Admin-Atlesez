@@ -1516,6 +1516,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]")!;
     const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]")!;
     const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
+    const documentSidebar = root.querySelector<HTMLElement>(".document-sidebar")!;
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     const personalNote = root.querySelector<HTMLTextAreaElement>("[data-personal-note]")!;
     const personalNoteMessage = root.querySelector<HTMLOutputElement>("[data-personal-note-message]")!;
@@ -4337,6 +4338,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       assignedSubjects = data.scope?.subjects ?? [];
       root.dataset.manager = String(isManager);
       newDocumentButton.disabled = !(isManager || assignedSubjects.length);
+      // 目次と保存済み原稿一覧は、原稿APIのスコープ確認後に表示する。
+      // HTMLの初期状態では誤表示を避けるため hidden だが、取得後も隠れたままだと
+      // 「目次から執筆を開始」できないため、成功時に必ず利用可能にする。
+      documentSidebar.hidden = false;
       (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager;
       if (currentDocument) updatePublicationActions(currentDocument);
 
