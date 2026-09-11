@@ -29,7 +29,6 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
     <header class="outline-header">
       <div>
         <h1>学習サイトの目次</h1>
-        <p>分野とカテゴリの構成を先に決め、各項目から記事の執筆を始めます。</p>
       </div>
       <nav aria-label="目次の操作"><a href="/admin/editor/?new=1&choose=1">新規記事作成</a><a href="/admin/genre-roles/?project=atlas">分野・カテゴリを管理</a></nav>
     </header>
@@ -42,6 +41,8 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
         <span class="outline-count" data-outline-count aria-live="polite"></span>
         <span class="outline-selection-count" data-outline-selection-count aria-live="polite">0件選択</span>
         <button type="button" class="outline-button" data-outline-confirm disabled>選択項目を確認</button>
+        <button type="button" class="outline-button" data-outline-bulk-archive disabled>選択項目をアーカイブ</button>
+        <button type="button" class="outline-button" data-outline-bulk-restore disabled>選択項目を復元</button>
         <button type="button" class="outline-button outline-button-primary" data-outline-save-order disabled>並び順を保存</button>
       </div>
     </section>
@@ -54,8 +55,9 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
             <label>分野<select name="subject" data-form-subject required></select></label>
             <label>カテゴリ<select name="category" data-form-category required></select></label>
             <label>記事タイトル<input name="title" required maxlength="160" placeholder="例：ラグランジュの定理" /></label>
-            <label>URL名（英小文字）<input name="slug" required pattern="[a-z0-9-]+" maxlength="80" placeholder="lagrange-theorem" /></label>
+            <label>URL名（任意）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" placeholder="未入力なら自動生成" /></label>
             <label>表示順<input name="sortOrder" type="number" min="0" max="9999" value="0" /></label>
+            <label>親項目（任意）<select name="parentId" data-form-parent><option value="">最上位</option></select></label>
             <label>概念ID（任意）<input name="conceptId" maxlength="200" placeholder="自動設定も可能" /></label>
             <label class="wide">要約（任意）<textarea name="summary" rows="2" maxlength="500" placeholder="記事一覧に表示する短い説明"></textarea></label>
           </div>
@@ -64,8 +66,22 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       </details>
     </section>
 
+    <dialog class="outline-edit-dialog" data-outline-edit-dialog aria-labelledby="outline-edit-heading">
+      <form method="dialog" data-outline-edit-form>
+        <h2 id="outline-edit-heading">目次項目を編集</h2>
+        <input type="hidden" name="id" />
+        <label>記事タイトル<input name="title" required maxlength="160" /></label>
+        <label>URL名（英小文字）<input name="slug" required pattern="[a-z0-9-]+" maxlength="80" /></label>
+        <label>要約（任意）<textarea name="summary" rows="2" maxlength="500"></textarea></label>
+        <label>親項目（任意）<select name="parentId" data-edit-parent><option value="">最上位</option></select></label>
+        <label>表示順<input name="sortOrder" type="number" min="0" max="9999" /></label>
+        <div class="outline-dialog-actions"><button type="button" class="outline-button" data-outline-edit-cancel>キャンセル</button><button type="submit" class="outline-button outline-button-primary">保存</button></div>
+        <output data-outline-edit-message aria-live="polite"></output>
+      </form>
+    </dialog>
+
     <section class="outline-results" aria-labelledby="outline-results-heading">
-      <div class="outline-results-heading"><h2 id="outline-results-heading">記事の構成</h2><span>本文の進み具合は記事の状態に反映されます。</span></div>
+      <div class="outline-results-heading"><h2 id="outline-results-heading">記事の構成</h2></div>
       <div class="outline-list" data-outline-list aria-live="polite"><p class="outline-loading">目次を読み込んでいます…</p></div>
     </section>
     <AdminRetryNotice scope="editor-outline" message="目次を読み込めませんでした。" />
@@ -83,6 +99,22 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
   .outline-results{margin-top:1.25rem}.outline-results-heading{align-items:baseline;border-bottom:1px solid var(--border-default);display:flex;gap:.75rem;justify-content:space-between;padding-bottom:.65rem}.outline-results-heading h2{font-size:1.1rem;margin:0}.outline-results-heading span{color:var(--text-secondary);font-size:.72rem}.outline-list{display:grid;gap:.75rem;margin-top:.8rem}.outline-category{border:1px solid var(--border-default);background:var(--background-secondary)}.outline-category-heading{align-items:center;background:var(--surface-alt);border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;padding:.65rem .8rem}.outline-category-heading h3{font-size:.9rem;margin:0}.outline-category-heading span{color:var(--text-secondary);font-size:.72rem}.outline-entry{align-items:center;border-bottom:1px solid var(--border-default);display:grid;gap:.65rem;grid-template-columns:auto auto minmax(0,1fr) auto auto;padding:.7rem .8rem}.outline-entry:last-child{border-bottom:0}.outline-entry.is-dragging{background:color-mix(in srgb,var(--accent-primary) 10%,var(--background-primary));opacity:.65}.outline-entry.is-drop-target{outline:2px solid var(--accent-primary);outline-offset:-2px}.outline-select{accent-color:var(--accent-primary);height:1rem;width:1rem}.outline-drag-handle{background:transparent;border:0;color:var(--text-secondary);cursor:grab;font-size:1rem;padding:.15rem}.outline-drag-handle:active{cursor:grabbing}.outline-entry-title{font-size:.84rem;font-weight:800}.outline-entry-meta{color:var(--text-secondary);font-size:.7rem;margin-top:.2rem}.outline-status{border:1px solid var(--border-default);color:var(--text-secondary);font-size:.68rem;font-weight:800;padding:.2rem .4rem;white-space:nowrap}.outline-status-ready{border-color:var(--success);color:var(--success)}.outline-status-progress{border-color:var(--warning);color:var(--warning)}.outline-entry a{border:1px solid var(--border-default);color:var(--accent-primary);font-size:.72rem;font-weight:800;padding:.35rem .5rem;text-decoration:none;white-space:nowrap}.outline-entry a:hover{border-color:var(--accent-primary)}.outline-entry-actions{display:flex;gap:.35rem}.outline-entry-actions button{background:transparent;border:1px solid var(--border-default);color:var(--text-secondary);cursor:pointer;font:inherit;font-size:.68rem;padding:.3rem .45rem}.outline-entry-actions button:hover,.outline-entry-actions button:focus-visible{border-color:var(--accent-primary);color:var(--accent-primary)}.outline-empty,.outline-loading{color:var(--text-secondary);font-size:.8rem;padding:1rem 0}.outline-create button:disabled{cursor:wait;opacity:.6}
   .outline-select{appearance:auto!important;block-size:16px!important;box-sizing:border-box;display:block;flex:0 0 16px;height:16px!important;inline-size:16px!important;margin:0;min-block-size:16px!important;min-height:16px!important;min-inline-size:16px!important;padding:0;width:16px!important}
   @media(max-width:760px){.outline-page{padding:0 .85rem 3rem}.outline-header{align-items:start;display:grid}.outline-header nav a{flex:1}.outline-toolbar{display:grid}.outline-toolbar label{min-width:0}.outline-toolbar-actions{margin-left:0}.outline-count{margin:0;padding:0}.outline-form-grid{grid-template-columns:1fr}.outline-form-grid .wide{grid-column:auto}.outline-entry{align-items:start;grid-template-columns:auto auto minmax(0,1fr) auto}.outline-entry .outline-status{grid-column:4;grid-row:1}.outline-entry a{grid-column:3/-1;text-align:center}.outline-entry-actions{grid-column:3/-1}.outline-results-heading{display:grid}}
+</style>
+<style>
+  .outline-entry{padding-left:calc(.8rem + (var(--outline-depth,0) * 1.2rem));}
+  .outline-children{border-left:1px solid var(--border-default);margin-left:1rem;}
+  .outline-entry-main{min-width:0;}
+  .outline-entry-actions{align-items:center;flex-wrap:wrap;}
+  .outline-entry-actions button[data-move-entry]{font-size:.75rem;line-height:1;min-width:1.7rem;padding:.3rem;}
+  .outline-entry.is-archived{opacity:.7;}
+  .outline-edit-dialog{background:var(--background-primary);border:1px solid var(--border-strong);color:var(--text-primary);max-width:34rem;padding:0;width:calc(100vw - 2rem);}
+  .outline-edit-dialog::backdrop{background:rgba(0,0,0,.6);}
+  .outline-edit-dialog form{display:grid;gap:.75rem;padding:1.1rem;}
+  .outline-edit-dialog h2{font-size:1.1rem;margin:0;}
+  .outline-edit-dialog label{display:grid;gap:.3rem;font-size:.78rem;font-weight:800;}
+  .outline-edit-dialog input,.outline-edit-dialog select,.outline-edit-dialog textarea{background:var(--background-secondary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;padding:.55rem;}
+  .outline-dialog-actions{display:flex;gap:.5rem;justify-content:flex-end;}
+  .outline-edit-dialog output{color:var(--text-secondary);font-size:.75rem;min-height:1.2rem;}
 </style>
 <style is:global>
   /* 目次項目はAPI応答から動的に描画するため、チェックの寸法はグローバルに固定する。 */
@@ -108,7 +140,7 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
   import { createAdminLoadRetry } from "../../../scripts/admin-load-retry";
 
   type Subject = { slug:string; name:string; status?:string; categories:Array<{slug:string;name:string;order:number}> };
-  type Entry = { id?:string; key:string; subject:string; category:string; title:string; slug:string; summary?:string; concept_id?:string; order:number; sort_order?:number; progress?:string; status?:string };
+  type Entry = { id?:string; key:string; subject:string; category:string; title:string; slug:string; summary?:string; concept_id?:string; parent_id?:string|null; document_id?:string|null; order:number; sort_order?:number; progress?:string; status?:string };
   type DocumentRow = { id:string; subject:string; category:string; slug:string; title:string; status:string; published_at?:string|null };
   const initialize = () => {
     const root = document.querySelector<HTMLElement>("[data-outline-page]");
@@ -124,6 +156,10 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
     const categorySelect = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
     const formSubject = root.querySelector<HTMLSelectElement>("[data-form-subject]")!;
     const formCategory = root.querySelector<HTMLSelectElement>("[data-form-category]")!;
+    const formParent = root.querySelector<HTMLSelectElement>("[data-form-parent]")!;
+    const editDialog = root.querySelector<HTMLDialogElement>("[data-outline-edit-dialog]")!;
+    const editForm = root.querySelector<HTMLFormElement>("[data-outline-edit-form]")!;
+    const editParent = root.querySelector<HTMLSelectElement>("[data-edit-parent]")!;
     const includeArchived = root.querySelector<HTMLInputElement>("[data-outline-include-archived]")!;
     const list = root.querySelector<HTMLElement>("[data-outline-list]")!;
     const count = root.querySelector<HTMLElement>("[data-outline-count]")!;
@@ -134,36 +170,41 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       [...staticEntries,...customEntries].filter((item) => item.subject === subjectSlug).forEach((item) => { if (!map.has(item.category)) map.set(item.category,{slug:item.category,name:item.category,order:999}); });
       return [...map.values()].sort((a,b) => a.order-b.order || a.name.localeCompare(b.name,"ja"));
     };
+    const allEntries = () => [...customEntries,...staticEntries].filter((entry,index,array) => array.findIndex((item) => item.subject === entry.subject && item.category === entry.category && item.slug === entry.slug) === index);
+    const fillParentOptions = (select:HTMLSelectElement, subject:string, category:string, excluded:string = "", selected = "") => {
+      const entries = allEntries().filter((entry) => entry.id && entry.subject === subject && entry.category === category && entry.id !== excluded && entry.status !== "archived").sort((a,b) => a.order-b.order || a.title.localeCompare(b.title,"ja"));
+      select.innerHTML = `<option value="">最上位</option>${entries.map((entry) => `<option value="${esc(entry.id)}">${esc(entry.title)}</option>`).join("")}`;
+      select.value = entries.some((entry) => entry.id === selected) ? selected : "";
+    };
     const fillSubjects = (selected = subjectSelect.value) => {
       const options = subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}${item.status === "preparing" ? "（準備中）" : ""}</option>`).join("");
       subjectSelect.innerHTML = options || '<option value="">分野がありません</option>'; formSubject.innerHTML = options;
       const value = subjects.some((item) => item.slug === selected) ? selected : subjects[0]?.slug ?? ""; subjectSelect.value = value; formSubject.value = value; fillCategories(); fillFormCategories();
     };
     const fillCategories = (selected = categorySelect.value) => { const options = categoryOptions(subjectSelect.value); categorySelect.innerHTML = `<option value="">すべてのカテゴリ</option>${options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("")}`; categorySelect.value = options.some((item) => item.slug === selected) ? selected : ""; };
-    const fillFormCategories = (selected = formCategory.value) => { const options = categoryOptions(formSubject.value); formCategory.innerHTML = options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join(""); formCategory.value = options.some((item) => item.slug === selected) ? selected : options[0]?.slug ?? ""; };
-    const allEntries = () => [...staticEntries,...customEntries].filter((entry,index,array) => array.findIndex((item) => item.subject === entry.subject && item.category === entry.category && item.slug === entry.slug) === index);
-    const documentFor = (entry:Entry) => documents.find((item) => item.subject === entry.subject && item.category === entry.category && (item.slug === entry.slug || item.title === entry.title));
-    const editorUrl = (entry:Entry, document?:DocumentRow) => document ? `/admin/editor/?document=${encodeURIComponent(document.id)}` : `/admin/editor/?new=1&subject=${encodeURIComponent(entry.subject)}&category=${encodeURIComponent(entry.category)}&slug=${encodeURIComponent(entry.slug)}&title=${encodeURIComponent(entry.title)}${entry.summary ? `&summary=${encodeURIComponent(entry.summary)}` : ""}${entry.concept_id ? `&conceptId=${encodeURIComponent(entry.concept_id)}` : ""}`;
+    const fillFormCategories = (selected = formCategory.value) => { const options = categoryOptions(formSubject.value); formCategory.innerHTML = options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join(""); formCategory.value = options.some((item) => item.slug === selected) ? selected : options[0]?.slug ?? ""; fillParentOptions(formParent, formSubject.value, formCategory.value); };
+    const documentFor = (entry:Entry) => entry.document_id ? documents.find((item) => item.id === entry.document_id) : documents.find((item) => item.subject === entry.subject && item.category === entry.category && (item.slug === entry.slug || item.title === entry.title));
+    const editorUrl = (entry:Entry, document?:DocumentRow) => document ? `/admin/editor/?document=${encodeURIComponent(document.id)}${entry.id ? `&outlineId=${encodeURIComponent(entry.id)}` : ""}` : `/admin/editor/?new=1&subject=${encodeURIComponent(entry.subject)}&category=${encodeURIComponent(entry.category)}&slug=${encodeURIComponent(entry.slug)}&title=${encodeURIComponent(entry.title)}${entry.summary ? `&summary=${encodeURIComponent(entry.summary)}` : ""}${entry.concept_id ? `&conceptId=${encodeURIComponent(entry.concept_id)}` : ""}${entry.id ? `&outlineId=${encodeURIComponent(entry.id)}` : ""}`;
     const orderDirty = new Set<string>();
     const selectedKeys = new Set<string>();
     const orderButton = root.querySelector<HTMLButtonElement>("[data-outline-save-order]")!;
     const confirmButton = root.querySelector<HTMLButtonElement>("[data-outline-confirm]")!;
+    const bulkArchiveButton = root.querySelector<HTMLButtonElement>("[data-outline-bulk-archive]")!;
+    const bulkRestoreButton = root.querySelector<HTMLButtonElement>("[data-outline-bulk-restore]")!;
     const selectionCount = root.querySelector<HTMLElement>("[data-outline-selection-count]")!;
-    const updateToolbar = () => {
-      selectionCount.textContent = `${selectedKeys.size}件選択`;
-      confirmButton.disabled = selectedKeys.size === 0;
-      orderButton.disabled = orderDirty.size === 0;
-    };
-    const entryStatus = (entry:Entry) => {
-      const document = documentFor(entry);
-      return document ? (document.published_at ? "公開済み" : document.status === "draft" ? "原稿あり" : "執筆中") : entry.progress === "in-progress" ? "執筆中" : "未着手";
+    const updateToolbar = () => { selectionCount.textContent = `${selectedKeys.size}件選択`; confirmButton.disabled = selectedKeys.size === 0; bulkArchiveButton.disabled = selectedKeys.size === 0; bulkRestoreButton.disabled = selectedKeys.size === 0 || !includeArchived.checked; orderButton.disabled = orderDirty.size === 0; };
+    const entryStatus = (entry:Entry) => { const document = documentFor(entry); return document ? (document.published_at ? "公開済み" : document.status === "draft" ? "原稿あり" : "執筆中") : entry.progress === "in-progress" ? "執筆中" : "未着手"; };
+    const renderEntry = (entry:Entry, childrenByParent:Map<string,Entry[]>, depth:number):string => {
+      const document = documentFor(entry); const archived = entry.status === "archived"; const status = archived ? "アーカイブ済み" : entryStatus(entry); const tone = archived ? "" : status === "公開済み" || status === "原稿あり" ? "outline-status-ready" : status === "執筆中" ? "outline-status-progress" : ""; const id = entry.id ? esc(entry.id) : ""; const selectionKey = esc(entry.key); const editable = Boolean(entry.id); const children = entry.id ? (childrenByParent.get(entry.id) ?? []) : [];
+      const move = editable && !archived ? `<button type="button" data-move-entry="up" aria-label="${esc(entry.title)}を上へ">↑</button><button type="button" data-move-entry="down" aria-label="${esc(entry.title)}を下へ">↓</button>` : "";
+      return `<article class="outline-entry${archived ? " is-archived" : ""}" style="--outline-depth:${depth}" data-outline-entry data-entry-id="${id}" data-entry-key="${selectionKey}" draggable="${editable && !archived}"><input class="outline-select" type="checkbox" data-outline-select="${selectionKey}" aria-label="${esc(entry.title)}を選択" ${selectedKeys.has(entry.key) ? "checked" : ""} ${archived && !includeArchived.checked ? "disabled" : ""}><button class="outline-drag-handle" type="button" data-drag-handle="${id}" aria-label="${esc(entry.title)}の並び順を変更" ${editable && !archived ? "" : "disabled"}>⋮⋮</button><div class="outline-entry-main"><div class="outline-entry-title">${esc(entry.title)}</div><div class="outline-entry-meta">${esc(entry.slug)}${entry.summary ? ` ・ ${esc(entry.summary)}` : ""}</div></div><span class="outline-status ${tone}">${status}</span><div class="outline-entry-actions">${move}${editable ? `<button type="button" data-edit-entry="${id}" ${archived ? "disabled" : ""}>編集</button><button type="button" data-archive-entry="${id}" data-archive-action="${archived ? "restore" : "archive"}">${archived ? "復元" : "アーカイブ"}</button>` : ""}<a href="${editorUrl(entry,document)}">${document ? "記事を開く" : "執筆を開始"}</a></div></article>${children.length ? `<div class="outline-children" data-parent-id="${id}">${children.map((child) => renderEntry(child, childrenByParent, depth + 1)).join("")}</div>` : ""}`;
     };
     const render = () => {
       const selectedSubject = subjectSelect.value; const selectedCategory = categorySelect.value;
       const filtered = allEntries().filter((entry) => entry.subject === selectedSubject && (!selectedCategory || entry.category === selectedCategory) && (includeArchived.checked || entry.status !== "archived")).sort((a,b) => a.category.localeCompare(b.category) || a.order-b.order || a.title.localeCompare(b.title,"ja"));
       count.textContent = `${filtered.length}件`;
       const groups = new Map<string,Entry[]>(); filtered.forEach((entry) => groups.set(entry.category,[...(groups.get(entry.category) ?? []),entry]));
-      list.innerHTML = groups.size ? [...groups.entries()].map(([category,entries]) => { const name = categoryOptions(selectedSubject).find((item) => item.slug === category)?.name ?? category; return `<section class="outline-category" data-outline-category="${esc(category)}"><div class="outline-category-heading"><h3>${esc(name)}</h3><span>${entries.length}件</span></div>${entries.map((entry) => { const document = documentFor(entry); const archived = entry.status === "archived"; const status = archived ? "アーカイブ済み" : entryStatus(entry); const tone = archived ? "" : status === "公開済み" || status === "原稿あり" ? "outline-status-ready" : status === "執筆中" ? "outline-status-progress" : ""; const id = entry.id ? esc(entry.id) : ""; const selectionKey = esc(entry.key); const editable = Boolean(entry.id); return `<article class="outline-entry${archived ? " is-archived" : ""}" data-outline-entry data-entry-id="${id}" draggable="${editable && !archived}"><input class="outline-select" type="checkbox" data-outline-select="${selectionKey}" aria-label="${esc(entry.title)}を選択" ${selectedKeys.has(entry.key) ? "checked" : ""} ${archived ? "disabled" : ""}><button class="outline-drag-handle" type="button" data-drag-handle="${id}" aria-label="${esc(entry.title)}の並び順を変更" ${editable && !archived ? "" : "disabled"}>⋮⋮</button><div><div class="outline-entry-title">${esc(entry.title)}</div><div class="outline-entry-meta">${esc(entry.slug)}${entry.summary ? ` ・ ${esc(entry.summary)}` : ""}</div></div><span class="outline-status ${tone}">${status}</span><div class="outline-entry-actions">${editable ? `<button type="button" data-edit-entry="${id}" ${archived ? "disabled" : ""}>編集</button><button type="button" data-archive-entry="${id}" data-archive-action="${archived ? "restore" : "archive"}">${archived ? "復元" : "アーカイブ"}</button>` : ""}<a href="${editorUrl(entry,document)}">${document ? "記事を開く" : "執筆を開始"}</a></div></article>`; }).join("")}</section>`; }).join("") : '<p class="outline-empty">この分野には目次項目がありません。上の「目次項目を追加」から作成できます。</p>';
+      list.innerHTML = groups.size ? [...groups.entries()].map(([category,entries]) => { const name = categoryOptions(selectedSubject).find((item) => item.slug === category)?.name ?? category; const childrenByParent = new Map<string,Entry[]>(); entries.forEach((entry) => { if (entry.parent_id) childrenByParent.set(entry.parent_id,[...(childrenByParent.get(entry.parent_id) ?? []),entry]); }); const roots = entries.filter((entry) => !entry.parent_id || !entries.some((candidate) => candidate.id === entry.parent_id)); return `<section class="outline-category" data-outline-category="${esc(category)}"><div class="outline-category-heading"><h3>${esc(name)}</h3><span>${entries.length}件</span></div>${roots.map((entry) => renderEntry(entry, childrenByParent, 0)).join("")}</section>`; }).join("") : '<p class="outline-empty">この分野には目次項目がありません。上の「目次項目を追加」から作成できます。</p>';
       updateToolbar();
     };
     const load = async () => {
@@ -172,24 +213,35 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       if (!documentsResponse.ok) throw new Error(documentsData.error ?? "原稿一覧を読み込めませんでした。"); if (!outlineResponse.ok) throw new Error(outlineData.error ?? "目次を読み込めませんでした。");
       documents = documentsData.documents ?? []; customEntries = (outlineData.entries ?? []).map((entry) => ({...entry,key:entry.id ?? `${entry.subject}/${entry.category}/${entry.slug}`,order:Number(entry.sort_order ?? entry.order ?? 0)}));
       const catalog = (taxonomyData.catalog ?? []).filter((item) => item.status !== "archived"); const merged = new Map(subjects.map((item) => [item.slug,{...item,categories:[...item.categories]}])); catalog.filter((item) => item.kind === "subject").forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug,{slug:item.slug,name:item.name,status:"preparing",categories:[]}); }); catalog.filter((item) => item.kind === "category").forEach((item) => { const subject = merged.get(item.subject_slug); if (subject && !subject.categories.some((category) => category.slug === item.slug)) subject.categories.push({slug:item.slug,name:item.name,order:Number(item.sort_order ?? 0)}); });
-      const permitted = documentsData.scope?.isManager || !documentsData.scope?.subjects?.length ? null : new Set(documentsData.scope.subjects);
-      subjects = [...merged.values()].filter((item) => !permitted || permitted.has(item.slug));
-      staticEntries = staticEntries.filter((entry) => !permitted || permitted.has(entry.subject));
-      fillSubjects(); render();
+      const permitted = documentsData.scope?.isManager || !documentsData.scope?.subjects?.length ? null : new Set(documentsData.scope.subjects); subjects = [...merged.values()].filter((item) => !permitted || permitted.has(item.slug)); staticEntries = staticEntries.filter((entry) => !permitted || permitted.has(entry.subject)); fillSubjects(); render();
     };
     const retry = createAdminLoadRetry(root, () => load(), "目次を読み込めませんでした。");
     const run = async () => { retry.begin(); try { await load(); retry.success(); } catch (error) { retry.fail(error); list.innerHTML = `<p class="outline-empty">${esc(error instanceof Error ? error.message : "目次を読み込めませんでした。")}</p>`; } };
-    subjectSelect.addEventListener("change", () => { fillCategories(); formSubject.value = subjectSelect.value; fillFormCategories(); selectedKeys.clear(); orderDirty.clear(); render(); }); categorySelect.addEventListener("change", () => { selectedKeys.clear(); render(); }); includeArchived.addEventListener("change", () => { selectedKeys.clear(); orderDirty.clear(); void run(); }); formSubject.addEventListener("change", () => fillFormCategories());
+    const patchEntry = async (payload:Record<string,unknown>) => { const response = await fetch("/api/admin/editor/outline", { method:"PATCH", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) }); const result = await response.json() as {error?:string}; if (!response.ok) throw new Error(result.error ?? "目次項目を更新できませんでした。"); await run(); };
+    const selectedIds = () => allEntries().filter((entry) => selectedKeys.has(entry.key) && entry.id).map((entry) => entry.id as string);
+    subjectSelect.addEventListener("change", () => { fillCategories(); formSubject.value = subjectSelect.value; fillFormCategories(); selectedKeys.clear(); orderDirty.clear(); render(); }); categorySelect.addEventListener("change", () => { selectedKeys.clear(); render(); }); includeArchived.addEventListener("change", () => { selectedKeys.clear(); orderDirty.clear(); void run(); }); formSubject.addEventListener("change", () => { fillFormCategories(); }); formCategory.addEventListener("change", () => fillParentOptions(formParent, formSubject.value, formCategory.value));
     root.addEventListener("change", (event) => { const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-outline-select]"); if (!input) return; const key = input.dataset.outlineSelect; if (!key) return; if (input.checked) selectedKeys.add(key); else selectedKeys.delete(key); updateToolbar(); });
-      root.addEventListener("click", (event) => { const target = event.target as HTMLElement; const archive = target.closest<HTMLButtonElement>("[data-archive-entry]"); if (archive) { const id = archive.dataset.archiveEntry; const action = archive.dataset.archiveAction === "restore" ? "restore" : "archive"; if (!id || !confirm(action === "restore" ? "この目次項目を復元しますか？" : "この目次項目をアーカイブしますか？")) return; archive.disabled = true; void fetch("/api/admin/editor/outline", { method:"PATCH", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify({ id, action }) }).then(async (response) => { const result = await response.json() as {error?:string}; if (!response.ok) throw new Error(result.error ?? "目次項目を更新できませんでした。"); await run(); }).catch((error) => { archive.disabled = false; alert(error instanceof Error ? error.message : "目次項目を更新できませんでした。"); }); return; } const edit = target.closest<HTMLButtonElement>("[data-edit-entry]"); if (edit) { const id = edit.dataset.editEntry; const entry = allEntries().find((item) => item.id === id); if (!entry) return; const title = prompt("記事タイトル", entry.title); if (title === null || !title.trim()) return; const sortOrder = prompt("表示順", String(entry.order)); if (sortOrder === null) return; edit.disabled = true; void fetch("/api/admin/editor/outline", { method:"PATCH", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify({ id, action:"update", title:title.trim(), sortOrder:Number(sortOrder) }) }).then(async (response) => { const result = await response.json() as {error?:string}; if (!response.ok) throw new Error(result.error ?? "目次を更新できませんでした。"); await run(); }).catch((error) => { edit.disabled = false; alert(error instanceof Error ? error.message : "目次を更新できませんでした。"); }); } });
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const move = target.closest<HTMLButtonElement>("[data-move-entry]");
+      if (move) { const entry = move.closest<HTMLElement>("[data-outline-entry]"); const container = entry?.parentElement; if (!entry || !container) return; const sibling = move.dataset.moveEntry === "up" ? entry.previousElementSibling : entry.nextElementSibling; if (!(sibling instanceof HTMLElement) || !sibling.matches("[data-outline-entry]")) return; if (move.dataset.moveEntry === "up") container.insertBefore(entry, sibling); else container.insertBefore(sibling, entry); container.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]").forEach((item) => { if (item.dataset.entryId) orderDirty.add(item.dataset.entryId); }); updateToolbar(); return; }
+      const archive = target.closest<HTMLButtonElement>("[data-archive-entry]");
+      if (archive) { const id = archive.dataset.archiveEntry; const action = archive.dataset.archiveAction === "restore" ? "restore" : "archive"; if (!id || !confirm(action === "restore" ? "この目次項目を復元しますか？" : "この目次項目をアーカイブしますか？")) return; archive.disabled = true; void patchEntry({ id, action }).catch((error) => { archive.disabled = false; alert(error instanceof Error ? error.message : "目次項目を更新できませんでした。"); }); return; }
+      const edit = target.closest<HTMLButtonElement>("[data-edit-entry]");
+      if (edit) { const id = edit.dataset.editEntry; const entry = allEntries().find((item) => item.id === id); if (!entry) return; (editForm.elements.namedItem("id") as HTMLInputElement).value = entry.id ?? ""; (editForm.elements.namedItem("title") as HTMLInputElement).value = entry.title; (editForm.elements.namedItem("slug") as HTMLInputElement).value = entry.slug; (editForm.elements.namedItem("summary") as HTMLTextAreaElement).value = entry.summary ?? ""; (editForm.elements.namedItem("sortOrder") as HTMLInputElement).value = String(entry.order); fillParentOptions(editParent, entry.subject, entry.category, entry.id, entry.parent_id ?? ""); editDialog.showModal(); }
+    });
+    root.querySelector<HTMLButtonElement>("[data-outline-edit-cancel]")?.addEventListener("click", () => editDialog.close());
+    bulkArchiveButton.addEventListener("click", () => { const ids = selectedIds(); if (!ids.length || !confirm(`${ids.length}件をアーカイブしますか？`)) return; bulkArchiveButton.disabled = true; void patchEntry({ action:"bulk", ids, status:"archived" }).then(() => selectedKeys.clear()).catch((error) => alert(error instanceof Error ? error.message : "一括アーカイブに失敗しました。")); });
+    bulkRestoreButton.addEventListener("click", () => { const ids = selectedIds(); if (!ids.length || !confirm(`${ids.length}件を復元しますか？`)) return; bulkRestoreButton.disabled = true; void patchEntry({ action:"bulk", ids, status:"active" }).then(() => selectedKeys.clear()).catch((error) => alert(error instanceof Error ? error.message : "一括復元に失敗しました。")); });
     let draggedId = "";
     root.addEventListener("dragstart", (event) => { const entry = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!entry?.dataset.entryId) return; draggedId = entry.dataset.entryId; entry.classList.add("is-dragging"); event.dataTransfer?.setData("text/plain", draggedId); event.dataTransfer?.setDragImage(entry, 12, 12); });
     root.addEventListener("dragover", (event) => { const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!target || !draggedId || target.dataset.entryId === draggedId) return; event.preventDefault(); root.querySelectorAll(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target")); target.classList.add("is-drop-target"); });
-    root.addEventListener("drop", (event) => { event.preventDefault(); const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!target || !draggedId || target.dataset.entryId === draggedId) return; const source = root.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(draggedId)}"]`); if (!source) return; target.parentElement?.insertBefore(source, event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2 ? target : target.nextElementSibling); const entries = [...target.parentElement!.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]")]; entries.forEach((item) => { if (item.dataset.entryId) orderDirty.add(item.dataset.entryId); }); target.classList.remove("is-drop-target"); draggedId = ""; updateToolbar(); });
+    root.addEventListener("drop", (event) => { event.preventDefault(); const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!target || !draggedId || target.dataset.entryId === draggedId) return; const source = root.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(draggedId)}"]`); const parent = target.parentElement; if (!source || !parent || source.parentElement !== parent) return; parent.insertBefore(source, event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2 ? target : target.nextElementSibling); parent.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]").forEach((item) => { if (item.dataset.entryId) orderDirty.add(item.dataset.entryId); }); target.classList.remove("is-drop-target"); draggedId = ""; updateToolbar(); });
     root.addEventListener("dragend", () => { root.querySelectorAll(".is-dragging,.is-drop-target").forEach((item) => item.classList.remove("is-dragging","is-drop-target")); draggedId = ""; });
-    orderButton.addEventListener("click", () => { const items = [...root.querySelectorAll<HTMLElement>("[data-outline-category]")].flatMap((group) => [...group.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]")].map((item, index) => ({ id:item.dataset.entryId!, sortOrder:(index + 1) * 10 }))); orderButton.disabled = true; void fetch("/api/admin/editor/outline", { method:"PATCH", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify({ action:"reorder", items }) }).then(async (response) => { const result = await response.json() as {error?:string}; if (!response.ok) throw new Error(result.error ?? "並び順を保存できませんでした。"); orderDirty.clear(); await run(); }).catch((error) => { orderButton.disabled = false; alert(error instanceof Error ? error.message : "並び順を保存できませんでした。"); }); });
+    orderButton.addEventListener("click", () => { const items = [...root.querySelectorAll<HTMLElement>("[data-outline-category]")].flatMap((group) => { const counters = new Map<string,number>(); return [...group.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]")].map((item) => { const parentId = item.parentElement?.classList.contains("outline-children") ? item.parentElement.dataset.parentId ?? null : null; const next = (counters.get(parentId ?? "") ?? 0) + 1; counters.set(parentId ?? "", next); return { id:item.dataset.entryId!, sortOrder:next * 10, parentId }; }); }); orderButton.disabled = true; void patchEntry({ action:"reorder", items }).then(() => orderDirty.clear()).catch((error) => { orderButton.disabled = false; alert(error instanceof Error ? error.message : "並び順を保存できませんでした。"); }); });
     confirmButton.addEventListener("click", () => { const selected = allEntries().filter((entry) => selectedKeys.has(entry.key)); const summary = selected.map((entry) => `${entry.title}：${entryStatus(entry)}`).join("\n"); if (summary) alert(`選択した記事の状態\n\n${summary}`); });
     root.querySelector<HTMLFormElement>("[data-outline-form]")?.addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const output = form.querySelector<HTMLOutputElement>("[data-outline-form-message]")!; const values = Object.fromEntries(new FormData(form).entries()); const submit = form.querySelector<HTMLButtonElement>("button[type=submit]")!; submit.disabled = true; output.textContent = "追加しています…"; try { const response = await fetch("/api/admin/editor/outline",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(values)}); const result = await response.json() as {error?:string}; if (!response.ok) throw new Error(result.error ?? "目次を追加できませんでした。"); output.textContent = "目次に追加しました。"; form.reset(); fillSubjects(subjectSelect.value); await run(); } catch (error) { output.textContent = error instanceof Error ? error.message : "目次を追加できませんでした。"; } finally { submit.disabled = false; } });
+    editForm.addEventListener("submit", async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(editForm).entries()); const output = editForm.querySelector<HTMLOutputElement>("[data-outline-edit-message]")!; const submit = editForm.querySelector<HTMLButtonElement>("button[type=submit]")!; submit.disabled = true; output.textContent = "保存しています…"; try { await patchEntry({ ...values, action:"update", sortOrder:Number(values.sortOrder ?? 0), parentId:values.parentId || null }); editDialog.close(); } catch (error) { output.textContent = error instanceof Error ? error.message : "目次を更新できませんでした。"; } finally { submit.disabled = false; } });
     void run();
   };
   document.addEventListener("astro:page-load", initialize); initialize();
