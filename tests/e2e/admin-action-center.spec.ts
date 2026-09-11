@@ -175,12 +175,21 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   await expect(
     page.getByRole("button", { name: "未対応", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("link", { name: /タスク管理を開く/ }),
+  ).toHaveAttribute("href", "/admin/member-tasks/");
   page.once("dialog", (dialog) => dialog.accept("未対応の確認"));
   await page.getByRole("button", { name: "表示を保存", exact: true }).click();
   await expect(
     page.locator('[data-action-saved-view] option[value]:not([value=""])'),
   ).toHaveText("未対応の確認");
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
+  await expect(
+    page
+      .locator("[data-action-items] .action-item")
+      .first()
+      .locator(".item-open"),
+  ).toHaveText("タスク管理で開く");
   await expect(
     page
       .locator("[data-action-items] .action-item")
