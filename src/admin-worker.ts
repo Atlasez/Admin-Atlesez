@@ -4277,15 +4277,94 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
       }
       if (cursor) return json({ error: "階層が深すぎます。" }, 400);
     }
+    // 目次と記事を同時に編集できるときだけ、記事の識別子も一緒に更新する。
+    // 目次だけを先に変えると、記事編集画面の outlineId 検証が失敗して
+    // 「目次上は別記事、記事側は旧URL」の不整合が残るためである。
+    const linkedDocument = current.document_id
+      ? await env.REPORTS.prepare(
+          `SELECT id,subject,category,slug,title,summary,concept_id,updated_at,published_at,publication_action,publication_review_stage
+           FROM editorial_documents WHERE id=?`,
+        )
+          .bind(current.document_id)
+          .first<{
+            id: string;
+            subject: string;
+            category: string;
+            slug: string;
+            title: string;
+            summary: string;
+            concept_id: string;
+            updated_at: string;
+            published_at: string | null;
+            publication_action: string | null;
+            publication_review_stage: string | null;
+          }>()
+      : null;
+    const linkedIdentityChanged = Boolean(
+      linkedDocument &&
+        (linkedDocument.subject !== subject ||
+          linkedDocument.category !== category ||
+          linkedDocument.slug !== slug),
+    );
+    const linkedArticleBusy = Boolean(
+      linkedDocument &&
+        (linkedDocument.published_at ||
+          linkedDocument.publication_action ||
+          linkedDocument.publication_review_stage),
+    );
+    if (linkedIdentityChanged && linkedArticleBusy) {
+      return json(
+        {
+          error:
+            "公開済みまたは公開処理中の記事は、目次から分野・カテゴリ・URL名を変更できません。先に公開を取り消すか、更新案を作成してください。",
+          code: "LINKED_ARTICLE_PUBLISHED",
+        },
+        409,
+      );
+    }
+    const now = new Date().toISOString();
     try {
-      await env.REPORTS.prepare("UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,parent_id=?,slug=?,title=?,summary=?,concept_id=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(subject, category, parentId, slug, title, summary, conceptId, sortOrder, new Date().toISOString(), id).run();
+      const statements = [
+        env.REPORTS.prepare("UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,parent_id=?,slug=?,title=?,summary=?,concept_id=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+          .bind(subject, category, parentId, slug, title, summary, conceptId, sortOrder, now, id),
+      ];
+      if (linkedDocument && !linkedArticleBusy) {
+        statements.unshift(
+          env.REPORTS.prepare(
+            `UPDATE editorial_documents
+             SET subject=?,category=?,slug=?,title=?,summary=?,concept_id=?,updated_by=?,updated_at=?
+             WHERE id=? AND updated_at=?`,
+          ).bind(
+            subject,
+            category,
+            slug,
+            title,
+            summary,
+            conceptId,
+            scope.email,
+            now,
+            linkedDocument.id,
+            linkedDocument.updated_at,
+          ),
+        );
+      }
+      const results = await env.REPORTS.batch(statements);
+      const documentUpdate = linkedDocument && !linkedArticleBusy ? results[0] as { meta?: { changes?: number } } : null;
+      if (documentUpdate?.meta?.changes === 0) {
+        return json(
+          {
+            error: "記事が先に更新されています。目次を再読み込みしてから再試行してください。",
+            code: "STALE_LINKED_ARTICLE",
+          },
+          409,
+        );
+      }
     } catch (error) {
       if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ分野・カテゴリ・IDの目次項目がすでにあります。" }, 409);
       throw error;
     }
-    await recordAdminAudit(env, scope.email, "outline_updated", "outline", id, title, `目次項目を更新：${title}`, { subject, category, slug });
-    return json({ ok: true, id, subject, category, parentId, slug, title, summary, conceptId, sortOrder });
+    await recordAdminAudit(env, scope.email, "outline_updated", "outline", id, title, `目次項目を更新：${title}`, { subject, category, slug, linkedDocumentId: linkedDocument?.id ?? null, linkedDocumentUpdated: Boolean(linkedDocument && !linkedArticleBusy) });
+    return json({ ok: true, id, subject, category, parentId, slug, title, summary, conceptId, sortOrder, linkedDocumentUpdated: Boolean(linkedDocument && !linkedArticleBusy) });
   }
   if (request.method !== "POST") return json({ error: "GET、POST、PATCHのみ利用できます。" }, 405);
   const payload = (await request.json().catch(() => null)) as {
