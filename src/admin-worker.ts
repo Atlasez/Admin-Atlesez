@@ -4584,14 +4584,14 @@ async function listEditorialDocuments(
         scope: { email: scope.email, subjects: [], isManager: scope.isManager },
       });
     const subjectValues = [...new Set([...scope.subjects, ...coordinatorSubjects])];
-    const subjectFilter = subjectValues.length ? `subject IN (${subjectValues.map(() => "?").join(", ")})` : "0";
+    const subjectFilter = subjectValues.length ? `d.subject IN (${subjectValues.map(() => "?").join(", ")})` : "0";
     // 分野統括者は担当分野の原稿だけを一覧できる。担当外の分野統括審査を
     // 無条件で追加すると、一覧には出るのに本文APIで403になる不整合が起きる。
     filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1))`);
     values.push(...subjectValues, scope.isProjectLeader ? 1 : 0);
   }
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
-  if (!includeArchived) filters.push("archived_at IS NULL");
+  if (!includeArchived) filters.push("d.archived_at IS NULL");
   const searchParams = new URL(request.url).searchParams;
   const requestedLimit = Number(searchParams.get("limit") ?? "50");
   const pageLimit = Number.isFinite(requestedLimit)
@@ -4603,7 +4603,7 @@ async function listEditorialDocuments(
     const cursorUpdatedAt = separator >= 0 ? rawCursor.slice(0, separator) : "";
     const cursorId = separator >= 0 ? rawCursor.slice(separator + 1) : "";
     if (cursorUpdatedAt && cursorId) {
-      filters.push("(updated_at < ? OR (updated_at = ? AND id < ?))");
+      filters.push("(d.updated_at < ? OR (d.updated_at = ? AND d.id < ?))");
       values.push(cursorUpdatedAt, cursorUpdatedAt, cursorId);
     }
   }
@@ -19053,8 +19053,18 @@ const listEditorialActiveEditors = async (
 ): Promise<Map<string, EditorialActiveEditor[]>> => {
   const namespace = env.EDITORIAL_COLLABORATION;
   if (!namespace || !documentIds.length) return new Map();
-  const entries = await Promise.all(
-    documentIds.map(async (documentId) => {
+  // Presence is useful context, but asking a Durable Object for every row in a
+  // large article page can exhaust the Worker CPU/request budget.  The list is
+  // ordered by most recently updated, so the first rows are the most likely to
+  // be actively edited.  Keep the enrichment bounded and leave the remaining
+  // rows with an empty presence list; the document list itself must never fail
+  // because presence is unavailable.
+  const presenceDocumentIds = documentIds.slice(0, 16);
+  const entries: Array<readonly [string, EditorialActiveEditor[]]> = [];
+  let nextIndex = 0;
+  const readPresence = async () => {
+    while (nextIndex < presenceDocumentIds.length) {
+      const documentId = presenceDocumentIds[nextIndex++];
       try {
         const response = await namespace
           .get(namespace.idFromName(documentId))
@@ -19067,8 +19077,10 @@ const listEditorialActiveEditors = async (
               },
             ),
           );
-        if (!response.ok)
-          return [documentId, [] as EditorialActiveEditor[]] as const;
+        if (!response.ok) {
+          entries.push([documentId, [] as EditorialActiveEditor[]]);
+          continue;
+        }
         const payload = (await response.json()) as {
           participants?: EditorialActiveEditor[];
         };
@@ -19084,13 +19096,16 @@ const listEditorialActiveEditors = async (
                 ),
             )
           : [];
-        return [documentId, participants] as const;
+        entries.push([documentId, participants]);
       } catch {
         // 同時編集サービスが一時的に利用できなくても、原稿一覧は表示する。
-        return [documentId, [] as EditorialActiveEditor[]] as const;
+        entries.push([documentId, [] as EditorialActiveEditor[]]);
       }
-    }),
-  );
+    }
+  };
+  // Four in-flight DO requests are enough to keep presence responsive without
+  // creating a burst of subrequests on every article-list refresh.
+  await Promise.all(Array.from({ length: Math.min(4, presenceDocumentIds.length) }, readPresence));
   return new Map(entries);
 };
 

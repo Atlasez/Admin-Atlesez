@@ -706,10 +706,84 @@ describe("admin worker editor APIs", () => {
 
     expect(response.status).toBe(200);
     expect(documentQueries).toHaveLength(1);
-    expect(documentQueries[0]).toContain("subject IN (?)");
+    expect(documentQueries[0]).toContain("d.subject IN (?)");
     expect(documentQueries[0]).not.toContain(
       "publication_review_stage='subject-coordinator'",
     );
+  });
+
+  it("bounds collaboration presence lookups for large article lists", async () => {
+    const presenceRequests: string[] = [];
+    const documents = Array.from({ length: 20 }, (_, index) => ({
+      id: `document-${index}`,
+      source_article_id: null,
+      subject: "mathematics",
+      category: "group-theory",
+      locale: "ja",
+      slug: `article-${index}`,
+      title: `記事${index}`,
+      summary: "要約",
+      concept_id: "math.group-theory.example",
+      latex_engine: "katex",
+      status: "draft",
+      created_by: "local-editor@atlasez.test",
+      updated_by: "local-editor@atlasez.test",
+      created_at: "2026-09-01T00:00:00.000Z",
+      updated_at: `2026-09-${String(20 - index).padStart(2, "0")}T00:00:00.000Z`,
+      reviewed_at: null,
+      published_at: null,
+      archived_at: null,
+      archived_by: null,
+      archive_expires_at: null,
+      scheduled_publish_at: null,
+      publication_review_stage: null,
+      created_by_display_name: "ローカル編集者",
+      updated_by_display_name: "ローカル編集者",
+      created_by_avatar_url: "",
+      updated_by_avatar_url: "",
+      publication_pr_number: null,
+      publication_pr_url: null,
+      publication_branch: null,
+      publication_action: null,
+      publication_requested_at: null,
+    }));
+    class PresenceStatement extends EmptyStatement {
+      async all<T>() {
+        if (this.query.includes("FROM editorial_documents d"))
+          return { results: documents as T[] };
+        return { results: [] as T[] };
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      EDITORIAL_COLLABORATION: {
+        idFromName: (name: string) => name,
+        get: (name: string) => ({
+          fetch: async () => {
+            presenceRequests.push(name);
+            return new Response(JSON.stringify({ participants: [] }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            });
+          },
+        }),
+      },
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new PresenceStatement(query),
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents"),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      documents: Array<{ active_editors: unknown[] }>;
+    };
+    expect(payload.documents).toHaveLength(20);
+    expect(presenceRequests).toHaveLength(16);
   });
 
   it("does not allow a new document to skip directly to feedback-complete", async () => {
