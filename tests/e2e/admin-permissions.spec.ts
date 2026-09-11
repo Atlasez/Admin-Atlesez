@@ -248,6 +248,69 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   });
 });
 
+test("実効権限プレビューはユーザー単位の閲覧・編集・承認範囲を表示する", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/report-admin-permissions", async (route) => {
+    await route.fulfill({
+      json: {
+        permissions: [
+          {
+            email: "coordinator@example.com",
+            display_name: "数学担当",
+            subjects: "mathematics",
+          },
+        ],
+        workflowRoles: [
+          {
+            email: "coordinator@example.com",
+            role: "subject-coordinator",
+            subject: "mathematics",
+            display_name: "数学担当",
+          },
+        ],
+        discordRoles: [],
+      },
+    });
+  });
+
+  await page.goto("./admin/permissions/?project=atlas");
+
+  const card = page.locator(".member-card");
+  await expect(card).toContainText("数学担当");
+  await card.getByRole("button", { name: "実効権限" }).click();
+
+  const preview = page.locator("[data-access-preview]");
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText("数学担当のアクセス範囲");
+  await expect(preview).toContainText("記事の閲覧・コメント");
+  await expect(preview).toContainText("本文・記事情報の編集");
+  await expect(preview).toContainText("公開審査の承認");
+  await expect(preview).toContainText("数学");
+  await expect(preview.locator(".access-preview-row")).toHaveCount(4);
+  await expect(
+    preview
+      .locator(".access-preview-row")
+      .nth(0)
+      .locator(".access-preview-row__heading span"),
+  ).toHaveText("許可");
+  await expect(
+    preview
+      .locator(".access-preview-row")
+      .nth(1)
+      .locator(".access-preview-row__heading span"),
+  ).toHaveText("許可");
+  await expect(
+    preview
+      .locator(".access-preview-row")
+      .nth(2)
+      .locator(".access-preview-row__heading span"),
+  ).toHaveText("許可");
+
+  await preview.locator("[data-access-preview-close]").last().click();
+  await expect(preview).toBeHidden();
+});
+
 test("分野統括は同じ分野の共同担当と一人の兼任を表示・保存できる", async ({
   page,
 }) => {
