@@ -176,11 +176,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             </div>
             <span data-outline-summary aria-live="polite"></span>
           </div>
-          <p class="atlas-outline-description">公開済みの記事だけでなく、今後作成予定の「未着手」「執筆中」の項目も含めて分野全体を確認できます。</p>
+          <p class="atlas-outline-description">公開済み・執筆中・未着手をまとめて確認し、目次からそのまま執筆を始められます。</p>
           <div class="atlas-outline-filters">
             <label>分野<select data-outline-subject></select></label>
             <label>カテゴリ<select data-outline-category></select></label>
           </div>
+          <a class="atlas-outline-manage-link" href="/admin/genre-roles/?project=atlas">分野・カテゴリの管理</a>
           <div class="atlas-outline-list" data-atlas-outline aria-live="polite"></div>
         </section>
       </aside>
@@ -264,8 +265,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <label class="metadata-field metadata-abstract"><span class="field-heading">要約<span class="required-mark" aria-hidden="true">*</span></span><input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
               <label class="metadata-field metadata-subject"><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
               <label class="metadata-field metadata-category"><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
-              <label class="metadata-field metadata-slug"><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-      <label class="metadata-field metadata-concept concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>既存の概念を選択。新規概念は「新しい概念を作成」から記事と一緒に登録できます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
+              <label class="metadata-field metadata-slug"><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /><small>タイトルから自動入力します。必要な場合だけ変更してください。</small></label>
+      <label class="metadata-field metadata-concept concept-picker-field"><span class="field-heading">学習地図への登録<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="学習地図への登録"><option value="">自動設定</option></select><small>通常は記事の分野・カテゴリ・URL名から自動設定されます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">自動設定</output></label>
       <details class="concept-id-advanced"><summary>概念IDの確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><label class="concept-registration-toggle"><input type="checkbox" data-register-concept /> 新しい概念として公開PRに追加する</label><div class="concept-registration-fields" data-concept-registration-fields hidden><label><span class="field-heading">概念名（日本語）<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptName" maxlength="180" placeholder="例：群の中心" /></label><label><span class="field-heading">概念名（英語・任意）</span><input name="conceptNameEn" maxlength="180" placeholder="例：The Center of a Group" /></label><small>チェックすると、この概念IDと概念名を記事の公開PRで concepts.yaml に追加します。学習地図に登録されるのはPRのCI成功後です。</small></div><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。</small></details>
               <label class="metadata-field metadata-locale">言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label class="metadata-field metadata-latex">LaTeX形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部LaTeX処理で使用。画面内プレビューはKaTeXです。</small></label>
@@ -284,7 +285,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           <div class="editor-split" aria-label="原稿とプレビュー">
             <section class="writing-area">
               <div class="pane-heading writing-pane-heading"><div class="pane-title"><h3>本文（Markdown）</h3><p class="math-authoring-help">詳細は「使える機能」へ</p></div><span data-word-count>0文字</span><div class="pane-controls"><button type="button" class="diagnostics-trigger" data-open-diagnostics aria-haspopup="dialog" hidden><span>確認事項</span><b data-diagnostics-trigger-count>0</b></button><button type="button" data-open-authoring-help aria-haspopup="dialog">使える機能</button><button type="button" data-pane-popout="writing">別窓</button></div></div>
-              <details class="writing-tools" data-tool-disclosure="math"><summary><span>挿入・数式設定</span><small>必要なときだけ開く</small></summary><div class="pane-controls writing-tools-controls" aria-label="本文への挿入"><label class="math-preset-control"><span>共通数式</span><button type="button" class="math-preset-picker" data-open-math-preset-library aria-haspopup="dialog"><span data-math-preset-selection>なし</span><span aria-hidden="true">⌄</span></button><select data-math-preset aria-label="共通数式プリセット" hidden><option value="">なし</option>{Object.entries(MATH_PRESETS).map(([value, preset]) => <option value={value}>{preset.label}</option>)}</select></label><button type="button" class="quiet-action" data-add-math-preset>プリセット管理</button><button type="button" class="quiet-action" data-open-reference-library>参考文献</button><button type="button" class="quiet-action" data-insert-math="inline">インライン数式</button><button type="button" class="quiet-action" data-insert-math="display">表示数式</button><button type="button" class="quiet-action" data-insert-math="proposition">命題</button><span class="latex-snippet-divider" aria-hidden="true"></span><button type="button" class="quiet-action" data-insert-latex-snippet="frac">分数</button><button type="button" class="quiet-action" data-insert-latex-snippet="sqrt">根号</button><button type="button" class="quiet-action" data-insert-latex-snippet="supsub">上下付き</button><button type="button" class="quiet-action" data-insert-latex-snippet="matrix">行列</button><button type="button" class="quiet-action" data-insert-latex-snippet="cases">場合分け</button><button type="button" class="quiet-action" data-insert-latex-snippet="aligned">整列</button></div></details>
+              <details class="writing-tools" data-tool-disclosure="math"><summary aria-label="挿入・数式設定を開く"><span aria-hidden="true">＋</span></summary><div class="pane-controls writing-tools-controls" aria-label="本文への挿入"><label class="math-preset-control"><span>共通数式</span><button type="button" class="math-preset-picker" data-open-math-preset-library aria-haspopup="dialog"><span data-math-preset-selection>なし</span><span aria-hidden="true">⌄</span></button><select data-math-preset aria-label="共通数式プリセット" hidden><option value="">なし</option>{Object.entries(MATH_PRESETS).map(([value, preset]) => <option value={value}>{preset.label}</option>)}</select></label><button type="button" class="quiet-action" data-add-math-preset>プリセット管理</button><button type="button" class="quiet-action" data-open-reference-library>参考文献</button><button type="button" class="quiet-action" data-insert-math="inline">インライン数式</button><button type="button" class="quiet-action" data-insert-math="display">表示数式</button><button type="button" class="quiet-action" data-insert-math="proposition">命題</button><span class="latex-snippet-divider" aria-hidden="true"></span><button type="button" class="quiet-action" data-insert-latex-snippet="frac">分数</button><button type="button" class="quiet-action" data-insert-latex-snippet="sqrt">根号</button><button type="button" class="quiet-action" data-insert-latex-snippet="supsub">上下付き</button><button type="button" class="quiet-action" data-insert-latex-snippet="matrix">行列</button><button type="button" class="quiet-action" data-insert-latex-snippet="cases">場合分け</button><button type="button" class="quiet-action" data-insert-latex-snippet="aligned">整列</button></div></details>
               <dialog class="math-preset-dialog" data-math-preset-dialog aria-labelledby="math-preset-dialog-title"><div class="math-preset-dialog-inner"><div class="math-preset-dialog-header"><div><p class="eyebrow">LATEX PRESETS</p><h2 id="math-preset-dialog-title">LaTeXプリセット</h2><p>選択したプリセットは記事の数式設定に適用されます。自分用プリセットはここで追加・編集・削除できます。</p></div><button type="button" class="help-close" data-close-math-preset aria-label="プリセットを閉じる">×</button></div><div class="math-preset-library" data-math-preset-library><div class="math-preset-library-heading"><h3>利用できるプリセット</h3><button type="button" class="primary-action" data-start-math-preset>＋ 新規追加</button></div><div class="math-preset-library-list" data-math-preset-library-list></div></div><section class="math-preset-editor" data-math-preset-editor hidden><div class="math-preset-editor-heading"><h3 data-math-preset-editor-title>プリセットを追加</h3><button type="button" class="quiet-action" data-cancel-math-preset-edit>一覧に戻る</button></div><label class="math-preset-group-field">グループ名（任意）<input data-custom-preset-group maxlength="80" placeholder="例：代数・写像" /></label><div data-math-preset-form><label>プリセット名<input data-custom-preset-label maxlength="80" required disabled placeholder="例：自分の解析記号" /></label><label>マクロ<textarea data-custom-preset-macros required disabled placeholder="\\foo = \\mathbb{R}\n\\dd = \\,\\mathrm{d}#1"></textarea></label><output data-custom-preset-message aria-live="polite"></output><div class="math-preset-dialog-actions"><button type="button" class="primary-action" data-custom-preset-save>保存</button></div></div></section></div></dialog>
               <dialog class="reference-library-dialog" data-reference-library-dialog aria-labelledby="reference-library-title"><div class="reference-library-inner"><div class="reference-library-header"><div><p class="eyebrow">PERSONAL REFERENCES</p><h2 id="reference-library-title">自分用参考文献リスト</h2><p><code>[[cite:識別子]]</code> を本文へ挿入すると、記事内では番号リンクとして表示されます。記事で使った文献は原稿にもコピー保存されます。</p></div><button type="button" class="help-close" data-close-reference-library aria-label="参考文献を閉じる">×</button></div><div class="reference-entry-form" data-reference-entry-form><input type="hidden" data-reference-edit-id /><label>識別子<input data-reference-id maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,79}" required disabled placeholder="例：atiyah-macdonald" /></label><label>書名・論文名<input data-reference-title maxlength="240" required disabled placeholder="例：Introduction to Commutative Algebra" /></label><label>著者・編者<input data-reference-authors maxlength="240" placeholder="例：M. F. Atiyah and I. G. Macdonald" /></label><label>出版年<input data-reference-year maxlength="32" placeholder="例：1969" /></label><label>出版社・掲載誌<input data-reference-publisher maxlength="240" placeholder="例：Addison-Wesley" /></label><label>URL<input data-reference-url type="url" maxlength="2000" placeholder="https://..." /></label><label>メモ<input data-reference-note maxlength="500" placeholder="必要なら版・ページなど" /></label><div class="reference-entry-actions"><button type="button" class="primary-action" data-save-reference>リストに保存</button><button type="button" class="quiet-action" data-cancel-reference-edit hidden>編集をキャンセル</button><output data-reference-entry-message aria-live="polite"></output></div></div><section class="reference-library-section" aria-labelledby="reference-list-heading"><div class="reference-library-section-heading"><h3 id="reference-list-heading">登録済みの文献</h3><span data-reference-count></span></div><div data-reference-library-list></div></section></div></dialog>
               <details class="editor-lock-bar" data-editor-lock-bar data-tool-disclosure="lock"><summary><span data-lock-status>確定部分はありません</span><small>選択範囲を確定</small></summary><div class="editor-lock-actions"><button type="button" class="quiet-action" data-lock-selection disabled>選択範囲をロック</button><button type="button" class="quiet-action" data-unlock-selection disabled>選択範囲のロック解除</button></div></details>
@@ -481,7 +482,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   select, input, textarea { background: var(--surface); border: 1px solid var(--border); border-radius: .45rem; color: var(--text); font: inherit; }
   select, input { box-sizing: border-box; min-height: 2.35rem; padding: .35rem .55rem; width: 100%; }
   .document-list { display: grid; gap: .45rem; margin-top: .35rem; max-height: 15rem; overflow: auto; padding-right: .1rem; }
-  .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
+  .atlas-outline-panel { border-top:1px solid var(--border); min-width:0; padding-top:.75rem; }.atlas-outline-heading { align-items:end; display:flex; gap:.5rem; justify-content:space-between; }.atlas-outline-heading h2 { color:var(--text); font-size:1rem; margin:0; }.atlas-outline-heading > span { color:var(--muted); flex:0 0 auto; font-size:.68rem; font-weight:800; text-align:right; }.atlas-outline-description { color:var(--muted); font-size:.72rem; line-height:1.5; margin:.4rem 0 .6rem; }.atlas-outline-filters { display:grid; gap:.4rem; }.atlas-outline-filters label { color:var(--muted); display:grid; font-size:.7rem; font-weight:800; gap:.22rem; }.atlas-outline-filters select { font-size:.76rem; min-height:2.1rem; }.atlas-outline-manage-link { color:var(--accent); display:inline-block; font-size:.7rem; font-weight:700; margin-top:.55rem; text-decoration:none; }.atlas-outline-manage-link:hover { text-decoration:underline; }.atlas-outline-list { max-height:34rem; margin-top:.65rem; overflow:auto; padding-right:.15rem; }.outline-category { border-top:1px solid var(--border); padding:.55rem 0 .2rem; }.outline-category h3 { color:var(--text); font-size:.78rem; margin:0 0 .25rem; }.outline-category-title { align-items:center; display:flex; gap:.3rem; justify-content:space-between; }.outline-category-count { color:var(--muted); font-size:.64rem; font-weight:700; }.outline-article { border-bottom:1px dashed color-mix(in srgb, var(--border), transparent 20%); display:grid; gap:.28rem; padding:.42rem 0; }.outline-article-row { align-items:start; display:flex; gap:.35rem; justify-content:space-between; }.outline-article-title { color:var(--text); font-size:.74rem; line-height:1.4; min-width:0; }.outline-status { border:1px solid var(--border); border-radius:999px; flex:0 0 auto; font-size:.61rem; font-weight:800; padding:.1rem .3rem; }.outline-status-published { background:#e6f4ea; border-color:#83b995; color:#24643a; }.outline-status-planned { background:#f1f3f5; color:#596773; }.outline-status-progress { background:#fff2cc; border-color:#d9a429; color:#714f00; }.outline-status-editorial { background:#e8f3fb; border-color:#8bb9d6; color:#185c86; }.outline-article-meta { color:var(--muted); font-size:.64rem; line-height:1.4; }.outline-article-actions { display:flex; flex-wrap:wrap; gap:.35rem; }.outline-article .quiet-action { font-size:.68rem; min-height:1.95rem; padding:.28rem .45rem; width:auto; }
   .document-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 0; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: .5rem; justify-content: space-between; padding: .6rem .7rem; text-align: left; width: 100%; }
   .document-card:hover, .document-card[aria-current="true"] { border-color: var(--accent); border-left-color: var(--accent); box-shadow: none; }
   .document-card small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.document-card-publication { color: var(--muted); flex: 0 0 auto; font-size: .62rem; font-weight: 800; white-space: nowrap; }.document-card-publication-source { color: var(--success,#4fbf79); }
@@ -958,12 +959,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .math-preset-control { align-items:center; color:var(--muted); display:flex; flex:1 1 10rem; font-size:.68rem; font-weight:800; gap:.35rem; justify-content:space-between; min-width:0; }
   .math-preset-control select { background:var(--surface); border:1px solid var(--border); border-radius:.35rem; color:var(--text); font:inherit; min-height:2rem; min-width:0; padding:.24rem .4rem; width:auto; }
   .writing-tools { border-bottom:1px solid var(--border); color:var(--muted); font-size:.74rem; }
-  .writing-tools summary { align-items:center; cursor:pointer; display:flex; font-weight:800; gap:.6rem; justify-content:space-between; list-style:none; padding:.5rem .9rem; }
+  .writing-tools summary { align-items:center; cursor:pointer; display:flex; font-weight:800; gap:.6rem; justify-content:center; list-style:none; padding:.3rem; width:2rem; }
   .writing-tools summary::-webkit-details-marker { display:none; }
   .writing-tools summary::marker { content:""; }
-  .writing-tools summary::after { color:var(--accent); content:"+"; font-size:1rem; line-height:1; }
-  .writing-tools[open] summary::after { content:"−"; }
-  .writing-tools summary small { color:var(--muted); font-size:.68rem; font-weight:500; margin-left:auto; }
+  .writing-tools summary > span { color:var(--accent); font-size:1.1rem; line-height:1; }
   .writing-tools[open] summary { border-bottom:1px solid var(--border); }
   .writing-tools .pane-controls { padding:.55rem .9rem .65rem; }
   .writing-tools p { line-height:1.55; margin:.45rem .9rem .65rem; }
@@ -1280,7 +1279,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
   type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
   type PublicationRun = { id: string; state: string; action: "publish" | "unpublish"; attempt: number; pull_request_number?: number | null; pull_request_url?: string | null; branch?: string | null; head_sha?: string | null; merge_sha?: string | null; last_check_at?: string | null; next_attempt_at?: string | null; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null; failure_detail?: string | null; failure_step?: string | null; failure_file?: string | null; failure_line?: number | null; failure_column?: number | null; failure_suggestion?: string | null; updated_at?: string };
-  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: PublicationRun | null; locked_ranges?: string | LockedRange[] };
+  type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: PublicationRun | null; locked_ranges?: string | LockedRange[]; created_by_display_name?: string; updated_by_display_name?: string; created_by_avatar_url?: string; updated_by_avatar_url?: string };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
@@ -1313,7 +1312,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       history.scrollRestoration = "manual";
       resetEditorEntryScroll();
     }
-    const { subjects, articles: initialArticles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
+    let { subjects, articles: initialArticles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const staticArticles = initialArticles;
     let articles = initialArticles;
     let publicCatalogSource: "api" | "static" = "static";
@@ -1346,6 +1345,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const sourceSubject = root.querySelector<HTMLSelectElement>("[data-source-subject]")!;
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
     const category = form.elements.namedItem("category") as HTMLSelectElement;
+    const title = form.elements.namedItem("title") as HTMLInputElement;
+    const slug = form.elements.namedItem("slug") as HTMLInputElement;
     const conceptId = form.elements.namedItem("conceptId") as HTMLInputElement;
     const conceptName = form.elements.namedItem("conceptName") as HTMLInputElement;
     const conceptNameEn = form.elements.namedItem("conceptNameEn") as HTMLInputElement;
@@ -1357,6 +1358,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const approvedStatusOption = status.querySelector<HTMLOptionElement>('option[value="approved"]')!;
     const statusHelp = root.querySelector<HTMLElement>("[data-status-help]")!;
     const conceptIdAdvanced = root.querySelector<HTMLDetailsElement>(".concept-id-advanced")!;
+    let slugEdited = false;
     const metadata = root.querySelector<HTMLDetailsElement>("[data-metadata]")!;
     const metadataSummary = root.querySelector<HTMLElement>("[data-metadata-summary]")!;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
@@ -1514,6 +1516,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]")!;
     const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]")!;
     const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
+    const documentSidebar = root.querySelector<HTMLElement>(".document-sidebar")!;
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     const personalNote = root.querySelector<HTMLTextAreaElement>("[data-personal-note]")!;
     const personalNoteMessage = root.querySelector<HTMLOutputElement>("[data-personal-note-message]")!;
@@ -1941,21 +1944,27 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!value) return "未設定";
       return value.includes("@") ? value.slice(0, value.indexOf("@")) : value;
     };
-    const personInitial = (email: string) => personLabel(email).trim().charAt(0).toUpperCase() || "運";
-    const renderDocumentProvenance = (item: Document, revisionEditors: string[] = []) => {
+    const personInitial = (name: string) => name.trim().charAt(0).toUpperCase() || "運";
+    type ProvenancePerson = { email: string; name: string; avatarUrl?: string };
+    const renderDocumentProvenance = (item: Document, revisionEditors: Array<string | ProvenancePerson> = []) => {
       const creator = item.created_by?.trim() || "";
-      const editors = [...new Set([item.updated_by, ...revisionEditors].map((value) => String(value ?? "").trim()).filter(Boolean))].slice(0, 6);
-      documentCreator.textContent = `初回作成者：${personLabel(creator)}`;
+      const creatorPerson: ProvenancePerson = { email: creator, name: item.created_by_display_name?.trim() || personLabel(creator), avatarUrl: item.created_by_avatar_url || "" };
+      const updatedPerson: ProvenancePerson = { email: item.updated_by?.trim() || "", name: item.updated_by_display_name?.trim() || personLabel(item.updated_by), avatarUrl: item.updated_by_avatar_url || "" };
+      const people = [updatedPerson, ...revisionEditors.map((value) => typeof value === "string" ? { email: value, name: personLabel(value) } : value)];
+      const editors = people.filter((value) => value.email).filter((value, index, all) => all.findIndex((candidate) => candidate.email.toLowerCase() === value.email.toLowerCase()) === index).slice(0, 6);
+      documentCreator.textContent = `初回作成者：${creatorPerson.name}`;
       documentUpdated.textContent = item.updated_at ? `最終更新：${date(item.updated_at)}` : "最終更新：未保存";
-      documentEditors.replaceChildren(...editors.map((email) => {
+      documentEditors.replaceChildren(...editors.map((person) => {
         const avatar = document.createElement("span");
         avatar.className = "document-editor-avatar";
-        avatar.textContent = personInitial(email);
-        avatar.title = personLabel(email);
-        avatar.setAttribute("aria-label", `${personLabel(email)}が編集`);
+        avatar.title = person.name;
+        avatar.setAttribute("aria-label", `${person.name}が編集`);
+        if (person.avatarUrl) {
+          const image = document.createElement("img"); image.src = person.avatarUrl; image.alt = ""; image.loading = "lazy"; image.referrerPolicy = "no-referrer"; image.addEventListener("error", () => { image.remove(); avatar.textContent = personInitial(person.name); }, { once: true }); avatar.append(image);
+        } else avatar.textContent = personInitial(person.name);
         return avatar;
       }));
-      documentEditors.setAttribute("aria-label", editors.length ? `編集履歴：${editors.map(personLabel).join("、")}` : "編集履歴：まだありません");
+      documentEditors.setAttribute("aria-label", editors.length ? `編集履歴：${editors.map((person) => person.name).join("、")}` : "編集履歴：まだありません");
     };
     // Keep the list state in sync immediately after the user starts an update
     // proposal. Persisted proposals are also detected from updated_at so the
@@ -2758,6 +2767,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const slug = formValue("slug").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "new-concept";
       return `${conceptPrefix(subject.value)}.${category.value}.${slug}`;
     };
+    const slugFromTitle = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 100);
     const syncConceptRegistration = () => {
       const registering = registerConcept.checked;
       conceptRegistrationFields.hidden = !registering;
@@ -3917,7 +3927,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       collaborationStatus.title = detail || collaborationStateLabels[connectionState];
       collaborationStatus.setAttribute("aria-label", `リアルタイム接続：${collaborationStateLabels[connectionState]}${detail ? `（${detail}）` : ""}`);
       if (connectionState !== "synced") collaborationLatency.hidden = true;
-      collaborationRetryButton.hidden = connectionState !== "disconnected" && connectionState !== "save-error";
+      const retryAfterAutomaticAttempts = connectionState === "disconnected" && Number(collaborationStatus.dataset.reconnectAttempt ?? "0") >= 2;
+      collaborationRetryButton.hidden = connectionState !== "save-error" && !retryAfterAutomaticAttempts;
       collaborationRetryButton.textContent = connectionState === "save-error" ? "保存を再試行" : "再接続";
       collaborationRetryButton.setAttribute("aria-label", connectionState === "save-error" ? "保存を再試行" : "リアルタイム接続を再試行");
     };
@@ -4100,7 +4111,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           window.clearTimeout(collaborationPongTimer);
           collaborationPongTimer = window.setTimeout(() => {
             if (generation !== collaborationGeneration || collaborationSocket !== socket || socket.readyState !== WebSocket.OPEN) return;
-            setCollaborationConnectionState("disconnected", "同期応答がありません");
+            setCollaborationConnectionState("reconnecting", "同期応答を確認できないため再接続します…");
             socket.close();
           }, 6_000);
           window.clearTimeout(collaborationHeartbeatTimer);
@@ -4166,10 +4177,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           stopCollaborationHeartbeat();
           collaborationHeartbeatNow = null;
           window.clearTimeout(stableConnectionTimer);
-          setCollaborationConnectionState("disconnected", "接続が一時的に切れました");
-          if (!navigator.onLine) return;
+          if (!navigator.onLine) { collaborationStatus.dataset.reconnectAttempt = String(reconnectAttempt + 1); setCollaborationConnectionState("disconnected", "オフラインです。接続が戻ると自動で再接続します。"); return; }
           const stable = connectedAt > 0 && Date.now() - connectedAt >= 10_000;
           if (stable) reconnectAttempt = 0;
+          collaborationStatus.dataset.reconnectAttempt = String(reconnectAttempt + 1);
+          setCollaborationConnectionState(reconnectAttempt >= 2 ? "disconnected" : "reconnecting", reconnectAttempt >= 2 ? "接続を複数回確認できません。再試行できます。" : "接続が一時的に切れたため自動で再接続します…");
           const baseDelay = Math.min(30_000, 250 * 2 ** Math.min(reconnectAttempt, 7));
           const jitter = Math.round(baseDelay * (Math.random() * 0.4 - 0.2));
           const delay = Math.max(250, baseDelay + jitter);
@@ -4203,6 +4215,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     });
     const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
       currentDocument = item;
+      slugEdited = Boolean(item.id);
       empty.hidden = true; form.hidden = false;
       latestPublicationRealtimeVersion = 0;
       collaborationSaveFailed = false;
@@ -4236,6 +4249,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const emptyDocument = (source?: SourceArticle) => {
       activeDocumentId = "";
+      slugEdited = Boolean(source?.slug);
       const available = availableEditorSubjects();
       const selected = source ? available.find((item) => item.slug === source.subject) ?? available[0] : available[0];
       if (!selected) return;
@@ -4294,6 +4308,24 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
+    const loadEditorialTaxonomy = async () => {
+      try {
+        const response = await fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as { catalog?: Array<{ kind: "subject" | "category"; subject_slug: string; slug: string; name: string; sort_order?: number; status?: string }> };
+        const rows = (data.catalog ?? []).filter((row) => row.status !== "archived");
+        const additions = rows.filter((row) => row.kind === "subject").map((row) => ({ slug: row.slug, name: row.name, status: "preparing" as const, categories: [] as Subject["categories"] }));
+        const merged = new Map(subjects.map((item) => [item.slug, { ...item, categories: [...item.categories] }]));
+        additions.forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug, item); });
+        rows.filter((row) => row.kind === "category").forEach((row) => {
+          const item = merged.get(row.subject_slug); if (!item || item.categories.some((category) => category.slug === row.slug)) return;
+          item.categories.push({ slug: row.slug, name: row.name, order: Number(row.sort_order ?? 0) });
+        });
+        subjects = [...merged.values()];
+      } catch {
+        // 動的カタログが未適用の環境では静的な目次をそのまま使う。
+      }
+    };
     const loadDocuments = async () => {
       editorLoadRetry?.begin();
       const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" });
@@ -4306,6 +4338,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       assignedSubjects = data.scope?.subjects ?? [];
       root.dataset.manager = String(isManager);
       newDocumentButton.disabled = !(isManager || assignedSubjects.length);
+      // 目次と保存済み原稿一覧は、原稿APIのスコープ確認後に表示する。
+      // HTMLの初期状態では誤表示を避けるため hidden だが、取得後も隠れたままだと
+      // 「目次から執筆を開始」できないため、成功時に必ず利用可能にする。
+      documentSidebar.removeAttribute("hidden");
       (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager;
       if (currentDocument) updatePublicationActions(currentDocument);
 
@@ -4314,7 +4350,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // catalog then refreshes only the source/outline enrichment in place.
       // Starting this request before the outline work is important: rendering
       // hundreds of planned entries can otherwise delay discovery of the fetch.
-      publicCatalogReady = loadPublicCatalog().then(() => {
+      publicCatalogReady = Promise.all([loadPublicCatalog(), loadEditorialTaxonomy()]).then(() => {
         populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles();
         window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       });
@@ -4390,7 +4426,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (workflowRefreshInFlight === refresh) workflowRefreshInFlight = null;
       }
     };
-    type Revision = { id: string; title: string; summary: string; body: string; status: string; saved_by: string; saved_at: string };
+    type Revision = { id: string; title: string; summary: string; body: string; status: string; saved_by: string; saved_at: string; saved_by_display_name?: string; saved_by_avatar_url?: string };
     type FeedbackRequestHistory = { task_id: string; title: string; details: string; status: "open" | "doing" | "done"; assignee_email: string | null; created_at: string; requester_display_name?: string; created_by: string; canUpdate?: boolean };
     type RevisionDiffLine = { kind: "unchanged" | "added" | "removed"; text: string };
     const revisionLineDiff = (before: string, after: string): RevisionDiffLine[] => {
@@ -4409,10 +4445,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; feedbackRequestHistory.textContent = "フィードバック依頼の履歴を読み込めませんでした。"; return; }
       const history = data.revisions ?? [];
       loadedRevisionHistory = history;
-      if (currentDocument) renderDocumentProvenance(currentDocument, history.map((item) => item.saved_by));
+      if (currentDocument) renderDocumentProvenance(currentDocument, history.map((item) => ({ email: item.saved_by, name: item.saved_by_display_name?.trim() || personLabel(item.saved_by), avatarUrl: item.saved_by_avatar_url || "" })));
       if (!history.length) revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。";
       else {
-        const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by)}・${esc(item.status)}</option>`).join("");
+        const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by_display_name?.trim() || personLabel(item.saved_by))}・${esc(item.status)}</option>`).join("");
         revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label><button type="button" class="quiet-action revision-restore-action" data-revision-restore>選択した版を入力へ反映</button></div><p class="revision-restore-help">反映した内容は入力欄に入るだけで、保存するまで記事は更新されません。</p><pre class="revision-diff" data-revision-diff></pre>`;
         const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
         const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;
@@ -4497,6 +4533,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; clearConceptRegistration(); refreshDefaultConceptId(); fillConceptOptions(); setUnsavedChanges(true); });
     category.addEventListener("change", () => { conceptId.value = ""; clearConceptRegistration(); refreshDefaultConceptId(); fillConceptOptions(); setUnsavedChanges(true); });
+    slug.addEventListener("input", () => { slugEdited = true; setUnsavedChanges(true); });
+    title.addEventListener("input", () => {
+      if (!slugEdited && !(form.elements.namedItem("documentId") as HTMLInputElement).value) {
+        const next = slugFromTitle(title.value);
+        if (next) { slug.value = next; refreshDefaultConceptId(); fillConceptOptions(conceptId.value); }
+      }
+      setUnsavedChanges(true);
+    });
     conceptPicker.addEventListener("change", () => {
       if (conceptPicker.value === "__new_concept__") {
         conceptId.value = generatedConceptId();
@@ -5255,7 +5299,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .document-provenance { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: .62rem; gap: .2rem .5rem; margin-top: .2rem; min-height: 1.1rem; }
   .document-provenance > span:not(.document-editor-stack) { white-space: nowrap; }
   .document-editor-stack { align-items: center; display: inline-flex; gap: .15rem; margin-left: .15rem; }
-  .document-editor-avatar { align-items: center; background: var(--accent-subtle, #e8f3fb); border: 1px solid color-mix(in srgb, var(--accent, #176ea6) 45%, var(--border)); border-radius: 50%; color: var(--accent, #176ea6); display: inline-flex; font-size: .52rem; font-weight: 900; height: 1.1rem; justify-content: center; width: 1.1rem; }
+  .document-editor-avatar { align-items: center; background: var(--accent-subtle, #e8f3fb); border: 1px solid color-mix(in srgb, var(--accent, #176ea6) 45%, var(--border)); border-radius: 50%; color: var(--accent, #176ea6); display: inline-flex; font-size: .52rem; font-weight: 900; height: 1.35rem; justify-content: center; overflow: hidden; width: 1.35rem; }
+  .document-editor-avatar img { height: 100%; object-fit: cover; width: 100%; }
   .preview-chapter { border-bottom: 1px solid var(--border); margin: 0; }
   .preview-chapter:last-child { border-bottom: 0; }
   .preview-chapter > summary { color: var(--text); cursor: pointer; font-size: 1.25rem; font-weight: 800; list-style-position: outside; margin: 1.3rem 0 .65rem; padding: .25rem .25rem .35rem 0; }

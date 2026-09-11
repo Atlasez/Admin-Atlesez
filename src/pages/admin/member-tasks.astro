@@ -53,6 +53,18 @@ const timezones = getTimeZoneOptions(new Date());
   .member-tasks label small{color:var(--text-secondary);font-weight:400;line-height:1.4}.member-tasks .task-pagination{align-items:center;display:flex;gap:.7rem;justify-content:center;margin-top:.9rem}.member-tasks .task-pagination[hidden]{display:none}.member-tasks .task-pagination span{color:var(--text-secondary);font-size:.72rem;font-variant-numeric:tabular-nums}.member-tasks .task-pagination button{background:transparent;border:1px solid var(--border-default);border-radius:6px;color:var(--text-primary);cursor:pointer;font-size:.72rem;padding:.45rem .7rem}.member-tasks .task-pagination button:hover:not(:disabled){border-color:var(--accent-primary);color:var(--accent-primary)}.member-tasks .task-pagination button:disabled{cursor:wait;opacity:.6}
 </style>
 <style is:global>
+  /* タスクのチェック操作はテキスト入力と同じ高さに拡大しない。 */
+  .member-tasks input[type="checkbox"] {
+    accent-color: var(--task-blue, var(--accent-primary));
+    block-size: 0.9rem !important;
+    inline-size: 0.9rem !important;
+    min-block-size: 0.9rem !important;
+    min-height: 0.9rem !important;
+    padding: 0 !important;
+  }
+  .member-tasks .archive-toggle input[type="checkbox"] { flex: 0 0 0.9rem; }
+</style>
+<style is:global>
   .member-tasks {
     --task-blue: #1769aa;
     --task-blue-dark: #0e4f84;

@@ -1650,6 +1650,39 @@ async function getGlobalAdminScope(
   });
 }
 
+/**
+ * 開発者モード専用の入口。全分野管理者に加えて、いずれかの運営プロジェクトで
+ * manager として登録された運営内運営にも診断画面を公開する。
+ * このスコープは開発者向けページ／診断だけで使い、通常の権限境界は拡張しない。
+ */
+async function getDeveloperScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  const identity = await getAuthenticatedEmail(request, env);
+  if (isResponse(identity)) return identity;
+  const scope = await resolveCachedAdminScope(request, env);
+  if (!isResponse(scope) && scope.allSubjects) return scope;
+  const manager = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM atlasez_project_memberships WHERE lower(email)=lower(?) AND role='manager' LIMIT 1",
+  )
+    .bind(identity)
+    .first<{ found: number }>();
+  const primary = identity.toLowerCase() === primaryAdminEmail(env);
+  if (!manager?.found && !primary)
+    return json({ error: "開発者モードの閲覧権限がありません。" }, 403);
+  return !isResponse(scope)
+    ? { ...scope, allSubjects: true, isManager: true }
+    : {
+        email: identity,
+        subjects: ["*"],
+        allSubjects: true,
+        isManager: true,
+        coordinatorSubjects: ["*"],
+        isProjectLeader: true,
+      };
+}
+
 const isSameOrigin = (request: Request) => {
   const origin = request.headers.get("origin");
   return !origin || origin === new URL(request.url).origin;
@@ -2212,6 +2245,10 @@ type AdminAuditAction =
   | "member_removed"
   | "task_archived"
   | "task_restored"
+  | "taxonomy_created"
+  | "taxonomy_updated"
+  | "taxonomy_archived"
+  | "taxonomy_restored"
   | "workflow_transition";
 
 type AdminAuditTarget =
@@ -2219,6 +2256,7 @@ type AdminAuditTarget =
   | "permission"
   | "member"
   | "task"
+  | "taxonomy"
   | "workflow";
 
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
@@ -2233,6 +2271,10 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   member_removed: "運営メンバーを削除",
   task_archived: "タスクをアーカイブ",
   task_restored: "タスクを復元",
+  taxonomy_created: "分野・カテゴリを追加",
+  taxonomy_updated: "分野・カテゴリを更新",
+  taxonomy_archived: "分野・カテゴリをアーカイブ",
+  taxonomy_restored: "分野・カテゴリを復元",
   workflow_transition: "状態を変更",
 }[action] ?? action);
 
@@ -2334,8 +2376,8 @@ const workflowTransitionsFor = (entityType: WorkflowEntityType, from: string) =>
 const workflowTransitionPolicyError = (role: WorkflowTransition["requiredRole"]) =>
   role === "manager" ? "運営内運営のみ状態を変更できます。" : role === "reviewer" ? "担当査読者のみ状態を変更できます。" : "担当者のみ状態を変更できます。";
 
-async function listWorkflowTransitions(request: Request, env: Env): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+async function listWorkflowTransitions(request: Request, env: Env, developerAccess = false): Promise<Response> {
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const [taskCounts, documentCounts, applicationCounts, approvalCounts] = await Promise.all([
     env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_tasks WHERE archived_at IS NULL GROUP BY status").all<{ state: string; count: number }>(),
@@ -2361,8 +2403,8 @@ async function listWorkflowTransitions(request: Request, env: Env): Promise<Resp
  * 状態イベントと現在レコードのずれを検出する読み取り専用の診断API。
  * 自動修復は行わず、管理者が確認してから個別の遷移APIを再実行できるようにする。
  */
-async function workflowDiagnostics(request: Request, env: Env): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+async function workflowDiagnostics(request: Request, env: Env, developerAccess = false): Promise<Response> {
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
     `SELECT e.id,e.entity_type,e.entity_id,e.from_state,e.to_state,e.actor_email,e.created_at,
@@ -2695,8 +2737,9 @@ async function listPermissionAudit(
 async function listAdminAuditLog(
   request: Request,
   env: Env,
+  developerAccess = false,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const url = new URL(request.url);
   const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
@@ -2792,7 +2835,7 @@ async function developerDiagnostics(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = await getDeveloperScope(request, env);
   if (isResponse(scope)) return scope;
   const startedAt = performance.now();
   const checks: Array<{
@@ -2871,8 +2914,9 @@ type GithubCommitSummary = {
 async function listAdminUpdateHistory(
   request: Request,
   env: Env,
+  developerAccess = false,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const params = new URL(request.url).searchParams;
   const requestedLimit = Number(params.get("limit") ?? "30");
@@ -3780,6 +3824,107 @@ async function genreRoleAssignment(
   return json({ error: "POST、DELETEのみ利用できます。" }, 405);
 }
 
+type EditorialTaxonomyRow = {
+  id: string;
+  project_id: string;
+  kind: "subject" | "category";
+  subject_slug: string;
+  slug: string;
+  name: string;
+  description: string;
+  sort_order: number;
+  status: "active" | "archived";
+};
+
+/** 管理画面で追加した分野・カテゴリを記事編集の目次へ反映する。 */
+async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const coordinatorSubjects = scope.coordinatorSubjects ?? [];
+  const url = new URL(request.url);
+  if (request.method === "GET") {
+    const includeArchived = url.searchParams.get("includeArchived") === "1";
+    const result = await env.REPORTS.prepare(
+      `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status
+       FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
+       ORDER BY kind,subject_slug,sort_order,name`,
+    ).all<EditorialTaxonomyRow>();
+    // 分野担当者には担当分野のカタログだけを返す。管理者は全件を閲覧できる。
+    // フロント側で非表示にするだけではAPIレスポンスに担当外情報が残るため、
+    // ここで境界を適用して目次・分類管理の両方を同じポリシーにする。
+    const allowedSubjects = new Set([
+      ...scope.subjects,
+      ...(scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*"),
+    ]);
+    const rows = scope.allSubjects || scope.isManager
+      ? (result.results ?? [])
+      : (result.results ?? []).filter((row) => row.kind === "subject"
+        ? allowedSubjects.has(row.slug)
+        : allowedSubjects.has(row.subject_slug));
+    return json({ catalog: rows });
+  }
+  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.method === "PATCH") {
+    const payload = (await request.json().catch(() => null)) as {
+      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown;
+    } | null;
+    const id = text(payload?.id, 64);
+    const action = text(payload?.action, 20);
+    if (!id) return json({ error: "対象を確認してください。" }, 400);
+    const current = await env.REPORTS.prepare(
+      "SELECT id,kind,subject_slug,slug,name,description,sort_order,status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
+    ).bind(id).first<EditorialTaxonomyRow>();
+    if (!current) return json({ error: "分野またはカテゴリが見つかりません。" }, 404);
+    const canEditCurrent = scope.allSubjects || scope.isManager || (current.kind === "category" && (coordinatorSubjects.includes(current.subject_slug) || coordinatorSubjects.includes("*")));
+    if (!canEditCurrent) return json({ error: "この分野・カテゴリを変更する権限がありません。" }, 403);
+    if (action === "archive" || action === "restore") {
+      const nextStatus = action === "archive" ? "archived" : "active";
+      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET status=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(nextStatus, new Date().toISOString(), id).run();
+      await recordAdminAudit(env, scope.email, action === "archive" ? "taxonomy_archived" : "taxonomy_restored", "taxonomy", id, current.name, `分野・カテゴリを${action === "archive" ? "アーカイブ" : "復元"}：${current.name}`, { kind: current.kind, slug: current.slug, subject: current.subject_slug });
+      return json({ ok: true, status: nextStatus });
+    }
+    if (action !== "update") return json({ error: "操作を確認してください。" }, 400);
+    const name = text(payload?.name, 120) || current.name;
+    const description = text(payload?.description, 500);
+    const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? current.sort_order) || 0));
+    const subject = current.kind === "category" ? text(payload?.subject, 80).toLowerCase() || current.subject_slug : "";
+    if (!name || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名と対象分野を確認してください。" }, 400);
+    try {
+      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(subject, name, description, sortOrder, new Date().toISOString(), id).run();
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
+      throw error;
+    }
+    await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, slug: current.slug, subject });
+    return json({ ok: true, id, name, description, sortOrder, subject });
+  }
+  const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
+  const kind = text(payload?.kind, 16) as "subject" | "category";
+  const subject = text(payload?.subject, 80).toLowerCase();
+  const slug = text(payload?.slug, 80).toLowerCase();
+  const name = text(payload?.name, 120);
+  const description = text(payload?.description, 500);
+  const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? 0) || 0));
+  if ((kind !== "subject" && kind !== "category") || !SUBJECT_SLUG.test(slug) || (kind === "category" && !SUBJECT_SLUG.test(subject)) || !name)
+    return json({ error: "種類、対象分野、ID、表示名を確認してください。" }, 400);
+  const canCreate = scope.allSubjects || scope.isManager || (kind === "category" && (coordinatorSubjects.includes(subject) || coordinatorSubjects.includes("*")));
+  if (!canCreate) return json({ error: "この分野・カテゴリを追加する権限がありません。" }, 403);
+  const now = new Date().toISOString();
+  try {
+    await env.REPORTS.prepare(
+      `INSERT INTO admin_editorial_taxonomy_catalog (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(crypto.randomUUID(), "atlas", kind, kind === "category" ? subject : "", slug, name, description, sortOrder, "active", scope.email, now, now).run();
+  } catch (error) {
+    if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
+    throw error;
+  }
+  await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", slug, name, `分野・カテゴリを追加：${name}`, { kind, slug, subject });
+  return json({ ok: true }, 201);
+}
+
 async function saveMemberSettings(
   request: Request,
   env: Env,
@@ -4001,7 +4146,11 @@ async function updateMemberDiscordRoles(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
+  title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references,
+  COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1)), ''), created_by) AS created_by_display_name,
+  COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1)), ''), updated_by) AS updated_by_display_name,
+  COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1), '') AS created_by_avatar_url,
+  COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1), '') AS updated_by_avatar_url
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -4580,14 +4729,14 @@ async function listEditorialDocuments(
         scope: { email: scope.email, subjects: [], isManager: scope.isManager },
       });
     const subjectValues = [...new Set([...scope.subjects, ...coordinatorSubjects])];
-    const subjectFilter = subjectValues.length ? `subject IN (${subjectValues.map(() => "?").join(", ")})` : "0";
+    const subjectFilter = subjectValues.length ? `d.subject IN (${subjectValues.map(() => "?").join(", ")})` : "0";
     // 分野統括者は担当分野の原稿だけを一覧できる。担当外の分野統括審査を
     // 無条件で追加すると、一覧には出るのに本文APIで403になる不整合が起きる。
     filters.push(`(${subjectFilter} OR (publication_review_stage='project-leader' AND ? = 1))`);
     values.push(...subjectValues, scope.isProjectLeader ? 1 : 0);
   }
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
-  if (!includeArchived) filters.push("archived_at IS NULL");
+  if (!includeArchived) filters.push("d.archived_at IS NULL");
   const searchParams = new URL(request.url).searchParams;
   const requestedLimit = Number(searchParams.get("limit") ?? "50");
   const pageLimit = Number.isFinite(requestedLimit)
@@ -4599,16 +4748,23 @@ async function listEditorialDocuments(
     const cursorUpdatedAt = separator >= 0 ? rawCursor.slice(0, separator) : "";
     const cursorId = separator >= 0 ? rawCursor.slice(separator + 1) : "";
     if (cursorUpdatedAt && cursorId) {
-      filters.push("(updated_at < ? OR (updated_at = ? AND id < ?))");
+      filters.push("(d.updated_at < ? OR (d.updated_at = ? AND d.id < ?))");
       values.push(cursorUpdatedAt, cursorUpdatedAt, cursorId);
     }
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
-    `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, publication_review_stage,
+    `SELECT d.id, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.latex_engine,
+      d.status, d.created_by, d.updated_by, d.created_at, d.updated_at, d.reviewed_at, d.published_at, d.archived_at, d.archived_by, d.archive_expires_at, d.scheduled_publish_at, d.publication_review_stage,
+      COALESCE(NULLIF(TRIM(cp.display_name), ''), d.created_by) AS created_by_display_name,
+      COALESCE(NULLIF(TRIM(up.display_name), ''), d.updated_by) AS updated_by_display_name,
+      COALESCE(cp.avatar_url, '') AS created_by_avatar_url,
+      COALESCE(up.avatar_url, '') AS updated_by_avatar_url,
       publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at
-     FROM editorial_documents${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
+     FROM editorial_documents d
+      LEFT JOIN editorial_member_profiles cp ON lower(cp.email)=lower(d.created_by)
+      LEFT JOIN editorial_member_profiles up ON lower(up.email)=lower(d.updated_by)
+      ${where} ORDER BY d.updated_at DESC, d.id DESC LIMIT ?`,
   )
     .bind(...values, pageLimit + 1)
     .all<Omit<EditorialDocument, "body">>();
@@ -13299,7 +13455,12 @@ async function listEditorialRevisions(
   if (!document || !canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const result = await env.REPORTS.prepare(
-    "SELECT id, title, summary, body, status, saved_by, saved_at FROM editorial_document_revisions WHERE document_id = ? ORDER BY saved_at DESC LIMIT 50",
+    `SELECT r.id, r.title, r.summary, r.body, r.status, r.saved_by, r.saved_at,
+            COALESCE(NULLIF(TRIM(p.display_name), ''), r.saved_by) AS saved_by_display_name,
+            COALESCE(p.avatar_url, '') AS saved_by_avatar_url
+       FROM editorial_document_revisions r
+       LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(r.saved_by)
+      WHERE r.document_id = ? ORDER BY r.saved_at DESC LIMIT 50`,
   )
     .bind(documentId)
     .all();
@@ -17168,12 +17329,10 @@ async function getPublicationReviewState(
     feedbackTaskDone: feedbackTasks.done,
     feedbackComplete,
     canDecide:
+      Boolean(scope.isManager) ||
       (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
-      (document.publication_review_stage === "project-leader" && (Boolean(scope.isProjectLeader) || scope.isManager)),
-    managerOverride:
-      document.publication_review_stage === "project-leader" &&
-      scope.isManager &&
-      !scope.isProjectLeader,
+      (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
+    managerOverride: Boolean(scope.isManager),
     coordinatorCount: coordinators.length,
     leaderCount: leaders.length,
   });
@@ -17203,10 +17362,23 @@ async function startPublicationReview(
     return json({ error: "執筆担当者だけが執筆完了にできます。" }, 403);
   if (document.published_at)
     return json({ error: "公開済みの記事です。" }, 400);
-  if (document.publication_review_stage)
+  if (document.publication_review_stage && !scope.isManager)
     return json({ error: "すでに公開審査中です。" }, 409);
   if (document.status !== "in-review" && document.status !== "draft")
     return json({ error: "先に原稿を保存してください。" }, 400);
+  // 全分野管理者は、担当者不在時も公開フローを止めずに自分で承認できる。
+  // 通常の査読経路は維持し、管理者操作だけ監査ログへ明記する。
+  const managerCanBypassReview = scope.isManager && !localDevelopmentEnabled(request, env);
+  if (managerCanBypassReview) {
+    const now = new Date().toISOString();
+    await env.REPORTS.prepare(
+      `UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+    ).bind(now, now, scope.email, documentId).run();
+    await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, expectedUpdatedAt: document.updated_at, metadata: { managerOverride: true }, createdAt: now });
+    await recordAdminAudit(env, scope.email, "article_approved", "article", documentId, document.title, `全分野管理者が記事を承認：${document.title}`, { managerOverride: true });
+    await notifyEditorialDocumentChange(env, documentId);
+    return json({ ok: true, status: "approved", stage: null, approvedForPublication: true, managerOverride: true });
+  }
   const feedbackTasks = await editorialFeedbackTaskState(env, document.id);
   if (feedbackTasks.total === 0 || feedbackTasks.done < feedbackTasks.total)
     return json(
@@ -17274,16 +17446,15 @@ async function decidePublicationReview(
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   const stage = document.publication_review_stage;
   if (!stage) return json({ error: "この原稿は公開審査中ではありません。" }, 409);
-  const managerOverride =
-    stage === "project-leader" && scope.isManager && !scope.isProjectLeader;
-  const authorized = stage === "subject-coordinator"
+  const managerOverride = scope.isManager;
+  const authorized = managerOverride || (stage === "subject-coordinator"
     ? canCoordinateSubject(scope, document.subject)
-    : Boolean(scope.isProjectLeader) || managerOverride;
+    : Boolean(scope.isProjectLeader));
   if (!authorized) return json({ error: "この審査を処理する権限がありません。" }, 403);
   const leaders = stage === "subject-coordinator"
     ? await publicationReviewRoleEmails(env, "project-leader", document.subject)
     : [];
-  if (stage === "subject-coordinator" && !leaders.length)
+  if (stage === "subject-coordinator" && !leaders.length && !scope.isManager)
     return json({ error: "プロジェクトリーダーが設定されていないため、次の公開審査へ進めません。" }, 503);
   const already = await env.REPORTS.prepare(
     "SELECT id FROM editorial_publication_reviews WHERE document_id=? AND review_round=? AND stage=? LIMIT 1",
@@ -17309,7 +17480,7 @@ async function decidePublicationReview(
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
     return json({ ok: true, status: "in-review", stage: null, returnedToFeedback: true });
   }
-  if (stage === "subject-coordinator" && leaders.length) {
+  if (stage === "subject-coordinator" && leaders.length && !scope.isManager) {
     await env.REPORTS.prepare(
       "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
@@ -19027,8 +19198,18 @@ const listEditorialActiveEditors = async (
 ): Promise<Map<string, EditorialActiveEditor[]>> => {
   const namespace = env.EDITORIAL_COLLABORATION;
   if (!namespace || !documentIds.length) return new Map();
-  const entries = await Promise.all(
-    documentIds.map(async (documentId) => {
+  // Presence is useful context, but asking a Durable Object for every row in a
+  // large article page can exhaust the Worker CPU/request budget.  The list is
+  // ordered by most recently updated, so the first rows are the most likely to
+  // be actively edited.  Keep the enrichment bounded and leave the remaining
+  // rows with an empty presence list; the document list itself must never fail
+  // because presence is unavailable.
+  const presenceDocumentIds = documentIds.slice(0, 16);
+  const entries: Array<readonly [string, EditorialActiveEditor[]]> = [];
+  let nextIndex = 0;
+  const readPresence = async () => {
+    while (nextIndex < presenceDocumentIds.length) {
+      const documentId = presenceDocumentIds[nextIndex++];
       try {
         const response = await namespace
           .get(namespace.idFromName(documentId))
@@ -19041,8 +19222,10 @@ const listEditorialActiveEditors = async (
               },
             ),
           );
-        if (!response.ok)
-          return [documentId, [] as EditorialActiveEditor[]] as const;
+        if (!response.ok) {
+          entries.push([documentId, [] as EditorialActiveEditor[]]);
+          continue;
+        }
         const payload = (await response.json()) as {
           participants?: EditorialActiveEditor[];
         };
@@ -19058,13 +19241,16 @@ const listEditorialActiveEditors = async (
                 ),
             )
           : [];
-        return [documentId, participants] as const;
+        entries.push([documentId, participants]);
       } catch {
         // 同時編集サービスが一時的に利用できなくても、原稿一覧は表示する。
-        return [documentId, [] as EditorialActiveEditor[]] as const;
+        entries.push([documentId, [] as EditorialActiveEditor[]]);
       }
-    }),
-  );
+    }
+  };
+  // Four in-flight DO requests are enough to keep presence responsive without
+  // creating a burst of subrequests on every article-list refresh.
+  await Promise.all(Array.from({ length: Math.min(4, presenceDocumentIds.length) }, readPresence));
   return new Map(entries);
 };
 
@@ -19325,7 +19511,8 @@ async function handleAdminRequest(
   // 専用スコープを持つため、この共通ゲートの対象外とする。
   if (
     url.pathname.startsWith("/api/admin/") &&
-    url.pathname !== "/api/admin/profile"
+    url.pathname !== "/api/admin/profile" &&
+    url.pathname !== "/api/admin/developer/diagnostics"
   ) {
     const baselineScope = await getAdminScope(request, env);
     if (isResponse(baselineScope)) return baselineScope;
@@ -19356,11 +19543,11 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
-    return listAdminAuditLog(request, env);
+    return listAdminAuditLog(request, env, true);
   if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
-    return listWorkflowTransitions(request, env);
+    return listWorkflowTransitions(request, env, true);
   if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
-    return workflowDiagnostics(request, env);
+    return workflowDiagnostics(request, env, true);
   if (url.pathname === "/api/admin/workflow/repair" && request.method === "POST")
     return repairWorkflowIssue(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
@@ -19368,7 +19555,7 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
     return developerDiagnostics(request, env);
   if (url.pathname === "/api/admin/update-history" && request.method === "GET")
-    return listAdminUpdateHistory(request, env);
+    return listAdminUpdateHistory(request, env, true);
   if (
     url.pathname === "/api/admin/member-management" &&
     request.method === "DELETE"
@@ -19378,6 +19565,8 @@ async function handleAdminRequest(
     return genreRoleCatalog(request, env);
   if (url.pathname === "/api/admin/genre-role-catalog/assignments")
     return genreRoleAssignment(request, env);
+  if (url.pathname === "/api/admin/editor/taxonomy")
+    return editorialTaxonomyCatalog(request, env);
   if (
     url.pathname === "/api/admin/member-settings" &&
     request.method === "PUT"
@@ -19907,7 +20096,9 @@ async function handleAdminRequest(
                 url.searchParams.get("project") ?? "",
               )
             : await getGlobalAdminScope(request, env)
-          : await getGlobalAdminScope(request, env);
+          : url.pathname === "/admin/developer" || url.pathname === "/admin/developer/"
+            ? await getDeveloperScope(request, env)
+            : await getGlobalAdminScope(request, env);
       if (isResponse(managerScope)) return managerScope;
     }
     return fetchAdminAsset(request, env);
