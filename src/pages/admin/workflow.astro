@@ -1,0 +1,97 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+
+<AdminLayout title="状態遷移" description="記事・タスク・応募の状態遷移を確認">
+  <main class="workflow-page" data-workflow-page data-admin-load-surface aria-busy="true">
+    <header class="workflow-heading">
+      <div>
+        <h1>状態遷移</h1>
+        <p>記事・タスク・応募・承認申請の状態と、許可されている次の操作を確認できます。</p>
+      </div>
+      <a href="/admin/manage/?project=atlas">管理トップへ戻る</a>
+    </header>
+    <section class="workflow-panel" aria-labelledby="workflow-summary-title">
+      <div class="workflow-toolbar"><h2 id="workflow-summary-title">現在の状態</h2><output data-workflow-updated aria-live="polite">読み込み中…</output></div>
+      <AdminRetryNotice message="状態遷移を読み込めませんでした。" />
+      <div class="workflow-entities" data-workflow-entities></div>
+    </section>
+    <section class="workflow-panel" aria-labelledby="workflow-rules-title">
+      <div class="workflow-toolbar"><h2 id="workflow-rules-title">許可されている操作</h2><span class="workflow-hint">状態を飛ばした変更はできません</span></div>
+      <div class="workflow-rules" data-workflow-rules></div>
+    </section>
+    <section class="workflow-panel" aria-labelledby="workflow-diagnostics-title">
+      <div class="workflow-toolbar"><h2 id="workflow-diagnostics-title">整合性チェック</h2><output data-workflow-diagnostics-updated aria-live="polite">未確認</output></div>
+      <p class="workflow-diagnostics-note">状態イベントと現在のデータにずれがないかを読み取り専用で確認します。</p>
+      <div class="workflow-diagnostics" data-workflow-diagnostics></div>
+    </section>
+  </main>
+</AdminLayout>
+
+<script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  const initWorkflowPage = () => {
+    const root = document.querySelector<HTMLElement>("[data-workflow-page]");
+    if (!root || root.dataset.initialized === "true") return;
+    root.dataset.initialized = "true";
+    const entities = root.querySelector<HTMLElement>("[data-workflow-entities]")!;
+    const rules = root.querySelector<HTMLElement>("[data-workflow-rules]")!;
+    const updated = root.querySelector<HTMLOutputElement>("[data-workflow-updated]")!;
+    const diagnostics = root.querySelector<HTMLElement>("[data-workflow-diagnostics]")!;
+    const diagnosticsUpdated = root.querySelector<HTMLOutputElement>("[data-workflow-diagnostics-updated]")!;
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character] ?? character));
+    const labels: Record<string, string> = { open: "未着手", doing: "進行中", done: "完了", draft: "下書き", "in-review": "査読中", approved: "承認済み", new: "新規", reviewing: "確認中", accepted: "受け入れ", rejected: "見送り", pending: "承認待ち" };
+    let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
+    const load = async () => {
+      retryController?.begin(); updated.value = "読み込み中…";
+      try {
+        const [response, diagnosticsResponse] = await Promise.all([
+          fetch("/api/admin/workflow/transitions", { credentials: "same-origin", cache: "no-store" }),
+          fetch("/api/admin/workflow/diagnostics", { credentials: "same-origin", cache: "no-store" }),
+        ]);
+        if (!response.ok) throw new Error("状態遷移を読み込めませんでした。");
+        const data = await response.json() as { entities?: Record<string, { label: string; states: string[]; counts: Record<string, number> }>; transitions?: Array<{ entityType: string; from: string; to: string; label: string; requiredRole: string }>; generatedAt?: string };
+        const entityRows = Object.entries(data.entities ?? {}).map(([, entity]) => `<article class="workflow-entity"><h3>${escape(entity.label)}</h3><div class="workflow-states">${entity.states.map((state) => `<div class="workflow-state"><span>${escape(labels[state] ?? state)}</span><strong>${Number(entity.counts?.[state] ?? 0)}</strong></div>`).join("")}</div></article>`).join("");
+        entities.innerHTML = entityRows || `<p class="workflow-empty">状態データはありません。</p>`;
+        const roleLabels: Record<string, string> = { assignee: "担当者", reviewer: "査読者", manager: "運営内運営" };
+        rules.innerHTML = (data.transitions ?? []).map((item) => `<div class="workflow-rule"><span class="workflow-rule-entity">${escape(data.entities?.[item.entityType]?.label ?? item.entityType)}</span><span class="workflow-state-chip">${escape(labels[item.from] ?? item.from)}</span><span class="workflow-arrow" aria-hidden="true">→</span><span class="workflow-state-chip">${escape(labels[item.to] ?? item.to)}</span><span class="workflow-rule-label">${escape(item.label)}</span><span class="workflow-role">${escape(roleLabels[item.requiredRole] ?? item.requiredRole)}</span></div>`).join("") || `<p class="workflow-empty">遷移ルールはありません。</p>`;
+        updated.value = data.generatedAt ? `最終確認：${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.generatedAt))}` : "最新状態";
+        if (diagnosticsResponse.ok) {
+          const diagnosticData = await diagnosticsResponse.json() as { issues?: Array<{ id: string; entityType: string; entityId: string; fromState: string; expectedState: string; currentState: string | null; kind: string; actorEmail: string; createdAt: string }>; generatedAt?: string };
+          const issues = diagnosticData.issues ?? [];
+          diagnostics.innerHTML = issues.length
+            ? `<p class="workflow-diagnostics-warning">${issues.length}件の不整合を検出しました。対象データを確認してから状態遷移を再実行してください。</p><ul>${issues.map((issue) => `<li><span><strong>${escape(issue.entityType)}:${escape(issue.entityId)}</strong> ${escape(issue.kind === "missing_entity" ? "対象が見つかりません" : `${issue.fromState} → ${issue.expectedState}（現在：${issue.currentState ?? "不明"}）`)}<small>${escape(issue.actorEmail)}</small></span>${issue.kind === "state_mismatch" ? `<button type="button" data-workflow-repair="${escape(issue.id)}">再同期</button>` : ""}</li>`).join("")}</ul>`
+            : `<p class="workflow-diagnostics-ok">不整合はありません。</p>`;
+          diagnostics.querySelectorAll<HTMLButtonElement>("[data-workflow-repair]").forEach((button) => {
+            button.addEventListener("click", async () => {
+              button.disabled = true;
+              const eventId = button.dataset.workflowRepair ?? "";
+              try {
+                const repairResponse = await fetch("/api/admin/workflow/repair", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId, confirm: true }) });
+                if (!repairResponse.ok) throw new Error("再同期できませんでした。");
+                button.textContent = "再同期済み";
+              } catch (repairError) {
+                button.textContent = repairError instanceof Error ? repairError.message : "再同期失敗";
+                button.disabled = false;
+              }
+            });
+          });
+          diagnosticsUpdated.value = diagnosticData.generatedAt ? `確認：${new Intl.DateTimeFormat("ja-JP", { timeStyle: "short" }).format(new Date(diagnosticData.generatedAt))}` : "確認済み";
+        } else {
+          diagnostics.innerHTML = `<p class="workflow-diagnostics-warning">整合性チェックを実行できませんでした。</p>`;
+          diagnosticsUpdated.value = "確認失敗";
+        }
+        retryController?.success();
+      } catch (loadError) { retryController?.fail(loadError); }
+    };
+    retryController = createAdminLoadRetry(root, () => load(), "状態遷移を読み込めませんでした。");
+    void load();
+  };
+  document.addEventListener("astro:page-load", initWorkflowPage); initWorkflowPage();
+</script>
+
+<style>
+  .workflow-page{margin:0 auto;max-width:1100px;padding:0 1.25rem 4rem}.workflow-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.1rem}.workflow-heading h1{font-size:clamp(1.7rem,3vw,2.2rem);margin:0}.workflow-heading p{color:var(--text-secondary);font-size:.82rem;margin:.35rem 0 0}.workflow-heading a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.workflow-panel{border:1px solid var(--border-default);margin-top:1rem;padding:1rem}.workflow-toolbar{align-items:center;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;padding-bottom:.7rem}.workflow-toolbar h2{font-size:1rem;margin:0}.workflow-toolbar output,.workflow-hint{color:var(--text-secondary);font-size:.72rem}.workflow-entities{display:grid;gap:.65rem;grid-template-columns:repeat(4,minmax(0,1fr));padding-top:.85rem}.workflow-entity{background:var(--background-secondary);border:1px solid var(--border-default);padding:.75rem}.workflow-entity h3{font-size:.84rem;margin:0 0 .55rem}.workflow-states{display:grid;gap:.3rem}.workflow-state{align-items:center;display:flex;justify-content:space-between}.workflow-state span{color:var(--text-secondary);font-size:.72rem}.workflow-state strong{color:var(--accent-success,#52a450);font-size:1.15rem}.workflow-rules{display:grid;padding-top:.4rem}.workflow-rule{align-items:center;border-bottom:1px solid var(--border-default);display:grid;gap:.55rem;grid-template-columns:7rem 5.3rem 1.2rem 5.3rem minmax(7rem,1fr) 6rem;min-height:2.65rem}.workflow-rule:last-child{border-bottom:0}.workflow-rule-entity,.workflow-rule-label,.workflow-role{font-size:.75rem}.workflow-rule-entity,.workflow-role{color:var(--text-secondary)}.workflow-state-chip{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:.3rem;font-size:.72rem;padding:.25rem .4rem;text-align:center}.workflow-arrow{color:var(--accent-primary);text-align:center}.workflow-empty{color:var(--text-secondary);font-size:.8rem;padding:1rem 0}.workflow-error{align-items:center;background:color-mix(in srgb,var(--danger,#e27676) 10%,transparent);border:1px solid color-mix(in srgb,var(--danger,#e27676) 35%,transparent);display:flex;gap:.8rem;justify-content:space-between;margin-top:.8rem;padding:.65rem .75rem}.workflow-error[hidden]{display:none!important}.workflow-error span{font-size:.78rem}.workflow-error button{background:transparent;border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);cursor:pointer;font-size:.72rem;padding:.35rem .6rem}.workflow-error button:hover{border-color:var(--accent-primary)}@media(max-width:820px){.workflow-entities{grid-template-columns:repeat(2,minmax(0,1fr))}.workflow-rule{grid-template-columns:6rem 4.5rem 1rem 4.5rem minmax(5rem,1fr)}}@media(max-width:560px){.workflow-page{padding:0 .8rem 3rem}.workflow-heading{align-items:start;display:grid}.workflow-entities{grid-template-columns:1fr}.workflow-rule{gap:.35rem;grid-template-columns:1fr 4.5rem 1rem 4.5rem}.workflow-rule-label,.workflow-role{grid-column:2/-1}.workflow-toolbar{align-items:start;display:grid;gap:.3rem}}
+  .workflow-diagnostics-note{color:var(--text-secondary);font-size:.78rem;margin:.75rem 0 0}.workflow-diagnostics{font-size:.78rem;padding-top:.7rem}.workflow-diagnostics-ok{color:var(--accent-success,#52a450);margin:.2rem 0}.workflow-diagnostics-warning{color:var(--accent-warning,#e8b84a);margin:.2rem 0}.workflow-diagnostics ul{list-style:none;margin:.4rem 0 0;padding:0}.workflow-diagnostics li{align-items:center;border-bottom:1px solid var(--border-default);display:flex;gap:.55rem;padding:.5rem 0}.workflow-diagnostics li:last-child{border-bottom:0}.workflow-diagnostics li>span{min-width:0}.workflow-diagnostics small{color:var(--text-secondary);display:block;margin-top:.2rem}.workflow-diagnostics button{background:transparent;border:1px solid var(--border-default);border-radius:.3rem;color:var(--text-primary);cursor:pointer;font-size:.7rem;margin-left:auto;padding:.3rem .5rem;white-space:nowrap}.workflow-diagnostics button:hover{border-color:var(--accent-primary)}.workflow-diagnostics button:disabled{cursor:default;opacity:.65}
+</style>

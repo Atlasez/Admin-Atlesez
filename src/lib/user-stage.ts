@@ -38,7 +38,7 @@ export function getUserStage({
   applicationStatus,
   profileComplete,
   projectProfileComplete,
-  tutorialComplete,
+  tutorialComplete: _tutorialComplete,
   onboardingComplete,
   isAdmin,
 }: UserStageInput): UserStage {
@@ -61,9 +61,9 @@ export function getUserStage({
         false
       ))
         return "ONBOARDING";
-      return (tutorialComplete ?? onboardingComplete ?? false)
-        ? "MEMBER"
-        : "TUTORIAL";
+      // チュートリアルは任意の案内として保持するが、受入後の必須工程にはしない。
+      // 基本情報とプロジェクト情報が揃えば、そのまま活動開始へ進める。
+      return "MEMBER";
     default:
       return "NEW_USER";
   }

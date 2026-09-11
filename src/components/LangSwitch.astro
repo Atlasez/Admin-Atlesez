@@ -7,24 +7,24 @@
  *  - 3言語を超えると絞り込み入力が出る。
  *  - 一覧は母語表記を主、英語表記を副として並べる（自分の言語を探しやすくするため）。
  *  - パネルは max-height + スクロール。20言語でも画面外にはみ出さない。
- *  - JavaScriptが無くても <details> の開閉だけで全言語のリンクに到達できる。
+ *  - JavaScriptが無くても <details> の開閉だけで全言語の選択肢に到達できる。
  */
-import { t, LOCALES, localeMeta, localeLabel, type Locale } from "../lib/i18n";
-import { atlasPath } from "../lib/site";
+import { t, type Locale } from "../lib/i18n";
+import {
+  UI_LANGUAGES,
+  UI_LANGUAGE_ENGLISH_NAMES,
+  UI_LANGUAGE_NAMES,
+} from "../lib/ui-locales";
 
 interface Props {
   locale: Locale;
-  /** 各ロケールの遷移先（省略時は各ロケールの総合ホーム） */
-  hrefs?: Record<string, string>;
 }
-const { locale, hrefs = {} } = Astro.props;
+const { locale } = Astro.props;
 
-const items = LOCALES.map((l) => ({
+const items = UI_LANGUAGES.map((l) => ({
   code: l,
-  native: localeLabel(l),
-  english: localeMeta[l]?.english ?? l,
-  href: hrefs[l] ?? atlasPath(l),
-  current: l === locale,
+  native: UI_LANGUAGE_NAMES[l],
+  english: UI_LANGUAGE_ENGLISH_NAMES[l],
 }));
 const filterable = items.length > 3;
 ---
@@ -36,7 +36,7 @@ const filterable = items.length > 3;
         <span class="lang-globe" aria-hidden="true">
           ⌘
         </span>
-        <span class="lang-current">{localeLabel(locale)}</span>
+        <span class="lang-current" data-lang-current>{UI_LANGUAGE_NAMES.ja}</span>
         <span class="lang-caret" aria-hidden="true" />
       </summary>
       <div class="lang-panel">
@@ -61,22 +61,15 @@ const filterable = items.length > 3;
               data-lang-item
               data-search={`${item.code} ${item.native} ${item.english}`.toLowerCase()}
             >
-              {item.current ? (
-                <span class="lang-option is-current" aria-current="true">
-                  <span class="lang-native">{item.native}</span>
-                  <span class="lang-english">{item.english}</span>
-                </span>
-              ) : (
-                <a
-                  class="lang-option"
-                  href={item.href}
-                  hreflang={item.code}
-                  lang={item.code}
-                >
-                  <span class="lang-native">{item.native}</span>
-                  <span class="lang-english">{item.english}</span>
-                </a>
-              )}
+              <button
+                type="button"
+                class="lang-option"
+                data-lang-value={item.code}
+                lang={item.code}
+              >
+                <span class="lang-native">{item.native}</span>
+                <span class="lang-english">{item.english}</span>
+              </button>
             </li>
           ))}
         </ul>
@@ -90,7 +83,9 @@ const filterable = items.length > 3;
 
 <style>
   .lang-switch {
+    display: inline-block;
     position: relative;
+    vertical-align: top;
   }
   .lang-switch > summary {
     display: inline-flex;
@@ -174,14 +169,21 @@ const filterable = items.length > 3;
     display: flex;
     flex-direction: column;
     gap: 0;
+    width: 100%;
     min-height: var(--touch-target);
     padding: var(--space-1) var(--space-2);
+    border: 0;
     border-radius: var(--radius);
     text-decoration: none;
     color: var(--text-primary);
+    background: transparent;
+    font: inherit;
     line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
   }
-  a.lang-option:hover {
+  .lang-option:hover,
+  .lang-option:focus-visible {
     background: var(--accent-subtle);
     color: var(--accent-primary);
   }
@@ -197,7 +199,8 @@ const filterable = items.length > 3;
     font-size: calc(0.72rem * var(--text-scale));
     color: var(--text-secondary);
   }
-  a.lang-option:hover .lang-english {
+  .lang-option:hover .lang-english,
+  .lang-option:focus-visible .lang-english {
     color: inherit;
   }
   .lang-empty {
@@ -218,7 +221,40 @@ const filterable = items.length > 3;
   if (root) {
     const filter = root.querySelector<HTMLInputElement>("[data-lang-filter]");
     const items = [...root.querySelectorAll<HTMLElement>("[data-lang-item]")];
+    const options = [
+      ...root.querySelectorAll<HTMLButtonElement>("[data-lang-value]"),
+    ];
+    const currentLabel = root.querySelector<HTMLElement>("[data-lang-current]");
     const empty = root.querySelector<HTMLElement>("[data-lang-empty]");
+
+    const readLanguage = () => {
+      try {
+        const prefs = JSON.parse(
+          localStorage.getItem("atlasez-prefs") ?? "{}",
+        );
+        const value = String(prefs?.lang ?? "ja");
+        return options.some((option) => option.dataset.langValue === value)
+          ? value
+          : "ja";
+      } catch {
+        return "ja";
+      }
+    };
+
+    const syncCurrentLanguage = () => {
+      const language = readLanguage();
+      for (const option of options) {
+        const current = option.dataset.langValue === language;
+        option.classList.toggle("is-current", current);
+        if (current) option.setAttribute("aria-current", "true");
+        else option.removeAttribute("aria-current");
+        if (currentLabel && current) {
+          currentLabel.textContent =
+            option.querySelector<HTMLElement>(".lang-native")?.textContent ??
+            language;
+        }
+      }
+    };
 
     filter?.addEventListener("input", () => {
       const q = filter.value.trim().toLowerCase();
@@ -230,6 +266,37 @@ const filterable = items.length > 3;
       }
       if (empty) empty.hidden = shown > 0;
     });
+
+    options.forEach((option) => {
+      option.addEventListener("click", () => {
+        const language = option.dataset.langValue;
+        if (!language) return;
+        let prefs: Record<string, string> = {};
+        try {
+          const parsed = JSON.parse(
+            localStorage.getItem("atlasez-prefs") ?? "{}",
+          );
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            prefs = parsed as Record<string, string>;
+          }
+        } catch {
+          prefs = {};
+        }
+        if (language === "ja") delete prefs.lang;
+        else prefs.lang = language;
+        try {
+          localStorage.setItem("atlasez-prefs", JSON.stringify(prefs));
+        } catch {
+          /* 保存できなくても、このページではイベントで反映する */
+        }
+        syncCurrentLanguage();
+        window.dispatchEvent(new CustomEvent("atlasez-lang-change"));
+        root.open = false;
+      });
+    });
+
+    syncCurrentLanguage();
+    window.addEventListener("atlasez-lang-change", syncCurrentLanguage);
 
     // パネルの外を押したら閉じる
     document.addEventListener("click", (event) => {

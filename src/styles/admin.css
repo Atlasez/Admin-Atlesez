@@ -1,0 +1,57 @@
+/*
+ * 運営サイト共通CSS
+ *
+ * ページ単位で色を発明せず、tokens.css のテーマ値をこの層で参照する。
+ * 既存ページのレイアウト用CSSはそのままにし、面・境界・文字・操作色の
+ * 定義だけを共通化することで、暗色/ブラック切替時の白漏れを防ぐ。
+ */
+[data-admin-shell] {
+  --admin-surface: var(--surface);
+  --admin-surface-raised: var(--surface-alt);
+  --admin-surface-inset: var(--surface-inset);
+  --admin-border: var(--border);
+  --admin-border-strong: var(--border-strong);
+  --admin-text: var(--text);
+  --admin-text-muted: var(--muted);
+  --admin-text-subtle: var(--text-muted);
+  --admin-accent: var(--accent);
+  --admin-accent-hover: var(--accent-hover);
+  --admin-on-accent: var(--on-accent);
+  --admin-success: var(--success);
+  --admin-warning: var(--warning);
+  --admin-danger: var(--danger);
+  --admin-focus: var(--focus-ring);
+}
+
+/* 共通の面・境界・補助文字。必要なページだけがクラスを付けて利用する。 */
+[data-admin-shell] .admin-surface {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text);
+}
+
+[data-admin-shell] .admin-surface-raised {
+  background: var(--admin-surface-raised);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text);
+}
+
+[data-admin-shell] .admin-muted {
+  color: var(--admin-text-muted);
+}
+
+[data-admin-shell] .admin-control {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text);
+}
+
+[data-admin-shell] .admin-control:focus-visible {
+  border-color: var(--admin-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-admin-shell] .admin-control {
+    transition: none;
+  }
+}

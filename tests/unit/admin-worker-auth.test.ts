@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
 class Statement {
@@ -36,6 +36,7 @@ const stageEnv = (
   atlasWritingPracticeStep = 0,
   atlasWritingPracticeComplete = false,
   projectProfileComplete = profileComplete,
+  sessionEmail = "applicant@example.com",
 ) => ({
   ADMIN_AUTH_MODE: "google-oauth",
   REPORTS: {
@@ -62,7 +63,7 @@ const stageEnv = (
       };
       statement.first = async <T>() => {
         if (query.includes("admin_auth_sessions"))
-          return { email: "applicant@example.com" } as T;
+          return { email: sessionEmail } as T;
         if (
           query.includes(
             "SELECT status,project_slug FROM atlasez_member_applications",
@@ -205,7 +206,260 @@ describe("admin logout contract", () => {
   });
 });
 
+describe("admin API scope gate", () => {
+  it("rejects authenticated users without an admin scope before handler-specific work", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/google-accounts", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "member@example.com",
+        },
+      }),
+      env("cloudflare-access") as never,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "この管理画面の閲覧権限が設定されていません。",
+    });
+  });
+
+  it("keeps the member profile endpoint on its self-service scope", async () => {
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/profile"),
+      stageEnv("accepted", false, true) as never,
+    );
+
+    expect(response.status).toBe(200);
+  });
+});
+
 describe("applicant stage server-side access", () => {
+  it("keeps the designated primary admin in the admin stage if the seed row is missing", async () => {
+    const rootPage = await worker.fetch(
+      loggedInRequest("/"),
+      stageEnv(
+        "reviewing",
+        false,
+        false,
+        false,
+        false,
+        0,
+        false,
+        false,
+        "ukyoukay0@gmail.com",
+      ) as never,
+    );
+    expect(rootPage.status).toBe(302);
+    expect(rootPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
+  });
+
+  it("shows the designated primary admin in the permissions list if the seed row is missing", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      env("cloudflare-access") as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      permissions: [
+        expect.objectContaining({
+          email: "ukyoukay0@gmail.com",
+          subjects: "*",
+          display_name: "主管理者",
+        }),
+      ],
+    });
+  });
+
+  it("keeps the legacy full-list response when permissions pagination is not requested", async () => {
+    const queries: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        return new Statement(query);
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as Record<string, unknown>;
+    expect(data).not.toHaveProperty("pagination");
+    const permissionQuery = queries.find((query) =>
+      query.includes("GROUP_CONCAT(DISTINCT p.subject)"),
+    );
+    expect(permissionQuery).toBeDefined();
+    expect(permissionQuery).not.toContain("LIMIT ?");
+  });
+
+  it("paginates permission audit entries with a stable cursor", async () => {
+    const queries: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        const statement = new Statement(query);
+        statement.all = async <T>() => {
+          if (query.includes("SELECT subject FROM report_admin_permissions"))
+            return { results: [{ subject: "*" }] as T[] };
+          if (
+            query.includes("SELECT role, subject FROM editorial_workflow_roles")
+          )
+            return { results: [] as T[] };
+          if (query.includes("FROM admin_permission_audit_log"))
+            return {
+              results: [
+                {
+                  id: "audit-2",
+                  actor_email: "admin@example.com",
+                  target_email: "member@example.com",
+                  action: "grant",
+                  before_subjects: "",
+                  after_subjects: "mathematics",
+                  created_at: "2026-09-10T02:00:00.000Z",
+                },
+                {
+                  id: "audit-1",
+                  actor_email: "admin@example.com",
+                  target_email: "member@example.com",
+                  action: "revoke",
+                  before_subjects: "mathematics",
+                  after_subjects: "",
+                  created_at: "2026-09-10T01:00:00.000Z",
+                },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/permission-audit?limit=1", {
+        headers: { "Cf-Access-Authenticated-User-Email": "admin@example.com" },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      entries: Array<{ id: string }>;
+      pagination: { hasMore: boolean; nextCursor: string | null };
+    };
+    expect(data.entries).toHaveLength(1);
+    expect(data.entries[0]?.id).toBe("audit-2");
+    expect(data.pagination.hasMore).toBe(true);
+    expect(data.pagination.nextCursor).toBe(
+      "2026-09-10T02%3A00%3A00.000Z|audit-2",
+    );
+    expect(
+      queries.find((query) =>
+        query.includes("FROM admin_permission_audit_log"),
+      ),
+    ).toContain("LIMIT ?");
+  });
+
+  it("paginates GitHub update history by page and reports continuation", async () => {
+    const requests: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("SELECT subject FROM report_admin_permissions")
+            ? { results: [{ subject: "*" }] as T[] }
+            : { results: [] as T[] };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      requests.push(String(input));
+      return new Response(
+        JSON.stringify([
+          {
+            sha: "abcdef1234567",
+            html_url: "https://github.com/Atlasez/Admin-Atlesez/commit/abcdef1",
+            commit: {
+              message: "perf: 履歴を段階取得",
+              author: { name: "運営チーム", date: "2026-09-10T03:00:00.000Z" },
+            },
+            author: { login: "atlasez" },
+          },
+          {
+            sha: "123456789abcd",
+            html_url: "https://github.com/Atlasez/Admin-Atlesez/commit/1234567",
+            commit: {
+              message: "fix: 表示を安定化",
+              author: { name: "運営チーム", date: "2026-09-09T03:00:00.000Z" },
+            },
+            author: { login: "atlasez" },
+          },
+        ]),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    try {
+      const response = await worker.fetch(
+        new Request(
+          "https://admin.example/api/admin/update-history?limit=2&page=3",
+          {
+            headers: {
+              "Cf-Access-Authenticated-User-Email": "admin@example.com",
+            },
+          },
+        ),
+        {
+          ADMIN_AUTH_MODE: "cloudflare-access",
+          REPORTS: reports,
+          ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+        } as never,
+      );
+
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as {
+        entries: Array<{ title: string }>;
+        pagination: {
+          page: number;
+          limit: number;
+          hasMore: boolean;
+          nextPage: number | null;
+        };
+      };
+      expect(data.entries).toHaveLength(2);
+      expect(data.entries[0]?.title).toBe("履歴を段階取得");
+      expect(data.pagination).toEqual({
+        page: 3,
+        limit: 2,
+        hasMore: true,
+        nextPage: 4,
+      });
+      expect(requests[0]).toContain("per_page=2&page=3");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("requires an authenticated Google session before accepting an application", async () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/apply", {
@@ -369,28 +623,32 @@ describe("applicant stage server-side access", () => {
     expect(onboardingPage.status).toBe(200);
   });
 
-  it("forces the tutorial after profile setup and before member features", async () => {
-    const profilePage = await worker.fetch(
+  it("starts member features after profile setup without showing the tutorial", async () => {
+    const onboardingPage = await worker.fetch(
       loggedInRequest("/onboarding/"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(profilePage.status).toBe(302);
-    expect(profilePage.headers.get("location")).toBe(
-      "https://admin.example/onboarding/tutorial/",
+    expect(onboardingPage.status).toBe(302);
+    expect(onboardingPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
     );
 
     const tutorialPage = await worker.fetch(
       loggedInRequest("/onboarding/tutorial/"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(tutorialPage.status).toBe(200);
+    expect(tutorialPage.status).toBe(302);
+    expect(tutorialPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
 
     const memberPage = await worker.fetch(
       loggedInRequest("/admin/portal/"),
       stageEnv("accepted", false, true) as never,
     );
+    expect(memberPage.status).toBe(302);
     expect(memberPage.headers.get("location")).toBe(
-      "https://admin.example/onboarding/tutorial/",
+      "https://admin.example/admin/portal/",
     );
   });
 
@@ -427,100 +685,22 @@ describe("applicant stage server-side access", () => {
     expect(profile.status).toBe(200);
   });
 
-  it("returns the current project context for the tutorial content", async () => {
+  it("keeps tutorial APIs out of the acceptance flow", async () => {
     const response = await worker.fetch(
       loggedInRequest("/api/onboarding/tutorial"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      project: "学習サイト「アトラス」",
-      projectSlug: "atlas",
-      atlasWritingPracticeComplete: false,
-      step: 0,
-      totalSteps: 4,
-    });
-  });
+    expect(response.status).toBe(403);
 
-  it("requires a real Atlas writing exercise before tutorial completion", async () => {
-    const incomplete = await worker.fetch(
+    const practice = await worker.fetch(
       loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
         action: "save-draft",
         title: "練習記事",
-        body: "## 見出し\n\n太字を使わない本文です。$x^2$ を含めても保存できません。",
+        body: "## 見出し\n\n**本文**と $x^2$ を含みます。",
       }),
       stageEnv("accepted", false, true) as never,
     );
-    expect(incomplete.status).toBe(400);
-
-    const completed = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "save-draft",
-        title: "集合の練習記事",
-        body: "## はじめに\n\n集合は要素をまとめたものです。$x^2$ と **大切な語句**を太字にして、読みやすい説明にします。",
-      }),
-      stageEnv("accepted", false, true) as never,
-    );
-    expect(completed.status).toBe(200);
-    await expect(completed.json()).resolves.toMatchObject({
-      ok: true,
-      step: 1,
-      complete: false,
-    });
-
-    const skipped = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "resolve-feedback",
-      }),
-      stageEnv("accepted", false, true) as never,
-    );
-    expect(skipped.status).toBe(409);
-
-    const feedback = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "request-feedback",
-      }),
-      stageEnv("accepted", false, true, false, false, 1) as never,
-    );
-    await expect(feedback.json()).resolves.toMatchObject({
-      ok: true,
-      step: 2,
-      complete: false,
-    });
-
-    const resolved = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "resolve-feedback",
-      }),
-      stageEnv("accepted", false, true, false, false, 2) as never,
-    );
-    await expect(resolved.json()).resolves.toMatchObject({
-      ok: true,
-      step: 3,
-      complete: false,
-    });
-
-    const scheduled = await worker.fetch(
-      loggedInJsonRequest("/api/onboarding/atlas-writing-practice", {
-        action: "check-schedule",
-      }),
-      stageEnv("accepted", false, true, false, false, 3) as never,
-    );
-    await expect(scheduled.json()).resolves.toMatchObject({
-      ok: true,
-      step: 4,
-      complete: true,
-      next: "/onboarding/tutorial/",
-    });
-
-    const resumed = await worker.fetch(
-      loggedInRequest("/api/onboarding/tutorial"),
-      stageEnv("accepted", false, true, false, false, 3) as never,
-    );
-    await expect(resumed.json()).resolves.toMatchObject({
-      atlasWritingPracticeStep: 3,
-      atlasWritingPracticeComplete: false,
-    });
+    expect(practice.status).toBe(403);
   });
 
   it("limits the onboarding demo to global internal-operations managers", async () => {

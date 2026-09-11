@@ -1,7 +1,7 @@
-# 公開チェックリスト（Cloudflare Pages）
+# 公開チェックリスト（Cloudflare Workers）
 
-配信は Cloudflare Pages が GitHub リポジトリ `Atlasez/Atlasez01` を
-直接ビルドして行う。詳しい背景は `docs/DEPLOYMENT.md`。
+配信は Cloudflare Workers Builds が GitHub リポジトリ `Atlasez/Atlasez01` の
+`main`をビルドして行う。詳しい背景は `docs/DEPLOYMENT.md`。GitHub PagesのWorkflowは確認用ミラーであり、本番配信経路ではない。
 
 ---
 
@@ -12,9 +12,9 @@ cd <このリポジトリをcloneした場所>
 git push
 ```
 
-push すると Cloudflare Pages のビルドが自動で始まる。
+`main`へマージすると Cloudflare Workers Builds の本番ビルドが自動で始まる。
 
-## 2. Cloudflare Pages のビルド設定を確認する
+## 2. Cloudflare Workers Builds のビルド設定を確認する
 
 Workers & Pages → プロジェクト → Settings → Build
 

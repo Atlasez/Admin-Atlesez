@@ -13,6 +13,7 @@ async function mockOperationsApi(page: Page) {
       due_timezone: "Asia/Tokyo",
       details: "",
       reminders: [],
+      created_at: "2026-09-01T00:00:00.000Z",
     },
   ];
   await page.route("**/api/admin/operations**", async (route) => {
@@ -66,12 +67,7 @@ test("T-1/T-2/T-5: タスク管理の初期表示が仕様どおりになる", a
   await expect(
     page.getByRole("heading", { level: 2, name: "タスク一覧" }),
   ).toBeVisible();
-  await expect(
-    page.getByText(
-      "表示対象を切り替えると、一覧に表示するタスクが変わります。",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(page.getByLabel("完了済みを表示")).toBeVisible();
   await expect(page.locator("[data-task-list]")).toContainText("既存のタスク");
 
   const dialog = page.locator("[data-task-create-dialog]");
@@ -98,4 +94,124 @@ test("T-1/T-2/T-5: タスク管理の初期表示が仕様どおりになる", a
     "タスクを追加しました。",
   );
   await expect(page.getByRole("heading", { name: "ToDo" })).toHaveCount(0);
+});
+
+test("タスク一覧はカーソルで追加読み込みできる", async ({ page }) => {
+  let requests = 0;
+  await page.route("**/api/admin/operations**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const cursor = requestUrl.searchParams.get("cursor");
+    requests += 1;
+    const task = cursor
+      ? {
+          id: "task-next",
+          title: "次ページのタスク",
+          status: "open",
+          subject: "mathematics",
+          assignee_email: "alice@example.com",
+          created_by: "alice@example.com",
+          due_at: null,
+          due_timezone: "Asia/Tokyo",
+          details: "",
+          reminders: [],
+        }
+      : {
+          id: "task-first",
+          title: "最初のタスク",
+          status: "open",
+          subject: "mathematics",
+          assignee_email: "alice@example.com",
+          created_by: "alice@example.com",
+          due_at: null,
+          due_timezone: "Asia/Tokyo",
+          details: "",
+          reminders: [],
+        };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: { email: "alice@example.com", isManager: false },
+        project: { id: "atlas", slug: "atlas", name: "Atlasez" },
+        tasks: [task],
+        events: [],
+        progress: [],
+        members: [{ email: "alice@example.com", display_name: "Alice" }],
+        availabilityBlocks: [],
+        pagination: cursor
+          ? { limit: 1, nextCursor: null, hasMore: false }
+          : { limit: 1, nextCursor: "cursor-1", hasMore: true },
+      }),
+    });
+  });
+
+  await page.goto("admin/operations/?project=atlas");
+  await expect(page.locator("[data-task-list]")).toContainText("最初のタスク");
+  const loadMore = page.getByRole("button", { name: "さらに読み込む" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(page.locator("[data-task-list]")).toContainText(
+    "次ページのタスク",
+  );
+  await expect(loadMore).toBeHidden();
+  expect(requests).toBe(2);
+});
+
+test("進捗報告一覧はカーソルで追加読み込みできる", async ({ page }) => {
+  let requests = 0;
+  await page.route("**/api/admin/progress**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const cursor = requestUrl.searchParams.get("cursor");
+    requests += 1;
+    const report = cursor
+      ? {
+          id: "progress-next",
+          project_id: "atlas",
+          project_name: "アトラス",
+          subject: "mathematics",
+          body: "次ページの進捗",
+          created_at: "2026-09-01T00:00:00.000Z",
+          email: "alice@example.com",
+          display_name: "Alice",
+        }
+      : {
+          id: "progress-first",
+          project_id: "atlas",
+          project_name: "アトラス",
+          subject: "mathematics",
+          body: "最初の進捗",
+          created_at: "2026-09-02T00:00:00.000Z",
+          email: "alice@example.com",
+          display_name: "Alice",
+        };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: {
+          email: "alice@example.com",
+          isManager: false,
+          subjects: ["mathematics"],
+        },
+        projects: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+        progress: [report],
+        progressPagination: cursor
+          ? { limit: 1, nextCursor: null, hasMore: false }
+          : { limit: 1, nextCursor: "cursor-1", hasMore: true },
+      }),
+    });
+  });
+
+  await page.goto("admin/progress/");
+  await expect(page.locator("[data-progress-list]")).toContainText(
+    "最初の進捗",
+  );
+  const loadMore = page.getByRole("button", { name: "さらに読み込む" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(page.locator("[data-progress-list]")).toContainText(
+    "次ページの進捗",
+  );
+  await expect(loadMore).toBeHidden();
+  expect(requests).toBe(2);
 });

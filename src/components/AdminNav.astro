@@ -2,34 +2,44 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "atlas" | "semi-platform" | "editor" | "articles" | "workspace" | "member-profile" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "applications" | "introductions" | "secretariat" | "co-working" | "management" | "onboarding-demo";
-  site?: "portal" | "atlas" | "semi-platform" | "secretariat";
+  current?: "portal" | "action-center" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "onboarding-demo" | "update-history" | "audit-log";
+  site?: "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
 const normalizedPath = Astro.url.pathname.replace(/\/$/, "") || "/";
 const requestedProject = Astro.url.searchParams.get("project");
-const operationProject = requestedProject === "secretariat" || requestedProject === "seminar-platform" ? requestedProject : "atlas";
-const querySite = requestedProject === "portal" ? "portal" : requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "semi-platform" : "atlas";
-const portalRoutes = new Set(["/admin/portal", "/admin/member-profile", "/admin/member-tasks", "/admin/member-calendar"]);
-const routeSite = portalRoutes.has(normalizedPath)
+type SiteKey = "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "secretariat";
+const siteForProject = (project: string | null): SiteKey => project === "secretariat" ? "secretariat" : project === "seminar-platform" ? "semi-platform" : project === "student-council-exchange" ? "student-council" : project === "thinking-cafe" ? "thinking-cafe" : project === "portal" ? "portal" : "atlas";
+const operationProject = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
+const querySite = siteForProject(requestedProject);
+const portalRoutes = new Set(["/admin/portal", "/admin/action-center", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/member-calendar"]);
+const routeSite: SiteKey = portalRoutes.has(normalizedPath)
   ? "portal"
-  : normalizedPath === "/admin/profile-requests"
-    ? "secretariat"
-  : normalizedPath === "/admin/secretariat"
+  : normalizedPath === "/admin/profile-requests" || normalizedPath === "/admin/secretariat"
     ? "secretariat"
     : normalizedPath === "/admin/semi-platform"
       ? "semi-platform"
-      : normalizedPath === "/admin/operations" || normalizedPath === "/admin/progress" || normalizedPath === "/admin/calendar" || normalizedPath === "/admin/co-working"
-        ? operationProject === "seminar-platform" ? "semi-platform" : operationProject
-        : normalizedPath === "/admin/secretariat" ? "secretariat" : normalizedPath === "/admin/semi-platform" ? "semi-platform" : querySite;
+      : normalizedPath === "/admin/student-council"
+        ? "student-council"
+        : normalizedPath === "/admin/thinking-cafe"
+          ? "thinking-cafe"
+          : ["/admin/operations", "/admin/progress", "/admin/calendar", "/admin/co-working"].includes(normalizedPath)
+            ? siteForProject(operationProject)
+            : querySite;
 const routeCurrent = normalizedPath === "/admin/portal"
   ? "portal"
+  : normalizedPath === "/admin/action-center"
+    ? "action-center"
   : normalizedPath === "/admin/atlas"
     ? "atlas"
     : normalizedPath === "/admin/secretariat"
       ? "secretariat"
       : normalizedPath === "/admin/semi-platform"
         ? "semi-platform"
+        : normalizedPath === "/admin/student-council"
+          ? "student-council"
+        : normalizedPath === "/admin/thinking-cafe"
+          ? "thinking-cafe"
         : normalizedPath === "/admin/articles"
           ? "articles"
           : normalizedPath === "/admin/editor"
@@ -40,6 +50,14 @@ const routeCurrent = normalizedPath === "/admin/portal"
                 ? "genres"
               : normalizedPath === "/admin/manage"
                 ? "management"
+              : normalizedPath === "/admin/procedures"
+                ? "procedures"
+              : normalizedPath === "/admin/member-management"
+                ? "member-management"
+              : normalizedPath === "/admin/genre-roles"
+                ? "genre-roles"
+              : normalizedPath === "/admin/operations-statistics"
+                ? "operations-statistics"
               : normalizedPath === "/admin/calendar"
                 ? "calendar"
               : normalizedPath === "/admin/operations"
@@ -56,16 +74,26 @@ const routeCurrent = normalizedPath === "/admin/portal"
                         ? "analytics"
                       : normalizedPath === "/admin/permissions"
                         ? "permissions"
-                        : normalizedPath === "/admin/guide"
+                          : normalizedPath === "/admin/guide"
                           ? "guide"
+                          : normalizedPath === "/admin/update-history"
+                            ? "update-history"
+                          : normalizedPath === "/admin/audit-log"
+                            ? "audit-log"
+                          : normalizedPath === "/admin/rules"
+                            ? "rules"
                           : normalizedPath === "/admin/onboarding-demo"
                             ? "onboarding-demo"
                           : normalizedPath === "/admin/applications"
                             ? "applications"
+                          : normalizedPath === "/admin/application-interview"
+                            ? "application-interview"
                             : normalizedPath === "/admin/introductions"
                               ? "introductions"
                               : normalizedPath === "/admin/member-profile"
                                 ? "member-profile"
+                              : normalizedPath === "/admin/member-profile/edit"
+                                ? "member-profile-edit"
                                 : normalizedPath === "/admin/member-tasks"
                                   ? "member-tasks"
                                   : normalizedPath === "/admin/member-calendar"
@@ -78,18 +106,22 @@ const routeCurrent = normalizedPath === "/admin/portal"
 const current = requestedCurrent ?? routeCurrent;
 const site = requestedSite ?? routeSite;
 // UIでは短いサイトキーを保ちつつ、D1では参加者が存在する正規slugを使う。
-const projectSlug = site === "secretariat" ? "secretariat" : site === "semi-platform" ? "seminar-platform" : "atlas";
-const homePath = site === "portal" ? "/admin/portal/" : site === "secretariat" ? "/admin/secretariat/" : site === "semi-platform" ? "/admin/semi-platform/" : "/admin/atlas/";
-const brandLabel = site === "portal" ? "Atlasezメンバー用サイト" : site === "secretariat" ? "Atlasez運営事務局" : site === "semi-platform" ? "ゼミプラットフォーム" : "学習サイト「アトラス」運営用サイト";
+const projectSlug = site === "secretariat" ? "secretariat" : site === "semi-platform" ? "seminar-platform" : site === "student-council" ? "student-council-exchange" : site === "thinking-cafe" ? "thinking-cafe" : "atlas";
+const homePath = site === "portal" ? "/admin/portal/" : site === "secretariat" ? "/admin/secretariat/" : site === "semi-platform" ? "/admin/semi-platform/" : site === "student-council" ? "/admin/student-council/" : site === "thinking-cafe" ? "/admin/thinking-cafe/" : "/admin/atlas/";
+const brandLabel = site === "portal" ? "Atlasezメンバー用サイト" : site === "secretariat" ? "Atlasez運営事務局" : site === "semi-platform" ? "ゼミプラットフォーム" : site === "student-council" ? "日本生徒会協会" : site === "thinking-cafe" ? "考えるカフェ" : "学習サイト「アトラス」運営用サイト";
 const pageLabel = ({
   portal: "Atlasezメンバー用サイト",
+  "action-center": "アクションセンター",
   atlas: "学習サイトHome",
   "semi-platform": "ゼミプラットフォームHome",
+  "student-council": "日本生徒会協会Home",
+  "thinking-cafe": "考えるカフェHome",
   secretariat: "運営事務局Home",
   editor: "記事編集",
   articles: "編集・フィードバック",
   workspace: "マイページ",
   "member-profile": "マイページ",
+  "member-profile-edit": "プロフィール編集",
   "member-tasks": "タスク管理",
   "member-calendar": "カレンダー",
   "profile-requests": "メンバー情報の承認",
@@ -100,26 +132,35 @@ const pageLabel = ({
   genres: "各ジャンル概要",
   review: "フィードバック一覧",
   reports: "問題報告",
-  analytics: "閲覧統計",
+  analytics: "学習サイト閲覧統計",
   permissions: "運営者・担当管理",
   guide: "作業の進め方",
+  rules: "規則",
   "onboarding-demo": "オンボーディング紹介",
   applications: "運営参加応募",
+  "application-interview": "面談メモ",
   introductions: "運営内自己紹介",
   "co-working": "同時作業会",
   management: "管理トップ",
+  procedures: "諸手続き",
+  "member-management": "運営メンバー管理",
+  "genre-roles": "ジャンル・役割管理",
+  "operations-statistics": "運営メンバー統計",
+  "update-history": "アップデート履歴",
+  "audit-log": "操作履歴",
 } as Record<NonNullable<Props["current"]>, string>)[current];
-const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "secretariat"]);
+const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "student-council", "thinking-cafe", "secretariat"]);
 ---
 <header class="admin-nav" data-admin-nav data-current-site={site} data-current-slug={projectSlug} transition:persist="admin-nav">
   <a class="admin-nav-brand-logo" href={homePath} aria-label={`${brandLabel}のトップへ戻る`}><img src="/images/atlasez-logo.png" alt="" width="34" height="34" /></a>
   <div class="admin-project-switcher" data-project-switcher data-current-site={site} data-current-slug={projectSlug}>
     <div class="admin-project-switcher-content">
-      <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : "Atlas learning site operations"}>{brandLabel}</a>
+    <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : site === "student-council" ? "Japan Student Council Association" : site === "thinking-cafe" ? "Thinking Cafe" : "Atlas learning site operations"}>{brandLabel}</a>
     </div>
   </div>
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
+      <a class="admin-action-center-link" href="/admin/action-center/" data-admin-page="action-center" aria-current={current === "action-center" ? "page" : undefined} aria-label="アクションセンター" title="アクションセンター"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>対応</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
       <a href="/admin/member-calendar/" data-admin-site="portal" data-admin-page="member-calendar" hidden={site !== "portal"} aria-current={current === "member-calendar" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/member-profile/" data-admin-site="portal" data-admin-page="member-profile" hidden={site !== "portal"} aria-current={current === "member-profile" ? "page" : undefined}>マイページ</a>
@@ -131,9 +172,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <a href="/admin/profile-requests/" data-admin-site="secretariat" data-admin-page="profile-requests" hidden={site !== "secretariat"} aria-current={current === "profile-requests" && site === "secretariat" ? "page" : undefined}>メンバー情報の承認</a>
       <a href="/admin/operations/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="operations" hidden={site !== "semi-platform"} aria-current={current === "operations" && site === "semi-platform" ? "page" : undefined}>ゼミ・タスク管理</a>
       <a href="/admin/calendar/?project=seminar-platform" data-admin-site="semi-platform" data-admin-page="calendar" hidden={site !== "semi-platform"} aria-current={current === "calendar" && site === "semi-platform" ? "page" : undefined}>ゼミ・カレンダー</a>
+      <a href="/admin/operations/?project=student-council-exchange" data-admin-site="student-council" data-admin-page="operations" hidden={site !== "student-council"} aria-current={current === "operations" && site === "student-council" ? "page" : undefined}>生徒会タスク管理</a>
+      <a href="/admin/calendar/?project=student-council-exchange" data-admin-site="student-council" data-admin-page="calendar" hidden={site !== "student-council"} aria-current={current === "calendar" && site === "student-council" ? "page" : undefined}>生徒会カレンダー</a>
+      <a href="/admin/operations/?project=thinking-cafe" data-admin-site="thinking-cafe" data-admin-page="operations" hidden={site !== "thinking-cafe"} aria-current={current === "operations" && site === "thinking-cafe" ? "page" : undefined}>カフェ・タスク管理</a>
+      <a href="/admin/calendar/?project=thinking-cafe" data-admin-site="thinking-cafe" data-admin-page="calendar" hidden={site !== "thinking-cafe"} aria-current={current === "calendar" && site === "thinking-cafe" ? "page" : undefined}>カフェ・カレンダー</a>
     <a class="admin-management-link" href={`/admin/manage/?project=${projectSlug}`} hidden={site === "portal"} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理</a>
   </nav>
   <div class="admin-account" data-admin-account hidden>
+    <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog"><kbd>⌘ K</kbd><span>操作を検索</span></button>
     <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-controls="admin-notification-panel" aria-haspopup="dialog" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
     <div id="admin-notification-panel" class="admin-notification-panel" data-admin-notification-panel role="dialog" aria-labelledby="admin-notification-heading" hidden><div class="notification-panel-heading"><strong id="admin-notification-heading">通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list aria-live="polite"><span class="admin-notification-loading">通知を確認しています…</span></div></div>
@@ -145,6 +191,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       <button type="submit" class="admin-logout">ログアウト</button>
     </form>
   </div>
+  <dialog class="admin-command-dialog" id="admin-command-dialog" data-admin-command-dialog aria-labelledby="admin-command-heading">
+    <form method="dialog" class="admin-command-inner">
+      <div class="admin-command-head"><h2 id="admin-command-heading">操作を検索</h2><button type="submit" class="admin-command-close" aria-label="操作検索を閉じる">×</button></div>
+      <label class="admin-command-search"><span aria-hidden="true">⌕</span><input type="search" data-admin-command-input placeholder="記事・タスク・操作を検索" autocomplete="off" /><kbd>Esc</kbd></label>
+      <div class="admin-command-list" data-admin-command-list role="listbox" aria-label="検索結果"></div>
+      <p class="admin-command-hint"><kbd>↑</kbd><kbd>↓</kbd>で移動 <kbd>Enter</kbd>で開く</p>
+    </form>
+  </dialog>
 </header>
 <nav class="admin-breadcrumbs" data-admin-breadcrumbs aria-label="パンくず" hidden={site === "portal"} transition:persist="admin-breadcrumbs"><a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span>{projectHome.has(current) ? <span aria-current="page">{brandLabel}</span> : <><a href={homePath}>{brandLabel}</a><span aria-hidden="true">›</span><span aria-current="page">{pageLabel}</span></>}</nav>
 <script>
@@ -169,24 +223,29 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.querySelectorAll<HTMLButtonElement>('[data-project-previous]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '前のプロジェクト' : 'Previous project'));
       document.querySelectorAll<HTMLButtonElement>('[data-project-next]').forEach((button) => button.setAttribute('aria-label', language === 'ja' ? '次のプロジェクト' : 'Next project'));
     };
-    const applyTheme = (dark: boolean, persist = false) => {
-      document.documentElement.dataset.prefBg = dark ? 'dark' : '';
+    const applyTheme = (mode: string | undefined, persist = false) => {
+      const normalized = mode === 'black' ? 'black' : mode === 'dark' ? 'dark' : '';
+      document.documentElement.dataset.prefBg = normalized ? 'dark' : '';
+      if (normalized === 'black') document.documentElement.dataset.prefMode = 'black';
+      else document.documentElement.removeAttribute('data-pref-mode');
       const preferences = readPreferences();
-      if (persist) { if (dark) preferences.bg = 'dark'; else delete preferences.bg; localStorage.setItem(preferencesKey, JSON.stringify(preferences)); }
+      if (persist) { if (normalized) preferences.bg = normalized; else delete preferences.bg; localStorage.setItem(preferencesKey, JSON.stringify(preferences)); }
     };
-    applyTheme(readPreferences().bg === 'dark');
+    applyTheme(readPreferences().bg);
     applyLanguage(currentLanguage());
 
-    type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'secretariat'; slug: string; current: string; home: string; label: string };
-    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', progress: '進捗報告', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', 'co-working': '同時作業会', reports: '問題報告', analytics: '閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', applications: '運営参加応募', introductions: '運営内自己紹介', review: 'フィードバック一覧', 'onboarding-demo': 'オンボーディング紹介' };
+    type RouteState = { site: 'portal' | 'atlas' | 'semi-platform' | 'student-council' | 'thinking-cafe' | 'secretariat'; slug: string; current: string; home: string; label: string };
+    const pageLabels: Record<string, string> = { articles: '編集・フィードバック', editor: '記事編集', workspace: 'マイページ', 'member-profile': 'マイページ', 'member-profile/edit': 'プロフィール編集', 'member-profile-edit': 'プロフィール編集', 'member-tasks': 'タスク管理', 'member-calendar': 'カレンダー', 'profile-requests': 'メンバー情報の承認', 'project-profile-requests': '運営内自己紹介の承認', operations: 'タスク管理', progress: '進捗報告', calendar: 'カレンダー', genres: '各ジャンル概要', management: '管理トップ', procedures: '諸手続き', 'member-management': '運営メンバー管理', 'genre-roles': 'ジャンル・役割管理', 'operations-statistics': '運営メンバー統計', 'co-working': '同時作業会', reports: '問題報告', analytics: '学習サイト閲覧統計', permissions: '運営者・担当管理', guide: '作業の進め方', rules: '規則', applications: '運営参加応募', 'application-interview': '面談メモ', introductions: '運営内自己紹介', review: 'フィードバック一覧', 'onboarding-demo': 'オンボーディング紹介' };
+    const slugForSite = (site: RouteState['site']) => site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : site === 'student-council' ? 'student-council-exchange' : site === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
+    const homeForSite = (site: RouteState['site']) => site === 'portal' ? '/admin/portal/' : site === 'secretariat' ? '/admin/secretariat/' : site === 'semi-platform' ? '/admin/semi-platform/' : site === 'student-council' ? '/admin/student-council/' : site === 'thinking-cafe' ? '/admin/thinking-cafe/' : '/admin/atlas/';
+    const labelForSite = (site: RouteState['site']) => site === 'portal' ? 'Atlasezメンバー用サイト' : site === 'secretariat' ? 'Atlasez運営事務局' : site === 'semi-platform' ? 'ゼミプラットフォーム' : site === 'student-council' ? '日本生徒会協会' : site === 'thinking-cafe' ? '考えるカフェ' : '学習サイト「アトラス」運営用サイト';
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
-      const site = ['/admin/portal', '/admin/member-profile', '/admin/member-tasks', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : project === 'secretariat' || path === '/admin/secretariat' || path === '/admin/profile-requests' ? 'secretariat' : project === 'seminar-platform' || path === '/admin/semi-platform' ? 'semi-platform' : 'atlas';
-      const slug = site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : 'atlas';
-      const labels: Record<RouteState['site'], string> = { portal: 'Atlasezメンバー用サイト', atlas: '学習サイト「アトラス」運営用サイト', 'semi-platform': 'ゼミプラットフォーム', secretariat: 'Atlasez運営事務局' };
-      const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
-      return { site, slug, current, home: site === 'portal' ? '/admin/portal/' : site === 'secretariat' ? '/admin/secretariat/' : site === 'semi-platform' ? '/admin/semi-platform/' : '/admin/atlas/', label: labels[site] };
+      const site: RouteState['site'] = ['/admin/portal', '/admin/member-profile', '/admin/member-profile/edit', '/admin/member-tasks', '/admin/member-calendar'].includes(path) || project === 'portal' ? 'portal' : path === '/admin/secretariat' || path === '/admin/profile-requests' || project === 'secretariat' ? 'secretariat' : path === '/admin/semi-platform' || project === 'seminar-platform' ? 'semi-platform' : path === '/admin/student-council' || project === 'student-council-exchange' ? 'student-council' : path === '/admin/thinking-cafe' || project === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
+      const slug = slugForSite(site);
+      const current = path === '/admin/portal' ? 'portal' : path === '/admin/atlas' ? 'atlas' : path === '/admin/secretariat' ? 'secretariat' : path === '/admin/semi-platform' ? 'semi-platform' : path === '/admin/student-council' ? 'student-council' : path === '/admin/thinking-cafe' ? 'thinking-cafe' : path === '/admin/manage' ? 'management' : path.slice('/admin/'.length) || 'atlas';
+      return { site, slug, current, home: homeForSite(site), label: labelForSite(site) };
     };
     const syncRouteChrome = () => {
       const state = readRouteState();
@@ -202,6 +261,18 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       switcher?.setAttribute('data-current-site', state.site);
       switcher?.setAttribute('data-current-slug', state.slug);
       document.querySelectorAll<HTMLAnchorElement>('[data-admin-project-link]').forEach((link) => {
+        const isManagementLink = link.dataset.adminProjectLink === 'manage';
+        if (isManagementLink && state.site === 'portal') {
+          // メンバー用サイトには運営管理への導線を表示しない。ClientRouterの
+          // persistent navでも、ポータルへ戻った瞬間に再表示されないようにする。
+          link.dataset.adminSite = 'restricted';
+          link.hidden = true;
+          link.setAttribute('aria-hidden', 'true');
+          link.tabIndex = -1;
+          return;
+        }
+        link.removeAttribute('aria-hidden');
+        link.removeAttribute('tabindex');
         link.dataset.adminSite = state.site;
         link.href = `/admin/${link.dataset.adminProjectLink}/?project=${encodeURIComponent(state.slug)}`;
       });
@@ -211,12 +282,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       primaryNav?.classList.remove('is-open');
       document.querySelectorAll<HTMLElement>('[data-admin-site]').forEach((link) => { link.hidden = link.dataset.adminSite !== state.site; });
       document.querySelectorAll<HTMLElement>('[data-admin-page]').forEach((link) => { link.setAttribute('aria-current', link.dataset.adminPage === state.current && link.closest('[data-admin-site]')?.getAttribute('data-admin-site') === state.site ? 'page' : 'false'); });
-      if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : 'Atlas learning site operations'; }
+      if (title) { title.href = state.home; title.dataset.adminJa = state.label; title.textContent = currentLanguage() === 'ja' ? state.label : state.site === 'portal' ? 'Atlasez member site' : state.site === 'secretariat' ? 'Atlasez Secretariat' : state.site === 'semi-platform' ? 'Seminar platform' : state.site === 'student-council' ? 'Japan Student Council Association' : state.site === 'thinking-cafe' ? 'Thinking Cafe' : 'Atlas learning site operations'; }
       const logo = document.querySelector<HTMLAnchorElement>('.admin-nav-brand-logo');
       if (logo) logo.href = state.home;
       if (breadcrumbs) {
         breadcrumbs.hidden = state.site === 'portal';
-        breadcrumbs.innerHTML = state.site === 'portal' ? '' : `<a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span><a href="${state.home}">${state.label}</a>${['atlas', 'semi-platform', 'secretariat'].includes(state.current) ? '' : `<span aria-hidden="true">›</span><span aria-current="page">${pageLabels[state.current] ?? state.current}</span>`}`;
+        breadcrumbs.innerHTML = state.site === 'portal' ? '' : `<a href="/admin/portal/">Atlasezメンバー用サイト</a><span aria-hidden="true">›</span><a href="${state.home}">${state.label}</a>${['atlas', 'semi-platform', 'student-council', 'thinking-cafe', 'secretariat'].includes(state.current) ? '' : `<span aria-hidden="true">›</span><span aria-current="page">${pageLabels[state.current] ?? state.current}</span>`}`;
       }
     };
     syncRouteChrome();
@@ -226,6 +297,30 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const managesCurrentProject = isManager || managerProjects.includes(state.slug) || (state.slug === 'seminar-platform' && managerProjects.includes('semi-platform'));
       document.querySelectorAll<HTMLElement>('[data-project-manager-only]').forEach((item) => { item.hidden = !managesCurrentProject || item.dataset.adminSite !== state.site; });
     };
+    type AuthStatus = { email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
+    type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
+    let authStatusRequest: Promise<AuthStatusResult> | null = null;
+    let authStatusCache: { value: AuthStatusResult; expiresAt: number } | null = null;
+    const fetchAuthStatus = () => {
+      if (authStatusCache && authStatusCache.expiresAt > Date.now()) return Promise.resolve(authStatusCache.value);
+      if (!authStatusRequest) {
+        const request = fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' })
+          .then(async (response) => {
+            const contentType = response.headers.get('content-type') ?? '';
+            const data = contentType.includes('application/json') ? await response.json() as AuthStatus : {};
+            return { ok: response.ok, status: response.status, contentType, data };
+          })
+          .catch(() => ({ ok: false, status: 0, contentType: '', data: {} }));
+        authStatusRequest = request.then((result) => {
+          // Both the manager visibility and account widgets need the same
+          // response during startup. Keep it briefly without changing the
+          // existing no-store request or longer-term permission freshness.
+          if (result.ok || result.status === 401) authStatusCache = { value: result, expiresAt: Date.now() + 1_000 };
+          return result;
+        }).finally(() => { authStatusRequest = null; });
+      }
+      return authStatusRequest;
+    };
     const refreshManagerVisibility = async () => {
       // 遷移後も保持されるナビの権限表示を、毎回サーバーの最新状態へ戻す。
       // 取得に失敗したときは安全側（非表示）にし、次の再試行で復元する。
@@ -233,10 +328,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.documentElement.dataset.adminNavRequest = requestId;
       applyManagerVisibility(false);
       try {
-        const response = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
-        const contentType = response.headers.get('content-type') ?? '';
-        if (requestId !== document.documentElement.dataset.adminNavRequest || !contentType.includes('application/json') || !response.ok) return;
-        const status = await response.json() as { isManager?: boolean; managerProjects?: string[] };
+        const response = await fetchAuthStatus();
+        if (requestId !== document.documentElement.dataset.adminNavRequest || !response.contentType.includes('application/json') || !response.ok) return;
+        const status = response.data;
         if (requestId !== document.documentElement.dataset.adminNavRequest) return;
         applyManagerVisibility(status.isManager === true, status.managerProjects ?? []);
       } catch {
@@ -246,7 +340,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     if (document.documentElement.dataset.adminNavLifecycleBound !== 'true') {
       document.documentElement.dataset.adminNavLifecycleBound = 'true';
       window.addEventListener('atlasez-lang-change', () => { applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
-      document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg === 'dark'); applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
+      document.addEventListener('astro:after-swap', () => { applyTheme(readPreferences().bg); applyLanguage(currentLanguage()); syncRouteChrome(); void refreshManagerVisibility(); });
       document.addEventListener('astro:page-load', () => { syncRouteChrome(); void refreshManagerVisibility(); });
     }
     void refreshManagerVisibility();
@@ -293,15 +387,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       if (cachedProfile) applyProfile(cachedProfile);
       const loadAccount = async () => {
         try {
-          const statusResponse = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
+          const statusResponse = await fetchAuthStatus();
           if (statusResponse.status === 401) {
             const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
             window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
             return;
           }
-          const statusType = statusResponse.headers.get('content-type') ?? '';
-          if (!statusType.includes('application/json')) throw new Error('認証状態を確認できません。ページを再読み込みしてください。');
-          const status = await statusResponse.json() as { email?: string; isManager?: boolean; error?: string };
+          if (!statusResponse.contentType.includes('application/json')) throw new Error('認証状態を確認できません。ページを再読み込みしてください。');
+          const status = statusResponse.data;
           if (!statusResponse.ok || !status.email) throw new Error(status.error ?? 'ログイン情報を取得できませんでした');
           if (email) { email.title = status.email; }
           const cachedForAccount = cachedProfile?.email === status.email ? cachedProfile : null;
@@ -339,7 +432,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           const unreadCount = notifications.filter((item) => !item.read).length;
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
-          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: 'フィードバック依頼', approved: 'フィードバック完了', published: '公開' } as Record<string, string>)[kind] ?? '記事';
+          const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: 'フィードバック依頼', 'feedback-request': 'フィードバック依頼', 'task-request': 'タスク依頼', application: '応募', approved: 'フィードバック完了', published: '公開', 'publication-ready': '公開準備完了' } as Record<string, string>)[kind] ?? '記事';
           notificationList.innerHTML = notifications.length ? notifications.map((item) => `<div class="admin-notification-item${item.read ? ' is-read' : ''}"><a href="${item.href}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabel((item as any).kind))}</span><b>${escape(item.title)}</b><small>${escape(item.detail)}</small><time datetime="${escape(item.updatedAt ?? '')}">${escape(formatNotificationTime(item.updatedAt))}</time></a>${item.read ? '<span class="notification-read-label">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div>`).join('') : '<span class="admin-notification-empty">通知はまだありません。</span>';
         } catch {
           notifications = [];
@@ -397,7 +490,83 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 <style>
   .admin-nav{align-items:center;border-bottom:1px solid var(--border-default);box-sizing:border-box;display:flex;gap:.65rem;left:50%;min-height:4.15rem;padding:0 max(1rem,calc((100vw - 1500px)/2));position:relative;transform:translateX(-50%);width:100vw}.admin-nav-brand{align-items:center;color:var(--accent-primary);display:flex;flex:0 0 auto;font-size:1.15rem;font-weight:700;gap:.45rem;text-decoration:none}.admin-nav-brand span{border-left:1px solid var(--border-default);color:var(--text-primary);font-size:.8rem;margin-left:.1rem;padding-left:.55rem}.admin-menu-toggle{display:none}.admin-nav nav{align-items:stretch;display:flex;flex:1 1 auto;min-height:4.15rem;min-width:0}.admin-nav nav>a{align-items:center;border-bottom:3px solid transparent;color:var(--text-primary);display:flex;flex:0 0 auto;font:inherit;font-size:.84rem;padding:0 .62rem;text-decoration:none}.admin-nav nav>a[aria-current="page"],.admin-nav nav>a:hover{border-bottom-color:var(--accent-primary);color:var(--accent-primary)}.admin-management-menu{align-items:center;display:flex;position:relative}.admin-management-menu summary{align-items:center;color:var(--text-secondary);cursor:pointer;display:flex;font-size:.84rem;gap:.28rem;height:100%;list-style:none;padding:0 .6rem;white-space:nowrap}.admin-management-menu summary::-webkit-details-marker{display:none}.admin-management-menu[open] summary,.admin-management-menu summary:hover{color:var(--accent-primary)}.admin-management-menu>div{background:var(--background-primary);border:1px solid var(--border-default);box-shadow:0 .8rem 2rem #001a2c1c;display:grid;min-width:11rem;padding:.35rem;position:absolute;top:3.3rem;z-index:30}.admin-management-menu>div a{border:0!important;color:var(--text-primary);font-size:.78rem;padding:.55rem .6rem;text-decoration:none}.admin-management-menu>div a:hover,.admin-management-menu>div a[aria-current="page"]{background:var(--background-secondary);color:var(--accent-primary)}.admin-account{align-items:center;display:flex;flex:0 0 auto;gap:.4rem;margin-left:auto;position:relative}.admin-account-profile{align-items:center;color:var(--text-primary);display:flex;gap:.4rem;max-width:17rem;min-width:0;text-decoration:none}.admin-account-profile:hover .admin-account-email{color:var(--accent-primary)}.admin-account-avatar{align-items:center;background:linear-gradient(145deg,#2d6ea8,#153c66);border:1px solid var(--border-default);border-radius:50%;color:#fff;display:flex;flex:0 0 2.4rem;font-size:.9rem;font-weight:800;height:2.4rem;justify-content:center;overflow:hidden;width:2.4rem}.admin-account-email{font-size:.73rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.admin-account form{margin:0}.admin-logout{background:transparent;border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-secondary);cursor:pointer;font:inherit;font-size:.72rem;padding:.4rem .5rem;white-space:nowrap}.admin-logout:hover,.admin-logout:focus-visible{border-color:var(--accent-primary);color:var(--accent-primary)}.admin-notifications{align-items:center;background:transparent;border:0;color:var(--text-primary);cursor:pointer;display:inline-flex;height:2.55rem;justify-content:center;padding:.3rem;position:relative;width:2.55rem}.admin-notifications svg{fill:none;height:1.72rem;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8;width:1.72rem}.admin-notifications:hover{background:var(--background-secondary);border-radius:50%;color:var(--accent-primary)}.admin-notifications [data-admin-notification-count]{background:#e10000;border:2px solid var(--background-primary);border-radius:999px;color:#fff;font-size:.62rem;font-weight:800;line-height:1;min-width:1.05rem;padding:.2rem .25rem;position:absolute;right:-.1rem;text-align:center;top:-.08rem}.admin-notification-panel{background:var(--background-primary);border:1px solid var(--border-default);border-radius:.65rem;box-shadow:0 .8rem 2rem #001a2c26;min-width:22rem;overflow:hidden;padding:.55rem;position:absolute;right:0;top:3.2rem;z-index:40}.admin-notification-panel[hidden]{display:none!important}.notification-panel-heading{align-items:center;border-bottom:1px solid var(--border-default);display:flex;gap:.35rem;padding:.15rem .2rem .55rem}.notification-panel-heading strong{margin-right:auto}.notification-panel-heading button{background:transparent;border:0;color:var(--text-secondary);cursor:pointer;font-size:1.2rem}.notification-panel-heading .mark-all-read{border-radius:999px;font-size:.68rem;font-weight:800;padding:.3rem .45rem}.notification-panel-heading .mark-all-read:hover{background:var(--background-secondary);color:var(--accent-primary)}.admin-notification-item{align-items:center;display:flex;gap:.2rem}.admin-notification-item a{color:var(--text-primary);display:grid;flex:1;gap:.15rem;padding:.6rem;text-decoration:none}.admin-notification-item a:hover{background:var(--background-secondary);border-radius:.35rem}.admin-notification-item.is-read{opacity:.58}.admin-notification-item button{background:transparent;border:0;border-radius:.3rem;color:var(--accent-primary);cursor:pointer;font-size:.68rem;font-weight:800;padding:.35rem}.admin-notification-item button:hover{background:var(--background-secondary)}.admin-notification-panel small,.admin-notification-empty,.admin-notification-loading{color:var(--text-secondary);font-size:.7rem}@media(max-width:980px){.admin-nav{display:grid;grid-template-columns:minmax(0,1fr) auto auto;padding-block:.45rem}.admin-menu-toggle{align-items:center;background:transparent;border:1px solid var(--border-default);border-radius:.35rem;color:var(--text-primary);cursor:pointer;display:inline-flex;font:inherit;font-size:.75rem;gap:.28rem;padding:.45rem .55rem}.admin-nav nav{display:none;grid-column:1/-1;grid-row:2;min-height:0;padding:.35rem 0 .1rem}.admin-nav nav.is-open{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.admin-nav nav>a{border:1px solid var(--border-default);border-width:0 0 1px;font-size:.8rem;min-height:2.6rem;padding:.2rem .45rem}.admin-management-menu{align-items:center;display:block}.admin-management-menu summary{height:2.6rem;padding:.2rem .45rem}.admin-management-menu>div{box-shadow:none;position:static}.admin-management-menu>div a{display:block}.admin-account{grid-column:3;grid-row:1;margin-left:0}.admin-account-email{max-width:10rem}}@media(max-width:620px){.admin-nav{gap:.4rem;padding-left:.75rem;padding-right:.75rem}.admin-nav-brand{font-size:1rem}.admin-nav-brand span{display:none}.admin-account-email{display:none}.admin-account-avatar{flex-basis:2.15rem;height:2.15rem;width:2.15rem}.admin-logout{font-size:.68rem;padding:.34rem .4rem}.admin-notification-panel{min-width:calc(100vw - 1.5rem);right:-.3rem}.admin-nav nav.is-open{grid-template-columns:1fr}.admin-menu-toggle span:last-child{display:none}}
   .admin-nav { z-index: 200; }
+  /* ナビとアカウント操作が狭い画面で重ならないよう、リンク列を自身の領域でクリップする。 */
+  .admin-nav nav { overflow: hidden; }
 </style>
+<script>
+  import { navigate } from "astro:transitions/client";
+
+  (() => {
+    const initializeCommandCenter = () => {
+      const button = document.querySelector<HTMLButtonElement>("[data-admin-command]");
+      const dialog = document.querySelector<HTMLDialogElement>("[data-admin-command-dialog]");
+      const input = document.querySelector<HTMLInputElement>("[data-admin-command-input]");
+      const list = document.querySelector<HTMLElement>("[data-admin-command-list]");
+      if (!button || !dialog || !input || !list || button.dataset.initialized === "true") return;
+      button.dataset.initialized = "true";
+      type Command = { label: string; detail: string; href?: string; run?: () => void };
+      const staticCommands: Command[] = [
+        { label: "アクションセンター", detail: "対応が必要な項目をまとめて確認", href: "/admin/action-center/" },
+        { label: "編集・フィードバック", detail: "記事の状態とフィードバック", href: "/admin/articles/" },
+        { label: "タスク管理", detail: "担当タスクと期限", href: "/admin/operations/?project=atlas" },
+        { label: "カレンダー", detail: "予定と締切", href: "/admin/calendar/?project=atlas" },
+        { label: "管理トップ", detail: "設定・権限・状態遷移", href: "/admin/manage/?project=atlas" },
+        { label: "表示設定を開く", detail: "テーマ・文字サイズ・コントラスト", run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
+      ];
+      type CommandHistory = { label: string; detail: string; href?: string; count: number; lastUsed: number };
+      const historyKey = "atlasez-command-history";
+      const readHistory = (): CommandHistory[] => {
+        try {
+          const value = JSON.parse(window.localStorage.getItem(historyKey) ?? "[]") as unknown;
+          return Array.isArray(value) ? value.filter((item): item is CommandHistory => Boolean(item && typeof item === "object" && typeof (item as CommandHistory).label === "string" && typeof (item as CommandHistory).count === "number" && typeof (item as CommandHistory).lastUsed === "number")).slice(0, 8) : [];
+        } catch { return []; }
+      };
+      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => ({ label: item.label, detail: `最近使った操作・${item.count}回`, ...(item.href ? { href: item.href } : {}) }));
+      const recordUsage = (command: Command) => {
+        try {
+          const now = Date.now();
+          const history = readHistory().filter((item) => item.href !== command.href || item.label !== command.label);
+          const previous = readHistory().find((item) => item.href === command.href && item.label === command.label);
+          history.unshift({ label: command.label, detail: command.detail, ...(command.href ? { href: command.href } : {}), count: (previous?.count ?? 0) + 1, lastUsed: now });
+          window.localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 8)));
+        } catch { /* localStorageが無効でも操作自体は継続 */ }
+      };
+      let commands = [...staticCommands];
+      let activeIndex = 0;
+      let searchTimer: number | undefined;
+      const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
+      const close = () => { if (dialog.open) dialog.close(); };
+      const run = (command: Command) => { recordUsage(command); close(); if (command.href) void navigate(command.href); else command.run?.(); };
+      const render = () => {
+        list.innerHTML = commands.length ? commands.map((command, index) => `<button type="button" class="admin-command-item${index === activeIndex ? " is-active" : ""}" role="option" aria-selected="${index === activeIndex}" data-command-index="${index}"><strong>${escape(command.label)}</strong><small>${escape(command.detail)}</small></button>`).join("") : `<p class="admin-command-empty">一致する項目はありません。</p>`;
+        list.querySelectorAll<HTMLButtonElement>("[data-command-index]").forEach((item) => item.addEventListener("click", () => run(commands[Number(item.dataset.commandIndex ?? 0)])));
+      };
+      const search = async () => {
+        const query = input.value.trim();
+        if (query.length < 2) { commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
+        const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query));
+        try {
+          const response = await fetch(`/api/admin/command-search?q=${encodeURIComponent(query)}`, { credentials: "same-origin", cache: "no-store" });
+          const data = await response.json().catch(() => ({})) as { results?: Array<{ type?: string; title?: string; detail?: string; href?: string }> };
+          const remote = (data.results ?? []).map((result) => ({ label: result.title ?? "", detail: `${result.type ?? ""} ／ ${result.detail ?? ""}`, href: result.href ?? "/admin/portal/" }));
+          commands = [...local, ...remote]; activeIndex = 0; render();
+        } catch { commands = local; activeIndex = 0; render(); }
+      };
+      const open = () => { if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      button.addEventListener("click", open);
+      input.addEventListener("input", () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void search(), 120); });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); if (!commands.length) return; activeIndex = (activeIndex + (event.key === "ArrowDown" ? 1 : -1) + commands.length) % commands.length; render(); }
+        else if (event.key === "Enter") { event.preventDefault(); if (commands[activeIndex]) run(commands[activeIndex]); }
+        else if (event.key === "Escape") { event.preventDefault(); close(); }
+      });
+      dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
+      document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "k") { event.preventDefault(); open(); } });
+    };
+    document.addEventListener("astro:page-load", initializeCommandCenter);
+    initializeCommandCenter();
+  })();
+</script>
 <style>
   .admin-nav [hidden] { display:none !important; }
   .admin-account[hidden] { display:none !important; }
@@ -420,6 +589,30 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     .admin-nav-brand-logo img { height:1.9rem; width:1.9rem; }
     .admin-project-switcher-title { font-size:.76rem; }
   }
+</style>
+<style>
+  .admin-command-button { align-items:center; background:transparent; border:1px solid var(--border-default); border-radius:.35rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; gap:.35rem; min-height:2.35rem; padding:.3rem .55rem; white-space:nowrap; }
+  .admin-command-button:hover,.admin-command-button:focus-visible { border-color:var(--accent-primary); color:var(--text-primary); outline:0; }
+  .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:.2rem; color:var(--text-muted); font:inherit; font-size:.62rem; padding:.1rem .28rem; white-space:nowrap; }
+  .admin-command-button span { font-size:.7rem; }
+  .admin-command-dialog { background:var(--background-primary); border:1px solid var(--border-strong); border-radius:.55rem; box-shadow:0 1.2rem 3rem rgb(0 0 0 / .32); color:var(--text-primary); margin:auto; max-height:min(32rem,calc(100vh - 4rem)); padding:0; width:min(38rem,calc(100vw - 2rem)); }
+  .admin-command-dialog::backdrop { background:rgb(0 0 0 / .48); }
+  .admin-command-inner { padding:1rem; }
+  .admin-command-head { align-items:center; display:flex; justify-content:space-between; }
+  .admin-command-head h2 { font-size:1rem; margin:0; }
+  .admin-command-close { background:transparent; border:1px solid var(--border-default); border-radius:.3rem; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; line-height:1; min-height:1.9rem; width:1.9rem; }
+  .admin-command-search { align-items:center; border:1px solid var(--accent-primary); border-radius:.35rem; display:flex; gap:.45rem; margin-top:.75rem; padding:0 .55rem; }
+  .admin-command-search > span { color:var(--accent-primary); font-size:1.1rem; }
+  .admin-command-search input { background:transparent; border:0; color:var(--text-primary); flex:1; font:inherit; font-size:.82rem; min-height:2.45rem; outline:0; }
+  .admin-command-list { display:grid; gap:.2rem; margin-top:.7rem; max-height:20rem; overflow:auto; }
+  .admin-command-item { align-items:start; background:transparent; border:1px solid transparent; border-radius:.3rem; color:var(--text-primary); cursor:pointer; display:grid; gap:.12rem; padding:.52rem .6rem; text-align:left; width:100%; }
+  .admin-command-item:hover,.admin-command-item.is-active { background:var(--background-secondary); border-color:color-mix(in srgb,var(--accent-primary) 32%,var(--border-default)); }
+  .admin-command-item strong { font-size:.78rem; }
+  .admin-command-item small { color:var(--text-secondary); font-size:.67rem; }
+  .admin-command-hint { color:var(--text-secondary); font-size:.67rem; margin:.7rem 0 0; }
+  .admin-command-hint kbd { margin-right:.2rem; }
+  @media(max-width:980px) { .admin-command-button { grid-column:1/-1; grid-row:2; justify-self:end; } .admin-account { align-items:center; flex-wrap:wrap; } }
+  @media(max-width:620px) { .admin-command-button span { display:none; } .admin-command-button { min-width:2.35rem; justify-content:center; } }
 </style>
 <style>
   .admin-breadcrumbs { align-items:center; color:var(--text-secondary); display:flex; flex-wrap:wrap; font-size:.72rem; gap:.4rem; line-height:1.4; margin:0 auto; max-width:1500px; padding:.55rem max(1rem,calc((100vw - 1500px)/2)); }
@@ -475,4 +668,34 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-nav .notification-read-label { align-self: center; color: var(--text-secondary); flex: 0 0 auto; font-size: .68rem; font-weight: 700; margin-right: .4rem; }
   .admin-nav .admin-notification-empty { display: block; padding: 1.25rem .8rem; text-align: center; }
   .admin-nav [data-manager-only][hidden] { display: none !important; }
+  /* 管理画面の共通クロームは低彩度・単色で統一する。 */
+  .admin-nav .admin-account-avatar { background: var(--background-secondary); color: var(--text-primary); }
+  .admin-breadcrumbs { flex-wrap: nowrap; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .admin-breadcrumbs > * { overflow: hidden; text-overflow: ellipsis; }
+  /* 選択中のナビは青い面や下線で主張せず、隣接面の差だけで示す。 */
+  .admin-nav nav > a[aria-current="page"] { background: color-mix(in srgb, var(--text-primary) 6%, transparent); border-bottom-color: transparent; color: var(--text-primary); }
+  .admin-nav nav > a:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); border-bottom-color: transparent; color: var(--text-primary); }
+  /* 全体の入口は残しつつ、通常のページタブより控えめなユーティリティボタンとして表示する。 */
+  .admin-nav nav > .admin-action-center-link {
+    align-self: center;
+    border: 1px solid var(--border-default) !important;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: .72rem;
+    gap: .3rem;
+    height: 2.1rem;
+    margin-right: .2rem;
+    padding: 0 .55rem;
+  }
+  .admin-nav nav > .admin-action-center-link svg { fill: none; height: .9rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: .9rem; }
+  .admin-nav nav > .admin-action-center-link:hover,
+  .admin-nav nav > .admin-action-center-link[aria-current="page"] {
+    background: var(--background-secondary);
+    border-color: var(--border-strong) !important;
+    color: var(--text-primary);
+  }
+  .admin-nav nav > .admin-action-center-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+  @media (max-width: 980px) {
+    .admin-nav nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
+  }
 </style>

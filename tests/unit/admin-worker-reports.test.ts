@@ -13,10 +13,18 @@ class ReportsStatement {
   async all<T>() {
     if (this.query.includes("FROM report_admin_permissions"))
       return { results: [{ subject: "mathematics" }] as T[] };
-    if (this.query.includes("FROM article_reports"))
-      return { results: this.db.reports as T[] };
-    if (this.query.includes("FROM article_analytics_daily"))
-      return { results: this.db.analytics as T[] };
+    if (this.query.includes("FROM article_reports")) {
+      const reports = this.query.includes("subject IN")
+        ? this.db.reports.filter((row) => row.subject === "mathematics")
+        : this.db.reports;
+      return { results: reports as T[] };
+    }
+    if (this.query.includes("FROM article_analytics_daily")) {
+      const rows = this.query.includes("subject IN")
+        ? this.db.analytics.filter((row) => row.subject === "mathematics")
+        : this.db.analytics;
+      return { results: rows as T[] };
+    }
     return { results: [] as T[] };
   }
   async first<T>() {
@@ -109,7 +117,7 @@ const env = (db: ReportsDb) => ({
 });
 
 describe("reports and statistics access", () => {
-  it("allows a normal operator to read all subjects while preserving write scope", async () => {
+  it("limits article analytics to the operator's assigned subjects", async () => {
     const db = new ReportsDb();
     const reports = await worker.fetch(
       request("/api/admin/article-reports"),
@@ -122,32 +130,52 @@ describe("reports and statistics access", () => {
         contact: string | null;
         can_manage: boolean;
       }>;
+      pagination: { hasMore: boolean; nextCursor: string | null };
     };
     expect(reportData.reports.map((item) => item.subject)).toEqual([
       "mathematics",
-      "physics",
     ]);
-    expect(reportData.reports.map((item) => item.can_manage)).toEqual([
-      true,
-      false,
-    ]);
+    expect(reportData.reports.map((item) => item.can_manage)).toEqual([true]);
     expect(reportData.reports.every((item) => item.contact === null)).toBe(
       true,
     );
+    expect(reportData.pagination).toEqual({
+      hasMore: false,
+      nextCursor: null,
+      limit: 100,
+    });
+    expect(
+      db.queries.some(
+        (query) =>
+          query.includes("FROM article_reports") &&
+          query.includes("subject IN"),
+      ),
+    ).toBe(true);
 
     const analytics = await worker.fetch(
       request("/api/admin/article-analytics?days=30"),
       env(db) as never,
     );
     expect(analytics.status).toBe(200);
-    expect((await analytics.json()).articles).toHaveLength(2);
+    const analyticsData = (await analytics.json()) as {
+      articles: Array<{ subject: string }>;
+      scope: { allSubjects: boolean; subjects: string[] };
+    };
+    expect(analyticsData.articles).toHaveLength(1);
+    expect(analyticsData.scope).toEqual({
+      allSubjects: false,
+      subjects: ["mathematics"],
+    });
     expect(
       db.queries.some(
         (query) =>
           query.includes("FROM article_analytics_daily") &&
-          !query.includes("subject IN"),
+          query.includes("subject IN"),
       ),
     ).toBe(true);
+    expect(db.bindings.some((values) => values.includes("mathematics"))).toBe(
+      true,
+    );
   });
 
   it("returns 401 without an operator identity", async () => {
@@ -157,5 +185,19 @@ describe("reports and statistics access", () => {
       env(db) as never,
     );
     expect(response.status).toBe(401);
+  });
+
+  it("does not expose site-wide region or search-query statistics to a subject-scoped operator", async () => {
+    const db = new ReportsDb();
+    const paths = [
+      "/api/admin/article-analytics-regions?days=30",
+      "/api/admin/search-console-country-analytics",
+      "/api/admin/search-console-query-analytics",
+    ];
+
+    for (const path of paths) {
+      const response = await worker.fetch(request(path), env(db) as never);
+      expect(response.status, path).toBe(403);
+    }
   });
 });

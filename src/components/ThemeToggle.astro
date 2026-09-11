@@ -18,34 +18,48 @@ const { locale = "ja" } = Astro.props;
   const buttons = document.querySelectorAll<HTMLButtonElement>("[data-theme-toggle]");
 
   function updateThemeButtons(): void {
-    const dark = root.dataset.prefBg === "dark";
+    const mode = root.dataset.prefMode === "black"
+      ? "black"
+      : root.dataset.prefBg === "dark" ? "dark" : "default";
     buttons.forEach((button) => {
       const label = button.querySelector<HTMLElement>("[data-theme-label]");
-      button.setAttribute("aria-pressed", String(dark));
+      button.dataset.themeMode = mode;
+      button.setAttribute("aria-pressed", String(mode !== "default"));
       button.setAttribute(
         "aria-label",
         document.documentElement.lang === "ja"
-          ? dark ? "ライトモードに切り替える" : "ダークモードに切り替える"
-          : dark ? "Switch to light mode" : "Switch to dark mode",
+          ? mode === "default" ? "ダークモードに切り替える" : mode === "dark" ? "ブラックモードに切り替える" : "ライトモードに切り替える"
+          : mode === "default" ? "Switch to dark mode" : mode === "dark" ? "Switch to black mode" : "Switch to light mode",
       );
       if (label) label.textContent = document.documentElement.lang === "ja"
-        ? dark ? "ライト表示" : "ダーク表示"
-        : dark ? "Light mode" : "Dark mode";
+        ? mode === "default" ? "ダーク表示" : mode === "dark" ? "ブラック表示" : "ライト表示"
+        : mode === "default" ? "Dark mode" : mode === "dark" ? "Black mode" : "Light mode";
     });
   }
 
   buttons.forEach((button) => button.addEventListener("click", () => {
     let prefs: Record<string, string> = {};
     try { prefs = JSON.parse(localStorage.getItem("atlasez-prefs") ?? "{}"); } catch { /* ignore */ }
-    if (root.dataset.prefBg === "dark") {
+    const current = root.dataset.prefMode === "black"
+      ? "black"
+      : root.dataset.prefBg === "dark" ? "dark" : "default";
+    const next = current === "default" ? "dark" : current === "dark" ? "black" : "default";
+    if (next === "default") {
       delete root.dataset.prefBg;
+      delete root.dataset.prefMode;
       delete prefs.bg;
+    } else if (next === "black") {
+      root.dataset.prefBg = "dark";
+      root.dataset.prefMode = "black";
+      prefs.bg = "black";
     } else {
       root.dataset.prefBg = "dark";
+      delete root.dataset.prefMode;
       prefs.bg = "dark";
     }
     localStorage.setItem("atlasez-prefs", JSON.stringify(prefs));
     updateThemeButtons();
+    window.dispatchEvent(new CustomEvent("atlasez-theme-change"));
     window.dispatchEvent(new CustomEvent("atlas-theme-change"));
   }));
   updateThemeButtons();

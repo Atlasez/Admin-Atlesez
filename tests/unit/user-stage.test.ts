@@ -22,7 +22,7 @@ describe("user stages", () => {
     expect(stageHome("MEMBER", "secretariat")).toBe("/admin/portal/");
   });
 
-  it("requires profile setup and the tutorial after acceptance before reaching the member stage", () => {
+  it("requires profile setup after acceptance, then starts the member stage without a mandatory tutorial", () => {
     expect(
       getUserStage({ isAdmin: false, applicationStatus: "accepted" }),
     ).toBe("ONBOARDING");
@@ -41,7 +41,7 @@ describe("user stages", () => {
         profileComplete: true,
         projectProfileComplete: true,
       }),
-    ).toBe("TUTORIAL");
+    ).toBe("MEMBER");
     expect(
       getUserStage({
         isAdmin: false,
@@ -51,7 +51,7 @@ describe("user stages", () => {
       }),
     ).toBe("MEMBER");
     expect(canAccess("ONBOARDING", "onboarding")).toBe(true);
-    expect(canAccess("TUTORIAL", "onboarding")).toBe(true);
+    expect(canAccess("MEMBER", "onboarding")).toBe(false);
     expect(stageHome("TUTORIAL")).toBe("/onboarding/tutorial/");
   });
 });

@@ -3,8 +3,12 @@ import tikzjax from "node-tikzjax";
 import {
   TIKZ_MAX_RENDERED_SVG_LENGTH,
   assertSafeTikzSource,
+  maskTikzUnicode,
+  normalizeTikzMathSlashes,
   normalizeTikzLibraries,
   normalizeTikzPackages,
+  restoreTikzUnicode,
+  normalizeTikzSvgFonts,
 } from "./tikz-policy.mjs";
 
 const tex2svg =
@@ -14,9 +18,30 @@ const tex2svg =
 if (typeof tex2svg !== "function")
   throw new Error("node-tikzjaxのレンダラーを読み込めませんでした。");
 
+// TikZJax emits Computer Modern font-family names (cmr10, cmmi10, ...).
+// Keep the font-face declarations inside the SVG because an inline SVG no
+// longer has access to the stylesheet of the renderer that created it.
+const TIKZ_FONT_CSS_URL =
+  "https://cdn.jsdelivr.net/npm/node-tikzjax@1.0.5/css/fonts.css";
+
+// TikZ's default black is emitted as a literal SVG color. Use the surrounding
+// article color for that default only, so light/dark themes remain readable
+// while explicitly colored paths and labels keep their original colors.
+function normalizeTikzSvgColors(svg) {
+  return String(svg ?? "")
+    .replace(/\b(fill|stroke)=(['"])#(?:000|000000)\2/gi, "$1=$2currentColor$2")
+    .replace(/\b(fill|stroke)\s*:\s*#(?:000|000000)\b/gi, "$1: currentColor");
+}
+
 // node-tikzjax uses a shared in-memory TeX filesystem and its own global
 // WASM state. Serialize renders so two requests cannot corrupt one another.
 let renderQueue = Promise.resolve();
+
+// Previewing an article can request the same source several times while the
+// author switches panes or reopens a document. Reusing the completed result
+// keeps a large figure from recompiling on every preview refresh.
+const TIKZ_RENDER_CACHE_SIZE = 8;
+const renderCache = new Map();
 
 const escapeHtml = (value) =>
   String(value)
@@ -46,8 +71,9 @@ function extractDeclarations(source) {
 }
 
 function normalizeSource(source, packages, libraries) {
-  const checked = assertSafeTikzSource(source);
-  const declarations = extractDeclarations(checked);
+  const checked = normalizeTikzMathSlashes(assertSafeTikzSource(source));
+  const unicode = maskTikzUnicode(checked);
+  const declarations = extractDeclarations(unicode.source);
   const packageList = normalizeTikzPackages([
     ...declarations.packages,
     ...packages,
@@ -60,6 +86,7 @@ function normalizeSource(source, packages, libraries) {
     body: declarations.body.trim(),
     packages: packageList,
     libraries: libraryList,
+    unicodeReplacements: unicode.replacements,
   };
 }
 
@@ -69,7 +96,7 @@ function sanitizeRenderedSvg(svg) {
     !/^<svg(?:\s|>)/i.test(value) ||
     value.length > TIKZ_MAX_RENDERED_SVG_LENGTH
   )
-    throw new Error("生成されたSVGが不正または大きすぎます。");
+    throw new Error("生成されたSVGが不正または4MBを超えています。");
   if (
     /<(?:script|foreignObject|iframe|object|embed)\b|\bon[a-z][a-z0-9_-]*\s*=|(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|javascript:)/i.test(
       value,
@@ -85,6 +112,18 @@ export async function renderTikzSource(source, options = {}) {
     options.packages ?? [],
     options.libraries ?? [],
   );
+  const cacheKey = JSON.stringify({
+    source: normalized.body,
+    packages: normalized.packages,
+    libraries: normalized.libraries,
+    unicode: normalized.unicodeReplacements,
+  });
+  const cached = renderCache.get(cacheKey);
+  if (cached) {
+    renderCache.delete(cacheKey);
+    renderCache.set(cacheKey, cached);
+    return cached;
+  }
   const render = async () => {
     const texPackages = Object.fromEntries(
       normalized.packages.map(({ name, options: packageOptions }) => [
@@ -99,19 +138,18 @@ export async function renderTikzSource(source, options = {}) {
     const svg = await tex2svg(tex, {
       texPackages,
       tikzLibraries: normalized.libraries.join(","),
+      embedFontCss: true,
+      fontCssUrl: TIKZ_FONT_CSS_URL,
       disableOptimize: false,
     });
     return {
-      svg: sanitizeRenderedSvg(svg),
-      hash: createHash("sha256")
-        .update(
-          JSON.stringify({
-            source: normalized.body,
-            packages: normalized.packages,
-            libraries: normalized.libraries,
-          }),
-        )
-        .digest("hex"),
+      svg: sanitizeRenderedSvg(
+        restoreTikzUnicode(
+          normalizeTikzSvgFonts(normalizeTikzSvgColors(svg)),
+          normalized.unicodeReplacements,
+        ),
+      ),
+      hash: createHash("sha256").update(cacheKey).digest("hex"),
       packages: normalized.packages,
       libraries: normalized.libraries,
     };
@@ -121,6 +159,12 @@ export async function renderTikzSource(source, options = {}) {
     () => undefined,
     () => undefined,
   );
+  renderCache.set(cacheKey, result);
+  while (renderCache.size > TIKZ_RENDER_CACHE_SIZE)
+    renderCache.delete(renderCache.keys().next().value);
+  result.catch(() => {
+    if (renderCache.get(cacheKey) === result) renderCache.delete(cacheKey);
+  });
   return result;
 }
 

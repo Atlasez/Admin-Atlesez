@@ -204,3 +204,6 @@ if (typeof document !== "undefined") {
   document.addEventListener("astro:page-load", initializeNavigationGuard);
   initializeNavigationGuard();
 }
+
+// Keep the file importable as an editor-only code-split module.
+export {};

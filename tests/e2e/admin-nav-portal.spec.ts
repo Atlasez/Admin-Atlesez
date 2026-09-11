@@ -2,10 +2,35 @@ import { expect, test, type Page } from "@playwright/test";
 
 type MockOptions = {
   notificationStatus?: number;
+  unreadNotificationsCount?: number;
+  pendingApprovals?: number;
+  taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number };
+  portalFailureOnce?: boolean;
   avatarUrl?: string;
+  calendarEvents?: Array<{
+    id: string;
+    kind: "organization" | "personal";
+    title: string;
+    startsAt: string;
+    projectName: string;
+  }>;
+  projects?: Array<{
+    id: string;
+    slug?: string;
+    name: string;
+    description?: string;
+    role: "manager" | "member";
+  }>;
+  availableProjects?: Array<{
+    id: string;
+    slug?: string;
+    name: string;
+    description?: string;
+  }>;
 };
 
 async function mockAdminShell(page: Page, options: MockOptions = {}) {
+  let portalCalls = 0;
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/admin/auth-status") {
@@ -51,6 +76,9 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
                     read: false,
                   },
                 ],
+                notificationsTruncated:
+                  (options.unreadNotificationsCount ?? 0) > 20,
+                unreadNotificationsCount: options.unreadNotificationsCount,
               }
             : { error: "SQL: no such table: internal_notifications" },
         ),
@@ -66,12 +94,32 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
       return;
     }
     if (url.pathname === "/api/admin/portal") {
+      portalCalls += 1;
+      if (options.portalFailureOnce && portalCalls === 1) {
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "一時的に読み込めません。" }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
+          projects: options.projects ?? [
+            {
+              id: "atlas",
+              slug: "atlas",
+              name: "学習サイト「アトラス」運営",
+              role: "manager",
+            },
+          ],
+          availableProjects: options.availableProjects ?? [],
           todos: [],
-          calendar: { events: [] },
+          taskSummary: options.taskSummary,
+          pendingApprovals: options.pendingApprovals ?? 0,
+          calendar: { events: options.calendarEvents ?? [] },
         }),
       });
       return;
@@ -208,10 +256,299 @@ test("portalの小ラベルだけを削除し主要sectionを維持する", asyn
   await expect(
     page.getByRole("heading", { name: "参加中のプロジェクト" }),
   ).toBeVisible();
+  await expect(page.locator('[data-admin-project-link="manage"]')).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: "運営として参加中" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "参加者として参加中" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "同時作業会・交流会の日程" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "自分の未完了タスク" }),
   ).toBeVisible();
+});
+
+test("承認待ちは履歴通知ではなくpending申請の件数を表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page, { pendingApprovals: 0 });
+  await page.route("**/api/admin/notifications", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "publication-review-history-12345678",
+            kind: "publication-review",
+            title: "処理済みの公開審査",
+            read: false,
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("admin/portal/");
+  await expect(page.locator('[data-summary-value="approvals"]')).toHaveText(
+    "0",
+  );
+  await expect(page.locator('[data-summary-detail="approvals"]')).toHaveText(
+    "承認待ちはありません",
+  );
+});
+
+test("ポータルのサマリーは表示上限を超えたタスク・通知も正確に表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page, {
+    taskSummary: { openCount: 127, dueToday: 4, dueSoon: 9 },
+    unreadNotificationsCount: 23,
+  });
+  await page.goto("admin/portal/");
+  await expect(page.locator("[data-todo-summary]")).toHaveText("127件を確認");
+  await expect(page.locator('[data-summary-value="today"]')).toHaveText("4");
+  await expect(page.locator('[data-summary-value="due-soon"]')).toHaveText("9");
+  await expect(page.locator('[data-summary-value="unread"]')).toHaveText("23");
+  await expect(page.locator('[data-summary-detail="unread"]')).toHaveText(
+    "通知を確認",
+  );
+});
+
+test("ポータルの読み込みエラーから再試行できる", async ({ page }) => {
+  await mockAdminShell(page, { portalFailureOnce: true });
+
+  await page.goto("admin/portal/");
+  const error = page.locator("[data-portal-error]");
+  await expect(error).toBeVisible();
+  await expect(error).toContainText("一時的に読み込めません。");
+
+  await error.getByRole("button", { name: "再試行" }).click();
+  await expect(error).toBeHidden();
+  await expect(page.locator('[data-summary-value="approvals"]')).toHaveText(
+    "0",
+  );
+});
+
+test("参加中のプロジェクトを運営と参加者に分けて表示する", async ({ page }) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        description: "学習サイトの編集と運営",
+        role: "manager",
+      },
+      {
+        id: "secretariat",
+        slug: "secretariat",
+        name: "Atlasez運営事務局",
+        role: "member",
+      },
+      {
+        id: "seminar-platform",
+        slug: "seminar-platform",
+        name: "ゼミプラットフォーム",
+        role: "member",
+      },
+    ],
+  });
+  await page.goto("admin/portal/");
+
+  const managed = page.locator('[data-project-group="managed"]');
+  const member = page.locator('[data-project-group="member"]');
+  await expect(managed.getByRole("link")).toHaveCount(1);
+  await expect(managed).toContainText("学習サイト「アトラス」運営");
+  await expect(member.getByRole("link")).toHaveCount(2);
+  await expect(member).toContainText("Atlasez運営事務局");
+  await expect(member).toContainText("ゼミプラットフォーム");
+  await expect(managed).not.toContainText("Atlasez運営事務局");
+  await expect(member).not.toContainText("学習サイト「アトラス」運営");
+  await expect(page.locator('[data-admin-project-link="manage"]')).toBeHidden();
+});
+
+test("参加中のプロジェクトカードは取得後もレイアウトを維持する", async ({
+  page,
+}) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        description: "記事編集・レビュー・公開管理",
+        role: "manager",
+      },
+      {
+        id: "secretariat",
+        slug: "secretariat",
+        name: "Atlasez運営事務局",
+        description: "応募・メンバー・手続きの管理",
+        role: "member",
+      },
+    ],
+  });
+  await page.goto("admin/portal/");
+
+  const cards = page.locator(".project-entry-card");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.first()).toHaveCSS("display", "grid");
+  await expect(cards.first()).toHaveCSS("padding", "16px");
+  const desktopGroups = await page
+    .locator(".project-group")
+    .evaluateAll((groups) =>
+      groups.map((group) => {
+        const rect = group.getBoundingClientRect();
+        return { left: rect.left, top: rect.top };
+      }),
+    );
+  expect(desktopGroups[1].left).toBeGreaterThan(desktopGroups[0].left);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(cards).toHaveCount(2);
+  const cardBox = await cards.first().boundingBox();
+  const groupBox = await page
+    .locator('[data-project-group="managed"]')
+    .boundingBox();
+  expect(cardBox).not.toBeNull();
+  expect(groupBox).not.toBeNull();
+  expect(cardBox!.width).toBeLessThanOrEqual(groupBox!.width);
+});
+
+test("未参加のプロジェクトを応募導線付きで表示する", async ({ page }) => {
+  await mockAdminShell(page, {
+    projects: [
+      {
+        id: "atlas",
+        slug: "atlas",
+        name: "学習サイト「アトラス」運営",
+        role: "member",
+      },
+    ],
+    availableProjects: [
+      {
+        id: "thinking-cafe",
+        slug: "thinking-cafe",
+        name: "考えるカフェ",
+        description: "対話と探究の場を運営します。",
+      },
+    ],
+  });
+
+  await page.goto("admin/portal/");
+  const section = page.locator("[data-available-projects]");
+  await expect(section).toBeVisible();
+  const card = section.locator(".project-entry-card");
+  await expect(card).toContainText("考えるカフェ");
+  await expect(card).toContainText("参加を申し込む");
+  await expect(card).toHaveAttribute("href", "/apply/?project=thinking-cafe");
+});
+
+test("メンバー用サイトの未完了タスクは参加中プロジェクトを横断して表示する", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/admin/auth-status") {
+      await route.fulfill({
+        json: { email: "alice@example.com", isManager: false },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/profile") {
+      await route.fulfill({
+        json: { profile: { display_name: "Alice", avatar_url: "" } },
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/notifications") {
+      await route.fulfill({ json: { notifications: [] } });
+      return;
+    }
+    if (url.pathname === "/api/admin/portal") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          projects: [
+            { id: "atlas", name: "学習サイト「アトラス」運営", role: "member" },
+            { id: "secretariat", name: "Atlasez運営事務局", role: "member" },
+          ],
+          todos: [
+            {
+              project_id: "atlas",
+              project_name: "学習サイト「アトラス」運営",
+              title: "数学記事の確認",
+              status: "open",
+            },
+            {
+              project_id: "secretariat",
+              project_name: "Atlasez運営事務局",
+              title: "応募管理の確認",
+              status: "doing",
+            },
+          ],
+          calendar: { events: [] },
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: "not found" } });
+  });
+
+  await page.goto("admin/portal/");
+  await expect(page.locator("[data-todos] .todo").nth(0)).toContainText(
+    "数学記事の確認",
+  );
+  await expect(page.locator("[data-todos] .todo").nth(1)).toContainText(
+    "応募管理の確認",
+  );
+  await expect(page.locator("[data-todos] .todo")).toHaveCount(2);
+  await expect(page.locator("[data-todos] .todo").nth(0)).toContainText(
+    "学習サイト「アトラス」運営",
+  );
+  await expect(page.locator("[data-todos] .todo").nth(1)).toContainText(
+    "Atlasez運営事務局",
+  );
+});
+
+test("カレンダーの表示対象を切り替え、予定行を独立して表示する", async ({
+  page,
+}) => {
+  const now = new Date().toISOString();
+  await mockAdminShell(page, {
+    calendarEvents: [
+      {
+        id: "event-1",
+        kind: "organization",
+        title: "同時作業会",
+        startsAt: now,
+        projectName: "アトラス運営",
+      },
+      {
+        id: "task-1",
+        kind: "personal",
+        title: "記事の確認期限",
+        startsAt: now,
+        projectName: "アトラス学習サイト",
+      },
+    ],
+  });
+
+  await page.goto("admin/portal/");
+  const organization = page.locator('[data-calendar-source="organization"]');
+  const personal = page.locator('[data-calendar-source="personal"]');
+  const agenda = page.locator("[data-calendar-agenda]");
+
+  await expect(organization).toBeChecked();
+  await expect(personal).not.toBeChecked();
+  await expect(agenda).toContainText("同時作業会");
+  await expect(agenda).not.toContainText("記事の確認期限");
+
+  await personal.check();
+  await expect(personal).toBeChecked();
+  await expect(agenda).toContainText("記事の確認期限");
+  await expect(agenda.locator(".calendar-agenda-item")).toHaveCount(2);
 });

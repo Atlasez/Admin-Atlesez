@@ -1,5 +1,8 @@
 import remarkMath from "remark-math";
-import { remarkArticleDirectives } from "./article-directives.mjs";
+import {
+  remarkArticleDirectives,
+  remarkArticleOrderedListContinuation,
+} from "./article-directives.mjs";
 import {
   rehypeArticleKatex,
   remarkArticleMathMacros,
@@ -128,6 +131,7 @@ export function remarkArticleTikz() {
 export const ARTICLE_REMARK_PLUGINS = [
   remarkArticleDirectives,
   remarkMath,
+  remarkArticleOrderedListContinuation,
   remarkJapaneseStrong,
   remarkEditorialImageSizes,
   remarkArticleMathMacros,

@@ -60,7 +60,7 @@ describe("shared math article structure", () => {
     numberMathStatements(body);
 
     expect(body.querySelector("#lagrange .thmtitle")?.textContent).toBe(
-      "命題1(ラグランジュの定理)",
+      "命題 1 (ラグランジュの定理)",
     );
     expect(
       body
@@ -68,7 +68,7 @@ describe("shared math article structure", () => {
         ?.getAttribute("href"),
     ).toBe("#lagrange");
     expect(body.querySelector(".math-statement-reference")?.textContent).toBe(
-      "命題1",
+      "命題 1",
     );
   });
 
@@ -93,11 +93,11 @@ describe("shared math article structure", () => {
       ],
     });
 
-    expect(body.querySelector("#local .thmtitle")?.textContent).toBe("定理1");
+    expect(body.querySelector("#local .thmtitle")?.textContent).toBe("定理 1");
     const link = body.querySelector<HTMLAnchorElement>(
       ".math-statement-reference-external",
     );
-    expect(link?.textContent).toBe("外部記事:定理2");
+    expect(link?.textContent).toBe("外部記事:定理 2");
     expect(link?.getAttribute("href")).toBe(
       "/atlas/ja/mathematics/algebra/external/#external-result",
     );
@@ -114,6 +114,6 @@ describe("shared math article structure", () => {
       [...body.querySelectorAll<HTMLElement>(".thmtitle")].map(
         (title) => title.textContent,
       ),
-    ).toEqual(["定義1", "命題2", "定理3", "補題4", "系5", "例6"]);
+    ).toEqual(["定義 1", "命題 2", "定理 3", "補題 4", "系 5", "例 6"]);
   });
 });

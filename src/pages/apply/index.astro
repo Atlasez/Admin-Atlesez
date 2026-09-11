@@ -28,6 +28,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         <a href="/apply/seminar-platform/" data-form-link="seminar-platform">ゼミプラットフォーム</a>
         <a href="/apply/student-council-exchange/" data-form-link="student-council-exchange">生徒会</a>
         <a href="/apply/secretariat/" data-form-link="secretariat">運営事務局</a>
+        <span class="form-directory-empty" data-form-directory-empty hidden>応募可能なプロジェクトはありません。</span>
       </nav>
       <p class="member-project-note" data-member-project-note hidden>基本情報は登録済みです。応募するプロジェクトを上から選ぶと、プロジェクト固有の入力画面へ進めます。</p>
 
@@ -122,7 +123,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const page = document.querySelector<HTMLElement>(".apply")!;
     const authenticatedEmail = form.querySelector<HTMLInputElement>("[data-auth-email]");
     const userStatusPromise = fetch("/api/user/status", { credentials: "same-origin", cache: "no-store" })
-      .then(async (response) => ({ response, data: await response.json() as { email?: string; stage?: string; applicationStatus?: string | null } }));
+      .then(async (response) => ({ response, data: await response.json() as { email?: string; stage?: string; applicationStatus?: string | null; applicationProjects?: string[] } }));
     void userStatusPromise
       .then(({ response, data }) => {
         if (response.ok && authenticatedEmail && data.email) authenticatedEmail.value = data.email;
@@ -155,6 +156,8 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     const projectTitle = page.querySelector<HTMLElement>("[data-project-title]")!;
     const projectIntro = page.querySelector<HTMLElement>("[data-project-intro]")!;
     const formDirectory = page.querySelector<HTMLElement>("[data-form-directory]")!;
+    const formDirectoryEmpty = page.querySelector<HTMLElement>("[data-form-directory-empty]")!;
+    const formLinks = [...page.querySelectorAll<HTMLAnchorElement>("[data-form-link]")];
     const formLoading = form.querySelector<HTMLElement>("[data-form-loading]")!;
     const projectForms: Record<string, { title: string; intro: string; article: string; interests: string; message: string; motivation: string; roles: string; articlePlaceholder: string }> = {
       atlas: { title: "学習サイト「アトラス」運営応募", intro: "学習サイト「アトラス」の記事執筆・査読・翻訳・運営に関する応募フォームです。", article: "書いてみたい記事・テーマ", interests: "関心のあるプロジェクト・できること", message: "参加したい理由・自己紹介", motivation: "参加理由（複数ある場合はすべて）", roles: "希望担当（複数ある場合はすべて）", articlePlaceholder: "例：群論の基本概念、英語学習の語源マップ…" },
@@ -293,7 +296,7 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
       profile.birth_date,
       profile.residence_city,
     ].some((value) => !value?.trim());
-    const showFormMode = (profile: ApplicationProfile | null, stage: string, allowBasicFallback = false) => {
+    const showFormMode = (profile: ApplicationProfile | null, stage: string, applicationProjects: string[] = [], allowBasicFallback = false) => {
       const existingMember = ["ONBOARDING", "TUTORIAL", "MEMBER"].includes(stage);
       const markReady = () => {
         formLoading.hidden = true;
@@ -315,7 +318,37 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
         if (message) profileMessage.value = message;
         markReady();
       };
+      const hideUnavailableLinks = (applicationProjects: string[]) => {
+        const unavailable = new Set(applicationProjects);
+        let availableCount = 0;
+        for (const link of formLinks) {
+          const available = !unavailable.has(link.dataset.formLink ?? "");
+          link.hidden = !available;
+          if (available) availableCount += 1;
+        }
+        formDirectoryEmpty.hidden = availableCount !== 0;
+      };
+      hideUnavailableLinks(applicationProjects);
+      const showUnavailableProject = () => {
+        hideUnavailableLinks(applicationProjects);
+        projectTitle.textContent = "このプロジェクトには応募できません";
+        projectIntro.textContent = "このプロジェクトにはすでに応募済み、または参加中です。応募可能なプロジェクトを選択してください。";
+        formDirectory.hidden = false;
+        basicFieldset.hidden = true;
+        projectFieldset.hidden = true;
+        basicNext.hidden = true;
+        memberProjectNote.hidden = true;
+        submitButton.hidden = true;
+        setFieldsetDisabled(basicFieldset, true);
+        setFieldsetDisabled(projectFieldset, true);
+        refreshRequiredMarkers();
+        markReady();
+      };
       if (directProjectScreen) {
+        if (applicationProjects.includes(projectSlug)) {
+          showUnavailableProject();
+          return;
+        }
         if (!profile) {
           if (allowBasicFallback) {
             showBasicMode("基本情報を確認できませんでした。入力内容を確認して、もう一度お試しください。");
@@ -390,12 +423,17 @@ const zoneGroups = timeZones.reduce<Record<string, string[]>>((groups, zone) => 
     language.addEventListener("change", updateLanguage); updateLanguage();
     void Promise.all([userStatusPromise, profilePromise]).then(([statusResult, profileResult]) => {
       const stage = statusResult.response.ok ? (statusResult.data.stage ?? "NEW_USER") : "NEW_USER";
+      const applicationProjects = statusResult.response.ok ? (statusResult.data.applicationProjects ?? []) : [];
+      const unavailable = new Set(applicationProjects);
+      let availableCount = 0;
+      for (const link of formLinks) { const available = !unavailable.has(link.dataset.formLink ?? ""); link.hidden = !available; if (available) availableCount += 1; }
+      formDirectoryEmpty.hidden = availableCount !== 0;
       const profile = profileResult.response.ok ? (profileResult.data.profile ?? null) : null;
       if (profileResult.response.ok && profile) fillProfile(profile);
-      showFormMode(profile, stage);
+      showFormMode(profile, stage, applicationProjects);
       if (profile && !directProjectScreen) profileMessage.value = "保存済みの基本情報を読み込みました。変更してから次へ進むこともできます。";
     }).catch(() => {
-      showFormMode(null, "NEW_USER", true);
+      showFormMode(null, "NEW_USER", [], true);
       profileMessage.value = "基本情報を確認できませんでした。入力内容を確認して、もう一度お試しください。";
     });
     const saveBasicProfileAndContinue = async () => {

@@ -127,9 +127,6 @@ function initializeRealtimePresence() {
   const participantList = root.querySelector<HTMLElement>(
     "[data-collaboration-participants]",
   );
-  const collaborationState = root.querySelector<HTMLElement>(
-    "[data-collaboration-state]",
-  );
   if (!form || !body) return;
 
   const layer = document.createElement("div");
@@ -184,12 +181,6 @@ function initializeRealtimePresence() {
         continue;
       }
       if (key) seen.add(key);
-    }
-    if (collaborationState) {
-      const count = participantList.children.length;
-      if (count > 0) {
-        collaborationState.textContent = `同時編集: ${count}人が接続中`;
-      }
     }
   };
 

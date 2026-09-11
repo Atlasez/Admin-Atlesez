@@ -13,6 +13,7 @@ const pages = [
   "projects/",
   "news/",
   "join/",
+  "admin/ui-prototype/",
   "atlas/ja/",
   "atlas/ja/guide/",
   "atlas/ja/mathematics/",

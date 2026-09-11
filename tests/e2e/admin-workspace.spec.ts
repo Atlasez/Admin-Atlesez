@@ -83,6 +83,12 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   const getSavedProjectProfile = await mockWorkspaceApi(page);
   await page.goto("admin/workspace/?project=atlas");
 
+  await expect(page.getByRole("link", { name: "原稿一覧を開く" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("link", { name: /承認画面を開く/ })).toHaveCount(
+    0,
+  );
   await expect(page.getByText("数学担当", { exact: true })).toBeVisible();
   await expect(page.getByLabel("運営内自己紹介")).toHaveValue(
     "既存の運営内自己紹介",
@@ -96,7 +102,7 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   await page.getByLabel("運営内自己紹介").fill("更新後の運営内自己紹介");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-profile-message]")).toContainText(
-    "承認タスクを送りました",
+    "運営事務局へ承認申請を送りました",
   );
   expect(getSavedProjectProfile()).toMatchObject({
     projectId: "atlas",
@@ -160,6 +166,60 @@ test("運営内自己紹介一覧はプロジェクトの承認済み情報を�
   await expect(page.getByText("数学担当", { exact: true })).toBeVisible();
 });
 
+test("運営内自己紹介一覧は続きのメンバーをカーソルで追加表示できる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({ json: { email: "alice@example.com", isManager: false } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "山田 花子" } } }),
+  );
+  await page.route("**/api/admin/project-introductions?**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (requestUrl.searchParams.has("cursor")) {
+      await route.fulfill({
+        json: {
+          entries: [
+            {
+              display_name: "鈴木 次郎",
+              university: "東京大学",
+              assignments: ["数学担当"],
+            },
+          ],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        entries: [
+          {
+            display_name: "山田 花子",
+            university: "既存大学",
+            assignments: ["国語担当"],
+          },
+        ],
+        pagination: { hasMore: true, nextCursor: "cursor-token" },
+      },
+    });
+  });
+
+  await page.goto("admin/introductions/?project=atlas");
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "さらに読み込む" }).click();
+  await expect(page.getByRole("heading", { name: "鈴木 次郎" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeHidden();
+});
+
 test("プロジェクト運営は運営内自己紹介を承認・却下できる", async ({ page }) => {
   await page.route("**/api/admin/auth-status", (route) =>
     route.fulfill({
@@ -184,11 +244,11 @@ test("プロジェクト運営は運営内自己紹介を承認・却下でき�
       await route.fulfill({ json: { ok: true, status: action } });
     },
   );
-  await page.route("**/api/admin/project-profile-change-requests?**", (route) =>
+  await page.route("**/api/admin/profile-change-requests?**", (route) =>
     route.fulfill({
       json: {
-        project: { id: "atlas", name: "アトラス" },
-        requests: [
+        requests: [],
+        atlasInternalBioRequests: [
           {
             id: "77777777-7777-4777-8777-777777777777",
             email: "member@example.com",
@@ -203,10 +263,10 @@ test("プロジェクト運営は運営内自己紹介を承認・却下でき�
     }),
   );
 
-  await page.goto("admin/project-profile-requests/?project=atlas");
+  await page.goto("admin/profile-requests/?section=atlas");
   await expect(page.getByText("変更後", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "承認", exact: true }).click();
-  expect(action).toBe("approve");
+  await page.getByRole("button", { name: "承認する", exact: true }).click();
+  await expect.poll(() => action).toBe("approve");
 });
 
 test("各ジャンル概要で現行の分野・カテゴリ情報を確認できる", async ({
@@ -227,4 +287,86 @@ test("各ジャンル概要で現行の分野・カテゴリ情報を確認で�
   ).toBeVisible();
   await expect(page.getByText("カテゴリ数").first()).toBeVisible();
   await expect(page.locator(".genre-grid article").first()).toBeVisible();
+});
+
+test("各ジャンル概要で担当メンバーと進捗を確認・更新できる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/auth-status", (route) =>
+    route.fulfill({ json: { email: "manager@example.com", isManager: true } }),
+  );
+  await page.route("**/api/admin/notifications", (route) =>
+    route.fulfill({ json: { notifications: [] } }),
+  );
+  await page.route("**/api/admin/profile", (route) =>
+    route.fulfill({ json: { profile: { display_name: "管理者" } } }),
+  );
+  let savedProgress = "";
+  await page.route("**/api/admin/genre-overviews?**", async (route) => {
+    if (route.request().method() === "PUT") {
+      savedProgress = (route.request().postDataJSON() as { progress: string })
+        .progress;
+      await route.fulfill({
+        json: {
+          subject: "mathematics",
+          progress: savedProgress,
+          updatedAt: "2026-09-02T12:00:00.000Z",
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        scope: { coordinatorSubjects: [] },
+        canEditAll: true,
+        members: [
+          {
+            display_name: "山田 花子",
+            avatar_url: "https://cdn.example.com/yamada.png",
+            role: "member",
+            assignments: ["運営メンバー", "数学担当"],
+          },
+          {
+            display_name: "上杉和輝",
+            role: "manager",
+            assignments: ["全ジャンル管理"],
+          },
+        ],
+        overviews: [
+          {
+            subject: "mathematics",
+            progress: "集合論の記事を確認中",
+            updated_at: "2026-09-01T12:00:00.000Z",
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("admin/genres/");
+  const mathematics = page.locator("#mathematics");
+  await expect(
+    mathematics.getByText("山田 花子", { exact: true }),
+  ).toBeVisible();
+  await expect(mathematics.getByText("上杉和輝", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(mathematics.locator("img.member-avatar")).toHaveAttribute(
+    "src",
+    "https://cdn.example.com/yamada.png",
+  );
+  await expect(mathematics.getByText("小林 和真", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    mathematics.getByText("集合論の記事を確認中", { exact: true }),
+  ).toBeVisible();
+  await mathematics
+    .locator("[data-progress-input]")
+    .fill("線形代数の記事を執筆中");
+  await mathematics.getByRole("button", { name: "進捗を保存" }).click();
+  await expect(
+    mathematics.getByText("線形代数の記事を執筆中", { exact: true }),
+  ).toBeVisible();
+  expect(savedProgress).toBe("線形代数の記事を執筆中");
 });

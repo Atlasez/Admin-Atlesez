@@ -350,10 +350,15 @@ test.describe("学習サイト", () => {
 
     await page.locator("[data-map-search]").fill("群の定義");
     await page.locator("[data-map-search]").dispatchEvent("change");
-    const fold = page.getByRole("button", { name: /群論を折りたたむ/ });
-    await expect(fold).toBeVisible();
-    await fold.click();
-    await expect(fold).not.toBeVisible();
+    // 詳細表示から戻る操作はEscまたは背景クリックに集約し、
+    // カテゴリ名ごとの「折りたたむ」ボタンは表示しない。
+    await expect(
+      page.getByRole("button", { name: /折りたたむ|Fold/ }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("[data-map-status]")).toContainText(
+      "カテゴリを表示",
+    );
 
     const open = page.getByRole("button", { name: "学習ルート検索" });
     // 枠の外に箱を並べず、押したときだけ枠内にパネルを出す
@@ -468,6 +473,47 @@ test.describe("学習サイト", () => {
     await expect(page.locator("[data-search-count]")).toContainText("件の記事");
   });
 
+  test("検索の分野フィルターをチェックボックスで複数選択できる", async ({
+    page,
+  }) => {
+    await page.goto("atlas/ja/search/");
+    const filters = page.locator("[data-search-filters]");
+    const all = filters.locator(
+      '[data-filter-name="subject"][data-filter-all="true"]',
+    );
+    const subjects = filters.locator(
+      '[data-filter-name="subject"]:not([data-filter-all="true"])',
+    );
+
+    await expect(all).toBeVisible();
+    expect(await subjects.count()).toBeGreaterThan(1);
+    await expect(all).toBeChecked();
+    await expect(filters.locator("select[multiple]")).toHaveCount(0);
+
+    await subjects.nth(0).check();
+    await subjects.nth(1).check();
+    await expect(all).not.toBeChecked();
+    await expect(subjects.nth(0)).toBeChecked();
+    await expect(subjects.nth(1)).toBeChecked();
+  });
+
+  test("数学記事の証明ボタンの矢印がラベルに重ならない", async ({ page }) => {
+    await page.goto("atlas/ja/mathematics/group-theory/cyclic-groups/");
+    const summary = page
+      .locator(
+        '.article-body[data-article-subject="mathematics"] .proof-details > summary',
+      )
+      .first();
+    await expect(summary).toHaveText("証明.");
+    const layout = await summary.evaluate((element) => ({
+      markerContent: getComputedStyle(element, "::marker").content,
+      paddingLeft: Number.parseFloat(getComputedStyle(element).paddingLeft),
+      arrowLeft: Number.parseFloat(getComputedStyle(element, "::before").left),
+    }));
+    expect(layout.markerContent).toBe('""');
+    expect(layout.paddingLeft).toBeGreaterThan(layout.arrowLeft);
+  });
+
   test("スマートフォンでも行き先が畳まれずに出ている", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("atlas/ja/");
@@ -484,6 +530,10 @@ test.describe("学習サイト", () => {
     await page.goto("atlas/ja/");
     // 表示設定はヘッダーのメニュー1か所に集約されている
     const menu = page.locator("[data-settings-menu]");
+    await expect(page.locator(".atlas-footer select")).toHaveCount(0);
+    await expect(
+      page.locator(".atlas-footer [data-settings-menu]"),
+    ).toHaveCount(0);
     await page.locator("[data-settings-menu] > summary").click();
     await expect(menu).toHaveAttribute("open", "");
     /*

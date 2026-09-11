@@ -15,6 +15,8 @@ const DIRECTIVE_LABELS = {
   note: "注",
   warning: "注意",
   tip: "ヒント",
+  folding: "折りたたみ",
+  supp: "補足",
 };
 
 const SEMANTIC_CLASSES = {
@@ -43,6 +45,77 @@ const escapeHtml = (value) =>
       })[character] ?? character,
   );
 
+/**
+ * Directive titles are normally plain text, but mathematics articles also
+ * use titles such as `:::prop $G$ の群`.  A raw HTML title is not visited by
+ * remark-math, so keep the title as MDAST inline nodes and let the shared
+ * KaTeX pipeline render it with the article's macros.
+ */
+const titleNodes = (value) => {
+  const nodes = [];
+  const source = String(value ?? "");
+  // Directive titles are parsed after Markdown has already built the block
+  // tree.  Re-create the small subset of inline Markdown that is useful in a
+  // title so explicit emphasis survives, while an ordinary title remains
+  // plain text (there is no implicit <strong> wrapper).
+  const pattern = /(\*\*[^*\r\n]+?\*\*|\$[^$\r\n]+\$)/g;
+  let cursor = 0;
+  for (const match of source.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    if (start > cursor)
+      nodes.push({ type: "text", value: source.slice(cursor, start) });
+    const token = match[0];
+    if (token.startsWith("**")) {
+      nodes.push({
+        type: "strong",
+        children: titleNodes(token.slice(2, -2)),
+      });
+    } else {
+      const value = token.slice(1, -1);
+      nodes.push({
+        type: "inlineMath",
+        value,
+        data: {
+          hName: "code",
+          hProperties: { className: ["language-math", "math-inline"] },
+          hChildren: [{ type: "text", value }],
+        },
+      });
+    }
+    cursor = start + match[0].length;
+  }
+  if (cursor < source.length)
+    nodes.push({ type: "text", value: source.slice(cursor) });
+  return nodes.length ? nodes : [{ type: "text", value: source }];
+};
+
+const titleParagraph = (
+  marker,
+  { className, tagName = "p", preserveSource = false } = {},
+) => {
+  const properties =
+    className && tagName !== "p" ? { className: [className] } : undefined;
+  const children =
+    className && tagName === "p"
+      ? [
+          {
+            type: "html",
+            value: `<span class="${escapeHtml(className)}"${preserveSource ? ` data-authored-statement-title="${escapeHtml(marker.title)}"` : ""}>`,
+          },
+          ...titleNodes(marker.title),
+          { type: "html", value: "</span>" },
+        ]
+      : titleNodes(marker.title);
+  return {
+    type: "paragraph",
+    data: {
+      hName: tagName,
+      ...(properties ? { hProperties: properties } : {}),
+    },
+    children,
+  };
+};
+
 export function parseArticleDirectiveMarker(value) {
   const match = /^\s*(:{3,4})\s*([A-Za-z][A-Za-z0-9_-]*)(?:\s+(.+?))?\s*$/.exec(
     value,
@@ -68,22 +141,117 @@ export function isArticleDirectiveClose(value, minimumLength = 3) {
   return Boolean(match && match[1].length >= minimumLength);
 }
 
+function inlineSource(node) {
+  if (!node) return "";
+  if (node.type === "text") return node.value;
+  if (node.type === "inlineMath") return `$${node.value}$`;
+  const children = (node.children ?? []).map(inlineSource).join("");
+  if (node.type === "strong") return `**${children}**`;
+  if (node.type === "emphasis") return `*${children}*`;
+  if (node.type === "delete") return `~~${children}~~`;
+  if (node.type === "inlineCode") return `\`${node.value}\``;
+  if (node.type === "break") return "\n";
+  if (node.type === "link") return `[${children}](${node.url ?? ""})`;
+  return children;
+}
+
 function paragraphText(node) {
   if (!node || node.type !== "paragraph" || !Array.isArray(node.children))
     return null;
-  if (!node.children.every((child) => child.type === "text")) return null;
-  return node.children.map((child) => child.value).join("");
+  // A directive marker is a paragraph whose inline children can include
+  // explicit emphasis (for example `:::folding **補足**`).  Serialize only
+  // known inline nodes; links and other rich content are not valid markers.
+  const supported = new Set([
+    "text",
+    "inlineMath",
+    "strong",
+    "emphasis",
+    "delete",
+    "inlineCode",
+    "break",
+  ]);
+  const containsUnsupported = (children) =>
+    children.some(
+      (child) =>
+        !supported.has(child.type) ||
+        (child.children && containsUnsupported(child.children)),
+    );
+  if (containsUnsupported(node.children)) return null;
+  return node.children.map(inlineSource).join("");
+}
+
+/**
+ * Preserve ordered-list numbering when a display-math block splits a list.
+ * CommonMark treats an unindented `$$…$$` block as a list boundary, so the
+ * following list starts at 1 even when the author used it as the next item.
+ * The article renderer keeps the two lists as separate blocks (so the formula
+ * retains its own spacing) but carries the expected `start` value forward.
+ */
+export function remarkArticleOrderedListContinuation() {
+  return (tree) => {
+    const visit = (parent) => {
+      if (!parent || !Array.isArray(parent.children)) return;
+      let previousList = null;
+      let separatedByDisplayMath = false;
+      for (const child of parent.children) {
+        if (child?.type === "list" && child.ordered) {
+          if (
+            previousList &&
+            separatedByDisplayMath &&
+            (child.start == null || child.start === 1)
+          ) {
+            const previousStart = Number(previousList.start ?? 1);
+            child.start = previousStart + previousList.children.length;
+          }
+          visit(child);
+          previousList = child;
+          separatedByDisplayMath = false;
+          continue;
+        }
+        if (child?.type === "math") {
+          if (previousList) separatedByDisplayMath = true;
+          continue;
+        }
+        previousList = null;
+        separatedByDisplayMath = false;
+        visit(child);
+      }
+    };
+    visit(tree);
+  };
 }
 
 function directiveMarkup(marker) {
   const safeName = marker.name.replace(/[^a-z0-9_-]/g, "");
-  const title = escapeHtml(marker.title);
   const id = marker.id
     ? ` id="${escapeHtml(marker.id)}" data-statement-id="${escapeHtml(marker.id)}"`
     : "";
   if (marker.name === "proof") {
     return {
-      open: `<details class="proof-details" data-directive="proof" open><summary>${title}</summary><div class="proof-details-inner">`,
+      open: `<details class="proof-details folding" data-directive="proof" open>`,
+      title: titleParagraph(marker, { tagName: "summary" }),
+      bodyOpen: `<div class="proof-details-inner">`,
+      close: "</div></details>",
+    };
+  }
+
+  if (marker.name === "folding") {
+    return {
+      open: `<details class="folding" data-directive="folding">`,
+      title: titleParagraph(marker, { tagName: "summary" }),
+      bodyOpen: `<div class="folding-content">`,
+      close: "</div></details>",
+    };
+  }
+
+  if (marker.name === "supp") {
+    return {
+      open: `<details class="supp-details" data-directive="supp">`,
+      title: titleParagraph(marker, {
+        className: "supp-details-summary",
+        tagName: "summary",
+      }),
+      bodyOpen: `<div class="supp-details-inner">`,
       close: "</div></details>",
     };
   }
@@ -91,13 +259,22 @@ function directiveMarkup(marker) {
   const semanticClass = SEMANTIC_CLASSES[marker.name];
   if (semanticClass) {
     return {
-      open: `<section class="article-directive ${semanticClass}" data-directive="${safeName}"${id}><p><span class="thmtitle">${title}</span></p>`,
+      open: `<section class="article-directive ${semanticClass}" data-directive="${safeName}"${id}>`,
+      title: titleParagraph(marker, {
+        className: "thmtitle",
+        preserveSource: true,
+      }),
       close: "</section>",
     };
   }
 
   return {
-    open: `<section class="article-directive article-directive-${safeName}" data-directive="${safeName}"><div class="article-directive-title">${title}</div><div class="article-directive-body">`,
+    open: `<section class="article-directive article-directive-${safeName}" data-directive="${safeName}">`,
+    title: titleParagraph(marker, {
+      className: "article-directive-title",
+      tagName: "div",
+    }),
+    bodyOpen: `<div class="article-directive-body">`,
     close: "</div></section>",
   };
 }
@@ -122,6 +299,9 @@ export function remarkArticleDirectives() {
       if (marker) {
         const markup = directiveMarkup(marker);
         output.push({ type: "html", value: markup.open });
+        if (markup.title) output.push(markup.title);
+        if (markup.bodyOpen)
+          output.push({ type: "html", value: markup.bodyOpen });
         stack.push({ fenceLength: marker.fence.length, close: markup.close });
         continue;
       }

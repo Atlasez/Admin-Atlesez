@@ -85,7 +85,20 @@ Cloudflare DashboardのGit repository接続が「内部エラー」で失敗し�
 - 緊急手動デプロイが必要な場合は、対象SHA、理由、承認者、影響、復旧方法をIssueに記録してから、別途明示承認を得る。
 - Workers Builds復旧後は、最初の1回を監視デプロイとし、SHA、Version ID、時刻、Chrome結果を記録する。
 
-## 7. Chrome確認
+## 7. 本番相当のライブスモーク
+
+認証済みChromeから保存したPlaywright Storage Stateを渡すと、ローカルのモックではなく指定したADMIN URLへ主要画面を確認できる。通常のE2Eでは実行されず、`E2E_LIVE_SMOKE=1`を明示した場合だけ有効になる。
+
+```bash
+E2E_LIVE_SMOKE=1 \
+E2E_BASE_URL=https://admin.atlasez.org \
+E2E_AUTH_STORAGE_STATE=/absolute/path/admin-auth.json \
+npm run test:e2e:admin-live
+```
+
+Storage StateにはCookieやトークンが含まれるため、リポジトリへ保存せず、共有端末では実行後に削除する。`build-info.json`のrepository・target・commitと、ポータル、タスク、カレンダー、マイページ、管理トップ、記事一覧のHTTP応答・認証遷移を検証する。認証状態を用意できない場合は、Chromeで同じURLを手動確認し、ライブスモークを成功扱いにしない。
+
+## 8. Chrome確認
 
 認証済みChromeで、少なくとも次を確認する。
 

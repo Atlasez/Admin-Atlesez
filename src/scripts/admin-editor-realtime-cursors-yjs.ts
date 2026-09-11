@@ -16,33 +16,18 @@ type CursorState = {
   updatedAt: number;
 };
 
-type Member = { sessionId?: string; email?: string; displayName?: string };
+type Member = {
+  sessionId?: string;
+  email?: string;
+  displayName?: string;
+  field?: string;
+  cursorStart?: number | null;
+  cursorEnd?: number | null;
+  cursorAnchor?: string | null;
+  cursorHead?: string | null;
+};
 type Rect = { left: number; top: number; width: number; height: number };
-const LOCAL = "local-cursor";
 const REMOTE = "remote-update";
-
-function parseCursor(raw: unknown): CursorState | null {
-  if (typeof raw !== "string") return null;
-  try {
-    const value = JSON.parse(raw) as Partial<CursorState>;
-    if (typeof value.id !== "string") return null;
-    return {
-      id: value.id,
-      email: typeof value.email === "string" ? value.email : "",
-      name: typeof value.name === "string" ? value.name : "共同編集者",
-      active: value.active === true,
-      anchor: typeof value.anchor === "number" ? value.anchor : 0,
-      head: typeof value.head === "number" ? value.head : 0,
-      relativeAnchor:
-        typeof value.relativeAnchor === "string" ? value.relativeAnchor : null,
-      relativeHead:
-        typeof value.relativeHead === "string" ? value.relativeHead : null,
-      updatedAt: typeof value.updatedAt === "number" ? value.updatedAt : 0,
-    };
-  } catch {
-    return null;
-  }
-}
 
 function hueFor(value: string): number {
   let hash = 0;
@@ -71,7 +56,6 @@ function initialize(): void {
     return;
   root.dataset.yjsRemoteCursors = "true";
 
-  const localId = crypto.randomUUID();
   let documentId = "";
   let socket: WebSocket | null = null;
   let reconnectTimer = 0;
@@ -82,7 +66,7 @@ function initialize(): void {
   let lastSignature = "";
   let ydoc = new Y.Doc();
   let ybody = ydoc.getText("body");
-  let cursorMap = ydoc.getMap<string>("editor-cursors");
+  let remoteCursors = new Map<string, CursorState>();
   let layer: HTMLDivElement | null = null;
   let mirror: HTMLDivElement | null = null;
   let surface: Document | null = null;
@@ -246,11 +230,10 @@ function initialize(): void {
     layer.replaceChildren();
     const now = Date.now();
     const bounds = viewport();
-    for (const raw of cursorMap.values()) {
-      const state = parseCursor(raw);
+    for (const state of remoteCursors.values()) {
       if (
-        !state ||
-        state.id === localId ||
+        state.id === serverSessionId ||
+        (ownEmail && state.email.toLowerCase() === ownEmail.toLowerCase()) ||
         !state.active ||
         now - state.updatedAt > 12_000
       ) {
@@ -309,12 +292,7 @@ function initialize(): void {
     ydoc.destroy();
     ydoc = new Y.Doc();
     ybody = ydoc.getText("body");
-    cursorMap = ydoc.getMap<string>("editor-cursors");
-    cursorMap.observe(render);
-    ydoc.on("update", (update, origin) => {
-      if (origin === LOCAL && socket?.readyState === WebSocket.OPEN)
-        socket.send(update);
-    });
+    remoteCursors = new Map();
   };
 
   const publish = (heartbeat = false) => {
@@ -330,7 +308,7 @@ function initialize(): void {
     lastSignature = signature;
     const inSync = ybody.toString() === textarea.value;
     const state: CursorState = {
-      id: localId,
+      id: serverSessionId || "local",
       email: ownEmail,
       name: ownName,
       active,
@@ -342,10 +320,40 @@ function initialize(): void {
       relativeHead: inSync ? encodeRelativeCursorPosition(ybody, head) : null,
       updatedAt: Date.now(),
     };
-    ydoc.transact(() => cursorMap.set(localId, JSON.stringify(state)), LOCAL);
     socket.send(
-      JSON.stringify({ type: "presence", field: active ? "body" : "" }),
+      JSON.stringify({
+        type: "presence",
+        field: active ? "body" : "",
+        cursorStart: active ? anchor : null,
+        cursorEnd: active ? head : null,
+        cursorAnchor: active ? state.relativeAnchor : null,
+        cursorHead: active ? state.relativeHead : null,
+      }),
     );
+  };
+
+  const updateRemoteCursors = (members: Member[]) => {
+    remoteCursors = new Map(
+      members
+        .filter((member): member is Member & { sessionId: string } =>
+          Boolean(member.sessionId),
+        )
+        .map((member) => [
+          member.sessionId,
+          {
+            id: member.sessionId,
+            email: member.email ?? "",
+            name: member.displayName ?? "共同編集者",
+            active: member.field === "body",
+            anchor: member.cursorStart ?? 0,
+            head: member.cursorEnd ?? member.cursorStart ?? 0,
+            relativeAnchor: member.cursorAnchor ?? null,
+            relativeHead: member.cursorHead ?? null,
+            updatedAt: Date.now(),
+          },
+        ]),
+    );
+    render();
   };
 
   const updateIdentity = (members: Member[]) => {
@@ -375,7 +383,7 @@ function initialize(): void {
 
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const next = new WebSocket(
-      `${protocol}//${location.host}/api/admin/editor/documents/${encodeURIComponent(nextId)}/collaboration`,
+      `${protocol}//${location.host}/api/admin/editor/documents/${encodeURIComponent(nextId)}/collaboration?mode=presence`,
     );
     next.binaryType = "arraybuffer";
     socket = next;
@@ -408,6 +416,7 @@ function initialize(): void {
           Array.isArray(message.participants)
         ) {
           updateIdentity(message.participants);
+          updateRemoteCursors(message.participants);
         }
       } catch {
         // Cursor sync itself does not depend on JSON presence packets.
@@ -442,9 +451,6 @@ function initialize(): void {
     "astro:before-swap",
     () => {
       destroyed = true;
-      if (cursorMap.has(localId)) {
-        ydoc.transact(() => cursorMap.delete(localId), LOCAL);
-      }
       observer.disconnect();
       window.clearInterval(poll);
       window.clearInterval(heartbeat);

@@ -1,0 +1,80 @@
+name: Configure admin Discord secrets
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: "Atlasez学習サイト運営向けのDiscord Secretsだけを更新することを確認しました"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-admin-discord
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: 812021e62fa20465950b61be55dfe064
+
+jobs:
+  configure:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_target == true
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
+      DISCORD_OAUTH_CLIENT_SECRET: ${{ secrets.DISCORD_OAUTH_CLIENT_SECRET }}
+      DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY }}
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify deployment target
+        run: npm run verify:deploy-config
+
+      - name: Validate all Discord secrets before writing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DISCORD_OAUTH_CLIENT_SECRET DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY DISCORD_BOT_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing production secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Update Discord OAuth client secret
+        run: printf '%s' "$DISCORD_OAUTH_CLIENT_SECRET" | npx wrangler secret put DISCORD_OAUTH_CLIENT_SECRET --config wrangler.admin.jsonc
+
+      - name: Update Discord token encryption key
+        run: printf '%s' "$DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY" | npx wrangler secret put DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY --config wrangler.admin.jsonc
+
+      - name: Update Discord bot token
+        run: printf '%s' "$DISCORD_BOT_TOKEN" | npx wrangler secret put DISCORD_BOT_TOKEN --config wrangler.admin.jsonc
+
+      - name: Verify secret names
+        run: |
+          set -euo pipefail
+          npx wrangler secret list --config wrangler.admin.jsonc | tee /tmp/admin-discord-secrets.json
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const names = new Set(JSON.parse(fs.readFileSync("/tmp/admin-discord-secrets.json", "utf8")).map((item) => item.name));
+          for (const name of ["DISCORD_OAUTH_CLIENT_SECRET", "DISCORD_OAUTH_TOKEN_ENCRYPTION_KEY", "DISCORD_BOT_TOKEN"]) {
+            if (!names.has(name)) throw new Error(`Secret was not recorded: ${name}`);
+          }
+          NODE
