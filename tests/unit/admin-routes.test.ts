@@ -3,7 +3,7 @@ import { ADMIN_PAGE_PATHS, isAdminPagePath } from "../../src/lib/admin-routes";
 
 describe("admin page routes", () => {
   it("exposes every generated admin page through the Worker", () => {
-    expect(ADMIN_PAGE_PATHS).toHaveLength(38);
+    expect(ADMIN_PAGE_PATHS).toHaveLength(41);
 
     for (const path of ADMIN_PAGE_PATHS) {
       expect(isAdminPagePath(path)).toBe(true);
@@ -20,6 +20,16 @@ describe("admin page routes", () => {
     expect(isAdminPagePath("/admin/member-profile/edit")).toBe(true);
     expect(isAdminPagePath("/admin/member-profile/edit/")).toBe(true);
     expect(ADMIN_PAGE_PATHS).not.toContain("/admin/member-profile/edit");
+  });
+
+  it("exposes the nested outline editor and prototype pages", () => {
+    expect(isAdminPagePath("/admin/editor/outline")).toBe(true);
+    expect(isAdminPagePath("/admin/editor/outline/")).toBe(true);
+    expect(isAdminPagePath("/admin/ui-prototype/editor-toolbar/")).toBe(true);
+    expect(isAdminPagePath("/admin/ui-prototype/editor-header-codex/")).toBe(
+      true,
+    );
+    expect(ADMIN_PAGE_PATHS).not.toContain("/admin/editor/outline");
   });
 
   it("exposes the nested learning content prototype without adding it to top-level navigation", () => {
