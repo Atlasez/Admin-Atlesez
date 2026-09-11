@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import worker, { scheduledPublicationEpoch } from "../../src/admin-worker";
+import worker, {
+  mergeEditorialTaxonomyYaml,
+  scheduledPublicationEpoch,
+} from "../../src/admin-worker";
 
 class EmptyStatement {
   constructor(protected readonly query: string) {}
@@ -55,6 +58,78 @@ const githubWebhookSignature = async (secret: string, body: string) => {
 };
 
 describe("admin worker editor APIs", () => {
+  it("merges a dynamic subject and category into the learning-site catalog", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  status: published",
+      "  order: 1",
+      "  group: natural",
+      "  genre: mathematics-information",
+      "  description: { ja: 数学, en: Mathematics }",
+      "  categories:",
+      "    - id: group-theory",
+      "      slug: group-theory",
+      "      name: { ja: 群論, en: Group Theory }",
+      "      order: 1",
+      "      entryConceptIds: []",
+      "      relatedCategoryIds: []",
+      "- id: physics",
+      "  slug: physics",
+      "  name: { ja: 物理, en: Physics }",
+      "  status: published",
+    ].join("\n");
+    const rows = [
+      {
+        kind: "subject" as const,
+        subject_slug: "",
+        slug: "informatics",
+        name: "情報",
+        description: "情報科学を体系的に学ぶ",
+        sort_order: 20,
+      },
+      {
+        kind: "category" as const,
+        subject_slug: "informatics",
+        slug: "machine-learning",
+        name: "機械学習",
+        description: "",
+        sort_order: 0,
+      },
+    ];
+    const merged = mergeEditorialTaxonomyYaml(yaml, rows, "informatics");
+    expect(merged).toContain("- id: informatics");
+    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain("entryConceptIds: []");
+    expect(merged.indexOf("- id: informatics")).toBeGreaterThan(
+      merged.indexOf("- id: physics"),
+    );
+  });
+
+  it("adds a dynamic category to an existing learning-site subject only once", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  categories:",
+      "    - id: group-theory",
+      "      slug: group-theory",
+    ].join("\n");
+    const row = {
+      kind: "category" as const,
+      subject_slug: "mathematics",
+      slug: "machine-learning",
+      name: "機械学習",
+      description: "",
+      sort_order: 9,
+    };
+    const once = mergeEditorialTaxonomyYaml(yaml, [row], "mathematics");
+    const twice = mergeEditorialTaxonomyYaml(once, [row], "mathematics");
+    expect(twice).toBe(once);
+    expect((twice.match(/id: machine-learning/g) ?? []).length).toBe(1);
+  });
+
   it("returns the numeric pending approval count in the portal overview", async () => {
     const portalEnv = {
       ...emptyEnv,
@@ -167,6 +242,18 @@ describe("admin worker editor APIs", () => {
     expect(subject).toMatchObject({ kind: "subject", name: "情報" });
     expect(subject.slug).toMatch(/^subject-[0-9a-f]{8}$/);
 
+    const taxonomyEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() =>
+            query.includes("kind='subject'") ? ({ id: "subject" } as T) : null;
+          return statement;
+        },
+      },
+    };
     const categoryResponse = await worker.fetch(
       new Request("http://localhost/api/admin/editor/taxonomy", {
         method: "POST",
@@ -177,7 +264,7 @@ describe("admin worker editor APIs", () => {
           name: "機械学習",
         }),
       }),
-      emptyEnv as never,
+      taxonomyEnv as never,
     );
 
     expect(categoryResponse.status).toBe(201);
@@ -1111,6 +1198,13 @@ describe("admin worker editor APIs", () => {
         super.bind(...values);
         bindings.push(values);
         return this;
+      }
+      async first<T>() {
+        if (this.query.includes("kind='subject'"))
+          return { id: "subject" } as T;
+        if (this.query.includes("kind='category'"))
+          return { id: "category" } as T;
+        return null as T | null;
       }
     }
     const env = {
