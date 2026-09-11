@@ -410,14 +410,21 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
     "href",
     /subject-1/,
   );
-  const articleHref = await page.locator("[data-outline-list] a").first().getAttribute("href");
+  const articleHref = await page
+    .locator("[data-outline-list] a")
+    .first()
+    .getAttribute("href");
   expect(articleHref).toContain("new=1");
   expect(articleHref).toContain("outline-");
   await page.goto(`.${articleHref}`);
   await expect(page.locator('input[name="title"]')).toHaveValue("集中不等式");
-  await expect(page.locator('input[name="slug"]')).toHaveValue("concentration-inequality");
+  await expect(page.locator('input[name="slug"]')).toHaveValue(
+    "concentration-inequality",
+  );
   await expect(page.locator('select[name="subject"]')).toHaveValue("subject-1");
-  await expect(page.locator('select[name="category"]')).toHaveValue("category-2");
+  await expect(page.locator('select[name="category"]')).toHaveValue(
+    "category-2",
+  );
 });
 
 test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
