@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import worker, {
+  editorialOutlineAutoSlug,
   mergeEditorialTaxonomyYaml,
   scheduledPublicationEpoch,
 } from "../../src/admin-worker";
@@ -58,6 +59,15 @@ const githubWebhookSignature = async (secret: string, body: string) => {
 };
 
 describe("admin worker editor APIs", () => {
+  it("derives stable outline slugs from article titles", () => {
+    expect(editorialOutlineAutoSlug("Concentration Inequalities", "fallback")).toBe(
+      "outline-concentration-inequalities",
+    );
+    expect(editorialOutlineAutoSlug("集中不等式", "fallback")).toMatch(
+      /^outline-[a-z0-9-]+$/,
+    );
+  });
+
   it("merges a dynamic subject and category into the learning-site catalog", () => {
     const yaml = [
       "- id: mathematics",

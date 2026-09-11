@@ -3888,6 +3888,23 @@ const editorialTaxonomyAutoSlug = (kind: "subject" | "category", name: string) =
   return `${kind}-${codePoints}`.slice(0, 80);
 };
 
+/** 表示名から、URLに使える安定した識別子を生成する。日本語は
+ * Unicodeコードポイントをbase36化し、ASCII以外をそのままURLへ出さない。 */
+export const editorialOutlineAutoSlug = (title: string, fallbackId: string) => {
+  const latin = title
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  if (latin) return `outline-${latin}`.slice(0, 80);
+  const codePoints = [...title]
+    .map((character) => character.codePointAt(0)?.toString(36) ?? "0")
+    .join("-")
+    .slice(0, 68);
+  return `outline-${codePoints || fallbackId.slice(0, 8)}`.slice(0, 80);
+};
+
 /** 管理画面で追加した分野・カテゴリを記事編集の目次へ反映する。 */
 async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
@@ -3944,9 +3961,17 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     if (!name || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名と対象分野を確認してください。" }, 400);
     if (current.kind === "category") {
       const associationError = await editorialTaxonomyAssociationError(env, subject, current.slug);
-      if (associationError && associationError.includes("分野が見つかりません"))
-        return json({ error: associationError }, 400);
+      if (associationError) return json({ error: associationError }, 400);
     }
+    const duplicateName = await env.REPORTS.prepare(
+      `SELECT id FROM admin_editorial_taxonomy_catalog
+       WHERE project_id='atlas' AND kind=? AND lower(name)=lower(?) AND status='active'
+         AND id<>? AND (? = 'subject' OR subject_slug=?) LIMIT 1`,
+    )
+      .bind(current.kind, name, current.id, current.kind, subject)
+      .first<{ id: string }>();
+    if (duplicateName)
+      return json({ error: "同じ対象に同じ表示名がすでにあります。" }, 409);
     try {
       await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
         .bind(subject, name, description, sortOrder, new Date().toISOString(), id).run();
@@ -4210,7 +4235,7 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
     if (!parent || parent.subject_slug !== subject || parent.category_slug !== category || !canEditSubject(parent.subject_slug)) return json({ error: "親項目を確認してください。" }, 400);
   }
   const id = crypto.randomUUID();
-  const slug = requestedSlug || `outline-${id.slice(0, 8)}`;
+  const slug = requestedSlug || editorialOutlineAutoSlug(title, id);
   const now = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
