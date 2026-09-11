@@ -265,8 +265,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <label class="metadata-field metadata-abstract"><span class="field-heading">要約<span class="required-mark" aria-hidden="true">*</span></span><input name="summary" required maxlength="800" placeholder="記事一覧に表示される短い説明" /></label>
               <label class="metadata-field metadata-subject"><span class="field-heading">分野<span class="required-mark" aria-hidden="true">*</span></span><select name="subject" required data-subject></select></label>
               <label class="metadata-field metadata-category"><span class="field-heading">カテゴリ<span class="required-mark" aria-hidden="true">*</span></span><select name="category" required data-category></select></label>
-              <label class="metadata-field metadata-slug"><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /></label>
-      <label class="metadata-field metadata-concept concept-picker-field"><span class="field-heading">記事で扱う概念<span class="required-mark" aria-hidden="true">*</span></span><select data-concept-picker aria-label="記事で扱う概念"><option value="">概念を選択してください</option></select><small>既存の概念を選択。新規概念は「新しい概念を作成」から記事と一緒に登録できます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">概念を選択してください</output></label>
+              <label class="metadata-field metadata-slug"><span class="field-heading">URL用の名前<span class="required-mark" aria-hidden="true">*</span></span><input name="slug" required pattern="[a-z0-9-]+" maxlength="100" placeholder="group-definition" /><small>タイトルから自動入力します。必要な場合だけ変更してください。</small></label>
+      <label class="metadata-field metadata-concept concept-picker-field"><span class="field-heading">学習地図への登録</span><select data-concept-picker aria-label="学習地図への登録"><option value="">自動設定</option></select><small>通常は記事の分野・カテゴリ・URL名から自動設定されます。</small><output class="concept-id-preview" data-concept-id-preview aria-live="polite">自動設定</output></label>
       <details class="concept-id-advanced"><summary>概念IDの確認・手入力（上級者向け）</summary><label><span class="field-heading">概念ID<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptId" required pattern="[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+" maxlength="180" placeholder="例：math.group-theory.group-definition" /></label><label class="concept-registration-toggle"><input type="checkbox" data-register-concept /> 新しい概念として公開PRに追加する</label><div class="concept-registration-fields" data-concept-registration-fields hidden><label><span class="field-heading">概念名（日本語）<span class="required-mark" aria-hidden="true">*</span></span><input name="conceptName" maxlength="180" placeholder="例：群の中心" /></label><label><span class="field-heading">概念名（英語・任意）</span><input name="conceptNameEn" maxlength="180" placeholder="例：The Center of a Group" /></label><small>チェックすると、この概念IDと概念名を記事の公開PRで concepts.yaml に追加します。学習地図に登録されるのはPRのCI成功後です。</small></div><small>概念一覧にない新しい概念や、既存記事の旧IDを扱う場合だけ使用します。</small></details>
               <label class="metadata-field metadata-locale">言語<select name="locale"><option value="ja">日本語</option><option value="en">English</option></select></label>
               <label class="metadata-field metadata-latex">LaTeX形式<select name="latexEngine"><option value="uplatex">upLaTeX（日本語文書）</option><option value="pdflatex">LaTeX標準</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select><small>外部LaTeX処理で使用。画面内プレビューはKaTeXです。</small></label>
@@ -1345,6 +1345,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const sourceSubject = root.querySelector<HTMLSelectElement>("[data-source-subject]")!;
     const subject = form.elements.namedItem("subject") as HTMLSelectElement;
     const category = form.elements.namedItem("category") as HTMLSelectElement;
+    const title = form.elements.namedItem("title") as HTMLInputElement;
+    const slug = form.elements.namedItem("slug") as HTMLInputElement;
     const conceptId = form.elements.namedItem("conceptId") as HTMLInputElement;
     const conceptName = form.elements.namedItem("conceptName") as HTMLInputElement;
     const conceptNameEn = form.elements.namedItem("conceptNameEn") as HTMLInputElement;
@@ -1356,6 +1358,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const approvedStatusOption = status.querySelector<HTMLOptionElement>('option[value="approved"]')!;
     const statusHelp = root.querySelector<HTMLElement>("[data-status-help]")!;
     const conceptIdAdvanced = root.querySelector<HTMLDetailsElement>(".concept-id-advanced")!;
+    let slugEdited = false;
     const metadata = root.querySelector<HTMLDetailsElement>("[data-metadata]")!;
     const metadataSummary = root.querySelector<HTMLElement>("[data-metadata-summary]")!;
     const body = root.querySelector<HTMLTextAreaElement>("[data-body]")!;
@@ -2763,6 +2766,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const slug = formValue("slug").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "new-concept";
       return `${conceptPrefix(subject.value)}.${category.value}.${slug}`;
     };
+    const slugFromTitle = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 100);
     const syncConceptRegistration = () => {
       const registering = registerConcept.checked;
       conceptRegistrationFields.hidden = !registering;
@@ -4210,6 +4214,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     });
     const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
       currentDocument = item;
+      slugEdited = Boolean(item.id);
       empty.hidden = true; form.hidden = false;
       latestPublicationRealtimeVersion = 0;
       collaborationSaveFailed = false;
@@ -4243,6 +4248,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     const emptyDocument = (source?: SourceArticle) => {
       activeDocumentId = "";
+      slugEdited = Boolean(source?.slug);
       const available = availableEditorSubjects();
       const selected = source ? available.find((item) => item.slug === source.subject) ?? available[0] : available[0];
       if (!selected) return;
@@ -4504,6 +4510,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     subject.addEventListener("change", () => { fillCategories(); conceptId.value = ""; clearConceptRegistration(); refreshDefaultConceptId(); fillConceptOptions(); setUnsavedChanges(true); });
     category.addEventListener("change", () => { conceptId.value = ""; clearConceptRegistration(); refreshDefaultConceptId(); fillConceptOptions(); setUnsavedChanges(true); });
+    slug.addEventListener("input", () => { slugEdited = true; setUnsavedChanges(true); });
+    title.addEventListener("input", () => {
+      if (!slugEdited && !(form.elements.namedItem("documentId") as HTMLInputElement).value) {
+        const next = slugFromTitle(title.value);
+        if (next) { slug.value = next; refreshDefaultConceptId(); fillConceptOptions(conceptId.value); }
+      }
+      setUnsavedChanges(true);
+    });
     conceptPicker.addEventListener("change", () => {
       if (conceptPicker.value === "__new_concept__") {
         conceptId.value = generatedConceptId();
