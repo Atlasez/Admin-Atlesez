@@ -3978,9 +3978,43 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
     const payload = (await request.json().catch(() => null)) as {
       id?: unknown; action?: unknown; subject?: unknown; category?: unknown; slug?: unknown;
       title?: unknown; summary?: unknown; conceptId?: unknown; sortOrder?: unknown;
+      items?: unknown;
     } | null;
-    const id = text(payload?.id, 64);
     const action = text(payload?.action, 20);
+    if (action === "reorder") {
+      const items = Array.isArray(payload?.items)
+        ? payload.items
+            .map((item) => {
+              if (!item || typeof item !== "object") return null;
+              const value = item as { id?: unknown; sortOrder?: unknown };
+              const id = text(value.id, 64);
+              const sortOrder = Math.max(0, Math.min(9999, Number(value.sortOrder ?? 0) || 0));
+              return /^[0-9a-f-]{36}$/i.test(id) ? { id, sortOrder } : null;
+            })
+            .filter((item): item is { id: string; sortOrder: number } => Boolean(item))
+            .slice(0, 200)
+        : [];
+      if (!items.length) return json({ error: "並び替える目次項目を選択してください。" }, 400);
+      const ids = [...new Set(items.map((item) => item.id))];
+      const existing = await env.REPORTS.prepare(
+        `SELECT id,subject_slug,title FROM editorial_outline_entries
+         WHERE project_id='atlas' AND id IN (${ids.map(() => "?").join(",")})`,
+      ).bind(...ids).all<{ id: string; subject_slug: string; title: string }>();
+      const existingById = new Map((existing.results ?? []).map((row) => [row.id, row]));
+      if (existingById.size !== ids.length || [...existingById.values()].some((row) => !canEditSubject(row.subject_slug)))
+        return json({ error: "担当範囲外または存在しない目次項目が含まれています。" }, 403);
+      const now = new Date().toISOString();
+      await env.REPORTS.batch(
+        items.map((item) =>
+          env.REPORTS.prepare(
+            "UPDATE editorial_outline_entries SET sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'",
+          ).bind(item.sortOrder, now, item.id),
+        ),
+      );
+      await recordAdminAudit(env, scope.email, "outline_updated", "outline", ids.join(","), "目次", `目次項目の並び順を更新（${ids.length}件）`, { ids });
+      return json({ ok: true, updated: ids.length });
+    }
+    const id = text(payload?.id, 64);
     if (!id) return json({ error: "対象を確認してください。" }, 400);
     const current = await env.REPORTS.prepare(
       "SELECT id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at FROM editorial_outline_entries WHERE id=? AND project_id='atlas'",

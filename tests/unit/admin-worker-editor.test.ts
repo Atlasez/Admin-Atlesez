@@ -144,6 +144,56 @@ describe("admin worker editor APIs", () => {
     expect(queries.every((query) => !query.includes("LIMIT 100"))).toBe(true);
   });
 
+  it("reorders outline entries only inside the caller's permitted subjects", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000001";
+    const queries: string[] = [];
+    const batches: unknown[][] = [];
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() =>
+            ({
+              results: [
+                {
+                  id: outlineId,
+                  subject_slug: "mathematics",
+                  title: "群の定義",
+                },
+              ],
+            }) as { results: T[] };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "reorder",
+          items: [{ id: outlineId, sortOrder: 20 }],
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      updated: 1,
+    });
+    expect(queries.some((query) => query.includes("id IN (?)"))).toBe(true);
+    expect(batches).toHaveLength(1);
+  });
+
   it("counts pending project profile approvals across projects", async () => {
     const queries: string[] = [];
     const portalEnv = {

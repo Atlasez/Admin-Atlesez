@@ -201,6 +201,26 @@ test("独立した目次ページから未着手の記事を執筆開始でき�
   }
 });
 
+test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  const entry = page.locator("[data-outline-entry]").first();
+  await expect(entry).toBeVisible();
+  await expect(entry.locator("[data-outline-select]")).toBeEnabled();
+  await expect(entry.getByRole("button", { name: "編集" })).toBeVisible();
+  await expect(entry.getByRole("button", { name: "アーカイブ" })).toBeVisible();
+
+  await entry.locator("[data-outline-select]").check();
+  await expect(page.getByText("1件選択")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "選択項目を確認" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "並び順を保存" }),
+  ).toBeDisabled();
+});
+
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
   page,
 }) => {
