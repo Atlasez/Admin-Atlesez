@@ -1,6 +1,7 @@
 ---
 import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 import { MATH_PRESETS } from "../../lib/math-authoring.mjs";
 import {
   getPlannedArticles,
@@ -138,7 +139,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 ---
 
 <AdminLayout title="記事編集ワークスペース" description="アトラス運営者用の記事執筆・フィードバック画面">
-  <main class="editor-workspace" data-editor-workspace data-editor-starting>
+  <main class="editor-workspace" data-editor-workspace data-editor-starting data-admin-load-surface>
     <header class="workspace-header">
       <div>
         <h1>記事編集ワークスペース</h1>
@@ -159,6 +160,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         <li data-workflow-step="published"><b>6</b><span>公開</span></li>
       </ol>
     </section>
+
+    <AdminRetryNotice scope="editor-documents" message="原稿一覧を読み込めませんでした。" />
 
     <div class="workspace-grid">
       <aside class="document-sidebar" aria-label="作成済みの記事一覧" hidden>
@@ -446,9 +449,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 <style>
   .editor-workspace { --surface: var(--admin-surface); --surface-alt: var(--admin-surface-raised); --border: var(--admin-border); --text: var(--admin-text); --muted: var(--admin-text-muted); --accent: var(--admin-accent); box-sizing: border-box; margin: 0 auto; max-width: 1500px; overflow-anchor: none; padding: 0 clamp(1rem, 3vw, 2.5rem) 4rem; }
   html:has(.editor-workspace), body:has(.editor-workspace) { overflow-anchor: none; }
-  .editor-workspace[data-editor-starting] .editor-panel { min-height: 32rem; position: relative; visibility: hidden; }
+  .editor-workspace[data-editor-starting] .editor-panel { min-height: 46rem; min-width: 0; position: relative; visibility: hidden; }
   .editor-workspace[data-editor-starting] .document-toolbar { position: static; }
-  .editor-workspace[data-editor-starting] .editor-panel::after { color: var(--muted); content: "編集スペースを読み込んでいます…"; font-size: .9rem; left: 50%; position: absolute; top: 50%; transform: translate(-50%, -50%); visibility: visible; white-space: nowrap; }
+  .editor-workspace[data-editor-starting] .editor-panel::after { align-items: center; box-sizing: border-box; color: var(--muted); content: "編集スペースを読み込んでいます…"; display: grid; font-size: .9rem; inset: 0; justify-items: center; line-height: 1.5; padding: 1rem; pointer-events: none; position: absolute; text-align: center; visibility: visible; white-space: normal; }
   .workspace-header { align-items: start; border-bottom: 1px solid var(--border); display: flex; gap: 2rem; justify-content: space-between; padding-bottom: 1.25rem; }
   .eyebrow { color: var(--accent); font-size: .76rem; font-weight: 800; letter-spacing: .1em; margin: 0 0 .4rem; }
   .workspace-header h1 { font-size: clamp(1.5rem, 2.2vw, 2rem); letter-spacing: -.03em; line-height: 1.25; margin: 0; }
@@ -1243,6 +1246,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 <style>.site-preview-link,.site-preview-toggle{color:var(--accent);font-size:.76rem;font-weight:800;margin-left:auto;text-decoration:none;white-space:nowrap}.site-preview-toggle{background:transparent;border:1px solid var(--border);cursor:pointer;padding:.35rem .5rem}.site-preview-link:hover,.site-preview-toggle:hover{text-decoration:underline}.site-preview-frame{background:var(--surface);min-height:clamp(32rem,66vh,52rem)}.site-preview-header{align-items:center;background:var(--surface-alt);border-bottom:1px solid var(--border);color:var(--text);display:flex;gap:1rem;font-size:.72rem;padding:.7rem .9rem}.site-preview-header b{color:var(--accent);font-size:.95rem}.site-preview-search{border:1px solid var(--border);color:var(--muted);margin-left:auto;padding:.3rem .5rem}.site-preview-breadcrumb{color:var(--muted);font-size:.72rem;padding:.7rem 1.15rem 0}.site-preview-frame:not(.is-site-mode) .site-preview-header,.site-preview-frame:not(.is-site-mode) .site-preview-breadcrumb{display:none}.site-preview-frame.is-site-mode .article-preview{height:calc(clamp(32rem,66vh,52rem) - 5rem)}
 
 <style>.diagnostics-trigger{align-items:center;background:color-mix(in srgb,var(--danger,#c62828) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--danger,#c62828) 35%,var(--border));border-radius:.35rem;color:var(--danger,#c62828);display:inline-flex;gap:.3rem}.diagnostics-trigger b{background:var(--danger,#c62828);border-radius:999px;color:#fff;font-size:.64rem;min-width:1.1rem;padding:.08rem .25rem;text-align:center}.editor-diagnostics-dialog{background:var(--surface);border:1px solid color-mix(in srgb,var(--danger,#c62828) 35%,var(--border));border-left:4px solid var(--danger,#c62828);border-radius:.7rem;box-shadow:0 1.5rem 5rem rgb(0 0 0 / .3);color:var(--text);max-height:min(82vh,38rem);padding:0;width:min(92vw,42rem)}.editor-diagnostics-dialog::backdrop{background:rgb(5 12 18 / .62)}.editor-diagnostics-inner{max-height:min(82vh,38rem);overflow:auto;padding:1rem 1.1rem 1.1rem}.editor-diagnostics-header{align-items:start;border-bottom:1px solid var(--border);display:flex;gap:1rem;justify-content:space-between;padding-bottom:.8rem}.editor-diagnostics-header h2{font-size:1.05rem;margin:.12rem 0 .25rem}.editor-diagnostics-header p:last-child{color:var(--muted);font-size:.75rem;line-height:1.5;margin:0}.editor-diagnostics-summary{align-items:baseline;display:flex;flex-wrap:wrap;gap:.5rem;margin:.9rem 0 .55rem}.editor-diagnostics-summary strong{color:var(--danger,#c62828);font-size:.82rem}.editor-diagnostics-summary span{color:var(--muted);font-size:.72rem}.editor-diagnostics-dialog ul{display:grid;gap:.5rem;list-style:none;margin:0;padding:0}.editor-diagnostics-dialog li{background:color-mix(in srgb,var(--danger,#c62828) 7%,var(--surface-alt));border:1px solid color-mix(in srgb,var(--danger,#c62828) 25%,var(--border));border-left:3px solid var(--warning,#a66a00);border-radius:.35rem;font-size:.76rem;line-height:1.55;padding:.6rem .7rem}.editor-diagnostics-dialog li b{font-variant-numeric:tabular-nums;margin-right:.35rem}.editor-diagnostics-dialog li.is-warning b{color:var(--warning,#a66a00)}.editor-diagnostics-dialog li.is-error{border-left-color:var(--danger,#c62828)}.editor-diagnostics-dialog li.is-error b{color:var(--danger,#c62828)}[data-pref-bg="dark"] .editor-diagnostics-dialog li{background:#3b1720;border-color:#a64756;color:#ffe8eb}</style><style>.publication-diagnostic{background:var(--surface-alt);border:1px solid #d9a429;border-radius:.45rem;flex:1 1 100%;min-width:min(100%,28rem);padding:.35rem .55rem}.publication-diagnostic summary{color:#805500;cursor:pointer;font-size:.72rem;font-weight:800}.publication-diagnostic-body{padding:.35rem 0 .1rem}.publication-diagnostic dl{display:grid;gap:.35rem;margin:0}.publication-diagnostic dl>div{display:grid;gap:.15rem;grid-template-columns:7rem minmax(0,1fr)}.publication-diagnostic dt{color:var(--muted);font-size:.68rem;font-weight:800}.publication-diagnostic dd{font-size:.72rem;line-height:1.5;margin:0;min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}.publication-diagnostic dd[data-publication-failure-detail]{font-family:var(--font-mono);font-size:.69rem}.publication-diagnostic dd:empty::before{color:var(--muted);content:"CIログに詳細がありません。右のCIログリンクを確認してください。";font-family:inherit}.publication-diagnostic[hidden]{display:none}</style><style>.media-width-control{align-items:end;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.7rem;gap:.45rem}.media-width-control>label{align-items:center;display:flex;gap:.25rem}.media-width-control select{background:var(--surface);border:1px solid var(--border);color:var(--text);font:inherit;min-height:1.9rem;min-width:8.5rem;padding:.25rem .4rem}.media-width-custom-label input{background:var(--surface);border:1px solid var(--border);color:var(--muted);font:inherit;min-height:1.9rem;padding:.25rem .4rem;width:5rem}.media-width-custom-label span{color:var(--muted)}</style><script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   import "katex/dist/katex.min.css";
   import * as Y from "yjs";
   import { diagnoseArticleSource } from "../../lib/article-diagnostics.mjs";
@@ -1428,6 +1432,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const documentCreator = root.querySelector<HTMLElement>("[data-document-creator]")!;
     const documentUpdated = root.querySelector<HTMLElement>("[data-document-updated]")!;
     const documentEditors = root.querySelector<HTMLElement>("[data-document-editors]")!;
+    let editorLoadRetry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const state = root.querySelector<HTMLElement>("[data-document-state]")!;
     const publicationState = root.querySelector<HTMLElement>("[data-publication-state]")!;
     const publicationLink = root.querySelector<HTMLElement>("[data-publication-link]")!;
@@ -2251,16 +2256,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const canRetryUnpublication = Boolean(item.published_at && item.publication_run?.action === "unpublish" && ["failed", "needs_operator"].includes(item.publication_run.state));
       const publicationBusy = Boolean(item.publication_run && ["queued", "checks_pending", "merge_pending", "deploy_pending", "retry_wait"].includes(item.publication_run.state));
       publishButton.hidden = !(isManager && Boolean(item.id) && item.status === "approved" && (!item.published_at || canUpdatePublishedArticle || canRetryPublication) && (!item.publication_pr_url || canRetryPublication));
-      publishButton.disabled = publicationBusy;
+      publishButton.disabled = publicationBusy || publicationActionInFlight;
       publishButton.textContent = canUpdatePublishedArticle || (canRetryPublication && Boolean(item.published_at)) ? "公開内容を更新して再試行" : canRetryPublication ? "公開処理を再試行" : "公開する";
       scheduleButton.hidden = true;
       unpublishButton.hidden = !(isManager && Boolean(item.id) && Boolean(item.published_at) && (item.publication_action !== "unpublish" || canRetryUnpublication));
-      unpublishButton.disabled = publicationBusy;
+      unpublishButton.disabled = publicationBusy || publicationActionInFlight;
       unpublishButton.textContent = canRetryUnpublication ? "非公開処理を再試行" : "公開を取り消す";
       reviewButton.hidden = !Boolean(item.id);
       reviewButton.disabled = Boolean(item.published_at) || Boolean(item.publication_pr_url);
       reviewButton.title = item.published_at ? "公開済みの記事へ依頼するには、先に公開を取り消してください。" : "複数回、別の担当者へフィードバックを依頼できます。";
     };
+    let publicationActionInFlight = false;
     let publicationRefreshTimer: number | null = null;
     let publicationRefreshInFlight = false;
     let publicationRefreshGeneration = 0;
@@ -4289,6 +4295,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
     const loadDocuments = async () => {
+      editorLoadRetry?.begin();
       const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" });
       const data = await read<{ documents?: Omit<Document, "body">[]; mentionNames?: string[]; scope?: { email: string; subjects: string[]; isManager?: boolean }; error?: string }>(response);
       if (!response.ok) throw new Error(data.error ?? "原稿一覧を読み込めませんでした。");
@@ -4317,6 +4324,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // but not required to open and edit the selected article.
       window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       void loadPublicationIntegration();
+      editorLoadRetry?.success();
     };
     const openDocument = async (id: string) => {
       if (id) activeDocumentId = id;
@@ -4393,17 +4401,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }
       return output;
     };
+    let loadedRevisionHistory: Revision[] = [];
     const loadRevisions = async (id:string) => {
       if(!id) return;
       const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"});
       const data=await read<{revisions?:Revision[];feedbackRequests?:FeedbackRequestHistory[];error?:string}>(response);
       if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; feedbackRequestHistory.textContent = "フィードバック依頼の履歴を読み込めませんでした。"; return; }
       const history = data.revisions ?? [];
+      loadedRevisionHistory = history;
       if (currentDocument) renderDocumentProvenance(currentDocument, history.map((item) => item.saved_by));
       if (!history.length) revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。";
       else {
         const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by)}・${esc(item.status)}</option>`).join("");
-        revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label></div><pre class="revision-diff" data-revision-diff></pre>`;
+        revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label><button type="button" class="quiet-action revision-restore-action" data-revision-restore>選択した版を入力へ反映</button></div><p class="revision-restore-help">反映した内容は入力欄に入るだけで、保存するまで記事は更新されません。</p><pre class="revision-diff" data-revision-diff></pre>`;
         const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
         const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;
         const output = revisions.querySelector<HTMLElement>("[data-revision-diff]")!;
@@ -4426,6 +4436,33 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           }).join("")}</div>`
         : "<p class=\"feedback-request-history-empty\">この原稿には、まだフィードバック依頼はありません。</p>";
     };
+    revisions.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-revision-restore]");
+      if (!button) return;
+      const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]");
+      const revision = before ? loadedRevisionHistory[Number(before.value)] : undefined;
+      if (!revision) return;
+      if (loadedDocumentWasPublished && !updateProposalActive) {
+        saveMessage.value = "公開中の記事へ版を反映するには、先に「更新案を作成」を押してください。";
+        updateProposalButton.focus({ preventScroll: true });
+        return;
+      }
+      const title = form.elements.namedItem("title") as HTMLInputElement;
+      const summary = form.elements.namedItem("summary") as HTMLInputElement;
+      title.value = revision.title;
+      summary.value = revision.summary;
+      body.value = revision.body;
+      lockedRanges = validLockedRanges(lockedRanges, body.value);
+      previousBodyValue = body.value;
+      renderLockControls();
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+      summary.dispatchEvent(new Event("input", { bubbles: true }));
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+      saveMessage.value = `${date(revision.saved_at)}の版を入力欄へ反映しました。内容を確認して保存してください。`;
+      const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]");
+      if (after) { after.value = "current"; after.dispatchEvent(new Event("change")); }
+      title.focus({ preventScroll: true });
+    });
     feedbackRequestHistory.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-save-feedback-task]");
       if (!button) return;
@@ -4987,9 +5024,61 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     publicationReviewButton.addEventListener("click", () => { publicationReviewNote.value = ""; if (!publicationReviewDialog.open) publicationReviewDialog.showModal(); });
     publicationReviewCancel.addEventListener("click", () => publicationReviewDialog.close());
     publicationReviewForm.addEventListener("submit", async (event) => { event.preventDefault(); const submitter = (event.submitter as HTMLButtonElement | null)?.value; if (submitter !== "approve" && submitter !== "reject") return; const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; const button = event.submitter as HTMLButtonElement; button.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/publication-review`, { method: "PATCH", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: submitter === "approve" ? "approved" : "rejected", note: publicationReviewNote.value }) }); const data = await read<{ error?: string; status?: string }>(response); if (!response.ok) throw new Error(data.error ?? "公開審査を処理できませんでした。"); publicationReviewDialog.close(); await openDocument(id); saveMessage.value = submitter === "approve" ? (data.status === "approved" ? "公開審査が完了しました。公開または公開予約へ進めます。" : "承認しました。次の審査担当へ通知しました。") : "差し戻しました。フィードバック中へ戻しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "公開審査を処理できませんでした。"; } finally { button.disabled = false; } });
-    const publishCurrentDocument = async () => { const id = (form.elements.namedItem("documentId") as HTMLInputElement).value; if (!id) return; try { if (hasUnsavedChanges) { saveMessage.value = "公開前に最新の変更を保存中…"; await saveCurrentDocument(false); } const currentItem = documents.find((item) => item.id === id); const response = await fetch(`/api/admin/editor/documents/${id}/publish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ force: Boolean(currentItem?.published_at) }) }); const data = await read<{ error?: string; pending?: boolean; publicationRun?: { state?: string } | null }>(response); if (!response.ok) { await openDocument(id).catch(() => undefined); throw new Error(data.error ?? "自動公開を開始できませんでした。"); } await openDocument(id); await loadDocuments(); saveMessage.value = data.publicationRun ? "自動公開を開始しました。CI・学習サイト反映まで運営サイトが確認します。" : data.pending ? "自動公開処理を確認しています。" : "公開処理を完了しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "自動公開を開始できませんでした。"; } };
+    const publishCurrentDocument = async () => {
+      const id = (form.elements.namedItem("documentId") as HTMLInputElement).value;
+      if (!id || publicationActionInFlight) return;
+      publicationActionInFlight = true;
+      publishButton.disabled = true;
+      publishButton.setAttribute("aria-busy", "true");
+      try {
+        if (hasUnsavedChanges) {
+          saveMessage.value = "公開前に最新の変更を保存中…";
+          await saveCurrentDocument(false);
+        }
+        const currentItem = documents.find((item) => item.id === id);
+        const response = await fetch(`/api/admin/editor/documents/${id}/publish`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ force: Boolean(currentItem?.published_at) }),
+        });
+        const data = await read<{
+          error?: string;
+          pending?: boolean;
+          accepted?: boolean;
+          message?: string;
+          publicationRun?: { state?: string } | null;
+        }>(response);
+        // 失敗時もサーバーが返したRunを再取得して、原因・診断・再試行を
+        // 画面に残す。ネットワークタイムアウト後にPRだけ作成された場合も、
+        // 次の再読込で同じRunへ復帰できる。
+        await openDocument(id).catch(() => undefined);
+        if (!response.ok) {
+          throw new Error(data.error ?? "自動公開を開始できませんでした。");
+        }
+        await loadDocuments();
+        saveMessage.value = data.accepted
+          ? (data.message ?? "公開処理を受け付けました。CI・学習サイト反映まで運営サイトが確認します。")
+          : data.publicationRun
+            ? "自動公開を開始しました。CI・学習サイト反映まで運営サイトが確認します。"
+            : data.pending
+              ? "自動公開処理を確認しています。"
+              : "公開処理を完了しました。";
+      } catch (error) {
+        saveMessage.value = error instanceof Error ? error.message : "自動公開を開始できませんでした。";
+      } finally {
+        publicationActionInFlight = false;
+        publishButton.removeAttribute("aria-busy");
+        const current = documents.find((item) => item.id === documentIdForRequest());
+        if (current) updatePublicationActions(current);
+        else publishButton.disabled = false;
+      }
+    };
     const unpublishCurrentDocument = async () => { const id = documentIdForRequest(); if (!id) { saveMessage.value = "非公開にする原稿IDを取得できませんでした。ページを再読み込みしてください。"; return; } unpublishButton.disabled = true; try { const response = await fetch(`/api/admin/editor/documents/${id}/unpublish`, { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: "{}" }); const data = await read<{ error?: string; pending?: boolean; publicationRun?: { state?: string } | null }>(response); if (!response.ok) { await openDocument(id).catch(() => undefined); throw new Error(data.error ?? "自動非公開化を開始できませんでした。"); } await openDocument(id); await loadDocuments(); saveMessage.value = data.publicationRun ? "自動非公開化を開始しました。学習サイトの反映まで運営サイトが確認します。" : data.pending ? "自動非公開化を確認しています。" : "非公開化を完了しました。"; } catch (error) { saveMessage.value = error instanceof Error ? error.message : "自動非公開化を開始できませんでした。"; } finally { if (documentIdForRequest() === id) unpublishButton.disabled = false; } };
-    publishButton.addEventListener("click", () => approvalDialog.showModal());
+    publishButton.addEventListener("click", () => {
+      if (publicationActionInFlight || publishButton.disabled || approvalDialog.open) return;
+      approvalDialog.showModal();
+    });
     unpublishButton.addEventListener("click", () => unpublishDialog.showModal());
     setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
@@ -5006,7 +5095,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     // パネル全体を不可視にせず、新規作成・公開記事登録へすぐ進めるようにする。
     if (!reviewDocumentId && !sourceArticleId && !isNewDocument) root.removeAttribute("data-editor-starting");
     initializeSelects();
-    void loadDocuments().then(async () => {
+    const loadEditorEntry = async () => {
+      await loadDocuments();
       if (reviewDocumentId) {
         await openDocument(reviewDocumentId);
         await loadRevisions(reviewDocumentId);
@@ -5021,7 +5111,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       } else if (isNewDocument) emptyDocument();
       resetEditorEntryScroll(); restoreInitialEditorScroll();
       requestAnimationFrame(() => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); requestAnimationFrame(restoreInitialEditorScroll); });
-    }).catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
+    };
+    editorLoadRetry = createAdminLoadRetry(root, () => loadEditorEntry(), "原稿一覧を読み込めませんでした。", { scope: "editor-documents" });
+    void loadEditorEntry().catch((error: unknown) => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); editorLoadRetry?.fail(error); list.innerHTML = `<p class="comment-empty">${esc(error instanceof Error ? error.message : "原稿一覧を読み込めませんでした。")}</p>`; });
   };
 
   document.addEventListener("astro:page-load", initializeEditorWorkspace);
@@ -5196,6 +5288,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .feedback-request-history-empty { color: var(--muted); font-size: .8rem; margin: 0; }
   .revision-compare-controls { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .revision-compare-controls label { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .25rem; }
+  .revision-restore-action { align-self: end; min-height: 2.25rem; }
+  .revision-restore-help { color: var(--muted); font-size: .78rem; margin: .5rem 0 0; }
   .revision-diff { background: var(--background-inset); border: 1px solid var(--border); color: var(--text); line-height: 1.55; margin: .75rem 0 0; max-height: 28rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }.revision-diff-line { display:block; margin-inline:-.3rem; min-height:1.55em; padding:0 .3rem; }.revision-diff-line.is-added { background:#e0f4e6; box-shadow:inset 3px 0 #27834b; color:#155d32; }.revision-diff-line.is-removed { background:#fde6e6; box-shadow:inset 3px 0 #c74343; color:#8b2525; }[data-pref-bg="dark"] .revision-diff-line.is-added { background:#133d2a; box-shadow:inset 3px 0 #65c98c; color:#d5f7e4; }[data-pref-bg="dark"] .revision-diff-line.is-removed { background:#4b2226; box-shadow:inset 3px 0 #f08080; color:#ffd8dc; }
   .comment-tags { align-items: center; display: flex; flex-wrap: wrap; gap: .3rem; padding: 0 .85rem .55rem; }
   .comment-tags span { color: var(--muted); font-size: .7rem; font-weight: 800; }

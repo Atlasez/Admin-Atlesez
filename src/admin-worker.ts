@@ -76,6 +76,8 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
   /** localhostの開発時だけ使う、ログイン不要のテスト用メールアドレス。 */
   ADMIN_LOCAL_EMAIL?: string;
+  /** 任意。D1の初期権限行を復旧するための主管理者メール。コードへ直書きしない。 */
+  ADMIN_PRIMARY_EMAIL?: string;
   /** 既存運用からの移行用GitHub token（自動Mergeには使用しない）。 */
   GITHUB_PUBLISH_TOKEN?: string;
   /** 必須レビューを自動承認する、PR作成者とは別の書き込み権限Token。 */
@@ -594,9 +596,6 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 // session now proves Google identity only; admin access still requires the
 // separate report_admin_permissions check below.
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
-// Keep the designated primary operator available if an existing production
-// database temporarily loses its seeded permission row.
-const PRIMARY_ADMIN_EMAIL = "ukyoukay0@gmail.com";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
 const GOOGLE_LINK_STATE_COOKIE = "atlasez_google_account_link_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
@@ -932,6 +931,26 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
     (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1")
   );
 };
+const primaryAdminEmail = (env: Env) => env.ADMIN_PRIMARY_EMAIL?.trim().toLowerCase() ?? "";
+
+/**
+ * 検証用に予約したメールドメイン。通常の運営名簿へ混入させず、
+ * 管理画面の「検証用アーカイブ」だけで確認できるようにする。
+ * 実在メンバーのデータを推測で除外しないため、予約ドメインのみを対象にする。
+ */
+const isVerificationAccountEmail = (value: string) => {
+  const email = value.trim().toLowerCase();
+  return (
+    email.endsWith("@example.com") ||
+    email.endsWith("@example.invalid") ||
+    email.endsWith("@example.test") ||
+    email.endsWith("@atlasez.test")
+  );
+};
+
+const VERIFICATION_EMAIL_SQL = `(lower(trim(email)) LIKE '%@example.com' OR lower(trim(email)) LIKE '%@example.invalid' OR lower(trim(email)) LIKE '%@example.test' OR lower(trim(email)) LIKE '%@atlasez.test')`;
+const verificationEmailSql = (alias: string) =>
+  VERIFICATION_EMAIL_SQL.replaceAll("email", `${alias}.email`);
 
 class GoogleIdentityConflictError extends Error {}
 
@@ -1162,14 +1181,15 @@ async function resolveAdminScope(
   const grantedSubjects = result.results
     .map((permission) => permission.subject)
     .filter(Boolean);
-  const isPrimaryAdmin = email === PRIMARY_ADMIN_EMAIL;
+  const configuredPrimaryAdmin = primaryAdminEmail(env);
   if (
     !grantedSubjects.length &&
     !(workflowRoles.results ?? []).length &&
-    !isPrimaryAdmin
+    email !== configuredPrimaryAdmin
   )
     return json({ error: "この管理画面の閲覧権限が設定されていません。" }, 403);
-  const allSubjects = isPrimaryAdmin || grantedSubjects.includes("*");
+  const allSubjects =
+    email === configuredPrimaryAdmin || grantedSubjects.includes("*");
   // `*` は全分野管理者の権限であって、その人自身の執筆担当分野ではない。
   // 通常の原稿一覧・作業状況は担当分野だけに限定する。
   const subjects = grantedSubjects.filter((subject) => subject !== "*");
@@ -1374,9 +1394,7 @@ async function getUserStageForEmail(
       projectProfileComplete,
       tutorialComplete: Boolean(tutorial?.tutorial_completed_at),
       isAdmin:
-        localAdmin ||
-        Boolean(permission) ||
-        email === PRIMARY_ADMIN_EMAIL,
+        localAdmin || Boolean(permission) || email === primaryAdminEmail(env),
     }),
   };
 }
@@ -2059,6 +2077,7 @@ async function listReportAdminPermissions(
      FROM report_admin_permissions p
      LEFT JOIN editorial_member_profiles m ON m.email = p.email
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = p.email
+     WHERE NOT ${verificationEmailSql("p")}
      ${cursorFilter}
      GROUP BY p.email, m.display_name, m.university, m.year, m.interests
      ORDER BY display_name, lower(p.email)${memberLimitClause}`,
@@ -2108,7 +2127,9 @@ async function listReportAdminPermissions(
       assignment.discord_role_id,
     ]);
   }
-  const fetchedPermissions = result.results ?? [];
+  const fetchedPermissions = (result.results ?? []).filter(
+    (member) => !isVerificationAccountEmail(member.email),
+  );
   const hasMore = paginated && fetchedPermissions.length > pageLimit;
   const pagePermissions = paginated
     ? fetchedPermissions.slice(0, pageLimit)
@@ -2121,13 +2142,13 @@ async function listReportAdminPermissions(
     ...member,
     discord_role_ids: (assignmentsByEmail.get(member.email.toLowerCase()) ?? []).join(","),
   }));
-  // The primary operator is also allowed through the authentication fallback
-  // when an older production database is missing the seeded permission row.
-  // Keep the permissions screen consistent with that access decision instead
-  // of hiding the currently signed-in global administrator from the list.
+  // 復旧用の主管理者メールは環境変数からのみ読み取る。通常はD1の
+  // report_admin_permissions行が表示されるため、この補完は旧DB向けに限定する。
+  const configuredPrimaryAdmin = primaryAdminEmail(env);
   if (
-    scope.email === PRIMARY_ADMIN_EMAIL &&
-    !permissions.some((member) => member.email.toLowerCase() === PRIMARY_ADMIN_EMAIL)
+    configuredPrimaryAdmin &&
+    scope.email === configuredPrimaryAdmin &&
+    !permissions.some((member) => member.email.toLowerCase() === configuredPrimaryAdmin)
   ) {
     const [profile, discordAccount] = await Promise.all([
       env.REPORTS.prepare(
@@ -2135,7 +2156,7 @@ async function listReportAdminPermissions(
          FROM editorial_member_profiles
          WHERE lower(email) = lower(?) LIMIT 1`,
       )
-        .bind(PRIMARY_ADMIN_EMAIL)
+        .bind(configuredPrimaryAdmin)
         .first<{
           display_name: string;
           university: string;
@@ -2148,11 +2169,11 @@ async function listReportAdminPermissions(
          FROM atlasez_member_discord_accounts
          WHERE lower(email) = lower(?) LIMIT 1`,
       )
-        .bind(PRIMARY_ADMIN_EMAIL)
+        .bind(configuredPrimaryAdmin)
         .first<{ discord_user_id: string }>(),
     ]);
     permissions.push({
-      email: PRIMARY_ADMIN_EMAIL,
+      email: configuredPrimaryAdmin,
       subjects: "*",
       display_name: profile?.display_name?.trim() || "主管理者",
       university: profile?.university ?? "",
@@ -2160,15 +2181,10 @@ async function listReportAdminPermissions(
       interests: profile?.interests ?? "",
       avatar_url: profile?.avatar_url ?? "",
       discord_user_id: discordAccount?.discord_user_id ?? "",
-      discord_role_ids: (
-        assignmentsByEmail.get(PRIMARY_ADMIN_EMAIL) ?? []
-      ).join(","),
+      discord_role_ids: (assignmentsByEmail.get(configuredPrimaryAdmin) ?? []).join(","),
     });
     permissions.sort((left, right) =>
-      `${left.display_name}\u0000${left.email}`.localeCompare(
-        `${right.display_name}\u0000${right.email}`,
-        "ja",
-      ),
+      `${left.display_name}\u0000${left.email}`.localeCompare(`${right.display_name}\u0000${right.email}`, "ja"),
     );
   }
   return json({
@@ -2614,6 +2630,7 @@ async function listPermissionAudit(
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 30;
   const rawCursor = text(searchParams.get("cursor"), 240).trim();
+  const includeArchived = searchParams.get("includeArchived") === "1";
   const cursorSeparator = rawCursor.lastIndexOf("|");
   let cursorCreatedAt = "";
   let cursorId = "";
@@ -2626,16 +2643,18 @@ async function listPermissionAudit(
       cursorId = "";
     }
   }
-  const cursorFilter = cursorCreatedAt && cursorId
-    ? " WHERE (created_at < ? OR (created_at = ? AND id < ?))"
-    : "";
-  const cursorValues = cursorCreatedAt && cursorId
-    ? [cursorCreatedAt, cursorCreatedAt, cursorId]
-    : [];
+  const conditions: string[] = [];
+  const cursorValues: string[] = [];
+  if (!includeArchived) conditions.push("archived_at IS NULL");
+  if (cursorCreatedAt && cursorId) {
+    conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
+    cursorValues.push(cursorCreatedAt, cursorCreatedAt, cursorId);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await env.REPORTS.prepare(
-    `SELECT id,actor_email,target_email,action,before_subjects,after_subjects,created_at
+    `SELECT id,actor_email,target_email,action,before_subjects,after_subjects,created_at,archived_at
      FROM admin_permission_audit_log
-     ${cursorFilter}
+     ${where}
      ORDER BY created_at DESC,id DESC LIMIT ?`,
   )
     .bind(...cursorValues, limit + 1)
@@ -2647,6 +2666,7 @@ async function listPermissionAudit(
       before_subjects: string;
       after_subjects: string;
       created_at: string;
+      archived_at: string | null;
     }>()
     .catch(() => ({ results: [] as Array<{
       id: string;
@@ -2656,6 +2676,7 @@ async function listPermissionAudit(
       before_subjects: string;
       after_subjects: string;
       created_at: string;
+      archived_at: string | null;
     }> }));
   const allEntries = rows.results ?? [];
   const entries = allEntries.slice(0, limit);
@@ -2666,6 +2687,7 @@ async function listPermissionAudit(
     : null;
   return json({
     entries,
+    includeArchived,
     pagination: { limit, nextCursor, hasMore },
   });
 }
@@ -2684,6 +2706,7 @@ async function listAdminAuditLog(
   const query = text(url.searchParams.get("q"), 120).trim();
   const action = text(url.searchParams.get("action"), 40).trim();
   const targetType = text(url.searchParams.get("targetType"), 20).trim();
+  const includeArchived = url.searchParams.get("includeArchived") === "1";
   const rawCursor = text(url.searchParams.get("cursor"), 240).trim();
   const cursorSeparator = rawCursor.lastIndexOf("|");
   let cursorCreatedAt = "";
@@ -2699,6 +2722,7 @@ async function listAdminAuditLog(
   }
   const conditions: string[] = [];
   const params: string[] = [];
+  if (!includeArchived) conditions.push("archived_at IS NULL");
   if (query) {
     conditions.push("(actor_email LIKE ? OR target_label LIKE ? OR summary LIKE ? OR target_id LIKE ?)");
     const pattern = `%${query}%`;
@@ -2718,7 +2742,7 @@ async function listAdminAuditLog(
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await env.REPORTS.prepare(
-    `SELECT id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at
+    `SELECT id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at,archived_at
      FROM admin_audit_log ${where}
      ORDER BY created_at DESC,id DESC LIMIT ?`,
   )
@@ -2733,6 +2757,7 @@ async function listAdminAuditLog(
       summary: string;
       details_json: string;
       created_at: string;
+      archived_at: string | null;
     }>()
     .catch(() => ({ results: [] as Array<{
       id: string;
@@ -2744,6 +2769,7 @@ async function listAdminAuditLog(
       summary: string;
       details_json: string;
       created_at: string;
+      archived_at: string | null;
     }> }));
   const allEntries = rows.results ?? [];
   const entries = allEntries.slice(0, limit);
@@ -2757,6 +2783,7 @@ async function listAdminAuditLog(
       ...row,
       actionLabel: adminAuditActionLabel(row.action),
     })),
+    includeArchived,
     pagination: { limit, nextCursor, hasMore },
   });
 }
@@ -3373,6 +3400,45 @@ async function updateMemberAttributes(
     .bind(email, university, year, interests.join(","), now)
     .run();
   return json({ ok: true, provisioning });
+}
+
+/**
+ * 検証用アカウントを通常の名簿とは分離して返す。
+ * 予約ドメインのデータは削除せず、権限を持つ管理者だけが確認できる。
+ */
+async function listVerificationMemberAccounts(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const result = await env.REPORTS.prepare(
+    `WITH raw_members AS (
+      SELECT email FROM atlasez_project_memberships WHERE trim(email)<>''
+      UNION ALL SELECT email FROM report_admin_permissions WHERE trim(email)<>''
+      UNION ALL SELECT email FROM editorial_workflow_roles WHERE trim(email)<>''
+    ), candidate_members AS (
+      SELECT lower(email) AS normalized_email, MAX(email) AS email
+      FROM raw_members
+      GROUP BY lower(email)
+    )
+    SELECT c.email,
+      COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name,
+      COALESCE(p.avatar_url, '') AS avatar_url
+    FROM candidate_members c
+    LEFT JOIN editorial_member_profiles p ON lower(p.email)=c.normalized_email
+    WHERE ${verificationEmailSql("c")}
+    ORDER BY display_name, lower(c.email)`,
+  ).all<{ email: string; display_name: string; avatar_url: string }>();
+  return json({
+    members: (result.results ?? [])
+      .filter((member) => isVerificationAccountEmail(member.email))
+      .map((member) => ({
+        email: member.email,
+        display_name: member.display_name,
+        avatar_url: member.avatar_url,
+      })),
+  });
 }
 
 async function createReportAdminPermission(
@@ -6037,12 +6103,12 @@ async function genreOverviews(
       )
        SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
         COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
-        COALESCE(p.avatar_url,'') AS avatar_url,
+       COALESCE(p.avatar_url,'') AS avatar_url,
         COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year,
         COALESCE(p.country,'') AS country
        FROM candidate_members m
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
-       WHERE 1=1 ${cursorFilter}
+       WHERE NOT ${verificationEmailSql("m")}${cursorFilter}
        ORDER BY display_name,lower(m.email)${memberLimitClause}`,
     )
       .bind(project.id, ...cursorValues, ...(memberLimitValue === undefined ? [] : [memberLimitValue]))
@@ -8459,8 +8525,11 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     items,
     history: history.slice(0, 100),
     counts: {
-      today: items.filter((item) => item.priority === "urgent" || (item.dueAt && item.dueAt.slice(0, 10) === new Date().toISOString().slice(0, 10))).length,
-      dueSoon: items.filter((item) => item.priority === "due-soon").length,
+      // ポータルと同じ getWorkflowSummary を正本にする。アクション項目は
+      // 一覧上限（タスク50件・記事100件）の影響を受けるため、表示行から
+      // 再集計すると件数がポータルとずれる。
+      today: workflowSummary.taskSummary.dueToday,
+      dueSoon: workflowSummary.taskSummary.dueSoon,
       unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
       approvals: workflowSummary.pendingApprovals,
       assigned: items.filter((item) => item.kind !== "notification").length,
@@ -14798,8 +14867,14 @@ async function editorialPublicationIntegrationStatus(
     const automaticMerge = Boolean(auth?.app && canWrite);
     const reviewer = await editorialPublicationReviewerStatus(env, repository);
     const automaticReview = reviewer.canWrite;
+    // 公開前CIをWorkflow dispatchするには、公開用GitHub AppへActions: write
+    // が必要。古いGitHub APIレスポンスで権限一覧が省略される場合は
+    // 判定不能として既存の連携状態を壊さない。
+    const preflightReady = auth.app
+      ? auth.permissions?.actions === undefined || auth.permissions.actions === "write"
+      : null;
     const ready = defaultBranch === "main" && canWrite && !archived;
-    const automationReady = ready && automaticMerge && automaticReview;
+    const automationReady = ready && automaticMerge && automaticReview && preflightReady !== false;
     return json({
       ready,
       configured: true,
@@ -14809,16 +14884,19 @@ async function editorialPublicationIntegrationStatus(
       canCreatePullRequest: canWrite,
       automaticMerge,
       automaticReview,
+      preflightReady,
       automationReady,
       archived,
       ...(ready
         ? automationReady
           ? {}
           : {
-              automationError:
-                automaticMerge
-                  ? reviewer.error ?? "自動承認用Tokenを確認できません。"
-                  : "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
+            automationError:
+                preflightReady === false
+                  ? "公開前検証を実行するため、公開用GitHub AppにActions: write権限を付与してください。"
+                  : automaticMerge
+                    ? reviewer.error ?? "自動承認用Tokenを確認できません。"
+                    : "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
             }
         : {
             error: archived
@@ -14954,6 +15032,8 @@ type EditorialPublicationRun = {
   check_name: string | null;
   check_url: string | null;
   diagnostic_url: string | null;
+  preflight_run_id: number | null;
+  preflight_requested_at: string | null;
   failure_detail?: string | null;
   failure_step?: string | null;
   failure_file?: string | null;
@@ -14969,6 +15049,7 @@ const publicationRunSelect = `SELECT id, document_id, action, state, attempt,
   pull_request_number, pull_request_url, branch, head_sha, merge_sha,
   last_check_at, next_attempt_at, error_code, error_message, idempotency_key,
   lease_until, failure_kind, check_name, check_url, diagnostic_url,
+  preflight_run_id, preflight_requested_at,
   failure_detail, failure_step, failure_file, failure_line, failure_column, failure_suggestion,
   created_by,
   created_at, updated_at FROM editorial_publication_runs`;
@@ -15132,6 +15213,8 @@ const updateEditorialPublicationRun = async (
       | "check_name"
       | "check_url"
       | "diagnostic_url"
+      | "preflight_run_id"
+      | "preflight_requested_at"
       | "failure_detail"
       | "failure_step"
       | "failure_file"
@@ -15159,6 +15242,8 @@ const updateEditorialPublicationRun = async (
     "check_name",
     "check_url",
     "diagnostic_url",
+    "preflight_run_id",
+    "preflight_requested_at",
     "failure_detail",
     "failure_step",
     "failure_file",
@@ -15663,6 +15748,226 @@ async function verifyEditorialPublicationDeployment(
 const publicationRunBranch = (document: EditorialDocument, run: EditorialPublicationRun) =>
   run.branch ?? `editorial/${run.action === "publish" ? "published" : "draft"}-${document.id}-${run.id}`;
 
+type EditorialPreflightWorkflowRun = {
+  id: number;
+  status: string | null;
+  conclusion: string | null;
+  html_url: string | null;
+  head_branch: string | null;
+  created_at: string | null;
+};
+
+const editorialPreflightWorkflow = "ci.yml";
+
+const dispatchEditorialPublicationPreflight = async (
+  env: Env,
+  branch: string,
+) => {
+  const auth = await githubToken(env);
+  if (!auth)
+    throw new EditorialPublicationFailure(
+      "公開前検証を開始できません。GitHub公開連携が未設定です。",
+      "preflight_configuration",
+      "configuration",
+    );
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        ...githubApiHeaders(auth.token, "atlasez-editorial-preflight"),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ ref: branch }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403)
+      throw new EditorialPublicationFailure(
+        "公開前検証を開始できません。GitHub AppにActionsのWorkflow dispatch権限（Actions: write）が必要です。",
+        "preflight_permission",
+        "configuration",
+        false,
+      );
+    throw await githubFailure(
+      response,
+      "公開前検証を開始できませんでした。",
+      "preflight_dispatch",
+    );
+  }
+  return new Date().toISOString();
+};
+
+const editorialPreflightWorkflowRun = async (
+  env: Env,
+  branch: string,
+  requestedAt: string,
+  runId?: number | null,
+): Promise<EditorialPreflightWorkflowRun | null> => {
+  const auth = await githubToken(env);
+  if (!auth) return null;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const headers = githubApiHeaders(auth.token, "atlasez-editorial-preflight");
+  let runs: EditorialPreflightWorkflowRun[] = [];
+  if (runId) {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}/actions/runs/${runId}`,
+      { headers },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok)
+      throw await githubFailure(
+        response,
+        "公開前検証の状態を取得できませんでした。",
+        "preflight_status",
+      );
+    const data = (await response.json()) as Partial<EditorialPreflightWorkflowRun>;
+    if (typeof data.id !== "number") return null;
+    runs = [
+      {
+        id: data.id,
+        status: typeof data.status === "string" ? data.status : null,
+        conclusion: typeof data.conclusion === "string" ? data.conclusion : null,
+        html_url: typeof data.html_url === "string" ? data.html_url : null,
+        head_branch: typeof data.head_branch === "string" ? data.head_branch : null,
+        created_at: typeof data.created_at === "string" ? data.created_at : null,
+      },
+    ];
+  } else {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(branch)}&per_page=10`,
+      { headers },
+    );
+    if (!response.ok)
+      throw await githubFailure(
+        response,
+        "公開前検証の実行一覧を取得できませんでした。",
+        "preflight_runs",
+      );
+    const data = (await response.json().catch(() => ({}))) as {
+      workflow_runs?: Partial<EditorialPreflightWorkflowRun>[];
+    };
+    runs = (data.workflow_runs ?? []).flatMap((value) =>
+      typeof value.id === "number"
+        ? [{
+            id: value.id,
+            status: typeof value.status === "string" ? value.status : null,
+            conclusion: typeof value.conclusion === "string" ? value.conclusion : null,
+            html_url: typeof value.html_url === "string" ? value.html_url : null,
+            head_branch: typeof value.head_branch === "string" ? value.head_branch : null,
+            created_at: typeof value.created_at === "string" ? value.created_at : null,
+          }]
+        : [],
+    );
+  }
+  const requestedEpoch = Date.parse(requestedAt);
+  return runs
+    .filter((run) => run.head_branch === branch)
+    .filter((run) => {
+      const createdEpoch = run.created_at ? Date.parse(run.created_at) : NaN;
+      return !Number.isFinite(requestedEpoch) || !Number.isFinite(createdEpoch) || createdEpoch >= requestedEpoch - 60_000;
+    })
+    .sort((left, right) => Date.parse(right.created_at ?? "") - Date.parse(left.created_at ?? ""))[0] ?? null;
+};
+
+const prepareEditorialPublicationBranch = async (
+  env: Env,
+  document: EditorialDocument,
+  run: EditorialPublicationRun,
+) => {
+  const branch = publicationRunBranch(document, run);
+  const result = await writeEditorialDocumentToGitHub(
+    document,
+    env,
+    run.action === "publish" ? "published" : "draft",
+    `${run.action === "publish" ? "Publish" : "Unpublish"} article: ${document.title}`,
+    branch,
+    { createPullRequest: false },
+  );
+  if (result instanceof Response)
+    throw await publicationFailureFromResponse(result, "公開前の事前検証用ブランチを作成できませんでした。");
+  return { branch: result.branch };
+};
+
+const startEditorialPublicationPreflight = async (
+  env: Env,
+  document: EditorialDocument,
+  run: EditorialPublicationRun,
+) => {
+  const { branch } = await prepareEditorialPublicationBranch(env, document, run);
+  const requestedAt = await dispatchEditorialPublicationPreflight(env, branch);
+  const preflight = await editorialPreflightWorkflowRun(env, branch, requestedAt);
+  await updateEditorialPublicationRun(env, run.id, {
+    state: "checks_pending",
+    branch,
+    preflight_run_id: preflight?.id ?? null,
+    preflight_requested_at: requestedAt,
+    last_check_at: new Date().toISOString(),
+    next_attempt_at: null,
+    check_name: "公開前の事前検証",
+    check_url: preflight?.html_url ?? `https://github.com/${env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01"}/actions/workflows/${editorialPreflightWorkflow}`,
+    diagnostic_url: preflight?.html_url ?? null,
+    error_code: null,
+    error_message: "公開用PRを作成する前に、記事と学習サイトのCIを検証しています。",
+    failure_kind: null,
+    failure_detail: null,
+    failure_step: null,
+    failure_file: null,
+    failure_line: null,
+    failure_column: null,
+    failure_suggestion: null,
+    lease_until: null,
+  });
+};
+
+const getEditorialPreflightDiagnostic = async (
+  env: Env,
+  workflow: EditorialPreflightWorkflowRun,
+): Promise<EditorialPublicationDiagnostic | null> => {
+  const auth = await githubToken(env);
+  if (!auth) return null;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const headers = githubApiHeaders(auth.token, "atlasez-editorial-preflight-diagnostics");
+  const jobsResponse = await fetch(
+    `https://api.github.com/repos/${repository}/actions/runs/${workflow.id}/jobs?per_page=100`,
+    { headers },
+  ).catch(() => null);
+  if (!jobsResponse?.ok) return null;
+  const data = (await jobsResponse.json().catch(() => ({}))) as {
+    jobs?: Array<{ id?: number; name?: string; conclusion?: string | null }>;
+  };
+  const failedJob = (data.jobs ?? []).find((job) =>
+    job.id && ["failure", "cancelled", "timed_out", "action_required"].includes(job.conclusion ?? ""),
+  );
+  if (!failedJob?.id) return null;
+  const logResponse = await fetch(
+    `https://api.github.com/repos/${repository}/actions/jobs/${failedJob.id}/logs`,
+    { headers },
+  ).catch(() => null);
+  if (!logResponse?.ok) return null;
+  const logLines = (await logResponse.text().catch(() => ""))
+    .split(/\r?\n/)
+    .map(cleanGithubLogLine)
+    .filter(Boolean);
+  const meaningful = logLines.filter((line) => !/node(?:\.js)?\s+20\s+is\s+deprecated|actions\/(?:checkout|setup-node)@|process completed with exit code|^\[command\]/i.test(line));
+  const fileReference = extractGithubFileReference(meaningful) ?? extractGithubFileReference(logLines);
+  const relevant = meaningful.filter((line) => /error|failed|failure|invalid|not found|存在しない|未対応|unsupported|directive|検証エラー|重複|循環|katex|mathjax|latex|typescript|eslint|lint|format/i.test(line));
+  const detailLines = [...new Set([
+    ...(fileReference ? [fileReference.message] : []),
+    ...relevant.filter((line) => !/^Process completed with exit code \d+\.?$/i.test(line)),
+  ])].slice(0, 5);
+  if (!detailLines.length) return null;
+  return {
+    detail: detailLines.join("\n").slice(0, 2_000),
+    step: [...logLines].reverse().find((line) => /^Run\s+.+/.test(line))?.replace(/^Run\s+/, "") ?? failedJob.name ?? null,
+    file: fileReference?.file ?? null,
+    line: fileReference?.line ?? null,
+    column: fileReference?.column ?? null,
+    suggestion: publicationSuggestionFor(detailLines.join("\n")),
+  };
+};
+
 async function createEditorialPublicationRunPullRequest(
   env: Env,
   document: EditorialDocument,
@@ -15702,6 +16007,10 @@ async function createEditorialPublicationRunPullRequest(
     failure_kind: null,
     error_code: null,
     error_message: "公開用PRを作成しました。CIを自動確認しています。",
+    check_name: null,
+    check_url: null,
+    preflight_run_id: null,
+    preflight_requested_at: null,
     diagnostic_url: result.pullRequestUrl,
   });
   return result;
@@ -15738,6 +16047,7 @@ const publicationFailureStatus = (failure: EditorialPublicationFailure) =>
   failure.kind === "configuration" ? 503 : failure.kind === "validation" ? 409 : 502;
 
 type PublicationRunProgressTarget = {
+  runId?: string;
   pullRequestNumber?: number;
   branch?: string;
   headSha?: string;
@@ -15871,6 +16181,118 @@ async function receiveGithubPublicationWebhook(
   return json({ ok: true, event, ...(await progress) }, 202);
 }
 
+/**
+ * PR作成前に公開サイトのCIを実行し、ブランチ内容を検証する。
+ * 事前検証中はPR番号を持たないため、公開PRへ失敗した変更を出さない。
+ */
+async function progressEditorialPublicationPreflight(
+  env: Env,
+  document: EditorialDocument,
+  run: EditorialPublicationRun,
+) {
+  if (!run.branch) {
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "failed",
+      failure_kind: "internal",
+      error_code: "preflight_branch_missing",
+      error_message: "公開前検証用ブランチが見つかりません。運営サイトから再試行してください。",
+      failure_suggestion: "公開ボタンをもう一度押して、公開処理を再試行してください。",
+    });
+    return true;
+  }
+  const workflow = await editorialPreflightWorkflowRun(
+    env,
+    run.branch,
+    run.preflight_requested_at ?? run.created_at,
+    run.preflight_run_id,
+  );
+  const workflowUrl =
+    workflow?.html_url ??
+    run.check_url ??
+    `https://github.com/${env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01"}/actions/workflows/${editorialPreflightWorkflow}`;
+  const now = new Date().toISOString();
+  if (!workflow) {
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "checks_pending",
+      last_check_at: now,
+      check_name: "公開前の事前検証",
+      check_url: workflowUrl,
+      diagnostic_url: run.diagnostic_url ?? workflowUrl,
+      error_code: "preflight_pending",
+      error_message: "公開用PRを作成する前に、記事と学習サイトのCIを開始しています。",
+    });
+    return true;
+  }
+  if (workflow.status !== "completed") {
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "checks_pending",
+      preflight_run_id: workflow.id,
+      last_check_at: now,
+      check_name: "公開前の事前検証",
+      check_url: workflowUrl,
+      diagnostic_url: workflowUrl,
+      error_code: "preflight_pending",
+      error_message: "公開前の事前検証を実行しています。完了までPRは作成されません。",
+    });
+    return true;
+  }
+  if (workflow.conclusion === "success") {
+    await createEditorialPublicationRunPullRequest(env, document, {
+      ...run,
+      preflight_run_id: workflow.id,
+      check_url: workflowUrl,
+    });
+    return true;
+  }
+  const transient = ["cancelled", "timed_out", "startup_failure"].includes(
+    workflow.conclusion ?? "",
+  );
+  const canRetry = transient && run.attempt < publicationMaxAttempts;
+  const failureValues: Partial<EditorialPublicationRun> = canRetry
+    ? {
+        state: "retry_wait",
+        // 次回のretry_wait処理でattemptを1つ進める。ここで増やすと
+        // 事前検証の再実行時に試行回数を二重計上してしまう。
+        attempt: run.attempt,
+        next_attempt_at: new Date(Date.now() + publicationRetryDelayMs(run.attempt)).toISOString(),
+        failure_kind: "ci",
+        error_code: "preflight_transient_failure",
+        error_message: `公開前の事前検証が一時的に失敗しました（${workflow.conclusion ?? "unknown"}）。自動再試行します。PRは作成されていません。`,
+        check_name: "公開前の事前検証",
+        check_url: workflowUrl,
+        diagnostic_url: workflowUrl,
+        failure_suggestion: "再試行後も失敗する場合は、事前検証ログを確認してください。",
+        lease_until: null,
+      }
+    : {
+        state: "failed",
+        failure_kind: "ci",
+        error_code: "preflight_failed",
+        error_message: "公開前の事前検証が失敗したため、PRは作成されませんでした。記事内容を修正して再試行してください。",
+        check_name: "公開前の事前検証",
+        check_url: workflowUrl,
+        diagnostic_url: workflowUrl,
+        failure_suggestion: "事前検証ログで示された記事・数式・画像・リンクを修正してから、運営サイトで再試行してください。",
+        lease_until: null,
+      };
+  await updateEditorialPublicationRun(env, run.id, failureValues);
+  const diagnostic = await getEditorialPreflightDiagnostic(env, workflow).catch((error) => {
+    console.error("editorial preflight diagnostic failed", { runId: run.id, error });
+    return null;
+  });
+  if (diagnostic) {
+    await updateEditorialPublicationRun(env, run.id, {
+      failure_detail: diagnostic.detail,
+      failure_step: diagnostic.step,
+      failure_file: diagnostic.file,
+      failure_line: diagnostic.line,
+      failure_column: diagnostic.column,
+      failure_suggestion: diagnostic.suggestion,
+    });
+  }
+  return true;
+}
+
 async function progressEditorialPublicationRun(env: Env, run: EditorialPublicationRun) {
   const document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
@@ -15884,6 +16306,14 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
       error_code: "document_missing",
       error_message: "対象原稿が削除されています。",
     });
+    return;
+  }
+  if (
+    run.state === "checks_pending" &&
+    run.check_name === "公開前の事前検証" &&
+    !run.pull_request_number
+  ) {
+    await progressEditorialPublicationPreflight(env, document, run);
     return;
   }
   if (run.state === "deploy_pending") {
@@ -15922,7 +16352,10 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
       await updateEditorialPublicationRun(env, run.id, { state: "failed", error_code: "retry_exhausted", error_message: "自動再試行の上限に達しました。記事内容またはCIの失敗内容を確認してください。" });
       return;
     }
-    await createEditorialPublicationRunPullRequest(env, document, { ...run, attempt: run.state === "retry_wait" ? run.attempt + 1 : run.attempt });
+    await startEditorialPublicationPreflight(env, document, {
+      ...run,
+      attempt: run.state === "retry_wait" ? run.attempt + 1 : run.attempt,
+    });
     return;
   }
   const pullRequestNumber = run.pull_request_number ?? document.publication_pr_number;
@@ -16047,6 +16480,10 @@ async function progressEditorialPublicationRuns(
   const now = new Date().toISOString();
   const filters: string[] = [];
   const bindings: unknown[] = [];
+  if (target?.runId) {
+    filters.push("id = ?");
+    bindings.push(target.runId);
+  }
   if (target?.pullRequestNumber) {
     filters.push("pull_request_number = ?");
     bindings.push(target.pullRequestNumber);
@@ -16128,6 +16565,7 @@ async function writeEditorialDocumentToGitHub(
   publicationStatus: "published" | "draft",
   message: string,
   requestedBranch?: string,
+  options?: { createPullRequest?: boolean },
 ): Promise<{
   pullRequestUrl: string | null;
   pullRequestNumber: number | null;
@@ -16272,6 +16710,31 @@ async function writeEditorialDocumentToGitHub(
     });
     if (!publish.ok) throw await githubFailure(publish, "GitHubへ記事を反映できませんでした。", "github_article_write");
     const result = (await publish.json()) as { content?: { sha?: string } };
+    // 事前検証では、ここまででブランチ上の全ファイルを書き終えている。
+    // PRを作らずにCIだけ走らせることで、公開用PRへ失敗した変更を出さない。
+    if (options?.createPullRequest === false) {
+      try {
+        await storeArticleBackup(
+          env,
+          repository,
+          path,
+          result.content?.sha ?? crypto.randomUUID(),
+          body,
+          "publish",
+        );
+      } catch (error) {
+        console.error("article source backup failed after preflight write", {
+          documentId: document.id,
+          error,
+        });
+      }
+      return {
+        pullRequestUrl: null,
+        pullRequestNumber: null,
+        branch,
+        body,
+      };
+    }
     const owner = repository.split("/")[0] ?? "Atlasez";
     const pullRequestsResponse = await fetch(
       `https://api.github.com/repos/${repository}/pulls?head=${encodeURIComponent(`${owner}:${branch}`)}&base=main&state=all&per_page=100`,
@@ -16367,6 +16830,7 @@ async function publishEditorialDocument(
   request: Request,
   env: Env,
   documentId: string,
+  ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -16459,6 +16923,7 @@ async function publishEditorialDocument(
   const claim = await claimEditorialPublicationRun(env, documentId, "publish", scope.email);
   if (!claim.run)
     return json({ error: "公開処理のRunを作成できませんでした。" }, 503);
+  const claimedRun = claim.run;
   if (!claim.created)
     return json({
       ok: true,
@@ -16467,6 +16932,44 @@ async function publishEditorialDocument(
       pullRequestUrl: claim.run.pull_request_url ?? document.publication_pr_url,
       pullRequestNumber: claim.run.pull_request_number ?? document.publication_pr_number,
     });
+
+  // GitHubのブランチ・本文・画像・PR操作は外部APIの遅延に左右される。
+  // 本番リクエストでは受付を先に返し、Runの進行を待受コンテキストへ
+  // 引き渡すことで、公開ボタンがCloudflareのリクエスト制限で失敗しない
+  // ようにする。ctxがない単体テスト／ローカル呼び出しでは従来通り同期実行。
+  if (ctx) {
+    ctx.waitUntil(
+      Promise.all([
+        recordAdminAudit(
+          env,
+          scope.email,
+          "article_published",
+          "article",
+          documentId,
+          document.title,
+          `記事の公開処理を受付：${document.title}`,
+          { publicationRunId: claimedRun.id, status: "queued" },
+        ),
+        progressEditorialPublicationRuns(env, { runId: claimedRun.id }),
+      ]).catch((error) =>
+        console.error("queued editorial publication run failed", {
+          documentId,
+          runId: claimedRun.id,
+          error,
+        }),
+      ),
+    );
+    return json(
+      {
+        ok: true,
+        pending: true,
+        accepted: true,
+        publicationRun: claimedRun,
+        message: "公開処理を受け付けました。GitHub・CI・学習サイト反映をバックグラウンドで確認します。",
+      },
+      202,
+    );
+  }
   let result: { pullRequestUrl: string | null; pullRequestNumber: number | null; branch: string; body: string };
   try {
     result = await createEditorialPublicationRunPullRequest(env, document, claim.run);
@@ -16604,7 +17107,7 @@ async function dispatchScheduledEditorialPublications(env: Env) {
         await env.REPORTS.prepare("UPDATE editorial_documents SET scheduled_publish_claimed_at = NULL WHERE id = ?").bind(document.id).run();
         continue;
       }
-      await createEditorialPublicationRunPullRequest(env, document, runClaim.run);
+      await startEditorialPublicationPreflight(env, document, runClaim.run);
       await env.REPORTS.prepare(
         "UPDATE editorial_documents SET scheduled_publish_at = NULL, scheduled_publish_claimed_at = NULL WHERE id = ?",
       ).bind(document.id).run();
@@ -16836,6 +17339,7 @@ async function unpublishEditorialDocument(
   request: Request,
   env: Env,
   documentId: string,
+  ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -16948,6 +17452,7 @@ async function unpublishEditorialDocument(
   const claim = await claimEditorialPublicationRun(env, documentId, "unpublish", scope.email);
   if (!claim.run)
     return json({ error: "公開取り消し処理のRunを作成できませんでした。" }, 503);
+  const claimedRun = claim.run;
   if (!claim.created)
     return json({
       ok: true,
@@ -16956,6 +17461,39 @@ async function unpublishEditorialDocument(
       pullRequestUrl: claim.run.pull_request_url ?? document.publication_pr_url,
       pullRequestNumber: claim.run.pull_request_number ?? document.publication_pr_number,
     });
+  if (ctx) {
+    ctx.waitUntil(
+      Promise.all([
+        recordAdminAudit(
+          env,
+          scope.email,
+          "article_unpublished",
+          "article",
+          documentId,
+          document.title,
+          `記事の公開取り消し処理を受付：${document.title}`,
+          { publicationRunId: claimedRun.id, status: "queued" },
+        ),
+        progressEditorialPublicationRuns(env, { runId: claimedRun.id }),
+      ]).catch((error) =>
+        console.error("queued editorial unpublication run failed", {
+          documentId,
+          runId: claimedRun.id,
+          error,
+        }),
+      ),
+    );
+    return json(
+      {
+        ok: true,
+        pending: true,
+        accepted: true,
+        publicationRun: claimedRun,
+        message: "公開取り消しを受け付けました。GitHub・CI・学習サイト反映をバックグラウンドで確認します。",
+      },
+      202,
+    );
+  }
   let result: { pullRequestUrl: string | null; pullRequestNumber: number | null; branch: string; body: string };
   try {
     result = await createEditorialPublicationRunPullRequest(env, document, claim.run);
@@ -18810,6 +19348,11 @@ async function handleAdminRequest(
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
+  if (
+    url.pathname === "/api/admin/verification-members" &&
+    request.method === "GET"
+  )
+    return listVerificationMemberAccounts(request, env);
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
@@ -19297,14 +19840,14 @@ async function handleAdminRequest(
   );
   if (editorialPublishMatch)
     return request.method === "POST"
-      ? publishEditorialDocument(request, env, editorialPublishMatch[1])
+      ? publishEditorialDocument(request, env, editorialPublishMatch[1], ctx)
       : json({ error: "POSTのみ利用できます。" }, 405);
   const editorialUnpublishMatch = url.pathname.match(
     /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/unpublish$/i,
   );
   if (editorialUnpublishMatch)
     return request.method === "POST"
-      ? unpublishEditorialDocument(request, env, editorialUnpublishMatch[1])
+      ? unpublishEditorialDocument(request, env, editorialUnpublishMatch[1], ctx)
       : json({ error: "POSTのみ利用できます。" }, 405);
   const editorialDocumentMatch = url.pathname.match(
     /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})$/i,
@@ -19387,6 +19930,7 @@ async function handleAdminRequest(
 
 const COMPLETED_TASK_ARCHIVE_AFTER_DAYS = 30;
 const TASK_ARCHIVE_RETENTION_DAYS = 90;
+const AUDIT_LOG_RETENTION_DAYS = 730;
 
 /** 完了から一定期間経ったタスクを監査可能なアーカイブへ退避する。 */
 async function archiveStaleCompletedTasks(env: Env) {
@@ -19409,6 +19953,30 @@ async function archiveStaleCompletedTasks(env: Env) {
   } catch (error) {
     // 移行前の環境でも他の定期処理を止めない。
     console.warn("task archive sweep skipped", error);
+  }
+}
+
+/** 監査ログは保持期限を過ぎても削除せず、アーカイブとして残す。 */
+async function archiveStaleAuditLogs(env: Env) {
+  const now = new Date();
+  const cutoff = new Date(
+    now.getTime() - AUDIT_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const archivedAt = now.toISOString();
+  try {
+    await Promise.all([
+      env.REPORTS.prepare(
+        `UPDATE admin_audit_log SET archived_at=?
+         WHERE archived_at IS NULL AND created_at<?`,
+      ).bind(archivedAt, cutoff).run(),
+      env.REPORTS.prepare(
+        `UPDATE admin_permission_audit_log SET archived_at=?
+         WHERE archived_at IS NULL AND created_at<?`,
+      ).bind(archivedAt, cutoff).run(),
+    ]);
+  } catch (error) {
+    // 移行前の環境でも他の定期処理を止めない。
+    console.warn("audit archive sweep skipped", error);
   }
 }
 
@@ -19466,6 +20034,7 @@ export default {
           syncDiscordRolesToAdmin(env),
           syncEditorialPublicationStatus(env),
           dispatchScheduledEditorialPublications(env),
+          archiveStaleAuditLogs(env),
         ]),
       );
       return;
@@ -19481,6 +20050,7 @@ export default {
         dispatchApplicationEmails(env),
         dispatchPendingDiscordProvisioning(env),
         dispatchScheduledEditorialPublications(env),
+        archiveStaleAuditLogs(env),
       ]),
     );
   },

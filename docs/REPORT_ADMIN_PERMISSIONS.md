@@ -39,7 +39,7 @@ FROM report_admin_permissions
 ORDER BY email, subject;
 ```
 
-`ukyoukay0@gmail.com` は初期状態で `*`（全分野）の管理者として登録されます。過去に受信済みで分野が空欄の報告は、全分野管理者だけが確認できます。
+主管理者はD1の `report_admin_permissions` に `subject='*'` を持つアカウントとして管理します。過去に受信済みで分野が空欄の報告は、全分野管理者だけが確認できます。
 
 ## 仕組みと注意点
 

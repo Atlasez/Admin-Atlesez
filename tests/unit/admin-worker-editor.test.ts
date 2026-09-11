@@ -151,6 +151,43 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("uses the shared task summary for action-center due counts", async () => {
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("SELECT id,slug,name FROM atlasez_projects")) {
+              return {
+                results: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+              } as { results: T[] };
+            }
+            return { results: [] as T[] };
+          };
+          statement.first = async <T>() => {
+            if (query.includes("SELECT COUNT(*) AS open_count")) {
+              return { open_count: 18, due_today: 4, due_soon: 7 } as T;
+            }
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      counts: { today: 4, dueSoon: 7 },
+    });
+  });
+
   it("loads action-center history queries only for the history view", async () => {
     const actionQueries: string[] = [];
     const actionEnv = {
@@ -1633,6 +1670,38 @@ describe("admin worker editor APIs", () => {
             entry.values.includes("publish"),
         ),
       ).toBe(true);
+
+      // 本番のWorkerExecutionContextでは外部GitHub処理を待受後へ移し、
+      // 公開受付が外部APIの遅延でタイムアウトしないことを確認する。
+      currentPublicationRun = null;
+      requests.length = 0;
+      const background: Promise<unknown>[] = [];
+      const acceptedResponse = await worker.fetch(
+        new Request(
+          `http://localhost/api/admin/editor/documents/${documentId}/publish`,
+          {
+            method: "POST",
+            headers: {
+              origin: "http://localhost",
+              "content-type": "application/json",
+            },
+            body: "{}",
+          },
+        ),
+        env as never,
+        {
+          waitUntil: (promise: Promise<unknown>) => background.push(promise),
+        } as never,
+      );
+      expect(acceptedResponse.status).toBe(202);
+      await expect(acceptedResponse.json()).resolves.toMatchObject({
+        ok: true,
+        pending: true,
+        accepted: true,
+        publicationRun: { id: publicationRun.id },
+      });
+      expect(background).toHaveLength(1);
+      await Promise.all(background);
     } finally {
       vi.unstubAllGlobals();
     }

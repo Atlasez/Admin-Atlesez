@@ -19,6 +19,7 @@ class Statement {
 
 const env = (mode: string, extra: Record<string, string> = {}) => ({
   ADMIN_AUTH_MODE: mode,
+  ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
   ...extra,
   REPORTS: {
     prepare: (query: string) => new Statement(query),
@@ -39,6 +40,7 @@ const stageEnv = (
   sessionEmail = "applicant@example.com",
 ) => ({
   ADMIN_AUTH_MODE: "google-oauth",
+  ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
   REPORTS: {
     prepare: (query: string) => {
       const statement = new Statement(query);
@@ -294,6 +296,7 @@ describe("applicant stage server-side access", () => {
       }),
       {
         ADMIN_AUTH_MODE: "cloudflare-access",
+        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
         REPORTS: reports,
         ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
       } as never,
@@ -307,6 +310,97 @@ describe("applicant stage server-side access", () => {
     );
     expect(permissionQuery).toBeDefined();
     expect(permissionQuery).not.toContain("LIMIT ?");
+  });
+
+  it("keeps reserved verification accounts out of the normal permission list", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() => {
+          if (query.includes("GROUP_CONCAT(DISTINCT p.subject)"))
+            return {
+              results: [
+                {
+                  email: "operator@example.com",
+                  subjects: "mathematics",
+                  display_name: "検証アカウント",
+                  university: "",
+                  year: "",
+                  interests: "",
+                  avatar_url: "",
+                  discord_user_id: "",
+                },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      permissions?: Array<{ email?: string }>;
+    };
+    expect(
+      data.permissions?.some(
+        (member) => member.email === "operator@example.com",
+      ),
+    ).toBe(false);
+  });
+
+  it("exposes reserved verification accounts through the isolated endpoint", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("candidate_members")
+            ? ({
+                results: [
+                  {
+                    email: "operator@example.com",
+                    display_name: "検証アカウント",
+                    avatar_url: "",
+                  },
+                ],
+              } as { results: T[] })
+            : ({ results: [] } as { results: T[] });
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/verification-members", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      members: [{ email: "operator@example.com" }],
+    });
   });
 
   it("paginates permission audit entries with a stable cursor", async () => {
@@ -378,6 +472,35 @@ describe("applicant stage server-side access", () => {
         query.includes("FROM admin_permission_audit_log"),
       ),
     ).toContain("LIMIT ?");
+    expect(
+      queries.find((query) =>
+        query.includes("FROM admin_permission_audit_log"),
+      ),
+    ).toContain("archived_at IS NULL");
+
+    const archivedResponse = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/permission-audit?limit=1&includeArchived=1",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "admin@example.com",
+          },
+        },
+      ),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+    expect(archivedResponse.status).toBe(200);
+    await expect(archivedResponse.json()).resolves.toMatchObject({
+      includeArchived: true,
+    });
+    const archivedQuery = queries
+      .filter((query) => query.includes("FROM admin_permission_audit_log"))
+      .at(-1);
+    expect(archivedQuery).not.toContain("archived_at IS NULL");
   });
 
   it("paginates GitHub update history by page and reports continuation", async () => {

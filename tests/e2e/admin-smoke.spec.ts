@@ -175,6 +175,32 @@ test("運営メンバー統計は共通のエラー状態から再試行でき�
   expect(genreRequests).toBe(2);
 });
 
+test("運営メンバー管理は検証用アカウントを専用アーカイブへ分離する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.route("**/api/admin/verification-members", async (route) => {
+    await route.fulfill({
+      json: {
+        members: [
+          {
+            email: "operator@example.com",
+            display_name: "検証アカウント",
+            avatar_url: "",
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("admin/member-management/");
+  const archive = page.locator("[data-verification-archive]");
+  await expect(archive).toBeVisible();
+  await expect(archive).toContainText("検証アカウント");
+  await expect(page.locator("[data-table-body]")).not.toContainText(
+    "operator@example.com",
+  );
+});
+
 test("作業の進め方に運営画面のスクリーンショットが表示される", async ({
   page,
 }) => {
@@ -194,3 +220,28 @@ test("作業の進め方に運営画面のスクリーンショットが表示�
     )
     .toBe(true);
 });
+
+const responsiveSmokePages = [
+  ["ポータル", "admin/portal/"],
+  ["アクションセンター", "admin/action-center/"],
+  ["タスク管理", "admin/member-tasks/"],
+  ["記事一覧", "admin/articles/"],
+  ["権限管理", "admin/permissions/"],
+  ["記事編集", "admin/editor/"],
+] as const;
+
+for (const [label, path] of responsiveSmokePages) {
+  for (const width of [1440, 768, 390]) {
+    test(`${label}が${width}pxで横方向に崩れない`, async ({ page }) => {
+      await mockAdminApis(page);
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(path);
+      const geometry = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(geometry.viewport).toBe(width);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(width + 1);
+    });
+  }
+}

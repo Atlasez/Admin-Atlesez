@@ -184,6 +184,67 @@ test("個別記事を開いたときは未選択用の開始パネルを表示�
   await expect(page.locator("[data-editor-empty]")).toBeHidden();
 });
 
+test("記事読み込み中の表示は編集パネル中央に固定される", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    // Keep the request pending long enough to observe the reserved loading
+    // layout even on a fast CI runner. `page.goto` below only waits for the
+    // initial document, so the editor-starting marker is guaranteed to be
+    // present before the response resolves.
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await route.fulfill({
+      json: {
+        documents: [documentItem],
+        mentionNames: ["Alice", "Bob"],
+        scope: {
+          email: "alice@example.com",
+          subjects: ["mathematics"],
+          isManager: true,
+        },
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1", {
+    waitUntil: "domcontentloaded",
+  });
+  const layout = await page
+    .locator(".editor-workspace[data-editor-starting] .editor-panel")
+    .evaluate((panel) => {
+      const style = getComputedStyle(panel, "::after");
+      return {
+        panelWidth: panel.getBoundingClientRect().width,
+        minHeight: panel.getBoundingClientRect().height,
+        display: style.display,
+        inset: style.inset,
+        transform: style.transform,
+        textAlign: style.textAlign,
+      };
+    });
+  expect(layout.panelWidth).toBeGreaterThan(0);
+  expect(layout.minHeight).toBeGreaterThanOrEqual(736);
+  expect(layout.display).toBe("grid");
+  expect(layout.inset).toBe("0px");
+  expect(layout.transform).toBe("none");
+  expect(layout.textAlign).toBe("center");
+});
+
+test("公開操作は処理中の二重送信を防ぐ", async ({ page }) => {
+  const approvedDocument = { ...documentItem, status: "approved" };
+  await mockAdminApi(page, undefined, approvedDocument);
+  let publishRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/admin/editor/documents/doc-1/publish"))
+      publishRequests += 1;
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await page.getByRole("button", { name: "公開する" }).click();
+  const confirm = page
+    .locator("[data-approval-dialog]")
+    .getByRole("button", { name: "はい（公開する）" });
+  await Promise.all([confirm.click(), confirm.click().catch(() => undefined)]);
+  await expect.poll(() => publishRequests).toBe(1);
+});
+
 test("記事の初回作成者と編集者アイコンを表示し、プレビューを章単位で折りたためる", async ({
   page,
 }) => {
@@ -1501,6 +1562,53 @@ test("H-1: 保存版と現在の本文の差分を表示できる", async ({ pag
   await expect(page.locator(".revision-diff-line.is-added")).toContainText(
     "+ 群の本文です。",
   );
+});
+
+test("H-3: 版履歴を保存前の入力欄へ安全に反映できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/revisions",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          revisions: [
+            {
+              id: "revision-1",
+              title: "群の定義（旧版）",
+              summary: "旧要約",
+              body: "## 群\n\n旧版の本文です。",
+              status: "draft",
+              saved_by: "alice@example.com",
+              saved_at: "2026-08-19T00:00:00.000Z",
+            },
+          ],
+        },
+      });
+    },
+  );
+  let patchCount = 0;
+  page.on("request", (request) => {
+    if (
+      request.url().includes("/api/admin/editor/documents/doc-1") &&
+      request.method() === "PATCH"
+    ) {
+      patchCount += 1;
+    }
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-revision-before]")).toHaveCount(1);
+  await page.locator("[data-revision-restore]").click();
+  await expect(page.locator('input[name="title"]')).toHaveValue(
+    "群の定義（旧版）",
+  );
+  await expect(page.locator('textarea[name="body"]')).toHaveValue(
+    "## 群\n\n旧版の本文です。",
+  );
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力欄へ反映しました",
+  );
+  expect(patchCount).toBe(0);
 });
 
 test("H-2: 版履歴を査読コメント枠から独立して配置する", async ({ page }) => {
