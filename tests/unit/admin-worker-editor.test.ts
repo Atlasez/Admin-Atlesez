@@ -295,6 +295,25 @@ describe("admin worker editor APIs", () => {
     expect(category.slug).toMatch(/^category-[a-z0-9-]+$/);
   });
 
+  it("treats an existing static subject as an idempotent create", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "subject", name: "情報" }),
+      }),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      existing: true,
+      slug: "informatics",
+      name: "情報",
+    });
+  });
+
   it("migrates draft references when a dynamic subject slug changes", async () => {
     const taxonomyId = "00000000-0000-0000-0000-000000000021";
     const queries: string[] = [];
@@ -569,6 +588,97 @@ describe("admin worker editor APIs", () => {
     });
     expect(queries.some((query) => query.includes("id IN (?)"))).toBe(true);
     expect(batches).toHaveLength(1);
+  });
+
+  it("supports cursor pagination for large outline lists", async () => {
+    const queries: string[] = [];
+    const outlineRows = [
+      {
+        id: "00000000-0000-0000-0000-000000000041",
+        project_id: "atlas",
+        subject_slug: "informatics",
+        category_slug: "machine-learning",
+        parent_id: null,
+        document_id: null,
+        slug: "first",
+        title: "最初の項目",
+        summary: "",
+        concept_id: "",
+        sort_order: 10,
+        status: "active",
+        created_by: "local-editor@atlasez.test",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "00000000-0000-0000-0000-000000000042",
+        project_id: "atlas",
+        subject_slug: "informatics",
+        category_slug: "machine-learning",
+        parent_id: null,
+        document_id: null,
+        slug: "second",
+        title: "次の項目",
+        summary: "",
+        concept_id: "",
+        sort_order: 20,
+        status: "active",
+        created_by: "local-editor@atlasez.test",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { subject: "*" } as T;
+            return null as T | null;
+          };
+          statement.all = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries"))
+              return { results: outlineRows as T[] } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/outline?project=atlas&limit=1",
+      ),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      entries: unknown[];
+      pagination: {
+        limit: number;
+        hasMore: boolean;
+        nextCursor?: string | null;
+      };
+    };
+    expect(payload).toMatchObject({
+      entries: [expect.objectContaining({ id: outlineRows[0].id })],
+      pagination: { limit: 1, hasMore: true },
+    });
+    expect(payload.pagination.nextCursor).toContain(
+      "informatics|machine-learning|10|",
+    );
+    expect(
+      queries.some((query) =>
+        query.includes(
+          "ORDER BY subject_slug,category_slug,sort_order,title,id LIMIT ?",
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("keeps a linked draft article in sync when an outline identity changes", async () => {
