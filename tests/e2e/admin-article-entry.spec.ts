@@ -8,7 +8,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     const groups = page.locator("[data-menu-group]");
     await expect(groups).toHaveCount(4);
-    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
+    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(4);
     await expect(
@@ -66,6 +66,56 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ).toHaveAttribute("href", "/admin/developer/?mode=developer");
   });
 
+  test("公開処理の状況は失敗を優先表示し、CIログと再試行を提供する", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/publication-runs**", (route) =>
+      route.fulfill({
+        json: {
+          generatedAt: "2026-09-12T00:00:00.000Z",
+          counts: { failed: 1, retry_wait: 1, published: 3 },
+          runs: [
+            {
+              id: "run-1",
+              document_id: "document-1",
+              action: "publish",
+              state: "failed",
+              attempt: 2,
+              title: "テスト記事",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "cyclic-groups",
+              updated_at: "2026-09-12T00:00:00.000Z",
+              failure_kind: "github_api",
+              failure_suggestion: "CIログを確認してください。",
+              check_url: "https://github.com/example/checks/1",
+              diagnostic_url: "https://admin.example.test/diagnostics/1",
+              pull_request_url: "https://github.com/example/pull/1",
+            },
+          ],
+        },
+      }),
+    );
+    await page.goto("admin/publication-runs/");
+
+    await expect(
+      page.getByRole("heading", { name: "公開処理の状況", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("cell", { name: "テスト記事" })).toBeVisible();
+    await expect(
+      page.locator("[data-list]").getByText("自動公開失敗"),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "CIログ" })).toHaveAttribute(
+      "href",
+      "https://github.com/example/checks/1",
+    );
+    await expect(page.getByRole("link", { name: "診断" })).toHaveAttribute(
+      "href",
+      "https://admin.example.test/diagnostics/1",
+    );
+    await expect(page.getByRole("button", { name: "再試行" })).toBeVisible();
+  });
+
   test("規則ページの主要セクションと作業の進め方への導線を表示する", async ({
     page,
   }) => {
@@ -101,7 +151,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator(".workflow-card")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: /新規記事作成/ }),
-    ).toHaveAttribute("href", "/admin/editor/?new=1&from=articles");
+    ).toHaveAttribute("href", "/admin/editor/?new=1&choose=1&from=articles");
     await expect(
       page.getByRole("button", { name: /加筆・修正/ }),
     ).toBeVisible();
@@ -170,6 +220,17 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(card).toContainText("編集中：山田花子（本文）");
     await expect(card.locator(".badge.editing")).toHaveText(/1人が編集中/);
     await expect(card).toHaveAttribute("aria-label", /編集中/);
+    const listLayout = await page.locator("[data-list]").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        display: style.display,
+        gridAutoFlow: style.gridAutoFlow,
+        gridTemplateColumns: style.gridTemplateColumns,
+      };
+    });
+    expect(listLayout.display).toBe("grid");
+    expect(listLayout.gridAutoFlow).toBe("row");
+    expect(listLayout.gridTemplateColumns.split(" ")).toHaveLength(1);
   });
 
   test("D-3c: 公開済み記事の更新案作成中を一覧のボタンで示す", async ({

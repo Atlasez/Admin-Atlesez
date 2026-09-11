@@ -2249,6 +2249,10 @@ type AdminAuditAction =
   | "taxonomy_updated"
   | "taxonomy_archived"
   | "taxonomy_restored"
+  | "outline_created"
+  | "outline_updated"
+  | "outline_archived"
+  | "outline_restored"
   | "workflow_transition";
 
 type AdminAuditTarget =
@@ -2257,6 +2261,7 @@ type AdminAuditTarget =
   | "member"
   | "task"
   | "taxonomy"
+  | "outline"
   | "workflow";
 
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
@@ -2275,6 +2280,10 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   taxonomy_updated: "分野・カテゴリを更新",
   taxonomy_archived: "分野・カテゴリをアーカイブ",
   taxonomy_restored: "分野・カテゴリを復元",
+  outline_created: "目次項目を追加",
+  outline_updated: "目次項目を更新",
+  outline_archived: "目次項目をアーカイブ",
+  outline_restored: "目次項目を復元",
   workflow_transition: "状態を変更",
 }[action] ?? action);
 
@@ -3923,6 +3932,147 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   }
   await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", slug, name, `分野・カテゴリを追加：${name}`, { kind, slug, subject });
   return json({ ok: true }, 201);
+}
+
+type EditorialOutlineEntryRow = {
+  id: string;
+  project_id: string;
+  subject_slug: string;
+  category_slug: string;
+  slug: string;
+  title: string;
+  summary: string;
+  concept_id: string;
+  sort_order: number;
+  status: "active" | "archived";
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** 分野の目次を先に作成し、本文は後から記事編集画面で執筆するためのAPI。 */
+async function editorialOutlineEntries(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const url = new URL(request.url);
+  const allowedSubjects = new Set([
+    ...scope.subjects,
+    ...(scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*"),
+  ]);
+  const canEditSubject = (subject: string) =>
+    scope.allSubjects || scope.isManager || allowedSubjects.has(subject) || (scope.coordinatorSubjects ?? []).includes("*");
+  if (request.method === "GET") {
+    const includeArchived = url.searchParams.get("includeArchived") === "1";
+    const rows = await env.REPORTS.prepare(
+      `SELECT id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at
+       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
+       ORDER BY subject_slug,category_slug,sort_order,title`,
+    ).all<EditorialOutlineEntryRow>();
+    const visible = scope.allSubjects || scope.isManager
+      ? rows.results ?? []
+      : (rows.results ?? []).filter((row) => allowedSubjects.has(row.subject_slug));
+    return json({ entries: visible });
+  }
+  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けません。" }, 403);
+  if (request.method === "PATCH") {
+    const payload = (await request.json().catch(() => null)) as {
+      id?: unknown; action?: unknown; subject?: unknown; category?: unknown; slug?: unknown;
+      title?: unknown; summary?: unknown; conceptId?: unknown; sortOrder?: unknown;
+      items?: unknown;
+    } | null;
+    const action = text(payload?.action, 20);
+    if (action === "reorder") {
+      const items = Array.isArray(payload?.items)
+        ? payload.items
+            .map((item) => {
+              if (!item || typeof item !== "object") return null;
+              const value = item as { id?: unknown; sortOrder?: unknown };
+              const id = text(value.id, 64);
+              const sortOrder = Math.max(0, Math.min(9999, Number(value.sortOrder ?? 0) || 0));
+              return /^[0-9a-f-]{36}$/i.test(id) ? { id, sortOrder } : null;
+            })
+            .filter((item): item is { id: string; sortOrder: number } => Boolean(item))
+            .slice(0, 200)
+        : [];
+      if (!items.length) return json({ error: "並び替える目次項目を選択してください。" }, 400);
+      const ids = [...new Set(items.map((item) => item.id))];
+      const existing = await env.REPORTS.prepare(
+        `SELECT id,subject_slug,title FROM editorial_outline_entries
+         WHERE project_id='atlas' AND id IN (${ids.map(() => "?").join(",")})`,
+      ).bind(...ids).all<{ id: string; subject_slug: string; title: string }>();
+      const existingById = new Map((existing.results ?? []).map((row) => [row.id, row]));
+      if (existingById.size !== ids.length || [...existingById.values()].some((row) => !canEditSubject(row.subject_slug)))
+        return json({ error: "担当範囲外または存在しない目次項目が含まれています。" }, 403);
+      const now = new Date().toISOString();
+      await env.REPORTS.batch(
+        items.map((item) =>
+          env.REPORTS.prepare(
+            "UPDATE editorial_outline_entries SET sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'",
+          ).bind(item.sortOrder, now, item.id),
+        ),
+      );
+      await recordAdminAudit(env, scope.email, "outline_updated", "outline", ids.join(","), "目次", `目次項目の並び順を更新（${ids.length}件）`, { ids });
+      return json({ ok: true, updated: ids.length });
+    }
+    const id = text(payload?.id, 64);
+    if (!id) return json({ error: "対象を確認してください。" }, 400);
+    const current = await env.REPORTS.prepare(
+      "SELECT id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at FROM editorial_outline_entries WHERE id=? AND project_id='atlas'",
+    ).bind(id).first<EditorialOutlineEntryRow>();
+    if (!current) return json({ error: "目次項目が見つかりません。" }, 404);
+    if (!canEditSubject(current.subject_slug)) return json({ error: "この分野の目次を変更する権限がありません。" }, 403);
+    if (action === "archive" || action === "restore") {
+      const status = action === "archive" ? "archived" : "active";
+      await env.REPORTS.prepare("UPDATE editorial_outline_entries SET status=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(status, new Date().toISOString(), id).run();
+      await recordAdminAudit(env, scope.email, action === "archive" ? "outline_archived" : "outline_restored", "outline", id, current.title, `目次項目を${action === "archive" ? "アーカイブ" : "復元"}：${current.title}`, { subject: current.subject_slug, category: current.category_slug });
+      return json({ ok: true, status });
+    }
+    if (action !== "update") return json({ error: "操作を確認してください。" }, 400);
+    const subject = text(payload?.subject, 80).toLowerCase() || current.subject_slug;
+    const category = text(payload?.category, 80).toLowerCase() || current.category_slug;
+    const slug = text(payload?.slug, 80).toLowerCase() || current.slug;
+    const title = text(payload?.title, 160) || current.title;
+    const summary = text(payload?.summary, 500);
+    const conceptId = text(payload?.conceptId, 200);
+    const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? current.sort_order) || 0));
+    if (!SUBJECT_SLUG.test(subject) || !SUBJECT_SLUG.test(category) || !SUBJECT_SLUG.test(slug) || !title || !canEditSubject(subject)) return json({ error: "分野、カテゴリ、ID、表示名を確認してください。" }, 400);
+    try {
+      await env.REPORTS.prepare("UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,slug=?,title=?,summary=?,concept_id=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(subject, category, slug, title, summary, conceptId, sortOrder, new Date().toISOString(), id).run();
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ分野・カテゴリ・IDの目次項目がすでにあります。" }, 409);
+      throw error;
+    }
+    await recordAdminAudit(env, scope.email, "outline_updated", "outline", id, title, `目次項目を更新：${title}`, { subject, category, slug });
+    return json({ ok: true, id, subject, category, slug, title, summary, conceptId, sortOrder });
+  }
+  if (request.method !== "POST") return json({ error: "GET、POST、PATCHのみ利用できます。" }, 405);
+  const payload = (await request.json().catch(() => null)) as {
+    subject?: unknown; category?: unknown; slug?: unknown; title?: unknown; summary?: unknown; conceptId?: unknown; sortOrder?: unknown;
+  } | null;
+  const subject = text(payload?.subject, 80).toLowerCase();
+  const category = text(payload?.category, 80).toLowerCase();
+  const slug = text(payload?.slug, 80).toLowerCase();
+  const title = text(payload?.title, 160);
+  const summary = text(payload?.summary, 500);
+  const conceptId = text(payload?.conceptId, 200);
+  const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? 0) || 0));
+  if (!SUBJECT_SLUG.test(subject) || !SUBJECT_SLUG.test(category) || !SUBJECT_SLUG.test(slug) || !title) return json({ error: "分野、カテゴリ、ID、表示名を確認してください。" }, 400);
+  if (!canEditSubject(subject)) return json({ error: "この分野に目次を追加する権限がありません。" }, 403);
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  try {
+    await env.REPORTS.prepare(
+      `INSERT INTO editorial_outline_entries (id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(id, "atlas", subject, category, slug, title, summary, conceptId, sortOrder, "active", scope.email, now, now).run();
+  } catch (error) {
+    if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ分野・カテゴリ・IDの目次項目がすでにあります。" }, 409);
+    throw error;
+  }
+  await recordAdminAudit(env, scope.email, "outline_created", "outline", id, title, `目次項目を追加：${title}`, { subject, category, slug });
+  return json({ ok: true, id }, 201);
 }
 
 async function saveMemberSettings(
@@ -8217,7 +8367,31 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     name: string;
   }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
-  const workflowSummary = await getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests);
+  // 通知件数もポータルのレスポンスに含め、ヘッダー・アクションセンターと
+  // 同じ集計結果を利用できるようにする。クライアント側で別リクエストを
+  // 競合させると、片方だけ更新されて件数がずれるためである。
+  const [workflowSummary, notificationResponse] = await Promise.all([
+    getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests),
+    adminNotifications(
+      new Request(new URL("/api/admin/notifications?limit=100", request.url), {
+        headers: request.headers,
+      }),
+      env,
+      scope,
+    ),
+  ]);
+  const notificationData: {
+    notifications?: Array<Record<string, unknown>>;
+    notificationsTruncated?: boolean;
+    notificationsUnavailable?: boolean;
+    unreadNotificationsCount?: number;
+  } = notificationResponse.ok
+    ? ((await notificationResponse.json().catch(() => ({}))) as {
+        notifications?: Array<Record<string, unknown>>;
+        notificationsTruncated?: boolean;
+        unreadNotificationsCount?: number;
+      })
+    : { notificationsUnavailable: true };
   const taskScopeSql = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
        AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
@@ -8311,6 +8485,10 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     taskSummary: {
       ...workflowSummary.taskSummary,
     },
+    notifications: notificationData.notifications ?? [],
+    notificationsTruncated: notificationData.notificationsTruncated === true,
+    notificationsUnavailable: notificationData.notificationsUnavailable === true,
+    unreadNotificationsCount: notificationData.unreadNotificationsCount ?? null,
     calendar: {
       rangeStart: rangeStart.toISOString(),
       rangeEnd: rangeEnd.toISOString(),
@@ -8535,7 +8713,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       kind: "task",
       title: row.title,
       detail: row.details?.split("\n")[0] || (row.task_kind === "feedback" ? "フィードバック依頼を確認してください。" : "タスクを確認してください。"),
-      href: row.task_kind === "feedback" ? "/admin/operations/?project=atlas" : `/admin/operations/?project=${encodeURIComponent(row.project_id)}`,
+      // タスクの詳細操作は横断タスク管理を正本にし、アクションセンターから
+      // 開いたときは対象タスクへフォーカスする。
+      href: `/admin/member-tasks/?focus=${encodeURIComponent(row.id)}`,
       status: row.status,
       priority: actionCenterPriority(row.due_at, row.updated_at, now),
       updatedAt: row.updated_at,
@@ -8619,7 +8799,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   }
   const history: ActionCenterItem[] = [];
   for (const row of taskHistoryRows.results ?? []) {
-    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/operations/?project=${encodeURIComponent(row.project_id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
+    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/member-tasks/?focus=${encodeURIComponent(row.id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
   }
   for (const row of documentHistoryRows.results ?? []) {
     const permitted = scope.isManager || row.created_by.toLowerCase() === scope.email.toLowerCase();
@@ -15404,6 +15584,85 @@ const getLatestEditorialPublicationRun = async (
     .bind(documentId)
     .first<EditorialPublicationRun>();
 
+/**
+ * 公開処理の状態を記事横断で確認する運用向け一覧。
+ * 記事編集画面の最新run表示とは別に、失敗・再試行待ちをまとめて
+ * 復旧できるようにする。記事の可視範囲は編集一覧と同じ条件に限定する。
+ */
+async function editorialPublicationRunsOverview(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const params = new URL(request.url).searchParams;
+  const requestedState = params.get("state")?.trim() ?? "";
+  const allowedStates = new Set<EditorialPublicationRunState>([
+    "queued",
+    "checks_pending",
+    "merge_pending",
+    "deploy_pending",
+    "retry_wait",
+    "published",
+    "unpublished",
+    "failed",
+    "needs_operator",
+  ]);
+  const state = allowedStates.has(requestedState as EditorialPublicationRunState)
+    ? (requestedState as EditorialPublicationRunState)
+    : null;
+  const requestedLimit = Number(params.get("limit") ?? "50");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const visibility = documentVisibilityFor(scope);
+  const stateClause = state ? " AND r.state = ?" : "";
+  const bindings = [...visibility.bindings, ...(state ? [state] : []), limit];
+  const selectColumns = `r.id, r.document_id, r.action, r.state, r.attempt,
+    r.pull_request_number, r.pull_request_url, r.branch, r.head_sha, r.merge_sha,
+    r.last_check_at, r.next_attempt_at, r.error_code, r.error_message, r.idempotency_key,
+    r.lease_until, r.failure_kind, r.check_name, r.check_url, r.diagnostic_url,
+    r.preflight_run_id, r.preflight_requested_at, r.snapshot_updated_at, r.snapshot_hash,
+    r.failure_history, r.failure_detail, r.failure_step, r.failure_file, r.failure_line,
+    r.failure_column, r.failure_suggestion, r.created_by, r.created_at, r.updated_at`;
+  const rows = await env.REPORTS.prepare(
+    `SELECT ${selectColumns}, d.title, d.subject, d.category, d.slug, d.status AS document_status, d.published_at
+       FROM editorial_documents d
+       JOIN editorial_publication_runs r ON r.document_id = d.id
+      WHERE ${visibility.sql}${stateClause}
+      ORDER BY CASE WHEN r.state IN ('failed','needs_operator') THEN 0 WHEN r.state='retry_wait' THEN 1 ELSE 2 END,
+               r.updated_at DESC
+      LIMIT ?`,
+  )
+    .bind(...bindings)
+    .all<EditorialPublicationRun & {
+      title: string;
+      subject: string;
+      category: string;
+      slug: string;
+      document_status: string;
+      published_at: string | null;
+    }>();
+  const countRows = await env.REPORTS.prepare(
+    `SELECT r.state, COUNT(*) AS count
+       FROM editorial_documents d
+       JOIN editorial_publication_runs r ON r.document_id = d.id
+      WHERE ${visibility.sql}
+      GROUP BY r.state`,
+  )
+    .bind(...visibility.bindings)
+    .all<{ state: EditorialPublicationRunState; count: number }>();
+  const counts = Object.fromEntries(
+    (countRows.results ?? []).map((row) => [row.state, Number(row.count ?? 0)]),
+  );
+  return json({
+    generatedAt: new Date().toISOString(),
+    runs: rows.results ?? [],
+    counts,
+    scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects },
+  });
+}
+
 const updateEditorialPublicationRun = async (
   env: Env,
   runId: string,
@@ -18914,8 +19173,9 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
 async function adminNotifications(
   request: Request,
   env: Env,
+  preloadedScope?: AdminScope,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = preloadedScope ?? (await getAdminScope(request, env));
   if (isResponse(scope)) return scope;
   const profile = await env.REPORTS.prepare(
     "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
@@ -19737,6 +19997,8 @@ async function handleAdminRequest(
     return genreRoleAssignment(request, env);
   if (url.pathname === "/api/admin/editor/taxonomy")
     return editorialTaxonomyCatalog(request, env);
+  if (url.pathname === "/api/admin/editor/outline")
+    return editorialOutlineEntries(request, env);
   if (
     url.pathname === "/api/admin/member-settings" &&
     request.method === "PUT"
@@ -20026,6 +20288,11 @@ async function handleAdminRequest(
     request.method === "GET"
   )
     return editorialPublicationIntegrationStatus(request, env);
+  if (
+    url.pathname === "/api/admin/editor/publication-runs" &&
+    request.method === "GET"
+  )
+    return editorialPublicationRunsOverview(request, env);
   if (
     url.pathname === "/api/admin/editor/concepts" &&
     request.method === "POST"

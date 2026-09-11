@@ -190,6 +190,9 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
 
   await page.goto("admin/member-tasks/");
   await expect(page.locator("[data-scroll-create]")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /未対応を確認/ }),
+  ).toHaveAttribute("href", "/admin/action-center/");
   await page.locator("[data-scroll-create]").click();
   await expect(page.locator("[data-title]")).toBeFocused();
   await expect(page.locator("[data-summary-total]")).toHaveText("2");
@@ -214,6 +217,13 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
   await firstTask.getByRole("button", { name: "状態を保存" }).click();
   await updateRequest;
   expect(updatedStatus).toBe("done");
+
+  await page.goto(
+    "admin/member-tasks/?focus=22222222-2222-4222-8222-222222222222",
+  );
+  await expect(
+    page.locator('[data-task-id="22222222-2222-4222-8222-222222222222"]'),
+  ).toHaveClass(/is-focused/);
 });
 
 test("完了タスクをアーカイブし、必要なときに復元できる", async ({ page }) => {

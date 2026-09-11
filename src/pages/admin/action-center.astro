@@ -7,7 +7,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   <main class="action-center" data-action-center data-admin-load-surface aria-busy="true">
     <header class="action-center-heading">
       <h1>アクションセンター</h1>
-      <button class="refresh-button" type="button" data-action-refresh>更新</button>
+      <div class="action-center-heading-actions">
+        <a class="page-link" href="/admin/member-tasks/">タスク管理を開く <span aria-hidden="true">→</span></a>
+        <button class="refresh-button" type="button" data-action-refresh>更新</button>
+      </div>
     </header>
 
     <section class="action-summary" aria-label="対応状況" data-action-summary></section>
@@ -159,12 +162,13 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         const readButton = item.kind === "notification" && !item.read ? `<button type="button" class="item-read" data-read-notification='${escape(JSON.stringify(item.notificationIds ?? [item.id.replace(/^notification:/, "")]))}'>既読にする</button>` : "";
         const tone = statusTone(item.status);
         const isSelected = selected.has(item.id);
+        const openLabel = item.kind === "task" ? "タスク管理で開く" : "開く";
         return `<article class="action-item priority-${escape(item.priority)} status-${tone} ${item.read ? "is-read" : "is-unread"}">
           <div class="item-leading"><input class="item-select" type="checkbox" data-action-select="${escape(item.id)}" ${isSelected ? "checked" : ""} aria-label="${escape(item.title)}を選択" /><span class="item-kind-icon" aria-hidden="true">${escape(kindIcons[item.kind] ?? "・")}</span><span class="item-priority-dot" aria-hidden="true"></span></div>
           <div class="item-main"><div class="item-top"><span class="item-kind">${escape(kindLabels[item.kind] ?? item.kind)}</span><span class="item-status">${escape(statusLabels[item.status] ?? item.status)}</span>${priorityLabels[item.priority] ? `<span class="item-priority">${escape(priorityLabels[item.priority])}</span>` : ""}</div>
             <a class="item-title" href="${escape(item.href)}">${escape(item.title)}</a><p>${escape(item.detail)}</p>
             <div class="item-meta"><span>${escape(item.project ?? "")}</span>${item.subject ? `<span>${escape(item.subject)}</span>` : ""}<time datetime="${escape(item.updatedAt)}">${escape(formatTime(item.updatedAt))}</time>${due}${group}</div>
-          </div><div class="item-actions">${actions}${readButton}<a class="item-open" href="${escape(item.href)}" aria-label="${escape(item.title)}を開く">開く</a></div>
+          </div><div class="item-actions">${actions}${readButton}<a class="item-open" href="${escape(item.href)}" aria-label="${escape(item.title)}を${escape(openLabel)}">${openLabel}</a></div>
         </article>`;
       }).join("");
       itemsNode.querySelectorAll<HTMLButtonElement>("[data-transition]").forEach((button) => button.addEventListener("click", () => {
@@ -331,6 +335,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .action-center { margin: 0 auto; max-width: 1180px; padding: 0 1.25rem 4rem; }
   .action-center-heading { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 1.35rem 0 .85rem; }
   .action-center-heading h1 { font-size: clamp(1.45rem, 2.5vw, 1.85rem); letter-spacing: -.03em; margin: 0; }
+  .action-center-heading-actions { align-items: center; display: flex; gap: .5rem; }
+  .page-link { align-items: center; border: 1px solid var(--border-default); border-radius: .35rem; color: var(--text-secondary); display: inline-flex; font-size: .72rem; font-weight: 750; gap: .3rem; min-height: 2.2rem; padding: .35rem .65rem; text-decoration: none; }
+  .page-link:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .page-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .refresh-button, .filter-button, .item-action, .item-read { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .35rem; color: var(--text-primary); cursor: pointer; font: inherit; font-size: .72rem; font-weight: 700; min-height: 2.2rem; padding: .35rem .65rem; }
   .refresh-button:hover, .filter-button:hover, .item-action:hover, .item-read:hover { border-color: var(--accent-primary); }
   .refresh-button:focus-visible, .filter-button:focus-visible, .item-action:focus-visible, .item-read:focus-visible, .item-open:focus-visible, .summary-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
@@ -407,6 +415,6 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .action-empty strong { color: var(--text-primary); font-size: .86rem; }
   .action-empty span { font-size: .72rem; }
   @media (max-width: 820px) { .action-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .summary-item:nth-child(4) { border-left: 0; border-top: 1px solid var(--border-default); } .summary-item:nth-child(n + 4) { border-top: 1px solid var(--border-default); } .action-item { grid-template-columns: 2rem minmax(0, 1fr); } .item-actions { grid-column: 2; justify-content: start; min-width: 0; } }
-  @media (max-width: 560px) { .action-center { padding: 0 .8rem 3rem; } .action-center-heading { align-items: start; } .action-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--border-default); } .action-center-toolbar { align-items: start; display: grid; } }
+  @media (max-width: 560px) { .action-center { padding: 0 .8rem 3rem; } .action-center-heading { align-items: start; } .action-center-heading-actions { align-items: stretch; flex-direction: column-reverse; } .action-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--border-default); } .action-center-toolbar { align-items: start; display: grid; } }
   @media (prefers-reduced-motion: reduce) { .action-item { transition: none; } }
 </style>

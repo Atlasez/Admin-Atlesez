@@ -106,6 +106,24 @@ async function mockAdminApi(
         mentionNames: ["Alice", "Bob"],
         scope,
       };
+    } else if (url.pathname === "/api/admin/editor/outline") {
+      payload = {
+        entries: [
+          {
+            id: "outline-1",
+            key: "mathematics/group-theory/2",
+            subject: "mathematics",
+            category: "group-theory",
+            slug: "lagrange-theorem",
+            title: "ラグランジュの定理",
+            summary: "群の位数と部分群の関係",
+            order: 2,
+            status: "active",
+          },
+        ],
+      };
+    } else if (url.pathname === "/api/admin/editor/taxonomy") {
+      payload = { catalog: [] };
     } else if (url.pathname === "/api/admin/editor/documents/doc-1") {
       payload = { document, comments };
     } else if (url.pathname.endsWith("/assets")) {
@@ -146,19 +164,104 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
-test("目次サイドバーを表示し、目次から執筆を開始できる", async ({ page }) => {
+test("新規記事作成では記事作成方法を選択できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1&choose=1");
+
+  const dialog = page.locator("[data-new-document-choice]");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "記事から作成" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: "目次から作成" }),
+  ).toHaveAttribute("href", "/admin/editor/outline/");
+
+  await dialog.getByRole("button", { name: "記事から作成" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("[data-document-form]")).toBeVisible();
+  await expect(page.locator('input[name="title"]')).toHaveValue("");
+});
+
+test("記事編集画面に目次サイドバーを追加せず、独立した目次から執筆を開始できる", async ({
+  page,
+}) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  const sidebar = page.locator(".document-sidebar");
-  await expect(sidebar).toBeVisible();
-  await expect(sidebar.locator("#atlas-outline-heading")).toHaveText(
-    "学習サイトの目次",
-  );
-  await expect(sidebar.locator(".outline-article").first()).toBeVisible();
+  await expect(page.locator(".document-sidebar")).toBeHidden();
   await expect(
-    sidebar.locator("[data-outline-planned], [data-outline-article]").first(),
+    page.getByRole("link", { name: "学習サイトの目次" }),
+  ).toHaveAttribute("href", "/admin/editor/outline/");
+});
+
+test("独立した目次ページから未着手の記事を執筆開始できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/outline/");
+  await expect(
+    page.getByRole("heading", { name: "学習サイトの目次" }),
   ).toBeVisible();
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await expect(
+    page.locator("[data-outline-list] .outline-entry").first(),
+  ).toBeVisible();
+  const startLink = page.locator("[data-outline-list] a").first();
+  await expect(startLink).toHaveText(/執筆を開始|記事を開く/);
+  const href = await startLink.getAttribute("href");
+  expect(href).toContain("subject=mathematics");
+  if (href?.includes("new=1")) {
+    await page.goto(`.${href}`);
+    await expect(page.locator('input[name="title"]')).toHaveValue(
+      "ラグランジュの定理",
+    );
+    await expect(page.locator('input[name="slug"]')).toHaveValue(
+      "lagrange-theorem",
+    );
+  }
+});
+
+test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/outline/");
+  const outlineArchiveCheckbox = page.locator(
+    "[data-outline-include-archived]",
+  );
+  const outlineArchiveBox = await outlineArchiveCheckbox.boundingBox();
+  expect(outlineArchiveBox?.width).toBeLessThanOrEqual(20);
+  expect(outlineArchiveBox?.height).toBeLessThanOrEqual(20);
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  const entry = page.locator("[data-outline-entry]").first();
+  await expect(entry).toBeVisible();
+  await expect(entry.locator("[data-outline-select]")).toBeEnabled();
+  await expect(entry.getByRole("button", { name: "編集" })).toBeVisible();
+  await expect(entry.getByRole("button", { name: "アーカイブ" })).toBeVisible();
+
+  await entry.locator("[data-outline-select]").check();
+  await expect(page.getByText("1件選択")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "選択項目を確認" }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "並び順を保存" }),
+  ).toBeDisabled();
+});
+
+test("タスク管理と目次のチェックボックスはコンパクトなサイズで表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/operations/?project=atlas");
+  const taskCheckbox = page.locator("[data-task-show-completed]");
+  const taskBox = await taskCheckbox.boundingBox();
+  expect(taskBox?.width).toBeLessThanOrEqual(20);
+  expect(taskBox?.height).toBeLessThanOrEqual(20);
+
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  const outlineCheckbox = page.locator("[data-outline-select]").first();
+  const outlineBox = await outlineCheckbox.boundingBox();
+  expect(outlineBox?.width).toBeLessThanOrEqual(20);
+  expect(outlineBox?.height).toBeLessThanOrEqual(20);
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
@@ -2267,7 +2370,7 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".document-sidebar")).toBeVisible();
+  await expect(page.locator(".document-sidebar")).toBeHidden();
   await expect(page.getByRole("button", { name: /[123]画面/ })).toHaveCount(0);
   await expect(page.locator('[data-pane-tab="writing"]')).toHaveAttribute(
     "aria-pressed",
@@ -2420,9 +2523,17 @@ for (const returnVia of ["popup", "close", "toggle", "tab"] as const) {
     await button.click();
     const popup = await popupPromise;
     await expect(panel).toBeHidden();
-    if (returnVia === "popup")
-      await popup.locator("[data-reattach-pane]").click();
-    else if (returnVia === "close") await popup.close();
+    if (returnVia === "popup") {
+      // The popup can close itself immediately when the parent receives the
+      // reattach event. Guard the click so a successful automatic close is
+      // treated as a valid return path instead of a flaky page-closed error.
+      if (!popup.isClosed()) {
+        await popup
+          .locator("[data-reattach-pane]")
+          .click({ timeout: 5_000 })
+          .catch(() => undefined);
+      }
+    } else if (returnVia === "close") await popup.close();
     else if (returnVia === "toggle")
       await page
         .locator('.pane-layout-controls [data-pane-popout="writing"]')

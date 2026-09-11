@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "action-center" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "onboarding-demo" | "update-history" | "audit-log";
+  current?: "portal" | "action-center" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "publication-runs" | "onboarding-demo" | "update-history" | "audit-log";
   site?: "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -58,6 +58,8 @@ const routeCurrent = normalizedPath === "/admin/portal"
                 ? "genre-roles"
               : normalizedPath === "/admin/operations-statistics"
                 ? "operations-statistics"
+              : normalizedPath === "/admin/publication-runs"
+                ? "publication-runs"
               : normalizedPath === "/admin/calendar"
                 ? "calendar"
               : normalizedPath === "/admin/operations"
@@ -146,6 +148,7 @@ const pageLabel = ({
   "member-management": "運営メンバー管理",
   "genre-roles": "ジャンル・役割管理",
   "operations-statistics": "運営メンバー統計",
+  "publication-runs": "公開処理の状況",
   "update-history": "アップデート履歴",
   "audit-log": "操作履歴",
 } as Record<NonNullable<Props["current"]>, string>)[current];

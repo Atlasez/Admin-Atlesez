@@ -704,21 +704,14 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       portalRetry.disabled = true;
       portalRetry.textContent = '再試行中…';
       try {
-        const [data, notificationData] = await Promise.all([
-          fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-            const contentType = response.headers.get('content-type') ?? '';
-            const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
-            if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。');
-            return data;
-          }),
-          fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-            if (!response.ok) return { notifications: [], notificationsUnavailable: true } as PortalData;
-            const data = await response.json() as PortalData;
-            return { notifications: data.notifications ?? [], notificationsTruncated: data.notificationsTruncated === true, unreadNotificationsCount: data.unreadNotificationsCount } as PortalData;
-          }),
-        ]);
+        const data = await fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
+          const contentType = response.headers.get('content-type') ?? '';
+          const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
+          if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。');
+          return data;
+        });
         if (lifecycle.signal.aborted) return;
-        portalData = { ...data, ...notificationData };
+        portalData = data;
         renderPortal(portalData);
         portalError.hidden = true;
         retry?.success();

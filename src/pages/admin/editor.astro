@@ -145,6 +145,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         <h1>記事編集ワークスペース</h1>
       </div>
       <nav aria-label="運営メニュー">
+        <a href="/admin/editor/outline/">学習サイトの目次</a>
         <a href="/admin/articles/">編集・フィードバックへ戻る</a>
       </nav>
     </header>
@@ -199,6 +200,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             </div>
           </div>
         </div>
+
+        <dialog class="new-document-choice" data-new-document-choice aria-labelledby="new-document-choice-title">
+          <form method="dialog" class="new-document-choice-panel">
+            <div>
+              <h2 id="new-document-choice-title">新規記事作成</h2>
+              <p>作成方法を選択してください。</p>
+            </div>
+            <div class="new-document-choice-actions">
+              <button type="button" class="primary-action" data-new-from-article>記事から作成</button>
+              <a class="quiet-action" href="/admin/editor/outline/" data-new-from-outline>目次から作成</a>
+            </div>
+            <button type="submit" class="new-document-choice-cancel">キャンセル</button>
+          </form>
+        </dialog>
 
         <form class="document-form" data-document-form hidden>
           <input type="hidden" name="documentId" />
@@ -462,7 +477,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .workspace-header nav a:hover, .workspace-header nav button:hover { background: var(--surface-alt); }
   .workspace-header nav form { margin: 0; }
   .workflow-guide { color: var(--muted); display: grid; font-size: .8rem; gap: .75rem; padding: 1rem 0 1.15rem; }.workflow-guide p { margin: 0; }.workflow-guide p strong { color: var(--text); }.workflow-guide p small { color: var(--muted); display: block; margin-top: .2rem; }.workflow-guide ol { display: grid; gap: .65rem; grid-template-columns: repeat(6, minmax(0, 1fr)); list-style: none; margin: 0; max-width: none; padding: 0; width: 100%; }.workflow-guide li { align-items: center; color: var(--muted); display: grid; font-weight: 700; gap: .42rem; grid-template-rows: 1.55rem auto; justify-items: center; min-width: 0; position: relative; text-align: center; }.workflow-guide li:not(:last-child)::after { background: var(--border); content: ""; height: 2px; left: calc(50% + .9rem); position: absolute; right: calc(-50% + .9rem); top: .72rem; z-index: 0; }.workflow-guide b { align-items: center; background: color-mix(in srgb, var(--accent), transparent 88%); border-radius: 999px; color: var(--accent); display: inline-flex; font-size: .72rem; height: 1.3rem; justify-content: center; position: relative; width: 1.3rem; z-index: 1; }.workflow-guide li span { line-height: 1.35; max-width: 100%; overflow-wrap: anywhere; }.workflow-guide li.is-complete { color: var(--accent); }.workflow-guide li.is-complete b, .workflow-guide li.is-current b { background: var(--accent); color: white; }.workflow-guide li.is-complete:not(:last-child)::after { background: var(--accent); }.workflow-guide li.is-current { color: var(--text); }.workflow-guide li.is-current span { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: .25rem; }.workflow-guide.is-on-hold [data-workflow-step] { opacity: .45; }
-  .workspace-grid { border-bottom: 1px solid var(--border); border-top: 2px solid var(--accent); display: grid; grid-template-columns: minmax(0, 1fr); min-height: 46rem; overflow: visible; }.document-sidebar { align-content:start; background:var(--surface-alt); border-right:1px solid var(--border); display:grid!important; gap:.75rem; min-width:0; padding:.9rem; }.document-sidebar[hidden] { display:none!important; }.sidebar-collapse-toggle { align-self:start; background:transparent; border:1px solid var(--border); color:var(--muted); cursor:pointer; font:inherit; font-size:.72rem; font-weight:800; padding:.35rem .45rem; text-align:left; }.sidebar-collapse-toggle:hover { border-color:var(--accent); color:var(--accent); }
+  .workspace-grid { border-bottom: 1px solid var(--border); border-top: 2px solid var(--accent); display: grid; grid-template-columns: minmax(0, 1fr); min-height: 46rem; overflow: visible; }.document-sidebar { display:none!important; }.document-sidebar[hidden] { display:none!important; }.sidebar-collapse-toggle { align-self:start; background:transparent; border:1px solid var(--border); color:var(--muted); cursor:pointer; font:inherit; font-size:.72rem; font-weight:800; padding:.35rem .45rem; text-align:left; }.sidebar-collapse-toggle:hover { border-color:var(--accent); color:var(--accent); }
   .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 3.2rem minmax(0, 1fr); }.editor-workspace.sidebar-collapsed .document-sidebar { padding:.45rem; }.editor-workspace.sidebar-collapsed .document-sidebar > :not(.sidebar-collapse-toggle) { display:none; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { align-items:center; display:flex; font-size:1.05rem; height:2.35rem; justify-content:center; overflow:visible; padding:0; white-space:nowrap; width:2.35rem; }
   .sidebar-heading { align-items: start; display: flex; gap: .75rem; justify-content: space-between; }
   .sidebar-heading strong { display: block; font-size: .9rem; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -498,6 +513,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-workspace .empty-state { align-items: stretch; color: var(--muted); display: flex; flex-direction: column; justify-content: center; margin: 5rem auto; max-width: 38rem; text-align: center; }
   .editor-workspace .empty-state[hidden] { display: none !important; }
   .editor-start-actions{display:grid;gap:1rem;margin:1.4rem auto 0;max-width:32rem;text-align:left;width:100%}.editor-start-actions>.primary-action{justify-self:center}.editor-start-actions .source-picker{background:var(--surface-alt);border:1px solid var(--border);border-radius:.65rem;margin:0;padding:1rem}.editor-start-actions .source-picker strong{color:var(--text);font-size:.9rem}.editor-start-actions .source-picker>span{font-size:.76rem;font-weight:500;line-height:1.5}.editor-start-actions .source-picker .quiet-action{justify-self:start}
+  .new-document-choice { background: var(--surface); border: 1px solid var(--border); border-radius: .65rem; color: var(--text); padding: 0; width: min(28rem, calc(100vw - 2rem)); }
+  .new-document-choice::backdrop { background: rgb(0 0 0 / .52); }
+  .new-document-choice-panel { display: grid; gap: 1rem; padding: 1.25rem; }
+  .new-document-choice-panel h2 { font-size: 1.05rem; margin: 0; }
+  .new-document-choice-panel p { color: var(--muted); font-size: .78rem; margin: .35rem 0 0; }
+  .new-document-choice-actions { display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .new-document-choice-actions > * { align-items: center; display: inline-flex; justify-content: center; min-height: 2.35rem; text-align: center; text-decoration: none; }
+  .new-document-choice-cancel { background: transparent; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: .76rem; justify-self: end; padding: .25rem .35rem; }
+  .new-document-choice-cancel:hover { color: var(--text); }
   .document-form { display:grid; flex:1 1 auto; gap:1rem; min-height:0; }.document-form[hidden]{display:none!important}
   .directive-completion-hint, .latex-completion-hint { color:var(--muted); font-size:.72rem; line-height:1.5; margin:0; }.directive-completion-hint code, .latex-completion-hint code { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; padding:.05rem .2rem; }.directive-completion-hint kbd, .latex-completion-hint kbd { background:var(--surface-alt); border:1px solid var(--border); border-radius:.25rem; font:inherit; margin-left:.18rem; padding:.05rem .25rem; }
   .pane-layout-controls{align-items:center;display:flex;flex-wrap:wrap;gap:.3rem;margin:.35rem 0}.pane-layout-controls>span:not(.pane-layout-control){color:var(--muted);font-size:.72rem;font-weight:800;margin-right:.15rem}.pane-layout-control{display:inline-flex}.pane-layout-controls button{background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:1.9rem;padding:.2rem .5rem}.pane-layout-control>button:first-child{border-radius:.35rem 0 0 .35rem}.pane-layout-control>.pane-popout-toggle{border-left-color:var(--border);border-radius:0 .35rem .35rem 0;font-size:.9rem;line-height:1;min-width:1.7rem;padding:.2rem .35rem}.pane-layout-controls button:hover,.pane-layout-controls button.is-selected,.pane-layout-controls button[aria-pressed="true"],.pane-layout-control.is-popped-out>button{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent)}.pane-layout-control>.pane-popout-toggle:hover{background:var(--accent);color:var(--surface)}
@@ -1038,6 +1062,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-split[data-visible-panes="0"]::after { color:var(--muted); content:"表示する枠を上のボタンから選択してください"; font-size:.8rem; font-weight:800; }
   .pane-only { max-width:none; padding:0 clamp(1rem, 3vw, 2.5rem) 3rem; }
   .pane-only .document-sidebar,.pane-only .editor-quick-actions,.pane-only .pane-layout-controls { display:none!important; }
+  /* 旧保存状態が残っていても、非表示になった左バー分の空列を作らない。 */
+  .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns:minmax(0,1fr)!important; }
   .pane-only .workspace-grid { border:0; display:block; min-height:0; }
   .pane-only .editor-panel { padding:0; }
   .pane-only .editor-split { display:block; }
@@ -1518,6 +1544,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const referencePreview = root.querySelector<HTMLElement>("[data-reference-preview]")!;
     const referenceSource = root.querySelector<HTMLElement>("[data-reference-source]")!;
     const newDocumentButton = root.querySelector<HTMLButtonElement>("[data-new-document]")!;
+    const newDocumentChoice = root.querySelector<HTMLDialogElement>("[data-new-document-choice]")!;
+    const newFromArticleButton = root.querySelector<HTMLButtonElement>("[data-new-from-article]")!;
     const documentSidebar = root.querySelector<HTMLElement>(".document-sidebar")!;
     const sidebarCollapseButton = root.querySelector<HTMLButtonElement>("[data-sidebar-collapse]")!;
     const personalNote = root.querySelector<HTMLTextAreaElement>("[data-personal-note]")!;
@@ -4355,10 +4383,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       assignedSubjects = data.scope?.subjects ?? [];
       root.dataset.manager = String(isManager);
       newDocumentButton.disabled = !(isManager || assignedSubjects.length);
-      // 目次と保存済み原稿一覧は、原稿APIのスコープ確認後に表示する。
-      // HTMLの初期状態では誤表示を避けるため hidden だが、取得後も隠れたままだと
-      // 「目次から執筆を開始」できないため、成功時に必ず利用可能にする。
-      documentSidebar.removeAttribute("hidden");
+      // 原稿一覧と目次は独立ページへ移行したため、編集画面では左バーを表示しない。
+      documentSidebar.setAttribute("hidden", "");
+      documentSidebar.setAttribute("aria-hidden", "true");
       (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager;
       if (currentDocument) updatePublicationActions(currentDocument);
 
@@ -5059,7 +5086,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     form.addEventListener("invalid", (event) => {
       if (event.target instanceof HTMLElement && metadata.contains(event.target)) metadata.open = true;
     }, true);
-    root.querySelector<HTMLButtonElement>("[data-new-document]")!.addEventListener("click", () => emptyDocument());
+    const openNewDocumentChoice = () => {
+      if (!newDocumentChoice.open) newDocumentChoice.showModal();
+    };
+    newDocumentButton.addEventListener("click", openNewDocumentChoice);
+    newFromArticleButton.addEventListener("click", () => {
+      newDocumentChoice.close();
+      emptyDocument();
+      saveMessage.value = "記事から新規原稿を開始しました。本文を入力して保存してください。";
+    });
     root.querySelector<HTMLButtonElement>("[data-import-source]")!.addEventListener("click", () => { const source = articles.find((item) => item.articleId === sourcePicker.value); if (!source) { saveMessage.value = "運営管理へ登録する公開記事を選んでください。"; return; } const existing = documents.find((item) => item.source_article_id === source.articleId) ?? documents.find((item) => item.subject === source.subject && item.category === source.category && item.slug === source.slug); if (existing) { void openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。新しい原稿は作成していません。"; return; } emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; });
     list.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-document-id]"); if (button) { const id=button.dataset.documentId??""; void openDocument(id).then(()=>loadRevisions(id)).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "原稿を読み込めませんでした。"; }); } });
     form.addEventListener("submit", (event) => { event.preventDefault(); void saveCurrentDocument().catch((error: unknown) => { if (!authRedirecting) saveMessage.value = error instanceof Error ? error.message : "保存できませんでした。"; }); });
@@ -5141,9 +5176,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       approvalDialog.showModal();
     });
     unpublishButton.addEventListener("click", () => unpublishDialog.showModal());
-    setSidebarCollapsed(localStorage.getItem("atlasez-editor-sidebar-collapsed") === "true");
+    // 旧バージョンの折りたたみ状態を復元しない。編集画面に左バーは存在しない。
+    root.classList.remove("sidebar-collapsed");
     document.addEventListener("astro:before-swap", () => { disconnectCollaboration(); releaseAllAssetPreviews(); }, { once: true });
-    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const sourceArticleId = query.get("sourceArticle"); const isNewDocument = query.get("new") === "1"; const updateModeRequested = query.get("mode") === "update";
+    const query = new URLSearchParams(window.location.search); const reviewDocumentId = query.get("document"); const sourceArticleId = query.get("sourceArticle"); const isNewDocument = query.get("new") === "1"; const chooseNewDocument = isNewDocument && query.get("choose") === "1"; const updateModeRequested = query.get("mode") === "update";
     if ((reviewDocumentId || sourceArticleId || isNewDocument) && !window.location.hash) {
       initialScrollRestoreUntil = performance.now() + 15_000;
       [0, 50, 250, 750, 1_500, 3_000, 4_500, 8_000, 12_000].forEach((delay) => window.setTimeout(restoreInitialEditorScroll, delay));
@@ -5169,8 +5205,22 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const existing = documentForSourceArticle(source);
         if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; }
         else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; }
-      } else if (isNewDocument) emptyDocument();
+      } else if (isNewDocument) {
+        const seededSubject = query.get("subject")?.trim() ?? "";
+        const seededCategory = query.get("category")?.trim() ?? "";
+        const seededTitle = query.get("title")?.trim() ?? "";
+        const seededSlug = query.get("slug")?.trim() ?? "";
+        const seededSummary = query.get("summary")?.trim() ?? "";
+        const seededConceptId = query.get("conceptId")?.trim() ?? "";
+        const hasSeed = Boolean(seededSubject || seededCategory || seededTitle || seededSlug || seededSummary || seededConceptId);
+        if (hasSeed) {
+          const seed: SourceArticle = { articleId: "", title: seededTitle, subject: seededSubject, category: seededCategory, slug: seededSlug, summary: seededSummary, conceptId: seededConceptId, body: "", status: "draft" };
+          emptyDocument(seed);
+          saveMessage.value = "目次から新規原稿を開始しました。本文を入力して保存してください。";
+        } else if (!chooseNewDocument) emptyDocument();
+      }
       resetEditorEntryScroll(); restoreInitialEditorScroll();
+      if (chooseNewDocument) window.requestAnimationFrame(openNewDocumentChoice);
       requestAnimationFrame(() => { root.removeAttribute("data-editor-starting"); resetEditorEntryScroll(); restoreInitialEditorScroll(); requestAnimationFrame(restoreInitialEditorScroll); });
     };
     editorLoadRetry = createAdminLoadRetry(root, () => loadEditorEntry(), "原稿一覧を読み込めませんでした。", { scope: "editor-documents" });
