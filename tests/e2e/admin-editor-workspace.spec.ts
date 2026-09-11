@@ -2267,7 +2267,7 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".document-sidebar")).toBeHidden();
+  await expect(page.locator(".document-sidebar")).toBeVisible();
   await expect(page.getByRole("button", { name: /[123]画面/ })).toHaveCount(0);
   await expect(page.locator('[data-pane-tab="writing"]')).toHaveAttribute(
     "aria-pressed",
