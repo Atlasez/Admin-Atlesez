@@ -76,6 +76,8 @@ interface Env {
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
   /** localhostの開発時だけ使う、ログイン不要のテスト用メールアドレス。 */
   ADMIN_LOCAL_EMAIL?: string;
+  /** 任意。D1の初期権限行を復旧するための主管理者メール。コードへ直書きしない。 */
+  ADMIN_PRIMARY_EMAIL?: string;
   /** 既存運用からの移行用GitHub token（自動Mergeには使用しない）。 */
   GITHUB_PUBLISH_TOKEN?: string;
   /** 必須レビューを自動承認する、PR作成者とは別の書き込み権限Token。 */
@@ -594,9 +596,6 @@ const APPLICATION_GRADES_BY_AFFILIATION: Record<string, readonly string[]> = {
 // session now proves Google identity only; admin access still requires the
 // separate report_admin_permissions check below.
 const ADMIN_SESSION_COOKIE = "atlasez_admin_session";
-// Keep the designated primary operator available if an existing production
-// database temporarily loses its seeded permission row.
-const PRIMARY_ADMIN_EMAIL = "ukyoukay0@gmail.com";
 const GOOGLE_STATE_COOKIE = "atlasez_google_oauth_state";
 const GOOGLE_LINK_STATE_COOKIE = "atlasez_google_account_link_state";
 const SEARCH_CONSOLE_STATE_COOKIE = "atlasez_search_console_oauth_state";
@@ -932,6 +931,7 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
     (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1")
   );
 };
+const primaryAdminEmail = (env: Env) => env.ADMIN_PRIMARY_EMAIL?.trim().toLowerCase() ?? "";
 
 class GoogleIdentityConflictError extends Error {}
 
@@ -1162,14 +1162,15 @@ async function resolveAdminScope(
   const grantedSubjects = result.results
     .map((permission) => permission.subject)
     .filter(Boolean);
-  const isPrimaryAdmin = email === PRIMARY_ADMIN_EMAIL;
+  const configuredPrimaryAdmin = primaryAdminEmail(env);
   if (
     !grantedSubjects.length &&
     !(workflowRoles.results ?? []).length &&
-    !isPrimaryAdmin
+    email !== configuredPrimaryAdmin
   )
     return json({ error: "この管理画面の閲覧権限が設定されていません。" }, 403);
-  const allSubjects = isPrimaryAdmin || grantedSubjects.includes("*");
+  const allSubjects =
+    email === configuredPrimaryAdmin || grantedSubjects.includes("*");
   // `*` は全分野管理者の権限であって、その人自身の執筆担当分野ではない。
   // 通常の原稿一覧・作業状況は担当分野だけに限定する。
   const subjects = grantedSubjects.filter((subject) => subject !== "*");
@@ -1374,9 +1375,7 @@ async function getUserStageForEmail(
       projectProfileComplete,
       tutorialComplete: Boolean(tutorial?.tutorial_completed_at),
       isAdmin:
-        localAdmin ||
-        Boolean(permission) ||
-        email === PRIMARY_ADMIN_EMAIL,
+        localAdmin || Boolean(permission) || email === primaryAdminEmail(env),
     }),
   };
 }
@@ -2121,13 +2120,13 @@ async function listReportAdminPermissions(
     ...member,
     discord_role_ids: (assignmentsByEmail.get(member.email.toLowerCase()) ?? []).join(","),
   }));
-  // The primary operator is also allowed through the authentication fallback
-  // when an older production database is missing the seeded permission row.
-  // Keep the permissions screen consistent with that access decision instead
-  // of hiding the currently signed-in global administrator from the list.
+  // 復旧用の主管理者メールは環境変数からのみ読み取る。通常はD1の
+  // report_admin_permissions行が表示されるため、この補完は旧DB向けに限定する。
+  const configuredPrimaryAdmin = primaryAdminEmail(env);
   if (
-    scope.email === PRIMARY_ADMIN_EMAIL &&
-    !permissions.some((member) => member.email.toLowerCase() === PRIMARY_ADMIN_EMAIL)
+    configuredPrimaryAdmin &&
+    scope.email === configuredPrimaryAdmin &&
+    !permissions.some((member) => member.email.toLowerCase() === configuredPrimaryAdmin)
   ) {
     const [profile, discordAccount] = await Promise.all([
       env.REPORTS.prepare(
@@ -2135,7 +2134,7 @@ async function listReportAdminPermissions(
          FROM editorial_member_profiles
          WHERE lower(email) = lower(?) LIMIT 1`,
       )
-        .bind(PRIMARY_ADMIN_EMAIL)
+        .bind(configuredPrimaryAdmin)
         .first<{
           display_name: string;
           university: string;
@@ -2148,11 +2147,11 @@ async function listReportAdminPermissions(
          FROM atlasez_member_discord_accounts
          WHERE lower(email) = lower(?) LIMIT 1`,
       )
-        .bind(PRIMARY_ADMIN_EMAIL)
+        .bind(configuredPrimaryAdmin)
         .first<{ discord_user_id: string }>(),
     ]);
     permissions.push({
-      email: PRIMARY_ADMIN_EMAIL,
+      email: configuredPrimaryAdmin,
       subjects: "*",
       display_name: profile?.display_name?.trim() || "主管理者",
       university: profile?.university ?? "",
@@ -2160,15 +2159,10 @@ async function listReportAdminPermissions(
       interests: profile?.interests ?? "",
       avatar_url: profile?.avatar_url ?? "",
       discord_user_id: discordAccount?.discord_user_id ?? "",
-      discord_role_ids: (
-        assignmentsByEmail.get(PRIMARY_ADMIN_EMAIL) ?? []
-      ).join(","),
+      discord_role_ids: (assignmentsByEmail.get(configuredPrimaryAdmin) ?? []).join(","),
     });
     permissions.sort((left, right) =>
-      `${left.display_name}\u0000${left.email}`.localeCompare(
-        `${right.display_name}\u0000${right.email}`,
-        "ja",
-      ),
+      `${left.display_name}\u0000${left.email}`.localeCompare(`${right.display_name}\u0000${right.email}`, "ja"),
     );
   }
   return json({

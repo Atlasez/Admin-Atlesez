@@ -19,6 +19,7 @@ class Statement {
 
 const env = (mode: string, extra: Record<string, string> = {}) => ({
   ADMIN_AUTH_MODE: mode,
+  ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
   ...extra,
   REPORTS: {
     prepare: (query: string) => new Statement(query),
@@ -39,6 +40,7 @@ const stageEnv = (
   sessionEmail = "applicant@example.com",
 ) => ({
   ADMIN_AUTH_MODE: "google-oauth",
+  ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
   REPORTS: {
     prepare: (query: string) => {
       const statement = new Statement(query);
@@ -294,6 +296,7 @@ describe("applicant stage server-side access", () => {
       }),
       {
         ADMIN_AUTH_MODE: "cloudflare-access",
+        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
         REPORTS: reports,
         ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
       } as never,
