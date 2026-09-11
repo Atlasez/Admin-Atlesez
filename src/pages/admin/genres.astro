@@ -240,12 +240,11 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       try {
         const [response, taxonomyResponse] = await Promise.all([
           fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }),
-          fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" }),
+          fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" }).catch(() => null),
         ]);
         const data = await response.json() as { members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string };
-        const taxonomyData = await taxonomyResponse.json() as { catalog?: Array<{ kind?: string; subject_slug?: string; slug?: string; name?: string; description?: string; status?: string }>; error?: string };
+        const taxonomyData = taxonomyResponse?.ok ? await taxonomyResponse.json() as { catalog?: Array<{ kind?: string; subject_slug?: string; slug?: string; name?: string; description?: string; status?: string }>; error?: string } : { catalog: [] };
         if (!response.ok) throw new Error(data.error ?? "ジャンル概要を読み込めませんでした。");
-        if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。");
         overviewMembers = data.members ?? [];
         membersLoaded = true;
         const coordinatorSubjects = data.scope?.coordinatorSubjects ?? [];
