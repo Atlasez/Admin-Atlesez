@@ -10714,7 +10714,34 @@ async function progressReportsOverview(
       scope: { email: scope.email, isManager: false },
       projects: [],
       progress: [],
+      progressPagination: { limit: 50, nextCursor: null, hasMore: false },
     });
+
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  const pageLimit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  let cursor: { createdAt: string; id: string } | null = null;
+  const rawCursor = searchParams.get("cursor");
+  if (rawCursor) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(rawCursor)) as {
+        createdAt?: unknown;
+        id?: unknown;
+      };
+      if (
+        typeof parsed.createdAt === "string" &&
+        parsed.createdAt &&
+        typeof parsed.id === "string" &&
+        parsed.id
+      ) {
+        cursor = { createdAt: parsed.createdAt, id: parsed.id };
+      }
+    } catch {
+      cursor = null;
+    }
+  }
 
   const conditions: string[] = [];
   const values: unknown[] = [];
@@ -10733,6 +10760,10 @@ async function progressReportsOverview(
     values.push(project.id, scope.email, ...scope.subjects);
   }
 
+  const cursorCondition = cursor
+    ? " AND (r.created_at < ? OR (r.created_at = ? AND r.id < ?))"
+    : "";
+  if (cursor) values.push(cursor.createdAt, cursor.createdAt, cursor.id);
   const reports = await env.REPORTS.prepare(
     `SELECT r.id,r.project_id,r.subject,r.document_id,r.body,r.created_at,r.email,
       COALESCE(NULLIF(TRIM(profile.display_name),''),r.email) AS display_name,
@@ -10740,11 +10771,24 @@ async function progressReportsOverview(
      FROM editorial_progress_reports r
      LEFT JOIN editorial_member_profiles profile ON lower(profile.email)=lower(r.email)
      LEFT JOIN atlasez_projects p ON p.id=r.project_id
-     WHERE ${conditions.join(" OR ")}
-     ORDER BY r.created_at DESC`,
+     WHERE (${conditions.join(" OR ")})${cursorCondition}
+     ORDER BY r.created_at DESC,r.id DESC
+     LIMIT ?`,
   )
-    .bind(...values)
+    .bind(...values, pageLimit + 1)
     .all<Record<string, unknown>>();
+  const fetchedReports = reports.results ?? [];
+  const hasMore = fetchedReports.length > pageLimit;
+  const pageReports = fetchedReports.slice(0, pageLimit);
+  const lastReport = pageReports.at(-1);
+  const nextCursor = hasMore && lastReport
+    ? encodeURIComponent(
+        JSON.stringify({
+          createdAt: String(lastReport.created_at ?? ""),
+          id: String(lastReport.id ?? ""),
+        }),
+      )
+    : null;
   return json({
     scope: {
       email: scope.email,
@@ -10752,7 +10796,8 @@ async function progressReportsOverview(
       isManager: scope.isManager,
     },
     projects,
-    progress: reports.results ?? [],
+    progress: pageReports,
+    progressPagination: { limit: pageLimit, nextCursor, hasMore },
   });
 }
 

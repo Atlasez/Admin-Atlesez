@@ -156,3 +156,62 @@ test("タスク一覧はカーソルで追加読み込みできる", async ({ pa
   await expect(loadMore).toBeHidden();
   expect(requests).toBe(2);
 });
+
+test("進捗報告一覧はカーソルで追加読み込みできる", async ({ page }) => {
+  let requests = 0;
+  await page.route("**/api/admin/progress**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const cursor = requestUrl.searchParams.get("cursor");
+    requests += 1;
+    const report = cursor
+      ? {
+          id: "progress-next",
+          project_id: "atlas",
+          project_name: "アトラス",
+          subject: "mathematics",
+          body: "次ページの進捗",
+          created_at: "2026-09-01T00:00:00.000Z",
+          email: "alice@example.com",
+          display_name: "Alice",
+        }
+      : {
+          id: "progress-first",
+          project_id: "atlas",
+          project_name: "アトラス",
+          subject: "mathematics",
+          body: "最初の進捗",
+          created_at: "2026-09-02T00:00:00.000Z",
+          email: "alice@example.com",
+          display_name: "Alice",
+        };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: {
+          email: "alice@example.com",
+          isManager: false,
+          subjects: ["mathematics"],
+        },
+        projects: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+        progress: [report],
+        progressPagination: cursor
+          ? { limit: 1, nextCursor: null, hasMore: false }
+          : { limit: 1, nextCursor: "cursor-1", hasMore: true },
+      }),
+    });
+  });
+
+  await page.goto("admin/progress/");
+  await expect(page.locator("[data-progress-list]")).toContainText(
+    "最初の進捗",
+  );
+  const loadMore = page.getByRole("button", { name: "さらに読み込む" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(page.locator("[data-progress-list]")).toContainText(
+    "次ページの進捗",
+  );
+  await expect(loadMore).toBeHidden();
+  expect(requests).toBe(2);
+});
