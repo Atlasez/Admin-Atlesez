@@ -295,6 +295,68 @@ describe("admin worker editor APIs", () => {
     expect(category.slug).toMatch(/^category-[a-z0-9-]+$/);
   });
 
+  it("reorders taxonomy entries in a single subject/category group", async () => {
+    const firstId = "00000000-0000-0000-0000-000000000011";
+    const secondId = "00000000-0000-0000-0000-000000000012";
+    const batches: unknown[][] = [];
+    const reorderEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("kind,subject_slug,status"))
+              return {
+                results: [
+                  {
+                    id: firstId,
+                    kind: "category",
+                    subject_slug: "informatics",
+                    status: "active",
+                  },
+                  {
+                    id: secondId,
+                    kind: "category",
+                    subject_slug: "informatics",
+                    status: "active",
+                  },
+                ],
+              } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "reorder",
+          items: [
+            { id: secondId, sortOrder: 0 },
+            { id: firstId, sortOrder: 10 },
+          ],
+        }),
+      }),
+      reorderEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      updated: 2,
+    });
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
   it("reorders outline entries only inside the caller's permitted subjects", async () => {
     const outlineId = "00000000-0000-0000-0000-000000000001";
     const queries: string[] = [];
