@@ -123,6 +123,53 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   expect(heights.documents).toBeLessThan(heights.note);
 });
 
+test("個人ワークスペースの読み込み失敗を共通の再試行で復帰できる", async ({
+  page,
+}) => {
+  await mockWorkspaceApi(page);
+  let workspaceCalls = 0;
+  await page.route("**/api/admin/personal-workspace", async (route) => {
+    workspaceCalls += 1;
+    if (workspaceCalls === 1) {
+      await route.fulfill({
+        status: 503,
+        json: { error: "一時的に読み込めません。" },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        privateNote: "再試行後のメモ",
+        privateNoteUpdatedAt: null,
+        documents: [
+          {
+            id: "doc-retry",
+            subject: "mathematics",
+            category: "algebra",
+            title: "再試行後の原稿",
+            status: "draft",
+            updated_at: "2026-08-20T00:00:00.000Z",
+            published_at: null,
+          },
+        ],
+      },
+    });
+  });
+
+  await page.goto("admin/workspace/?project=atlas");
+  const surface = page.locator(".workspace-grid");
+  const retryNotice = surface.locator(
+    '[data-admin-load-error-scope="workspace"]',
+  );
+  await expect(retryNotice).toBeVisible();
+  await expect(surface).toHaveAttribute("aria-busy", "false");
+  await retryNotice.getByRole("button", { name: "再試行" }).click();
+  await expect(page.getByText("再試行後の原稿", { exact: true })).toBeVisible();
+  await expect(retryNotice).toBeHidden();
+  await expect(surface).toHaveAttribute("aria-busy", "false");
+  expect(workspaceCalls).toBe(2);
+});
+
 test("運営内自己紹介一覧はプロジェクトの承認済み情報を表示する", async ({
   page,
 }) => {
