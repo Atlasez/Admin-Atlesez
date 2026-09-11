@@ -106,6 +106,24 @@ async function mockAdminApi(
         mentionNames: ["Alice", "Bob"],
         scope,
       };
+    } else if (url.pathname === "/api/admin/editor/outline") {
+      payload = {
+        entries: [
+          {
+            id: "outline-1",
+            key: "mathematics/group-theory/2",
+            subject: "mathematics",
+            category: "group-theory",
+            slug: "lagrange-theorem",
+            title: "ラグランジュの定理",
+            summary: "群の位数と部分群の関係",
+            order: 2,
+            status: "active",
+          },
+        ],
+      };
+    } else if (url.pathname === "/api/admin/editor/taxonomy") {
+      payload = { catalog: [] };
     } else if (url.pathname === "/api/admin/editor/documents/doc-1") {
       payload = { document, comments };
     } else if (url.pathname.endsWith("/assets")) {
@@ -146,19 +164,32 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
-test("目次サイドバーを表示し、目次から執筆を開始できる", async ({ page }) => {
+test("記事編集画面に目次サイドバーを追加せず、独立した目次から執筆を開始できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  const sidebar = page.locator(".document-sidebar");
-  await expect(sidebar).toBeVisible();
-  await expect(sidebar.locator("#atlas-outline-heading")).toHaveText(
-    "学習サイトの目次",
+  await expect(page.locator(".document-sidebar")).toBeHidden();
+  await expect(page.getByRole("link", { name: "学習サイトの目次" })).toHaveAttribute(
+    "href",
+    "/admin/editor/outline/",
   );
-  await expect(sidebar.locator(".outline-article").first()).toBeVisible();
-  await expect(
-    sidebar.locator("[data-outline-planned], [data-outline-article]").first(),
-  ).toBeVisible();
+});
+
+test("独立した目次ページから未着手の記事を執筆開始できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/outline/");
+  await expect(page.getByRole("heading", { name: "学習サイトの目次" })).toBeVisible();
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await expect(page.locator("[data-outline-list] .outline-entry").first()).toBeVisible();
+  const startLink = page.locator("[data-outline-list] a").first();
+  await expect(startLink).toHaveText(/執筆を開始|記事を開く/);
+  const href = await startLink.getAttribute("href");
+  expect(href).toContain("subject=mathematics");
+  if (href?.includes("new=1")) {
+    await page.goto(`.${href}`);
+    await expect(page.locator('input[name="title"]')).toHaveValue("ラグランジュの定理");
+    await expect(page.locator('input[name="slug"]')).toHaveValue("lagrange-theorem");
+  }
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
@@ -2267,7 +2298,7 @@ test("E-1〜E-5/E-13: 全4枠をボタンで切り替え、四辺移動とライ
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
-  await expect(page.locator(".document-sidebar")).toBeVisible();
+  await expect(page.locator(".document-sidebar")).toBeHidden();
   await expect(page.getByRole("button", { name: /[123]画面/ })).toHaveCount(0);
   await expect(page.locator('[data-pane-tab="writing"]')).toHaveAttribute(
     "aria-pressed",

@@ -2249,6 +2249,10 @@ type AdminAuditAction =
   | "taxonomy_updated"
   | "taxonomy_archived"
   | "taxonomy_restored"
+  | "outline_created"
+  | "outline_updated"
+  | "outline_archived"
+  | "outline_restored"
   | "workflow_transition";
 
 type AdminAuditTarget =
@@ -2257,6 +2261,7 @@ type AdminAuditTarget =
   | "member"
   | "task"
   | "taxonomy"
+  | "outline"
   | "workflow";
 
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
@@ -2275,6 +2280,10 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   taxonomy_updated: "分野・カテゴリを更新",
   taxonomy_archived: "分野・カテゴリをアーカイブ",
   taxonomy_restored: "分野・カテゴリを復元",
+  outline_created: "目次項目を追加",
+  outline_updated: "目次項目を更新",
+  outline_archived: "目次項目をアーカイブ",
+  outline_restored: "目次項目を復元",
   workflow_transition: "状態を変更",
 }[action] ?? action);
 
@@ -3923,6 +3932,113 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   }
   await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", slug, name, `分野・カテゴリを追加：${name}`, { kind, slug, subject });
   return json({ ok: true }, 201);
+}
+
+type EditorialOutlineEntryRow = {
+  id: string;
+  project_id: string;
+  subject_slug: string;
+  category_slug: string;
+  slug: string;
+  title: string;
+  summary: string;
+  concept_id: string;
+  sort_order: number;
+  status: "active" | "archived";
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** 分野の目次を先に作成し、本文は後から記事編集画面で執筆するためのAPI。 */
+async function editorialOutlineEntries(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const url = new URL(request.url);
+  const allowedSubjects = new Set([
+    ...scope.subjects,
+    ...(scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*"),
+  ]);
+  const canEditSubject = (subject: string) =>
+    scope.allSubjects || scope.isManager || allowedSubjects.has(subject) || (scope.coordinatorSubjects ?? []).includes("*");
+  if (request.method === "GET") {
+    const includeArchived = url.searchParams.get("includeArchived") === "1";
+    const rows = await env.REPORTS.prepare(
+      `SELECT id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at
+       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
+       ORDER BY subject_slug,category_slug,sort_order,title`,
+    ).all<EditorialOutlineEntryRow>();
+    const visible = scope.allSubjects || scope.isManager
+      ? rows.results ?? []
+      : (rows.results ?? []).filter((row) => allowedSubjects.has(row.subject_slug));
+    return json({ entries: visible });
+  }
+  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けません。" }, 403);
+  if (request.method === "PATCH") {
+    const payload = (await request.json().catch(() => null)) as {
+      id?: unknown; action?: unknown; subject?: unknown; category?: unknown; slug?: unknown;
+      title?: unknown; summary?: unknown; conceptId?: unknown; sortOrder?: unknown;
+    } | null;
+    const id = text(payload?.id, 64);
+    const action = text(payload?.action, 20);
+    if (!id) return json({ error: "対象を確認してください。" }, 400);
+    const current = await env.REPORTS.prepare(
+      "SELECT id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at FROM editorial_outline_entries WHERE id=? AND project_id='atlas'",
+    ).bind(id).first<EditorialOutlineEntryRow>();
+    if (!current) return json({ error: "目次項目が見つかりません。" }, 404);
+    if (!canEditSubject(current.subject_slug)) return json({ error: "この分野の目次を変更する権限がありません。" }, 403);
+    if (action === "archive" || action === "restore") {
+      const status = action === "archive" ? "archived" : "active";
+      await env.REPORTS.prepare("UPDATE editorial_outline_entries SET status=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(status, new Date().toISOString(), id).run();
+      await recordAdminAudit(env, scope.email, action === "archive" ? "outline_archived" : "outline_restored", "outline", id, current.title, `目次項目を${action === "archive" ? "アーカイブ" : "復元"}：${current.title}`, { subject: current.subject_slug, category: current.category_slug });
+      return json({ ok: true, status });
+    }
+    if (action !== "update") return json({ error: "操作を確認してください。" }, 400);
+    const subject = text(payload?.subject, 80).toLowerCase() || current.subject_slug;
+    const category = text(payload?.category, 80).toLowerCase() || current.category_slug;
+    const slug = text(payload?.slug, 80).toLowerCase() || current.slug;
+    const title = text(payload?.title, 160) || current.title;
+    const summary = text(payload?.summary, 500);
+    const conceptId = text(payload?.conceptId, 200);
+    const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? current.sort_order) || 0));
+    if (!SUBJECT_SLUG.test(subject) || !SUBJECT_SLUG.test(category) || !SUBJECT_SLUG.test(slug) || !title || !canEditSubject(subject)) return json({ error: "分野、カテゴリ、ID、表示名を確認してください。" }, 400);
+    try {
+      await env.REPORTS.prepare("UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,slug=?,title=?,summary=?,concept_id=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(subject, category, slug, title, summary, conceptId, sortOrder, new Date().toISOString(), id).run();
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ分野・カテゴリ・IDの目次項目がすでにあります。" }, 409);
+      throw error;
+    }
+    await recordAdminAudit(env, scope.email, "outline_updated", "outline", id, title, `目次項目を更新：${title}`, { subject, category, slug });
+    return json({ ok: true, id, subject, category, slug, title, summary, conceptId, sortOrder });
+  }
+  if (request.method !== "POST") return json({ error: "GET、POST、PATCHのみ利用できます。" }, 405);
+  const payload = (await request.json().catch(() => null)) as {
+    subject?: unknown; category?: unknown; slug?: unknown; title?: unknown; summary?: unknown; conceptId?: unknown; sortOrder?: unknown;
+  } | null;
+  const subject = text(payload?.subject, 80).toLowerCase();
+  const category = text(payload?.category, 80).toLowerCase();
+  const slug = text(payload?.slug, 80).toLowerCase();
+  const title = text(payload?.title, 160);
+  const summary = text(payload?.summary, 500);
+  const conceptId = text(payload?.conceptId, 200);
+  const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? 0) || 0));
+  if (!SUBJECT_SLUG.test(subject) || !SUBJECT_SLUG.test(category) || !SUBJECT_SLUG.test(slug) || !title) return json({ error: "分野、カテゴリ、ID、表示名を確認してください。" }, 400);
+  if (!canEditSubject(subject)) return json({ error: "この分野に目次を追加する権限がありません。" }, 403);
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  try {
+    await env.REPORTS.prepare(
+      `INSERT INTO editorial_outline_entries (id,project_id,subject_slug,category_slug,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(id, "atlas", subject, category, slug, title, summary, conceptId, sortOrder, "active", scope.email, now, now).run();
+  } catch (error) {
+    if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ分野・カテゴリ・IDの目次項目がすでにあります。" }, 409);
+    throw error;
+  }
+  await recordAdminAudit(env, scope.email, "outline_created", "outline", id, title, `目次項目を追加：${title}`, { subject, category, slug });
+  return json({ ok: true, id }, 201);
 }
 
 async function saveMemberSettings(
@@ -19737,6 +19853,8 @@ async function handleAdminRequest(
     return genreRoleAssignment(request, env);
   if (url.pathname === "/api/admin/editor/taxonomy")
     return editorialTaxonomyCatalog(request, env);
+  if (url.pathname === "/api/admin/editor/outline")
+    return editorialOutlineEntries(request, env);
   if (
     url.pathname === "/api/admin/member-settings" &&
     request.method === "PUT"
