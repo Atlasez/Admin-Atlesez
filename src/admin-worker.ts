@@ -8713,7 +8713,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       kind: "task",
       title: row.title,
       detail: row.details?.split("\n")[0] || (row.task_kind === "feedback" ? "フィードバック依頼を確認してください。" : "タスクを確認してください。"),
-      href: row.task_kind === "feedback" ? "/admin/operations/?project=atlas" : `/admin/operations/?project=${encodeURIComponent(row.project_id)}`,
+      // タスクの詳細操作は横断タスク管理を正本にし、アクションセンターから
+      // 開いたときは対象タスクへフォーカスする。
+      href: `/admin/member-tasks/?focus=${encodeURIComponent(row.id)}`,
       status: row.status,
       priority: actionCenterPriority(row.due_at, row.updated_at, now),
       updatedAt: row.updated_at,
@@ -8797,7 +8799,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   }
   const history: ActionCenterItem[] = [];
   for (const row of taskHistoryRows.results ?? []) {
-    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/operations/?project=${encodeURIComponent(row.project_id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
+    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/member-tasks/?focus=${encodeURIComponent(row.id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
   }
   for (const row of documentHistoryRows.results ?? []) {
     const permitted = scope.isManager || row.created_by.toLowerCase() === scope.email.toLowerCase();
