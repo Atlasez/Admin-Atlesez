@@ -3935,7 +3935,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (request.method === "PATCH") {
     const payload = (await request.json().catch(() => null)) as {
-      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown; items?: unknown;
+      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown; slug?: unknown; items?: unknown;
     } | null;
     const action = text(payload?.action, 20);
     const id = text(payload?.id, 64);
