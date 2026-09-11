@@ -1670,6 +1670,38 @@ describe("admin worker editor APIs", () => {
             entry.values.includes("publish"),
         ),
       ).toBe(true);
+
+      // 本番のWorkerExecutionContextでは外部GitHub処理を待受後へ移し、
+      // 公開受付が外部APIの遅延でタイムアウトしないことを確認する。
+      currentPublicationRun = null;
+      requests.length = 0;
+      const background: Promise<unknown>[] = [];
+      const acceptedResponse = await worker.fetch(
+        new Request(
+          `http://localhost/api/admin/editor/documents/${documentId}/publish`,
+          {
+            method: "POST",
+            headers: {
+              origin: "http://localhost",
+              "content-type": "application/json",
+            },
+            body: "{}",
+          },
+        ),
+        env as never,
+        {
+          waitUntil: (promise: Promise<unknown>) => background.push(promise),
+        } as never,
+      );
+      expect(acceptedResponse.status).toBe(202);
+      await expect(acceptedResponse.json()).resolves.toMatchObject({
+        ok: true,
+        pending: true,
+        accepted: true,
+        publicationRun: { id: publicationRun.id },
+      });
+      expect(background).toHaveLength(1);
+      await Promise.all(background);
     } finally {
       vi.unstubAllGlobals();
     }
