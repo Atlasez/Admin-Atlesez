@@ -1503,6 +1503,53 @@ test("H-1: 保存版と現在の本文の差分を表示できる", async ({ pag
   );
 });
 
+test("H-3: 版履歴を保存前の入力欄へ安全に反映できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/revisions",
+    async (route) => {
+      await route.fulfill({
+        json: {
+          revisions: [
+            {
+              id: "revision-1",
+              title: "群の定義（旧版）",
+              summary: "旧要約",
+              body: "## 群\n\n旧版の本文です。",
+              status: "draft",
+              saved_by: "alice@example.com",
+              saved_at: "2026-08-19T00:00:00.000Z",
+            },
+          ],
+        },
+      });
+    },
+  );
+  let patchCount = 0;
+  page.on("request", (request) => {
+    if (
+      request.url().includes("/api/admin/editor/documents/doc-1") &&
+      request.method() === "PATCH"
+    ) {
+      patchCount += 1;
+    }
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  await expect(page.locator("[data-revision-before]")).toHaveCount(1);
+  await page.locator("[data-revision-restore]").click();
+  await expect(page.locator('input[name="title"]')).toHaveValue(
+    "群の定義（旧版）",
+  );
+  await expect(page.locator('textarea[name="body"]')).toHaveValue(
+    "## 群\n\n旧版の本文です。",
+  );
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "入力欄へ反映しました",
+  );
+  expect(patchCount).toBe(0);
+});
+
 test("H-2: 版履歴を査読コメント枠から独立して配置する", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?document=doc-1");

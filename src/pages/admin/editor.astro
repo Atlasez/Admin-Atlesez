@@ -4393,17 +4393,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }
       return output;
     };
+    let loadedRevisionHistory: Revision[] = [];
     const loadRevisions = async (id:string) => {
       if(!id) return;
       const response=await fetch(`/api/admin/editor/documents/${id}/revisions`,{credentials:"same-origin"});
       const data=await read<{revisions?:Revision[];feedbackRequests?:FeedbackRequestHistory[];error?:string}>(response);
       if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; feedbackRequestHistory.textContent = "フィードバック依頼の履歴を読み込めませんでした。"; return; }
       const history = data.revisions ?? [];
+      loadedRevisionHistory = history;
       if (currentDocument) renderDocumentProvenance(currentDocument, history.map((item) => item.saved_by));
       if (!history.length) revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。";
       else {
         const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by)}・${esc(item.status)}</option>`).join("");
-        revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label></div><pre class="revision-diff" data-revision-diff></pre>`;
+        revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label><button type="button" class="quiet-action revision-restore-action" data-revision-restore>選択した版を入力へ反映</button></div><p class="revision-restore-help">反映した内容は入力欄に入るだけで、保存するまで記事は更新されません。</p><pre class="revision-diff" data-revision-diff></pre>`;
         const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
         const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;
         const output = revisions.querySelector<HTMLElement>("[data-revision-diff]")!;
@@ -4426,6 +4428,33 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           }).join("")}</div>`
         : "<p class=\"feedback-request-history-empty\">この原稿には、まだフィードバック依頼はありません。</p>";
     };
+    revisions.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-revision-restore]");
+      if (!button) return;
+      const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]");
+      const revision = before ? loadedRevisionHistory[Number(before.value)] : undefined;
+      if (!revision) return;
+      if (loadedDocumentWasPublished && !updateProposalActive) {
+        saveMessage.value = "公開中の記事へ版を反映するには、先に「更新案を作成」を押してください。";
+        updateProposalButton.focus({ preventScroll: true });
+        return;
+      }
+      const title = form.elements.namedItem("title") as HTMLInputElement;
+      const summary = form.elements.namedItem("summary") as HTMLInputElement;
+      title.value = revision.title;
+      summary.value = revision.summary;
+      body.value = revision.body;
+      lockedRanges = validLockedRanges(lockedRanges, body.value);
+      previousBodyValue = body.value;
+      renderLockControls();
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+      summary.dispatchEvent(new Event("input", { bubbles: true }));
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+      saveMessage.value = `${date(revision.saved_at)}の版を入力欄へ反映しました。内容を確認して保存してください。`;
+      const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]");
+      if (after) { after.value = "current"; after.dispatchEvent(new Event("change")); }
+      title.focus({ preventScroll: true });
+    });
     feedbackRequestHistory.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-save-feedback-task]");
       if (!button) return;
@@ -5196,6 +5225,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .feedback-request-history-empty { color: var(--muted); font-size: .8rem; margin: 0; }
   .revision-compare-controls { display: grid; gap: .65rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .revision-compare-controls label { color: var(--muted); display: grid; font-size: .76rem; font-weight: 800; gap: .25rem; }
+  .revision-restore-action { align-self: end; min-height: 2.25rem; }
+  .revision-restore-help { color: var(--muted); font-size: .78rem; margin: .5rem 0 0; }
   .revision-diff { background: var(--background-inset); border: 1px solid var(--border); color: var(--text); line-height: 1.55; margin: .75rem 0 0; max-height: 28rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }.revision-diff-line { display:block; margin-inline:-.3rem; min-height:1.55em; padding:0 .3rem; }.revision-diff-line.is-added { background:#e0f4e6; box-shadow:inset 3px 0 #27834b; color:#155d32; }.revision-diff-line.is-removed { background:#fde6e6; box-shadow:inset 3px 0 #c74343; color:#8b2525; }[data-pref-bg="dark"] .revision-diff-line.is-added { background:#133d2a; box-shadow:inset 3px 0 #65c98c; color:#d5f7e4; }[data-pref-bg="dark"] .revision-diff-line.is-removed { background:#4b2226; box-shadow:inset 3px 0 #f08080; color:#ffd8dc; }
   .comment-tags { align-items: center; display: flex; flex-wrap: wrap; gap: .3rem; padding: 0 .85rem .55rem; }
   .comment-tags span { color: var(--muted); font-size: .7rem; font-weight: 800; }
