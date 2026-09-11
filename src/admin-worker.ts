@@ -3935,7 +3935,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (request.method === "PATCH") {
     const payload = (await request.json().catch(() => null)) as {
-      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown; items?: unknown;
+      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown; slug?: unknown; items?: unknown;
     } | null;
     const action = text(payload?.action, 20);
     const id = text(payload?.id, 64);
@@ -4005,10 +4005,26 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     const description = text(payload?.description, 500);
     const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? current.sort_order) || 0));
     const subject = current.kind === "category" ? text(payload?.subject, 80).toLowerCase() || current.subject_slug : "";
-    if (!name || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名と対象分野を確認してください。" }, 400);
+    const slug = text(payload?.slug, 80).toLowerCase() || current.slug;
+    if (!name || !SUBJECT_SLUG.test(slug) || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名、ID、対象分野を確認してください。" }, 400);
+    if (current.kind === "subject" && APPLICATION_SUBJECT_LABELS[slug] && slug !== current.slug)
+      return json({ error: "既存の分野と同じIDには変更できません。" }, 409);
     if (current.kind === "category") {
-      const associationError = await editorialTaxonomyAssociationError(env, subject, current.slug);
-      if (associationError) return json({ error: associationError }, 400);
+      if (subject !== current.subject_slug) {
+        const targetSubject = APPLICATION_SUBJECT_LABELS[subject]
+          ? true
+          : Boolean(
+              await env.REPORTS.prepare(
+                "SELECT id FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' AND kind='subject' AND slug=? AND status='active'",
+              )
+                .bind(subject)
+                .first<{ id: string }>(),
+            );
+        if (!targetSubject) return json({ error: "移動先の分野が見つかりません。" }, 400);
+      } else {
+        const associationError = await editorialTaxonomyAssociationError(env, subject, current.slug);
+        if (associationError) return json({ error: associationError }, 400);
+      }
     }
     const duplicateName = await env.REPORTS.prepare(
       `SELECT id FROM admin_editorial_taxonomy_catalog
@@ -4019,15 +4035,110 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       .first<{ id: string }>();
     if (duplicateName)
       return json({ error: "同じ対象に同じ表示名がすでにあります。" }, 409);
+    const oldSubject = current.kind === "subject" ? current.slug : current.subject_slug;
+    const nextSubject = current.kind === "subject" ? slug : subject;
+    const oldCategory = current.kind === "category" ? current.slug : "";
+    const nextCategory = current.kind === "category" ? slug : "";
+    const identityChanged = oldSubject !== nextSubject || oldCategory !== nextCategory;
+    const documentIdentity = current.kind === "subject"
+      ? "subject=?"
+      : "subject=? AND category=?";
+    const documentValues = current.kind === "subject" ? [oldSubject] : [oldSubject, oldCategory];
+
+    // 公開済みのURLを黙って変更すると学習サイトのリンクを壊すため、
+    // 公開記事・公開カタログ・公開処理中の記事が残る場合は移行を拒否する。
+    if (identityChanged) {
+      const busyDocuments = await env.REPORTS.prepare(
+        `SELECT COUNT(*) AS count FROM editorial_documents
+         WHERE ${documentIdentity} AND (published_at IS NOT NULL OR publication_action IS NOT NULL OR publication_review_stage IS NOT NULL)`,
+      ).bind(...documentValues).first<{ count: number | string }>();
+      const catalogIdentity = current.kind === "subject"
+        ? "subject=?"
+        : "subject=? AND category=?";
+      const publicCatalog = await env.REPORTS.prepare(
+        `SELECT COUNT(*) AS count FROM editorial_article_catalog
+         WHERE ${catalogIdentity} AND public_status='published'`,
+      ).bind(...documentValues).first<{ count: number | string }>();
+      if (Number(busyDocuments?.count ?? 0) > 0 || Number(publicCatalog?.count ?? 0) > 0)
+        return json(
+          {
+            error: "公開済みまたは公開処理中の記事があるためIDを変更できません。先に公開を取り消すか、更新案を完了してください。",
+            code: "TAXONOMY_ID_IN_USE",
+          },
+          409,
+        );
+    }
+
+    // 記事カタログはpath/identity_keyが一意なので、先に対象行を取得して
+    // 新しいURLを組み立て、関連テーブルと同じD1 batchで移行する。
+    const catalogRows = identityChanged
+      ? (await env.REPORTS.prepare(
+          `SELECT path,locale,subject,category,slug FROM editorial_article_catalog
+           WHERE ${current.kind === "subject" ? "subject=?" : "subject=? AND category=?"}`,
+        ).bind(...documentValues).all<{ path: string; locale: string; subject: string; category: string; slug: string }>()).results ?? []
+      : [];
+    const now = new Date().toISOString();
+    const statements = [
+      env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(current.kind === "category" ? nextSubject : "", slug, name, description, sortOrder, now, id),
+    ];
+    if (identityChanged) {
+      if (current.kind === "subject") {
+        statements.push(
+          env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,updated_at=? WHERE project_id='atlas' AND kind='category' AND subject_slug=?")
+            .bind(nextSubject, now, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_subject_overviews SET subject=? WHERE project_id='atlas' AND subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE report_admin_permissions SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_workflow_roles SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE atlasez_discord_channel_mappings SET subject=? WHERE project_id='atlas' AND subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE atlasez_discord_role_mappings SET subject=? WHERE project_id='atlas' AND subject=?")
+            .bind(nextSubject, oldSubject),
+        );
+      }
+      statements.push(
+        env.REPORTS.prepare(`UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,updated_at=? WHERE project_id='atlas' AND ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, now, ...documentValues),
+        env.REPORTS.prepare(`UPDATE editorial_documents SET subject=?,category=?,updated_at=? WHERE ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, now, ...documentValues),
+        env.REPORTS.prepare(`UPDATE article_reports SET subject=?,category=? WHERE ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, ...documentValues),
+        env.REPORTS.prepare(`UPDATE article_analytics_daily SET subject=?,category=? WHERE ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, ...documentValues),
+      );
+      if (oldSubject !== nextSubject) {
+        statements.push(
+          env.REPORTS.prepare("UPDATE editorial_progress_reports SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_tasks SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_events SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+        );
+      }
+      for (const row of catalogRows) {
+        const articleSubject = current.kind === "subject" ? nextSubject : row.subject;
+        const articleCategory = current.kind === "category" ? nextCategory : row.category;
+        const localeDirectory = editorialLocaleDirectory(row.locale);
+        const nextPath = `src/content/articles/${localeDirectory}/${articleSubject}/${articleCategory}/${row.slug}.md`;
+        const nextIdentity = `${row.locale}/${articleSubject}/${articleCategory}/${row.slug}`;
+        statements.push(
+          env.REPORTS.prepare("UPDATE editorial_article_catalog SET path=?,identity_key=?,subject=?,category=? WHERE path=?")
+            .bind(nextPath, nextIdentity, articleSubject, articleCategory, row.path),
+        );
+      }
+    }
     try {
-      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(subject, name, description, sortOrder, new Date().toISOString(), id).run();
+      await env.REPORTS.batch(statements);
     } catch (error) {
       if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
       throw error;
     }
-    await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, slug: current.slug, subject });
-    return json({ ok: true, id, name, description, sortOrder, subject });
+    await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, previousSubject: oldSubject, subject: nextSubject, previousSlug: current.slug, slug, referencesMigrated: identityChanged });
+    return json({ ok: true, id, name, description, sortOrder, subject: nextSubject, slug, referencesMigrated: identityChanged });
   }
   const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
   const kind = text(payload?.kind, 16) as "subject" | "category";

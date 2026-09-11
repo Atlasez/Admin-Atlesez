@@ -295,6 +295,170 @@ describe("admin worker editor APIs", () => {
     expect(category.slug).toMatch(/^category-[a-z0-9-]+$/);
   });
 
+  it("migrates draft references when a dynamic subject slug changes", async () => {
+    const taxonomyId = "00000000-0000-0000-0000-000000000021";
+    const queries: string[] = [];
+    const batches: unknown[][] = [];
+    const renameEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { subject: "*" } as T;
+            if (
+              query.includes(
+                "SELECT id,kind,subject_slug,slug,name,description",
+              )
+            )
+              return {
+                id: taxonomyId,
+                project_id: "atlas",
+                kind: "subject",
+                subject_slug: "",
+                slug: "subject-data-science",
+                name: "データサイエンス",
+                description: "",
+                sort_order: 0,
+                status: "active",
+              } as T;
+            if (query.includes("COUNT(*) AS count")) return { count: 0 } as T;
+            return null;
+          };
+          statement.all = async <T>() => {
+            if (query.includes("SELECT path,locale,subject,category,slug"))
+              return {
+                results: [
+                  {
+                    path: "src/content/articles/jpn/subject-data-science/ml/concentration.md",
+                    locale: "ja",
+                    subject: "subject-data-science",
+                    category: "ml",
+                    slug: "concentration",
+                  },
+                ],
+              } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: taxonomyId,
+          action: "update",
+          slug: "subject-data-science-v2",
+          name: "データサイエンス",
+          description: "更新済み",
+          sortOrder: 10,
+        }),
+      }),
+      renameEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      slug: "subject-data-science-v2",
+      referencesMigrated: true,
+    });
+    expect(batches).toHaveLength(1);
+    const statements = batches[0] as Array<{ query?: string }>;
+    expect(
+      statements.some((statement) =>
+        statement.query?.includes("UPDATE editorial_documents SET subject=?"),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((statement) =>
+        statement.query?.includes(
+          "UPDATE editorial_article_catalog SET path=?",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      queries.some((query) => query.includes("public_status='published'")),
+    ).toBe(true);
+  });
+
+  it("blocks a dynamic taxonomy slug change while a published article uses it", async () => {
+    const taxonomyId = "00000000-0000-0000-0000-000000000022";
+    const batches: unknown[][] = [];
+    const conflictEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { subject: "*" } as T;
+            if (
+              query.includes(
+                "SELECT id,kind,subject_slug,slug,name,description",
+              )
+            )
+              return {
+                id: taxonomyId,
+                project_id: "atlas",
+                kind: "subject",
+                subject_slug: "",
+                slug: "subject-data-science",
+                name: "データサイエンス",
+                description: "",
+                sort_order: 0,
+                status: "active",
+              } as T;
+            if (
+              query.includes("editorial_documents") &&
+              query.includes("COUNT(*) AS count")
+            )
+              return { count: 1 } as T;
+            if (query.includes("COUNT(*) AS count")) return { count: 0 } as T;
+            return null;
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: taxonomyId,
+          action: "update",
+          slug: "subject-data-science-v2",
+          name: "データサイエンス",
+        }),
+      }),
+      conflictEnv as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "TAXONOMY_ID_IN_USE",
+    });
+    expect(batches).toHaveLength(0);
+  });
+
   it("reorders taxonomy entries in a single subject/category group", async () => {
     const firstId = "00000000-0000-0000-0000-000000000011";
     const secondId = "00000000-0000-0000-0000-000000000012";

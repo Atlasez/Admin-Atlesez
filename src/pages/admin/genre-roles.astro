@@ -296,9 +296,10 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
           const item = taxonomy.find((entry) => entry.id === editTaxonomy.dataset.editTaxonomy);
           if (!item) return;
           const name = window.prompt("表示名", item.name); if (name === null) return;
+          const slug = window.prompt("ID（英小文字とハイフン）", item.slug); if (slug === null) return;
           const description = window.prompt("説明（任意）", item.description ?? ""); if (description === null) return;
           const sortOrder = window.prompt("表示順（0以上）", String(item.sort_order ?? 0)); if (sortOrder === null) return;
-          await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: item.id, action: "update", name, description, sortOrder, subject: item.subject_slug }) });
+          await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: item.id, action: "update", name, slug, description, sortOrder, subject: item.subject_slug }) });
           await load();
         } else if (removeStandard) {
           const [kind, email, slug] = (removeStandard.dataset.removeStandard ?? "").split("|");
