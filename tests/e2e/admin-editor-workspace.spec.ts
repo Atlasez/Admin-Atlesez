@@ -187,7 +187,11 @@ test("個別記事を開いたときは未選択用の開始パネルを表示�
 test("記事読み込み中の表示は編集パネル中央に固定される", async ({ page }) => {
   await mockAdminApi(page);
   await page.route("**/api/admin/editor/documents", async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    // Keep the request pending long enough to observe the reserved loading
+    // layout even on a fast CI runner. `page.goto` below only waits for the
+    // initial document, so the editor-starting marker is guaranteed to be
+    // present before the response resolves.
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
     await route.fulfill({
       json: {
         documents: [documentItem],
@@ -200,7 +204,9 @@ test("記事読み込み中の表示は編集パネル中央に固定される",
       },
     });
   });
-  await page.goto("./admin/editor/?document=doc-1");
+  await page.goto("./admin/editor/?document=doc-1", {
+    waitUntil: "domcontentloaded",
+  });
   const layout = await page
     .locator(".editor-workspace[data-editor-starting] .editor-panel")
     .evaluate((panel) => {
