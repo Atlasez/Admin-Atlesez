@@ -164,31 +164,40 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
-test("記事編集画面に目次サイドバーを追加せず、独立した目次から執筆を開始できる", async ({ page }) => {
+test("記事編集画面に目次サイドバーを追加せず、独立した目次から執筆を開始できる", async ({
+  page,
+}) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");
 
   await expect(page.locator(".document-sidebar")).toBeHidden();
-  await expect(page.getByRole("link", { name: "学習サイトの目次" })).toHaveAttribute(
-    "href",
-    "/admin/editor/outline/",
-  );
+  await expect(
+    page.getByRole("link", { name: "学習サイトの目次" }),
+  ).toHaveAttribute("href", "/admin/editor/outline/");
 });
 
 test("独立した目次ページから未着手の記事を執筆開始できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/outline/");
-  await expect(page.getByRole("heading", { name: "学習サイトの目次" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "学習サイトの目次" }),
+  ).toBeVisible();
   await page.locator("[data-outline-subject]").selectOption("mathematics");
-  await expect(page.locator("[data-outline-list] .outline-entry").first()).toBeVisible();
+  await expect(
+    page.locator("[data-outline-list] .outline-entry").first(),
+  ).toBeVisible();
   const startLink = page.locator("[data-outline-list] a").first();
   await expect(startLink).toHaveText(/執筆を開始|記事を開く/);
   const href = await startLink.getAttribute("href");
   expect(href).toContain("subject=mathematics");
   if (href?.includes("new=1")) {
     await page.goto(`.${href}`);
-    await expect(page.locator('input[name="title"]')).toHaveValue("ラグランジュの定理");
-    await expect(page.locator('input[name="slug"]')).toHaveValue("lagrange-theorem");
+    await expect(page.locator('input[name="title"]')).toHaveValue(
+      "ラグランジュの定理",
+    );
+    await expect(page.locator('input[name="slug"]')).toHaveValue(
+      "lagrange-theorem",
+    );
   }
 });
 
