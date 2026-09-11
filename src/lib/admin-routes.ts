@@ -26,6 +26,7 @@ const adminPageNames = [
   "procedures",
   "profile-requests",
   "project-profile-requests",
+  "publication-runs",
   "secretariat",
   "co-working",
   "permissions",
@@ -37,6 +38,8 @@ const adminPageNames = [
   "update-history",
   "onboarding-demo",
   "ui-prototype",
+  "student-council",
+  "thinking-cafe",
 ] as const;
 
 export const ADMIN_PAGE_PATHS = adminPageNames.map(
@@ -50,8 +53,24 @@ const adminPagePathSet = new Set(
 // Nested pages stay out of the top-level navigation list while still passing
 // through the admin Worker page gate.
 const adminNestedPagePathSet = new Set([
+  "/admin/editor/outline",
+  "/admin/editor/outline/",
   "/admin/member-profile/edit",
   "/admin/member-profile/edit/",
+  "/admin/ui-prototype/editor-header",
+  "/admin/ui-prototype/editor-header/",
+  "/admin/ui-prototype/editor-header-admin",
+  "/admin/ui-prototype/editor-header-admin/",
+  "/admin/ui-prototype/editor-header-codex",
+  "/admin/ui-prototype/editor-header-codex/",
+  "/admin/ui-prototype/editor-header-compare",
+  "/admin/ui-prototype/editor-header-compare/",
+  "/admin/ui-prototype/editor-header-focus",
+  "/admin/ui-prototype/editor-header-focus/",
+  "/admin/ui-prototype/editor-header-jreast",
+  "/admin/ui-prototype/editor-header-jreast/",
+  "/admin/ui-prototype/editor-toolbar",
+  "/admin/ui-prototype/editor-toolbar/",
   "/admin/ui-prototype/learning-content",
   "/admin/ui-prototype/learning-content/",
 ]);
