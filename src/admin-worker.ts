@@ -3913,14 +3913,17 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
   const kind = text(payload?.kind, 16) as "subject" | "category";
   const subject = text(payload?.subject, 80).toLowerCase();
-  const slug = text(payload?.slug, 80).toLowerCase();
+  const requestedSlug = text(payload?.slug, 80).toLowerCase();
   const name = text(payload?.name, 120);
   const description = text(payload?.description, 500);
   const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? 0) || 0));
-  if ((kind !== "subject" && kind !== "category") || !SUBJECT_SLUG.test(slug) || (kind === "category" && !SUBJECT_SLUG.test(subject)) || !name)
+  if ((kind !== "subject" && kind !== "category") || (requestedSlug && !SUBJECT_SLUG.test(requestedSlug)) || (kind === "category" && !SUBJECT_SLUG.test(subject)) || !name)
     return json({ error: "種類、対象分野、ID、表示名を確認してください。" }, 400);
   const canCreate = scope.allSubjects || scope.isManager || (kind === "category" && (coordinatorSubjects.includes(subject) || coordinatorSubjects.includes("*")));
   if (!canCreate) return json({ error: "この分野・カテゴリを追加する権限がありません。" }, 403);
+  // 表示名だけで追加できるよう、内部IDは未入力時に衝突しない値を生成する。
+  // 日本語名を無理にローマ字化せず、公開URLと管理用識別子を分離する。
+  const slug = requestedSlug || `${kind}-${crypto.randomUUID().slice(0, 8)}`;
   const now = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
@@ -3932,7 +3935,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     throw error;
   }
   await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", slug, name, `分野・カテゴリを追加：${name}`, { kind, slug, subject });
-  return json({ ok: true }, 201);
+  return json({ ok: true, kind, subject, slug, name }, 201);
 }
 
 type EditorialOutlineEntryRow = {
@@ -3963,8 +3966,8 @@ async function syncEditorialOutlineDocument(
   if (outlineId) {
     await env.REPORTS.prepare(
       `UPDATE editorial_outline_entries SET document_id=?,updated_at=?
-       WHERE id=? AND project_id='atlas' AND subject_slug=? AND status='active'`,
-    ).bind(documentId, new Date().toISOString(), outlineId, identity.subject).run();
+       WHERE id=? AND project_id='atlas' AND subject_slug=? AND category_slug=? AND slug=? AND status='active'`,
+    ).bind(documentId, new Date().toISOString(), outlineId, identity.subject, identity.category, identity.slug).run();
     return;
   }
   await env.REPORTS.prepare(
