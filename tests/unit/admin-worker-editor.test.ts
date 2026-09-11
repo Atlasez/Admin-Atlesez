@@ -84,6 +84,66 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("returns publication runs ordered by operator attention with scoped metadata", async () => {
+    const queries: string[] = [];
+    const run = {
+      id: "run-1",
+      document_id: "document-1",
+      action: "publish",
+      state: "failed",
+      attempt: 2,
+      title: "テスト記事",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "cyclic-groups",
+      document_status: "draft",
+      published_at: null,
+      updated_at: "2026-09-12T00:00:00.000Z",
+      failure_kind: "github_api",
+      failure_step: "checks",
+      failure_file: null,
+      failure_line: null,
+      failure_suggestion: "CIログを確認して再試行してください。",
+      check_url: "https://github.com/example/checks/1",
+      diagnostic_url: "https://admin.example.test/diagnostics/1",
+      pull_request_url: "https://github.com/example/pull/1",
+    };
+    const publicationEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("GROUP BY r.state"))
+              return { results: [{ state: "failed", count: 1 }] } as {
+                results: T[];
+              };
+            return { results: [run] } as { results: T[] };
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/publication-runs?limit=10",
+      ),
+      publicationEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      runs: [run],
+      counts: { failed: 1 },
+      scope: { isManager: true },
+    });
+    expect(queries.some((query) => query.includes("ORDER BY CASE"))).toBe(true);
+    expect(queries.every((query) => !query.includes("LIMIT 100"))).toBe(true);
+  });
+
   it("counts pending project profile approvals across projects", async () => {
     const queries: string[] = [];
     const portalEnv = {

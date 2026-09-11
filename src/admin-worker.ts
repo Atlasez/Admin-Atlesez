@@ -8333,7 +8333,31 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     name: string;
   }>;
   const projectIds = projectRows.map((project) => project.id).filter(Boolean);
-  const workflowSummary = await getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests);
+  // 通知件数もポータルのレスポンスに含め、ヘッダー・アクションセンターと
+  // 同じ集計結果を利用できるようにする。クライアント側で別リクエストを
+  // 競合させると、片方だけ更新されて件数がずれるためである。
+  const [workflowSummary, notificationResponse] = await Promise.all([
+    getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests),
+    adminNotifications(
+      new Request(new URL("/api/admin/notifications?limit=100", request.url), {
+        headers: request.headers,
+      }),
+      env,
+      scope,
+    ),
+  ]);
+  const notificationData: {
+    notifications?: Array<Record<string, unknown>>;
+    notificationsTruncated?: boolean;
+    notificationsUnavailable?: boolean;
+    unreadNotificationsCount?: number;
+  } = notificationResponse.ok
+    ? ((await notificationResponse.json().catch(() => ({}))) as {
+        notifications?: Array<Record<string, unknown>>;
+        notificationsTruncated?: boolean;
+        unreadNotificationsCount?: number;
+      })
+    : { notificationsUnavailable: true };
   const taskScopeSql = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
        AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
@@ -8427,6 +8451,10 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
     taskSummary: {
       ...workflowSummary.taskSummary,
     },
+    notifications: notificationData.notifications ?? [],
+    notificationsTruncated: notificationData.notificationsTruncated === true,
+    notificationsUnavailable: notificationData.notificationsUnavailable === true,
+    unreadNotificationsCount: notificationData.unreadNotificationsCount ?? null,
     calendar: {
       rangeStart: rangeStart.toISOString(),
       rangeEnd: rangeEnd.toISOString(),
@@ -15520,6 +15548,85 @@ const getLatestEditorialPublicationRun = async (
     .bind(documentId)
     .first<EditorialPublicationRun>();
 
+/**
+ * 公開処理の状態を記事横断で確認する運用向け一覧。
+ * 記事編集画面の最新run表示とは別に、失敗・再試行待ちをまとめて
+ * 復旧できるようにする。記事の可視範囲は編集一覧と同じ条件に限定する。
+ */
+async function editorialPublicationRunsOverview(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const params = new URL(request.url).searchParams;
+  const requestedState = params.get("state")?.trim() ?? "";
+  const allowedStates = new Set<EditorialPublicationRunState>([
+    "queued",
+    "checks_pending",
+    "merge_pending",
+    "deploy_pending",
+    "retry_wait",
+    "published",
+    "unpublished",
+    "failed",
+    "needs_operator",
+  ]);
+  const state = allowedStates.has(requestedState as EditorialPublicationRunState)
+    ? (requestedState as EditorialPublicationRunState)
+    : null;
+  const requestedLimit = Number(params.get("limit") ?? "50");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    : 50;
+  const visibility = documentVisibilityFor(scope);
+  const stateClause = state ? " AND r.state = ?" : "";
+  const bindings = [...visibility.bindings, ...(state ? [state] : []), limit];
+  const selectColumns = `r.id, r.document_id, r.action, r.state, r.attempt,
+    r.pull_request_number, r.pull_request_url, r.branch, r.head_sha, r.merge_sha,
+    r.last_check_at, r.next_attempt_at, r.error_code, r.error_message, r.idempotency_key,
+    r.lease_until, r.failure_kind, r.check_name, r.check_url, r.diagnostic_url,
+    r.preflight_run_id, r.preflight_requested_at, r.snapshot_updated_at, r.snapshot_hash,
+    r.failure_history, r.failure_detail, r.failure_step, r.failure_file, r.failure_line,
+    r.failure_column, r.failure_suggestion, r.created_by, r.created_at, r.updated_at`;
+  const rows = await env.REPORTS.prepare(
+    `SELECT ${selectColumns}, d.title, d.subject, d.category, d.slug, d.status AS document_status, d.published_at
+       FROM editorial_documents d
+       JOIN editorial_publication_runs r ON r.document_id = d.id
+      WHERE ${visibility.sql}${stateClause}
+      ORDER BY CASE WHEN r.state IN ('failed','needs_operator') THEN 0 WHEN r.state='retry_wait' THEN 1 ELSE 2 END,
+               r.updated_at DESC
+      LIMIT ?`,
+  )
+    .bind(...bindings)
+    .all<EditorialPublicationRun & {
+      title: string;
+      subject: string;
+      category: string;
+      slug: string;
+      document_status: string;
+      published_at: string | null;
+    }>();
+  const countRows = await env.REPORTS.prepare(
+    `SELECT r.state, COUNT(*) AS count
+       FROM editorial_documents d
+       JOIN editorial_publication_runs r ON r.document_id = d.id
+      WHERE ${visibility.sql}
+      GROUP BY r.state`,
+  )
+    .bind(...visibility.bindings)
+    .all<{ state: EditorialPublicationRunState; count: number }>();
+  const counts = Object.fromEntries(
+    (countRows.results ?? []).map((row) => [row.state, Number(row.count ?? 0)]),
+  );
+  return json({
+    generatedAt: new Date().toISOString(),
+    runs: rows.results ?? [],
+    counts,
+    scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects },
+  });
+}
+
 const updateEditorialPublicationRun = async (
   env: Env,
   runId: string,
@@ -19030,8 +19137,9 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
 async function adminNotifications(
   request: Request,
   env: Env,
+  preloadedScope?: AdminScope,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = preloadedScope ?? (await getAdminScope(request, env));
   if (isResponse(scope)) return scope;
   const profile = await env.REPORTS.prepare(
     "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
@@ -20144,6 +20252,11 @@ async function handleAdminRequest(
     request.method === "GET"
   )
     return editorialPublicationIntegrationStatus(request, env);
+  if (
+    url.pathname === "/api/admin/editor/publication-runs" &&
+    request.method === "GET"
+  )
+    return editorialPublicationRunsOverview(request, env);
   if (
     url.pathname === "/api/admin/editor/concepts" &&
     request.method === "POST"
