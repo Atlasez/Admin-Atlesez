@@ -220,3 +220,28 @@ test("作業の進め方に運営画面のスクリーンショットが表示�
     )
     .toBe(true);
 });
+
+const responsiveSmokePages = [
+  ["ポータル", "admin/portal/"],
+  ["アクションセンター", "admin/action-center/"],
+  ["タスク管理", "admin/member-tasks/"],
+  ["記事一覧", "admin/articles/"],
+  ["権限管理", "admin/permissions/"],
+  ["記事編集", "admin/editor/"],
+] as const;
+
+for (const [label, path] of responsiveSmokePages) {
+  for (const width of [1440, 768, 390]) {
+    test(`${label}が${width}pxで横方向に崩れない`, async ({ page }) => {
+      await mockAdminApis(page);
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(path);
+      const geometry = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(geometry.viewport).toBe(width);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(width + 1);
+    });
+  }
+}
