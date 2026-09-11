@@ -4001,7 +4001,11 @@ async function updateMemberDiscordRoles(
 }
 
 const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
-  title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references
+  title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references,
+  COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1)), ''), created_by) AS created_by_display_name,
+  COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1)), ''), updated_by) AS updated_by_display_name,
+  COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1), '') AS created_by_avatar_url,
+  COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1), '') AS updated_by_avatar_url
   FROM editorial_documents`;
 
 const canEditSubject = (scope: AdminScope, subject: string) =>
@@ -4605,10 +4609,17 @@ async function listEditorialDocuments(
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
-    `SELECT id, source_article_id, subject, category, locale, slug, title, summary, concept_id, latex_engine,
-      status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, publication_review_stage,
+    `SELECT d.id, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.latex_engine,
+      d.status, d.created_by, d.updated_by, d.created_at, d.updated_at, d.reviewed_at, d.published_at, d.archived_at, d.archived_by, d.archive_expires_at, d.scheduled_publish_at, d.publication_review_stage,
+      COALESCE(NULLIF(TRIM(cp.display_name), ''), d.created_by) AS created_by_display_name,
+      COALESCE(NULLIF(TRIM(up.display_name), ''), d.updated_by) AS updated_by_display_name,
+      COALESCE(cp.avatar_url, '') AS created_by_avatar_url,
+      COALESCE(up.avatar_url, '') AS updated_by_avatar_url,
       publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at
-     FROM editorial_documents${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
+     FROM editorial_documents d
+      LEFT JOIN editorial_member_profiles cp ON lower(cp.email)=lower(d.created_by)
+      LEFT JOIN editorial_member_profiles up ON lower(up.email)=lower(d.updated_by)
+      ${where} ORDER BY d.updated_at DESC, d.id DESC LIMIT ?`,
   )
     .bind(...values, pageLimit + 1)
     .all<Omit<EditorialDocument, "body">>();
@@ -13299,7 +13310,12 @@ async function listEditorialRevisions(
   if (!document || !canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const result = await env.REPORTS.prepare(
-    "SELECT id, title, summary, body, status, saved_by, saved_at FROM editorial_document_revisions WHERE document_id = ? ORDER BY saved_at DESC LIMIT 50",
+    `SELECT r.id, r.title, r.summary, r.body, r.status, r.saved_by, r.saved_at,
+            COALESCE(NULLIF(TRIM(p.display_name), ''), r.saved_by) AS saved_by_display_name,
+            COALESCE(p.avatar_url, '') AS saved_by_avatar_url
+       FROM editorial_document_revisions r
+       LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(r.saved_by)
+      WHERE r.document_id = ? ORDER BY r.saved_at DESC LIMIT 50`,
   )
     .bind(documentId)
     .all();
@@ -17168,12 +17184,10 @@ async function getPublicationReviewState(
     feedbackTaskDone: feedbackTasks.done,
     feedbackComplete,
     canDecide:
+      Boolean(scope.isManager) ||
       (document.publication_review_stage === "subject-coordinator" && canCoordinateSubject(scope, document.subject)) ||
-      (document.publication_review_stage === "project-leader" && (Boolean(scope.isProjectLeader) || scope.isManager)),
-    managerOverride:
-      document.publication_review_stage === "project-leader" &&
-      scope.isManager &&
-      !scope.isProjectLeader,
+      (document.publication_review_stage === "project-leader" && Boolean(scope.isProjectLeader)),
+    managerOverride: Boolean(scope.isManager),
     coordinatorCount: coordinators.length,
     leaderCount: leaders.length,
   });
@@ -17203,10 +17217,23 @@ async function startPublicationReview(
     return json({ error: "執筆担当者だけが執筆完了にできます。" }, 403);
   if (document.published_at)
     return json({ error: "公開済みの記事です。" }, 400);
-  if (document.publication_review_stage)
+  if (document.publication_review_stage && !scope.isManager)
     return json({ error: "すでに公開審査中です。" }, 409);
   if (document.status !== "in-review" && document.status !== "draft")
     return json({ error: "先に原稿を保存してください。" }, 400);
+  // 全分野管理者は、担当者不在時も公開フローを止めずに自分で承認できる。
+  // 通常の査読経路は維持し、管理者操作だけ監査ログへ明記する。
+  const managerCanBypassReview = scope.isManager && !localDevelopmentEnabled(request, env);
+  if (managerCanBypassReview) {
+    const now = new Date().toISOString();
+    await env.REPORTS.prepare(
+      `UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+    ).bind(now, now, scope.email, documentId).run();
+    await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, expectedUpdatedAt: document.updated_at, metadata: { managerOverride: true }, createdAt: now });
+    await recordAdminAudit(env, scope.email, "article_approved", "article", documentId, document.title, `全分野管理者が記事を承認：${document.title}`, { managerOverride: true });
+    await notifyEditorialDocumentChange(env, documentId);
+    return json({ ok: true, status: "approved", stage: null, approvedForPublication: true, managerOverride: true });
+  }
   const feedbackTasks = await editorialFeedbackTaskState(env, document.id);
   if (feedbackTasks.total === 0 || feedbackTasks.done < feedbackTasks.total)
     return json(
@@ -17274,16 +17301,15 @@ async function decidePublicationReview(
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   const stage = document.publication_review_stage;
   if (!stage) return json({ error: "この原稿は公開審査中ではありません。" }, 409);
-  const managerOverride =
-    stage === "project-leader" && scope.isManager && !scope.isProjectLeader;
-  const authorized = stage === "subject-coordinator"
+  const managerOverride = scope.isManager;
+  const authorized = managerOverride || (stage === "subject-coordinator"
     ? canCoordinateSubject(scope, document.subject)
-    : Boolean(scope.isProjectLeader) || managerOverride;
+    : Boolean(scope.isProjectLeader));
   if (!authorized) return json({ error: "この審査を処理する権限がありません。" }, 403);
   const leaders = stage === "subject-coordinator"
     ? await publicationReviewRoleEmails(env, "project-leader", document.subject)
     : [];
-  if (stage === "subject-coordinator" && !leaders.length)
+  if (stage === "subject-coordinator" && !leaders.length && !scope.isManager)
     return json({ error: "プロジェクトリーダーが設定されていないため、次の公開審査へ進めません。" }, 503);
   const already = await env.REPORTS.prepare(
     "SELECT id FROM editorial_publication_reviews WHERE document_id=? AND review_round=? AND stage=? LIMIT 1",
@@ -17309,7 +17335,7 @@ async function decidePublicationReview(
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
     return json({ ok: true, status: "in-review", stage: null, returnedToFeedback: true });
   }
-  if (stage === "subject-coordinator" && leaders.length) {
+  if (stage === "subject-coordinator" && leaders.length && !scope.isManager) {
     await env.REPORTS.prepare(
       "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
