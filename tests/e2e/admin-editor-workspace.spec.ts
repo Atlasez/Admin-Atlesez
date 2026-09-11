@@ -223,6 +223,12 @@ test("独立した目次ページから未着手の記事を執筆開始でき�
 test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/outline/");
+  const outlineArchiveCheckbox = page.locator(
+    "[data-outline-include-archived]",
+  );
+  const outlineArchiveBox = await outlineArchiveCheckbox.boundingBox();
+  expect(outlineArchiveBox?.width).toBeLessThanOrEqual(20);
+  expect(outlineArchiveBox?.height).toBeLessThanOrEqual(20);
   await page.locator("[data-outline-subject]").selectOption("mathematics");
   const entry = page.locator("[data-outline-entry]").first();
   await expect(entry).toBeVisible();
