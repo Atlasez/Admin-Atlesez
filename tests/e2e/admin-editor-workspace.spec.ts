@@ -146,6 +146,21 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
+test("目次サイドバーを表示し、目次から執筆を開始できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1");
+
+  const sidebar = page.locator(".document-sidebar");
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.locator("#atlas-outline-heading")).toHaveText(
+    "学習サイトの目次",
+  );
+  await expect(sidebar.locator(".outline-article").first()).toBeVisible();
+  await expect(
+    sidebar.locator("[data-outline-planned], [data-outline-article]").first(),
+  ).toBeVisible();
+});
+
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
   page,
 }) => {

@@ -4341,7 +4341,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // 目次と保存済み原稿一覧は、原稿APIのスコープ確認後に表示する。
       // HTMLの初期状態では誤表示を避けるため hidden だが、取得後も隠れたままだと
       // 「目次から執筆を開始」できないため、成功時に必ず利用可能にする。
-      documentSidebar.hidden = false;
+      documentSidebar.removeAttribute("hidden");
       (status.querySelector('option[value="approved"]') as HTMLOptionElement).disabled = !isManager;
       if (currentDocument) updatePublicationActions(currentDocument);
 
