@@ -5207,6 +5207,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (existing) { await openDocument(existing.id).then(() => loadRevisions(existing.id)); saveMessage.value = "この公開記事に紐付いた運営原稿を開きました。"; }
         else { emptyDocument(source); saveMessage.value = "公開記事を運営管理へ登録する原稿を作成しました。保存してください。保存だけでは自動公開されません。"; }
       } else if (isNewDocument) {
+        // 目次からの新規作成では、動的に追加された分野・カテゴリを
+        // selectへ反映してから初期値を適用する。先にemptyDocumentを呼ぶと
+        // 静的カタログの先頭分野へフォールバックしてしまう。
+        await publicCatalogReady;
         const seededSubject = query.get("subject")?.trim() ?? "";
         const seededCategory = query.get("category")?.trim() ?? "";
         const seededTitle = query.get("title")?.trim() ?? "";
