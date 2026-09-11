@@ -56,13 +56,13 @@ const timezones = getTimeZoneOptions(new Date());
   /* タスクのチェック操作はテキスト入力と同じ高さに拡大しない。 */
   .member-tasks input[type="checkbox"] {
     accent-color: var(--task-blue, var(--accent-primary));
-    block-size: 1rem !important;
-    inline-size: 1rem !important;
-    min-block-size: 1rem !important;
-    min-height: 1rem !important;
+    block-size: 0.9rem !important;
+    inline-size: 0.9rem !important;
+    min-block-size: 0.9rem !important;
+    min-height: 0.9rem !important;
     padding: 0 !important;
   }
-  .member-tasks .archive-toggle input[type="checkbox"] { flex: 0 0 1rem; }
+  .member-tasks .archive-toggle input[type="checkbox"] { flex: 0 0 0.9rem; }
 </style>
 <style is:global>
   .member-tasks {

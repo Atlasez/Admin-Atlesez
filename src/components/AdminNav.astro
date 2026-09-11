@@ -296,6 +296,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       document.querySelectorAll<HTMLElement>('[data-manager-only]').forEach((item) => { item.hidden = !isManager || item.dataset.adminSite !== state.site; });
       const managesCurrentProject = isManager || managerProjects.includes(state.slug) || (state.slug === 'seminar-platform' && managerProjects.includes('semi-platform'));
       document.querySelectorAll<HTMLElement>('[data-project-manager-only]').forEach((item) => { item.hidden = !managesCurrentProject || item.dataset.adminSite !== state.site; });
+      document.querySelectorAll<HTMLElement>('[data-developer-only]').forEach((item) => {
+        item.hidden = !(isManager || managerProjects.length > 0) || item.dataset.adminSite !== state.site;
+      });
     };
     type AuthStatus = { email?: string; isManager?: boolean; managerProjects?: string[]; error?: string };
     type AuthStatusResult = { ok: boolean; status: number; contentType: string; data: AuthStatus };
