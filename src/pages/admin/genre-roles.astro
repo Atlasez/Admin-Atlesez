@@ -314,8 +314,11 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       const targetIndex = target ? (sourceGroup === targetGroup ? oldSiblings.findIndex((item) => item.id === target.id) : nextSiblings.findIndex((item) => item.id === target.id)) : nextSiblings.length;
       if (targetIndex < 0) return;
       oldSiblings.splice(sourceIndex, 1);
-      if (sourceGroup === targetGroup) nextSiblings.splice(Math.min(targetIndex, nextSiblings.length), 0, source);
-      else nextSiblings.splice(Math.min(targetIndex, nextSiblings.length), 0, source);
+      // 同一グループでは作業用配列にも移動元が含まれているため、
+      // 先に取り除いてから差し込みます。取り除かないと移動元が二重になり、
+      // 最後に設定した順序が元の位置へ戻ってしまいます。
+      if (sourceGroup === targetGroup) nextSiblings.splice(sourceIndex, 1);
+      nextSiblings.splice(Math.min(targetIndex, nextSiblings.length), 0, source);
       if (sourceGroup !== targetGroup && source.kind === "category") source.subject_slug = targetGroup.slice("category:".length);
       oldSiblings.forEach((item, index) => { item.sort_order = index * 10; });
       nextSiblings.forEach((item, index) => { item.sort_order = index * 10; });
