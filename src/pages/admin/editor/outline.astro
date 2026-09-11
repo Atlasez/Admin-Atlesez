@@ -152,6 +152,9 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
     let staticEntries = data.planned ?? [];
     let customEntries:Entry[] = [];
     let documents:DocumentRow[] = [];
+    const query = new URLSearchParams(window.location.search);
+    const initialSubject = query.get("subject")?.trim() ?? "";
+    const initialCategory = query.get("category")?.trim() ?? "";
     const subjectSelect = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
     const categorySelect = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
     const formSubject = root.querySelector<HTMLSelectElement>("[data-form-subject]")!;
@@ -176,12 +179,12 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       select.innerHTML = `<option value="">最上位</option>${entries.map((entry) => `<option value="${esc(entry.id)}">${esc(entry.title)}</option>`).join("")}`;
       select.value = entries.some((entry) => entry.id === selected) ? selected : "";
     };
-    const fillSubjects = (selected = subjectSelect.value) => {
+    const fillSubjects = (selected = subjectSelect.value || initialSubject) => {
       const options = subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}${item.status === "preparing" ? "（準備中）" : ""}</option>`).join("");
       subjectSelect.innerHTML = options || '<option value="">分野がありません</option>'; formSubject.innerHTML = options;
       const value = subjects.some((item) => item.slug === selected) ? selected : subjects[0]?.slug ?? ""; subjectSelect.value = value; formSubject.value = value; fillCategories(); fillFormCategories();
     };
-    const fillCategories = (selected = categorySelect.value) => { const options = categoryOptions(subjectSelect.value); categorySelect.innerHTML = `<option value="">すべてのカテゴリ</option>${options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("")}`; categorySelect.value = options.some((item) => item.slug === selected) ? selected : ""; };
+    const fillCategories = (selected = categorySelect.value || initialCategory) => { const options = categoryOptions(subjectSelect.value); categorySelect.innerHTML = `<option value="">すべてのカテゴリ</option>${options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("")}`; categorySelect.value = options.some((item) => item.slug === selected) ? selected : ""; };
     const fillFormCategories = (selected = formCategory.value) => { const options = categoryOptions(formSubject.value); formCategory.innerHTML = options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join(""); formCategory.value = options.some((item) => item.slug === selected) ? selected : options[0]?.slug ?? ""; fillParentOptions(formParent, formSubject.value, formCategory.value); };
     const documentFor = (entry:Entry) => entry.document_id ? documents.find((item) => item.id === entry.document_id) : documents.find((item) => item.subject === entry.subject && item.category === entry.category && (item.slug === entry.slug || item.title === entry.title));
     const editorUrl = (entry:Entry, document?:DocumentRow) => document ? `/admin/editor/?document=${encodeURIComponent(document.id)}${entry.id ? `&outlineId=${encodeURIComponent(entry.id)}` : ""}` : `/admin/editor/?new=1&subject=${encodeURIComponent(entry.subject)}&category=${encodeURIComponent(entry.category)}&slug=${encodeURIComponent(entry.slug)}&title=${encodeURIComponent(entry.title)}${entry.summary ? `&summary=${encodeURIComponent(entry.summary)}` : ""}${entry.concept_id ? `&conceptId=${encodeURIComponent(entry.concept_id)}` : ""}${entry.id ? `&outlineId=${encodeURIComponent(entry.id)}` : ""}`;

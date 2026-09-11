@@ -357,8 +357,8 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("機械学習", { exact: true })).toBeVisible();
 
-  await page.goto("./admin/editor/outline/");
-  await page.locator("[data-outline-subject]").selectOption("subject-1");
+  await page.goto("./admin/editor/outline/?subject=subject-1");
+  await expect(page.locator("[data-outline-subject]")).toHaveValue("subject-1");
   await page.getByText("目次項目を追加", { exact: true }).click();
   await expect(page.locator("[data-form-category] option")).toHaveText(
     "機械学習",
