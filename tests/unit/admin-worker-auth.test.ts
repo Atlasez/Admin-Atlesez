@@ -472,6 +472,35 @@ describe("applicant stage server-side access", () => {
         query.includes("FROM admin_permission_audit_log"),
       ),
     ).toContain("LIMIT ?");
+    expect(
+      queries.find((query) =>
+        query.includes("FROM admin_permission_audit_log"),
+      ),
+    ).toContain("archived_at IS NULL");
+
+    const archivedResponse = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/permission-audit?limit=1&includeArchived=1",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "admin@example.com",
+          },
+        },
+      ),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+    expect(archivedResponse.status).toBe(200);
+    await expect(archivedResponse.json()).resolves.toMatchObject({
+      includeArchived: true,
+    });
+    const archivedQuery = queries
+      .filter((query) => query.includes("FROM admin_permission_audit_log"))
+      .at(-1);
+    expect(archivedQuery).not.toContain("archived_at IS NULL");
   });
 
   it("paginates GitHub update history by page and reports continuation", async () => {
