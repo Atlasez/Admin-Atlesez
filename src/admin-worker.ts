@@ -15195,6 +15195,9 @@ type EditorialPublicationRun = {
   diagnostic_url: string | null;
   preflight_run_id: number | null;
   preflight_requested_at: string | null;
+  snapshot_updated_at: string | null;
+  snapshot_hash: string | null;
+  failure_history: string;
   failure_detail?: string | null;
   failure_step?: string | null;
   failure_file?: string | null;
@@ -15211,6 +15214,8 @@ const publicationRunSelect = `SELECT id, document_id, action, state, attempt,
   last_check_at, next_attempt_at, error_code, error_message, idempotency_key,
   lease_until, failure_kind, check_name, check_url, diagnostic_url,
   preflight_run_id, preflight_requested_at,
+  snapshot_updated_at, snapshot_hash,
+  failure_history,
   failure_detail, failure_step, failure_file, failure_line, failure_column, failure_suggestion,
   created_by,
   created_at, updated_at FROM editorial_publication_runs`;
@@ -15249,6 +15254,54 @@ class EditorialPublicationFailure extends Error {
 const publicationRetryDelayMs = (attempt: number) =>
   Math.min(15 * 60_000, 60_000 * 2 ** Math.max(0, attempt));
 const publicationMaxAttempts = 3;
+
+const redactPublicationDiagnostic = (value: string) =>
+  value
+    .replace(/(authorization|token|password|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[redacted]");
+
+type EditorialPublicationSnapshot = {
+  updatedAt: string;
+  hash: string;
+};
+
+/** 公開runが参照した記事の世代を本文とメタデータから固定する。 */
+const editorialPublicationSnapshot = async (
+  document: Pick<EditorialDocument, "id" | "updated_at" | "subject" | "category" | "locale" | "slug" | "title" | "summary" | "concept_id" | "body" | "latex_engine" | "status" | "article_references">,
+): Promise<EditorialPublicationSnapshot> => {
+  const canonical = JSON.stringify([
+    document.id,
+    document.updated_at,
+    document.subject,
+    document.category,
+    document.locale,
+    document.slug,
+    document.title,
+    document.summary,
+    document.concept_id,
+    document.body,
+    document.latex_engine,
+    document.status,
+    document.article_references,
+  ]);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonical),
+  );
+  return { updatedAt: document.updated_at, hash: hexDigest(digest) };
+};
+
+const editorialPublicationSnapshotMatches = async (
+  document: EditorialDocument,
+  run: EditorialPublicationRun,
+) => {
+  // 0105以前に作成されたrunはスナップショットを持たないため、従来の
+  // リコンシリエーションを継続する。新しいrunは必ず一致を検証する。
+  if (!run.snapshot_hash || !run.snapshot_updated_at) return true;
+  if (run.snapshot_updated_at !== document.updated_at) return false;
+  const current = await editorialPublicationSnapshot(document);
+  return current.hash === run.snapshot_hash;
+};
 
 const githubFailure = async (
   response: Response,
@@ -15376,6 +15429,9 @@ const updateEditorialPublicationRun = async (
       | "diagnostic_url"
       | "preflight_run_id"
       | "preflight_requested_at"
+      | "snapshot_updated_at"
+      | "snapshot_hash"
+      | "failure_history"
       | "failure_detail"
       | "failure_step"
       | "failure_file"
@@ -15405,6 +15461,9 @@ const updateEditorialPublicationRun = async (
     "diagnostic_url",
     "preflight_run_id",
     "preflight_requested_at",
+    "snapshot_updated_at",
+    "snapshot_hash",
+    "failure_history",
     "failure_detail",
     "failure_step",
     "failure_file",
@@ -15414,11 +15473,50 @@ const updateEditorialPublicationRun = async (
   ]);
   const entries = Object.entries(values).filter(([key]) => allowed.has(key));
   if (!entries.length) return;
+  const shouldRecordFailure = Boolean(
+    values.failure_kind ||
+      (values.error_code && !/_pending$/i.test(values.error_code)),
+  );
+  const finalValues = shouldRecordFailure
+    ? await (async () => {
+        const current = await env.REPORTS.prepare(
+          "SELECT failure_history FROM editorial_publication_runs WHERE id = ?",
+        )
+          .bind(runId)
+          .first<{ failure_history?: string | null }>();
+        let history: Array<Record<string, unknown>> = [];
+        try {
+          const parsed = current?.failure_history
+            ? JSON.parse(current.failure_history)
+            : [];
+          if (Array.isArray(parsed))
+            history = parsed.filter(
+              (item) => item && typeof item === "object",
+            );
+        } catch {
+          history = [];
+        }
+        history.push({
+          at: new Date().toISOString(),
+          state: values.state ?? null,
+          kind: values.failure_kind ?? null,
+          code: values.error_code ?? null,
+          message:
+            typeof values.error_message === "string"
+              ? redactPublicationDiagnostic(values.error_message).slice(0, 500)
+              : null,
+        });
+        return { ...values, failure_history: JSON.stringify(history.slice(-12)) };
+      })()
+    : values;
+  const finalEntries = Object.entries(finalValues).filter(([key]) =>
+    allowed.has(key),
+  );
   const now = new Date().toISOString();
   await env.REPORTS.prepare(
-    `UPDATE editorial_publication_runs SET ${entries.map(([key]) => `${key} = ?`).join(", ")}, updated_at = ? WHERE id = ?`,
+    `UPDATE editorial_publication_runs SET ${finalEntries.map(([key]) => `${key} = ?`).join(", ")}, updated_at = ? WHERE id = ?`,
   )
-    .bind(...entries.map(([, value]) => value), now, runId)
+    .bind(...finalEntries.map(([, value]) => value), now, runId)
     .run();
   const run = await env.REPORTS.prepare(
     "SELECT document_id FROM editorial_publication_runs WHERE id = ?",
@@ -15433,6 +15531,7 @@ const claimEditorialPublicationRun = async (
   documentId: string,
   action: "publish" | "unpublish",
   createdBy: string,
+  document?: Pick<EditorialDocument, "id" | "updated_at" | "subject" | "category" | "locale" | "slug" | "title" | "summary" | "concept_id" | "body" | "latex_engine" | "status" | "article_references">,
 ) => {
   const active = await env.REPORTS.prepare(
     `${publicationRunSelect} WHERE document_id = ? AND state IN (${publicationRunActiveStates.map(() => "?").join(",")}) ORDER BY created_at DESC LIMIT 1`,
@@ -15443,14 +15542,53 @@ const claimEditorialPublicationRun = async (
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  const idempotencyKey = `${documentId}:${action}:${id}`;
+  const snapshot = document ? await editorialPublicationSnapshot(document) : null;
+  // 同じ記事世代の二重クリックは同じキーで吸収し、失敗後の明示的な
+  // 再試行は末尾にrun IDを付けて新しいrunとして開始できるようにする。
+  const idempotencyKey = snapshot
+    ? `${documentId}:${action}:${snapshot.updatedAt}:${snapshot.hash}`
+    : `${documentId}:${action}:${id}`;
   const result = (await env.REPORTS.prepare(
     `INSERT OR IGNORE INTO editorial_publication_runs
-      (id, document_id, action, state, attempt, idempotency_key, lease_until, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?)`,
+      (id, document_id, action, state, attempt, idempotency_key, lease_until,
+       snapshot_updated_at, snapshot_hash, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, documentId, action, idempotencyKey, new Date(Date.now() + 90_000).toISOString(), createdBy, now, now)
+    .bind(
+      id,
+      documentId,
+      action,
+      idempotencyKey,
+      new Date(Date.now() + 90_000).toISOString(),
+      snapshot?.updatedAt ?? null,
+      snapshot?.hash ?? null,
+      createdBy,
+      now,
+      now,
+    )
     .run()) as { meta?: { changes?: number } };
+  if (result.meta?.changes === 0 && snapshot) {
+    const retryKey = `${idempotencyKey}:retry:${id}`;
+    await env.REPORTS.prepare(
+      `INSERT OR IGNORE INTO editorial_publication_runs
+        (id, document_id, action, state, attempt, idempotency_key, lease_until,
+         snapshot_updated_at, snapshot_hash, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, 'queued', 0, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        documentId,
+        action,
+        retryKey,
+        new Date(Date.now() + 90_000).toISOString(),
+        snapshot.updatedAt,
+        snapshot.hash,
+        createdBy,
+        now,
+        now,
+      )
+      .run();
+  }
   const run = await getLatestEditorialPublicationRun(env, documentId);
   await notifyEditorialDocumentChange(env, documentId);
   return { run, created: result.meta?.changes === 1 || run?.id === id };
@@ -16469,6 +16607,18 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
     });
     return;
   }
+  if (!(await editorialPublicationSnapshotMatches(document, run))) {
+    await updateEditorialPublicationRun(env, run.id, {
+      state: "needs_operator",
+      failure_kind: "validation",
+      error_code: "publication_superseded",
+      error_message: "公開処理中に記事が更新されたため、古い内容の公開を停止しました。最新内容を確認して再試行してください。",
+      failure_suggestion: "記事を保存して公開プレビューを確認した後、最新の公開操作をもう一度実行してください。",
+      next_attempt_at: null,
+      lease_until: null,
+    });
+    return;
+  }
   if (
     run.state === "checks_pending" &&
     run.check_name === "公開前の事前検証" &&
@@ -16491,6 +16641,22 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
               error_message: "学習サイトのビルド確認がタイムアウトしました。配信状態を確認してください。",
             }
           : { failure_kind: "deployment", error_code: deployment.reason, error_message: "学習サイトの反映を確認しています。" }),
+      });
+      return;
+    }
+    const latestDocument = await env.REPORTS.prepare(
+      `${editorialDocumentSelect} WHERE id = ?`,
+    )
+      .bind(document.id)
+      .first<EditorialDocument>();
+    if (!latestDocument || !(await editorialPublicationSnapshotMatches(latestDocument, run))) {
+      await updateEditorialPublicationRun(env, run.id, {
+        state: "needs_operator",
+        failure_kind: "validation",
+        error_code: "publication_superseded",
+        error_message: "学習サイト反映の直前に記事が更新されたため、古い内容の公開を停止しました。",
+        failure_suggestion: "最新内容を保存・確認してから、もう一度公開してください。",
+        next_attempt_at: null,
       });
       return;
     }
@@ -16975,6 +17141,9 @@ async function writeEditorialDocumentToGitHub(
       body,
     };
   } catch (error) {
+    // 既に分類済みの失敗は外側のrunオーケストレータへ渡し、
+    // 失敗箇所・再試行可否・診断URLを失わないようにする。
+    if (error instanceof EditorialPublicationFailure) throw error;
     return json(
       {
         error:
@@ -17081,7 +17250,7 @@ async function publishEditorialDocument(
     !forceRepublish
   )
     return json({ error: "この記事はすでに公開済みです。" }, 400);
-  const claim = await claimEditorialPublicationRun(env, documentId, "publish", scope.email);
+  const claim = await claimEditorialPublicationRun(env, documentId, "publish", scope.email, document);
   if (!claim.run)
     return json({ error: "公開処理のRunを作成できませんでした。" }, 503);
   const claimedRun = claim.run;
@@ -17263,7 +17432,7 @@ async function dispatchScheduledEditorialPublications(env: Env) {
     if (!claim.meta?.changes) continue;
     let runClaim: Awaited<ReturnType<typeof claimEditorialPublicationRun>> | null = null;
     try {
-      runClaim = await claimEditorialPublicationRun(env, document.id, "publish", "scheduled-publisher");
+      runClaim = await claimEditorialPublicationRun(env, document.id, "publish", "scheduled-publisher", document);
       if (!runClaim.run || !runClaim.created) {
         await env.REPORTS.prepare("UPDATE editorial_documents SET scheduled_publish_claimed_at = NULL WHERE id = ?").bind(document.id).run();
         continue;
@@ -17620,7 +17789,7 @@ async function unpublishEditorialDocument(
       now,
     )
     .run();
-  const claim = await claimEditorialPublicationRun(env, documentId, "unpublish", scope.email);
+  const claim = await claimEditorialPublicationRun(env, documentId, "unpublish", scope.email, document);
   if (!claim.run)
     return json({ error: "公開取り消し処理のRunを作成できませんでした。" }, 503);
   const claimedRun = claim.run;
@@ -19353,6 +19522,7 @@ async function notifyEditorialDocumentChange(
               failure_line: publicationRun.failure_line ?? null,
               failure_column: publicationRun.failure_column ?? null,
               failure_suggestion: publicationRun.failure_suggestion ?? null,
+              failure_history: publicationRun.failure_history ?? "[]",
               updated_at: publicationRun.updated_at,
             }
           : null,

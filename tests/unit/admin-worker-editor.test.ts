@@ -2081,4 +2081,112 @@ describe("admin worker editor APIs", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("stops a publication run when its article snapshot is stale", async () => {
+    const documentId = "66666666-6666-4666-8666-666666666666";
+    const run = {
+      id: "77777777-7777-4777-8777-777777777777",
+      document_id: documentId,
+      action: "publish" as const,
+      state: "checks_pending" as const,
+      attempt: 0,
+      pull_request_number: 321,
+      pull_request_url: "https://github.com/Atlasez/Atlasez01/pull/321",
+      branch: "editorial/published-stale",
+      head_sha: null,
+      merge_sha: null,
+      last_check_at: null,
+      next_attempt_at: null,
+      error_code: null,
+      error_message: null,
+      idempotency_key: "stale-run",
+      lease_until: null,
+      failure_kind: null,
+      check_name: null,
+      check_url: null,
+      diagnostic_url: null,
+      preflight_run_id: null,
+      preflight_requested_at: null,
+      snapshot_updated_at: "2026-08-30T00:00:00.000Z",
+      snapshot_hash: "hash-of-an-older-version",
+      created_by: "local-editor@atlasez.test",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-30T00:00:00.000Z",
+    };
+    const document = {
+      id: documentId,
+      subject: "mathematics",
+      category: "overview",
+      locale: "ja",
+      slug: "stale-article",
+      title: "更新済み記事",
+      summary: "概要",
+      concept_id: "mathematics.overview.stale",
+      body: "新しい本文",
+      article_references: "[]",
+      latex_engine: "katex" as const,
+      status: "approved" as const,
+      updated_at: "2026-08-30T00:01:00.000Z",
+    };
+    const executed: { query: string; values: unknown[] }[] = [];
+    class StalePublicationStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async all<T>() {
+        if (this.query.includes("FROM editorial_publication_runs"))
+          return { results: [run] as T[] };
+        return { results: [] as T[] };
+      }
+
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return document as T;
+        if (this.query.includes("FROM editorial_publication_runs"))
+          return { document_id: documentId } as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.query, values: this.values });
+        return { meta: { changes: 1 } };
+      }
+    }
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      requests.push(String(input));
+      throw new Error("GitHub should not be called for a stale run");
+    });
+    const pending: Promise<unknown>[] = [];
+    try {
+      await worker.scheduled(
+        { cron: "*/1 * * * *" },
+        {
+          ...emptyEnv,
+          REPORTS: {
+            ...emptyEnv.REPORTS,
+            prepare: (query: string) => new StalePublicationStatement(query),
+          },
+        } as never,
+        { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+      );
+      await Promise.all(pending);
+      expect(requests).toHaveLength(0);
+      expect(
+        executed.some((entry) =>
+          entry.values.includes("publication_superseded"),
+        ),
+      ).toBe(true);
+      expect(
+        executed.some((entry) => entry.values.includes("needs_operator")),
+      ).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
