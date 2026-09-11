@@ -8,7 +8,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     const groups = page.locator("[data-menu-group]");
     await expect(groups).toHaveCount(4);
-    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
+    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(4);
     await expect(
