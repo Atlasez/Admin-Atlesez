@@ -2630,6 +2630,7 @@ async function listPermissionAudit(
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 30;
   const rawCursor = text(searchParams.get("cursor"), 240).trim();
+  const includeArchived = searchParams.get("includeArchived") === "1";
   const cursorSeparator = rawCursor.lastIndexOf("|");
   let cursorCreatedAt = "";
   let cursorId = "";
@@ -2642,16 +2643,18 @@ async function listPermissionAudit(
       cursorId = "";
     }
   }
-  const cursorFilter = cursorCreatedAt && cursorId
-    ? " WHERE (created_at < ? OR (created_at = ? AND id < ?))"
-    : "";
-  const cursorValues = cursorCreatedAt && cursorId
-    ? [cursorCreatedAt, cursorCreatedAt, cursorId]
-    : [];
+  const conditions: string[] = [];
+  const cursorValues: string[] = [];
+  if (!includeArchived) conditions.push("archived_at IS NULL");
+  if (cursorCreatedAt && cursorId) {
+    conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
+    cursorValues.push(cursorCreatedAt, cursorCreatedAt, cursorId);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await env.REPORTS.prepare(
-    `SELECT id,actor_email,target_email,action,before_subjects,after_subjects,created_at
+    `SELECT id,actor_email,target_email,action,before_subjects,after_subjects,created_at,archived_at
      FROM admin_permission_audit_log
-     ${cursorFilter}
+     ${where}
      ORDER BY created_at DESC,id DESC LIMIT ?`,
   )
     .bind(...cursorValues, limit + 1)
@@ -2663,6 +2666,7 @@ async function listPermissionAudit(
       before_subjects: string;
       after_subjects: string;
       created_at: string;
+      archived_at: string | null;
     }>()
     .catch(() => ({ results: [] as Array<{
       id: string;
@@ -2672,6 +2676,7 @@ async function listPermissionAudit(
       before_subjects: string;
       after_subjects: string;
       created_at: string;
+      archived_at: string | null;
     }> }));
   const allEntries = rows.results ?? [];
   const entries = allEntries.slice(0, limit);
@@ -2682,6 +2687,7 @@ async function listPermissionAudit(
     : null;
   return json({
     entries,
+    includeArchived,
     pagination: { limit, nextCursor, hasMore },
   });
 }
@@ -2700,6 +2706,7 @@ async function listAdminAuditLog(
   const query = text(url.searchParams.get("q"), 120).trim();
   const action = text(url.searchParams.get("action"), 40).trim();
   const targetType = text(url.searchParams.get("targetType"), 20).trim();
+  const includeArchived = url.searchParams.get("includeArchived") === "1";
   const rawCursor = text(url.searchParams.get("cursor"), 240).trim();
   const cursorSeparator = rawCursor.lastIndexOf("|");
   let cursorCreatedAt = "";
@@ -2715,6 +2722,7 @@ async function listAdminAuditLog(
   }
   const conditions: string[] = [];
   const params: string[] = [];
+  if (!includeArchived) conditions.push("archived_at IS NULL");
   if (query) {
     conditions.push("(actor_email LIKE ? OR target_label LIKE ? OR summary LIKE ? OR target_id LIKE ?)");
     const pattern = `%${query}%`;
@@ -2734,7 +2742,7 @@ async function listAdminAuditLog(
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = await env.REPORTS.prepare(
-    `SELECT id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at
+    `SELECT id,actor_email,action,target_type,target_id,target_label,summary,details_json,created_at,archived_at
      FROM admin_audit_log ${where}
      ORDER BY created_at DESC,id DESC LIMIT ?`,
   )
@@ -2749,6 +2757,7 @@ async function listAdminAuditLog(
       summary: string;
       details_json: string;
       created_at: string;
+      archived_at: string | null;
     }>()
     .catch(() => ({ results: [] as Array<{
       id: string;
@@ -2760,6 +2769,7 @@ async function listAdminAuditLog(
       summary: string;
       details_json: string;
       created_at: string;
+      archived_at: string | null;
     }> }));
   const allEntries = rows.results ?? [];
   const entries = allEntries.slice(0, limit);
@@ -2773,6 +2783,7 @@ async function listAdminAuditLog(
       ...row,
       actionLabel: adminAuditActionLabel(row.action),
     })),
+    includeArchived,
     pagination: { limit, nextCursor, hasMore },
   });
 }
@@ -19447,6 +19458,7 @@ async function handleAdminRequest(
 
 const COMPLETED_TASK_ARCHIVE_AFTER_DAYS = 30;
 const TASK_ARCHIVE_RETENTION_DAYS = 90;
+const AUDIT_LOG_RETENTION_DAYS = 730;
 
 /** 完了から一定期間経ったタスクを監査可能なアーカイブへ退避する。 */
 async function archiveStaleCompletedTasks(env: Env) {
@@ -19469,6 +19481,30 @@ async function archiveStaleCompletedTasks(env: Env) {
   } catch (error) {
     // 移行前の環境でも他の定期処理を止めない。
     console.warn("task archive sweep skipped", error);
+  }
+}
+
+/** 監査ログは保持期限を過ぎても削除せず、アーカイブとして残す。 */
+async function archiveStaleAuditLogs(env: Env) {
+  const now = new Date();
+  const cutoff = new Date(
+    now.getTime() - AUDIT_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const archivedAt = now.toISOString();
+  try {
+    await Promise.all([
+      env.REPORTS.prepare(
+        `UPDATE admin_audit_log SET archived_at=?
+         WHERE archived_at IS NULL AND created_at<?`,
+      ).bind(archivedAt, cutoff).run(),
+      env.REPORTS.prepare(
+        `UPDATE admin_permission_audit_log SET archived_at=?
+         WHERE archived_at IS NULL AND created_at<?`,
+      ).bind(archivedAt, cutoff).run(),
+    ]);
+  } catch (error) {
+    // 移行前の環境でも他の定期処理を止めない。
+    console.warn("audit archive sweep skipped", error);
   }
 }
 
@@ -19526,6 +19562,7 @@ export default {
           syncDiscordRolesToAdmin(env),
           syncEditorialPublicationStatus(env),
           dispatchScheduledEditorialPublications(env),
+          archiveStaleAuditLogs(env),
         ]),
       );
       return;
@@ -19541,6 +19578,7 @@ export default {
         dispatchApplicationEmails(env),
         dispatchPendingDiscordProvisioning(env),
         dispatchScheduledEditorialPublications(env),
+        archiveStaleAuditLogs(env),
       ]),
     );
   },
