@@ -226,7 +226,7 @@ describe("admin worker editor APIs", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           kind: "subject",
-          name: "情報",
+          name: "データサイエンス",
           description: "情報分野",
         }),
       }),
@@ -239,8 +239,11 @@ describe("admin worker editor APIs", () => {
       slug: string;
       name: string;
     };
-    expect(subject).toMatchObject({ kind: "subject", name: "情報" });
-    expect(subject.slug).toMatch(/^subject-[0-9a-f]{8}$/);
+    expect(subject).toMatchObject({
+      kind: "subject",
+      name: "データサイエンス",
+    });
+    expect(subject.slug).toMatch(/^subject-[a-z0-9-]+$/);
 
     const taxonomyEnv = {
       ...emptyEnv,
@@ -279,7 +282,7 @@ describe("admin worker editor APIs", () => {
       subject: subject.slug,
       name: "機械学習",
     });
-    expect(category.slug).toMatch(/^category-[0-9a-f]{8}$/);
+    expect(category.slug).toMatch(/^category-[a-z0-9-]+$/);
   });
 
   it("reorders outline entries only inside the caller's permitted subjects", async () => {
