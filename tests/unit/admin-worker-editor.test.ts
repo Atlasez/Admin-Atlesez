@@ -407,6 +407,154 @@ describe("admin worker editor APIs", () => {
     expect(batches).toHaveLength(1);
   });
 
+  it("keeps a linked draft article in sync when an outline identity changes", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000021";
+    const documentId = "00000000-0000-0000-0000-000000000022";
+    const batches: unknown[][] = [];
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries WHERE id=?"))
+              return {
+                id: outlineId,
+                project_id: "atlas",
+                subject_slug: "mathematics",
+                category_slug: "group-theory",
+                parent_id: null,
+                document_id: documentId,
+                slug: "old-slug",
+                title: "旧タイトル",
+                summary: "旧要約",
+                concept_id: "old-concept",
+                sort_order: 10,
+                status: "active",
+                created_by: "local-editor@atlasez.test",
+                created_at: "2026-01-01T00:00:00.000Z",
+                updated_at: "2026-01-01T00:00:00.000Z",
+              } as T;
+            if (query.includes("FROM editorial_documents WHERE id=?"))
+              return {
+                id: documentId,
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "old-slug",
+                title: "旧タイトル",
+                summary: "旧要約",
+                concept_id: "old-concept",
+                updated_at: "2026-01-01T00:00:00.000Z",
+                published_at: null,
+                publication_action: null,
+                publication_review_stage: null,
+              } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return statements.map(() => ({ meta: { changes: 1 } }));
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: outlineId,
+          action: "update",
+          subject: "mathematics",
+          category: "group-theory",
+          slug: "new-slug",
+          title: "新タイトル",
+          summary: "新要約",
+          conceptId: "new-concept",
+          sortOrder: 20,
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      linkedDocumentUpdated: true,
+      slug: "new-slug",
+    });
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
+  it("does not let an outline edit silently change a published article URL", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000031";
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries WHERE id=?"))
+              return {
+                id: outlineId,
+                project_id: "atlas",
+                subject_slug: "mathematics",
+                category_slug: "group-theory",
+                parent_id: null,
+                document_id: "00000000-0000-0000-0000-000000000032",
+                slug: "old-slug",
+                title: "タイトル",
+                summary: "要約",
+                concept_id: "concept",
+                sort_order: 10,
+                status: "active",
+                created_by: "local-editor@atlasez.test",
+                created_at: "2026-01-01T00:00:00.000Z",
+                updated_at: "2026-01-01T00:00:00.000Z",
+              } as T;
+            if (query.includes("FROM editorial_documents WHERE id=?"))
+              return {
+                id: "00000000-0000-0000-0000-000000000032",
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "old-slug",
+                title: "タイトル",
+                summary: "要約",
+                concept_id: "concept",
+                updated_at: "2026-01-01T00:00:00.000Z",
+                published_at: "2026-01-02T00:00:00.000Z",
+                publication_action: null,
+                publication_review_stage: null,
+              } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: outlineId,
+          action: "update",
+          slug: "new-slug",
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "LINKED_ARTICLE_PUBLISHED",
+    });
+  });
+
   it("counts pending project profile approvals across projects", async () => {
     const queries: string[] = [];
     const portalEnv = {
