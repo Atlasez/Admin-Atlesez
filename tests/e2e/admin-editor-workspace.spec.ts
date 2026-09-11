@@ -164,6 +164,25 @@ test("E-5: 記事設定には担当分野だけを表示する", async ({ page }
   await expect(personalNotebook).toHaveAttribute("open", "");
 });
 
+test("新規記事作成では記事作成方法を選択できる", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?new=1&choose=1");
+
+  const dialog = page.locator("[data-new-document-choice]");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "記事から作成" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: "目次から作成" }),
+  ).toHaveAttribute("href", "/admin/editor/outline/");
+
+  await dialog.getByRole("button", { name: "記事から作成" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("[data-document-form]")).toBeVisible();
+  await expect(page.locator('input[name="title"]')).toHaveValue("");
+});
+
 test("記事編集画面に目次サイドバーを追加せず、独立した目次から執筆を開始できる", async ({
   page,
 }) => {
@@ -219,6 +238,24 @@ test("目次項目を選択して編集・アーカイブ操作を開始でき�
   await expect(
     page.getByRole("button", { name: "並び順を保存" }),
   ).toBeDisabled();
+});
+
+test("タスク管理と目次のチェックボックスはコンパクトなサイズで表示する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/operations/?project=atlas");
+  const taskCheckbox = page.locator("[data-task-show-completed]");
+  const taskBox = await taskCheckbox.boundingBox();
+  expect(taskBox?.width).toBeLessThanOrEqual(20);
+  expect(taskBox?.height).toBeLessThanOrEqual(20);
+
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  const outlineCheckbox = page.locator("[data-outline-select]").first();
+  const outlineBox = await outlineCheckbox.boundingBox();
+  expect(outlineBox?.width).toBeLessThanOrEqual(20);
+  expect(outlineBox?.height).toBeLessThanOrEqual(20);
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({

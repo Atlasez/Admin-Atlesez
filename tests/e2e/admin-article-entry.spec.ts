@@ -151,7 +151,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(page.locator(".workflow-card")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: /新規記事作成/ }),
-    ).toHaveAttribute("href", "/admin/editor/?new=1&from=articles");
+    ).toHaveAttribute("href", "/admin/editor/?new=1&choose=1&from=articles");
     await expect(
       page.getByRole("button", { name: /加筆・修正/ }),
     ).toBeVisible();

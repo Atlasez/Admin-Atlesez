@@ -1264,7 +1264,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .task-workspace .task-row { align-items: flex-start; gap: .8rem; }
   .task-view-tools { align-items: center; color: var(--text-secondary); display: flex; font-size: .72rem; gap: 1rem; justify-content: space-between; margin: -.35rem 0 .9rem; }
   .task-view-tools label { align-items: center; cursor: pointer; display: inline-flex; gap: .4rem; }
-  .task-view-tools input { accent-color: var(--accent-primary); }
+  .task-view-tools input[type="checkbox"],
+  .progress-subject-filters input[type="checkbox"],
+  .all-day-toggle input[type="checkbox"] { accent-color: var(--accent-primary); appearance: auto; block-size: 16px; flex: 0 0 16px; inline-size: 16px; margin: 0; min-block-size: 16px; min-inline-size: 16px; padding: 0; }
   .task-view-tools [data-task-summary] { font-variant-numeric: tabular-nums; }
   .task-title { min-width: 0; }
   .task-title b { display: block; margin-top: .2rem; }
