@@ -4050,17 +4050,34 @@ async function syncEditorialOutlineDocument(
   identity: { subject: string; category: string; slug: string },
   outlineId?: string,
 ) {
+  const now = new Date().toISOString();
   if (outlineId) {
+    // 1つの記事を複数の目次へ紐付けない。移動保存時は以前の参照を先に外す。
+    await env.REPORTS.prepare(
+      `UPDATE editorial_outline_entries SET document_id=NULL,updated_at=?
+       WHERE project_id='atlas' AND document_id=? AND id<>?`,
+    ).bind(now, documentId, outlineId).run();
     await env.REPORTS.prepare(
       `UPDATE editorial_outline_entries SET document_id=?,updated_at=?
        WHERE id=? AND project_id='atlas' AND subject_slug=? AND category_slug=? AND slug=? AND status='active'`,
-    ).bind(documentId, new Date().toISOString(), outlineId, identity.subject, identity.category, identity.slug).run();
+    ).bind(documentId, now, outlineId, identity.subject, identity.category, identity.slug).run();
     return;
   }
+  // 既存記事を識別子で自動照合する場合のみ、重複参照を整理する。
+  const match = await env.REPORTS.prepare(
+    `SELECT id FROM editorial_outline_entries
+     WHERE project_id='atlas' AND subject_slug=? AND category_slug=? AND slug=? AND status='active'
+     LIMIT 1`,
+  ).bind(identity.subject, identity.category, identity.slug).first<{ id: string }>();
+  if (!match) return;
+  await env.REPORTS.prepare(
+    `UPDATE editorial_outline_entries SET document_id=NULL,updated_at=?
+     WHERE project_id='atlas' AND document_id=? AND id<>?`,
+  ).bind(now, documentId, match.id).run();
   await env.REPORTS.prepare(
     `UPDATE editorial_outline_entries SET document_id=?,updated_at=?
      WHERE project_id='atlas' AND subject_slug=? AND category_slug=? AND slug=? AND status='active'`,
-  ).bind(documentId, new Date().toISOString(), identity.subject, identity.category, identity.slug).run();
+  ).bind(documentId, now, identity.subject, identity.category, identity.slug).run();
 }
 
 /** 分野の目次を先に作成し、本文は後から記事編集画面で執筆するためのAPI。 */
