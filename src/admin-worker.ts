@@ -14562,7 +14562,7 @@ async function syncPublishedArticleBackups(env: Env) {
 }
 
 /** GitHub main上の公開用Markdownを基準に、編集室の公開済み表示を正規化する。 */
-async function syncEditorialPublicationStatus(env: Env) {
+async function syncEditorialPublicationStatus(env: Env, documentId?: string) {
   const token = (await githubToken(env))?.token;
   if (!token)
     throw new Error("GitHub公開連携が未設定のため、公開状態を同期できません。");
@@ -14573,9 +14573,13 @@ async function syncEditorialPublicationStatus(env: Env) {
     "user-agent": "atlasez-editorial-publication-sync",
     "x-github-api-version": "2022-11-28",
   };
+  const normalizedDocumentId = documentId?.trim() || null;
   const documents = await env.REPORTS.prepare(
-    "SELECT id, locale, subject, category, slug, published_at, publication_action FROM editorial_documents",
-  ).all<
+    `SELECT id, locale, subject, category, slug, published_at, publication_action
+       FROM editorial_documents${normalizedDocumentId ? " WHERE id = ?" : ""}`,
+  )
+    .bind(...(normalizedDocumentId ? [normalizedDocumentId] : []))
+    .all<
     Pick<
       EditorialDocument,
       | "id"
@@ -14652,8 +14656,10 @@ async function syncEditorialPublicationStatusForAdmin(
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const documentId =
+    new URL(request.url).searchParams.get("documentId")?.trim() || undefined;
   try {
-    return json(await syncEditorialPublicationStatus(env));
+    return json(await syncEditorialPublicationStatus(env, documentId));
   } catch (error) {
     return json(
       {
@@ -16385,7 +16391,7 @@ async function publishEditorialDocument(
       document.publication_pr_number,
     );
     if (existingPullRequest?.merged_at) {
-      await syncEditorialPublicationStatus(env).catch((error) =>
+      await syncEditorialPublicationStatus(env, documentId).catch((error) =>
         console.error("publication status sync after merged PR failed", {
           documentId,
           error,
@@ -16882,7 +16888,7 @@ async function unpublishEditorialDocument(
       }
     }
     if (existingPullRequest?.merged_at) {
-      await syncEditorialPublicationStatus(env).catch((error) =>
+      await syncEditorialPublicationStatus(env, documentId).catch((error) =>
         console.error("publication status sync after merged PR failed", {
           documentId,
           error,
@@ -16909,7 +16915,7 @@ async function unpublishEditorialDocument(
   // 過去の実装や同期遅延でD1だけが「未公開」になっていても、
   // main上の記事が公開中なら、ここで状態を復元して再試行可能にする。
   if (!document.published_at) {
-    await syncEditorialPublicationStatus(env).catch((error) =>
+    await syncEditorialPublicationStatus(env, documentId).catch((error) =>
       console.error("publication status sync before unpublish retry failed", {
         documentId,
         error,

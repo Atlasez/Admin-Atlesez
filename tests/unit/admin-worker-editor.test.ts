@@ -327,6 +327,72 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it("syncs only the requested document when publication status is refreshed", async () => {
+    const queries: string[] = [];
+    const bindings: unknown[][] = [];
+    const document = {
+      id: "document-1",
+      locale: "ja",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "cyclic-groups",
+      published_at: null,
+      publication_action: null,
+    };
+    const publicationEnv = {
+      ...emptyEnv,
+      GITHUB_PUBLISH_TOKEN: "test-token",
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          return {
+            bind: (...values: unknown[]) => {
+              bindings.push(values);
+              return {
+                all: async <T>() =>
+                  ({ results: [document] }) as { results: T[] },
+                run: async () => ({}),
+              };
+            },
+          };
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(new URL(input.toString()).pathname).toBe(
+        "/repos/Atlasez/Atlasez01/contents/src/content/articles/jpn/mathematics/group-theory/cyclic-groups.md",
+      );
+      return new Response(
+        JSON.stringify({ content: "LS0tCnN0YXR1czogcHVibGlzaGVkCi0tLQo=" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const response = await worker.fetch(
+        new Request(
+          "http://localhost/api/admin/editor/sync-publication-status?documentId=document-1",
+          { method: "POST" },
+        ),
+        publicationEnv as never,
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        published: 1,
+        pending: 0,
+        total: 1,
+      });
+      expect(queries[0]).toContain("FROM editorial_documents WHERE id = ?");
+      expect(bindings[0]).toEqual(["document-1"]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("rejects unsigned GitHub publication webhooks", async () => {
     const response = await worker.fetch(
       new Request("http://localhost/api/internal/github-publication-webhook", {
