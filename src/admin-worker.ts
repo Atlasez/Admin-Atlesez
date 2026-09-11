@@ -3874,6 +3874,20 @@ async function editorialTaxonomyAssociationError(
     : "この分野のカテゴリが見つかりません。先にカテゴリを追加してください。";
 }
 
+const editorialTaxonomyAutoSlug = (kind: "subject" | "category", name: string) => {
+  const latin = name
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  if (latin) return `${kind}-${latin}`.slice(0, 80);
+  const codePoints = [...name]
+    .map((character) => character.codePointAt(0)?.toString(36) ?? "0")
+    .join("-");
+  return `${kind}-${codePoints}`.slice(0, 80);
+};
+
 /** 管理画面で追加した分野・カテゴリを記事編集の目次へ反映する。 */
 async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
@@ -3957,11 +3971,21 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     if (associationError && associationError.includes("分野が見つかりません"))
       return json({ error: associationError }, 400);
   }
+  if (kind === "subject" && Object.values(APPLICATION_SUBJECT_LABELS).some((label) => label === name))
+    return json({ error: "同じ表示名の分野が既にあります。既存の分野へカテゴリを追加してください。" }, 409);
+  const duplicateName = await env.REPORTS.prepare(
+    `SELECT id FROM admin_editorial_taxonomy_catalog
+     WHERE project_id='atlas' AND kind=? AND lower(name)=lower(?) AND status='active'
+       AND (? = 'subject' OR subject_slug=?) LIMIT 1`,
+  )
+    .bind(kind, name, kind, subject)
+    .first<{ id: string }>();
+  if (duplicateName) return json({ error: "同じ対象に同じ表示名がすでにあります。" }, 409);
   const canCreate = scope.allSubjects || scope.isManager || (kind === "category" && (coordinatorSubjects.includes(subject) || coordinatorSubjects.includes("*")));
   if (!canCreate) return json({ error: "この分野・カテゴリを追加する権限がありません。" }, 403);
   // 表示名だけで追加できるよう、内部IDは未入力時に衝突しない値を生成する。
   // 日本語名を無理にローマ字化せず、公開URLと管理用識別子を分離する。
-  const slug = requestedSlug || `${kind}-${crypto.randomUUID().slice(0, 8)}`;
+  const slug = requestedSlug || editorialTaxonomyAutoSlug(kind, name);
   const now = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
