@@ -8224,8 +8224,10 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
          FROM editorial_documents d
         WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
+          AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
+            OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))
         ORDER BY CASE WHEN d.scheduled_publish_at IS NULL THEN 1 ELSE 0 END,d.scheduled_publish_at,d.updated_at DESC LIMIT 100`,
-    ).bind(...documentVisibility.bindings).all<{
+    ).bind(...documentVisibility.bindings, scope.email).all<{
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
     }>().catch(() => ({ results: [] as Array<{
