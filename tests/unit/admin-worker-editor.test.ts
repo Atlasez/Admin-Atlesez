@@ -217,6 +217,43 @@ describe("admin worker editor APIs", () => {
     ).toBe(true);
   });
 
+  it("limits active action-center articles to states that require work", async () => {
+    let documentQuery = "";
+    let documentBindings: unknown[] = [];
+    const actionEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          const originalBind = statement.bind.bind(statement);
+          statement.bind = (...values: unknown[]) => {
+            if (
+              query.includes("d.scheduled_publish_at") &&
+              query.includes("COALESCE(d.category")
+            ) {
+              documentQuery = query;
+              documentBindings = values;
+            }
+            return originalBind(...values);
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(documentQuery).toContain("d.status = 'draft'");
+    expect(documentQuery).toContain("d.status = 'in-review'");
+    expect(documentQuery).toContain("d.publication_review_stage IS NOT NULL");
+    expect(documentBindings).toContain("local-editor@atlasez.test");
+  });
+
   it("uses bounded cursor pages for profile change requests", async () => {
     const queries: string[] = [];
     const bindings: unknown[][] = [];
