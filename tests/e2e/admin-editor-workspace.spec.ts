@@ -261,6 +261,23 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
         });
         return;
       }
+      if (request.method() === "PATCH") {
+        const body = JSON.parse(request.postData() ?? "{}");
+        if (body.action === "reorder" && Array.isArray(body.items)) {
+          for (const item of body.items) {
+            const entry = taxonomy.find(
+              (candidate) => candidate.id === item.id,
+            );
+            if (entry) entry.sort_order = Number(item.sortOrder ?? 0);
+          }
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -356,13 +373,26 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.locator('input[name="name"]').fill("機械学習");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("機械学習", { exact: true })).toBeVisible();
+  await taxonomyForm.locator('select[name="kind"]').selectOption("category");
+  await taxonomyForm
+    .locator('select[name="subject"]')
+    .selectOption("subject-1");
+  await taxonomyForm.locator('input[name="name"]').fill("統計学");
+  await taxonomyForm.getByRole("button", { name: "追加" }).click();
+  await expect(page.getByText("統計学", { exact: true })).toBeVisible();
+  await page
+    .locator('[data-taxonomy-id="category-3"] [data-direction="up"]')
+    .click();
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
+  ).toContainText("統計学");
 
   await page.goto("./admin/editor/outline/?subject=subject-1");
   await expect(page.locator("[data-outline-subject]")).toHaveValue("subject-1");
   await page.getByText("目次項目を追加", { exact: true }).click();
-  await expect(page.locator("[data-form-category] option")).toHaveText(
-    "機械学習",
-  );
+  await expect(
+    page.locator('[data-form-category] option[value="category-2"]'),
+  ).toHaveText("機械学習");
   await page.locator("[data-form-category]").selectOption("category-2");
   await page
     .locator('[data-outline-form] input[name="title"]')
@@ -379,6 +409,21 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await expect(page.locator("[data-outline-list] a").first()).toHaveAttribute(
     "href",
     /subject-1/,
+  );
+  const articleHref = await page
+    .locator("[data-outline-list] a")
+    .first()
+    .getAttribute("href");
+  expect(articleHref).toContain("new=1");
+  expect(articleHref).toContain("outline-");
+  await page.goto(`.${articleHref}`);
+  await expect(page.locator('input[name="title"]')).toHaveValue("集中不等式");
+  await expect(page.locator('input[name="slug"]')).toHaveValue(
+    "concentration-inequality",
+  );
+  await expect(page.locator('select[name="subject"]')).toHaveValue("subject-1");
+  await expect(page.locator('select[name="category"]')).toHaveValue(
+    "category-2",
   );
 });
 

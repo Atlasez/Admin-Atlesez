@@ -3935,11 +3935,58 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (request.method === "PATCH") {
     const payload = (await request.json().catch(() => null)) as {
-      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown;
+      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown; slug?: unknown; items?: unknown;
     } | null;
-    const id = text(payload?.id, 64);
     const action = text(payload?.action, 20);
-    if (!id) return json({ error: "対象を確認してください。" }, 400);
+    const id = text(payload?.id, 64);
+    if (action !== "reorder" && !id) return json({ error: "対象を確認してください。" }, 400);
+    if (action === "reorder") {
+      const items = Array.isArray(payload?.items)
+        ? payload.items
+            .map((item) => {
+              if (!item || typeof item !== "object") return null;
+              const value = item as { id?: unknown; sortOrder?: unknown };
+              const itemId = text(value.id, 64);
+              const sortOrder = Math.max(0, Math.min(9999, Number(value.sortOrder ?? 0) || 0));
+              return /^[0-9a-f-]{36}$/i.test(itemId) ? { id: itemId, sortOrder } : null;
+            })
+            .filter((item): item is { id: string; sortOrder: number } => Boolean(item))
+            .slice(0, 200)
+        : [];
+      if (!items.length) return json({ error: "並び替える項目を選択してください。" }, 400);
+      const itemIds = [...new Set(items.map((item) => item.id))];
+      if (itemIds.length !== items.length) return json({ error: "同じ項目が重複しています。" }, 400);
+      const existing = await env.REPORTS.prepare(
+        `SELECT id,kind,subject_slug,status FROM admin_editorial_taxonomy_catalog
+         WHERE project_id='atlas' AND id IN (${itemIds.map(() => "?").join(",")})`,
+      ).bind(...itemIds).all<Pick<EditorialTaxonomyRow, "id" | "kind" | "subject_slug" | "status">>();
+      const existingById = new Map((existing.results ?? []).map((row) => [row.id, row]));
+      if (existingById.size !== itemIds.length) return json({ error: "存在しない項目が含まれています。" }, 404);
+      if ([...existingById.values()].some((row) => {
+        const editable = scope.allSubjects || scope.isManager || (row.kind === "category" && (coordinatorSubjects.includes(row.subject_slug) || coordinatorSubjects.includes("*")));
+        return !editable;
+      })) return json({ error: "担当範囲外の項目が含まれています。" }, 403);
+      const groups = new Map<string, typeof items>();
+      for (const item of items) {
+        const row = existingById.get(item.id)!;
+        const key = `${row.kind}:${row.subject_slug}`;
+        const group = groups.get(key) ?? [];
+        group.push(item);
+        groups.set(key, group);
+      }
+      const now = new Date().toISOString();
+      await env.REPORTS.batch(
+        [...groups.values()].flatMap((group) =>
+          group.map((item, index) =>
+            env.REPORTS.prepare(
+              "UPDATE admin_editorial_taxonomy_catalog SET sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'",
+            ).bind(index * 10, now, item.id),
+          ),
+        ),
+      );
+      await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", itemIds.join(","), "分野・カテゴリ", `分野・カテゴリの並び順を更新（${itemIds.length}件）`, { ids: itemIds });
+      return json({ ok: true, updated: itemIds.length });
+    }
     const current = await env.REPORTS.prepare(
       "SELECT id,kind,subject_slug,slug,name,description,sort_order,status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
     ).bind(id).first<EditorialTaxonomyRow>();
@@ -3958,10 +4005,26 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     const description = text(payload?.description, 500);
     const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? current.sort_order) || 0));
     const subject = current.kind === "category" ? text(payload?.subject, 80).toLowerCase() || current.subject_slug : "";
-    if (!name || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名と対象分野を確認してください。" }, 400);
+    const slug = text(payload?.slug, 80).toLowerCase() || current.slug;
+    if (!name || !SUBJECT_SLUG.test(slug) || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名、ID、対象分野を確認してください。" }, 400);
+    if (current.kind === "subject" && APPLICATION_SUBJECT_LABELS[slug] && slug !== current.slug)
+      return json({ error: "既存の分野と同じIDには変更できません。" }, 409);
     if (current.kind === "category") {
-      const associationError = await editorialTaxonomyAssociationError(env, subject, current.slug);
-      if (associationError) return json({ error: associationError }, 400);
+      if (subject !== current.subject_slug) {
+        const targetSubject = APPLICATION_SUBJECT_LABELS[subject]
+          ? true
+          : Boolean(
+              await env.REPORTS.prepare(
+                "SELECT id FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' AND kind='subject' AND slug=? AND status='active'",
+              )
+                .bind(subject)
+                .first<{ id: string }>(),
+            );
+        if (!targetSubject) return json({ error: "移動先の分野が見つかりません。" }, 400);
+      } else {
+        const associationError = await editorialTaxonomyAssociationError(env, subject, current.slug);
+        if (associationError) return json({ error: associationError }, 400);
+      }
     }
     const duplicateName = await env.REPORTS.prepare(
       `SELECT id FROM admin_editorial_taxonomy_catalog
@@ -3972,15 +4035,110 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       .first<{ id: string }>();
     if (duplicateName)
       return json({ error: "同じ対象に同じ表示名がすでにあります。" }, 409);
+    const oldSubject = current.kind === "subject" ? current.slug : current.subject_slug;
+    const nextSubject = current.kind === "subject" ? slug : subject;
+    const oldCategory = current.kind === "category" ? current.slug : "";
+    const nextCategory = current.kind === "category" ? slug : "";
+    const identityChanged = oldSubject !== nextSubject || oldCategory !== nextCategory;
+    const documentIdentity = current.kind === "subject"
+      ? "subject=?"
+      : "subject=? AND category=?";
+    const documentValues = current.kind === "subject" ? [oldSubject] : [oldSubject, oldCategory];
+
+    // 公開済みのURLを黙って変更すると学習サイトのリンクを壊すため、
+    // 公開記事・公開カタログ・公開処理中の記事が残る場合は移行を拒否する。
+    if (identityChanged) {
+      const busyDocuments = await env.REPORTS.prepare(
+        `SELECT COUNT(*) AS count FROM editorial_documents
+         WHERE ${documentIdentity} AND (published_at IS NOT NULL OR publication_action IS NOT NULL OR publication_review_stage IS NOT NULL)`,
+      ).bind(...documentValues).first<{ count: number | string }>();
+      const catalogIdentity = current.kind === "subject"
+        ? "subject=?"
+        : "subject=? AND category=?";
+      const publicCatalog = await env.REPORTS.prepare(
+        `SELECT COUNT(*) AS count FROM editorial_article_catalog
+         WHERE ${catalogIdentity} AND public_status='published'`,
+      ).bind(...documentValues).first<{ count: number | string }>();
+      if (Number(busyDocuments?.count ?? 0) > 0 || Number(publicCatalog?.count ?? 0) > 0)
+        return json(
+          {
+            error: "公開済みまたは公開処理中の記事があるためIDを変更できません。先に公開を取り消すか、更新案を完了してください。",
+            code: "TAXONOMY_ID_IN_USE",
+          },
+          409,
+        );
+    }
+
+    // 記事カタログはpath/identity_keyが一意なので、先に対象行を取得して
+    // 新しいURLを組み立て、関連テーブルと同じD1 batchで移行する。
+    const catalogRows = identityChanged
+      ? (await env.REPORTS.prepare(
+          `SELECT path,locale,subject,category,slug FROM editorial_article_catalog
+           WHERE ${current.kind === "subject" ? "subject=?" : "subject=? AND category=?"}`,
+        ).bind(...documentValues).all<{ path: string; locale: string; subject: string; category: string; slug: string }>()).results ?? []
+      : [];
+    const now = new Date().toISOString();
+    const statements = [
+      env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(current.kind === "category" ? nextSubject : "", slug, name, description, sortOrder, now, id),
+    ];
+    if (identityChanged) {
+      if (current.kind === "subject") {
+        statements.push(
+          env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,updated_at=? WHERE project_id='atlas' AND kind='category' AND subject_slug=?")
+            .bind(nextSubject, now, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_subject_overviews SET subject=? WHERE project_id='atlas' AND subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE report_admin_permissions SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_workflow_roles SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE atlasez_discord_channel_mappings SET subject=? WHERE project_id='atlas' AND subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE atlasez_discord_role_mappings SET subject=? WHERE project_id='atlas' AND subject=?")
+            .bind(nextSubject, oldSubject),
+        );
+      }
+      statements.push(
+        env.REPORTS.prepare(`UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,updated_at=? WHERE project_id='atlas' AND ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, now, ...documentValues),
+        env.REPORTS.prepare(`UPDATE editorial_documents SET subject=?,category=?,updated_at=? WHERE ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, now, ...documentValues),
+        env.REPORTS.prepare(`UPDATE article_reports SET subject=?,category=? WHERE ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, ...documentValues),
+        env.REPORTS.prepare(`UPDATE article_analytics_daily SET subject=?,category=? WHERE ${documentIdentity}`)
+          .bind(nextSubject, current.kind === "category" ? nextCategory : oldCategory, ...documentValues),
+      );
+      if (oldSubject !== nextSubject) {
+        statements.push(
+          env.REPORTS.prepare("UPDATE editorial_progress_reports SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_tasks SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+          env.REPORTS.prepare("UPDATE editorial_events SET subject=? WHERE subject=?")
+            .bind(nextSubject, oldSubject),
+        );
+      }
+      for (const row of catalogRows) {
+        const articleSubject = current.kind === "subject" ? nextSubject : row.subject;
+        const articleCategory = current.kind === "category" ? nextCategory : row.category;
+        const localeDirectory = editorialLocaleDirectory(row.locale);
+        const nextPath = `src/content/articles/${localeDirectory}/${articleSubject}/${articleCategory}/${row.slug}.md`;
+        const nextIdentity = `${row.locale}/${articleSubject}/${articleCategory}/${row.slug}`;
+        statements.push(
+          env.REPORTS.prepare("UPDATE editorial_article_catalog SET path=?,identity_key=?,subject=?,category=? WHERE path=?")
+            .bind(nextPath, nextIdentity, articleSubject, articleCategory, row.path),
+        );
+      }
+    }
     try {
-      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(subject, name, description, sortOrder, new Date().toISOString(), id).run();
+      await env.REPORTS.batch(statements);
     } catch (error) {
       if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
       throw error;
     }
-    await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, slug: current.slug, subject });
-    return json({ ok: true, id, name, description, sortOrder, subject });
+    await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, previousSubject: oldSubject, subject: nextSubject, previousSlug: current.slug, slug, referencesMigrated: identityChanged });
+    return json({ ok: true, id, name, description, sortOrder, subject: nextSubject, slug, referencesMigrated: identityChanged });
   }
   const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
   const kind = text(payload?.kind, 16) as "subject" | "category";
@@ -3996,8 +4154,21 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     if (associationError && associationError.includes("分野が見つかりません"))
       return json({ error: associationError }, 400);
   }
-  if (kind === "subject" && Object.values(APPLICATION_SUBJECT_LABELS).some((label) => label === name))
-    return json({ error: "同じ表示名の分野が既にあります。既存の分野へカテゴリを追加してください。" }, 409);
+  if (kind === "subject") {
+    const existingStaticSubject = Object.entries(APPLICATION_SUBJECT_LABELS).find(([, label]) => label === name);
+    // 静的カタログにすでに存在する分野（例：情報）を、画面から
+    // もう一度作成しても重複エラーにせず、その分野を選択した扱いにする。
+    // これにより「情報を作成→機械学習カテゴリを追加」という導線を
+    // 既存データを壊さず idempotent に完了できる。
+    if (existingStaticSubject && (!requestedSlug || requestedSlug === existingStaticSubject[0])) {
+      const canUseStaticSubject = scope.allSubjects || scope.isManager || scope.subjects.includes(existingStaticSubject[0]) || (scope.coordinatorSubjects ?? []).some((item) => item === existingStaticSubject[0] || item === "*");
+      if (!canUseStaticSubject) return json({ error: "この分野を追加する権限がありません。" }, 403);
+      await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", existingStaticSubject[0], name, `既存の分野を選択：${name}`, { kind, slug: existingStaticSubject[0], existing: true });
+      return json({ ok: true, existing: true, kind, subject: "", slug: existingStaticSubject[0], name, status: "published" });
+    }
+    if (existingStaticSubject)
+      return json({ error: "同じ表示名の分野が既にあります。既存の分野へカテゴリを追加してください。" }, 409);
+  }
   const duplicateName = await env.REPORTS.prepare(
     `SELECT id FROM admin_editorial_taxonomy_catalog
      WHERE project_id='atlas' AND kind=? AND lower(name)=lower(?) AND status='active'
@@ -4102,15 +4273,55 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
     scope.allSubjects || scope.isManager || allowedSubjects.has(subject) || (scope.coordinatorSubjects ?? []).includes("*");
   if (request.method === "GET") {
     const includeArchived = url.searchParams.get("includeArchived") === "1";
+    const paginated = url.searchParams.has("limit");
+    const requestedLimit = Number(url.searchParams.get("limit") ?? "100");
+    const pageLimit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+      : 100;
+    const rawCursor = text(url.searchParams.get("cursor"), 600);
+    const cursorParts = rawCursor.split("|");
+    let cursor: { subject: string; category: string; order: number; title: string; id: string } | null = null;
+    if (cursorParts.length === 5) {
+      const order = Number(cursorParts[2]);
+      try {
+        const subject = decodeURIComponent(cursorParts[0]);
+        const category = decodeURIComponent(cursorParts[1]);
+        const title = decodeURIComponent(cursorParts[3]);
+        const id = decodeURIComponent(cursorParts[4]);
+        if (subject && category && Number.isInteger(order) && order >= 0 && id)
+          cursor = { subject, category, order, title, id };
+      } catch {
+        cursor = null;
+      }
+    }
+    const cursorFilter = cursor
+      ? ` AND (subject_slug > ? OR
+          (subject_slug = ? AND (category_slug > ? OR
+            (category_slug = ? AND (sort_order > ? OR
+              (sort_order = ? AND (title > ? OR (title = ? AND id > ?))))))))`
+      : "";
+    const cursorValues = cursor
+      ? [cursor.subject, cursor.subject, cursor.category, cursor.category, cursor.order, cursor.order, cursor.title, cursor.title, cursor.id]
+      : [];
+    const limitClause = paginated ? " LIMIT ?" : "";
     const rows = await env.REPORTS.prepare(
       `SELECT id,project_id,subject_slug,category_slug,parent_id,document_id,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at
-       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
-       ORDER BY subject_slug,category_slug,sort_order,title`,
-    ).all<EditorialOutlineEntryRow>();
+       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}${cursorFilter}
+       ORDER BY subject_slug,category_slug,sort_order,title,id${limitClause}`,
+    )
+      .bind(...cursorValues, ...(paginated ? [pageLimit + 1] : []))
+      .all<EditorialOutlineEntryRow>();
+    const fetched = rows.results ?? [];
+    const hasMore = paginated && fetched.length > pageLimit;
+    const pageRows = paginated ? fetched.slice(0, pageLimit) : fetched;
     const visible = scope.allSubjects || scope.isManager
-      ? rows.results ?? []
-      : (rows.results ?? []).filter((row) => allowedSubjects.has(row.subject_slug));
-    return json({ entries: visible });
+      ? pageRows
+      : pageRows.filter((row) => allowedSubjects.has(row.subject_slug));
+    const last = pageRows.at(-1);
+    const nextCursor = hasMore && last
+      ? [last.subject_slug, last.category_slug, String(last.sort_order), last.title, last.id].map(encodeURIComponent).join("|")
+      : null;
+    return json({ entries: visible, pagination: { limit: paginated ? pageLimit : visible.length, nextCursor, hasMore } });
   }
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けません。" }, 403);
   if (request.method === "PATCH") {
@@ -4230,15 +4441,94 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
       }
       if (cursor) return json({ error: "階層が深すぎます。" }, 400);
     }
+    // 目次と記事を同時に編集できるときだけ、記事の識別子も一緒に更新する。
+    // 目次だけを先に変えると、記事編集画面の outlineId 検証が失敗して
+    // 「目次上は別記事、記事側は旧URL」の不整合が残るためである。
+    const linkedDocument = current.document_id
+      ? await env.REPORTS.prepare(
+          `SELECT id,subject,category,slug,title,summary,concept_id,updated_at,published_at,publication_action,publication_review_stage
+           FROM editorial_documents WHERE id=?`,
+        )
+          .bind(current.document_id)
+          .first<{
+            id: string;
+            subject: string;
+            category: string;
+            slug: string;
+            title: string;
+            summary: string;
+            concept_id: string;
+            updated_at: string;
+            published_at: string | null;
+            publication_action: string | null;
+            publication_review_stage: string | null;
+          }>()
+      : null;
+    const linkedIdentityChanged = Boolean(
+      linkedDocument &&
+        (linkedDocument.subject !== subject ||
+          linkedDocument.category !== category ||
+          linkedDocument.slug !== slug),
+    );
+    const linkedArticleBusy = Boolean(
+      linkedDocument &&
+        (linkedDocument.published_at ||
+          linkedDocument.publication_action ||
+          linkedDocument.publication_review_stage),
+    );
+    if (linkedIdentityChanged && linkedArticleBusy) {
+      return json(
+        {
+          error:
+            "公開済みまたは公開処理中の記事は、目次から分野・カテゴリ・URL名を変更できません。先に公開を取り消すか、更新案を作成してください。",
+          code: "LINKED_ARTICLE_PUBLISHED",
+        },
+        409,
+      );
+    }
+    const now = new Date().toISOString();
     try {
-      await env.REPORTS.prepare("UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,parent_id=?,slug=?,title=?,summary=?,concept_id=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(subject, category, parentId, slug, title, summary, conceptId, sortOrder, new Date().toISOString(), id).run();
+      const statements = [
+        env.REPORTS.prepare("UPDATE editorial_outline_entries SET subject_slug=?,category_slug=?,parent_id=?,slug=?,title=?,summary=?,concept_id=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+          .bind(subject, category, parentId, slug, title, summary, conceptId, sortOrder, now, id),
+      ];
+      if (linkedDocument && !linkedArticleBusy) {
+        statements.unshift(
+          env.REPORTS.prepare(
+            `UPDATE editorial_documents
+             SET subject=?,category=?,slug=?,title=?,summary=?,concept_id=?,updated_by=?,updated_at=?
+             WHERE id=? AND updated_at=?`,
+          ).bind(
+            subject,
+            category,
+            slug,
+            title,
+            summary,
+            conceptId,
+            scope.email,
+            now,
+            linkedDocument.id,
+            linkedDocument.updated_at,
+          ),
+        );
+      }
+      const results = await env.REPORTS.batch(statements);
+      const documentUpdate = linkedDocument && !linkedArticleBusy ? results[0] as { meta?: { changes?: number } } : null;
+      if (documentUpdate?.meta?.changes === 0) {
+        return json(
+          {
+            error: "記事が先に更新されています。目次を再読み込みしてから再試行してください。",
+            code: "STALE_LINKED_ARTICLE",
+          },
+          409,
+        );
+      }
     } catch (error) {
       if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ分野・カテゴリ・IDの目次項目がすでにあります。" }, 409);
       throw error;
     }
-    await recordAdminAudit(env, scope.email, "outline_updated", "outline", id, title, `目次項目を更新：${title}`, { subject, category, slug });
-    return json({ ok: true, id, subject, category, parentId, slug, title, summary, conceptId, sortOrder });
+    await recordAdminAudit(env, scope.email, "outline_updated", "outline", id, title, `目次項目を更新：${title}`, { subject, category, slug, linkedDocumentId: linkedDocument?.id ?? null, linkedDocumentUpdated: Boolean(linkedDocument && !linkedArticleBusy) });
+    return json({ ok: true, id, subject, category, parentId, slug, title, summary, conceptId, sortOrder, linkedDocumentUpdated: Boolean(linkedDocument && !linkedArticleBusy) });
   }
   if (request.method !== "POST") return json({ error: "GET、POST、PATCHのみ利用できます。" }, 405);
   const payload = (await request.json().catch(() => null)) as {

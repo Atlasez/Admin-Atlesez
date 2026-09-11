@@ -186,6 +186,10 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
   .genre-roles .taxonomy-section { border-top: 1px solid var(--border-default); margin-top: 2rem; padding-top: 1.2rem; }
   .genre-roles .taxonomy-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
   .genre-roles .taxonomy-card[data-status="archived"] { opacity: .72; }
+  .genre-roles .taxonomy-card[draggable="true"] { cursor: grab; }
+  .genre-roles .taxonomy-card[draggable="true"]:active { cursor: grabbing; }
+  .genre-roles .taxonomy-order-actions { display: inline-flex; gap: .2rem; }
+  .genre-roles .taxonomy-order-actions button:disabled { cursor: not-allowed; opacity: .4; }
 
   .genre-roles .delete-catalog {
     color: #e27676 !important;
@@ -222,7 +226,44 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
     const renderCatalogSelect = () => { const system = subjectRows().map((subject) => `<option value="system-member|${esc(subject.slug)}">分野担当：${esc(subject.name)}</option><option value="system-lead|${esc(subject.slug)}">分野統括：${esc(subject.name)}</option>`).join(""); catalogSelect.innerHTML = `<option value="">選択してください</option>${system}${catalog.map((item) => `<option value="${esc(item.id)}">${esc(item.kind === "genre" ? "ジャンル" : "役割")}：${esc(item.name)}</option>`).join("")}`; };
     const renderSubjects = () => { const subjectElements = subjectRows(); content.innerHTML = subjectElements.map((subject) => { const slug = subject.slug; const assigned = genreMembers.filter((member) => (member.subjectAssignments ?? []).includes(slug)); const leads = genreMembers.filter((member) => (member.workflowSubjects ?? []).includes(slug)); const managers = genreMembers.filter((member) => member.role === "manager"); const memberButtons = assigned.map((member) => `<span class="person"><span>${esc(memberName(member))}</span><button type="button" class="person-remove" data-remove-standard="member|${esc(member.email)}|${esc(slug)}">削除</button></span>`).join("") || '<span class="unassigned">未割り当て</span>'; const leadButtons = leads.map((member) => `<span class="person person--lead"><span>${esc(memberName(member))}</span><button type="button" class="person-remove" data-remove-standard="lead|${esc(member.email)}|${esc(slug)}">削除</button></span>`).join("") || '<span class="unassigned">未割り当て</span>'; return `<article class="subject-card"><div class="subject-card__heading"><div><h2>${esc(subject.name)}</h2><code>${esc(slug)}</code></div><span class="subject-status">${esc(subject.status)}</span></div><p class="subject-description">${esc(subject.description)}</p><div class="role-list"><div class="role-row"><span class="role-label"><i class="dot dot--member"></i>分野担当</span><div class="people">${memberButtons}</div></div><div class="role-row"><span class="role-label"><i class="dot dot--lead"></i>分野統括</span><div class="people">${leadButtons}</div></div><div class="role-row"><span class="role-label"><i class="dot dot--manager"></i>運営統括</span><div class="people">${people(managers, "person--manager")}</div></div></div></article>`; }).join("") || '<p class="loading">分野情報がありません。</p>'; };
     const renderCustom = () => { customCount.textContent = `${catalog.length}件`; customContent.innerHTML = catalog.length ? catalog.map((item) => { const itemAssignments = assignments.filter((assignment) => assignment.catalog_id === item.id); return `<article class="custom-card"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${esc(item.slug)}</code></div><span class="subject-status">${item.kind === "genre" ? "ジャンル" : "役割"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-people"><strong class="custom-card__meta">参加メンバー</strong><div class="custom-people-list">${people(itemAssignments, "", (assignment) => `${item.id}|${assignment.email}`)}</div></div><div class="custom-card__actions"><span class="custom-card__meta">${itemAssignments.length}人</span><button type="button" class="delete-catalog" data-delete-catalog="${esc(item.id)}">項目を削除</button></div></article>`; }).join("") : '<p class="loading">カスタム項目はまだありません。</p>'; };
-    const renderTaxonomy = () => { taxonomyCount.textContent = `${taxonomy.length}件`; taxonomyContent.innerHTML = taxonomy.length ? taxonomy.slice().sort((a,b) => a.kind.localeCompare(b.kind) || a.subject_slug.localeCompare(b.subject_slug) || (Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)) || a.name.localeCompare(b.name, "ja")).map((item) => `<article class="custom-card taxonomy-card" data-status="${esc(item.status ?? "active")}"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${item.kind === "category" ? `${esc(item.subject_slug)} / ` : ""}${esc(item.slug)}</code></div><span class="subject-status">${item.kind === "subject" ? "分野" : "カテゴリ"}・${item.status === "archived" ? "アーカイブ" : "公開"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-card__meta">表示順 ${Number(item.sort_order ?? 0)}</div><div class="custom-card__actions"><button type="button" data-toggle-taxonomy="${esc(item.id)}" data-next-status="${item.status === "archived" ? "restore" : "archive"}">${item.status === "archived" ? "復元" : "アーカイブ"}</button><button type="button" data-edit-taxonomy="${esc(item.id)}">編集</button></div></article>`).join("") : '<p class="loading">追加した分野・カテゴリはまだありません。</p>'; };
+    const taxonomyGroupKey = (item: Taxonomy) => `${item.kind}:${item.subject_slug}`;
+    const taxonomyEntries = () => taxonomy.slice().sort((a, b) => a.kind.localeCompare(b.kind) || a.subject_slug.localeCompare(b.subject_slug) || (Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)) || a.name.localeCompare(b.name, "ja"));
+    const renderTaxonomy = () => {
+      const entries = taxonomyEntries();
+      taxonomyCount.textContent = `${entries.length}件`;
+      taxonomyContent.innerHTML = entries.length ? entries.map((item) => {
+        const siblings = entries.filter((entry) => taxonomyGroupKey(entry) === taxonomyGroupKey(item));
+        const position = siblings.findIndex((entry) => entry.id === item.id);
+        const moveLabel = item.kind === "subject" ? "分野" : "カテゴリ";
+        return `<article class="custom-card taxonomy-card" data-status="${esc(item.status ?? "active")}" data-taxonomy-id="${esc(item.id)}" data-taxonomy-group="${esc(taxonomyGroupKey(item))}" draggable="true"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${item.kind === "category" ? `${esc(item.subject_slug)} / ` : ""}${esc(item.slug)}</code></div><span class="subject-status">${moveLabel}・${item.status === "archived" ? "アーカイブ" : "公開"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-card__meta">表示順 ${Number(item.sort_order ?? 0)} ・ ${position + 1}/${siblings.length}</div><div class="custom-card__actions"><span class="taxonomy-order-actions"><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="up" aria-label="${esc(item.name)}を上へ" ${position <= 0 ? "disabled" : ""}>上へ</button><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="down" aria-label="${esc(item.name)}を下へ" ${position >= siblings.length - 1 ? "disabled" : ""}>下へ</button></span><span><button type="button" data-toggle-taxonomy="${esc(item.id)}" data-next-status="${item.status === "archived" ? "restore" : "archive"}">${item.status === "archived" ? "復元" : "アーカイブ"}</button><button type="button" data-edit-taxonomy="${esc(item.id)}">編集</button></span></div></article>`;
+      }).join("") : '<p class="loading">追加した分野・カテゴリはまだありません。</p>';
+    };
+    const persistTaxonomyOrder = async (items: Taxonomy[]) => {
+      await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ action: "reorder", items: items.map((item, index) => ({ id: item.id, sortOrder: index * 10 })) }) });
+    };
+    const reorderTaxonomy = async (sourceId: string, targetId: string) => {
+      const source = taxonomy.find((item) => item.id === sourceId);
+      const target = taxonomy.find((item) => item.id === targetId);
+      if (!source || !target || taxonomyGroupKey(source) !== taxonomyGroupKey(target) || sourceId === targetId) return;
+      const siblings = taxonomyEntries().filter((item) => taxonomyGroupKey(item) === taxonomyGroupKey(source));
+      const sourceIndex = siblings.findIndex((item) => item.id === sourceId);
+      const targetIndex = siblings.findIndex((item) => item.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+      siblings.splice(sourceIndex, 1);
+      siblings.splice(targetIndex, 0, source);
+      siblings.forEach((item, index) => { item.sort_order = index * 10; });
+      renderTaxonomy();
+      try { await persistTaxonomyOrder(siblings); } catch (error) { await load(); throw error; }
+    };
+    const moveTaxonomy = async (id: string, direction: "up" | "down") => {
+      const entries = taxonomyEntries();
+      const item = entries.find((entry) => entry.id === id);
+      if (!item) return;
+      const siblings = entries.filter((entry) => taxonomyGroupKey(entry) === taxonomyGroupKey(item));
+      const position = siblings.findIndex((entry) => entry.id === id);
+      const target = siblings[position + (direction === "up" ? -1 : 1)];
+      if (target) await reorderTaxonomy(id, target.id);
+    };
     let load: () => Promise<void>;
     const retry = createAdminLoadRetry(root, () => load(), "役割情報を読み込めませんでした。");
     load = async () => { retry.begin(); try { const [genreResponse, catalogResponse, taxonomyResponse] = await Promise.all([fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }), fetch("/api/admin/genre-role-catalog?project=atlas", { credentials: "same-origin", cache: "no-store" }), fetch("/api/admin/editor/taxonomy?project=atlas&includeArchived=1", { credentials: "same-origin", cache: "no-store" })]); const genre = await genreResponse.json() as GenreResponse; const catalogData = await catalogResponse.json() as CatalogResponse; const taxonomyData = await taxonomyResponse.json() as { catalog?: Taxonomy[]; error?: string }; if (!genreResponse.ok) throw new Error(genre.error ?? "担当情報を読み込めませんでした。"); if (!catalogResponse.ok) throw new Error(catalogData.error ?? "カタログを読み込めませんでした。"); if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。"); genreMembers = genre.members ?? []; catalog = catalogData.catalog ?? []; assignments = catalogData.assignments ?? []; taxonomy = taxonomyData.catalog ?? []; renderTaxonomySubjectOptions(); renderCatalogSelect(); renderSubjects(); renderCustom(); renderTaxonomy(); retry.success(); } catch (error) { retry.fail(error); throw error; } };
@@ -242,17 +283,23 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       const deleteCatalog = target.closest<HTMLElement>("[data-delete-catalog]");
       const toggleTaxonomy = target.closest<HTMLElement>("[data-toggle-taxonomy]");
       const editTaxonomy = target.closest<HTMLElement>("[data-edit-taxonomy]");
+      const moveTaxonomyButton = target.closest<HTMLButtonElement>("[data-move-taxonomy]");
       try {
-        if (toggleTaxonomy) {
+        if (moveTaxonomyButton) {
+          const id = moveTaxonomyButton.dataset.moveTaxonomy;
+          const direction = moveTaxonomyButton.dataset.direction;
+          if (id && (direction === "up" || direction === "down")) await moveTaxonomy(id, direction);
+        } else if (toggleTaxonomy) {
           await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: toggleTaxonomy.dataset.toggleTaxonomy, action: toggleTaxonomy.dataset.nextStatus }) });
           await load();
         } else if (editTaxonomy) {
           const item = taxonomy.find((entry) => entry.id === editTaxonomy.dataset.editTaxonomy);
           if (!item) return;
           const name = window.prompt("表示名", item.name); if (name === null) return;
+          const slug = window.prompt("ID（英小文字とハイフン）", item.slug); if (slug === null) return;
           const description = window.prompt("説明（任意）", item.description ?? ""); if (description === null) return;
           const sortOrder = window.prompt("表示順（0以上）", String(item.sort_order ?? 0)); if (sortOrder === null) return;
-          await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: item.id, action: "update", name, description, sortOrder, subject: item.subject_slug }) });
+          await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: item.id, action: "update", name, slug, description, sortOrder, subject: item.subject_slug }) });
           await load();
         } else if (removeStandard) {
           const [kind, email, slug] = (removeStandard.dataset.removeStandard ?? "").split("|");
@@ -268,6 +315,33 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
         }
       } catch (error) { const message = root.querySelector<HTMLOutputElement>("[data-message]"); if (message) message.value = error instanceof Error ? error.message : "更新できませんでした。"; }
     });
+    let draggedTaxonomyId = "";
+    taxonomyContent.addEventListener("dragstart", (event) => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-id]");
+      if (!card) return;
+      draggedTaxonomyId = card.dataset.taxonomyId ?? "";
+      event.dataTransfer?.setData("text/plain", draggedTaxonomyId);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+    taxonomyContent.addEventListener("dragover", (event) => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-id]");
+      if (!card || !draggedTaxonomyId) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    taxonomyContent.addEventListener("drop", (event) => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-id]");
+      const targetId = card?.dataset.taxonomyId ?? "";
+      if (!targetId || !draggedTaxonomyId) return;
+      event.preventDefault();
+      const sourceId = draggedTaxonomyId;
+      draggedTaxonomyId = "";
+      void reorderTaxonomy(sourceId, targetId).catch((error) => {
+        const message = root.querySelector<HTMLOutputElement>("[data-message]");
+        if (message) message.value = error instanceof Error ? error.message : "並び順を更新できませんでした。";
+      });
+    });
+    taxonomyContent.addEventListener("dragend", () => { draggedTaxonomyId = ""; });
     void load().catch((error) => { content.innerHTML = `<p class="loading">${esc(error instanceof Error ? error.message : "役割情報を読み込めませんでした。")}</p>`; customContent.innerHTML = ""; });
   }; document.addEventListener("astro:page-load", initialize); initialize();
 </script>

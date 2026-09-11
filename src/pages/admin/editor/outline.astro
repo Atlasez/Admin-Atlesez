@@ -141,7 +141,7 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
 
   type Subject = { slug:string; name:string; status?:string; categories:Array<{slug:string;name:string;order:number}> };
   type Entry = { id?:string; key:string; subject:string; category:string; title:string; slug:string; summary?:string; concept_id?:string; parent_id?:string|null; document_id?:string|null; order:number; sort_order?:number; progress?:string; status?:string };
-  type DocumentRow = { id:string; subject:string; category:string; slug:string; title:string; status:string; published_at?:string|null };
+  type DocumentRow = { id:string; subject:string; category:string; slug:string; title:string; status:string; published_at?:string|null; scheduled_publish_at?:string|null; publication_pr_number?:number|null; publication_action?:string|null };
   const initialize = () => {
     const root = document.querySelector<HTMLElement>("[data-outline-page]");
     const source = root?.querySelector<HTMLScriptElement>("[data-outline-source]");
@@ -196,9 +196,20 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
     const bulkRestoreButton = root.querySelector<HTMLButtonElement>("[data-outline-bulk-restore]")!;
     const selectionCount = root.querySelector<HTMLElement>("[data-outline-selection-count]")!;
     const updateToolbar = () => { selectionCount.textContent = `${selectedKeys.size}件選択`; confirmButton.disabled = selectedKeys.size === 0; bulkArchiveButton.disabled = selectedKeys.size === 0; bulkRestoreButton.disabled = selectedKeys.size === 0 || !includeArchived.checked; orderButton.disabled = orderDirty.size === 0; };
-    const entryStatus = (entry:Entry) => { const document = documentFor(entry); return document ? (document.published_at ? "公開済み" : document.status === "draft" ? "原稿あり" : "執筆中") : entry.progress === "in-progress" ? "執筆中" : "未着手"; };
+    const entryStatus = (entry:Entry) => {
+      const document = documentFor(entry);
+      if (!document) return entry.progress === "in-progress" ? "執筆中" : "未着手";
+      if (document.published_at) return "公開済み";
+      if (document.publication_action === "publish" && document.publication_pr_number) return "公開処理中";
+      if (document.scheduled_publish_at) return "公開予約";
+      if (document.status === "approved") return "公開準備完了";
+      if (document.status === "in-review") return "フィードバック中";
+      if (document.status === "on-hold") return "修正中";
+      if (document.status === "draft") return "下書き";
+      return "執筆中";
+    };
     const renderEntry = (entry:Entry, childrenByParent:Map<string,Entry[]>, depth:number):string => {
-      const document = documentFor(entry); const archived = entry.status === "archived"; const status = archived ? "アーカイブ済み" : entryStatus(entry); const tone = archived ? "" : status === "公開済み" || status === "原稿あり" ? "outline-status-ready" : status === "執筆中" ? "outline-status-progress" : ""; const id = entry.id ? esc(entry.id) : ""; const selectionKey = esc(entry.key); const editable = Boolean(entry.id); const children = entry.id ? (childrenByParent.get(entry.id) ?? []) : [];
+      const document = documentFor(entry); const archived = entry.status === "archived"; const status = archived ? "アーカイブ済み" : entryStatus(entry); const tone = archived ? "" : ["公開済み", "公開準備完了", "公開予約"].includes(status) ? "outline-status-ready" : ["下書き", "執筆中", "フィードバック中", "修正中", "公開処理中"].includes(status) ? "outline-status-progress" : ""; const id = entry.id ? esc(entry.id) : ""; const selectionKey = esc(entry.key); const editable = Boolean(entry.id); const children = entry.id ? (childrenByParent.get(entry.id) ?? []) : [];
       const move = editable && !archived ? `<button type="button" data-move-entry="up" aria-label="${esc(entry.title)}を上へ">↑</button><button type="button" data-move-entry="down" aria-label="${esc(entry.title)}を下へ">↓</button>` : "";
       return `<article class="outline-entry${archived ? " is-archived" : ""}" style="--outline-depth:${depth}" data-outline-entry data-entry-id="${id}" data-entry-key="${selectionKey}" draggable="${editable && !archived}"><input class="outline-select" type="checkbox" data-outline-select="${selectionKey}" aria-label="${esc(entry.title)}を選択" ${selectedKeys.has(entry.key) ? "checked" : ""} ${archived && !includeArchived.checked ? "disabled" : ""}><button class="outline-drag-handle" type="button" data-drag-handle="${id}" aria-label="${esc(entry.title)}の並び順を変更" ${editable && !archived ? "" : "disabled"}>⋮⋮</button><div class="outline-entry-main"><div class="outline-entry-title">${esc(entry.title)}</div><div class="outline-entry-meta">${esc(entry.slug)}${entry.summary ? ` ・ ${esc(entry.summary)}` : ""}</div></div><span class="outline-status ${tone}">${status}</span><div class="outline-entry-actions">${move}${editable ? `<button type="button" data-edit-entry="${id}" ${archived ? "disabled" : ""}>編集</button><button type="button" data-archive-entry="${id}" data-archive-action="${archived ? "restore" : "archive"}">${archived ? "復元" : "アーカイブ"}</button>` : ""}<a href="${editorUrl(entry,document)}">${document ? "記事を開く" : "執筆を開始"}</a></div></article>${children.length ? `<div class="outline-children" data-parent-id="${id}">${children.map((child) => renderEntry(child, childrenByParent, depth + 1)).join("")}</div>` : ""}`;
     };
@@ -210,11 +221,32 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       list.innerHTML = groups.size ? [...groups.entries()].map(([category,entries]) => { const name = categoryOptions(selectedSubject).find((item) => item.slug === category)?.name ?? category; const childrenByParent = new Map<string,Entry[]>(); entries.forEach((entry) => { if (entry.parent_id) childrenByParent.set(entry.parent_id,[...(childrenByParent.get(entry.parent_id) ?? []),entry]); }); const roots = entries.filter((entry) => !entry.parent_id || !entries.some((candidate) => candidate.id === entry.parent_id)); return `<section class="outline-category" data-outline-category="${esc(category)}"><div class="outline-category-heading"><h3>${esc(name)}</h3><span>${entries.length}件</span></div>${roots.map((entry) => renderEntry(entry, childrenByParent, 0)).join("")}</section>`; }).join("") : '<p class="outline-empty">この分野には目次項目がありません。上の「目次項目を追加」から作成できます。</p>';
       updateToolbar();
     };
+    const loadPaged = async <T extends { error?: string; pagination?: { hasMore?: boolean; nextCursor?: string | null }; [key: string]: unknown }>(path: string, key: "documents" | "entries", limit: number, fallback: string) => {
+      const rows: unknown[] = [];
+      let cursor = "";
+      let first: T | null = null;
+      for (let page = 0; page < 50; page += 1) {
+        const separator = path.includes("?") ? "&" : "?";
+        const response = await fetch(`${path}${separator}limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials:"same-origin", cache:"no-store" });
+        const data = await response.json() as T;
+        if (!first) first = data;
+        if (!response.ok) throw new Error(data.error ?? fallback);
+        const pageRows = Array.isArray(data[key]) ? data[key] : [];
+        rows.push(...pageRows);
+        if (!data.pagination?.hasMore || !data.pagination.nextCursor) break;
+        cursor = data.pagination.nextCursor;
+      }
+      return { data: first ?? ({} as T), rows };
+    };
     const load = async () => {
-      const [documentsResponse, outlineResponse, taxonomyResponse] = await Promise.all([fetch("/api/admin/editor/documents",{credentials:"same-origin",cache:"no-store"}), fetch(`/api/admin/editor/outline?project=atlas${includeArchived.checked ? "&includeArchived=1" : ""}`,{credentials:"same-origin",cache:"no-store"}), fetch("/api/admin/editor/taxonomy?project=atlas",{credentials:"same-origin",cache:"no-store"})]);
-      const documentsData = await documentsResponse.json() as {documents?:DocumentRow[];scope?:{subjects?:string[];isManager?:boolean};error?:string}; const outlineData = await outlineResponse.json() as {entries?:Entry[];error?:string}; const taxonomyData = await taxonomyResponse.json() as {catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string};
-      if (!documentsResponse.ok) throw new Error(documentsData.error ?? "原稿一覧を読み込めませんでした。"); if (!outlineResponse.ok) throw new Error(outlineData.error ?? "目次を読み込めませんでした。");
-      documents = documentsData.documents ?? []; customEntries = (outlineData.entries ?? []).map((entry) => ({...entry,key:entry.id ?? `${entry.subject}/${entry.category}/${entry.slug}`,order:Number(entry.sort_order ?? entry.order ?? 0)}));
+      const [documentsPage, outlinePage, taxonomyResponse] = await Promise.all([
+        loadPaged<{ documents?:DocumentRow[];scope?:{subjects?:string[];isManager?:boolean};error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>("/api/admin/editor/documents", "documents", 100, "原稿一覧を読み込めませんでした。"),
+        loadPaged<{ entries?:Entry[];error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>(`/api/admin/editor/outline?project=atlas${includeArchived.checked ? "&includeArchived=1" : ""}`, "entries", 200, "目次を読み込めませんでした。"),
+        fetch("/api/admin/editor/taxonomy?project=atlas",{credentials:"same-origin",cache:"no-store"}),
+      ]);
+      const documentsData = documentsPage.data; const outlineData = outlinePage.data; const taxonomyData = await taxonomyResponse.json() as {catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string};
+      if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。");
+      documents = (documentsPage.rows as DocumentRow[]); customEntries = (outlinePage.rows as Entry[]).map((entry) => ({...entry,key:entry.id ?? `${entry.subject}/${entry.category}/${entry.slug}`,order:Number(entry.sort_order ?? entry.order ?? 0)}));
       const catalog = (taxonomyData.catalog ?? []).filter((item) => item.status !== "archived"); const merged = new Map(subjects.map((item) => [item.slug,{...item,categories:[...item.categories]}])); catalog.filter((item) => item.kind === "subject").forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug,{slug:item.slug,name:item.name,status:"preparing",categories:[]}); }); catalog.filter((item) => item.kind === "category").forEach((item) => { const subject = merged.get(item.subject_slug); if (subject && !subject.categories.some((category) => category.slug === item.slug)) subject.categories.push({slug:item.slug,name:item.name,order:Number(item.sort_order ?? 0)}); });
       const permitted = documentsData.scope?.isManager || !documentsData.scope?.subjects?.length ? null : new Set(documentsData.scope.subjects); subjects = [...merged.values()].filter((item) => !permitted || permitted.has(item.slug)); staticEntries = staticEntries.filter((entry) => !permitted || permitted.has(entry.subject)); fillSubjects(); render();
     };

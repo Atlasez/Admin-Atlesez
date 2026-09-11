@@ -295,6 +295,251 @@ describe("admin worker editor APIs", () => {
     expect(category.slug).toMatch(/^category-[a-z0-9-]+$/);
   });
 
+  it("treats an existing static subject as an idempotent create", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "subject", name: "情報" }),
+      }),
+      emptyEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      existing: true,
+      slug: "informatics",
+      name: "情報",
+    });
+  });
+
+  it("migrates draft references when a dynamic subject slug changes", async () => {
+    const taxonomyId = "00000000-0000-0000-0000-000000000021";
+    const queries: string[] = [];
+    const batches: unknown[][] = [];
+    const renameEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { subject: "*" } as T;
+            if (
+              query.includes(
+                "SELECT id,kind,subject_slug,slug,name,description",
+              )
+            )
+              return {
+                id: taxonomyId,
+                project_id: "atlas",
+                kind: "subject",
+                subject_slug: "",
+                slug: "subject-data-science",
+                name: "データサイエンス",
+                description: "",
+                sort_order: 0,
+                status: "active",
+              } as T;
+            if (query.includes("COUNT(*) AS count")) return { count: 0 } as T;
+            return null;
+          };
+          statement.all = async <T>() => {
+            if (query.includes("SELECT path,locale,subject,category,slug"))
+              return {
+                results: [
+                  {
+                    path: "src/content/articles/jpn/subject-data-science/ml/concentration.md",
+                    locale: "ja",
+                    subject: "subject-data-science",
+                    category: "ml",
+                    slug: "concentration",
+                  },
+                ],
+              } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: taxonomyId,
+          action: "update",
+          slug: "subject-data-science-v2",
+          name: "データサイエンス",
+          description: "更新済み",
+          sortOrder: 10,
+        }),
+      }),
+      renameEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      slug: "subject-data-science-v2",
+      referencesMigrated: true,
+    });
+    expect(batches).toHaveLength(1);
+    const statements = batches[0] as Array<{ query?: string }>;
+    expect(
+      statements.some((statement) =>
+        statement.query?.includes("UPDATE editorial_documents SET subject=?"),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((statement) =>
+        statement.query?.includes(
+          "UPDATE editorial_article_catalog SET path=?",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      queries.some((query) => query.includes("public_status='published'")),
+    ).toBe(true);
+  });
+
+  it("blocks a dynamic taxonomy slug change while a published article uses it", async () => {
+    const taxonomyId = "00000000-0000-0000-0000-000000000022";
+    const batches: unknown[][] = [];
+    const conflictEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { subject: "*" } as T;
+            if (
+              query.includes(
+                "SELECT id,kind,subject_slug,slug,name,description",
+              )
+            )
+              return {
+                id: taxonomyId,
+                project_id: "atlas",
+                kind: "subject",
+                subject_slug: "",
+                slug: "subject-data-science",
+                name: "データサイエンス",
+                description: "",
+                sort_order: 0,
+                status: "active",
+              } as T;
+            if (
+              query.includes("editorial_documents") &&
+              query.includes("COUNT(*) AS count")
+            )
+              return { count: 1 } as T;
+            if (query.includes("COUNT(*) AS count")) return { count: 0 } as T;
+            return null;
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: taxonomyId,
+          action: "update",
+          slug: "subject-data-science-v2",
+          name: "データサイエンス",
+        }),
+      }),
+      conflictEnv as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "TAXONOMY_ID_IN_USE",
+    });
+    expect(batches).toHaveLength(0);
+  });
+
+  it("reorders taxonomy entries in a single subject/category group", async () => {
+    const firstId = "00000000-0000-0000-0000-000000000011";
+    const secondId = "00000000-0000-0000-0000-000000000012";
+    const batches: unknown[][] = [];
+    const reorderEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("kind,subject_slug,status"))
+              return {
+                results: [
+                  {
+                    id: firstId,
+                    kind: "category",
+                    subject_slug: "informatics",
+                    status: "active",
+                  },
+                  {
+                    id: secondId,
+                    kind: "category",
+                    subject_slug: "informatics",
+                    status: "active",
+                  },
+                ],
+              } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return [];
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "reorder",
+          items: [
+            { id: secondId, sortOrder: 0 },
+            { id: firstId, sortOrder: 10 },
+          ],
+        }),
+      }),
+      reorderEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      updated: 2,
+    });
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
   it("reorders outline entries only inside the caller's permitted subjects", async () => {
     const outlineId = "00000000-0000-0000-0000-000000000001";
     const queries: string[] = [];
@@ -343,6 +588,245 @@ describe("admin worker editor APIs", () => {
     });
     expect(queries.some((query) => query.includes("id IN (?)"))).toBe(true);
     expect(batches).toHaveLength(1);
+  });
+
+  it("supports cursor pagination for large outline lists", async () => {
+    const queries: string[] = [];
+    const outlineRows = [
+      {
+        id: "00000000-0000-0000-0000-000000000041",
+        project_id: "atlas",
+        subject_slug: "informatics",
+        category_slug: "machine-learning",
+        parent_id: null,
+        document_id: null,
+        slug: "first",
+        title: "最初の項目",
+        summary: "",
+        concept_id: "",
+        sort_order: 10,
+        status: "active",
+        created_by: "local-editor@atlasez.test",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "00000000-0000-0000-0000-000000000042",
+        project_id: "atlas",
+        subject_slug: "informatics",
+        category_slug: "machine-learning",
+        parent_id: null,
+        document_id: null,
+        slug: "second",
+        title: "次の項目",
+        summary: "",
+        concept_id: "",
+        sort_order: 20,
+        status: "active",
+        created_by: "local-editor@atlasez.test",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { subject: "*" } as T;
+            return null as T | null;
+          };
+          statement.all = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries"))
+              return { results: outlineRows as T[] } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request(
+        "http://localhost/api/admin/editor/outline?project=atlas&limit=1",
+      ),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      entries: unknown[];
+      pagination: {
+        limit: number;
+        hasMore: boolean;
+        nextCursor?: string | null;
+      };
+    };
+    expect(payload).toMatchObject({
+      entries: [expect.objectContaining({ id: outlineRows[0].id })],
+      pagination: { limit: 1, hasMore: true },
+    });
+    expect(payload.pagination.nextCursor).toContain(
+      "informatics|machine-learning|10|",
+    );
+    expect(
+      queries.some((query) =>
+        query.includes(
+          "ORDER BY subject_slug,category_slug,sort_order,title,id LIMIT ?",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps a linked draft article in sync when an outline identity changes", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000021";
+    const documentId = "00000000-0000-0000-0000-000000000022";
+    const batches: unknown[][] = [];
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries WHERE id=?"))
+              return {
+                id: outlineId,
+                project_id: "atlas",
+                subject_slug: "mathematics",
+                category_slug: "group-theory",
+                parent_id: null,
+                document_id: documentId,
+                slug: "old-slug",
+                title: "旧タイトル",
+                summary: "旧要約",
+                concept_id: "old-concept",
+                sort_order: 10,
+                status: "active",
+                created_by: "local-editor@atlasez.test",
+                created_at: "2026-01-01T00:00:00.000Z",
+                updated_at: "2026-01-01T00:00:00.000Z",
+              } as T;
+            if (query.includes("FROM editorial_documents WHERE id=?"))
+              return {
+                id: documentId,
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "old-slug",
+                title: "旧タイトル",
+                summary: "旧要約",
+                concept_id: "old-concept",
+                updated_at: "2026-01-01T00:00:00.000Z",
+                published_at: null,
+                publication_action: null,
+                publication_review_stage: null,
+              } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+        batch: async (statements: unknown[]) => {
+          batches.push(statements);
+          return statements.map(() => ({ meta: { changes: 1 } }));
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: outlineId,
+          action: "update",
+          subject: "mathematics",
+          category: "group-theory",
+          slug: "new-slug",
+          title: "新タイトル",
+          summary: "新要約",
+          conceptId: "new-concept",
+          sortOrder: 20,
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      linkedDocumentUpdated: true,
+      slug: "new-slug",
+    });
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+  });
+
+  it("does not let an outline edit silently change a published article URL", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000031";
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries WHERE id=?"))
+              return {
+                id: outlineId,
+                project_id: "atlas",
+                subject_slug: "mathematics",
+                category_slug: "group-theory",
+                parent_id: null,
+                document_id: "00000000-0000-0000-0000-000000000032",
+                slug: "old-slug",
+                title: "タイトル",
+                summary: "要約",
+                concept_id: "concept",
+                sort_order: 10,
+                status: "active",
+                created_by: "local-editor@atlasez.test",
+                created_at: "2026-01-01T00:00:00.000Z",
+                updated_at: "2026-01-01T00:00:00.000Z",
+              } as T;
+            if (query.includes("FROM editorial_documents WHERE id=?"))
+              return {
+                id: "00000000-0000-0000-0000-000000000032",
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "old-slug",
+                title: "タイトル",
+                summary: "要約",
+                concept_id: "concept",
+                updated_at: "2026-01-01T00:00:00.000Z",
+                published_at: "2026-01-02T00:00:00.000Z",
+                publication_action: null,
+                publication_review_stage: null,
+              } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: outlineId,
+          action: "update",
+          slug: "new-slug",
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "LINKED_ARTICLE_PUBLISHED",
+    });
   });
 
   it("counts pending project profile approvals across projects", async () => {
