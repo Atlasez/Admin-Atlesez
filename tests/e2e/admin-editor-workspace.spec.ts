@@ -184,6 +184,61 @@ test("個別記事を開いたときは未選択用の開始パネルを表示�
   await expect(page.locator("[data-editor-empty]")).toBeHidden();
 });
 
+test("記事読み込み中の表示は編集パネル中央に固定される", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await route.fulfill({
+      json: {
+        documents: [documentItem],
+        mentionNames: ["Alice", "Bob"],
+        scope: {
+          email: "alice@example.com",
+          subjects: ["mathematics"],
+          isManager: true,
+        },
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  const layout = await page
+    .locator(".editor-workspace[data-editor-starting] .editor-panel")
+    .evaluate((panel) => {
+      const style = getComputedStyle(panel, "::after");
+      return {
+        panelWidth: panel.getBoundingClientRect().width,
+        minHeight: panel.getBoundingClientRect().height,
+        display: style.display,
+        inset: style.inset,
+        transform: style.transform,
+        textAlign: style.textAlign,
+      };
+    });
+  expect(layout.panelWidth).toBeGreaterThan(0);
+  expect(layout.minHeight).toBeGreaterThanOrEqual(736);
+  expect(layout.display).toBe("grid");
+  expect(layout.inset).toBe("0px");
+  expect(layout.transform).toBe("none");
+  expect(layout.textAlign).toBe("center");
+});
+
+test("公開操作は処理中の二重送信を防ぐ", async ({ page }) => {
+  const approvedDocument = { ...documentItem, status: "approved" };
+  await mockAdminApi(page, undefined, approvedDocument);
+  let publishRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/admin/editor/documents/doc-1/publish"))
+      publishRequests += 1;
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await page.getByRole("button", { name: "公開する" }).click();
+  const confirm = page
+    .locator("[data-approval-dialog]")
+    .getByRole("button", { name: "はい（公開する）" });
+  await Promise.all([confirm.click(), confirm.click().catch(() => undefined)]);
+  await expect.poll(() => publishRequests).toBe(1);
+});
+
 test("記事の初回作成者と編集者アイコンを表示し、プレビューを章単位で折りたためる", async ({
   page,
 }) => {

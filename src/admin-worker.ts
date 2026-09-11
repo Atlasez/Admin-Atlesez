@@ -15807,6 +15807,7 @@ const publicationFailureStatus = (failure: EditorialPublicationFailure) =>
   failure.kind === "configuration" ? 503 : failure.kind === "validation" ? 409 : 502;
 
 type PublicationRunProgressTarget = {
+  runId?: string;
   pullRequestNumber?: number;
   branch?: string;
   headSha?: string;
@@ -16116,6 +16117,10 @@ async function progressEditorialPublicationRuns(
   const now = new Date().toISOString();
   const filters: string[] = [];
   const bindings: unknown[] = [];
+  if (target?.runId) {
+    filters.push("id = ?");
+    bindings.push(target.runId);
+  }
   if (target?.pullRequestNumber) {
     filters.push("pull_request_number = ?");
     bindings.push(target.pullRequestNumber);
@@ -16436,6 +16441,7 @@ async function publishEditorialDocument(
   request: Request,
   env: Env,
   documentId: string,
+  ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -16528,6 +16534,7 @@ async function publishEditorialDocument(
   const claim = await claimEditorialPublicationRun(env, documentId, "publish", scope.email);
   if (!claim.run)
     return json({ error: "公開処理のRunを作成できませんでした。" }, 503);
+  const claimedRun = claim.run;
   if (!claim.created)
     return json({
       ok: true,
@@ -16536,6 +16543,44 @@ async function publishEditorialDocument(
       pullRequestUrl: claim.run.pull_request_url ?? document.publication_pr_url,
       pullRequestNumber: claim.run.pull_request_number ?? document.publication_pr_number,
     });
+
+  // GitHubのブランチ・本文・画像・PR操作は外部APIの遅延に左右される。
+  // 本番リクエストでは受付を先に返し、Runの進行を待受コンテキストへ
+  // 引き渡すことで、公開ボタンがCloudflareのリクエスト制限で失敗しない
+  // ようにする。ctxがない単体テスト／ローカル呼び出しでは従来通り同期実行。
+  if (ctx) {
+    ctx.waitUntil(
+      Promise.all([
+        recordAdminAudit(
+          env,
+          scope.email,
+          "article_published",
+          "article",
+          documentId,
+          document.title,
+          `記事の公開処理を受付：${document.title}`,
+          { publicationRunId: claimedRun.id, status: "queued" },
+        ),
+        progressEditorialPublicationRuns(env, { runId: claimedRun.id }),
+      ]).catch((error) =>
+        console.error("queued editorial publication run failed", {
+          documentId,
+          runId: claimedRun.id,
+          error,
+        }),
+      ),
+    );
+    return json(
+      {
+        ok: true,
+        pending: true,
+        accepted: true,
+        publicationRun: claimedRun,
+        message: "公開処理を受け付けました。GitHub・CI・学習サイト反映をバックグラウンドで確認します。",
+      },
+      202,
+    );
+  }
   let result: { pullRequestUrl: string | null; pullRequestNumber: number | null; branch: string; body: string };
   try {
     result = await createEditorialPublicationRunPullRequest(env, document, claim.run);
@@ -16905,6 +16950,7 @@ async function unpublishEditorialDocument(
   request: Request,
   env: Env,
   documentId: string,
+  ctx?: WorkerExecutionContext,
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
@@ -17017,6 +17063,7 @@ async function unpublishEditorialDocument(
   const claim = await claimEditorialPublicationRun(env, documentId, "unpublish", scope.email);
   if (!claim.run)
     return json({ error: "公開取り消し処理のRunを作成できませんでした。" }, 503);
+  const claimedRun = claim.run;
   if (!claim.created)
     return json({
       ok: true,
@@ -17025,6 +17072,39 @@ async function unpublishEditorialDocument(
       pullRequestUrl: claim.run.pull_request_url ?? document.publication_pr_url,
       pullRequestNumber: claim.run.pull_request_number ?? document.publication_pr_number,
     });
+  if (ctx) {
+    ctx.waitUntil(
+      Promise.all([
+        recordAdminAudit(
+          env,
+          scope.email,
+          "article_unpublished",
+          "article",
+          documentId,
+          document.title,
+          `記事の公開取り消し処理を受付：${document.title}`,
+          { publicationRunId: claimedRun.id, status: "queued" },
+        ),
+        progressEditorialPublicationRuns(env, { runId: claimedRun.id }),
+      ]).catch((error) =>
+        console.error("queued editorial unpublication run failed", {
+          documentId,
+          runId: claimedRun.id,
+          error,
+        }),
+      ),
+    );
+    return json(
+      {
+        ok: true,
+        pending: true,
+        accepted: true,
+        publicationRun: claimedRun,
+        message: "公開取り消しを受け付けました。GitHub・CI・学習サイト反映をバックグラウンドで確認します。",
+      },
+      202,
+    );
+  }
   let result: { pullRequestUrl: string | null; pullRequestNumber: number | null; branch: string; body: string };
   try {
     result = await createEditorialPublicationRunPullRequest(env, document, claim.run);
@@ -19371,14 +19451,14 @@ async function handleAdminRequest(
   );
   if (editorialPublishMatch)
     return request.method === "POST"
-      ? publishEditorialDocument(request, env, editorialPublishMatch[1])
+      ? publishEditorialDocument(request, env, editorialPublishMatch[1], ctx)
       : json({ error: "POSTのみ利用できます。" }, 405);
   const editorialUnpublishMatch = url.pathname.match(
     /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/unpublish$/i,
   );
   if (editorialUnpublishMatch)
     return request.method === "POST"
-      ? unpublishEditorialDocument(request, env, editorialUnpublishMatch[1])
+      ? unpublishEditorialDocument(request, env, editorialUnpublishMatch[1], ctx)
       : json({ error: "POSTのみ利用できます。" }, 405);
   const editorialDocumentMatch = url.pathname.match(
     /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})$/i,
