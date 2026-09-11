@@ -1217,6 +1217,8 @@ describe("admin worker editor APIs", () => {
           return { id: "subject" } as T;
         if (this.query.includes("kind='category'"))
           return { id: "category" } as T;
+        if (this.query.includes("FROM editorial_outline_entries"))
+          return { id: outlineId } as T;
         return null as T | null;
       }
     }

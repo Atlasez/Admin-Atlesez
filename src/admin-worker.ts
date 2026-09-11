@@ -4052,6 +4052,15 @@ async function syncEditorialOutlineDocument(
 ) {
   const now = new Date().toISOString();
   if (outlineId) {
+    const target = await env.REPORTS.prepare(
+      `SELECT id FROM editorial_outline_entries
+       WHERE id=? AND project_id='atlas' AND subject_slug=? AND category_slug=? AND slug=? AND status='active'`,
+    )
+      .bind(outlineId, identity.subject, identity.category, identity.slug)
+      .first<{ id: string }>();
+    // 記事の識別子が目次と一致しない場合は、既存リンクを保持する。
+    // 先に解除すると、slug編集時に紐付けが失われるため。
+    if (!target) return;
     // 1つの記事を複数の目次へ紐付けない。移動保存時は以前の参照を先に外す。
     await env.REPORTS.prepare(
       `UPDATE editorial_outline_entries SET document_id=NULL,updated_at=?
