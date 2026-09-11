@@ -8525,8 +8525,11 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     items,
     history: history.slice(0, 100),
     counts: {
-      today: items.filter((item) => item.priority === "urgent" || (item.dueAt && item.dueAt.slice(0, 10) === new Date().toISOString().slice(0, 10))).length,
-      dueSoon: items.filter((item) => item.priority === "due-soon").length,
+      // ポータルと同じ getWorkflowSummary を正本にする。アクション項目は
+      // 一覧上限（タスク50件・記事100件）の影響を受けるため、表示行から
+      // 再集計すると件数がポータルとずれる。
+      today: workflowSummary.taskSummary.dueToday,
+      dueSoon: workflowSummary.taskSummary.dueSoon,
       unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
       approvals: workflowSummary.pendingApprovals,
       assigned: items.filter((item) => item.kind !== "notification").length,
