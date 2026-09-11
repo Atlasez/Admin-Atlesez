@@ -3935,11 +3935,58 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (request.method === "PATCH") {
     const payload = (await request.json().catch(() => null)) as {
-      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown;
+      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown; items?: unknown;
     } | null;
-    const id = text(payload?.id, 64);
     const action = text(payload?.action, 20);
-    if (!id) return json({ error: "対象を確認してください。" }, 400);
+    const id = text(payload?.id, 64);
+    if (action !== "reorder" && !id) return json({ error: "対象を確認してください。" }, 400);
+    if (action === "reorder") {
+      const items = Array.isArray(payload?.items)
+        ? payload.items
+            .map((item) => {
+              if (!item || typeof item !== "object") return null;
+              const value = item as { id?: unknown; sortOrder?: unknown };
+              const itemId = text(value.id, 64);
+              const sortOrder = Math.max(0, Math.min(9999, Number(value.sortOrder ?? 0) || 0));
+              return /^[0-9a-f-]{36}$/i.test(itemId) ? { id: itemId, sortOrder } : null;
+            })
+            .filter((item): item is { id: string; sortOrder: number } => Boolean(item))
+            .slice(0, 200)
+        : [];
+      if (!items.length) return json({ error: "並び替える項目を選択してください。" }, 400);
+      const itemIds = [...new Set(items.map((item) => item.id))];
+      if (itemIds.length !== items.length) return json({ error: "同じ項目が重複しています。" }, 400);
+      const existing = await env.REPORTS.prepare(
+        `SELECT id,kind,subject_slug,status FROM admin_editorial_taxonomy_catalog
+         WHERE project_id='atlas' AND id IN (${itemIds.map(() => "?").join(",")})`,
+      ).bind(...itemIds).all<Pick<EditorialTaxonomyRow, "id" | "kind" | "subject_slug" | "status">>();
+      const existingById = new Map((existing.results ?? []).map((row) => [row.id, row]));
+      if (existingById.size !== itemIds.length) return json({ error: "存在しない項目が含まれています。" }, 404);
+      if ([...existingById.values()].some((row) => {
+        const editable = scope.allSubjects || scope.isManager || (row.kind === "category" && (coordinatorSubjects.includes(row.subject_slug) || coordinatorSubjects.includes("*")));
+        return !editable;
+      })) return json({ error: "担当範囲外の項目が含まれています。" }, 403);
+      const groups = new Map<string, typeof items>();
+      for (const item of items) {
+        const row = existingById.get(item.id)!;
+        const key = `${row.kind}:${row.subject_slug}`;
+        const group = groups.get(key) ?? [];
+        group.push(item);
+        groups.set(key, group);
+      }
+      const now = new Date().toISOString();
+      await env.REPORTS.batch(
+        [...groups.values()].flatMap((group) =>
+          group.map((item, index) =>
+            env.REPORTS.prepare(
+              "UPDATE admin_editorial_taxonomy_catalog SET sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'",
+            ).bind(index * 10, now, item.id),
+          ),
+        ),
+      );
+      await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", itemIds.join(","), "分野・カテゴリ", `分野・カテゴリの並び順を更新（${itemIds.length}件）`, { ids: itemIds });
+      return json({ ok: true, updated: itemIds.length });
+    }
     const current = await env.REPORTS.prepare(
       "SELECT id,kind,subject_slug,slug,name,description,sort_order,status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
     ).bind(id).first<EditorialTaxonomyRow>();
