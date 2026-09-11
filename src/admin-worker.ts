@@ -933,6 +933,25 @@ const localDevelopmentEnabled = (request: Request, env: Env) => {
 };
 const primaryAdminEmail = (env: Env) => env.ADMIN_PRIMARY_EMAIL?.trim().toLowerCase() ?? "";
 
+/**
+ * 検証用に予約したメールドメイン。通常の運営名簿へ混入させず、
+ * 管理画面の「検証用アーカイブ」だけで確認できるようにする。
+ * 実在メンバーのデータを推測で除外しないため、予約ドメインのみを対象にする。
+ */
+const isVerificationAccountEmail = (value: string) => {
+  const email = value.trim().toLowerCase();
+  return (
+    email.endsWith("@example.com") ||
+    email.endsWith("@example.invalid") ||
+    email.endsWith("@example.test") ||
+    email.endsWith("@atlasez.test")
+  );
+};
+
+const VERIFICATION_EMAIL_SQL = `(lower(trim(email)) LIKE '%@example.com' OR lower(trim(email)) LIKE '%@example.invalid' OR lower(trim(email)) LIKE '%@example.test' OR lower(trim(email)) LIKE '%@atlasez.test')`;
+const verificationEmailSql = (alias: string) =>
+  VERIFICATION_EMAIL_SQL.replaceAll("email", `${alias}.email`);
+
 class GoogleIdentityConflictError extends Error {}
 
 async function accountById(
@@ -2058,6 +2077,7 @@ async function listReportAdminPermissions(
      FROM report_admin_permissions p
      LEFT JOIN editorial_member_profiles m ON m.email = p.email
      LEFT JOIN atlasez_member_discord_accounts d ON d.email = p.email
+     WHERE NOT ${verificationEmailSql("p")}
      ${cursorFilter}
      GROUP BY p.email, m.display_name, m.university, m.year, m.interests
      ORDER BY display_name, lower(p.email)${memberLimitClause}`,
@@ -2107,7 +2127,9 @@ async function listReportAdminPermissions(
       assignment.discord_role_id,
     ]);
   }
-  const fetchedPermissions = result.results ?? [];
+  const fetchedPermissions = (result.results ?? []).filter(
+    (member) => !isVerificationAccountEmail(member.email),
+  );
   const hasMore = paginated && fetchedPermissions.length > pageLimit;
   const pagePermissions = paginated
     ? fetchedPermissions.slice(0, pageLimit)
@@ -3367,6 +3389,45 @@ async function updateMemberAttributes(
     .bind(email, university, year, interests.join(","), now)
     .run();
   return json({ ok: true, provisioning });
+}
+
+/**
+ * 検証用アカウントを通常の名簿とは分離して返す。
+ * 予約ドメインのデータは削除せず、権限を持つ管理者だけが確認できる。
+ */
+async function listVerificationMemberAccounts(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const result = await env.REPORTS.prepare(
+    `WITH raw_members AS (
+      SELECT email FROM atlasez_project_memberships WHERE trim(email)<>''
+      UNION ALL SELECT email FROM report_admin_permissions WHERE trim(email)<>''
+      UNION ALL SELECT email FROM editorial_workflow_roles WHERE trim(email)<>''
+    ), candidate_members AS (
+      SELECT lower(email) AS normalized_email, MAX(email) AS email
+      FROM raw_members
+      GROUP BY lower(email)
+    )
+    SELECT c.email,
+      COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name,
+      COALESCE(p.avatar_url, '') AS avatar_url
+    FROM candidate_members c
+    LEFT JOIN editorial_member_profiles p ON lower(p.email)=c.normalized_email
+    WHERE ${verificationEmailSql("c")}
+    ORDER BY display_name, lower(c.email)`,
+  ).all<{ email: string; display_name: string; avatar_url: string }>();
+  return json({
+    members: (result.results ?? [])
+      .filter((member) => isVerificationAccountEmail(member.email))
+      .map((member) => ({
+        email: member.email,
+        display_name: member.display_name,
+        avatar_url: member.avatar_url,
+      })),
+  });
 }
 
 async function createReportAdminPermission(
@@ -6031,12 +6092,12 @@ async function genreOverviews(
       )
        SELECT m.email,CASE WHEN m.is_manager=1 THEN 'manager' ELSE 'member' END AS role,
         COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name,
-        COALESCE(p.avatar_url,'') AS avatar_url,
+       COALESCE(p.avatar_url,'') AS avatar_url,
         COALESCE(p.university,'') AS university,COALESCE(p.year,'') AS year,
         COALESCE(p.country,'') AS country
        FROM candidate_members m
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=m.normalized_email
-       WHERE 1=1 ${cursorFilter}
+       WHERE NOT ${verificationEmailSql("m")}${cursorFilter}
        ORDER BY display_name,lower(m.email)${memberLimitClause}`,
     )
       .bind(project.id, ...cursorValues, ...(memberLimitValue === undefined ? [] : [memberLimitValue]))
@@ -18804,6 +18865,11 @@ async function handleAdminRequest(
       return deleteReportAdminPermission(request, env);
     return json({ error: "GET、POST、PUT、DELETEのみ利用できます。" }, 405);
   }
+  if (
+    url.pathname === "/api/admin/verification-members" &&
+    request.method === "GET"
+  )
+    return listVerificationMemberAccounts(request, env);
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")

@@ -312,6 +312,97 @@ describe("applicant stage server-side access", () => {
     expect(permissionQuery).not.toContain("LIMIT ?");
   });
 
+  it("keeps reserved verification accounts out of the normal permission list", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() => {
+          if (query.includes("GROUP_CONCAT(DISTINCT p.subject)"))
+            return {
+              results: [
+                {
+                  email: "operator@example.com",
+                  subjects: "mathematics",
+                  display_name: "検証アカウント",
+                  university: "",
+                  year: "",
+                  interests: "",
+                  avatar_url: "",
+                  discord_user_id: "",
+                },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/report-admin-permissions", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      permissions?: Array<{ email?: string }>;
+    };
+    expect(
+      data.permissions?.some(
+        (member) => member.email === "operator@example.com",
+      ),
+    ).toBe(false);
+  });
+
+  it("exposes reserved verification accounts through the isolated endpoint", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("candidate_members")
+            ? ({
+                results: [
+                  {
+                    email: "operator@example.com",
+                    display_name: "検証アカウント",
+                    avatar_url: "",
+                  },
+                ],
+              } as { results: T[] })
+            : ({ results: [] } as { results: T[] });
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/verification-members", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      members: [{ email: "operator@example.com" }],
+    });
+  });
+
   it("paginates permission audit entries with a stable cursor", async () => {
     const queries: string[] = [];
     const reports = {
