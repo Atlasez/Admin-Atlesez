@@ -221,11 +221,32 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       list.innerHTML = groups.size ? [...groups.entries()].map(([category,entries]) => { const name = categoryOptions(selectedSubject).find((item) => item.slug === category)?.name ?? category; const childrenByParent = new Map<string,Entry[]>(); entries.forEach((entry) => { if (entry.parent_id) childrenByParent.set(entry.parent_id,[...(childrenByParent.get(entry.parent_id) ?? []),entry]); }); const roots = entries.filter((entry) => !entry.parent_id || !entries.some((candidate) => candidate.id === entry.parent_id)); return `<section class="outline-category" data-outline-category="${esc(category)}"><div class="outline-category-heading"><h3>${esc(name)}</h3><span>${entries.length}件</span></div>${roots.map((entry) => renderEntry(entry, childrenByParent, 0)).join("")}</section>`; }).join("") : '<p class="outline-empty">この分野には目次項目がありません。上の「目次項目を追加」から作成できます。</p>';
       updateToolbar();
     };
+    const loadPaged = async <T extends { error?: string; pagination?: { hasMore?: boolean; nextCursor?: string | null }; [key: string]: unknown }>(path: string, key: "documents" | "entries", limit: number, fallback: string) => {
+      const rows: unknown[] = [];
+      let cursor = "";
+      let first: T | null = null;
+      for (let page = 0; page < 50; page += 1) {
+        const separator = path.includes("?") ? "&" : "?";
+        const response = await fetch(`${path}${separator}limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials:"same-origin", cache:"no-store" });
+        const data = await response.json() as T;
+        if (!first) first = data;
+        if (!response.ok) throw new Error(data.error ?? fallback);
+        const pageRows = Array.isArray(data[key]) ? data[key] : [];
+        rows.push(...pageRows);
+        if (!data.pagination?.hasMore || !data.pagination.nextCursor) break;
+        cursor = data.pagination.nextCursor;
+      }
+      return { data: first ?? ({} as T), rows };
+    };
     const load = async () => {
-      const [documentsResponse, outlineResponse, taxonomyResponse] = await Promise.all([fetch("/api/admin/editor/documents",{credentials:"same-origin",cache:"no-store"}), fetch(`/api/admin/editor/outline?project=atlas${includeArchived.checked ? "&includeArchived=1" : ""}`,{credentials:"same-origin",cache:"no-store"}), fetch("/api/admin/editor/taxonomy?project=atlas",{credentials:"same-origin",cache:"no-store"})]);
-      const documentsData = await documentsResponse.json() as {documents?:DocumentRow[];scope?:{subjects?:string[];isManager?:boolean};error?:string}; const outlineData = await outlineResponse.json() as {entries?:Entry[];error?:string}; const taxonomyData = await taxonomyResponse.json() as {catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string};
-      if (!documentsResponse.ok) throw new Error(documentsData.error ?? "原稿一覧を読み込めませんでした。"); if (!outlineResponse.ok) throw new Error(outlineData.error ?? "目次を読み込めませんでした。");
-      documents = documentsData.documents ?? []; customEntries = (outlineData.entries ?? []).map((entry) => ({...entry,key:entry.id ?? `${entry.subject}/${entry.category}/${entry.slug}`,order:Number(entry.sort_order ?? entry.order ?? 0)}));
+      const [documentsPage, outlinePage, taxonomyResponse] = await Promise.all([
+        loadPaged<{ documents?:DocumentRow[];scope?:{subjects?:string[];isManager?:boolean};error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>("/api/admin/editor/documents", "documents", 100, "原稿一覧を読み込めませんでした。"),
+        loadPaged<{ entries?:Entry[];error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>(`/api/admin/editor/outline?project=atlas${includeArchived.checked ? "&includeArchived=1" : ""}`, "entries", 200, "目次を読み込めませんでした。"),
+        fetch("/api/admin/editor/taxonomy?project=atlas",{credentials:"same-origin",cache:"no-store"}),
+      ]);
+      const documentsData = documentsPage.data; const outlineData = outlinePage.data; const taxonomyData = await taxonomyResponse.json() as {catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string};
+      if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。");
+      documents = (documentsPage.rows as DocumentRow[]); customEntries = (outlinePage.rows as Entry[]).map((entry) => ({...entry,key:entry.id ?? `${entry.subject}/${entry.category}/${entry.slug}`,order:Number(entry.sort_order ?? entry.order ?? 0)}));
       const catalog = (taxonomyData.catalog ?? []).filter((item) => item.status !== "archived"); const merged = new Map(subjects.map((item) => [item.slug,{...item,categories:[...item.categories]}])); catalog.filter((item) => item.kind === "subject").forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug,{slug:item.slug,name:item.name,status:"preparing",categories:[]}); }); catalog.filter((item) => item.kind === "category").forEach((item) => { const subject = merged.get(item.subject_slug); if (subject && !subject.categories.some((category) => category.slug === item.slug)) subject.categories.push({slug:item.slug,name:item.name,order:Number(item.sort_order ?? 0)}); });
       const permitted = documentsData.scope?.isManager || !documentsData.scope?.subjects?.length ? null : new Set(documentsData.scope.subjects); subjects = [...merged.values()].filter((item) => !permitted || permitted.has(item.slug)); staticEntries = staticEntries.filter((entry) => !permitted || permitted.has(entry.subject)); fillSubjects(); render();
     };

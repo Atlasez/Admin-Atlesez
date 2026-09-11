@@ -4273,15 +4273,55 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
     scope.allSubjects || scope.isManager || allowedSubjects.has(subject) || (scope.coordinatorSubjects ?? []).includes("*");
   if (request.method === "GET") {
     const includeArchived = url.searchParams.get("includeArchived") === "1";
+    const paginated = url.searchParams.has("limit");
+    const requestedLimit = Number(url.searchParams.get("limit") ?? "100");
+    const pageLimit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
+      : 100;
+    const rawCursor = text(url.searchParams.get("cursor"), 600);
+    const cursorParts = rawCursor.split("|");
+    let cursor: { subject: string; category: string; order: number; title: string; id: string } | null = null;
+    if (cursorParts.length === 5) {
+      const order = Number(cursorParts[2]);
+      try {
+        const subject = decodeURIComponent(cursorParts[0]);
+        const category = decodeURIComponent(cursorParts[1]);
+        const title = decodeURIComponent(cursorParts[3]);
+        const id = decodeURIComponent(cursorParts[4]);
+        if (subject && category && Number.isInteger(order) && order >= 0 && id)
+          cursor = { subject, category, order, title, id };
+      } catch {
+        cursor = null;
+      }
+    }
+    const cursorFilter = cursor
+      ? ` AND (subject_slug > ? OR
+          (subject_slug = ? AND (category_slug > ? OR
+            (category_slug = ? AND (sort_order > ? OR
+              (sort_order = ? AND (title > ? OR (title = ? AND id > ?))))))))`
+      : "";
+    const cursorValues = cursor
+      ? [cursor.subject, cursor.subject, cursor.category, cursor.category, cursor.order, cursor.order, cursor.title, cursor.title, cursor.id]
+      : [];
+    const limitClause = paginated ? " LIMIT ?" : "";
     const rows = await env.REPORTS.prepare(
       `SELECT id,project_id,subject_slug,category_slug,parent_id,document_id,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at
-       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
-       ORDER BY subject_slug,category_slug,sort_order,title`,
-    ).all<EditorialOutlineEntryRow>();
+       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}${cursorFilter}
+       ORDER BY subject_slug,category_slug,sort_order,title,id${limitClause}`,
+    )
+      .bind(...cursorValues, ...(paginated ? [pageLimit + 1] : []))
+      .all<EditorialOutlineEntryRow>();
+    const fetched = rows.results ?? [];
+    const hasMore = paginated && fetched.length > pageLimit;
+    const pageRows = paginated ? fetched.slice(0, pageLimit) : fetched;
     const visible = scope.allSubjects || scope.isManager
-      ? rows.results ?? []
-      : (rows.results ?? []).filter((row) => allowedSubjects.has(row.subject_slug));
-    return json({ entries: visible });
+      ? pageRows
+      : pageRows.filter((row) => allowedSubjects.has(row.subject_slug));
+    const last = pageRows.at(-1);
+    const nextCursor = hasMore && last
+      ? [last.subject_slug, last.category_slug, String(last.sort_order), last.title, last.id].map(encodeURIComponent).join("|")
+      : null;
+    return json({ entries: visible, pagination: { limit: paginated ? pageLimit : visible.length, nextCursor, hasMore } });
   }
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けません。" }, 403);
   if (request.method === "PATCH") {
