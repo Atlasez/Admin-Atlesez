@@ -1256,11 +1256,18 @@ describe("admin worker editor APIs", () => {
     );
 
     expect(response.status).toBe(201);
-    const linkQuery = queries.find((query) =>
-      query.includes("UPDATE editorial_outline_entries SET document_id"),
+    const linkQuery = queries.find(
+      (query) =>
+        query.includes("UPDATE editorial_outline_entries SET document_id") &&
+        query.includes("WHERE id=? AND project_id"),
     );
     expect(linkQuery).toContain("category_slug=? AND slug=?");
-    const linkBindings = bindings.find((values) => values.includes(outlineId));
+    const linkBindings = bindings.find(
+      (values) =>
+        values.includes(outlineId) &&
+        values.includes("subject-1234abcd") &&
+        values.includes("machine-learning"),
+    );
     expect(linkBindings).toEqual(
       expect.arrayContaining([
         outlineId,
