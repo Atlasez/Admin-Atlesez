@@ -60,9 +60,9 @@ const githubWebhookSignature = async (secret: string, body: string) => {
 
 describe("admin worker editor APIs", () => {
   it("derives stable outline slugs from article titles", () => {
-    expect(editorialOutlineAutoSlug("Concentration Inequalities", "fallback")).toBe(
-      "outline-concentration-inequalities",
-    );
+    expect(
+      editorialOutlineAutoSlug("Concentration Inequalities", "fallback"),
+    ).toBe("outline-concentration-inequalities");
     expect(editorialOutlineAutoSlug("集中不等式", "fallback")).toMatch(
       /^outline-[a-z0-9-]+$/,
     );
