@@ -1312,7 +1312,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       history.scrollRestoration = "manual";
       resetEditorEntryScroll();
     }
-    const { subjects, articles: initialArticles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
+    let { subjects, articles: initialArticles, plannedArticles, conceptOptions, commentTags } = JSON.parse(payloadElement.textContent ?? "{}") as { subjects: Subject[]; articles: SourceArticle[]; plannedArticles: PlannedArticle[]; conceptOptions: ConceptOption[]; commentTags: string[] };
     const staticArticles = initialArticles;
     let articles = initialArticles;
     let publicCatalogSource: "api" | "static" = "static";
@@ -4307,6 +4307,24 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         return `<section class="outline-category"><div class="outline-category-title"><h3>${esc(categoryItem.name)}</h3><span class="outline-category-count">${entries.length}件</span></div>${entries.length ? entries.map((entry) => `<article class="outline-article"><div class="outline-article-row"><span class="outline-article-title">${esc(entry.title)}</span><span class="outline-status ${entry.statusClass}">${esc(entry.status)}</span></div><span class="outline-article-meta">${esc(entry.meta)}</span><div class="outline-article-actions">${entry.actionMarkup}</div></article>`).join("") : '<p class="comment-empty">このカテゴリの目次はまだありません。</p>'}</section>`;
       }).join("") : '<p class="comment-empty">この分野の目次情報はまだありません。</p>';
     };
+    const loadEditorialTaxonomy = async () => {
+      try {
+        const response = await fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as { catalog?: Array<{ kind: "subject" | "category"; subject_slug: string; slug: string; name: string; sort_order?: number; status?: string }> };
+        const rows = (data.catalog ?? []).filter((row) => row.status !== "archived");
+        const additions = rows.filter((row) => row.kind === "subject").map((row) => ({ slug: row.slug, name: row.name, status: "preparing" as const, categories: [] as Subject["categories"] }));
+        const merged = new Map(subjects.map((item) => [item.slug, { ...item, categories: [...item.categories] }]));
+        additions.forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug, item); });
+        rows.filter((row) => row.kind === "category").forEach((row) => {
+          const item = merged.get(row.subject_slug); if (!item || item.categories.some((category) => category.slug === row.slug)) return;
+          item.categories.push({ slug: row.slug, name: row.name, order: Number(row.sort_order ?? 0) });
+        });
+        subjects = [...merged.values()];
+      } catch {
+        // 動的カタログが未適用の環境では静的な目次をそのまま使う。
+      }
+    };
     const loadDocuments = async () => {
       editorLoadRetry?.begin();
       const response = await fetch("/api/admin/editor/documents", { credentials: "same-origin" });
@@ -4327,7 +4345,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       // catalog then refreshes only the source/outline enrichment in place.
       // Starting this request before the outline work is important: rendering
       // hundreds of planned entries can otherwise delay discovery of the fetch.
-      publicCatalogReady = loadPublicCatalog().then(() => {
+      publicCatalogReady = Promise.all([loadPublicCatalog(), loadEditorialTaxonomy()]).then(() => {
         populateEditorSubjects(); fillCategories(); populateSourceSubjects(); fillSourceArticles();
         window.setTimeout(() => { fillOutlineSubjects(); renderAtlasOutline(); }, 0);
       });

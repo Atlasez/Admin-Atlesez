@@ -3813,6 +3813,57 @@ async function genreRoleAssignment(
   return json({ error: "POST、DELETEのみ利用できます。" }, 405);
 }
 
+type EditorialTaxonomyRow = {
+  id: string;
+  project_id: string;
+  kind: "subject" | "category";
+  subject_slug: string;
+  slug: string;
+  name: string;
+  description: string;
+  sort_order: number;
+  status: "active" | "archived";
+};
+
+/** 管理画面で追加した分野・カテゴリを記事編集の目次へ反映する。 */
+async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  const url = new URL(request.url);
+  if (request.method === "GET") {
+    const includeArchived = url.searchParams.get("includeArchived") === "1";
+    const rows = await env.REPORTS.prepare(
+      `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status
+       FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
+       ORDER BY kind,subject_slug,sort_order,name`,
+    ).all<EditorialTaxonomyRow>();
+    return json({ catalog: rows.results ?? [] });
+  }
+  if (!scope.allSubjects)
+    return json({ error: "分野・カテゴリの追加は全分野管理者のみ利用できます。" }, 403);
+  if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
+  const kind = text(payload?.kind, 16) as "subject" | "category";
+  const subject = text(payload?.subject, 80).toLowerCase();
+  const slug = text(payload?.slug, 80).toLowerCase();
+  const name = text(payload?.name, 120);
+  const description = text(payload?.description, 500);
+  const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? 0) || 0));
+  if ((kind !== "subject" && kind !== "category") || !SUBJECT_SLUG.test(slug) || (kind === "category" && !SUBJECT_SLUG.test(subject)) || !name)
+    return json({ error: "種類、対象分野、ID、表示名を確認してください。" }, 400);
+  const now = new Date().toISOString();
+  try {
+    await env.REPORTS.prepare(
+      `INSERT INTO admin_editorial_taxonomy_catalog (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(crypto.randomUUID(), "atlas", kind, kind === "category" ? subject : "", slug, name, description, sortOrder, "active", scope.email, now, now).run();
+  } catch (error) {
+    if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
+    throw error;
+  }
+  return json({ ok: true }, 201);
+}
+
 async function saveMemberSettings(
   request: Request,
   env: Env,
@@ -19453,6 +19504,8 @@ async function handleAdminRequest(
     return genreRoleCatalog(request, env);
   if (url.pathname === "/api/admin/genre-role-catalog/assignments")
     return genreRoleAssignment(request, env);
+  if (url.pathname === "/api/admin/editor/taxonomy")
+    return editorialTaxonomyCatalog(request, env);
   if (
     url.pathname === "/api/admin/member-settings" &&
     request.method === "PUT"
