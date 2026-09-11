@@ -1,0 +1,68 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+
+<AdminLayout title="公開処理の状況" description="記事の公開処理と失敗した処理を確認します。">
+  <main class="publication-runs" data-publication-runs data-admin-load-surface aria-busy="true">
+    <header class="page-heading">
+      <div>
+        <h1>公開処理の状況</h1>
+        <p>記事の公開処理をまとめて確認し、失敗した処理を再試行できます。</p>
+      </div>
+      <nav aria-label="公開処理の操作"><a href="/admin/articles/">記事一覧</a><button type="button" data-refresh>更新</button></nav>
+    </header>
+
+    <section class="run-summary" aria-label="公開処理の件数" data-summary></section>
+    <div class="run-toolbar" role="toolbar" aria-label="公開処理の絞り込み">
+      <label>状態<select data-state-filter><option value="">すべて</option><option value="failed">自動公開失敗</option><option value="needs_operator">確認が必要</option><option value="retry_wait">自動再試行待ち</option><option value="queued">受付済み</option><option value="checks_pending">自動検証中</option><option value="merge_pending">公開処理中</option><option value="deploy_pending">学習サイト反映確認中</option><option value="published">公開済み</option></select></label>
+      <output data-updated aria-live="polite">読み込み中…</output>
+    </div>
+    <AdminRetryNotice scope="publication-runs" message="公開処理の状況を読み込めませんでした。" />
+    <section class="run-list" aria-labelledby="run-list-heading">
+      <div class="section-heading"><h2 id="run-list-heading">処理一覧</h2><span data-count>—</span></div>
+      <div class="run-table-wrap"><table><thead><tr><th>記事</th><th>状態</th><th>試行</th><th>最終更新</th><th>失敗内容</th><th>操作</th></tr></thead><tbody data-list><tr><td colspan="6" class="empty">読み込み中…</td></tr></tbody></table></div>
+    </section>
+  </main>
+</AdminLayout>
+
+<style>
+  .publication-runs{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem;color:var(--text-primary)}
+  .page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.25rem}.page-heading h1{font-size:clamp(1.8rem,4vw,2.5rem);margin:0}.page-heading p{color:var(--text-secondary);font-size:.8rem;line-height:1.6;margin:.45rem 0 0}.page-heading nav{align-items:center;display:flex;gap:.5rem}.page-heading nav a,.page-heading nav button{background:var(--background-secondary);border:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font:inherit;font-size:.76rem;font-weight:800;padding:.5rem .7rem;text-decoration:none}.page-heading nav button{background:var(--accent-primary);border-color:var(--accent-primary);color:var(--on-accent)}.page-heading nav button:disabled{cursor:wait;opacity:.6}
+  .run-summary{border:1px solid var(--border-default);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:1.1rem 0 .8rem}.summary-item{background:var(--background-secondary);border-left:1px solid var(--border-default);display:grid;gap:.2rem;padding:.7rem .8rem}.summary-item:first-child{border-left:0}.summary-item span{color:var(--text-secondary);font-size:.68rem;font-weight:800}.summary-item strong{font-size:1.25rem;font-variant-numeric:tabular-nums}.summary-item small{color:var(--text-muted);font-size:.66rem}.summary-item.is-alert strong{color:var(--danger)}
+  .run-toolbar{align-items:end;background:var(--background-secondary);border:1px solid var(--border-default);display:flex;gap:.75rem;justify-content:space-between;padding:.7rem .8rem}.run-toolbar label{color:var(--text-secondary);display:grid;font-size:.72rem;font-weight:800;gap:.3rem}.run-toolbar select{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;min-height:2.2rem;padding:.4rem .5rem}.run-toolbar output{color:var(--text-secondary);font-size:.72rem}
+  .run-list{margin-top:1rem}.section-heading{align-items:baseline;border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;padding-bottom:.65rem}.section-heading h2{font-size:1.05rem;margin:0}.section-heading span{color:var(--text-secondary);font-size:.72rem}.run-table-wrap{border:1px solid var(--border-default);margin-top:.7rem;overflow:auto}.run-table-wrap table{border-collapse:collapse;min-width:850px;width:100%}.run-table-wrap th,.run-table-wrap td{border-bottom:1px solid var(--border-default);padding:.65rem .7rem;text-align:left;vertical-align:top}.run-table-wrap th{background:var(--background-secondary);color:var(--text-secondary);font-size:.68rem;white-space:nowrap}.run-table-wrap td{font-size:.76rem}.run-table-wrap tr:last-child td{border-bottom:0}.run-article{display:grid;gap:.15rem;min-width:14rem}.run-article strong{font-size:.8rem}.run-article small{color:var(--text-secondary);font-size:.68rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.run-article a{color:var(--accent-primary);font-size:.7rem;font-weight:800;text-decoration:none}.run-state{border:1px solid var(--border-default);display:inline-block;font-size:.68rem;font-weight:800;padding:.2rem .4rem;white-space:nowrap}.run-state.is-alert{border-color:var(--danger);color:var(--danger)}.run-state.is-wait{border-color:var(--warning);color:var(--warning)}.run-state.is-ok{border-color:var(--success);color:var(--success)}.run-attempt,.run-time{color:var(--text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}.run-error{color:var(--text-secondary);font-size:.7rem;line-height:1.45;max-width:22rem;overflow-wrap:anywhere}.run-error strong{color:var(--danger);display:block;font-size:.68rem;margin-bottom:.15rem}.run-actions{display:flex;flex-wrap:wrap;gap:.35rem}.run-actions a,.run-actions button{background:transparent;border:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font:inherit;font-size:.68rem;font-weight:800;padding:.35rem .5rem;text-decoration:none;white-space:nowrap}.run-actions a:hover,.run-actions button:hover:not(:disabled){border-color:var(--accent-primary);color:var(--accent-primary)}.run-actions button:disabled{cursor:wait;opacity:.6}.empty{color:var(--text-secondary);padding:1.8rem!important;text-align:center}
+  @media(max-width:760px){.publication-runs{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.page-heading nav{justify-content:flex-start}.run-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.summary-item:nth-child(3){border-left:0;border-top:1px solid var(--border-default)}.summary-item:nth-child(4){border-top:1px solid var(--border-default)}.run-toolbar{align-items:start;display:grid}}
+</style>
+
+<script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+
+  type Run = { id:string; document_id:string; action:"publish"|"unpublish"; state:string; attempt:number; pull_request_url?:string|null; diagnostic_url?:string|null; check_url?:string|null; error_message?:string|null; failure_kind?:string|null; failure_step?:string|null; failure_file?:string|null; failure_line?:number|null; failure_suggestion?:string|null; title:string; subject:string; category:string; slug:string; updated_at:string; created_at:string };
+  type Payload = { runs?:Run[]; counts?:Record<string,number>; generatedAt?:string; error?:string };
+  const stateLabels:Record<string,string> = { queued:"受付済み", checks_pending:"自動検証中", merge_pending:"公開処理中", deploy_pending:"学習サイト反映確認中", retry_wait:"自動再試行待ち", failed:"自動公開失敗", needs_operator:"確認が必要", published:"公開済み", unpublished:"非公開化済み" };
+  const stateTone = (state:string) => ["failed","needs_operator"].includes(state) ? "is-alert" : state === "retry_wait" ? "is-wait" : ["published","unpublished"].includes(state) ? "is-ok" : "";
+  const initialize = () => {
+    const root = document.querySelector<HTMLElement>("[data-publication-runs]");
+    if (!root || root.dataset.ready === "true") return;
+    root.dataset.ready = "true";
+    const list = root.querySelector<HTMLTableSectionElement>("[data-list]")!;
+    const summary = root.querySelector<HTMLElement>("[data-summary]")!;
+    const stateFilter = root.querySelector<HTMLSelectElement>("[data-state-filter]")!;
+    const refresh = root.querySelector<HTMLButtonElement>("[data-refresh]")!;
+    const count = root.querySelector<HTMLElement>("[data-count]")!;
+    const updated = root.querySelector<HTMLOutputElement>("[data-updated]")!;
+    const esc = (value:unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character] ?? character));
+    const date = (value:string) => { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat("ja-JP", { dateStyle:"medium", timeStyle:"short" }).format(parsed); };
+    const renderSummary = (counts:Record<string,number> = {}) => { const cards = [["要確認",Number(counts.failed ?? 0) + Number(counts.needs_operator ?? 0),"失敗・運営確認",true],["自動再試行待ち",Number(counts.retry_wait ?? 0),"再試行を待機中",false],["処理中",["queued","checks_pending","merge_pending","deploy_pending"].reduce((sum,key) => sum + Number(counts[key] ?? 0),0),"自動処理中",false],["公開済み",Number(counts.published ?? 0),"完了した公開処理",false]] as const; summary.innerHTML = cards.map(([label,value,detail,alert]) => `<div class="summary-item${alert ? " is-alert" : ""}"><span>${label}</span><strong>${value}</strong><small>${detail}</small></div>`).join(""); };
+    const render = (runs:Run[] = [], counts:Record<string,number> = {}) => { renderSummary(counts); count.textContent = `${runs.length}件`; list.innerHTML = runs.length ? runs.map((run) => { const state = stateLabels[run.state] ?? run.state; const failure = run.error_message || run.failure_suggestion || ""; const detail = [run.failure_step, run.failure_file ? `${run.failure_file}${run.failure_line ? `:${run.failure_line}` : ""}` : ""].filter(Boolean).join(" ・ "); const links = [`<a href="/admin/editor/?document=${encodeURIComponent(run.document_id)}">記事を開く</a>`]; if (run.pull_request_url) links.push(`<a href="${esc(run.pull_request_url)}" target="_blank" rel="noreferrer">PR</a>`); if (run.check_url) links.push(`<a href="${esc(run.check_url)}" target="_blank" rel="noreferrer">CIログ</a>`); if (run.diagnostic_url) links.push(`<a href="${esc(run.diagnostic_url)}" target="_blank" rel="noreferrer">診断</a>`); if (["failed","needs_operator"].includes(run.state) && run.action === "publish") links.push(`<button type="button" data-retry="${esc(run.document_id)}">再試行</button>`); return `<tr><td><div class="run-article"><strong>${esc(run.title)}</strong><small>${esc(run.subject)} / ${esc(run.category)} / ${esc(run.slug)}</small></div></td><td><span class="run-state ${stateTone(run.state)}">${esc(state)}</span></td><td class="run-attempt">${Number(run.attempt ?? 0)}回</td><td class="run-time">${esc(date(run.updated_at))}</td><td class="run-error">${failure ? `<strong>${esc(run.failure_kind ? `原因：${run.failure_kind}` : "公開処理の状態")}</strong>${esc(failure)}${detail ? `<br>${esc(detail)}` : ""}` : "—"}</td><td><div class="run-actions">${links.join("")}</div></td></tr>`; }).join("") : `<tr><td colspan="6" class="empty">この状態の公開処理はありません。</td></tr>`; };
+    let retryController:ReturnType<typeof createAdminLoadRetry> | null = null;
+    const load = async () => { retryController?.begin(); refresh.disabled = true; const state = stateFilter.value; const response = await fetch(`/api/admin/editor/publication-runs?limit=100${state ? `&state=${encodeURIComponent(state)}` : ""}`, { credentials:"same-origin", cache:"no-store" }); const data = await response.json() as Payload; if (!response.ok) throw new Error(data.error ?? "公開処理の状況を取得できませんでした。"); render(data.runs ?? [], data.counts ?? {}); updated.textContent = data.generatedAt ? `更新：${date(data.generatedAt)}` : ""; retryController?.success(); };
+    root.addEventListener("click", (event) => { const target = event.target as HTMLElement; const button = target.closest<HTMLButtonElement>("[data-retry]"); if (!button) return; const documentId = button.dataset.retry; if (!documentId) return; button.disabled = true; void fetch(`/api/admin/editor/documents/${encodeURIComponent(documentId)}/publish`, { method:"POST", credentials:"same-origin", headers:{"content-type":"application/json"} }).then(async (response) => { const data = await response.json().catch(() => ({})) as {error?:string}; if (!response.ok) throw new Error(data.error ?? "公開処理を再試行できませんでした。"); await load(); }).catch((error) => { updated.textContent = error instanceof Error ? error.message : "公開処理を再試行できませんでした。"; button.disabled = false; }); });
+    stateFilter.addEventListener("change", () => void load().catch((error) => retryController?.fail(error)));
+    refresh.addEventListener("click", () => void load().catch((error) => retryController?.fail(error)));
+    retryController = createAdminLoadRetry(root, () => load(), "公開処理の状況を読み込めませんでした。");
+    void load().catch((error) => retryController?.fail(error));
+  };
+  document.addEventListener("astro:page-load", initialize); initialize();
+</script>

@@ -119,6 +119,19 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
           todos: [],
           taskSummary: options.taskSummary,
           pendingApprovals: options.pendingApprovals ?? 0,
+          notifications: [
+            {
+              id: "comment-12345678",
+              kind: "comment",
+              title: "原稿へのコメント",
+              detail: "定義を確認してください。",
+              href: "/admin/editor/?document=doc-1",
+              updatedAt: "2026-08-22T00:00:00.000Z",
+              read: false,
+            },
+          ],
+          notificationsTruncated: (options.unreadNotificationsCount ?? 0) > 20,
+          unreadNotificationsCount: options.unreadNotificationsCount ?? 0,
           calendar: { events: options.calendarEvents ?? [] },
         }),
       });
