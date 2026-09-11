@@ -1322,6 +1322,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     }
     root.dataset.editorInitialized = "true";
     const routeQuery = new URLSearchParams(window.location.search);
+    const outlineId = routeQuery.get("outlineId")?.trim() ?? "";
     const isEditorEntry = routeQuery.has("new") || routeQuery.has("document") || routeQuery.has("sourceArticle");
     const resetEditorEntryScroll = () => {
       if (!isEditorEntry) return;
@@ -3732,7 +3733,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }).filter((range) => after.slice(range.start, range.end) === range.text);
       return true;
     };
-    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", baseUpdatedAt: persistedDocumentUpdatedAt || undefined, subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
+    const documentPayload = () => ({ sourceArticleId: (form.elements.namedItem("documentId") as HTMLInputElement).dataset.sourceArticleId ?? "", outlineId: outlineId || undefined, baseUpdatedAt: persistedDocumentUpdatedAt || undefined, subject: subject.value, category: category.value, locale: formValue("locale"), slug: formValue("slug"), title: formValue("title"), summary: formValue("summary"), conceptId: formValue("conceptId"), conceptName: conceptName.value, conceptNameEn: conceptNameEn.value, registerConcept: registerConcept.checked, body: body.value, writingMemo: persistedWritingMemo, latexEngine: formValue("latexEngine"), status: status.value, lockedRanges, references: documentReferences.filter((reference) => referenceIsCited(reference.id)) });
     let documentSaveInFlight: Promise<unknown> | null = null;
     let documentSaveQueued = false;
     let collaborationSaveState: { failed: () => void; succeeded: () => void } = { failed: () => undefined, succeeded: () => undefined };

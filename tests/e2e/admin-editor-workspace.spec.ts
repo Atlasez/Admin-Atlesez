@@ -95,6 +95,7 @@ async function mockAdminApi(
   },
   document: Record<string, unknown> = documentItem,
   feedbackRequests: Record<string, unknown>[] = [],
+  outlineEntries: Record<string, unknown>[] = [],
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -108,19 +109,21 @@ async function mockAdminApi(
       };
     } else if (url.pathname === "/api/admin/editor/outline") {
       payload = {
-        entries: [
-          {
-            id: "outline-1",
-            key: "mathematics/group-theory/2",
-            subject: "mathematics",
-            category: "group-theory",
-            slug: "lagrange-theorem",
-            title: "ラグランジュの定理",
-            summary: "群の位数と部分群の関係",
-            order: 2,
-            status: "active",
-          },
-        ],
+        entries: outlineEntries.length
+          ? outlineEntries
+          : [
+              {
+                id: "outline-1",
+                key: "mathematics/group-theory/2",
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "lagrange-theorem",
+                title: "ラグランジュの定理",
+                summary: "群の位数と部分群の関係",
+                order: 2,
+                status: "active",
+              },
+            ],
       };
     } else if (url.pathname === "/api/admin/editor/taxonomy") {
       payload = { catalog: [] };
@@ -262,6 +265,54 @@ test("タスク管理と目次のチェックボックスはコンパクトな�
   const outlineBox = await outlineCheckbox.boundingBox();
   expect(outlineBox?.width).toBeLessThanOrEqual(20);
   expect(outlineBox?.height).toBeLessThanOrEqual(20);
+});
+
+test("目次項目は階層表示とキーボード代替操作を提供する", async ({ page }) => {
+  await mockAdminApi(page, undefined, undefined, undefined, [
+    {
+      id: "outline-parent",
+      key: "outline-parent",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "groups",
+      title: "群",
+      summary: "",
+      order: 1,
+      status: "active",
+    },
+    {
+      id: "outline-child",
+      key: "outline-child",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "cyclic-groups",
+      title: "巡回群",
+      summary: "",
+      parent_id: "outline-parent",
+      order: 2,
+      status: "active",
+    },
+  ]);
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await expect(page.getByText("巡回群")).toBeVisible();
+  await expect(
+    page.locator("[data-parent-id=outline-parent] [data-outline-entry]"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "巡回群を上へ" }),
+  ).toBeVisible();
+});
+
+test("目次項目の編集はダイアログで行える", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await page.locator("[data-edit-entry]").first().click();
+  await expect(page.locator("[data-outline-edit-dialog]")).toBeVisible();
+  await expect(
+    page.locator("[data-outline-edit-dialog] input[name=title]"),
+  ).toHaveValue("ラグランジュの定理");
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
