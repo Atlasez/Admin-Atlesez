@@ -220,6 +220,17 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(card).toContainText("編集中：山田花子（本文）");
     await expect(card.locator(".badge.editing")).toHaveText(/1人が編集中/);
     await expect(card).toHaveAttribute("aria-label", /編集中/);
+    const listLayout = await page.locator("[data-list]").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        display: style.display,
+        gridAutoFlow: style.gridAutoFlow,
+        gridTemplateColumns: style.gridTemplateColumns,
+      };
+    });
+    expect(listLayout.display).toBe("grid");
+    expect(listLayout.gridAutoFlow).toBe("row");
+    expect(listLayout.gridTemplateColumns.split(" ")).toHaveLength(1);
   });
 
   test("D-3c: 公開済み記事の更新案作成中を一覧のボタンで示す", async ({

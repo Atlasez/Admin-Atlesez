@@ -317,6 +317,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .catalog-feedback.is-error { color: #b24b38; }
   .list {
     display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.45rem;
   }
   .article {
@@ -450,6 +452,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     min-height: 2.75rem;
   }
   .list {
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
     margin: 0 auto;
     max-width: 60rem;
   }
@@ -518,7 +522,16 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     width: 100%;
   }
   .list {
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.28rem;
+  }
+  /* 読み込み中も一覧の表示方式を固定し、カード追加時の横並びを防ぐ。 */
+  [data-admin-shell] .admin-page .list.loading-state {
+    display: grid;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
   }
   .article {
     gap: 0.45rem;
@@ -596,6 +609,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article {
     color: var(--text);
     cursor: pointer;
+    min-width: 0;
+    width: 100%;
     text-decoration: none;
   }
   .article a,
