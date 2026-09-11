@@ -3844,12 +3844,24 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   const url = new URL(request.url);
   if (request.method === "GET") {
     const includeArchived = url.searchParams.get("includeArchived") === "1";
-    const rows = await env.REPORTS.prepare(
+    const result = await env.REPORTS.prepare(
       `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status
        FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
        ORDER BY kind,subject_slug,sort_order,name`,
     ).all<EditorialTaxonomyRow>();
-    return json({ catalog: rows.results ?? [] });
+    // 分野担当者には担当分野のカタログだけを返す。管理者は全件を閲覧できる。
+    // フロント側で非表示にするだけではAPIレスポンスに担当外情報が残るため、
+    // ここで境界を適用して目次・分類管理の両方を同じポリシーにする。
+    const allowedSubjects = new Set([
+      ...scope.subjects,
+      ...(scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*"),
+    ]);
+    const rows = scope.allSubjects || scope.isManager
+      ? (result.results ?? [])
+      : (result.results ?? []).filter((row) => row.kind === "subject"
+        ? allowedSubjects.has(row.slug)
+        : allowedSubjects.has(row.subject_slug));
+    return json({ catalog: rows });
   }
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
   if (request.method === "PATCH") {
