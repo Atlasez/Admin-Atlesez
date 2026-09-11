@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import worker, { scheduledPublicationEpoch } from "../../src/admin-worker";
+import worker, {
+  editorialOutlineAutoSlug,
+  mergeEditorialTaxonomyYaml,
+  scheduledPublicationEpoch,
+} from "../../src/admin-worker";
 
 class EmptyStatement {
   constructor(protected readonly query: string) {}
@@ -55,6 +59,87 @@ const githubWebhookSignature = async (secret: string, body: string) => {
 };
 
 describe("admin worker editor APIs", () => {
+  it("derives stable outline slugs from article titles", () => {
+    expect(
+      editorialOutlineAutoSlug("Concentration Inequalities", "fallback"),
+    ).toBe("outline-concentration-inequalities");
+    expect(editorialOutlineAutoSlug("集中不等式", "fallback")).toMatch(
+      /^outline-[a-z0-9-]+$/,
+    );
+  });
+
+  it("merges a dynamic subject and category into the learning-site catalog", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  status: published",
+      "  order: 1",
+      "  group: natural",
+      "  genre: mathematics-information",
+      "  description: { ja: 数学, en: Mathematics }",
+      "  categories:",
+      "    - id: group-theory",
+      "      slug: group-theory",
+      "      name: { ja: 群論, en: Group Theory }",
+      "      order: 1",
+      "      entryConceptIds: []",
+      "      relatedCategoryIds: []",
+      "- id: physics",
+      "  slug: physics",
+      "  name: { ja: 物理, en: Physics }",
+      "  status: published",
+    ].join("\n");
+    const rows = [
+      {
+        kind: "subject" as const,
+        subject_slug: "",
+        slug: "informatics",
+        name: "情報",
+        description: "情報科学を体系的に学ぶ",
+        sort_order: 20,
+      },
+      {
+        kind: "category" as const,
+        subject_slug: "informatics",
+        slug: "machine-learning",
+        name: "機械学習",
+        description: "",
+        sort_order: 0,
+      },
+    ];
+    const merged = mergeEditorialTaxonomyYaml(yaml, rows, "informatics");
+    expect(merged).toContain("- id: informatics");
+    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain("entryConceptIds: []");
+    expect(merged.indexOf("- id: informatics")).toBeGreaterThan(
+      merged.indexOf("- id: physics"),
+    );
+  });
+
+  it("adds a dynamic category to an existing learning-site subject only once", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  categories:",
+      "    - id: group-theory",
+      "      slug: group-theory",
+    ].join("\n");
+    const row = {
+      kind: "category" as const,
+      subject_slug: "mathematics",
+      slug: "machine-learning",
+      name: "機械学習",
+      description: "",
+      sort_order: 9,
+    };
+    const once = mergeEditorialTaxonomyYaml(yaml, [row], "mathematics");
+    const twice = mergeEditorialTaxonomyYaml(once, [row], "mathematics");
+    expect(twice).toBe(once);
+    expect((twice.match(/id: machine-learning/g) ?? []).length).toBe(1);
+  });
+
   it("returns the numeric pending approval count in the portal overview", async () => {
     const portalEnv = {
       ...emptyEnv,
@@ -142,6 +227,72 @@ describe("admin worker editor APIs", () => {
     });
     expect(queries.some((query) => query.includes("ORDER BY CASE"))).toBe(true);
     expect(queries.every((query) => !query.includes("LIMIT 100"))).toBe(true);
+  });
+
+  it("creates user-defined taxonomy entries without requiring an internal slug", async () => {
+    const subjectResponse = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "subject",
+          name: "データサイエンス",
+          description: "情報分野",
+        }),
+      }),
+      emptyEnv as never,
+    );
+
+    expect(subjectResponse.status).toBe(201);
+    const subject = (await subjectResponse.json()) as {
+      kind: string;
+      slug: string;
+      name: string;
+    };
+    expect(subject).toMatchObject({
+      kind: "subject",
+      name: "データサイエンス",
+    });
+    expect(subject.slug).toMatch(/^subject-[a-z0-9-]+$/);
+
+    const taxonomyEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() =>
+            query.includes("kind='subject'") ? ({ id: "subject" } as T) : null;
+          return statement;
+        },
+      },
+    };
+    const categoryResponse = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "category",
+          subject: subject.slug,
+          name: "機械学習",
+        }),
+      }),
+      taxonomyEnv as never,
+    );
+
+    expect(categoryResponse.status).toBe(201);
+    const category = (await categoryResponse.json()) as {
+      kind: string;
+      subject: string;
+      slug: string;
+      name: string;
+    };
+    expect(category).toMatchObject({
+      kind: "category",
+      subject: subject.slug,
+      name: "機械学習",
+    });
+    expect(category.slug).toMatch(/^category-[a-z0-9-]+$/);
   });
 
   it("reorders outline entries only inside the caller's permitted subjects", async () => {
@@ -1050,6 +1201,83 @@ describe("admin worker editor APIs", () => {
       "The Center of a Group",
       1,
     ]);
+  });
+
+  it("links an outline item only when subject, category, and slug all match", async () => {
+    const queries: string[] = [];
+    const bindings: unknown[][] = [];
+    class CapturedStatement extends EmptyStatement {
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        bindings.push(values);
+        return this;
+      }
+      async first<T>() {
+        if (this.query.includes("kind='subject'"))
+          return { id: "subject" } as T;
+        if (this.query.includes("kind='category'"))
+          return { id: "category" } as T;
+        if (this.query.includes("FROM editorial_outline_entries"))
+          return { id: outlineId } as T;
+        return null as T | null;
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          return new CapturedStatement(query);
+        },
+      },
+    };
+    const outlineId = "00000000-0000-0000-0000-000000000010";
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          subject: "subject-1234abcd",
+          category: "machine-learning",
+          locale: "ja",
+          slug: "concentration-inequality",
+          title: "集中不等式",
+          summary: "要約",
+          conceptId: "informatics.machine-learning.concentration-inequality",
+          body: "本文です。",
+          latexEngine: "katex",
+          status: "draft",
+          outlineId,
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(201);
+    const linkQuery = queries.find(
+      (query) =>
+        query.includes("UPDATE editorial_outline_entries SET document_id") &&
+        query.includes("WHERE id=? AND project_id"),
+    );
+    expect(linkQuery).toContain("category_slug=? AND slug=?");
+    const linkBindings = bindings.find(
+      (values) =>
+        values.includes(outlineId) &&
+        values.includes("subject-1234abcd") &&
+        values.includes("machine-learning"),
+    );
+    expect(linkBindings).toEqual(
+      expect.arrayContaining([
+        outlineId,
+        "subject-1234abcd",
+        "machine-learning",
+        "concentration-inequality",
+      ]),
+    );
   });
 
   it("creates multiple subject coordinator assignments in one request", async () => {

@@ -95,6 +95,7 @@ async function mockAdminApi(
   },
   document: Record<string, unknown> = documentItem,
   feedbackRequests: Record<string, unknown>[] = [],
+  outlineEntries: Record<string, unknown>[] = [],
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -108,19 +109,21 @@ async function mockAdminApi(
       };
     } else if (url.pathname === "/api/admin/editor/outline") {
       payload = {
-        entries: [
-          {
-            id: "outline-1",
-            key: "mathematics/group-theory/2",
-            subject: "mathematics",
-            category: "group-theory",
-            slug: "lagrange-theorem",
-            title: "ラグランジュの定理",
-            summary: "群の位数と部分群の関係",
-            order: 2,
-            status: "active",
-          },
-        ],
+        entries: outlineEntries.length
+          ? outlineEntries
+          : [
+              {
+                id: "outline-1",
+                key: "mathematics/group-theory/2",
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "lagrange-theorem",
+                title: "ラグランジュの定理",
+                summary: "群の位数と部分群の関係",
+                order: 2,
+                status: "active",
+              },
+            ],
       };
     } else if (url.pathname === "/api/admin/editor/taxonomy") {
       payload = { catalog: [] };
@@ -220,6 +223,165 @@ test("独立した目次ページから未着手の記事を執筆開始でき�
   }
 });
 
+test("分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める", async ({
+  page,
+}) => {
+  const taxonomy: Array<Record<string, unknown>> = [];
+  const outlineEntries: Array<Record<string, unknown>> = [];
+  let sequence = 0;
+  await page.route("**/api/admin/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/admin/editor/taxonomy") {
+      if (request.method() === "POST") {
+        const body = JSON.parse(request.postData() ?? "{}");
+        const kind = body.kind as string;
+        const subject = kind === "category" ? String(body.subject ?? "") : "";
+        const slug = String(body.slug ?? "") || `${kind}-${++sequence}`;
+        taxonomy.push({
+          id: slug,
+          kind,
+          subject_slug: subject,
+          slug,
+          name: body.name,
+          description: body.description ?? "",
+          sort_order: Number(body.sortOrder ?? 0),
+          status: "active",
+        });
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: true,
+            kind,
+            subject,
+            slug,
+            name: body.name,
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ catalog: taxonomy }),
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/outline") {
+      if (request.method() === "POST") {
+        const body = JSON.parse(request.postData() ?? "{}");
+        const id = `outline-${++sequence}`;
+        const entry = {
+          id,
+          key: id,
+          subject: body.subject,
+          category: body.category,
+          slug: body.slug || `outline-${sequence}`,
+          title: body.title,
+          summary: body.summary ?? "",
+          order: Number(body.sortOrder ?? 0),
+          sort_order: Number(body.sortOrder ?? 0),
+          status: "active",
+          document_id: null,
+        };
+        outlineEntries.push(entry);
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, id }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ entries: outlineEntries }),
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          documents: [],
+          scope: { subjects: [], isManager: true },
+        }),
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/genre-overviews") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          members: [],
+          overviews: [],
+          editableSubjects: [],
+          canEditAll: true,
+          scope: { coordinatorSubjects: ["*"] },
+        }),
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/genre-role-catalog") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ catalog: [], assignments: [] }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({}),
+    });
+  });
+
+  await page.goto("./admin/genre-roles/?project=atlas");
+  const taxonomyForm = page.locator("[data-taxonomy-form]");
+  await taxonomyForm.locator('select[name="kind"]').selectOption("subject");
+  await taxonomyForm.locator('input[name="name"]').fill("情報");
+  await taxonomyForm.getByRole("button", { name: "追加" }).click();
+  await expect(taxonomyForm.locator("[data-taxonomy-message]")).toHaveText(
+    /追加しました/,
+  );
+
+  await taxonomyForm.locator('select[name="kind"]').selectOption("category");
+  await taxonomyForm
+    .locator('select[name="subject"]')
+    .selectOption("subject-1");
+  await taxonomyForm.locator('input[name="name"]').fill("機械学習");
+  await taxonomyForm.getByRole("button", { name: "追加" }).click();
+  await expect(page.getByText("機械学習", { exact: true })).toBeVisible();
+
+  await page.goto("./admin/editor/outline/?subject=subject-1");
+  await expect(page.locator("[data-outline-subject]")).toHaveValue("subject-1");
+  await page.getByText("目次項目を追加", { exact: true }).click();
+  await expect(page.locator("[data-form-category] option")).toHaveText(
+    "機械学習",
+  );
+  await page.locator("[data-form-category]").selectOption("category-2");
+  await page
+    .locator('[data-outline-form] input[name="title"]')
+    .fill("集中不等式");
+  await page
+    .locator('[data-outline-form] input[name="slug"]')
+    .fill("concentration-inequality");
+  await page.locator('[data-outline-form] button[type="submit"]').click();
+  await expect(
+    page.locator("[data-outline-list] .outline-entry-title", {
+      hasText: "集中不等式",
+    }),
+  ).toBeVisible();
+  await expect(page.locator("[data-outline-list] a").first()).toHaveAttribute(
+    "href",
+    /subject-1/,
+  );
+});
+
 test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/outline/");
@@ -262,6 +424,54 @@ test("タスク管理と目次のチェックボックスはコンパクトな�
   const outlineBox = await outlineCheckbox.boundingBox();
   expect(outlineBox?.width).toBeLessThanOrEqual(20);
   expect(outlineBox?.height).toBeLessThanOrEqual(20);
+});
+
+test("目次項目は階層表示とキーボード代替操作を提供する", async ({ page }) => {
+  await mockAdminApi(page, undefined, undefined, undefined, [
+    {
+      id: "outline-parent",
+      key: "outline-parent",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "groups",
+      title: "群",
+      summary: "",
+      order: 1,
+      status: "active",
+    },
+    {
+      id: "outline-child",
+      key: "outline-child",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "cyclic-groups",
+      title: "巡回群",
+      summary: "",
+      parent_id: "outline-parent",
+      order: 2,
+      status: "active",
+    },
+  ]);
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await expect(page.getByText("巡回群")).toBeVisible();
+  await expect(
+    page.locator("[data-parent-id=outline-parent] [data-outline-entry]"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "巡回群を上へ" }),
+  ).toBeVisible();
+});
+
+test("目次項目の編集はダイアログで行える", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await page.locator("[data-edit-entry]").first().click();
+  await expect(page.locator("[data-outline-edit-dialog]")).toBeVisible();
+  await expect(
+    page.locator("[data-outline-edit-dialog] input[name=title]"),
+  ).toHaveValue("ラグランジュの定理");
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
