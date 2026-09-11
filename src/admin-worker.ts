@@ -1650,6 +1650,39 @@ async function getGlobalAdminScope(
   });
 }
 
+/**
+ * 開発者モード専用の入口。全分野管理者に加えて、いずれかの運営プロジェクトで
+ * manager として登録された運営内運営にも診断画面を公開する。
+ * このスコープは開発者向けページ／診断だけで使い、通常の権限境界は拡張しない。
+ */
+async function getDeveloperScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  const identity = await getAuthenticatedEmail(request, env);
+  if (isResponse(identity)) return identity;
+  const scope = await resolveCachedAdminScope(request, env);
+  if (!isResponse(scope) && scope.allSubjects) return scope;
+  const manager = await env.REPORTS.prepare(
+    "SELECT 1 AS found FROM atlasez_project_memberships WHERE lower(email)=lower(?) AND role='manager' LIMIT 1",
+  )
+    .bind(identity)
+    .first<{ found: number }>();
+  const primary = identity.toLowerCase() === primaryAdminEmail(env);
+  if (!manager?.found && !primary)
+    return json({ error: "開発者モードの閲覧権限がありません。" }, 403);
+  return !isResponse(scope)
+    ? { ...scope, allSubjects: true, isManager: true }
+    : {
+        email: identity,
+        subjects: ["*"],
+        allSubjects: true,
+        isManager: true,
+        coordinatorSubjects: ["*"],
+        isProjectLeader: true,
+      };
+}
+
 const isSameOrigin = (request: Request) => {
   const origin = request.headers.get("origin");
   return !origin || origin === new URL(request.url).origin;
@@ -2792,7 +2825,7 @@ async function developerDiagnostics(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = await getDeveloperScope(request, env);
   if (isResponse(scope)) return scope;
   const startedAt = performance.now();
   const checks: Array<{
@@ -19366,7 +19399,8 @@ async function handleAdminRequest(
   // 専用スコープを持つため、この共通ゲートの対象外とする。
   if (
     url.pathname.startsWith("/api/admin/") &&
-    url.pathname !== "/api/admin/profile"
+    url.pathname !== "/api/admin/profile" &&
+    url.pathname !== "/api/admin/developer/diagnostics"
   ) {
     const baselineScope = await getAdminScope(request, env);
     if (isResponse(baselineScope)) return baselineScope;
@@ -19948,7 +19982,9 @@ async function handleAdminRequest(
                 url.searchParams.get("project") ?? "",
               )
             : await getGlobalAdminScope(request, env)
-          : await getGlobalAdminScope(request, env);
+          : url.pathname === "/admin/developer" || url.pathname === "/admin/developer/"
+            ? await getDeveloperScope(request, env)
+            : await getGlobalAdminScope(request, env);
       if (isResponse(managerScope)) return managerScope;
     }
     return fetchAdminAsset(request, env);

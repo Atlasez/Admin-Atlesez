@@ -66,7 +66,7 @@ const japanRegionPaths = japanMap.locations
           <div class="analytics-geo-heading"><div><h3 id="japan-region-heading">日本国内の閲覧地域（都道府県別）</h3></div></div>
           <p class="analytics-geo-description">記事の閲覧イベントをCloudflareの推定地域で日別集計しています。IPアドレス・市区町村名・緯度経度は保存せず、都道府県相当の地域コードだけを扱います。</p>
           <output class="analytics-gsc-status" data-japan-region-status>閲覧地域の統計を読み込み中です…</output>
-          <div class="geo-layout"><div class="japan-map" data-japan-region-map role="img" aria-label="日本国内の閲覧地域別地図"><svg viewBox={japanMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="438" height="516"></rect><g class="japan-regions" set:html={japanRegionPaths}></g><g class="map-bubbles" data-japan-map-bubbles></g></svg></div><ol class="geo-list" data-japan-region-list></ol></div>
+          <div class="geo-layout"><div class="japan-map" data-japan-region-map role="img" aria-label="日本国内の閲覧地域別地図"><svg viewBox={japanMap.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="map-ocean" x="0" y="0" width="438" height="516"></rect><g class="japan-regions" set:html={japanRegionPaths}></g></svg></div><ol class="geo-list" data-japan-region-list></ol></div>
         </section>
       </div>
 
@@ -149,10 +149,6 @@ const japanRegionPaths = japanMap.locations
   :global(.world-map .country-shape:hover) { stroke: #ffffff; stroke-width: 1.8; }
   :global(.japan-map .japan-region-shape) { fill: #f7fafc; stroke: #a9c8de; stroke-linejoin: round; stroke-width: .8; transition: fill .18s ease, stroke .18s ease; }
   :global(.japan-map .japan-region-shape:hover) { stroke: #ffffff; stroke-width: 1.5; }
-  :global(.world-map .map-bubbles circle) { fill: #ef6c67; stroke: #ffffff; stroke-width: 1.7; }
-  :global(.japan-map .map-bubbles circle) { fill: #ef6c67; stroke: #ffffff; stroke-width: 1.2; }
-  :global(.world-map .map-bubbles circle:hover) { fill: #f4a62a; }
-  :global(.japan-map .map-bubbles circle:hover) { fill: #f4a62a; }
   .geo-list { display: grid; gap: .28rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); list-style: none; margin: 0; max-height: 9.5rem; overflow: auto; padding: 0; }
   .geo-list li { align-items: baseline; border-bottom: 1px solid var(--border); display: flex; font-size: .7rem; gap: .35rem; justify-content: space-between; padding: .25rem 0; }
   .geo-list li:last-child { border-bottom: 0; }
@@ -350,19 +346,6 @@ const japanRegionPaths = japanMap.locations
     const countryLabel = (code: string) => countryNames[code] ?? countryNames[code.toUpperCase()] ?? countryNames[code.toLowerCase()] ?? code.toUpperCase();
     let searchCountries: Array<{ country: string; value: number }> = [];
     let japanRegions: AnalyticsRegion[] = [];
-    const shapeMarkerPosition = (shape: SVGPathElement): [number, number] | null => {
-      try {
-        const bounds = shape.getBBox();
-        if (bounds.width === 0 || bounds.height === 0) return null;
-        // Use the rendered region's own geometry. The former hand-written
-        // coordinates drifted away from the SVG as soon as the map data or
-        // projection changed, so the bubble could describe one country while
-        // appearing over another.
-        return [bounds.x + bounds.width / 2, bounds.y + bounds.height / 2];
-      } catch {
-        return null;
-      }
-    };
     const renderWorldMap = (target: HTMLElement | null, countries: Array<{ country: string; value: number }>, metric: string) => {
       if (!target) return;
       const svg = target.querySelector<SVGSVGElement>("svg");
@@ -381,11 +364,8 @@ const japanRegionPaths = japanMap.locations
     };
     const renderJapanMap = (target: HTMLElement | null, regions: AnalyticsRegion[]) => {
       if (!target) return;
-      const bubbles = target.querySelector<SVGGElement>("[data-japan-map-bubbles]");
-      if (!bubbles) return;
       const shapes = Array.from(target.querySelectorAll<SVGPathElement>("[data-region-shape]"));
       shapes.forEach((shape) => { shape.style.removeProperty("fill"); shape.removeAttribute("aria-label"); });
-      bubbles.replaceChildren();
       const max = Math.max(...regions.map((item) => Number(item.views ?? 0)), 1);
       regions.forEach((item) => {
         const code = item.region_code.trim().toUpperCase();
@@ -396,14 +376,6 @@ const japanRegionPaths = japanMap.locations
         const label = shape.querySelector("title")?.textContent ?? code;
         shape.style.fill = `hsl(5 78% ${92 - ratio * 43}%)`;
         shape.setAttribute("aria-label", `${label} ${views.toLocaleString()}閲覧`);
-        const coordinate = shapeMarkerPosition(shape);
-        if (!coordinate) return;
-        const [x, y] = coordinate;
-        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y)); circle.setAttribute("r", String(2.5 + Math.sqrt(ratio) * 6));
-        circle.setAttribute("aria-label", `${label} ${views.toLocaleString()}閲覧`);
-        const title = document.createElementNS("http://www.w3.org/2000/svg", "title"); title.textContent = `${label}: ${views.toLocaleString()}閲覧`; circle.append(title);
-        bubbles.append(circle);
       });
     };
     const renderCountryList = (target: HTMLOListElement | null, countries: Array<{ country: string; value: number }>, formatter: (value: number) => string) => {

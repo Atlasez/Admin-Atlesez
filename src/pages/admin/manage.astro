@@ -18,10 +18,10 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
       {project === "atlas" && <a href="/admin/operations-statistics/?project=atlas"><strong>運営メンバー統計</strong><ul class="role-tags"><li>活動状況</li><li>進捗</li></ul><span aria-label="運営メンバー統計を開く">→</span></a>}
       <a href={`/admin/applications/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>応募管理</strong><ul class="role-tags"><li>運営内運営</li></ul><span aria-label="応募管理を開く">→</span></a>
     </section>
-    <details class="developer-entry" data-manager-only data-admin-site={project} hidden>
+    <details class="developer-entry" data-developer-only data-admin-site={project} hidden>
       <summary>開発者モード</summary>
       <p>操作履歴、状態遷移、配信診断など、日常運用では使わない機能を開きます。</p>
-      <a href="/admin/developer/?mode=developer">Developer Modeを開く →</a>
+      <a href="/admin/developer/?mode=developer">開発者モードを開く →</a>
     </details>
   </main>
 </AdminLayout>
