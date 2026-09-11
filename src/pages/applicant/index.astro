@@ -4,7 +4,6 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
 
 <ApplicantLayout title="Atlasezスタートページ" description="Atlasezで参加準備や応募状況を確認します。" showMemberProfile={false}>
   <section class="applicant-page" data-applicant-page>
-    <p class="eyebrow">ATLASEZ</p>
     <h1>Atlasezスタートページ</h1>
     <p class="intro">基本情報の登録、複数プロジェクトへの応募、応募状況の確認をここから進められます。</p>
 
@@ -19,7 +18,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
     </section>
 
     <section class="application-status-card" data-application-card hidden>
-      <div class="section-heading"><div><p class="eyebrow">APPLICATION</p><h2>応募状況</h2></div><span class="badge badge-accent" data-application-status>確認中…</span></div>
+      <div class="section-heading"><div><h2>応募状況</h2></div><span class="badge badge-accent" data-application-status>確認中…</span></div>
       <dl class="application-details" aria-live="polite">
       <div><dt>ログイン中のGoogleアカウント</dt><dd data-application-email>読み込み中…</dd></div>
       <div><dt>応募したプロジェクト</dt><dd><ul class="application-list" data-application-list><li>読み込み中…</li></ul></dd></div>
@@ -28,7 +27,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
     </section>
 
     <section class="discord-card" data-discord-card hidden>
-      <div class="section-heading"><div><p class="eyebrow">DISCORD</p><h2>Discord連携</h2></div><span class="badge" data-discord-status>未連携</span></div>
+      <div class="section-heading"><div><h2>Discord連携</h2></div><span class="badge" data-discord-status>未連携</span></div>
       <p class="notice" data-discord-message>Discordサーバー参加に必要な本人同意を行えます。</p>
       <a class="primary-action" data-discord-link href="/auth/discord/start?returnTo=%2Fapplicant%2F">Discordと連携</a>
     </section>
