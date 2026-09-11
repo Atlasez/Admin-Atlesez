@@ -65,6 +65,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
           </fieldset>
         </div>
         <div data-progress-list></div>
+        <div class="progress-pagination" data-progress-pagination hidden>
+          <span data-progress-pagination-summary></span>
+          <button type="button" data-progress-load-more>さらに読み込む</button>
+        </div>
       </section>
       <section class="task-workspace" hidden={calendarPage || progressOnly}>
         <div class="task-list-heading">
@@ -1275,12 +1279,13 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .task-open-editor { color: var(--accent-primary); display: inline-block; font-size: .72rem; font-weight: 800; margin-top: .65rem; text-decoration: none; }
   .task-open-editor:hover { text-decoration: underline; }
   .task-empty { color: var(--text-secondary); grid-column: 1 / -1; padding: 1.5rem; text-align: center; }
-  .task-pagination { align-items: center; display: flex; gap: .7rem; justify-content: center; margin-top: .9rem; }
+  .task-pagination, .progress-pagination { align-items: center; display: flex; gap: .7rem; justify-content: center; margin-top: .9rem; }
   .task-pagination[hidden] { display: none; }
-  .task-pagination span { color: var(--text-secondary); font-size: .72rem; font-variant-numeric: tabular-nums; }
-  .task-pagination button { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); cursor: pointer; font-size: .72rem; padding: .45rem .7rem; }
-  .task-pagination button:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--accent-primary); }
-  .task-pagination button:disabled { cursor: wait; opacity: .6; }
+  .progress-pagination[hidden] { display: none; }
+  .task-pagination span, .progress-pagination span { color: var(--text-secondary); font-size: .72rem; font-variant-numeric: tabular-nums; }
+  .task-pagination button, .progress-pagination button { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); cursor: pointer; font-size: .72rem; padding: .45rem .7rem; }
+  .task-pagination button:hover:not(:disabled), .progress-pagination button:hover:not(:disabled) { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .task-pagination button:disabled, .progress-pagination button:disabled { cursor: wait; opacity: .6; }
   .event-pagination { align-items: center; display: flex; gap: .7rem; justify-content: center; margin: .9rem 0; }
   .event-pagination[hidden] { display: none; }
   .event-pagination span { color: var(--text-secondary); font-size: .72rem; font-variant-numeric: tabular-nums; }
@@ -1315,7 +1320,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
   type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
   type AvailabilityRule = { id: string; email?: string; display_name?: string; weekday: number; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
-  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; eventPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
+  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; eventPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; progressPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
   const initializeOperations = () => {
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -1334,6 +1339,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const eventPaginationSummary = get<HTMLElement>('[data-event-pagination-summary]');
     const eventLoadMore = get<HTMLButtonElement>('[data-event-load-more]');
     const reports = get<HTMLElement>('[data-progress-list]');
+    const progressPagination = get<HTMLElement>('[data-progress-pagination]');
+    const progressPaginationSummary = get<HTMLElement>('[data-progress-pagination-summary]');
+    const progressLoadMore = get<HTMLButtonElement>('[data-progress-load-more]');
     const progressSubject = get<HTMLSelectElement>('[data-progress-subject]');
     const progressProjectFilter = get<HTMLSelectElement>('[data-progress-project-filter]');
     const progressCount = get<HTMLElement>('[data-progress-count]');
@@ -1384,6 +1392,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     let taskLoadingMore = false;
     let eventNextCursor: string | null = null;
     let eventLoadingMore = false;
+    let progressNextCursor: string | null = null;
+    let progressLoadingMore = false;
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const renderHolidayTags = () => {
       holidayTags.innerHTML = [...holidayCountry.selectedOptions].map((option) => `<button type="button" data-remove-holiday="${escapeHtml(option.value)}" aria-label="${escapeHtml(option.textContent || option.value)}を外す">${escapeHtml(option.textContent || option.value)} ×</button>`).join('') || '<span>祝日を表示しない</span>';
@@ -1444,7 +1454,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         if (!progressOverview || subjectFilter.all) return true;
         return subjectFilter.selected.includes(String(item.subject || '__none__'));
       });
-      progressCount.textContent = progressOverview ? `${visibleReports.length}件表示（全${allReports.length}件）` : `${allReports.length}件`;
+      progressCount.textContent = progressOverview
+        ? `${visibleReports.length}件表示（読み込み済み${allReports.length}件${progressNextCursor ? '・続きあり' : ''}）`
+        : `${allReports.length}件`;
       reports.innerHTML = visibleReports.map((item) => {
         const subject = String(item.subject || '__none__');
         const subjectText = subject === '__none__' ? '全体報告' : progressSubjectLabels.get(subject) || subject;
@@ -1453,6 +1465,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const projectName = String(item.project_name || item.project_id || 'プロジェクト不明');
         return `<article class="progress-report"><div class="progress-report-body">${escapeHtml(String(item.body ?? ''))}</div><div class="progress-report-meta"><span class="progress-report-tag">${escapeHtml(subjectText)}</span><span class="progress-report-tag">${escapeHtml(projectName)}</span><strong>${escapeHtml(reporter)}</strong>${escapeHtml(email)} ・ ${escapeHtml(formatDate(String(item.created_at)))}</div></article>`;
       }).join('') || `<p>${progressOverview ? '条件に一致する進捗報告はありません。' : '進捗報告はまだありません。'}</p>`;
+      progressPagination.hidden = !progressOverview || !progressNextCursor;
+      progressPaginationSummary.textContent = progressNextCursor ? `${allReports.length}件を読み込み済み` : '';
+      progressLoadMore.disabled = progressLoadingMore;
+      progressLoadMore.textContent = progressLoadingMore ? '読み込み中…' : 'さらに読み込む';
     };
     const reminderKind = (rule: ReminderRule) => rule.relative_kind === 'before' ? (rule.relative_unit === 'hours' ? 'before_hours' : 'before_days') : rule.relative_kind === 'due_day_hourly' ? 'due_day_hourly' : 'absolute';
     const reminderRowHtml = (rule: ReminderRule = {}) => {
@@ -1709,7 +1725,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLElement>('[data-block-list]').innerHTML = ruleItems + blockItems || '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { retry?.begin(); const requestVersion = ++loadVersion; data = memberPage ? await api<OperationData>('/api/admin/member-calendar?limit=50') : progressOverview ? await api<OperationData>('/api/admin/progress') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=50`); if (requestVersion !== loadVersion) return; taskNextCursor = data.pagination?.nextCursor ?? null; eventNextCursor = data.eventPagination?.nextCursor ?? null; render(); retry?.success(); };
+    const load = async () => { retry?.begin(); const requestVersion = ++loadVersion; data = memberPage ? await api<OperationData>('/api/admin/member-calendar?limit=50') : progressOverview ? await api<OperationData>('/api/admin/progress?limit=50') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=50`); if (requestVersion !== loadVersion) return; taskNextCursor = data.pagination?.nextCursor ?? null; eventNextCursor = data.eventPagination?.nextCursor ?? null; progressNextCursor = data.progressPagination?.nextCursor ?? null; render(); retry?.success(); };
     eventLoadMore.addEventListener('click', async () => {
       if (eventLoadingMore || !eventNextCursor || !memberPage) return;
       eventLoadingMore = true; render();
@@ -1729,6 +1745,16 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         taskNextCursor = page.pagination?.nextCursor ?? null;
       } catch (error) { taskListFeedback.value = error instanceof Error ? error.message : '追加のタスクを読み込めませんでした。'; }
       finally { taskLoadingMore = false; render(); }
+    });
+    progressLoadMore.addEventListener('click', async () => {
+      if (progressLoadingMore || !progressNextCursor || !progressOverview) return;
+      progressLoadingMore = true; render();
+      try {
+        const page = await api<OperationData>(`/api/admin/progress?limit=50&cursor=${encodeURIComponent(progressNextCursor)}`);
+        data = { ...data, progress: [...(data.progress ?? []), ...(page.progress ?? [])] };
+        progressNextCursor = page.progressPagination?.nextCursor ?? null;
+      } catch (error) { progressFeedback.value = error instanceof Error ? error.message : '追加の進捗報告を読み込めませんでした。'; }
+      finally { progressLoadingMore = false; render(); }
     });
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
     let activeAvailabilityTrigger: HTMLButtonElement | null = null;
