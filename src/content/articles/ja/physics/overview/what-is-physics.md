@@ -8,7 +8,7 @@ category: overview
 concepts:
   - id: physics.overview.what-is-physics
 authors: [editorial-workspace]
-reviewers: [ukyoukay0@gmail.com]
+reviewers: []
 status: published
 createdAt: 2026-08-11
 updatedAt: 2026-08-11

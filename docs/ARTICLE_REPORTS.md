@@ -14,7 +14,7 @@ Cloudflare Dashboardで Worker & Pages → `atlasez-web-1` → Settings → Vari
 
 - `atlasez-admin.<account>.workers.dev/*`
 
-初期の許可メールアドレスは `ukyoukay0@gmail.com` です。記事を投稿する読者向けの `/api/article-reports` は通常サイト側にだけ残し、保護対象に含めません。
+初期の許可設定はD1の `report_admin_permissions`（`subject='*'`）で管理します。記事を投稿する読者向けの `/api/article-reports` は通常サイト側にだけ残し、保護対象に含めません。
 
 ## ローカルで確認する
 
