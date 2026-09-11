@@ -86,7 +86,7 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
 </style>
 <style is:global>
   /* 目次項目はAPI応答から動的に描画するため、チェックの寸法はグローバルに固定する。 */
-  .outline-page .outline-select {
+  .outline-page input[type="checkbox"] {
     accent-color: var(--accent-primary);
     appearance: auto;
     block-size: 16px !important;
