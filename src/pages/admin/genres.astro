@@ -88,6 +88,10 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
           ))}
         </div>
         <p class="empty-state" data-empty-state hidden>条件に一致する分野はありません。</p>
+        <section class="dynamic-taxonomy-panel" data-dynamic-taxonomy hidden aria-labelledby="dynamic-taxonomy-heading">
+          <header class="content-heading"><div><h2 id="dynamic-taxonomy-heading">追加した分野・カテゴリ</h2></div><span class="content-count" data-dynamic-taxonomy-count></span></header>
+          <div class="genre-grid" data-dynamic-taxonomy-grid></div>
+        </section>
       </div>
     </section>
     <AdminRetryNotice />
@@ -109,14 +113,34 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     const count = root.querySelector<HTMLElement>("[data-visible-count]");
     const resultLabel = root.querySelector<HTMLElement>("[data-results-label]");
     const empty = root.querySelector<HTMLElement>("[data-empty-state]");
+    const dynamicPanel = root.querySelector<HTMLElement>("[data-dynamic-taxonomy]");
+    const dynamicGrid = root.querySelector<HTMLElement>("[data-dynamic-taxonomy-grid]");
+    const dynamicCount = root.querySelector<HTMLElement>("[data-dynamic-taxonomy-count]");
     type GenreMember = { email?: string; role?: string; display_name?: string; avatar_url?: string; assignments?: string[]; subjectAssignments?: string[]; workflowSubjects?: string[] };
     type GenreOverview = { subject?: string; progress?: string; updated_at?: string; updatedAt?: string };
     const subjectNames = new Map(cards.map((card) => [card.id, card.querySelector("h3")?.textContent?.trim() ?? card.id]));
+    const esc = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;", "'": "&#39;" })[character] ?? character);
     const progressBySubject = new Map<string, GenreOverview>();
     let overviewMembers: GenreMember[] = [];
     let editableSubjects = new Set<string>();
     let activeFilter = "all";
     let membersLoaded = false;
+
+    const renderDynamicTaxonomy = (catalog: Array<{ kind?: string; subject_slug?: string; slug?: string; name?: string; description?: string; status?: string }>) => {
+      if (!dynamicPanel || !dynamicGrid || !dynamicCount) return;
+      const rows = catalog.filter((item) => item.status !== "archived" && item.slug && item.name);
+      const subjectsBySlug = new Map<string, { name: string; description: string; status: string; categories: Array<{ name: string; slug: string }> }>();
+      rows.filter((item) => item.kind === "subject").forEach((item) => subjectsBySlug.set(item.slug!, { name: item.name!, description: item.description ?? "", status: "準備中", categories: [] }));
+      rows.filter((item) => item.kind === "category" && item.subject_slug).forEach((item) => {
+        const subject = subjectsBySlug.get(item.subject_slug!) ?? { name: subjectNames.get(item.subject_slug!) ?? item.subject_slug!, description: "", status: "公開中", categories: [] };
+        subject.categories.push({ name: item.name!, slug: item.slug! });
+        subjectsBySlug.set(item.subject_slug!, subject);
+      });
+      const items = [...subjectsBySlug.entries()];
+      dynamicPanel.hidden = items.length === 0;
+      dynamicCount.textContent = `${items.length}件`;
+      dynamicGrid.innerHTML = items.map(([slug, item]) => `<article class="genre-card dynamic-genre-card"><header class="genre-heading"><div class="genre-title"><div class="genre-meta"><span>追加カタログ</span><span class="status"><i aria-hidden="true"></i>${item.status}</span></div><h3>${esc(item.name)}</h3></div></header><p class="genre-description">${esc(item.description || "説明はまだ登録されていません。")}</p><section class="category-block"><div class="category-heading"><h4>カテゴリ</h4><span>${item.categories.length}件</span></div>${item.categories.length ? `<ul>${item.categories.sort((a,b) => a.name.localeCompare(b.name,"ja")).map((category) => `<li><strong>${esc(category.name)}</strong><code>${esc(category.slug)}</code></li>`).join("")}</ul>` : '<p class="empty-categories">カテゴリはこれから追加できます。</p>'}</section><footer class="genre-actions"><a class="card-link" href="/admin/editor/outline/?subject=${encodeURIComponent(slug)}">目次を開く<span aria-hidden="true">→</span></a></footer></article>`).join("");
+    };
 
     const formatUpdatedAt = (value?: string) => {
       if (!value) return "未登録";
@@ -214,9 +238,14 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     loadOverviews = async () => {
       retry.begin();
       try {
-        const response = await fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" });
+        const [response, taxonomyResponse] = await Promise.all([
+          fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }),
+          fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" }),
+        ]);
         const data = await response.json() as { members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string };
+        const taxonomyData = await taxonomyResponse.json() as { catalog?: Array<{ kind?: string; subject_slug?: string; slug?: string; name?: string; description?: string; status?: string }>; error?: string };
         if (!response.ok) throw new Error(data.error ?? "ジャンル概要を読み込めませんでした。");
+        if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。");
         overviewMembers = data.members ?? [];
         membersLoaded = true;
         const coordinatorSubjects = data.scope?.coordinatorSubjects ?? [];
@@ -226,6 +255,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
         progressBySubject.clear();
         (data.overviews ?? []).forEach((overview) => { if (overview.subject) progressBySubject.set(overview.subject, overview); });
         renderOverviews();
+        renderDynamicTaxonomy(taxonomyData.catalog ?? []);
         retry.success();
       } catch (error) {
         membersLoaded = true;
@@ -404,6 +434,8 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .card-link { color: var(--accent-primary); }
   .external-link { color: var(--text-secondary); font-size: .7rem; }
   .empty-state { border: 1px dashed var(--border-default); color: var(--text-secondary); margin: .7rem 0 0; padding: 2rem; text-align: center; }
+  .dynamic-taxonomy-panel { border-top: 1px solid var(--border-default); margin-top: 1.5rem; padding-top: 1rem; }
+  .dynamic-genre-card { border-style: dashed; }
 
   .visually-hidden { height: 1px; margin: -1px; overflow: hidden; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); }
   :where(a, button, input):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }

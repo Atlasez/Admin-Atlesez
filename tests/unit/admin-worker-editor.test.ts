@@ -144,6 +144,57 @@ describe("admin worker editor APIs", () => {
     expect(queries.every((query) => !query.includes("LIMIT 100"))).toBe(true);
   });
 
+  it("creates user-defined taxonomy entries without requiring an internal slug", async () => {
+    const subjectResponse = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "subject",
+          name: "情報",
+          description: "情報分野",
+        }),
+      }),
+      emptyEnv as never,
+    );
+
+    expect(subjectResponse.status).toBe(201);
+    const subject = (await subjectResponse.json()) as {
+      kind: string;
+      slug: string;
+      name: string;
+    };
+    expect(subject).toMatchObject({ kind: "subject", name: "情報" });
+    expect(subject.slug).toMatch(/^subject-[0-9a-f]{8}$/);
+
+    const categoryResponse = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/taxonomy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "category",
+          subject: subject.slug,
+          name: "機械学習",
+        }),
+      }),
+      emptyEnv as never,
+    );
+
+    expect(categoryResponse.status).toBe(201);
+    const category = (await categoryResponse.json()) as {
+      kind: string;
+      subject: string;
+      slug: string;
+      name: string;
+    };
+    expect(category).toMatchObject({
+      kind: "category",
+      subject: subject.slug,
+      name: "機械学習",
+    });
+    expect(category.slug).toMatch(/^category-[0-9a-f]{8}$/);
+  });
+
   it("reorders outline entries only inside the caller's permitted subjects", async () => {
     const outlineId = "00000000-0000-0000-0000-000000000001";
     const queries: string[] = [];
@@ -1050,6 +1101,67 @@ describe("admin worker editor APIs", () => {
       "The Center of a Group",
       1,
     ]);
+  });
+
+  it("links an outline item only when subject, category, and slug all match", async () => {
+    const queries: string[] = [];
+    const bindings: unknown[][] = [];
+    class CapturedStatement extends EmptyStatement {
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        bindings.push(values);
+        return this;
+      }
+    }
+    const env = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          return new CapturedStatement(query);
+        },
+      },
+    };
+    const outlineId = "00000000-0000-0000-0000-000000000010";
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          subject: "subject-1234abcd",
+          category: "machine-learning",
+          locale: "ja",
+          slug: "concentration-inequality",
+          title: "集中不等式",
+          summary: "要約",
+          conceptId: "informatics.machine-learning.concentration-inequality",
+          body: "本文です。",
+          latexEngine: "katex",
+          status: "draft",
+          outlineId,
+        }),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(201);
+    const linkQuery = queries.find((query) =>
+      query.includes("UPDATE editorial_outline_entries SET document_id"),
+    );
+    expect(linkQuery).toContain("category_slug=? AND slug=?");
+    const linkBindings = bindings.find((values) => values.includes(outlineId));
+    expect(linkBindings).toEqual(
+      expect.arrayContaining([
+        outlineId,
+        "subject-1234abcd",
+        "machine-learning",
+        "concentration-inequality",
+      ]),
+    );
   });
 
   it("creates multiple subject coordinator assignments in one request", async () => {
