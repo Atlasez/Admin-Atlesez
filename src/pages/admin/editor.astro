@@ -218,7 +218,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 </span>
                 <span class="publication-links" data-publication-link hidden></span>
                 <span class="publication-integration-status" data-publication-integration hidden></span>
-                <details class="publication-diagnostic" data-publication-diagnostic hidden><summary>CI失敗の詳細を表示</summary><div class="publication-diagnostic-body"><dl><div><dt>失敗ステップ</dt><dd data-publication-failure-step></dd></div><div><dt>対象ファイル</dt><dd data-publication-failure-file></dd></div><div><dt>原因</dt><dd data-publication-failure-detail></dd></div><div><dt>対処方法</dt><dd data-publication-failure-suggestion></dd></div></dl></div></details>
+                <details class="publication-diagnostic" data-publication-diagnostic hidden><summary>CI失敗の詳細を表示</summary><div class="publication-diagnostic-body"><dl><div><dt>失敗ステップ</dt><dd data-publication-failure-step></dd></div><div><dt>対象ファイル</dt><dd data-publication-failure-file></dd></div><div><dt>原因</dt><dd data-publication-failure-detail></dd></div><div><dt>対処方法</dt><dd data-publication-failure-suggestion></dd></div></dl><div data-publication-failure-history hidden><h4>これまでの失敗履歴</h4><ol data-publication-failure-history-list></ol></div></div></details>
               </div>
               <h2 data-document-heading>新規原稿</h2>
               <div class="document-provenance" aria-label="原稿の作成者と編集履歴">
@@ -1278,7 +1278,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   type LockedRange = { start: number; end: number; text: string };
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
   type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
-  type PublicationRun = { id: string; state: string; action: "publish" | "unpublish"; attempt: number; pull_request_number?: number | null; pull_request_url?: string | null; branch?: string | null; head_sha?: string | null; merge_sha?: string | null; last_check_at?: string | null; next_attempt_at?: string | null; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null; failure_detail?: string | null; failure_step?: string | null; failure_file?: string | null; failure_line?: number | null; failure_column?: number | null; failure_suggestion?: string | null; updated_at?: string };
+  type PublicationRun = { id: string; state: string; action: "publish" | "unpublish"; attempt: number; pull_request_number?: number | null; pull_request_url?: string | null; branch?: string | null; head_sha?: string | null; merge_sha?: string | null; last_check_at?: string | null; next_attempt_at?: string | null; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null; failure_detail?: string | null; failure_step?: string | null; failure_file?: string | null; failure_line?: number | null; failure_column?: number | null; failure_suggestion?: string | null; failure_history?: string; updated_at?: string };
   type Document = { id: string; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: PublicationRun | null; locked_ranges?: string | LockedRange[]; created_by_display_name?: string; updated_by_display_name?: string; created_by_avatar_url?: string; updated_by_avatar_url?: string };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
@@ -1448,6 +1448,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const publicationFailureFile = root.querySelector<HTMLElement>("[data-publication-failure-file]")!;
     const publicationFailureDetail = root.querySelector<HTMLElement>("[data-publication-failure-detail]")!;
     const publicationFailureSuggestion = root.querySelector<HTMLElement>("[data-publication-failure-suggestion]")!;
+    const publicationFailureHistory = root.querySelector<HTMLElement>("[data-publication-failure-history]")!;
+    const publicationFailureHistoryList = root.querySelector<HTMLOListElement>("[data-publication-failure-history-list]")!;
     const workflow = root.querySelector<HTMLElement>("[data-status-workflow]")!;
     const workflowCurrent = root.querySelector<HTMLElement>("[data-workflow-current]")!;
     const workflowHelp = root.querySelector<HTMLElement>("[data-workflow-help]")!;
@@ -2233,6 +2235,21 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         : "";
       publicationFailureDetail.textContent = run?.failure_detail ?? "";
       publicationFailureSuggestion.textContent = run?.failure_suggestion ?? "";
+      let history: Array<{ at?: string; state?: string | null; kind?: string | null; code?: string | null; message?: string | null }> = [];
+      try {
+        const parsed = run?.failure_history ? JSON.parse(run.failure_history) : [];
+        if (Array.isArray(parsed)) history = parsed.filter((item): item is typeof history[number] => Boolean(item && typeof item === "object"));
+      } catch {
+        history = [];
+      }
+      publicationFailureHistory.hidden = history.length === 0;
+      publicationFailureHistoryList.replaceChildren(...history.map((entry) => {
+        const item = document.createElement("li");
+        const time = entry.at ? date(entry.at) : "時刻不明";
+        const label = [entry.code, entry.kind, entry.state].filter(Boolean).join(" / ");
+        item.textContent = `${time}${label ? ` — ${label}` : ""}${entry.message ? `：${entry.message}` : ""}`;
+        return item;
+      }));
       publicationLink.replaceChildren();
       publicationLink.hidden = !pending && !run?.diagnostic_url && !run?.check_url;
       if (pending && item.publication_pr_url) {
