@@ -1859,7 +1859,9 @@ async function listArticleAnalyticsRegions(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  // 地域別の閲覧統計は全記事を横断した集計で分野境界を持たないため、
+  // 担当分野の限定管理者には返さず、全分野管理者だけに公開する。
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const daysParam = Number(new URL(request.url).searchParams.get("days") ?? 30);
   const days = Number.isInteger(daysParam)
@@ -1911,7 +1913,8 @@ async function listSearchConsoleCountryStats(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  // Search Consoleの国別集計はサイト全体のデータで分野別に分離できない。
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const snapshot = await env.REPORTS.prepare(
     `SELECT snapshot_id, start_date, end_date, MAX(fetched_at) AS fetched_at
@@ -1940,7 +1943,8 @@ async function listSearchConsoleQueryStats(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  // 検索語はサイト全体の利用状況を含むため、全分野管理者に限定する。
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const snapshot = await env.REPORTS.prepare(
     `SELECT snapshot_id, start_date, end_date, MAX(fetched_at) AS fetched_at
