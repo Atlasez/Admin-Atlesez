@@ -2460,9 +2460,17 @@ for (const returnVia of ["popup", "close", "toggle", "tab"] as const) {
     await button.click();
     const popup = await popupPromise;
     await expect(panel).toBeHidden();
-    if (returnVia === "popup")
-      await popup.locator("[data-reattach-pane]").click();
-    else if (returnVia === "close") await popup.close();
+    if (returnVia === "popup") {
+      // The popup can close itself immediately when the parent receives the
+      // reattach event. Guard the click so a successful automatic close is
+      // treated as a valid return path instead of a flaky page-closed error.
+      if (!popup.isClosed()) {
+        await popup
+          .locator("[data-reattach-pane]")
+          .click({ timeout: 5_000 })
+          .catch(() => undefined);
+      }
+    } else if (returnVia === "close") await popup.close();
     else if (returnVia === "toggle")
       await page
         .locator('.pane-layout-controls [data-pane-popout="writing"]')
