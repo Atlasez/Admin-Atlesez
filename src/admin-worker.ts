@@ -4154,8 +4154,21 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     if (associationError && associationError.includes("分野が見つかりません"))
       return json({ error: associationError }, 400);
   }
-  if (kind === "subject" && Object.values(APPLICATION_SUBJECT_LABELS).some((label) => label === name))
-    return json({ error: "同じ表示名の分野が既にあります。既存の分野へカテゴリを追加してください。" }, 409);
+  if (kind === "subject") {
+    const existingStaticSubject = Object.entries(APPLICATION_SUBJECT_LABELS).find(([, label]) => label === name);
+    // 静的カタログにすでに存在する分野（例：情報）を、画面から
+    // もう一度作成しても重複エラーにせず、その分野を選択した扱いにする。
+    // これにより「情報を作成→機械学習カテゴリを追加」という導線を
+    // 既存データを壊さず idempotent に完了できる。
+    if (existingStaticSubject && (!requestedSlug || requestedSlug === existingStaticSubject[0])) {
+      const canUseStaticSubject = scope.allSubjects || scope.isManager || scope.subjects.includes(existingStaticSubject[0]) || (scope.coordinatorSubjects ?? []).some((item) => item === existingStaticSubject[0] || item === "*");
+      if (!canUseStaticSubject) return json({ error: "この分野を追加する権限がありません。" }, 403);
+      await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", existingStaticSubject[0], name, `既存の分野を選択：${name}`, { kind, slug: existingStaticSubject[0], existing: true });
+      return json({ ok: true, existing: true, kind, subject: "", slug: existingStaticSubject[0], name, status: "published" });
+    }
+    if (existingStaticSubject)
+      return json({ error: "同じ表示名の分野が既にあります。既存の分野へカテゴリを追加してください。" }, 409);
+  }
   const duplicateName = await env.REPORTS.prepare(
     `SELECT id FROM admin_editorial_taxonomy_catalog
      WHERE project_id='atlas' AND kind=? AND lower(name)=lower(?) AND status='active'
