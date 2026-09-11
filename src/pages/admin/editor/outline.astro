@@ -141,7 +141,7 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
 
   type Subject = { slug:string; name:string; status?:string; categories:Array<{slug:string;name:string;order:number}> };
   type Entry = { id?:string; key:string; subject:string; category:string; title:string; slug:string; summary?:string; concept_id?:string; parent_id?:string|null; document_id?:string|null; order:number; sort_order?:number; progress?:string; status?:string };
-  type DocumentRow = { id:string; subject:string; category:string; slug:string; title:string; status:string; published_at?:string|null };
+  type DocumentRow = { id:string; subject:string; category:string; slug:string; title:string; status:string; published_at?:string|null; scheduled_publish_at?:string|null; publication_pr_number?:number|null; publication_action?:string|null };
   const initialize = () => {
     const root = document.querySelector<HTMLElement>("[data-outline-page]");
     const source = root?.querySelector<HTMLScriptElement>("[data-outline-source]");
@@ -196,9 +196,20 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
     const bulkRestoreButton = root.querySelector<HTMLButtonElement>("[data-outline-bulk-restore]")!;
     const selectionCount = root.querySelector<HTMLElement>("[data-outline-selection-count]")!;
     const updateToolbar = () => { selectionCount.textContent = `${selectedKeys.size}件選択`; confirmButton.disabled = selectedKeys.size === 0; bulkArchiveButton.disabled = selectedKeys.size === 0; bulkRestoreButton.disabled = selectedKeys.size === 0 || !includeArchived.checked; orderButton.disabled = orderDirty.size === 0; };
-    const entryStatus = (entry:Entry) => { const document = documentFor(entry); return document ? (document.published_at ? "公開済み" : document.status === "draft" ? "原稿あり" : "執筆中") : entry.progress === "in-progress" ? "執筆中" : "未着手"; };
+    const entryStatus = (entry:Entry) => {
+      const document = documentFor(entry);
+      if (!document) return entry.progress === "in-progress" ? "執筆中" : "未着手";
+      if (document.published_at) return "公開済み";
+      if (document.publication_action === "publish" && document.publication_pr_number) return "公開処理中";
+      if (document.scheduled_publish_at) return "公開予約";
+      if (document.status === "approved") return "公開準備完了";
+      if (document.status === "in-review") return "フィードバック中";
+      if (document.status === "on-hold") return "修正中";
+      if (document.status === "draft") return "下書き";
+      return "執筆中";
+    };
     const renderEntry = (entry:Entry, childrenByParent:Map<string,Entry[]>, depth:number):string => {
-      const document = documentFor(entry); const archived = entry.status === "archived"; const status = archived ? "アーカイブ済み" : entryStatus(entry); const tone = archived ? "" : status === "公開済み" || status === "原稿あり" ? "outline-status-ready" : status === "執筆中" ? "outline-status-progress" : ""; const id = entry.id ? esc(entry.id) : ""; const selectionKey = esc(entry.key); const editable = Boolean(entry.id); const children = entry.id ? (childrenByParent.get(entry.id) ?? []) : [];
+      const document = documentFor(entry); const archived = entry.status === "archived"; const status = archived ? "アーカイブ済み" : entryStatus(entry); const tone = archived ? "" : ["公開済み", "公開準備完了", "公開予約"].includes(status) ? "outline-status-ready" : ["下書き", "執筆中", "フィードバック中", "修正中", "公開処理中"].includes(status) ? "outline-status-progress" : ""; const id = entry.id ? esc(entry.id) : ""; const selectionKey = esc(entry.key); const editable = Boolean(entry.id); const children = entry.id ? (childrenByParent.get(entry.id) ?? []) : [];
       const move = editable && !archived ? `<button type="button" data-move-entry="up" aria-label="${esc(entry.title)}を上へ">↑</button><button type="button" data-move-entry="down" aria-label="${esc(entry.title)}を下へ">↓</button>` : "";
       return `<article class="outline-entry${archived ? " is-archived" : ""}" style="--outline-depth:${depth}" data-outline-entry data-entry-id="${id}" data-entry-key="${selectionKey}" draggable="${editable && !archived}"><input class="outline-select" type="checkbox" data-outline-select="${selectionKey}" aria-label="${esc(entry.title)}を選択" ${selectedKeys.has(entry.key) ? "checked" : ""} ${archived && !includeArchived.checked ? "disabled" : ""}><button class="outline-drag-handle" type="button" data-drag-handle="${id}" aria-label="${esc(entry.title)}の並び順を変更" ${editable && !archived ? "" : "disabled"}>⋮⋮</button><div class="outline-entry-main"><div class="outline-entry-title">${esc(entry.title)}</div><div class="outline-entry-meta">${esc(entry.slug)}${entry.summary ? ` ・ ${esc(entry.summary)}` : ""}</div></div><span class="outline-status ${tone}">${status}</span><div class="outline-entry-actions">${move}${editable ? `<button type="button" data-edit-entry="${id}" ${archived ? "disabled" : ""}>編集</button><button type="button" data-archive-entry="${id}" data-archive-action="${archived ? "restore" : "archive"}">${archived ? "復元" : "アーカイブ"}</button>` : ""}<a href="${editorUrl(entry,document)}">${document ? "記事を開く" : "執筆を開始"}</a></div></article>${children.length ? `<div class="outline-children" data-parent-id="${id}">${children.map((child) => renderEntry(child, childrenByParent, depth + 1)).join("")}</div>` : ""}`;
     };
