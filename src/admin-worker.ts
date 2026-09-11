@@ -2245,6 +2245,10 @@ type AdminAuditAction =
   | "member_removed"
   | "task_archived"
   | "task_restored"
+  | "taxonomy_created"
+  | "taxonomy_updated"
+  | "taxonomy_archived"
+  | "taxonomy_restored"
   | "workflow_transition";
 
 type AdminAuditTarget =
@@ -2252,6 +2256,7 @@ type AdminAuditTarget =
   | "permission"
   | "member"
   | "task"
+  | "taxonomy"
   | "workflow";
 
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
@@ -2266,6 +2271,10 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   member_removed: "運営メンバーを削除",
   task_archived: "タスクをアーカイブ",
   task_restored: "タスクを復元",
+  taxonomy_created: "分野・カテゴリを追加",
+  taxonomy_updated: "分野・カテゴリを更新",
+  taxonomy_archived: "分野・カテゴリをアーカイブ",
+  taxonomy_restored: "分野・カテゴリを復元",
   workflow_transition: "状態を変更",
 }[action] ?? action);
 
@@ -2367,8 +2376,8 @@ const workflowTransitionsFor = (entityType: WorkflowEntityType, from: string) =>
 const workflowTransitionPolicyError = (role: WorkflowTransition["requiredRole"]) =>
   role === "manager" ? "運営内運営のみ状態を変更できます。" : role === "reviewer" ? "担当査読者のみ状態を変更できます。" : "担当者のみ状態を変更できます。";
 
-async function listWorkflowTransitions(request: Request, env: Env): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+async function listWorkflowTransitions(request: Request, env: Env, developerAccess = false): Promise<Response> {
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const [taskCounts, documentCounts, applicationCounts, approvalCounts] = await Promise.all([
     env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_tasks WHERE archived_at IS NULL GROUP BY status").all<{ state: string; count: number }>(),
@@ -2394,8 +2403,8 @@ async function listWorkflowTransitions(request: Request, env: Env): Promise<Resp
  * 状態イベントと現在レコードのずれを検出する読み取り専用の診断API。
  * 自動修復は行わず、管理者が確認してから個別の遷移APIを再実行できるようにする。
  */
-async function workflowDiagnostics(request: Request, env: Env): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+async function workflowDiagnostics(request: Request, env: Env, developerAccess = false): Promise<Response> {
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
     `SELECT e.id,e.entity_type,e.entity_id,e.from_state,e.to_state,e.actor_email,e.created_at,
@@ -2728,8 +2737,9 @@ async function listPermissionAudit(
 async function listAdminAuditLog(
   request: Request,
   env: Env,
+  developerAccess = false,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const url = new URL(request.url);
   const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
@@ -2904,8 +2914,9 @@ type GithubCommitSummary = {
 async function listAdminUpdateHistory(
   request: Request,
   env: Env,
+  developerAccess = false,
 ): Promise<Response> {
-  const scope = await getGlobalAdminScope(request, env);
+  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const params = new URL(request.url).searchParams;
   const requestedLimit = Number(params.get("limit") ?? "30");
@@ -3829,6 +3840,7 @@ type EditorialTaxonomyRow = {
 async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const coordinatorSubjects = scope.coordinatorSubjects ?? [];
   const url = new URL(request.url);
   if (request.method === "GET") {
     const includeArchived = url.searchParams.get("includeArchived") === "1";
@@ -3839,9 +3851,43 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     ).all<EditorialTaxonomyRow>();
     return json({ catalog: rows.results ?? [] });
   }
-  if (!scope.allSubjects)
-    return json({ error: "分野・カテゴリの追加は全分野管理者のみ利用できます。" }, 403);
   if (!isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (request.method === "PATCH") {
+    const payload = (await request.json().catch(() => null)) as {
+      id?: unknown; action?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown; subject?: unknown;
+    } | null;
+    const id = text(payload?.id, 64);
+    const action = text(payload?.action, 20);
+    if (!id) return json({ error: "対象を確認してください。" }, 400);
+    const current = await env.REPORTS.prepare(
+      "SELECT id,kind,subject_slug,slug,name,description,sort_order,status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
+    ).bind(id).first<EditorialTaxonomyRow>();
+    if (!current) return json({ error: "分野またはカテゴリが見つかりません。" }, 404);
+    const canEditCurrent = scope.allSubjects || scope.isManager || (current.kind === "category" && (coordinatorSubjects.includes(current.subject_slug) || coordinatorSubjects.includes("*")));
+    if (!canEditCurrent) return json({ error: "この分野・カテゴリを変更する権限がありません。" }, 403);
+    if (action === "archive" || action === "restore") {
+      const nextStatus = action === "archive" ? "archived" : "active";
+      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET status=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(nextStatus, new Date().toISOString(), id).run();
+      await recordAdminAudit(env, scope.email, action === "archive" ? "taxonomy_archived" : "taxonomy_restored", "taxonomy", id, current.name, `分野・カテゴリを${action === "archive" ? "アーカイブ" : "復元"}：${current.name}`, { kind: current.kind, slug: current.slug, subject: current.subject_slug });
+      return json({ ok: true, status: nextStatus });
+    }
+    if (action !== "update") return json({ error: "操作を確認してください。" }, 400);
+    const name = text(payload?.name, 120) || current.name;
+    const description = text(payload?.description, 500);
+    const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? current.sort_order) || 0));
+    const subject = current.kind === "category" ? text(payload?.subject, 80).toLowerCase() || current.subject_slug : "";
+    if (!name || (current.kind === "category" && !SUBJECT_SLUG.test(subject))) return json({ error: "表示名と対象分野を確認してください。" }, 400);
+    try {
+      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(subject, name, description, sortOrder, new Date().toISOString(), id).run();
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
+      throw error;
+    }
+    await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, slug: current.slug, subject });
+    return json({ ok: true, id, name, description, sortOrder, subject });
+  }
   const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
   const kind = text(payload?.kind, 16) as "subject" | "category";
   const subject = text(payload?.subject, 80).toLowerCase();
@@ -3851,6 +3897,8 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   const sortOrder = Math.max(0, Math.min(9999, Number(payload?.sortOrder ?? 0) || 0));
   if ((kind !== "subject" && kind !== "category") || !SUBJECT_SLUG.test(slug) || (kind === "category" && !SUBJECT_SLUG.test(subject)) || !name)
     return json({ error: "種類、対象分野、ID、表示名を確認してください。" }, 400);
+  const canCreate = scope.allSubjects || scope.isManager || (kind === "category" && (coordinatorSubjects.includes(subject) || coordinatorSubjects.includes("*")));
+  if (!canCreate) return json({ error: "この分野・カテゴリを追加する権限がありません。" }, 403);
   const now = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
@@ -3861,6 +3909,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
     throw error;
   }
+  await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", slug, name, `分野・カテゴリを追加：${name}`, { kind, slug, subject });
   return json({ ok: true }, 201);
 }
 
@@ -19482,11 +19531,11 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
-    return listAdminAuditLog(request, env);
+    return listAdminAuditLog(request, env, true);
   if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
-    return listWorkflowTransitions(request, env);
+    return listWorkflowTransitions(request, env, true);
   if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
-    return workflowDiagnostics(request, env);
+    return workflowDiagnostics(request, env, true);
   if (url.pathname === "/api/admin/workflow/repair" && request.method === "POST")
     return repairWorkflowIssue(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
@@ -19494,7 +19543,7 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/developer/diagnostics" && request.method === "GET")
     return developerDiagnostics(request, env);
   if (url.pathname === "/api/admin/update-history" && request.method === "GET")
-    return listAdminUpdateHistory(request, env);
+    return listAdminUpdateHistory(request, env, true);
   if (
     url.pathname === "/api/admin/member-management" &&
     request.method === "DELETE"
