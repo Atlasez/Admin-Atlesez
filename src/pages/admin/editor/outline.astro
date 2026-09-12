@@ -103,6 +103,7 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
 <style>
   .outline-entry{padding-left:calc(.8rem + (var(--outline-depth,0) * 1.2rem));}
   .outline-children{border-left:1px solid var(--border-default);margin-left:1rem;}
+  .outline-children.is-drop-target{background:color-mix(in srgb,var(--accent-primary) 8%,transparent);outline:1px dashed var(--accent-primary);outline-offset:-2px;}
   .outline-entry-main{min-width:0;}
   .outline-entry-actions{align-items:center;flex-wrap:wrap;}
   .outline-entry-actions button[data-move-entry]{font-size:.75rem;line-height:1;min-width:1.7rem;padding:.3rem;}
@@ -269,9 +270,87 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
     bulkArchiveButton.addEventListener("click", () => { const ids = selectedIds(); if (!ids.length || !confirm(`${ids.length}件をアーカイブしますか？`)) return; bulkArchiveButton.disabled = true; void patchEntry({ action:"bulk", ids, status:"archived" }).then(() => selectedKeys.clear()).catch((error) => alert(error instanceof Error ? error.message : "一括アーカイブに失敗しました。")); });
     bulkRestoreButton.addEventListener("click", () => { const ids = selectedIds(); if (!ids.length || !confirm(`${ids.length}件を復元しますか？`)) return; bulkRestoreButton.disabled = true; void patchEntry({ action:"bulk", ids, status:"active" }).then(() => selectedKeys.clear()).catch((error) => alert(error instanceof Error ? error.message : "一括復元に失敗しました。")); });
     let draggedId = "";
-    root.addEventListener("dragstart", (event) => { const entry = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!entry?.dataset.entryId) return; draggedId = entry.dataset.entryId; entry.classList.add("is-dragging"); event.dataTransfer?.setData("text/plain", draggedId); event.dataTransfer?.setDragImage(entry, 12, 12); });
-    root.addEventListener("dragover", (event) => { const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!target || !draggedId || target.dataset.entryId === draggedId) return; event.preventDefault(); root.querySelectorAll(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target")); target.classList.add("is-drop-target"); });
-    root.addEventListener("drop", (event) => { event.preventDefault(); const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!target || !draggedId || target.dataset.entryId === draggedId) return; const source = root.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(draggedId)}"]`); const parent = target.parentElement; if (!source || !parent || source.parentElement !== parent) return; parent.insertBefore(source, event.clientY < target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2 ? target : target.nextElementSibling); parent.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]").forEach((item) => { if (item.dataset.entryId) orderDirty.add(item.dataset.entryId); }); target.classList.remove("is-drop-target"); draggedId = ""; updateToolbar(); });
+    const clearDropTargets = () => root.querySelectorAll<HTMLElement>(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+    const sourceNodes = (entry: HTMLElement) => {
+      const nodes: HTMLElement[] = [entry];
+      const children = entry.nextElementSibling;
+      if (children instanceof HTMLElement && children.matches(`.outline-children[data-parent-id="${CSS.escape(entry.dataset.entryId ?? "")}"]`)) nodes.push(children);
+      return nodes;
+    };
+    const isDescendantTarget = (source: HTMLElement, target: HTMLElement | null, targetContainer: HTMLElement | null) => {
+      if (targetContainer?.dataset.parentId === source.dataset.entryId) return true;
+      let current: HTMLElement | null = target;
+      while (current) {
+        const container = current.parentElement;
+        if (!(container instanceof HTMLElement) || !container.classList.contains("outline-children")) return false;
+        if (container.dataset.parentId === source.dataset.entryId) return true;
+        const parentEntry = container.previousElementSibling;
+        current = parentEntry instanceof HTMLElement && parentEntry.matches("[data-outline-entry]") ? parentEntry : null;
+      }
+      return false;
+    };
+    const categoryOf = (entry: HTMLElement) => entry.closest<HTMLElement>("[data-outline-category]")?.dataset.outlineCategory ?? "";
+    const markCategoryDirty = (category: HTMLElement | null) => category?.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]").forEach((item) => { if (item.dataset.entryId) orderDirty.add(item.dataset.entryId); });
+    const refreshDepths = (container: HTMLElement, depth: number) => {
+      [...container.children].forEach((node) => {
+        if (!(node instanceof HTMLElement) || !node.matches("[data-outline-entry]")) return;
+        node.style.setProperty("--outline-depth", String(depth));
+        const children = node.nextElementSibling;
+        if (children instanceof HTMLElement && children.classList.contains("outline-children")) refreshDepths(children, depth + 1);
+      });
+    };
+    const insertAfterSubtree = (container: HTMLElement, target: HTMLElement, nodes: HTMLElement[]) => {
+      const anchor = target.nextElementSibling instanceof HTMLElement && target.nextElementSibling.classList.contains("outline-children") ? target.nextElementSibling : target;
+      const next = anchor.nextElementSibling;
+      nodes.forEach((node) => container.insertBefore(node, next));
+    };
+    root.addEventListener("dragstart", (event) => { const entry = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]"); if (!entry?.dataset.entryId || entry.getAttribute("draggable") !== "true") return; draggedId = entry.dataset.entryId; entry.classList.add("is-dragging"); event.dataTransfer?.setData("text/plain", draggedId); event.dataTransfer?.setDragImage(entry, 12, 12); });
+    root.addEventListener("dragover", (event) => {
+      if (!draggedId) return;
+      const source = root.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(draggedId)}"]`);
+      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]");
+      const targetContainer = (event.target as HTMLElement).closest<HTMLElement>(".outline-children");
+      if (!source || (!target && !targetContainer)) return;
+      const category = source.closest<HTMLElement>("[data-outline-category]");
+      if ((target && categoryOf(target) !== category?.dataset.outlineCategory) || (targetContainer && targetContainer.closest<HTMLElement>("[data-outline-category]") !== category)) return;
+      if (target && (target === source || isDescendantTarget(source, target, targetContainer))) return;
+      event.preventDefault();
+      clearDropTargets();
+      (target ?? targetContainer)?.classList.add("is-drop-target");
+    });
+    root.addEventListener("drop", (event) => {
+      if (!draggedId) return;
+      const source = root.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(draggedId)}"]`);
+      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-outline-entry]");
+      const targetContainer = (event.target as HTMLElement).closest<HTMLElement>(".outline-children");
+      clearDropTargets();
+      if (!source || (!target && !targetContainer)) { draggedId = ""; return; }
+      const category = source.closest<HTMLElement>("[data-outline-category]");
+      if ((target && categoryOf(target) !== category?.dataset.outlineCategory) || (targetContainer && targetContainer.closest<HTMLElement>("[data-outline-category]") !== category) || (target && (target === source || isDescendantTarget(source, target, targetContainer)))) { draggedId = ""; return; }
+      event.preventDefault();
+      const nodes = sourceNodes(source);
+      const destination = targetContainer ?? target?.parentElement;
+      if (!destination) { draggedId = ""; return; }
+      if (targetContainer) {
+        nodes.forEach((node) => destination.append(node));
+      } else if (target) {
+        const rect = target.getBoundingClientRect();
+        const ratio = (event.clientY - rect.top) / rect.height;
+        if (ratio > 0.35 && ratio < 0.65 && target.dataset.entryId) {
+          let children = target.nextElementSibling instanceof HTMLElement && target.nextElementSibling.classList.contains("outline-children") ? target.nextElementSibling : null;
+          if (!children) { children = document.createElement("div"); children.className = "outline-children"; children.dataset.parentId = target.dataset.entryId; target.after(children); }
+          nodes.forEach((node) => children!.append(node));
+        } else {
+          const insertBefore = ratio <= 0.5;
+          if (insertBefore) nodes.forEach((node) => destination.insertBefore(node, target));
+          else insertAfterSubtree(destination, target, nodes);
+        }
+      }
+      refreshDepths(category ?? destination.closest<HTMLElement>("[data-outline-category]")!, 0);
+      markCategoryDirty(category ?? destination.closest<HTMLElement>("[data-outline-category]"));
+      draggedId = "";
+      updateToolbar();
+    });
     root.addEventListener("dragend", () => { root.querySelectorAll(".is-dragging,.is-drop-target").forEach((item) => item.classList.remove("is-dragging","is-drop-target")); draggedId = ""; });
     orderButton.addEventListener("click", () => { const items = [...root.querySelectorAll<HTMLElement>("[data-outline-category]")].flatMap((group) => { const counters = new Map<string,number>(); return [...group.querySelectorAll<HTMLElement>("[data-outline-entry][data-entry-id]")].map((item) => { const parentId = item.parentElement?.classList.contains("outline-children") ? item.parentElement.dataset.parentId ?? null : null; const next = (counters.get(parentId ?? "") ?? 0) + 1; counters.set(parentId ?? "", next); return { id:item.dataset.entryId!, sortOrder:next * 10, parentId }; }); }); orderButton.disabled = true; void patchEntry({ action:"reorder", items }).then(() => orderDirty.clear()).catch((error) => { orderButton.disabled = false; alert(error instanceof Error ? error.message : "並び順を保存できませんでした。"); }); });
     confirmButton.addEventListener("click", () => { const selected = allEntries().filter((entry) => selectedKeys.has(entry.key)); const summary = selected.map((entry) => `${entry.title}：${entryStatus(entry)}`).join("\n"); if (summary) alert(`選択した記事の状態\n\n${summary}`); });
