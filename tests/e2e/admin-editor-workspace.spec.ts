@@ -1063,6 +1063,15 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
       statusScrollWidth: statuses?.scrollWidth ?? 0,
       linkWidth: link?.getBoundingClientRect().width ?? 0,
       linkHeight: link?.getBoundingClientRect().height ?? 0,
+      children: statuses
+        ? [...statuses.children].map((child) => ({
+            cls: child.className,
+            rect: child.getBoundingClientRect().toJSON(),
+            scrollWidth: (child as HTMLElement).scrollWidth,
+            cssWidth: getComputedStyle(child).width,
+            position: getComputedStyle(child).position,
+          }))
+        : [],
     };
   });
   expect(statusLayout.statusScrollWidth).toBeLessThanOrEqual(

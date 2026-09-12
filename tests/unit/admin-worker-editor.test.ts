@@ -274,6 +274,35 @@ describe("admin worker editor APIs", () => {
     expect(merged).not.toContain("machine-learning");
   });
 
+  it("includes the article category on its publication branch even while taxonomy approval is pending", () => {
+    const yaml = [
+      "- id: informatics",
+      "  slug: informatics",
+      "  name: { ja: 情報, en: Information }",
+      "  status: published",
+      "  categories:",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "informatics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 0,
+          status: "active",
+          created_by: "alice@example.com",
+          publication_status: "preparing",
+        },
+      ],
+      "informatics",
+      "machine-learning",
+    );
+    expect(merged).toContain("- id: machine-learning");
+  });
+
   it("replaces a managed category outline without touching related categories", () => {
     const yaml = [
       "- id: mathematics",
