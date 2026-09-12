@@ -93,6 +93,7 @@ function initializeRealtimeCursors() {
   let ownName = "共同編集者";
   let serverSessionId = "";
   let reconnectTimer = 0;
+  let reconnectAttempt = 0;
   let ydoc = new Y.Doc();
   let ybody = ydoc.getText("body");
   let cursors = ydoc.getMap<string>("editor-cursors");
@@ -398,7 +399,11 @@ function initializeRealtimeCursors() {
     );
     next.binaryType = "arraybuffer";
     socket = next;
-    next.addEventListener("open", () => publishCursor(true));
+    next.addEventListener("open", () => {
+      // 接続できたら再接続の指数バックオフを初期化する。
+      reconnectAttempt = 0;
+      publishCursor(true);
+    });
     next.addEventListener("message", (event) => {
       if (event.data instanceof ArrayBuffer) {
         try {
@@ -435,7 +440,15 @@ function initializeRealtimeCursors() {
     });
     next.addEventListener("close", () => {
       if (!destroyed && documentId === nextDocumentId) {
-        reconnectTimer = window.setTimeout(() => connect(nextDocumentId), 1200);
+        const delay = Math.min(
+          30_000,
+          1_200 * 2 ** Math.min(reconnectAttempt, 5),
+        );
+        reconnectAttempt += 1;
+        reconnectTimer = window.setTimeout(
+          () => connect(nextDocumentId),
+          delay,
+        );
       }
     });
   };

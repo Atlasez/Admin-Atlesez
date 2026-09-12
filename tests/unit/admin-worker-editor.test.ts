@@ -1265,6 +1265,87 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("keeps action-center application data inside manager project scope", async () => {
+    const applicationQueries: Array<{ sql: string; bindings: unknown[] }> = [];
+    class ScopedStatement extends EmptyStatement {
+      private boundValues: unknown[] = [];
+
+      override bind(...values: unknown[]) {
+        this.boundValues = values;
+        super.bind(...values);
+        return this;
+      }
+
+      override async all<T>() {
+        const query = this.query;
+        if (query.includes("SELECT subject FROM report_admin_permissions"))
+          return { results: [] as T[] };
+        if (
+          query.includes("SELECT role, subject FROM editorial_workflow_roles")
+        )
+          return {
+            results: [
+              { role: "project-leader", subject: "mathematics" },
+            ] as T[],
+          };
+        if (
+          query.includes("FROM atlasez_projects p") &&
+          query.includes("m.role")
+        )
+          return {
+            results: [
+              { id: "atlas", slug: "atlas", name: "アトラス", role: "member" },
+              {
+                id: "secretariat",
+                slug: "secretariat",
+                name: "運営事務局",
+                role: "manager",
+              },
+            ] as T[],
+          };
+        if (
+          query.includes("SELECT project_id FROM atlasez_project_memberships")
+        )
+          return { results: [{ project_id: "secretariat" }] as T[] };
+        if (query.includes("FROM atlasez_member_applications")) {
+          applicationQueries.push({ sql: query, bindings: this.boundValues });
+          return { results: [] as T[] };
+        }
+        return { results: [] as T[] };
+      }
+
+      override async first<T>() {
+        if (this.query.includes("SELECT role FROM atlasez_project_memberships"))
+          return { role: "manager" } as T;
+        if (this.query.includes("SELECT COUNT(*)")) return { count: 0 } as T;
+        if (this.query.includes("SELECT COUNT(*) AS open_count"))
+          return { open_count: 0, due_today: 0, due_soon: 0 } as T;
+        return null as T | null;
+      }
+    }
+    const reports = {
+      prepare: (query: string) => new ScopedStatement(query),
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/action-center", {
+        headers: { "Cf-Access-Authenticated-User-Email": "member@example.com" },
+      }),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(applicationQueries.length).toBeGreaterThanOrEqual(2);
+    for (const query of applicationQueries) {
+      expect(query.sql).toContain("project_slug IN (?)");
+      expect(query.bindings).toEqual(["secretariat"]);
+    }
+  });
+
   it("loads action-center history queries only for the history view", async () => {
     const actionQueries: string[] = [];
     const actionEnv = {
