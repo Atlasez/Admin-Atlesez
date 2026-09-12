@@ -149,6 +149,7 @@ function initializeRealtimePresence() {
 
   let socket: WebSocket | null = null;
   let reconnectTimer = 0;
+  let reconnectAttempt = 0;
   let presenceFrame = 0;
   let renderFrame = 0;
   let currentDocumentId = "";
@@ -465,7 +466,11 @@ function initializeRealtimePresence() {
     socket = nextSocket;
     nextSocket.binaryType = "arraybuffer";
 
-    nextSocket.addEventListener("open", sendPresenceNow);
+    nextSocket.addEventListener("open", () => {
+      // 接続できたら次回の切断は短い待ち時間から再開する。
+      reconnectAttempt = 0;
+      sendPresenceNow();
+    });
     nextSocket.addEventListener("message", (event) => {
       if (event.data instanceof ArrayBuffer) {
         try {
@@ -498,7 +503,9 @@ function initializeRealtimePresence() {
     });
     nextSocket.addEventListener("close", () => {
       if (destroyed || currentDocumentId !== documentId) return;
-      reconnectTimer = window.setTimeout(() => connect(documentId), 1500);
+      const delay = Math.min(30_000, 1_500 * 2 ** Math.min(reconnectAttempt, 5));
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => connect(documentId), delay);
     });
   };
 
