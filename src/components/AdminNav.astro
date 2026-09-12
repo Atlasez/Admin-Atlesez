@@ -408,7 +408,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
             try { sessionStorage.removeItem(profileCacheKey); } catch { /* storage may be unavailable */ }
             applyProfile({}, status.email);
           } else if (!cachedProfile) applyProfile({}, status.email);
-          try {
+          // プロフィール画面自身が同じAPIを取得するため、ここで先に
+          // リクエストすると、失敗レスポンスをナビが消費して画面側の
+          // 再試行UIが表示されない競合が起きる。該当ページではキャッシュ
+          // またはメールアドレスを表示し、本文の取得結果に任せる。
+          const pageOwnsProfile = ['/admin/member-profile/', '/admin/member-profile/edit/'].includes(window.location.pathname);
+          if (!pageOwnsProfile) try {
             const profileResponse = await fetch('/api/admin/profile', { credentials: 'same-origin', cache: 'no-store' });
             if (profileResponse.ok) {
               const profile = await profileResponse.json() as ProfileResponse;
