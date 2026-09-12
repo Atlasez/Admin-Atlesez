@@ -632,6 +632,68 @@ describe("admin worker editor APIs", () => {
     expect(batches).toHaveLength(1);
   });
 
+  it("rejects outline reorder requests that would create a parent cycle", async () => {
+    const firstId = "00000000-0000-0000-0000-000000000011";
+    const secondId = "00000000-0000-0000-0000-000000000012";
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("id,subject_slug,category_slug,title")) {
+              return {
+                results: [
+                  {
+                    id: firstId,
+                    subject_slug: "mathematics",
+                    category_slug: "group-theory",
+                    title: "親",
+                  },
+                  {
+                    id: secondId,
+                    subject_slug: "mathematics",
+                    category_slug: "group-theory",
+                    title: "子",
+                  },
+                ],
+              } as { results: T[] };
+            }
+            if (query.includes("SELECT id,parent_id")) {
+              return {
+                results: [
+                  { id: firstId, parent_id: secondId },
+                  { id: secondId, parent_id: firstId },
+                ],
+              } as { results: T[] };
+            }
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "reorder",
+          items: [
+            { id: firstId, sortOrder: 10, parentId: secondId },
+            { id: secondId, sortOrder: 20, parentId: firstId },
+          ],
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({ error: "階層が循環しています。" });
+  });
+
   it("supports cursor pagination for large outline lists", async () => {
     const queries: string[] = [];
     const outlineRows = [
