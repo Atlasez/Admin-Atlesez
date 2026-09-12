@@ -32,6 +32,7 @@ import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
 import { parse as parseYaml } from "yaml";
 import { githubToken } from "./editorial-publication-github";
+import { EDITORIAL_STATIC_CATEGORIES } from "./lib/editorial-static-taxonomy";
 // ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
 // Preview/本番は外部の専用Worker bindingを必ず経由する。
 export { EditorialCollaborationRoom } from "./editorial-collaboration-worker";
@@ -3891,26 +3892,48 @@ const editorialTaxonomyAutoSlug = (kind: "subject" | "category", name: string) =
 /** 静的な分野も管理カタログへ取り込み、表示順を管理画面から保存できるようにする。 */
 async function ensureStaticEditorialTaxonomyCatalog(env: Env) {
   const now = new Date().toISOString();
-  const statements = Object.entries(APPLICATION_SUBJECT_LABELS).map(
+  const statements = Object.entries(APPLICATION_SUBJECT_LABELS).flatMap(
     ([slug, name], index) =>
-      env.REPORTS.prepare(
-        `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
-         (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(
-        crypto.randomUUID(),
-        "atlas",
-        "subject",
-        "",
-        slug,
-        name,
-        "",
-        index * 10,
-        "active",
-        "system",
-        now,
-        now,
-      ),
+      [
+        env.REPORTS.prepare(
+          `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
+           (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ).bind(
+          crypto.randomUUID(),
+          "atlas",
+          "subject",
+          "",
+          slug,
+          name,
+          "",
+          index * 10,
+          "active",
+          "system",
+          now,
+          now,
+        ),
+        ...(EDITORIAL_STATIC_CATEGORIES[slug] ?? []).map((category) =>
+          env.REPORTS.prepare(
+            `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
+             (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          ).bind(
+            crypto.randomUUID(),
+            "atlas",
+            "category",
+            slug,
+            category.slug,
+            category.name,
+            "",
+            category.sortOrder * 10,
+            "active",
+            "system",
+            now,
+            now,
+          ),
+        ),
+      ],
   );
   try {
     await env.REPORTS.batch(statements);
