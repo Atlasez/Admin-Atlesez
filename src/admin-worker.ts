@@ -17019,6 +17019,61 @@ async function getEditorialCheckRuns(env: Env, headSha: string) {
     `https://api.github.com/repos/${repository}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`,
     { headers: githubApiHeaders(auth.token, "atlasez-editorial-publication-run") },
   );
+  // GitHub AppのChecks権限は既存インストールごとに異なる。公開リポジトリ
+  // ではコミットステータスが読み取れるため、check-runs APIが403/404のときも
+  // そこでCIの合否を判定し、Actions:writeやChecks:readを公開処理の必須条件にしない。
+  if (!response.ok && (response.status === 403 || response.status === 404)) {
+    const statusResponse = await fetch(
+      `https://api.github.com/repos/${repository}/commits/${encodeURIComponent(headSha)}/status`,
+      { headers: githubApiHeaders(auth.token, "atlasez-editorial-publication-status") },
+    );
+    if (statusResponse.ok) {
+      const statusData = (await statusResponse.json().catch(() => ({}))) as {
+        state?: string;
+        total_count?: number;
+        statuses?: Array<{ context?: string; state?: string; target_url?: string | null; description?: string | null }>;
+      };
+      const statuses = Array.isArray(statusData.statuses) ? statusData.statuses : [];
+      const state = statusData.state?.toLowerCase();
+      const pending = state === "pending" || statuses.length === 0;
+      const failedStatus = statuses.find((item) =>
+        ["failure", "error"].includes(item.state?.toLowerCase() ?? ""),
+      );
+      return {
+        checks: statuses.map((item) => ({
+          name: item.context ?? "CI",
+          status: item.state === "pending" ? "in_progress" : "completed",
+          conclusion: ["failure", "error"].includes(item.state?.toLowerCase() ?? "")
+            ? "failure"
+            : item.state === "success"
+              ? "success"
+              : null,
+          html_url: item.target_url ?? null,
+          details_url: item.target_url ?? null,
+          output: item.description ? { summary: item.description } : null,
+        })),
+        pending,
+        pendingCheck: pending
+          ? ({
+              name: "CI",
+              status: "in_progress",
+              html_url: null,
+              details_url: null,
+            } satisfies EditorialCheckRun)
+          : undefined,
+        failed: failedStatus
+          ? {
+              name: failedStatus.context ?? "CI",
+              status: "completed",
+              conclusion: "failure",
+              html_url: failedStatus.target_url ?? null,
+              details_url: failedStatus.target_url ?? null,
+              output: failedStatus.description ? { summary: failedStatus.description } : null,
+            }
+          : undefined,
+      };
+    }
+  }
   if (!response.ok)
     throw await githubFailure(response, "CIの状態を取得できませんでした。", "github_check_lookup");
   const data = (await response.json()) as { check_runs?: EditorialCheckRun[] };
