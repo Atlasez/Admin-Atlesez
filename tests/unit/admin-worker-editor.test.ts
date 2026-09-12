@@ -218,6 +218,62 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it("does not publish a preparing subject to the learning-site catalog", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "subject",
+          subject_slug: "",
+          slug: "informatics",
+          name: "情報",
+          description: "",
+          sort_order: 20,
+          created_by: "alice@example.com",
+          publication_status: "preparing",
+        },
+      ],
+      "informatics",
+    );
+    expect(merged).toBe(yaml);
+  });
+
+  it("removes a managed category after it is archived or returned to preparing", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  categories:",
+      "    - id: machine-learning",
+      "      slug: machine-learning",
+      "      name: { ja: 機械学習, en: 機械学習 }",
+      "      order: 1",
+      "      relatedCategoryIds: []",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 1,
+          status: "active",
+          created_by: "alice@example.com",
+          publication_status: "preparing",
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).not.toContain("machine-learning");
+  });
+
   it("replaces a managed category outline without touching related categories", () => {
     const yaml = [
       "- id: mathematics",
