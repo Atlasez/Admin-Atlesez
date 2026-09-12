@@ -5702,16 +5702,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
 
   /*
-   * 診断のsummaryは操作ボタンを押してもツールバーを動かさないよう
-   * absoluteで配置する。ただし閉じたsummaryも表示されるため、親側で
-   * その1行分を確保し、直後の「記事設定」と重ならないようにする。
+   * 診断のsummaryは状態表示の直後に通常のレイアウトフローで配置する。
+   * 絶対配置にすると後続の「記事設定」と重なるため、診断欄自身が
+   * 1行を占有してツールバーの高さを自然に押し下げる。
    */
   .editor-workspace .document-statuses:has(> .publication-diagnostic:not([hidden])) {
-    padding-bottom: 4rem;
+    padding-bottom: 0;
   }
 
   .editor-workspace .document-toolbar > div:first-child:has(> .document-statuses > .publication-diagnostic:not([hidden])) {
-    padding-bottom: .75rem;
+    padding-bottom: 0;
   }
 
   .editor-workspace .document-statuses > .document-status-pill {
@@ -5757,25 +5757,23 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
 
   .editor-workspace .publication-diagnostic {
-    background: transparent;
-    border: 0;
-    border-radius: 0;
+    background: var(--surface-alt);
+    border: 1px solid #c58d13;
+    border-radius: .45rem;
     box-sizing: border-box;
-    left: 0;
-    max-width: none;
-    padding: 0;
-    position: absolute;
-    right: 0;
-    top: calc(100% + .4rem);
-    width: auto;
-    z-index: 30;
+    flex: 1 1 100%;
+    margin-top: .15rem;
+    max-width: 100%;
+    min-width: 0;
+    padding: .35rem .5rem;
+    position: static;
+    width: 100%;
+    z-index: auto;
   }
 
   .editor-workspace .publication-diagnostic[open] {
     background: var(--surface-alt);
-    border: 1px solid #c58d13;
-    border-radius: .45rem;
-    padding: .35rem .5rem;
+    border-color: #c58d13;
   }
 
   .editor-workspace .publication-diagnostic summary {
