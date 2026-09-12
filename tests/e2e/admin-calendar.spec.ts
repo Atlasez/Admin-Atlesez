@@ -298,6 +298,8 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
     ".calendar-cell--today .calendar-date-select",
   );
   const todayNumber = todayButton.locator(".calendar-day");
+  await expect(todayButton).toBeVisible();
+  await expect(todayNumber).toBeVisible();
   const todayButtonBox = await todayButton.boundingBox();
   const todayNumberBox = await todayNumber.boundingBox();
   expect(

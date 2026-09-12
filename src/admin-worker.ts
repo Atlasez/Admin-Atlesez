@@ -20181,6 +20181,23 @@ async function adminNotifications(
     ? `@${profile.display_name.trim()}`
     : "";
   const documentVisibility = documentVisibilityFor(scope);
+  // 通知はプロジェクトをまたいで同じSQLを使うため、担当者の作成者・
+  // 担当者条件だけでは、未所属プロジェクトのタスクが通知へ混入する。
+  // 先にアクセス可能なプロジェクトを確定し、SQL側で境界を適用する。
+  const visibleOperationProjects = scope.isManager
+    ? []
+    : await accessibleOperationProjects(env, scope);
+  const notificationProjectIds = visibleOperationProjects
+    .map((project) => project.id)
+    .filter(Boolean);
+  const notificationProjectFilter = scope.isManager
+    ? ""
+    : notificationProjectIds.length
+      ? ` AND t.project_id IN (${notificationProjectIds.map(() => "?").join(",")})`
+      : " AND 0=1";
+  const notificationProjectBindings = scope.isManager
+    ? []
+    : notificationProjectIds;
   const canReviewApplications =
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
@@ -20307,11 +20324,11 @@ async function adminNotifications(
       `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
-         WHERE t.status != 'done' AND t.archived_at IS NULL AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))
+         WHERE t.status != 'done' AND t.archived_at IS NULL AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))${notificationProjectFilter}
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
          ORDER BY r.remind_at ASC LIMIT 50`,
     )
-      .bind(scope.email, scope.email, scope.email, scope.email)
+      .bind(scope.email, scope.email, scope.email, ...notificationProjectBindings, scope.email)
       .all<{
         reminder_id: string;
         remind_at: string;
@@ -20336,8 +20353,9 @@ async function adminNotifications(
                scope.allSubjects
                  ? ""
                  : ` AND (t.subject IS NULL OR t.subject='*' OR t.subject IN (${scope.subjects.map(() => "?").join(",")}))`
-             }`
+             }` 
        }
+       ${notificationProjectFilter}
        ORDER BY t.updated_at DESC LIMIT 40`,
     )
       .bind(
@@ -20348,6 +20366,7 @@ async function adminNotifications(
               scope.email,
               scope.email,
               ...(!scope.allSubjects ? scope.subjects : []),
+              ...notificationProjectBindings,
             ]),
       )
       .all<{
