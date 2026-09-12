@@ -271,6 +271,14 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
             if (entry) entry.sort_order = Number(item.sortOrder ?? 0);
           }
         }
+        if (body.action === "update" && body.id) {
+          const entry = taxonomy.find((candidate) => candidate.id === body.id);
+          if (entry) {
+            entry.name = body.name ?? entry.name;
+            entry.slug = body.slug ?? entry.slug;
+            entry.description = body.description ?? entry.description;
+          }
+        }
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -380,6 +388,18 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.locator('input[name="name"]').fill("統計学");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("統計学", { exact: true })).toBeVisible();
+  // タイトルをクリックすると、カード内で表示名をすぐ編集できる。
+  const quickEdit = page.locator(
+    '[data-inline-edit-taxonomy][aria-label="機械学習の表示名を編集"]',
+  );
+  await quickEdit.click();
+  const quickEditor = page.locator('[data-taxonomy-editor="category-2"]');
+  await expect(quickEditor).toBeVisible();
+  await quickEditor.locator('input[name="name"]').fill("機械学習（基礎）");
+  await quickEditor.getByRole("button", { name: "保存" }).click();
+  await expect(
+    page.getByText("機械学習（基礎）", { exact: true }),
+  ).toBeVisible();
   // ドラッグ中のポインター位置（カード下半分）どおりに、後ろへ挿入される。
   const dragPosition = await page.evaluate(() => {
     const source = document.querySelector<HTMLElement>(
@@ -429,7 +449,7 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await page.getByText("目次項目を追加", { exact: true }).click();
   await expect(
     page.locator('[data-form-category] option[value="category-2"]'),
-  ).toHaveText("機械学習");
+  ).toHaveText("機械学習（基礎）");
   await page.locator("[data-form-category]").selectOption("category-2");
   await page
     .locator('[data-outline-form] input[name="title"]')
