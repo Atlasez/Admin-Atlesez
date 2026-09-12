@@ -15051,6 +15051,7 @@ export const mergeEditorialTaxonomyYaml = (
   yaml: string,
   rows: EditorialTaxonomyPublicationRow[],
   documentSubject: string,
+  documentCategory?: string,
 ) => {
   const subjectRow = rows.find(
     (row) => row.kind === "subject" && row.slug === documentSubject,
@@ -15071,7 +15072,9 @@ export const mergeEditorialTaxonomyYaml = (
     row.created_by === "system" ||
     row.publication_status === "published";
   const categories = categoryRows.filter(
-    (row) => (row.status ?? "active") === "active" && isPublic(row),
+    (row) =>
+      (row.status ?? "active") === "active" &&
+      (isPublic(row) || row.slug === documentCategory),
   );
   const hiddenCategories = categoryRows.filter(
     (row) => (row.status ?? "active") !== "active" || !isPublic(row),
@@ -15358,7 +15361,15 @@ async function syncEditorialTaxonomyToGitHub(
       true,
     );
   const current = githubText(data.content);
-  const content = mergeEditorialTaxonomyYaml(current, rows, document.subject);
+  // 記事公開時は、原稿が実際に所属するカテゴリが準備中でも同じ公開
+  // ブランチへ含める。カテゴリ作成直後に記事だけを公開する導線を壊さず、
+  // 学習サイト側の検証で「存在しないカテゴリ」とならないようにする。
+  const content = mergeEditorialTaxonomyYaml(
+    current,
+    rows,
+    document.subject,
+    document.category,
+  );
   if (content === current) return;
   const response = await fetch(endpoint, {
     method: "PUT",

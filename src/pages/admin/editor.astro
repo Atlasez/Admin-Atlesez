@@ -5336,12 +5336,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     background: var(--surface-alt);
     border: 1px solid #d9a429;
     border-radius: .45rem;
-    max-width: min(26rem, calc(100vw - 2rem));
+    max-width: 100%;
     min-width: 0;
     padding: .2rem .35rem;
     position: absolute;
     top: calc(100% + .4rem);
-    width: min(26rem, calc(100vw - 2rem));
+    width: min(26rem, 100%);
     z-index: 30;
   }
   .publication-diagnostic summary {
@@ -5744,8 +5744,48 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
 
   .editor-workspace .publication-diagnostic {
-    max-width: 100%;
-    width: min(26rem, 100%);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-sizing: border-box;
+    left: 0;
+    max-width: none;
+    padding: 0;
+    position: absolute;
+    right: 0;
+    top: calc(100% + .4rem);
+    width: auto;
+    z-index: 30;
+  }
+
+  .editor-workspace .publication-diagnostic[open] {
+    background: var(--surface-alt);
+    border: 1px solid #c58d13;
+    border-radius: .45rem;
+    padding: .35rem .5rem;
+  }
+
+  .editor-workspace .publication-diagnostic summary {
+    align-items: center;
+    color: var(--muted);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: .64rem;
+    font-weight: 800;
+    line-height: 1.35;
+    list-style-position: outside;
+    position: static !important;
+  }
+
+  .editor-workspace .publication-diagnostic summary:hover,
+  .editor-workspace .publication-diagnostic summary:focus-visible {
+    color: var(--accent);
+  }
+
+  .editor-workspace .publication-diagnostic .publication-diagnostic-body {
+    max-height: min(11rem, calc(100vh - 9rem));
+    overflow: auto;
+    padding: .35rem 0 0;
   }
 
   .editor-workspace .toolbar-actions {
