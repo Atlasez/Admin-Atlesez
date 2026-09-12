@@ -16293,9 +16293,14 @@ async function editorialPublicationIntegrationStatus(
     // 公開前CIをWorkflow dispatchするには、公開用GitHub AppへActions: write
     // が必要。古いGitHub APIレスポンスで権限一覧が省略される場合は
     // 判定不能として既存の連携状態を壊さない。
-    const preflightReady = auth.app
+    const appPreflightReady = auth.app
       ? auth.permissions?.actions === undefined || auth.permissions.actions === "write"
       : null;
+    // AppにActions権限がまだ付与されていない場合は、公開用Tokenを
+    // Workflow dispatch専用のフォールバックとして利用できる。
+    const preflightReady = appPreflightReady === false && env.GITHUB_PUBLISH_TOKEN?.trim()
+      ? true
+      : appPreflightReady;
     const ready = defaultBranch === "main" && canWrite && !archived;
     const automationReady = ready && automaticMerge && automaticReview && preflightReady !== false;
     return json({
@@ -16316,7 +16321,7 @@ async function editorialPublicationIntegrationStatus(
           : {
             automationError:
                 preflightReady === false
-                  ? "公開前検証を実行するため、公開用GitHub AppにActions: write権限を付与してください。"
+                  ? "公開前検証を実行するため、GitHub Appまたは公開用TokenにActions: write権限を付与してください。"
                   : automaticMerge
                     ? reviewer.error ?? "自動承認用Tokenを確認できません。"
                     : "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
@@ -17399,44 +17404,64 @@ type EditorialPreflightWorkflowRun = {
 
 const editorialPreflightWorkflow = "ci.yml";
 
+/**
+ * 公開前CIのdispatchだけはActions権限が必要になる。
+ * 公開用AppのInstallation tokenにActions: writeが付いていない移行期間でも、
+ * 既存のリポジトリ限定PATが設定されていればCI起動だけを安全にフォールバックする。
+ * PR作成・マージなど他の書き込み操作は従来どおりApp tokenを使う。
+ */
+const editorialPreflightTokens = async (env: Env) => {
+  const auth = await githubToken(env);
+  if (!auth) return [] as string[];
+  const tokens = [auth.token];
+  const fallback = env.GITHUB_PUBLISH_TOKEN?.trim();
+  if (auth.app && fallback && fallback !== auth.token) tokens.push(fallback);
+  return tokens;
+};
+
 const dispatchEditorialPublicationPreflight = async (
   env: Env,
   branch: string,
 ) => {
-  const auth = await githubToken(env);
-  if (!auth)
+  const tokens = await editorialPreflightTokens(env);
+  if (!tokens.length)
     throw new EditorialPublicationFailure(
       "公開前検証を開始できません。GitHub公開連携が未設定です。",
       "preflight_configuration",
       "configuration",
     );
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const response = await fetch(
-    `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        ...githubApiHeaders(auth.token, "atlasez-editorial-preflight"),
-        "content-type": "application/json",
+  let lastResponse: Response | null = null;
+  for (const [index, token] of tokens.entries()) {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          ...githubApiHeaders(token, "atlasez-editorial-preflight"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ref: branch }),
       },
-      body: JSON.stringify({ ref: branch }),
-    },
-  );
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403)
-      throw new EditorialPublicationFailure(
-        "公開前検証を開始できません。GitHub AppにActionsのWorkflow dispatch権限（Actions: write）が必要です。",
-        "preflight_permission",
-        "configuration",
-        false,
-      );
-    throw await githubFailure(
-      response,
-      "公開前検証を開始できませんでした。",
-      "preflight_dispatch",
     );
+    if (response.ok) return new Date().toISOString();
+    lastResponse = response;
+    // App権限不足時だけ、次の（リポジトリ限定）フォールバックTokenを試す。
+    if ((response.status !== 401 && response.status !== 403) || index === tokens.length - 1)
+      break;
   }
-  return new Date().toISOString();
+  if (lastResponse && (lastResponse.status === 401 || lastResponse.status === 403))
+    throw new EditorialPublicationFailure(
+      "公開前検証を開始できません。GitHub Appまたは公開用TokenにActionsのWorkflow dispatch権限（Actions: write）が必要です。",
+      "preflight_permission",
+      "configuration",
+      false,
+    );
+  throw await githubFailure(
+    lastResponse!,
+    "公開前検証を開始できませんでした。",
+    "preflight_dispatch",
+  );
 };
 
 const editorialPreflightWorkflowRun = async (
