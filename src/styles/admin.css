@@ -55,3 +55,47 @@
     transition: none;
   }
 }
+
+/* 全ページで同じ読み込みの位置・余白を確保する。各ページが個別に
+   スピナーや文言を実装しても、表示後にレイアウトが横並びへ跳ねない。 */
+[data-admin-shell] .loading-state {
+  align-items: center;
+  background: var(--admin-surface-raised);
+  border: 1px dashed var(--admin-border);
+  box-sizing: border-box;
+  color: var(--admin-text-muted);
+  display: grid;
+  justify-items: center;
+  min-height: 5.5rem;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+[data-admin-shell] [data-admin-load-surface][aria-busy="true"] {
+  cursor: progress;
+}
+
+[data-admin-shell] [data-admin-load-skeleton] {
+  animation: admin-skeleton-pulse 1.2s ease-in-out infinite;
+  background: color-mix(in srgb, var(--admin-text) 9%, transparent);
+  border-radius: var(--radius);
+  display: block;
+  min-height: 2.75rem;
+  overflow: hidden;
+}
+
+@keyframes admin-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-admin-shell] [data-admin-load-skeleton] {
+    animation: none;
+  }
+}

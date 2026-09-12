@@ -348,10 +348,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .summary-item:first-child { border-left: 0; }
   .summary-item:hover, .summary-item:focus-visible { background: var(--background-inset); outline: 0; }
   .summary-item span { color: var(--text-secondary); font-size: .68rem; font-weight: 800; }
-  .summary-item strong { color: var(--text-primary); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1; }
+  .summary-item strong { color: var(--task-count); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1; }
   .summary-item small { color: var(--text-muted); font-size: .66rem; line-height: 1.35; }
   /* 数字は一色に統一し、色は項目の状態バッジだけに限定する。 */
-  .summary-item[data-summary-filter="urgent"] strong, .summary-item[data-summary-filter="approvals"] strong, .summary-item[data-summary-filter="unread"] strong, .summary-item strong { color: var(--text-primary); }
+  .summary-item[data-summary-filter="urgent"] strong, .summary-item[data-summary-filter="approvals"] strong, .summary-item[data-summary-filter="unread"] strong, .summary-item strong { color: var(--task-count); }
   .action-center-toolbar { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: .2rem 0 .7rem; }
   .action-filters { display: flex; flex-wrap: wrap; gap: .35rem; }
   .filter-button { color: var(--text-secondary); min-height: 2rem; }

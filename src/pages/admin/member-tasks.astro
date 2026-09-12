@@ -143,9 +143,7 @@ const timezones = getTimeZoneOptions(new Date());
   .member-tasks .task-title { align-items: baseline; display: flex; gap: .55rem; }
   .member-tasks .task-title h3 { color: var(--task-navy); font-size: 1rem; margin: 0; }
   .member-tasks .status-dot { background: var(--task-blue); border-radius: 50%; flex: 0 0 auto; height: .55rem; width: .55rem; }
-  .member-tasks .task.status-done { border-left-color: #5d8c70; }
   .member-tasks .task.status-done .status-dot { background: #5d8c70; }
-  .member-tasks .task.status-doing { border-left-color: #d0861d; }
   .member-tasks .task.status-doing .status-dot { background: #d0861d; }
   .member-tasks .task-meta { margin-top: .55rem; }
   .member-tasks .badge { background: #f4f8fc; border: 1px solid var(--task-border); color: #526b80; }
@@ -386,10 +384,8 @@ const timezones = getTimeZoneOptions(new Date());
   .member-tasks .filters button:hover { color: var(--task-accent); }
   .member-tasks .filters button.is-selected { background: var(--task-surface); color: var(--text-primary); box-shadow: 0 1px 3px color-mix(in srgb, #000 20%, transparent); }
   .member-tasks [data-list] { display: grid; gap: 0; }
-  .member-tasks .task { background: transparent !important; border: 0 !important; border-top: 1px solid var(--task-line) !important; border-left: 3px solid var(--task-accent) !important; border-radius: 0; box-shadow: none !important; display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr) auto; padding: 1.05rem .2rem 1.05rem .85rem; transition: background 160ms ease, border-color 160ms ease; }
+  .member-tasks .task { background: transparent !important; border: 0 !important; border-top: 1px solid var(--task-line) !important; border-radius: 0; box-shadow: none !important; display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr) auto; padding: 1.05rem .2rem 1.05rem 0; transition: background 160ms ease, border-color 160ms ease; }
   .member-tasks .task:hover { background: var(--task-inset) !important; }
-  .member-tasks .task.status-done { border-left-color: #72c98b !important; }
-  .member-tasks .task.status-doing { border-left-color: #e8b84a !important; }
   .member-tasks .task-title { align-items: baseline; display: flex; gap: .55rem; }
   .member-tasks .task-title h3 { font-size: .98rem; line-height: 1.45; margin: 0; }
   .member-tasks .status-dot { background: var(--task-accent); border-radius: 50%; flex: 0 0 auto; height: .5rem; width: .5rem; }

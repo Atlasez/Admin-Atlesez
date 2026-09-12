@@ -40,6 +40,7 @@
   --danger: #a03123;
   --success: #2c6e49;
   --warning: #a66a00;
+  --task-count: #52a450;
 
   /* 運営サイト共通の意味別エイリアス。
      ページ固有CSSはこれらを参照し、ライト/ダーク/ブラックの面と文字を
@@ -121,6 +122,7 @@
   --success: #72c98b;
   --danger: #e27676;
   --warning: #e8b84a;
+  --task-count: #52a450;
 }
 
 /*
@@ -147,6 +149,7 @@
   --success: #75df94;
   --danger: #ff8585;
   --warning: #f4c84e;
+  --task-count: #52a450;
 }
 [data-site="atlas"][data-pref-bg="dark"],
 [data-pref-bg="dark"] [data-site="atlas"] {
