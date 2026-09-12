@@ -380,9 +380,41 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.locator('input[name="name"]').fill("統計学");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("統計学", { exact: true })).toBeVisible();
-  await page
-    .locator('[data-taxonomy-id="category-3"] [data-direction="up"]')
-    .click();
+  // ドラッグ中のポインター位置（カード下半分）どおりに、後ろへ挿入される。
+  const dragPosition = await page.evaluate(() => {
+    const source = document.querySelector<HTMLElement>(
+      '[data-taxonomy-id="category-2"]',
+    );
+    const target = document.querySelector<HTMLElement>(
+      '[data-taxonomy-id="category-3"]',
+    );
+    if (!source || !target) throw new Error("カテゴリカードが見つかりません。");
+    const dataTransfer = new DataTransfer();
+    source.dispatchEvent(
+      new DragEvent("dragstart", { bubbles: true, dataTransfer }),
+    );
+    const rect = target.getBoundingClientRect();
+    const clientY = rect.top + rect.height * 0.75;
+    target.dispatchEvent(
+      new DragEvent("dragover", { bubbles: true, clientY, dataTransfer }),
+    );
+    target.dispatchEvent(
+      new DragEvent("drop", { bubbles: true, clientY, dataTransfer }),
+    );
+    source.dispatchEvent(
+      new DragEvent("dragend", { bubbles: true, dataTransfer }),
+    );
+    return {
+      position: target.dataset.dropPosition ?? "",
+      order: [
+        ...document.querySelectorAll<HTMLElement>(
+          "[data-taxonomy-content] .taxonomy-card",
+        ),
+      ].map((item) => item.dataset.taxonomyId),
+    };
+  });
+  expect(dragPosition.position).toBe("after");
+  expect(dragPosition.order).toEqual(["category-3", "category-2"]);
   await expect(
     page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
   ).toContainText("統計学");
