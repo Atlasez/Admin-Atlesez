@@ -338,10 +338,22 @@ export class EditorialCollaborationRoom {
       );
       const sourceTime = sourceUpdatedAt ? Date.parse(sourceUpdatedAt) : NaN;
       const databaseTime = Date.parse(current.updated_at);
+      // Older editor clients could seed a shared field twice while reconnecting
+      // (for example, `title + title`).  This is never a valid persisted value;
+      // treat an exact duplicate of the current database snapshot as stale and
+      // repair it even when the room's timestamp metadata predates the fix.
+      const hasDuplicatedDatabaseField = (["title", "summary", "body"] as const).some(
+        (name) => {
+          const databaseValue = current[name];
+          const sharedValue = this.yDocument.getText(name).toString();
+          return Boolean(databaseValue) && sharedValue === `${databaseValue}${databaseValue}`;
+        },
+      );
       // The database is authoritative whenever this snapshot was created by an
       // older admin deployment or before the latest explicit save. This also
       // migrates existing rooms that only stored `yjs-state`.
       const databaseIsNewer =
+        hasDuplicatedDatabaseField ||
         !sourceUpdatedAt ||
         !Number.isFinite(sourceTime) ||
         !Number.isFinite(databaseTime) ||
