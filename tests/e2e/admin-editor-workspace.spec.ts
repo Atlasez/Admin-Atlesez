@@ -223,6 +223,41 @@ test("独立した目次ページから未着手の記事を執筆開始でき�
   }
 });
 
+test("目次APIのDB列名を画面モデルへ正規化して表示する", async ({ page }) => {
+  await mockAdminApi(
+    page,
+    undefined,
+    undefined,
+    [],
+    [
+      {
+        id: "outline-db-1",
+        subject_slug: "mathematics",
+        category_slug: "group-theory",
+        slug: "concentration-test",
+        title: "集中不等式",
+        summary: "APIのsnake_case行",
+        sort_order: 10,
+        parent_id: null,
+        status: "active",
+      },
+    ],
+  );
+  await page.goto(
+    "./admin/editor/outline/?subject=mathematics&category=group-theory",
+  );
+  await expect(
+    page
+      .locator("[data-outline-list] .outline-entry-title")
+      .filter({ hasText: "集中不等式" }),
+  ).toHaveCount(1);
+  await expect(
+    page
+      .locator("[data-outline-list] .outline-entry-meta")
+      .filter({ hasText: "concentration-test" }),
+  ).toHaveCount(1);
+});
+
 test("分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める", async ({
   page,
 }) => {

@@ -3801,7 +3801,16 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         }
         const savedId = id || data.id || "";
         if (!savedId) throw new Error("保存先の原稿IDを取得できませんでした。");
-        if (!id) { (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId; connectCollaboration(savedId); }
+        if (!id) {
+          (form.elements.namedItem("documentId") as HTMLInputElement).value = savedId;
+          connectCollaboration(savedId);
+          // 新規原稿を保存した直後にURLも永続的な原稿IDへ切り替える。
+          // new=1 のまま再読み込みすると、保存済み原稿ではなく空の新規原稿を
+          // 再生成してしまい、目次との紐付けや作成者表示が失われるため。
+          const nextQuery = new URLSearchParams({ document: savedId });
+          if (outlineId) nextQuery.set("outlineId", outlineId);
+          window.history.replaceState({}, "", `${window.location.pathname}?${nextQuery.toString()}${window.location.hash}`);
+        }
         await loadMediaAssets(savedId);
         persistedDocumentValues = { title: formValue("title"), summary: formValue("summary"), body: body.value };
         setUnsavedChanges(false);
