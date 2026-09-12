@@ -2947,13 +2947,52 @@ async function listAdminUpdateHistory(
   const headers = auth
     ? githubApiHeaders(auth.token, "atlasez-admin-update-history")
     : { accept: "application/vnd.github+json", "user-agent": "atlasez-admin-update-history", "x-github-api-version": "2022-11-28" };
-  const response = await fetch(
-    `https://api.github.com/repos/${repository}/commits?per_page=${limit}&page=${page}`,
-    { headers },
-  );
+  // GitHub は外部依存のため、DNS/タイムアウト・レート制限・想定外の
+  // JSONを管理画面の500へ変換しない。UIの共通リトライ導線が扱える
+  // 502契約へ正規化し、履歴ページだけが壊れた応答を表示しないようにする。
+  let response: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    response = await fetch(
+      `https://api.github.com/repos/${repository}/commits?per_page=${limit}&page=${page}`,
+      { headers, signal: controller.signal },
+    );
+  } catch {
+    clearTimeout(timeout);
+    return json(
+      {
+        error: "GitHubの更新履歴に接続できませんでした。時間をおいて再試行してください。",
+        code: controller.signal.aborted ? "GITHUB_TIMEOUT" : "GITHUB_UNAVAILABLE",
+        retryable: true,
+      },
+      502,
+    );
+  }
+  clearTimeout(timeout);
   if (!response.ok)
-    return json({ error: "GitHubの更新履歴を取得できませんでした。" }, 502);
-  const commits = (await response.json().catch(() => [])) as GithubCommitSummary[];
+    return json(
+      {
+        error:
+          response.status === 403 || response.status === 429
+            ? "GitHubの更新履歴の取得上限に達しました。時間をおいて再試行してください。"
+            : "GitHubの更新履歴を取得できませんでした。時間をおいて再試行してください。",
+        code: "GITHUB_REQUEST_FAILED",
+        retryable: response.status >= 500 || response.status === 403 || response.status === 429,
+      },
+      502,
+    );
+  const payload = await response.json().catch(() => null);
+  if (!Array.isArray(payload))
+    return json(
+      {
+        error: "GitHubから更新履歴を読み取れませんでした。時間をおいて再試行してください。",
+        code: "GITHUB_INVALID_RESPONSE",
+        retryable: true,
+      },
+      502,
+    );
+  const commits = payload as GithubCommitSummary[];
   const entries = commits
     .filter((commit) => commit.sha && commit.commit?.message)
     .map((commit) => {
@@ -4388,6 +4427,17 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
         cursor = null;
       }
     }
+    // 可視範囲をSQL側で先に絞り込む。取得後にfilterすると、担当外の
+    // 先頭ページだけでlimitを消費してしまい、担当分野の記事が次ページへ
+    // ずれて欠落する（特に大規模な目次で再現する）。
+    const subjectFilter = scope.allSubjects || scope.isManager
+      ? { sql: "", values: [] as string[] }
+      : allowedSubjects.size
+        ? {
+            sql: ` AND subject_slug IN (${[...allowedSubjects].map(() => "?").join(",")})`,
+            values: [...allowedSubjects],
+          }
+        : { sql: " AND 0=1", values: [] as string[] };
     const cursorFilter = cursor
       ? ` AND (subject_slug > ? OR
           (subject_slug = ? AND (category_slug > ? OR
@@ -4400,17 +4450,15 @@ async function editorialOutlineEntries(request: Request, env: Env): Promise<Resp
     const limitClause = paginated ? " LIMIT ?" : "";
     const rows = await env.REPORTS.prepare(
       `SELECT id,project_id,subject_slug,category_slug,parent_id,document_id,slug,title,summary,concept_id,sort_order,status,created_by,created_at,updated_at
-       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}${cursorFilter}
+       FROM editorial_outline_entries WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}${subjectFilter.sql}${cursorFilter}
        ORDER BY subject_slug,category_slug,sort_order,title,id${limitClause}`,
     )
-      .bind(...cursorValues, ...(paginated ? [pageLimit + 1] : []))
+      .bind(...subjectFilter.values, ...cursorValues, ...(paginated ? [pageLimit + 1] : []))
       .all<EditorialOutlineEntryRow>();
     const fetched = rows.results ?? [];
     const hasMore = paginated && fetched.length > pageLimit;
     const pageRows = paginated ? fetched.slice(0, pageLimit) : fetched;
-    const visible = scope.allSubjects || scope.isManager
-      ? pageRows
-      : pageRows.filter((row) => allowedSubjects.has(row.subject_slug));
+    const visible = pageRows;
     const last = pageRows.at(-1);
     const nextCursor = hasMore && last
       ? [last.subject_slug, last.category_slug, String(last.sort_order), last.title, last.id].map(encodeURIComponent).join("|")
@@ -9725,14 +9773,34 @@ async function memberTasksOverview(
   const taskCursorValues = taskCursor
     ? [taskCursor.status, taskCursor.status, taskCursor.archived, taskCursor.archived, taskCursor.due, taskCursor.due, taskCursor.dueAt, taskCursor.dueAt, taskCursor.updatedAt, taskCursor.updatedAt, taskCursor.id]
     : [];
+  const managerProjectIds = projects
+    .filter((project) => project.role === "manager")
+    .map((project) => project.id);
+  // 可視範囲をLIMITの前に適用する。取得後のfilterでは、担当外タスクが
+  // 先頭ページを消費して担当者のタスクが欠落するため、カーソルも正しく
+  // 継続できない。
+  const visiblePredicates: string[] = [];
+  const visibleValues: unknown[] = [];
+  if (managerProjectIds.length) {
+    visiblePredicates.push(`project_id IN (${managerProjectIds.map(() => "?").join(",")})`);
+    visibleValues.push(...managerProjectIds);
+  }
+  const subjectPredicate = scope.subjects.length
+    ? `subject IN (${scope.subjects.map(() => "?").join(",")})`
+    : "0=1";
+  visiblePredicates.push(
+    `(lower(created_by)=lower(?) OR lower(assignee_email)=lower(?) OR instr(',' || lower(COALESCE(assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (task_kind='feedback' AND assignee_email='*') OR subject IS NULL OR ${subjectPredicate})`,
+  );
+  visibleValues.push(scope.email, scope.email, scope.email, ...scope.subjects);
+  const visibilityFilter = ` AND (${visiblePredicates.join(" OR ")})`;
   const [tasks, members] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
         created_by,created_at,updated_at,archived_at,archived_by,archive_expires_at FROM editorial_tasks
-       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
+       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${visibilityFilter}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
        ORDER BY ${statusRank},${archivedRank},${dueRank},COALESCE(due_at, '') ASC,updated_at DESC,id DESC LIMIT ?`,
     )
-      .bind(...projectIds, ...taskCursorValues, pageLimit + 1)
+      .bind(...projectIds, ...visibleValues, ...taskCursorValues, pageLimit + 1)
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT m.project_id,m.email,
@@ -9745,22 +9813,11 @@ async function memberTasksOverview(
       .bind(...projectIds)
       .all<Record<string, unknown>>(),
   ]);
-  const managerProjects = new Set(
-    projects
-      .filter((project) => project.role === "manager")
-      .map((project) => project.id),
-  );
   const fetchedTasks = tasks.results ?? [];
   const hasMoreTasks = fetchedTasks.length > pageLimit;
   const pageTasks = fetchedTasks.slice(0, pageLimit);
-  const visibleTasks = pageTasks.filter(
-    (task) =>
-      managerProjects.has(String(task.project_id)) ||
-      taskAssignedTo(task.assignee_email, scope.email, task.task_kind) ||
-      task.created_by === scope.email ||
-      task.subject === null ||
-      scope.subjects.includes(String(task.subject ?? "")),
-  );
+  // 可視範囲はSQLで適用済み。ここでは型の揺れを吸収するだけで再filterしない。
+  const visibleTasks = pageTasks;
   const lastTask = pageTasks.at(-1);
   const nextTaskCursor = hasMoreTasks && lastTask
     ? encodeURIComponent(JSON.stringify({ status: lastTask.status === "done" ? 1 : 0, archived: lastTask.archived_at ? 1 : 0, due: !lastTask.due_at ? 1 : 0, dueAt: String(lastTask.due_at ?? ""), updatedAt: String(lastTask.updated_at ?? ""), id: String(lastTask.id ?? "") }))
