@@ -186,6 +186,38 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it("preserves a legacy category entry list when no admin outline exists", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  categories:",
+      "    - id: group-theory",
+      "      slug: group-theory",
+      "      name: { ja: 群論, en: Group Theory }",
+      "      order: 1",
+      "      entryConceptIds: [math.group-theory.group-definition]",
+      "      relatedCategoryIds: []",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "group-theory",
+          name: "群論",
+          description: "",
+          sort_order: 1,
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).toContain(
+      "entryConceptIds: [math.group-theory.group-definition]",
+    );
+  });
+
   it("returns the numeric pending approval count in the portal overview", async () => {
     const portalEnv = {
       ...emptyEnv,
