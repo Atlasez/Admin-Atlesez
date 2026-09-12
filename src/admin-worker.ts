@@ -9294,15 +9294,38 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   // 履歴は5種類のテーブルを横断するため、毎回同時取得すると件数が少なくても待ち時間が増える。
   const historyOnly = new URL(request.url).searchParams.get("view") === "history";
   const secretariatRole = scope.isManager ? "manager" : await operationProjectRole(env, scope, "secretariat");
-  const canReviewApplications = scope.isManager || secretariatRole === "manager";
+  const canReviewProfileRequests = scope.isManager || secretariatRole === "manager";
   const projectRows = scope.isManager
-    ? await env.REPORTS.prepare("SELECT id,slug,name FROM atlasez_projects ORDER BY name").all<{ id: string; slug: string; name: string }>()
+    ? await env.REPORTS.prepare("SELECT id,slug,name FROM atlasez_projects ORDER BY name").all<{ id: string; slug: string; name: string; role?: string }>()
     : await env.REPORTS.prepare(
-        `SELECT p.id,p.slug,p.name FROM atlasez_projects p
+        `SELECT p.id,p.slug,p.name,m.role FROM atlasez_projects p
          JOIN atlasez_project_memberships m ON m.project_id=p.id
          WHERE lower(m.email)=lower(?) ORDER BY p.name`,
-      ).bind(scope.email).all<{ id: string; slug: string; name: string }>();
-  const projects = projectRows.results ?? [];
+      ).bind(scope.email).all<{ id: string; slug: string; name: string; role?: string }>();
+  const projects = (projectRows.results ?? []).map((project) => ({
+    ...project,
+    role: project.role ?? (scope.isManager ? "manager" : ""),
+  }));
+  // 応募の閲覧・処理は、応募フォームに対応するプロジェクトの manager
+  // だけに限定する。secretariat manager だからといって、別プロジェクトの
+  // 応募者情報まで一覧へ混入させない。
+  const applicationProjectSlugs = scope.isManager
+    ? [...APPLICATION_FORM_SLUGS, "semi-platform"]
+    : [...new Set(
+        projects
+          .filter((project) => project.role === "manager")
+          .flatMap((project) => {
+            const rawSlug = project.slug.trim();
+            const canonicalSlug = canonicalApplicationProjectSlug(rawSlug);
+            return APPLICATION_FORM_SLUGS.has(canonicalSlug)
+              ? [rawSlug, canonicalSlug]
+              : [];
+          }),
+      )];
+  const canReviewApplications = applicationProjectSlugs.length > 0;
+  const applicationProjectFilter = applicationProjectSlugs.length
+    ? ` AND project_slug IN (${applicationProjectSlugs.map(() => "?").join(",")})`
+    : " AND 0=1";
   const projectIds = projects.map((project) => project.id).filter(Boolean);
   const approvalProjectIds = await reviewableProfileProjectIds(
     env,
@@ -9318,7 +9341,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     scope,
     projectIds,
     approvalProjectIds,
-    canReviewApplications,
+    canReviewProfileRequests,
   );
   const taskPredicate = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")}) AND ${scope.isManager
@@ -9360,8 +9383,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }) : canReviewApplications
       ? env.REPORTS.prepare(
           `SELECT id,name,email,project_slug,status,created_at,updated_at FROM atlasez_member_applications
-            WHERE status IN ('new','reviewing') ORDER BY created_at DESC LIMIT 80`,
-        ).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
+            WHERE status IN ('new','reviewing')${applicationProjectFilter}
+            ORDER BY created_at DESC LIMIT 80`,
+        ).bind(...applicationProjectSlugs).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }),
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }) : scope.isManager || secretariatRole === "manager"
       ? env.REPORTS.prepare(
@@ -9403,8 +9427,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     historyOnly ? canReviewApplications
       ? env.REPORTS.prepare(
           `SELECT id,name,email,project_slug,status,created_at,updated_at FROM atlasez_member_applications
-            WHERE status IN ('accepted','rejected') ORDER BY updated_at DESC LIMIT 50`,
-        ).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
+            WHERE status IN ('accepted','rejected')${applicationProjectFilter}
+            ORDER BY updated_at DESC LIMIT 50`,
+        ).bind(...applicationProjectSlugs).all<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> })
       : Promise.resolve({ results: [] as Array<{ id: string; name: string; email: string; project_slug: string; status: string; created_at: string; updated_at: string }> }),
     historyOnly ? scope.isManager || secretariatRole === "manager"
@@ -9871,6 +9896,15 @@ async function memberCalendarOverview(
   const eventCursorCondition = eventCursor
     ? " AND (starts_at > ? OR (starts_at = ? AND id > ?))"
     : "";
+  // メンバー向けカレンダーでは、自分以外の可用性ブロック／曜日ルールを
+  // 返さない。表示名を空にするだけではメールアドレスや時刻の組み合わせ
+  // から他メンバーの予定を推測できるため、SQLの段階で行を絞り込む。
+  const availabilityVisibility = scope.isManager
+    ? ""
+    : " WHERE lower(b.email)=lower(?)";
+  const availabilityRuleVisibility = scope.isManager
+    ? ""
+    : " WHERE lower(r.email)=lower(?)";
   const eventValues = eventCursor
     ? [...projectIds, eventCursor.startsAt, eventCursor.startsAt, eventCursor.id]
     : projectIds;
@@ -9903,9 +9937,10 @@ async function memberCalendarOverview(
         b.kind,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name
        FROM editorial_member_availability_blocks b
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(b.email)
+       ${availabilityVisibility}
        ORDER BY b.starts_at ASC LIMIT 500`,
     )
-      .bind(scope.email)
+      .bind(...(scope.isManager ? [scope.email] : [scope.email, scope.email]))
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT r.id,r.email,r.weekday,r.timezone,
@@ -9913,9 +9948,10 @@ async function memberCalendarOverview(
         r.kind,COALESCE(NULLIF(TRIM(p.display_name),''),'表示名未設定') AS display_name
        FROM editorial_member_availability_rules r
        LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(r.email)
+       ${availabilityRuleVisibility}
        ORDER BY r.weekday ASC, r.created_at ASC LIMIT 200`,
     )
-      .bind(scope.email)
+      .bind(...(scope.isManager ? [scope.email] : [scope.email, scope.email]))
       .all<Record<string, unknown>>(),
   ]);
   const fetchedEvents = events.results ?? [];
@@ -11676,6 +11712,15 @@ async function operationsOverview(
   const memberValues: unknown[] = canSeeAllProjectOperations
     ? []
     : scope.subjects;
+  // プロジェクト manager は参加者の可用性を確認できるが、一般メンバーは
+  // 自分のブロック／曜日ルールだけを返す。ラベルを空にするだけでなく、
+  // SQLの行自体を絞り込み、他人のメールアドレスや時刻を漏らさない。
+  const availabilityVisibility = canSeeAllProjectOperations
+    ? ""
+    : " WHERE lower(b.email)=lower(?)";
+  const availabilityRuleVisibility = canSeeAllProjectOperations
+    ? ""
+    : " WHERE lower(r.email)=lower(?)";
   const [tasks, events, progress, members, availability, availabilityBlocks, availabilityRules] =
     await Promise.all([
       env.REPORTS.prepare(
@@ -11725,9 +11770,14 @@ async function operationsOverview(
         b.kind, COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name
        FROM editorial_member_availability_blocks b
        LEFT JOIN editorial_member_profiles p ON lower(p.email) = lower(b.email)
+       ${availabilityVisibility}
        ORDER BY b.starts_at ASC LIMIT 500`,
       )
-        .bind(scope.email, scope.isManager ? 1 : 0)
+        .bind(
+          scope.email,
+          scope.isManager ? 1 : 0,
+          ...(canSeeAllProjectOperations ? [] : [scope.email]),
+        )
         .all<Record<string, unknown>>(),
       env.REPORTS.prepare(
         `SELECT r.id, r.email, r.weekday, r.timezone,
@@ -11735,9 +11785,14 @@ async function operationsOverview(
         r.kind, COALESCE(NULLIF(TRIM(p.display_name), ''), '表示名未設定') AS display_name
        FROM editorial_member_availability_rules r
        LEFT JOIN editorial_member_profiles p ON lower(p.email) = lower(r.email)
+       ${availabilityRuleVisibility}
        ORDER BY r.weekday ASC, r.created_at ASC LIMIT 200`,
       )
-        .bind(scope.email, scope.isManager ? 1 : 0)
+        .bind(
+          scope.email,
+          scope.isManager ? 1 : 0,
+          ...(canSeeAllProjectOperations ? [] : [scope.email]),
+        )
         .all<Record<string, unknown>>(),
     ]);
   const fetchedTaskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
@@ -20198,9 +20253,26 @@ async function adminNotifications(
   const notificationProjectBindings = scope.isManager
     ? []
     : notificationProjectIds;
-  const canReviewApplications =
-    scope.isManager ||
-    (await operationProjectRole(env, scope, "secretariat")) === "manager";
+  // 応募通知も応募一覧と同じプロジェクト境界を使う。運営事務局の
+  // manager であっても、manager として所属していないプロジェクトの
+  // 応募者情報は通知へ出さない。
+  const applicationProjectSlugs = scope.isManager
+    ? [...APPLICATION_FORM_SLUGS, "semi-platform"]
+    : [...new Set(
+        visibleOperationProjects
+          .filter((project) => project.role === "manager")
+          .flatMap((project) => {
+            const rawSlug = project.slug.trim();
+            const canonicalSlug = canonicalApplicationProjectSlug(rawSlug);
+            return APPLICATION_FORM_SLUGS.has(canonicalSlug)
+              ? [rawSlug, canonicalSlug]
+              : [];
+          }),
+      )];
+  const canReviewApplications = applicationProjectSlugs.length > 0;
+  const applicationProjectFilter = applicationProjectSlugs.length
+    ? ` AND project_slug IN (${applicationProjectSlugs.map(() => "?").join(",")})`
+    : " AND 0=1";
   const [
     commentRows,
     mentionRows,
@@ -20302,9 +20374,9 @@ async function adminNotifications(
       ? env.REPORTS.prepare(
           `SELECT id,name,email,project_slug,created_at
              FROM atlasez_member_applications
-            WHERE status='new'
+            WHERE status='new'${applicationProjectFilter}
             ORDER BY created_at DESC LIMIT 20`,
-        ).all<{
+        ).bind(...applicationProjectSlugs).all<{
           id: string;
           name: string;
           email: string;
