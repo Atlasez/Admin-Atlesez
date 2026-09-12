@@ -787,11 +787,35 @@ test("公開操作は処理中の二重送信を防ぐ", async ({ page }) => {
       publishRequests += 1;
   });
   await page.goto("./admin/editor/?document=doc-1");
-  await page.getByRole("button", { name: "公開する" }).click();
+  // 後続の文書取得で公開ボタンが表示されても、初期化前のクリックは
+  // ダイアログのイベント登録前に落ちる可能性があるため、編集WSの
+  // 初期化完了とボタン表示を待ってから操作する。
+  await expect(
+    page.locator('[data-editor-workspace][data-editor-initialized="true"]'),
+  ).toBeVisible();
+  await expect(page.locator("[data-editor-workspace]")).not.toHaveAttribute(
+    "data-editor-starting",
+    "",
+  );
+  const publishButton = page.getByRole("button", { name: "公開する" });
+  await expect(publishButton).toBeVisible();
+  await publishButton.click();
   const confirm = page
     .locator("[data-approval-dialog]")
     .getByRole("button", { name: "はい（公開する）" });
-  await Promise.all([confirm.click(), confirm.click().catch(() => undefined)]);
+  await expect(confirm).toBeVisible();
+  await confirm.click();
+  // 公開処理の開始直後に同じ確認イベントが届いても、二重送信を
+  // 受け付けないことをDOMイベントで確認する。ダイアログが閉じた後の
+  // Locator二重クリックはPlaywrightの待機タイムアウトを招くため使わない。
+  await page.locator("[data-approval-dialog]").evaluate((dialog) => {
+    const button = dialog.querySelector<HTMLButtonElement>(
+      'button[value="yes"]',
+    );
+    button?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+  });
   await expect.poll(() => publishRequests).toBe(1);
 });
 
