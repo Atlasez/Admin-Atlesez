@@ -41,3 +41,26 @@ test("操作履歴を検索し、誰がいつ何を変更したかを詳細表�
     "changedFields",
   );
 });
+
+test("操作履歴のフィルターはタブレット幅で画面外へはみ出さない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.route("**/api/admin/audit-log?*", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ entries: [] }),
+    }),
+  );
+  await page.goto("/admin/audit-log/");
+  const geometry = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    filterRight:
+      document.querySelector(".audit-filters")?.getBoundingClientRect().right ??
+      0,
+  }));
+  expect(geometry.viewport).toBe(768);
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewport + 1);
+  expect(geometry.filterRight).toBeLessThanOrEqual(geometry.viewport);
+});
