@@ -1600,6 +1600,9 @@ test("インライン数式・表示数式を本文と別窓へ挿入できる",
   await page.goto("./admin/editor/?new=1");
   await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
+  const editor = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
   await body.fill("本文");
   await body.focus();
   await body.evaluate((element) =>
@@ -1720,6 +1723,9 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
   await page.goto("./admin/editor/?new=1");
   await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
+  const editor = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
   const expectedStarts: Record<string, string> = {
     frac: "\\frac{ }{ }",
     sqrt: "\\sqrt{ }",
@@ -1729,9 +1735,11 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
     aligned: "\\begin{aligned}\n",
   };
   for (const [kind, expected] of Object.entries(expectedStarts)) {
-    await body.fill("");
-    await expect(body).toHaveValue("");
-    await body.focus();
+    // data-body is the hidden CodeMirror mirror; clear the visible editor so
+    // the next snippet starts from an empty document without a stale mirror.
+    await editor.fill("");
+    await expect(editor).toHaveText("");
+    await editor.focus();
     await page.locator(`[data-insert-latex-snippet="${kind}"]`).click();
     await expect(body).toHaveValue(
       new RegExp(`^${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
@@ -1744,7 +1752,11 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
     .click();
   const popup = await popupPromise;
   const popupBody = popup.locator("[data-body]");
-  await popupBody.fill("");
+  const popupEditor = popup.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  await popupEditor.fill("");
+  await expect(popupEditor).toHaveText("");
   await popup.locator('[data-insert-latex-snippet="matrix"]').click();
   await expect(popupBody).toHaveValue(/\\begin\{pmatrix\}\n/);
   await expect(body).toHaveValue(await popupBody.inputValue());
