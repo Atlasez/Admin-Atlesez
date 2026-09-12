@@ -16313,7 +16313,7 @@ async function editorialPublicationIntegrationStatus(
     // PR作成に必要なContents/Pull requests権限だけを確認する。
     const preflightReady = true;
     const ready = defaultBranch === "main" && canWrite && !archived;
-    const automationReady = ready && automaticMerge && automaticReview && preflightReady !== false;
+    const automationReady = ready && automaticMerge && automaticReview;
     return json({
       ready,
       configured: true,
