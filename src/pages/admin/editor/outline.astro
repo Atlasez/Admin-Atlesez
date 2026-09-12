@@ -247,7 +247,25 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       ]);
       const documentsData = documentsPage.data; const outlineData = outlinePage.data; const taxonomyData = await taxonomyResponse.json() as {catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string};
       if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。");
-      documents = (documentsPage.rows as DocumentRow[]); customEntries = (outlinePage.rows as Entry[]).map((entry) => ({...entry,key:entry.id ?? `${entry.subject}/${entry.category}/${entry.slug}`,order:Number(entry.sort_order ?? entry.order ?? 0)}));
+      documents = documentsPage.rows as DocumentRow[];
+      // 管理APIの目次行はDB列名（subject_slug/category_slug/parent_id）で返る。
+      // 画面側のEntryモデルへ正規化しないと、フィルターの subject/category と
+      // 一致せず、追加直後の目次が「0件」と表示されるためここで一度だけ変換する。
+      customEntries = (outlinePage.rows as Array<Entry & { subject_slug?: string; category_slug?: string; parent_id?: string | null }>).map((entry) => {
+        const subject = entry.subject ?? entry.subject_slug ?? "";
+        const category = entry.category ?? entry.category_slug ?? "";
+        const slug = entry.slug ?? "";
+        const id = entry.id;
+        return {
+          ...entry,
+          id,
+          subject,
+          category,
+          parent_id: entry.parent_id ?? null,
+          key: id ?? `${subject}/${category}/${slug}`,
+          order: Number(entry.sort_order ?? entry.order ?? 0),
+        };
+      });
       const catalog = (taxonomyData.catalog ?? []).filter((item) => item.status !== "archived"); const merged = new Map(subjects.map((item) => [item.slug,{...item,categories:[...item.categories]}])); catalog.filter((item) => item.kind === "subject").forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug,{slug:item.slug,name:item.name,status:"preparing",categories:[]}); }); catalog.filter((item) => item.kind === "category").forEach((item) => { const subject = merged.get(item.subject_slug); if (subject && !subject.categories.some((category) => category.slug === item.slug)) subject.categories.push({slug:item.slug,name:item.name,order:Number(item.sort_order ?? 0)}); });
       const permitted = documentsData.scope?.isManager || !documentsData.scope?.subjects?.length ? null : new Set(documentsData.scope.subjects); subjects = [...merged.values()].filter((item) => !permitted || permitted.has(item.slug)); staticEntries = staticEntries.filter((entry) => !permitted || permitted.has(entry.subject)); fillSubjects(); render();
     };
