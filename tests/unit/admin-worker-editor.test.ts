@@ -2194,6 +2194,8 @@ describe("admin worker editor APIs", () => {
         canWrite: true,
         automaticMerge: true,
         automaticReview: true,
+        preflightReady: true,
+        preflightMode: "pull_request_ci",
         automationReady: true,
       });
     } finally {
@@ -2816,6 +2818,13 @@ describe("admin worker editor APIs", () => {
             request.url.endsWith("/pulls") && request.init?.method === "POST",
         ),
       ).toHaveLength(1);
+      expect(
+        requests.some(
+          (request) =>
+            request.url.includes("/actions/workflows/") &&
+            request.url.endsWith("/dispatches"),
+        ),
+      ).toBe(false);
       const contentWrites = requests.filter(
         (request) =>
           request.url.includes("/contents/") && request.init?.method === "PUT",
@@ -2873,6 +2882,151 @@ describe("admin worker editor APIs", () => {
       expect(background).toHaveLength(1);
       await Promise.all(background);
     } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("falls back to commit statuses when the Checks API is unavailable", async () => {
+    const documentId = "88888888-8888-4888-8888-888888888888";
+    const run = {
+      id: "99999999-9999-4999-8999-999999999999",
+      document_id: documentId,
+      action: "publish" as const,
+      state: "checks_pending" as const,
+      attempt: 0,
+      pull_request_number: 777,
+      pull_request_url: "https://github.com/Atlasez/Atlasez01/pull/777",
+      branch: "editorial/published-status-fallback",
+      head_sha: null,
+      merge_sha: null,
+      last_check_at: null,
+      next_attempt_at: null,
+      error_code: null,
+      error_message: null,
+      idempotency_key: "status-fallback",
+      lease_until: null,
+      failure_kind: null,
+      check_name: null,
+      check_url: null,
+      diagnostic_url: null,
+      created_by: "local-editor@atlasez.test",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-30T00:00:00.000Z",
+    };
+    const executed: { query: string; values: unknown[] }[] = [];
+    class StatusFallbackStatement extends EmptyStatement {
+      private values: unknown[] = [];
+
+      bind(...values: unknown[]) {
+        super.bind(...values);
+        this.values = values;
+        return this;
+      }
+
+      async all<T>() {
+        if (this.query.includes("FROM editorial_publication_runs"))
+          return { results: [run] as T[] };
+        return { results: [] as T[] };
+      }
+
+      async first<T>() {
+        if (this.query.includes("FROM editorial_documents"))
+          return { id: documentId } as T;
+        return null as T | null;
+      }
+
+      async run() {
+        executed.push({ query: this.query, values: this.values });
+        return { meta: { changes: 1 } };
+      }
+    }
+    const requests: string[] = [];
+    const importKeyMock = vi
+      .spyOn(crypto.subtle, "importKey")
+      .mockResolvedValue({} as CryptoKey);
+    const signMock = vi
+      .spyOn(crypto.subtle, "sign")
+      .mockResolvedValue(new Uint8Array([0]).buffer);
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requests.push(url);
+      if (url.endsWith("/access_tokens"))
+        return new Response(
+          JSON.stringify({
+            token: "installation-token",
+            permissions: { contents: "write", pull_requests: "write" },
+          }),
+          { status: 201 },
+        );
+      if (url.endsWith("/pulls/777"))
+        return new Response(
+          JSON.stringify({
+            number: 777,
+            state: "open",
+            user: { login: "publisher-bot" },
+            head: { sha: "status-head" },
+            draft: false,
+            mergeable_state: "clean",
+          }),
+        );
+      if (url.includes("/check-runs?"))
+        return new Response("forbidden", { status: 403 });
+      if (url.endsWith("/status"))
+        return new Response(
+          JSON.stringify({
+            state: "success",
+            total_count: 1,
+            statuses: [
+              {
+                context: "content-ci",
+                state: "success",
+                target_url:
+                  "https://github.com/Atlasez/Atlasez01/actions/runs/777",
+              },
+            ],
+          }),
+        );
+      if (url.endsWith("/user"))
+        return new Response(JSON.stringify({ login: "editorial-reviewer" }));
+      if (url.includes("/pulls/777/reviews?"))
+        return new Response(JSON.stringify([]));
+      if (url.endsWith("/pulls/777/reviews"))
+        return new Response(
+          JSON.stringify({ state: "APPROVED", commit_id: "status-head" }),
+          { status: 200 },
+        );
+      if (url.endsWith("/pulls/777/merge"))
+        return new Response(
+          JSON.stringify({ merged: true, sha: "status-merge" }),
+        );
+      throw new Error(`Unexpected GitHub request: ${url}`);
+    });
+    try {
+      const pending: Promise<unknown>[] = [];
+      await worker.scheduled(
+        { cron: "*/1 * * * *" },
+        {
+          ...emptyEnv,
+          GITHUB_APP_ID: "4768541",
+          GITHUB_APP_INSTALLATION_ID: "157671744",
+          GITHUB_APP_PRIVATE_KEY:
+            "-----BEGIN PRIVATE KEY-----\nAQ==\n-----END PRIVATE KEY-----",
+          GITHUB_REVIEW_TOKEN: "review-token",
+          REPORTS: {
+            ...emptyEnv.REPORTS,
+            prepare: (query: string) => new StatusFallbackStatement(query),
+          },
+        } as never,
+        { waitUntil: (promise: Promise<unknown>) => pending.push(promise) },
+      );
+      await Promise.all(pending);
+      expect(requests.some((url) => url.endsWith("/status"))).toBe(true);
+      expect(
+        executed.some((entry) => entry.values.includes("deploy_pending")),
+      ).toBe(true);
+    } finally {
+      importKeyMock.mockRestore();
+      signMock.mockRestore();
       vi.unstubAllGlobals();
     }
   });

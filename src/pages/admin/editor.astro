@@ -5731,6 +5731,19 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
   .editor-workspace .document-statuses .publication-run-status {
     display: grid;
+    /* 古いプロトタイプ由来の巨大な疑似要素を無効化する。
+       状態カードは通常フローのレイアウトだけで描画し、PC幅でも
+       記事タイトルや右側の操作列へ重ならないようにする。 */
+    inset: auto !important;
+    transform: none !important;
+  }
+
+  .editor-workspace .document-statuses > .publication-run-status::before,
+  .editor-workspace .document-statuses > .publication-run-status::after,
+  .editor-workspace .document-statuses > .publication-diagnostic::before,
+  .editor-workspace .document-statuses > .publication-diagnostic::after {
+    content: none !important;
+    display: none !important;
   }
 
   .editor-workspace .publication-run-copy,
