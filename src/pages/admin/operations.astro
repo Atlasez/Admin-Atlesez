@@ -1313,9 +1313,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
 </style>
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
-  import { holidaysForRegions, localDateTimeToInstant, supportedHolidayRegions } from '../../lib/calendar-support';
-  import { recurringCoWorkingEventsForMonth } from '../../lib/co-working-schedule';
-  import { getTimeZoneOptions } from '../../lib/timezones';
   type OperationMember = { email: string; display_name?: string };
   type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
   type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
@@ -1323,7 +1320,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
   type AvailabilityRule = { id: string; email?: string; display_name?: string; weekday: number; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
   type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; eventPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; progressPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
-  const initializeOperations = () => {
+  const initializeOperations = async () => {
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
     root.dataset.initialized = 'true';
@@ -1389,6 +1386,27 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const progressOnly = root.dataset.progressOnly === 'true';
     const projectId = new URLSearchParams(location.search).get('project') || 'atlas';
     const calendarPage = location.pathname.replace(/\/$/, '') === '/admin/calendar';
+    // The timezone database and date-holidays contain large generated data
+    // sets. They are only needed by calendar views; keeping them out of the
+    // task/progress bundle avoids downloading ~1.6 MB before the first task
+    // list can be used. Dynamic imports are split into a calendar-only chunk.
+    let holidaysForRegions: typeof import('../../lib/calendar-support').holidaysForRegions;
+    let localDateTimeToInstant: typeof import('../../lib/calendar-support').localDateTimeToInstant;
+    let supportedHolidayRegions: typeof import('../../lib/calendar-support').supportedHolidayRegions;
+    let recurringCoWorkingEventsForMonth: typeof import('../../lib/co-working-schedule').recurringCoWorkingEventsForMonth;
+    let getTimeZoneOptions: typeof import('../../lib/timezones').getTimeZoneOptions;
+    if (calendarPage || memberPage) {
+      const [calendarSupport, coWorkingSchedule, timezoneSupport] = await Promise.all([
+        import('../../lib/calendar-support'),
+        import('../../lib/co-working-schedule'),
+        import('../../lib/timezones'),
+      ]);
+      holidaysForRegions = calendarSupport.holidaysForRegions;
+      localDateTimeToInstant = calendarSupport.localDateTimeToInstant;
+      supportedHolidayRegions = calendarSupport.supportedHolidayRegions;
+      recurringCoWorkingEventsForMonth = coWorkingSchedule.recurringCoWorkingEventsForMonth;
+      getTimeZoneOptions = timezoneSupport.getTimeZoneOptions;
+    }
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
     let taskNextCursor: string | null = null;
     let taskLoadingMore = false;
@@ -1508,7 +1526,10 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       const rows = rules.map((rule) => reminderRowHtml(rule)).join('') || '<p class="reminder-empty">リマインダーは設定されていません。</p>';
       return `<details class="task-reminder-editor"><summary>リマインダーを確認・編集（${rules.length}件）</summary><div data-reminder-editor="${escapeHtml(String(item.id))}"><p class="reminder-editor-note">期限基準の相対指定は保存時に日時へ展開されます。メール欄が空欄なら通知ベルに表示します。</p><div class="task-reminder-rules">${rows}</div><button type="button" class="secondary-button" data-add-reminder>リマインダーを追加</button><label class="field-label">指定日時の繰り返し<select data-reminder-repeat><option value="none" ${selected(repeat, 'none')}>1回</option><option value="daily" ${selected(repeat, 'daily')}>毎日</option><option value="weekly" ${selected(repeat, 'weekly')}>毎週</option><option value="monthly" ${selected(repeat, 'monthly')}>毎月</option></select></label><label class="field-label">自分の通知先メールアドレス（任意）<input type="email" maxlength="254" data-reminder-email value="${escapeHtml(String(item.reminder_email || ''))}" placeholder="自分のメールアドレス" /></label><button type="button" data-save-reminders>このタスクの設定を保存</button><output class="operation-feedback" data-reminder-feedback aria-live="polite"></output></div></details>`;
     };
-    populateTimezones();
+    // Task/progress views already receive their timezone options in the
+    // server-rendered HTML. Calendar-only enhancement can populate the
+    // searchable timezone and holiday controls after its lazy chunk arrives.
+    if (calendarPage || memberPage) populateTimezones();
     const api = async <T,>(url: string, method = 'GET', body?: unknown): Promise<T> => {
       const response = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', headers: body === undefined ? {} : { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
       const contentType = response.headers.get('content-type') ?? '';
@@ -1603,6 +1624,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       calendarSelectionSummary.value = `${calendarSelectionDates[0]}〜${calendarSelectionDates[calendarSelectionDates.length - 1]}を選択中。可否を選んで「期間を追加」を押してください。`;
     };
     const renderCalendar = () => {
+      // Task/progress pages keep the shared calendar markup for a consistent
+      // layout, but do not load or use the calendar runtime.
+      if (!calendarPage && !memberPage) return;
       const first = new Date(month.getFullYear(), month.getMonth(), 1), last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
       const selectedRegions = [...holidayCountry.selectedOptions].map((option) => option.value);
       const holidays = holidaysForRegions(selectedRegions, month.getFullYear());
