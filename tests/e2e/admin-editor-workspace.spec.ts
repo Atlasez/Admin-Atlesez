@@ -432,6 +432,146 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   );
 });
 
+test("目次項目をドラッグして親子関係を変更し、再読込後も維持できる", async ({
+  page,
+}) => {
+  const entries = [
+    {
+      id: "outline-a",
+      key: "outline-a",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "lagrange-theorem",
+      title: "ラグランジュの定理",
+      summary: "",
+      order: 10,
+      sort_order: 10,
+      parent_id: null,
+      status: "active",
+      document_id: null,
+    },
+    {
+      id: "outline-b",
+      key: "outline-b",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "group-order",
+      title: "群の位数",
+      summary: "",
+      order: 20,
+      sort_order: 20,
+      parent_id: null,
+      status: "active",
+      document_id: null,
+    },
+  ];
+  let savedItems: Array<Record<string, unknown>> = [];
+  await page.route("**/api/admin/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/admin/editor/outline") {
+      if (request.method() === "PATCH") {
+        const body = JSON.parse(request.postData() ?? "{}");
+        if (body.action === "reorder" && Array.isArray(body.items)) {
+          savedItems = body.items;
+          for (const item of body.items) {
+            const entry = entries.find((candidate) => candidate.id === item.id);
+            if (entry) {
+              entry.parent_id = item.parentId ?? null;
+              entry.sort_order = Number(item.sortOrder ?? entry.sort_order);
+            }
+          }
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ entries }),
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/documents") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          documents: [],
+          scope: { subjects: [], isManager: true },
+        }),
+      });
+      return;
+    }
+    if (url.pathname === "/api/admin/editor/taxonomy") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ catalog: [] }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({}),
+    });
+  });
+
+  await page.goto(
+    "./admin/editor/outline/?subject=mathematics&category=group-theory",
+  );
+  const source = page.locator(
+    '[data-outline-entry][data-entry-id="outline-a"]',
+  );
+  const target = page.locator(
+    '[data-outline-entry][data-entry-id="outline-b"]',
+  );
+  await expect(source).toBeVisible();
+  await expect(target).toBeVisible();
+  await page.evaluate(() => {
+    const source = document.querySelector<HTMLElement>(
+      '[data-outline-entry][data-entry-id="outline-a"]',
+    );
+    const target = document.querySelector<HTMLElement>(
+      '[data-outline-entry][data-entry-id="outline-b"]',
+    );
+    if (!source || !target) throw new Error("目次項目が見つかりません。");
+    const dataTransfer = new DataTransfer();
+    source.dispatchEvent(
+      new DragEvent("dragstart", { bubbles: true, dataTransfer }),
+    );
+    const rect = target.getBoundingClientRect();
+    const clientY = rect.top + rect.height / 2;
+    target.dispatchEvent(
+      new DragEvent("dragover", { bubbles: true, clientY, dataTransfer }),
+    );
+    target.dispatchEvent(
+      new DragEvent("drop", { bubbles: true, clientY, dataTransfer }),
+    );
+    source.dispatchEvent(
+      new DragEvent("dragend", { bubbles: true, dataTransfer }),
+    );
+  });
+  await expect(
+    page.getByRole("button", { name: "並び順を保存" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "並び順を保存" }).click();
+  await expect
+    .poll(() => savedItems.find((item) => item.id === "outline-a")?.parentId)
+    .toBe("outline-b");
+  await page.reload();
+  await expect(
+    page.locator(
+      '.outline-children[data-parent-id="outline-b"] [data-entry-id="outline-a"]',
+    ),
+  ).toBeVisible();
+});
+
 test("目次項目を選択して編集・アーカイブ操作を開始できる", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/outline/");
