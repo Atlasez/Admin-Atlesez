@@ -3888,6 +3888,38 @@ const editorialTaxonomyAutoSlug = (kind: "subject" | "category", name: string) =
   return `${kind}-${codePoints}`.slice(0, 80);
 };
 
+/** 静的な分野も管理カタログへ取り込み、表示順を管理画面から保存できるようにする。 */
+async function ensureStaticEditorialTaxonomyCatalog(env: Env) {
+  const now = new Date().toISOString();
+  const statements = Object.entries(APPLICATION_SUBJECT_LABELS).map(
+    ([slug, name], index) =>
+      env.REPORTS.prepare(
+        `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
+         (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ).bind(
+        crypto.randomUUID(),
+        "atlas",
+        "subject",
+        "",
+        slug,
+        name,
+        "",
+        index * 10,
+        "active",
+        "system",
+        now,
+        now,
+      ),
+  );
+  try {
+    await env.REPORTS.batch(statements);
+  } catch (error) {
+    // 既存環境で移行がまだ適用されていない場合も、従来の読み込みを止めない。
+    console.warn("static taxonomy catalog bootstrap skipped", error);
+  }
+}
+
 /** 表示名から、URLに使える安定した識別子を生成する。日本語は
  * Unicodeコードポイントをbase36化し、ASCII以外をそのままURLへ出さない。 */
 export const editorialOutlineAutoSlug = (title: string, fallbackId: string) => {
@@ -3912,6 +3944,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   const coordinatorSubjects = scope.coordinatorSubjects ?? [];
   const url = new URL(request.url);
   if (request.method === "GET") {
+    await ensureStaticEditorialTaxonomyCatalog(env);
     const includeArchived = url.searchParams.get("includeArchived") === "1";
     const result = await env.REPORTS.prepare(
       `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status
@@ -14953,9 +14986,18 @@ export const mergeEditorialTaxonomyYaml = (
     next = `${next}${suffix}\n${editorialTaxonomySubjectYaml(subjectRow, categories)}\n`;
     return next;
   }
-  if (!block || !categories.length) return next;
+  if (!block) return next;
 
   let blockText = block.text;
+  if (subjectRow) {
+    const orderLine = `  order: ${Math.max(0, Number(subjectRow.sort_order) || 0)}`;
+    if (/^  order:\s*\d+\s*$/m.test(blockText)) {
+      blockText = blockText.replace(/^  order:\s*\d+\s*$/m, orderLine);
+    }
+  }
+  if (!categories.length) {
+    return `${next.slice(0, block.start)}${blockText}${next.slice(block.end)}`;
+  }
   const hasCategories = /^  categories:\s*$/m.test(blockText);
   const missingCategories = categories.filter(
     (row) =>
@@ -14964,7 +15006,26 @@ export const mergeEditorialTaxonomyYaml = (
         "m",
       ).test(blockText),
   );
-  if (!missingCategories.length) return next;
+  // 既存の動的カテゴリは、表示名と順番も管理画面の最新値へ更新する。
+  for (const row of categories) {
+    const categoryPattern = new RegExp(
+      `(^    - id: ${escapeRegExp(row.slug)}\\s*$[\\s\\S]*?)(?=^    - id: |^  [^ ]|(?![\\s\\S]))`,
+      "m",
+    );
+    const categoryMatch = categoryPattern.exec(blockText);
+    if (!categoryMatch) continue;
+    let categoryBlock = categoryMatch[1];
+    const nameLine = `      name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`;
+    categoryBlock = /^      name:.*$/m.test(categoryBlock)
+      ? categoryBlock.replace(/^      name:.*$/m, nameLine)
+      : categoryBlock;
+    const orderLine = `      order: ${Math.max(0, Number(row.sort_order) || 0)}`;
+    categoryBlock = /^      order:\s*\d+\s*$/m.test(categoryBlock)
+      ? categoryBlock.replace(/^      order:\s*\d+\s*$/m, orderLine)
+      : categoryBlock;
+    blockText = `${blockText.slice(0, categoryMatch.index)}${categoryBlock}${blockText.slice(categoryMatch.index + categoryMatch[1].length)}`;
+  }
+  if (!missingCategories.length) return `${next.slice(0, block.start)}${blockText}${next.slice(block.end)}`;
   const suffix = missingCategories
     .map(editorialTaxonomyCategoryYaml)
     .join("\n");

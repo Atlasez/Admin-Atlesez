@@ -140,6 +140,48 @@ describe("admin worker editor APIs", () => {
     expect((twice.match(/id: machine-learning/g) ?? []).length).toBe(1);
   });
 
+  it("updates subject and existing category labels and order from the admin catalog", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  status: published",
+      "  order: 0",
+      "  categories:",
+      "    - id: machine-learning",
+      "      slug: machine-learning",
+      "      name: { ja: 古い名前, en: 古い名前 }",
+      "      order: 0",
+      "      entryConceptIds: []",
+      "      relatedCategoryIds: []",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "subject",
+          subject_slug: "",
+          slug: "mathematics",
+          name: "数学",
+          description: "",
+          sort_order: 20,
+        },
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 30,
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).toContain("  order: 20");
+    expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
+    expect(merged).toContain("      order: 30");
+  });
+
   it("returns the numeric pending approval count in the portal overview", async () => {
     const portalEnv = {
       ...emptyEnv,
@@ -588,6 +630,68 @@ describe("admin worker editor APIs", () => {
     });
     expect(queries.some((query) => query.includes("id IN (?)"))).toBe(true);
     expect(batches).toHaveLength(1);
+  });
+
+  it("rejects outline reorder requests that would create a parent cycle", async () => {
+    const firstId = "00000000-0000-0000-0000-000000000011";
+    const secondId = "00000000-0000-0000-0000-000000000012";
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("id,subject_slug,category_slug,title")) {
+              return {
+                results: [
+                  {
+                    id: firstId,
+                    subject_slug: "mathematics",
+                    category_slug: "group-theory",
+                    title: "親",
+                  },
+                  {
+                    id: secondId,
+                    subject_slug: "mathematics",
+                    category_slug: "group-theory",
+                    title: "子",
+                  },
+                ],
+              } as { results: T[] };
+            }
+            if (query.includes("SELECT id,parent_id")) {
+              return {
+                results: [
+                  { id: firstId, parent_id: null },
+                  { id: secondId, parent_id: firstId },
+                ],
+              } as { results: T[] };
+            }
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "reorder",
+          items: [
+            { id: firstId, sortOrder: 10, parentId: secondId },
+            { id: secondId, sortOrder: 20, parentId: firstId },
+          ],
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload).toMatchObject({ error: "階層が循環しています。" });
   });
 
   it("supports cursor pagination for large outline lists", async () => {

@@ -16,7 +16,7 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
     <section class="legend" aria-label="役割の説明"><span><i class="dot dot--member"></i>分野担当</span><span><i class="dot dot--lead"></i>分野統括（公開フロー）</span><span><i class="dot dot--manager"></i>運営統括</span><span><i class="dot dot--custom"></i>カスタム項目</span></section>
     <section class="subject-grid" aria-label="分野別の役割"><div class="loading" data-content>分野と担当を読み込んでいます…</div></section>
     <section class="custom-section" aria-labelledby="custom-heading"><div class="panel-heading"><h2 id="custom-heading">カスタムジャンル／役割</h2><span data-custom-count>—</span></div><div class="custom-grid" data-custom-content><p class="loading">読み込み中…</p></div></section>
-    <section class="taxonomy-section" aria-labelledby="taxonomy-heading"><div class="panel-heading"><h2 id="taxonomy-heading">学習サイトの分野／カテゴリ</h2><span data-taxonomy-count>—</span></div><div class="taxonomy-grid" data-taxonomy-content><p class="loading">読み込み中…</p></div></section>
+    <section class="taxonomy-section" aria-labelledby="taxonomy-heading"><div class="panel-heading"><div><h2 id="taxonomy-heading">学習サイトの分野／カテゴリ</h2><p class="panel-note">カードをドラッグして分野・カテゴリの順番や所属を変更できます。変更は対象記事の公開PRへ自動で反映されます。</p></div><span data-taxonomy-count>—</span></div><div class="taxonomy-board" data-taxonomy-content><p class="loading">読み込み中…</p></div></section>
     <AdminRetryNotice />
     <output class="message" data-message aria-live="polite"></output>
   </main>
@@ -184,12 +184,65 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
   }
 
   .genre-roles .taxonomy-section { border-top: 1px solid var(--border-default); margin-top: 2rem; padding-top: 1.2rem; }
-  .genre-roles .taxonomy-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
-  .genre-roles .taxonomy-card[data-status="archived"] { opacity: .72; }
-  .genre-roles .taxonomy-card[draggable="true"] { cursor: grab; }
-  .genre-roles .taxonomy-card[draggable="true"]:active { cursor: grabbing; }
-  .genre-roles .taxonomy-order-actions { display: inline-flex; gap: .2rem; }
+  .genre-roles .panel-note { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .3rem 0 0; }
+  .genre-roles .taxonomy-board { display: grid; gap: .8rem; }
+  .genre-roles .taxonomy-lanes { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); }
+  .genre-roles .taxonomy-subjects { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+  .genre-roles .taxonomy-subject-card,
+  .genre-roles .taxonomy-lane { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .45rem; min-width: 0; position: relative; }
+  .genre-roles .taxonomy-subject-card { display: grid; gap: .5rem; padding: .7rem .8rem; }
+  .genre-roles .taxonomy-subject-card[draggable="true"] { cursor: grab; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+  .genre-roles .taxonomy-subject-card[draggable="true"]:hover { background: var(--background-inset); border-color: var(--accent-primary); transform: translateY(-1px); }
+  .genre-roles .taxonomy-subject-card[draggable="true"]:active { cursor: grabbing; }
+  .genre-roles .taxonomy-subject-card.is-dragging,
+  .genre-roles .taxonomy-category.is-dragging { opacity: .45; }
+  .genre-roles .taxonomy-subject-card__heading,
+  .genre-roles .taxonomy-lane__heading { align-items: center; display: flex; gap: .6rem; justify-content: space-between; min-width: 0; }
+  .genre-roles .taxonomy-subject-card__title { align-items: center; display: flex; gap: .45rem; min-width: 0; }
+  .genre-roles .taxonomy-drag-handle { color: var(--text-muted); cursor: grab; font-size: .9rem; letter-spacing: -.1em; user-select: none; }
+  .genre-roles .taxonomy-subject-card h3,
+  .genre-roles .taxonomy-lane h3 { font-size: .92rem; margin: 0; overflow-wrap: anywhere; }
+  .genre-roles .taxonomy-subject-card code { color: var(--text-secondary); display: block; font-size: .66rem; margin-top: .15rem; overflow-wrap: anywhere; }
+  .genre-roles .taxonomy-lane { overflow: hidden; }
+  .genre-roles .taxonomy-lane__heading { border-bottom: 1px solid var(--border-default); padding: .65rem .8rem; }
+  .genre-roles .taxonomy-lane__heading > div { min-width: 0; }
+  .genre-roles .taxonomy-lane__heading small { color: var(--text-secondary); display: block; font-size: .64rem; margin-top: .15rem; }
+  .genre-roles .taxonomy-lane__heading .subject-status { font-size: .6rem; }
+  .genre-roles .taxonomy-category-list { display: grid; gap: .4rem; list-style: none; margin: 0; min-height: 2.7rem; padding: .55rem; }
+  .genre-roles .taxonomy-category { align-items: center; background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .3rem; display: flex; gap: .5rem; justify-content: space-between; min-width: 0; padding: .45rem .55rem; position: relative; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+  .genre-roles .taxonomy-category:hover { background: var(--background-inset); border-color: var(--border-strong); }
+  .genre-roles .taxonomy-category[draggable="true"] { cursor: grab; }
+  .genre-roles .taxonomy-category[draggable="true"]:active { cursor: grabbing; }
+  .genre-roles .taxonomy-category.is-drop-target,
+  .genre-roles .taxonomy-lane.is-drop-target { border-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 9%, var(--background-primary)); }
+  .genre-roles .taxonomy-category[data-drop-position="before"]::before,
+  .genre-roles .taxonomy-category[data-drop-position="after"]::after,
+  .genre-roles .taxonomy-subject-card[data-drop-position="before"]::before,
+  .genre-roles .taxonomy-subject-card[data-drop-position="after"]::after { background: var(--accent-primary); border-radius: 999px; content: ""; height: 3px; left: .35rem; position: absolute; right: .35rem; }
+  .genre-roles .taxonomy-category[data-drop-position="before"]::before,
+  .genre-roles .taxonomy-subject-card[data-drop-position="before"]::before { top: -.25rem; }
+  .genre-roles .taxonomy-category[data-drop-position="after"]::after,
+  .genre-roles .taxonomy-subject-card[data-drop-position="after"]::after { bottom: -.25rem; }
+  .genre-roles .taxonomy-category__label { min-width: 0; }
+  .genre-roles .taxonomy-category__label strong { color: var(--text-primary); display: block; font-size: .73rem; overflow-wrap: anywhere; }
+  .genre-roles .taxonomy-category__label code { color: var(--text-secondary); display: block; font-size: .6rem; margin-top: .12rem; overflow-wrap: anywhere; }
+  .genre-roles .taxonomy-category__actions,
+  .genre-roles .taxonomy-subject-card__actions { align-items: center; display: inline-flex; flex: 0 0 auto; gap: .15rem; }
+  .genre-roles .taxonomy-category__actions button,
+  .genre-roles .taxonomy-subject-card__actions button { background: transparent; border: 1px solid transparent; border-radius: .25rem; color: var(--accent-primary); cursor: pointer; font: inherit; font-size: .63rem; padding: .24rem .35rem; }
+  .genre-roles .taxonomy-category__actions button:hover,
+  .genre-roles .taxonomy-subject-card__actions button:hover { background: var(--background-inset); border-color: var(--border-default); }
+  .genre-roles .taxonomy-order-actions { display: inline-flex; gap: .15rem; }
   .genre-roles .taxonomy-order-actions button:disabled { cursor: not-allowed; opacity: .4; }
+  .genre-roles .taxonomy-editor { border-top: 1px solid var(--border-default); display: grid; gap: .4rem; margin-top: .4rem; padding-top: .55rem; }
+  .genre-roles .taxonomy-editor[hidden] { display: none; }
+  .genre-roles .taxonomy-editor label { color: var(--text-secondary); display: grid; font-size: .63rem; gap: .2rem; }
+  .genre-roles .taxonomy-editor input { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 1.9rem; padding: .3rem .4rem; }
+  .genre-roles .taxonomy-editor__actions { display: flex; gap: .3rem; }
+  .genre-roles .taxonomy-empty { color: var(--text-muted); font-size: .68rem; margin: 0; padding: .45rem .2rem; }
+  .genre-roles .taxonomy-card[data-status="archived"],
+  .genre-roles .taxonomy-subject-card[data-status="archived"],
+  .genre-roles .taxonomy-category[data-status="archived"] { opacity: .72; }
 
   .genre-roles .delete-catalog {
     color: #e27676 !important;
@@ -205,6 +258,9 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       grid-template-columns: 1fr;
       gap: 0.2rem;
     }
+
+    .genre-roles .taxonomy-subjects { grid-template-columns: 1fr; }
+    .genre-roles .taxonomy-lanes { grid-template-columns: 1fr; }
   }
 </style>
 
@@ -228,32 +284,56 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
     const renderCustom = () => { customCount.textContent = `${catalog.length}件`; customContent.innerHTML = catalog.length ? catalog.map((item) => { const itemAssignments = assignments.filter((assignment) => assignment.catalog_id === item.id); return `<article class="custom-card"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${esc(item.slug)}</code></div><span class="subject-status">${item.kind === "genre" ? "ジャンル" : "役割"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-people"><strong class="custom-card__meta">参加メンバー</strong><div class="custom-people-list">${people(itemAssignments, "", (assignment) => `${item.id}|${assignment.email}`)}</div></div><div class="custom-card__actions"><span class="custom-card__meta">${itemAssignments.length}人</span><button type="button" class="delete-catalog" data-delete-catalog="${esc(item.id)}">項目を削除</button></div></article>`; }).join("") : '<p class="loading">カスタム項目はまだありません。</p>'; };
     const taxonomyGroupKey = (item: Taxonomy) => `${item.kind}:${item.subject_slug}`;
     const taxonomyEntries = () => taxonomy.slice().sort((a, b) => a.kind.localeCompare(b.kind) || a.subject_slug.localeCompare(b.subject_slug) || (Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)) || a.name.localeCompare(b.name, "ja"));
+    const taxonomyEditor = (item: Taxonomy) => `<form class="taxonomy-editor" data-taxonomy-editor="${esc(item.id)}" hidden><label>表示名<input name="name" value="${esc(item.name)}" maxlength="120" required /></label><label>ID<input name="slug" value="${esc(item.slug)}" pattern="[a-z0-9-]+" maxlength="80" required /></label><label>説明<input name="description" value="${esc(item.description ?? "")}" maxlength="500" /></label><div class="taxonomy-editor__actions"><button type="submit" data-save-taxonomy="${esc(item.id)}">保存</button><button type="button" data-cancel-taxonomy="${esc(item.id)}">キャンセル</button></div></form>`;
     const renderTaxonomy = () => {
       const entries = taxonomyEntries();
-      taxonomyCount.textContent = `${entries.length}件`;
-      taxonomyContent.innerHTML = entries.length ? entries.map((item) => {
-        const siblings = entries.filter((entry) => taxonomyGroupKey(entry) === taxonomyGroupKey(item));
-        const position = siblings.findIndex((entry) => entry.id === item.id);
-        const moveLabel = item.kind === "subject" ? "分野" : "カテゴリ";
-        return `<article class="custom-card taxonomy-card" data-status="${esc(item.status ?? "active")}" data-taxonomy-id="${esc(item.id)}" data-taxonomy-group="${esc(taxonomyGroupKey(item))}" draggable="true"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${item.kind === "category" ? `${esc(item.subject_slug)} / ` : ""}${esc(item.slug)}</code></div><span class="subject-status">${moveLabel}・${item.status === "archived" ? "アーカイブ" : "公開"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-card__meta">表示順 ${Number(item.sort_order ?? 0)} ・ ${position + 1}/${siblings.length}</div><div class="custom-card__actions"><span class="taxonomy-order-actions"><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="up" aria-label="${esc(item.name)}を上へ" ${position <= 0 ? "disabled" : ""}>上へ</button><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="down" aria-label="${esc(item.name)}を下へ" ${position >= siblings.length - 1 ? "disabled" : ""}>下へ</button></span><span><button type="button" data-toggle-taxonomy="${esc(item.id)}" data-next-status="${item.status === "archived" ? "restore" : "archive"}">${item.status === "archived" ? "復元" : "アーカイブ"}</button><button type="button" data-edit-taxonomy="${esc(item.id)}">編集</button></span></div></article>`;
-      }).join("") : '<p class="loading">追加した分野・カテゴリはまだありません。</p>';
+      const subjectItems = new Map(entries.filter((item) => item.kind === "subject").map((item) => [item.slug, item]));
+      const categoriesBySubject = new Map<string, Taxonomy[]>();
+      entries.filter((item) => item.kind === "category").forEach((item) => { const list = categoriesBySubject.get(item.subject_slug) ?? []; list.push(item); categoriesBySubject.set(item.subject_slug, list); });
+      const visibleSubjects = subjectRows().sort((left, right) => {
+        const leftItem = subjectItems.get(left.slug); const rightItem = subjectItems.get(right.slug);
+        if (leftItem && rightItem) return (Number(leftItem.sort_order ?? 0) - Number(rightItem.sort_order ?? 0)) || left.name.localeCompare(right.name, "ja");
+        if (leftItem) return 1;
+        if (rightItem) return -1;
+        return left.name.localeCompare(right.name, "ja");
+      });
+      taxonomyCount.textContent = `${entries.length}件・${visibleSubjects.length}分野`;
+      if (!visibleSubjects.length) { taxonomyContent.innerHTML = '<p class="loading">追加した分野・カテゴリはまだありません。</p>'; return; }
+      const renderCategory = (item: Taxonomy, position: number, siblings: Taxonomy[]) => `<li class="taxonomy-category taxonomy-card" data-status="${esc(item.status ?? "active")}" data-taxonomy-id="${esc(item.id)}" data-taxonomy-group="${esc(taxonomyGroupKey(item))}" draggable="true" aria-label="${esc(item.name)}。ドラッグしてカテゴリの順番または所属分野を変更"><span class="taxonomy-drag-handle" aria-hidden="true">⠿</span><div class="taxonomy-category__label"><strong>${esc(item.name)}</strong><code>${esc(item.slug)}</code></div><div class="taxonomy-category__actions"><span class="taxonomy-order-actions"><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="up" aria-label="${esc(item.name)}を上へ" ${position <= 0 ? "disabled" : ""}>↑</button><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="down" aria-label="${esc(item.name)}を下へ" ${position >= siblings.length - 1 ? "disabled" : ""}>↓</button></span><button type="button" data-edit-taxonomy="${esc(item.id)}">編集</button><button type="button" data-toggle-taxonomy="${esc(item.id)}" data-next-status="${item.status === "archived" ? "restore" : "archive"}">${item.status === "archived" ? "復元" : "アーカイブ"}</button></div>${taxonomyEditor(item)}</li>`;
+      taxonomyContent.innerHTML = `<div class="taxonomy-lanes">${visibleSubjects.map((subject) => { const subjectItem = subjectItems.get(subject.slug); const categories = categoriesBySubject.get(subject.slug) ?? []; const subjectSiblings = entries.filter((entry) => entry.kind === "subject"); const subjectPosition = subjectItem ? subjectSiblings.findIndex((entry) => entry.id === subjectItem.id) : -1; const subjectStatus = subjectItem?.status === "archived" ? "アーカイブ" : subject.status; const subjectActions = subjectItem ? `<div class="taxonomy-subject-card__actions"><span class="taxonomy-order-actions"><button type="button" data-move-taxonomy="${esc(subjectItem.id)}" data-direction="up" aria-label="${esc(subject.name)}を上へ" ${subjectPosition <= 0 ? "disabled" : ""}>↑</button><button type="button" data-move-taxonomy="${esc(subjectItem.id)}" data-direction="down" aria-label="${esc(subject.name)}を下へ" ${subjectPosition >= subjectSiblings.length - 1 ? "disabled" : ""}>↓</button></span><button type="button" data-edit-taxonomy="${esc(subjectItem.id)}">編集</button><button type="button" data-toggle-taxonomy="${esc(subjectItem.id)}" data-next-status="${subjectItem.status === "archived" ? "restore" : "archive"}">${subjectItem.status === "archived" ? "復元" : "アーカイブ"}</button></div>` : ""; return `<article class="taxonomy-lane${subjectItem ? " taxonomy-subject-card" : ""}" data-taxonomy-lane data-taxonomy-target-group="category:${esc(subject.slug)}" data-status="${subjectItem?.status ?? "active"}" ${subjectItem ? `data-taxonomy-id="${esc(subjectItem.id)}" data-taxonomy-group="subject:" draggable="true" aria-label="${esc(subject.name)}。ドラッグして分野の順番を変更"` : ""}><header class="taxonomy-lane__heading"><div class="taxonomy-subject-card__title">${subjectItem ? '<span class="taxonomy-drag-handle" aria-hidden="true">⠿</span>' : ""}<div><h3>${esc(subject.name)}</h3><code>${esc(subject.slug)}</code><small>${subjectItem ? `分野・${subjectStatus}` : "既存の分野"}・カテゴリ ${categories.length}件</small></div></div>${subjectActions}</header>${categories.length ? `<ul class="taxonomy-category-list">${categories.map((item, index) => renderCategory(item, index, categories)).join("")}</ul>` : '<p class="taxonomy-empty">カテゴリをここへドロップ、または上のフォームから追加できます。</p>'}${subjectItem ? taxonomyEditor(subjectItem) : ""}</article>`; }).join("")}</div>`;
     };
     const persistTaxonomyOrder = async (items: Taxonomy[]) => {
       await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ action: "reorder", items: items.map((item, index) => ({ id: item.id, sortOrder: index * 10 })) }) });
     };
-    const reorderTaxonomy = async (sourceId: string, targetId: string) => {
+    const reorderTaxonomy = async (sourceId: string, targetId: string, requestedGroup?: string, placement: "before" | "after" = "before") => {
       const source = taxonomy.find((item) => item.id === sourceId);
       const target = taxonomy.find((item) => item.id === targetId);
-      if (!source || !target || taxonomyGroupKey(source) !== taxonomyGroupKey(target) || sourceId === targetId) return;
-      const siblings = taxonomyEntries().filter((item) => taxonomyGroupKey(item) === taxonomyGroupKey(source));
-      const sourceIndex = siblings.findIndex((item) => item.id === sourceId);
-      const targetIndex = siblings.findIndex((item) => item.id === targetId);
-      if (sourceIndex < 0 || targetIndex < 0) return;
-      siblings.splice(sourceIndex, 1);
-      siblings.splice(targetIndex, 0, source);
-      siblings.forEach((item, index) => { item.sort_order = index * 10; });
+      if (!source || sourceId === targetId) return;
+      const sourceGroup = taxonomyGroupKey(source);
+      const targetGroup = requestedGroup ?? (target ? taxonomyGroupKey(target) : sourceGroup);
+      if (source.kind === "subject" && targetGroup !== "subject:") return;
+      if (source.kind === "category" && !targetGroup.startsWith("category:")) return;
+      const oldSiblings = taxonomyEntries().filter((item) => taxonomyGroupKey(item) === sourceGroup);
+      const sourceIndex = oldSiblings.findIndex((item) => item.id === sourceId);
+      if (sourceIndex < 0) return;
+      const nextSiblings = (sourceGroup === targetGroup ? oldSiblings : taxonomyEntries().filter((item) => taxonomyGroupKey(item) === targetGroup))
+        .filter((item) => item.id !== sourceId);
+      const targetIndex = target ? nextSiblings.findIndex((item) => item.id === target.id) : nextSiblings.length;
+      if (targetIndex < 0) return;
+      const insertionIndex = target ? targetIndex + (placement === "after" ? 1 : 0) : nextSiblings.length;
+      // 移動元を除いた配列へ挿入するため、同じグループ内でも
+      // ポインターの「前／後」と一致した位置に必ず着地します。
+      nextSiblings.splice(Math.min(insertionIndex, nextSiblings.length), 0, source);
+      const remainingOldSiblings = oldSiblings.filter((item) => item.id !== sourceId);
+      if (sourceGroup !== targetGroup && source.kind === "category") source.subject_slug = targetGroup.slice("category:".length);
+      remainingOldSiblings.forEach((item, index) => { item.sort_order = index * 10; });
+      nextSiblings.forEach((item, index) => { item.sort_order = index * 10; });
       renderTaxonomy();
-      try { await persistTaxonomyOrder(siblings); } catch (error) { await load(); throw error; }
+      try {
+        if (sourceGroup !== targetGroup && source.kind === "category") await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: source.id, action: "update", name: source.name, slug: source.slug, description: source.description ?? "", subject: source.subject_slug, sortOrder: source.sort_order }) });
+        if (remainingOldSiblings.length) await persistTaxonomyOrder(remainingOldSiblings);
+        await persistTaxonomyOrder(nextSiblings);
+      } catch (error) { await load(); throw error; }
     };
     const moveTaxonomy = async (id: string, direction: "up" | "down") => {
       const entries = taxonomyEntries();
@@ -293,14 +373,8 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
           await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: toggleTaxonomy.dataset.toggleTaxonomy, action: toggleTaxonomy.dataset.nextStatus }) });
           await load();
         } else if (editTaxonomy) {
-          const item = taxonomy.find((entry) => entry.id === editTaxonomy.dataset.editTaxonomy);
-          if (!item) return;
-          const name = window.prompt("表示名", item.name); if (name === null) return;
-          const slug = window.prompt("ID（英小文字とハイフン）", item.slug); if (slug === null) return;
-          const description = window.prompt("説明（任意）", item.description ?? ""); if (description === null) return;
-          const sortOrder = window.prompt("表示順（0以上）", String(item.sort_order ?? 0)); if (sortOrder === null) return;
-          await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id: item.id, action: "update", name, slug, description, sortOrder, subject: item.subject_slug }) });
-          await load();
+          const editor = root.querySelector<HTMLElement>(`[data-taxonomy-editor="${CSS.escape(editTaxonomy.dataset.editTaxonomy ?? "")}"]`);
+          if (editor) { editor.hidden = false; editor.querySelector<HTMLInputElement>("input[name=name]")?.focus(); }
         } else if (removeStandard) {
           const [kind, email, slug] = (removeStandard.dataset.removeStandard ?? "").split("|");
           if (kind === "member") await send(`/api/admin/report-admin-permissions?email=${encodeURIComponent(email)}&subject=${encodeURIComponent(slug)}`, { method: "DELETE" });
@@ -315,33 +389,83 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
         }
       } catch (error) { const message = root.querySelector<HTMLOutputElement>("[data-message]"); if (message) message.value = error instanceof Error ? error.message : "更新できませんでした。"; }
     });
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const cancel = target.closest<HTMLElement>("[data-cancel-taxonomy]");
+      if (cancel) { const editor = root.querySelector<HTMLElement>(`[data-taxonomy-editor="${CSS.escape(cancel.dataset.cancelTaxonomy ?? "")}"]`); if (editor) editor.hidden = true; }
+    });
+    root.addEventListener("submit", async (event) => {
+      const editor = (event.target as HTMLElement).closest<HTMLFormElement>("[data-taxonomy-editor]");
+      if (!editor) return;
+      event.preventDefault();
+      const id = editor.dataset.taxonomyEditor ?? "";
+      const item = taxonomy.find((entry) => entry.id === id);
+      if (!item) return;
+      const values = Object.fromEntries(new FormData(editor).entries());
+      const button = editor.querySelector<HTMLButtonElement>("[data-save-taxonomy]");
+      if (button) button.disabled = true;
+      try {
+        await send("/api/admin/editor/taxonomy", { method: "PATCH", body: JSON.stringify({ id, action: "update", name: values.name, slug: values.slug, description: values.description, sortOrder: item.sort_order, subject: item.subject_slug }) });
+        await load();
+      } catch (error) {
+        const message = root.querySelector<HTMLOutputElement>("[data-message]");
+        if (message) message.value = error instanceof Error ? error.message : "表示名を更新できませんでした。";
+        if (button) button.disabled = false;
+      }
+    });
     let draggedTaxonomyId = "";
     taxonomyContent.addEventListener("dragstart", (event) => {
       const card = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-id]");
       if (!card) return;
       draggedTaxonomyId = card.dataset.taxonomyId ?? "";
+      card.classList.add("is-dragging");
       event.dataTransfer?.setData("text/plain", draggedTaxonomyId);
       if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
     });
     taxonomyContent.addEventListener("dragover", (event) => {
       const card = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-id]");
-      if (!card || !draggedTaxonomyId) return;
+      const lane = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-lane]");
+      if ((!card && !lane) || !draggedTaxonomyId) return;
+      const source = taxonomy.find((item) => item.id === draggedTaxonomyId);
+      if (!source) return;
+      const targetGroup = source.kind === "subject" ? "subject:" : (lane?.dataset.taxonomyTargetGroup ?? card?.dataset.taxonomyGroup ?? "");
+      if ((source.kind === "category" && !targetGroup.startsWith("category:")) || (source.kind === "subject" && targetGroup !== "subject:")) return;
       event.preventDefault();
+      // ポインターが別カードへ移動したとき、前の候補を残さない。
+      // 複数の枠が同時に強調されると、移動先を誤認しやすくなる。
+      taxonomyContent.querySelectorAll<HTMLElement>(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+      taxonomyContent.querySelectorAll<HTMLElement>("[data-drop-position]").forEach((item) => item.removeAttribute("data-drop-position"));
+      const target = card ?? (lane?.dataset.taxonomyId ? lane : null);
+      target?.classList.add("is-drop-target");
+      if (target && target !== lane) {
+        const rect = target.getBoundingClientRect();
+        target.dataset.dropPosition = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      }
       if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     });
     taxonomyContent.addEventListener("drop", (event) => {
       const card = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-id]");
+      const lane = (event.target as HTMLElement).closest<HTMLElement>("[data-taxonomy-lane]");
+      const source = taxonomy.find((item) => item.id === draggedTaxonomyId);
       const targetId = card?.dataset.taxonomyId ?? "";
-      if (!targetId || !draggedTaxonomyId) return;
+      if (!draggedTaxonomyId || !source || (!targetId && !lane)) return;
+      if (targetId === source.id) return;
+      const targetGroup = source.kind === "subject" ? "subject:" : (lane?.dataset.taxonomyTargetGroup ?? card?.dataset.taxonomyGroup ?? "");
+      if ((source.kind === "category" && !targetGroup.startsWith("category:")) || (source.kind === "subject" && targetGroup !== "subject:")) return;
       event.preventDefault();
       const sourceId = draggedTaxonomyId;
+      const placement = card?.dataset.dropPosition === "after" ? "after" : "before";
       draggedTaxonomyId = "";
-      void reorderTaxonomy(sourceId, targetId).catch((error) => {
+      void reorderTaxonomy(sourceId, targetId, targetGroup, placement).catch((error) => {
         const message = root.querySelector<HTMLOutputElement>("[data-message]");
         if (message) message.value = error instanceof Error ? error.message : "並び順を更新できませんでした。";
       });
     });
-    taxonomyContent.addEventListener("dragend", () => { draggedTaxonomyId = ""; });
+    taxonomyContent.addEventListener("dragleave", (event) => {
+      const target = event.target as HTMLElement;
+      target.closest<HTMLElement>(".is-drop-target")?.classList.remove("is-drop-target");
+    });
+    taxonomyContent.addEventListener("dragend", (event) => { (event.target as HTMLElement).closest<HTMLElement>(".is-dragging")?.classList.remove("is-dragging"); root.querySelectorAll<HTMLElement>(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target")); root.querySelectorAll<HTMLElement>("[data-drop-position]").forEach((item) => item.removeAttribute("data-drop-position")); draggedTaxonomyId = ""; });
     void load().catch((error) => { content.innerHTML = `<p class="loading">${esc(error instanceof Error ? error.message : "役割情報を読み込めませんでした。")}</p>`; customContent.innerHTML = ""; });
   }; document.addEventListener("astro:page-load", initialize); initialize();
 </script>
