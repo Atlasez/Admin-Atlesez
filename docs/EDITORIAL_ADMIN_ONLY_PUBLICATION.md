@@ -13,7 +13,7 @@
 ## 初回の本番設定
 
 1. GitHub Appを作成し、`Atlasez/Atlasez01`だけへインストールする。
-2. AppにはMetadata read、Contents read/write、Pull requests read/write、Checks readを付与する。
+2. AppにはMetadata read、Contents read/write、Pull requests read/writeを付与する。Checks readは推奨（未付与でも、公開リポジトリのCommit statusesをフォールバックしてCI判定を継続する）。
 3. `main`のルールセットで、公開専用Appを対象リポジトリだけのBypass actorに追加する。承認必須数は0に変更しない。
 4. 管理Workerへ次のSecretを登録する。
 
@@ -31,7 +31,7 @@
    - Events: Check runs、Check suites、Workflow runs、Pull requests
    - Active: 有効
 
-Webhookは署名を検証し、対象PR・ブランチ・Commitに紐づく公開Runだけを処理する。未署名または別リポジトリの通知は処理しない。
+Webhookは署名を検証し、対象PR・ブランチ・Commitに紐づく公開Runだけを処理する。未署名または別リポジトリの通知は処理しない。Webhookが遅延・欠落した場合も1分Cronが同じRunを再取得する。Checks APIが権限不足（403/404）の場合はCommit statuses APIへ自動フォールバックし、Actions:writeやWorkflow dispatch権限には依存しない。
 
 `GITHUB_PUBLISH_TOKEN`は移行期間の読み書き用フォールバックとして残すが、自動Mergeには利用しない。GitHub Appが未設定の場合、管理画面の公開連携は「自動公開未設定」と表示される。
 
