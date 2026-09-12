@@ -22,6 +22,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         <button type="button" class="filter-button" data-action-filter="urgent" aria-pressed="false">今日・期限間近</button>
         <button type="button" class="filter-button" data-action-filter="unread" aria-pressed="false">未読通知</button>
         <button type="button" class="filter-button" data-action-filter="assigned" aria-pressed="false">自分の担当</button>
+        <button type="button" class="filter-button" data-action-filter="approvals" aria-pressed="false">承認待ち</button>
         <button type="button" class="filter-button" data-action-filter="history" aria-pressed="false">完了・履歴</button>
         <label class="saved-view"><span class="visually-hidden">保存ビュー</span><select data-action-saved-view aria-label="保存ビュー"><option value="">保存ビュー</option></select></label>
         <button type="button" class="filter-button save-view-button" data-action-save-view>表示を保存</button>
@@ -101,6 +102,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       if (filter === "urgent") return item.priority === "urgent" || item.priority === "due-soon";
       if (filter === "unread") return item.kind === "notification" && !item.read;
       if (filter === "assigned") return item.kind !== "notification";
+      if (filter === "approvals") return item.kind === "approval";
       if (filter === "history") return true;
       return true;
     });
@@ -115,7 +117,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       summaryNode.innerHTML = values.map(([label, value, detail, key]) => `<button type="button" class="summary-item" data-summary-filter="${key}"><span>${escape(label)}</span><strong>${value}</strong><small>${escape(detail)}</small></button>`).join("");
       summaryNode.querySelectorAll<HTMLButtonElement>("[data-summary-filter]").forEach((button) => button.addEventListener("click", () => {
         const key = button.dataset.summaryFilter;
-        const filterMap: Record<string, string> = { urgent: "urgent", "due-soon": "urgent", unread: "unread", approvals: "action", assigned: "assigned" };
+        const filterMap: Record<string, string> = { urgent: "urgent", "due-soon": "urgent", unread: "unread", approvals: "approvals", assigned: "assigned" };
         setFilter(filterMap[key ?? ""] ?? "all");
       }));
     };
@@ -151,7 +153,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       const rows = filteredItems();
       count.textContent = `${rows.length}件`;
       if (!rows.length) {
-        itemsNode.innerHTML = `<div class="action-empty"><strong>${filter === "history" ? "完了・アーカイブ済みの項目はありません。" : "対応が必要な項目はありません。"}</strong><span>${filter === "history" ? "対応を完了するとここに表示されます。" : "新しい項目が追加されるとここに表示されます。"}</span></div>`;
+        itemsNode.innerHTML = `<div class="action-empty"><strong>${filter === "history" ? "完了・アーカイブ済みの項目はありません。" : filter === "approvals" ? "承認待ちの項目はありません。" : "対応が必要な項目はありません。"}</strong><span>${filter === "history" ? "対応を完了するとここに表示されます。" : "新しい項目が追加されるとここに表示されます。"}</span></div>`;
         renderBulkBar();
         return;
       }
@@ -195,7 +197,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       const changedView = (filter === "history") !== (next === "history");
       filter = next;
       selected.clear();
-      listHeading.textContent = filter === "history" ? "完了・アーカイブ済み" : "対応が必要な項目";
+      listHeading.textContent = filter === "history" ? "完了・アーカイブ済み" : filter === "approvals" ? "承認待ち" : "対応が必要な項目";
       root.querySelectorAll<HTMLButtonElement>("[data-action-filter]").forEach((button) => { const active = button.dataset.actionFilter === filter; button.classList.toggle("is-active", active); button.setAttribute("aria-pressed", String(active)); });
       renderItems();
       if (changedView) void load(next === "history" ? "history" : "action");
@@ -206,7 +208,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         const parsed = JSON.parse(localStorage.getItem(savedViewsKey) ?? "[]");
         if (!Array.isArray(parsed)) return [];
         return parsed.filter((view): view is { id: string; label: string; filter: string } =>
-          view && typeof view.id === "string" && typeof view.label === "string" && typeof view.filter === "string" && ["all", "action", "urgent", "unread", "assigned", "history"].includes(view.filter),
+          view && typeof view.id === "string" && typeof view.label === "string" && typeof view.filter === "string" && ["all", "action", "urgent", "unread", "assigned", "approvals", "history"].includes(view.filter),
         ).slice(0, 8);
       } catch { return []; }
     };
@@ -348,10 +350,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .summary-item:first-child { border-left: 0; }
   .summary-item:hover, .summary-item:focus-visible { background: var(--background-inset); outline: 0; }
   .summary-item span { color: var(--text-secondary); font-size: .68rem; font-weight: 800; }
-  .summary-item strong { color: var(--text-primary); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1; }
+  .summary-item strong { color: var(--task-count); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1; }
   .summary-item small { color: var(--text-muted); font-size: .66rem; line-height: 1.35; }
   /* 数字は一色に統一し、色は項目の状態バッジだけに限定する。 */
-  .summary-item[data-summary-filter="urgent"] strong, .summary-item[data-summary-filter="approvals"] strong, .summary-item[data-summary-filter="unread"] strong, .summary-item strong { color: var(--text-primary); }
+  .summary-item[data-summary-filter="urgent"] strong, .summary-item[data-summary-filter="approvals"] strong, .summary-item[data-summary-filter="unread"] strong, .summary-item strong { color: var(--task-count); }
   .action-center-toolbar { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: .2rem 0 .7rem; }
   .action-filters { display: flex; flex-wrap: wrap; gap: .35rem; }
   .filter-button { color: var(--text-secondary); min-height: 2rem; }

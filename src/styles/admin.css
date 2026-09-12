@@ -55,3 +55,239 @@
     transition: none;
   }
 }
+
+/* 全ページで同じ読み込みの位置・余白を確保する。各ページが個別に
+   スピナーや文言を実装しても、表示後にレイアウトが横並びへ跳ねない。 */
+[data-admin-shell] .loading-state {
+  align-items: center;
+  background: var(--admin-surface-raised);
+  border: 1px dashed var(--admin-border);
+  box-sizing: border-box;
+  color: var(--admin-text-muted);
+  display: grid;
+  justify-items: center;
+  min-height: 5.5rem;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+[data-admin-shell] [data-admin-load-surface][aria-busy="true"] {
+  cursor: progress;
+}
+
+[data-admin-shell] [data-admin-load-skeleton] {
+  animation: admin-skeleton-pulse 1.2s ease-in-out infinite;
+  background: color-mix(in srgb, var(--admin-text) 9%, transparent);
+  border-radius: var(--radius);
+  display: block;
+  min-height: 2.75rem;
+  overflow: hidden;
+}
+
+@keyframes admin-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-admin-shell] [data-admin-load-skeleton] {
+    animation: none;
+  }
+}
+
+/* Legacy pages occasionally carry light-theme declarations in their route
+   stylesheet.  Keep those declarations as a light-mode fallback, but always
+   resolve surfaces and text through the shared tokens in dark/black modes.
+   This prevents a white flash or unreadable navy text when the theme changes. */
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks,
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests {
+  background: var(--admin-surface) !important;
+  color: var(--admin-text) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks section,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks section,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .task,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .task,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .summary-card,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .summary-card,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .project-filter-panel,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .project-filter-panel,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .filters,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .filters,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .project-filters,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .project-filters,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .empty {
+  background: var(--admin-surface-raised) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text) !important;
+  box-shadow: none !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks input,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks input,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks select,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks select,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks textarea,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks textarea {
+  background: var(--admin-surface) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks h1,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks h1,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks h2,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks h2,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks h3,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks h3,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks label,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks label,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .task p,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .task p,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .result-summary,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .result-summary,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .archive-policy,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .archive-policy,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .archive-toggle,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .archive-toggle,
+[data-pref-bg="dark"] [data-admin-shell] .member-tasks .badge,
+[data-pref-mode="black"] [data-admin-shell] .member-tasks .badge {
+  color: var(--admin-text) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page .intro-hero,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page .intro-hero,
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .introductions-page
+  .intro-directory-bar,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .introductions-page
+  .intro-directory-bar,
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page .introduction-face,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .introductions-page
+  .introduction-face,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .approval-hero,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .approval-hero,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .approval-toolbar,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .approval-toolbar,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .request-card,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .request-card,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .request-summary,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .request-summary,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .review-panel,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .review-panel,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .info-panel,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .info-panel,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .empty-state,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .empty-state,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .loading-state,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .loading-state {
+  background: var(--admin-surface-raised) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text) !important;
+  box-shadow: none !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page input,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page input,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests textarea,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests textarea {
+  background: var(--admin-surface) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text) !important;
+}
+
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .introductions-page
+  .introduction-pagination
+  button,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .introductions-page
+  .introduction-pagination
+  button,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .status-tab,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .status-tab,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .load-more {
+  background: var(--admin-surface) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text) !important;
+}
+
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .load-more {
+  color: var(--admin-accent) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page h1,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page h1,
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page h2,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page h2,
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page p,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page p,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests h1,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests h1,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests h2,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests h2,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests h3,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests h3,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests dt,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests dt,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests dd,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests dd {
+  color: var(--admin-text) !important;
+}
+
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .introductions-page
+  .intro-primary-action,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .introductions-page
+  .intro-primary-action,
+[data-pref-bg="dark"]
+  [data-admin-shell]
+  .introductions-page
+  .introduction-card-toggle,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .introductions-page
+  .introduction-card-toggle,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .approve,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests .approve {
+  background: var(--admin-accent) !important;
+  border-color: var(--admin-accent) !important;
+  color: var(--admin-on-accent) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page .intro-message,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page .intro-message,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .approval-message,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .profile-requests
+  .approval-message {
+  color: var(--admin-danger) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page a,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page a,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests a,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests a {
+  color: var(--admin-accent) !important;
+}
