@@ -173,6 +173,7 @@ describe("admin worker editor APIs", () => {
           name: "機械学習",
           description: "",
           sort_order: 30,
+          entry_concept_ids: ["math.machine-learning.concentration-inequality"],
         },
       ],
       "mathematics",
@@ -180,6 +181,175 @@ describe("admin worker editor APIs", () => {
     expect(merged).toContain("  order: 20");
     expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
     expect(merged).toContain("      order: 30");
+    expect(merged).toContain(
+      'entryConceptIds: ["math.machine-learning.concentration-inequality"]',
+    );
+  });
+
+  it("preserves a legacy category entry list when no admin outline exists", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+      "  categories:",
+      "    - id: group-theory",
+      "      slug: group-theory",
+      "      name: { ja: 群論, en: Group Theory }",
+      "      order: 1",
+      "      entryConceptIds: [math.group-theory.group-definition]",
+      "      relatedCategoryIds: []",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "group-theory",
+          name: "群論",
+          description: "",
+          sort_order: 1,
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).toContain(
+      "entryConceptIds: [math.group-theory.group-definition]",
+    );
+  });
+
+  it("does not publish a preparing subject to the learning-site catalog", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  name: { ja: 数学, en: Mathematics }",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "subject",
+          subject_slug: "",
+          slug: "informatics",
+          name: "情報",
+          description: "",
+          sort_order: 20,
+          created_by: "alice@example.com",
+          publication_status: "preparing",
+        },
+      ],
+      "informatics",
+    );
+    expect(merged).toBe(yaml);
+  });
+
+  it("removes a managed category after it is archived or returned to preparing", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  categories:",
+      "    - id: machine-learning",
+      "      slug: machine-learning",
+      "      name: { ja: 機械学習, en: 機械学習 }",
+      "      order: 1",
+      "      relatedCategoryIds: []",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 1,
+          status: "active",
+          created_by: "alice@example.com",
+          publication_status: "preparing",
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).not.toContain("machine-learning");
+  });
+
+  it("includes the article category on its publication branch even while taxonomy approval is pending", () => {
+    const yaml = [
+      "- id: informatics",
+      "  slug: informatics",
+      "  name: { ja: 情報, en: Information }",
+      "  status: published",
+      "  categories:",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "informatics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 0,
+          status: "active",
+          created_by: "alice@example.com",
+          publication_status: "preparing",
+        },
+      ],
+      "informatics",
+      "machine-learning",
+    );
+    expect(merged).toContain("- id: machine-learning");
+  });
+
+  it("replaces a managed category outline without touching related categories", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  categories:",
+      "    - id: machine-learning",
+      "      slug: machine-learning",
+      "      name: { ja: 機械学習, en: 機械学習 }",
+      "      order: 1",
+      "      entryConceptIds: []",
+      "      outline:",
+      "        - id: old",
+      "          slug: old",
+      "          title: 旧項目",
+      "          summary: 旧概要",
+      "          conceptId: math.machine-learning.old",
+      "          order: 0",
+      "      relatedCategoryIds: [group-theory]",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 1,
+          outline_entries: [
+            {
+              id: "new",
+              parent_id: null,
+              slug: "new",
+              title: "新項目",
+              summary: "新概要",
+              concept_id: "math.machine-learning.new",
+              sort_order: 0,
+            },
+          ],
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).toContain('id: "new"');
+    expect(merged).not.toContain("id: old");
+    expect(merged).toContain("relatedCategoryIds: [group-theory]");
   });
 
   it("returns the numeric pending approval count in the portal overview", async () => {

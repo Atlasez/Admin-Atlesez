@@ -223,6 +223,41 @@ test("独立した目次ページから未着手の記事を執筆開始でき�
   }
 });
 
+test("目次APIのDB列名を画面モデルへ正規化して表示する", async ({ page }) => {
+  await mockAdminApi(
+    page,
+    undefined,
+    undefined,
+    [],
+    [
+      {
+        id: "outline-db-1",
+        subject_slug: "mathematics",
+        category_slug: "group-theory",
+        slug: "concentration-test",
+        title: "集中不等式",
+        summary: "APIのsnake_case行",
+        sort_order: 10,
+        parent_id: null,
+        status: "active",
+      },
+    ],
+  );
+  await page.goto(
+    "./admin/editor/outline/?subject=mathematics&category=group-theory",
+  );
+  await expect(
+    page
+      .locator("[data-outline-list] .outline-entry-title")
+      .filter({ hasText: "集中不等式" }),
+  ).toHaveCount(1);
+  await expect(
+    page
+      .locator("[data-outline-list] .outline-entry-meta")
+      .filter({ hasText: "concentration-test" }),
+  ).toHaveCount(1);
+});
+
 test("分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める", async ({
   page,
 }) => {
@@ -269,6 +304,14 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
               (candidate) => candidate.id === item.id,
             );
             if (entry) entry.sort_order = Number(item.sortOrder ?? 0);
+          }
+        }
+        if (body.action === "update" && body.id) {
+          const entry = taxonomy.find((candidate) => candidate.id === body.id);
+          if (entry) {
+            entry.name = body.name ?? entry.name;
+            entry.slug = body.slug ?? entry.slug;
+            entry.description = body.description ?? entry.description;
           }
         }
         await route.fulfill({
@@ -380,6 +423,18 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.locator('input[name="name"]').fill("統計学");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("統計学", { exact: true })).toBeVisible();
+  // タイトルをクリックすると、カード内で表示名をすぐ編集できる。
+  const quickEdit = page.locator(
+    '[data-inline-edit-taxonomy][aria-label="機械学習の表示名を編集"]',
+  );
+  await quickEdit.click();
+  const quickEditor = page.locator('[data-taxonomy-editor="category-2"]');
+  await expect(quickEditor).toBeVisible();
+  await quickEditor.locator('input[name="name"]').fill("機械学習（基礎）");
+  await quickEditor.getByRole("button", { name: "保存" }).click();
+  await expect(
+    page.getByText("機械学習（基礎）", { exact: true }),
+  ).toBeVisible();
   // ドラッグ中のポインター位置（カード下半分）どおりに、後ろへ挿入される。
   const dragPosition = await page.evaluate(() => {
     const source = document.querySelector<HTMLElement>(
@@ -429,7 +484,7 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await page.getByText("目次項目を追加", { exact: true }).click();
   await expect(
     page.locator('[data-form-category] option[value="category-2"]'),
-  ).toHaveText("機械学習");
+  ).toHaveText("機械学習（基礎）");
   await page.locator("[data-form-category]").selectOption("category-2");
   await page
     .locator('[data-outline-form] input[name="title"]')
@@ -787,11 +842,35 @@ test("公開操作は処理中の二重送信を防ぐ", async ({ page }) => {
       publishRequests += 1;
   });
   await page.goto("./admin/editor/?document=doc-1");
-  await page.getByRole("button", { name: "公開する" }).click();
+  // 後続の文書取得で公開ボタンが表示されても、初期化前のクリックは
+  // ダイアログのイベント登録前に落ちる可能性があるため、編集WSの
+  // 初期化完了とボタン表示を待ってから操作する。
+  await expect(
+    page.locator('[data-editor-workspace][data-editor-initialized="true"]'),
+  ).toBeVisible();
+  await expect(page.locator("[data-editor-workspace]")).not.toHaveAttribute(
+    "data-editor-starting",
+    "",
+  );
+  const publishButton = page.getByRole("button", { name: "公開する" });
+  await expect(publishButton).toBeVisible();
+  await publishButton.click();
   const confirm = page
     .locator("[data-approval-dialog]")
     .getByRole("button", { name: "はい（公開する）" });
-  await Promise.all([confirm.click(), confirm.click().catch(() => undefined)]);
+  await expect(confirm).toBeVisible();
+  await confirm.click();
+  // 公開処理の開始直後に同じ確認イベントが届いても、二重送信を
+  // 受け付けないことをDOMイベントで確認する。ダイアログが閉じた後の
+  // Locator二重クリックはPlaywrightの待機タイムアウトを招くため使わない。
+  await page.locator("[data-approval-dialog]").evaluate((dialog) => {
+    const button = dialog.querySelector<HTMLButtonElement>(
+      'button[value="yes"]',
+    );
+    button?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+  });
   await expect.poll(() => publishRequests).toBe(1);
 });
 
@@ -984,6 +1063,15 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
       statusScrollWidth: statuses?.scrollWidth ?? 0,
       linkWidth: link?.getBoundingClientRect().width ?? 0,
       linkHeight: link?.getBoundingClientRect().height ?? 0,
+      children: statuses
+        ? [...statuses.children].map((child) => ({
+            cls: child.className,
+            rect: child.getBoundingClientRect().toJSON(),
+            scrollWidth: (child as HTMLElement).scrollWidth,
+            cssWidth: getComputedStyle(child).width,
+            position: getComputedStyle(child).position,
+          }))
+        : [],
     };
   });
   expect(statusLayout.statusScrollWidth).toBeLessThanOrEqual(
@@ -1641,6 +1729,9 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
   await page.goto("./admin/editor/?new=1");
   await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
+  const editor = page.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
   const expectedStarts: Record<string, string> = {
     frac: "\\frac{ }{ }",
     sqrt: "\\sqrt{ }",
@@ -1650,9 +1741,11 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
     aligned: "\\begin{aligned}\n",
   };
   for (const [kind, expected] of Object.entries(expectedStarts)) {
-    await body.fill("");
-    await expect(body).toHaveValue("");
-    await body.focus();
+    // data-body is the hidden CodeMirror mirror; clear the visible editor so
+    // the next snippet starts from an empty document without a stale mirror.
+    await editor.fill("");
+    await expect(editor).toHaveText("");
+    await editor.focus();
     await page.locator(`[data-insert-latex-snippet="${kind}"]`).click();
     await expect(body).toHaveValue(
       new RegExp(`^${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
@@ -1665,7 +1758,11 @@ test("LaTeX構造スニペットを本文と別窓へ挿入できる", async ({ 
     .click();
   const popup = await popupPromise;
   const popupBody = popup.locator("[data-body]");
-  await popupBody.fill("");
+  const popupEditor = popup.locator(
+    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
+  );
+  await popupEditor.fill("");
+  await expect(popupEditor).toHaveText("");
   await popup.locator('[data-insert-latex-snippet="matrix"]').click();
   await expect(popupBody).toHaveValue(/\\begin\{pmatrix\}\n/);
   await expect(body).toHaveValue(await popupBody.inputValue());

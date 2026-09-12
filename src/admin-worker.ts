@@ -32,6 +32,7 @@ import { normalizeArticleReferences } from "./lib/article-references.mjs";
 import { tikzPackageHelp } from "./lib/tikz-policy.mjs";
 import { parse as parseYaml } from "yaml";
 import { githubToken } from "./editorial-publication-github";
+import { EDITORIAL_STATIC_CATEGORIES } from "./lib/editorial-static-taxonomy";
 // ローカルWrangler開発時だけ同一Workerのexportをフォールバックとして使う。
 // Preview/本番は外部の専用Worker bindingを必ず経由する。
 export { EditorialCollaborationRoom } from "./editorial-collaboration-worker";
@@ -2250,6 +2251,8 @@ type AdminAuditAction =
   | "taxonomy_updated"
   | "taxonomy_archived"
   | "taxonomy_restored"
+  | "taxonomy_published"
+  | "taxonomy_unpublished"
   | "outline_created"
   | "outline_updated"
   | "outline_archived"
@@ -2281,6 +2284,8 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   taxonomy_updated: "分野・カテゴリを更新",
   taxonomy_archived: "分野・カテゴリをアーカイブ",
   taxonomy_restored: "分野・カテゴリを復元",
+  taxonomy_published: "分野・カテゴリを公開準備完了",
+  taxonomy_unpublished: "分野・カテゴリを準備中へ戻す",
   outline_created: "目次項目を追加",
   outline_updated: "目次項目を更新",
   outline_archived: "目次項目をアーカイブ",
@@ -3844,6 +3849,11 @@ type EditorialTaxonomyRow = {
   description: string;
   sort_order: number;
   status: "active" | "archived";
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
+  publication_status: "preparing" | "published";
 };
 
 /** 動的分野では、記事とカテゴリの関連がカタログに存在することを保存前に確認する。 */
@@ -3891,26 +3901,52 @@ const editorialTaxonomyAutoSlug = (kind: "subject" | "category", name: string) =
 /** 静的な分野も管理カタログへ取り込み、表示順を管理画面から保存できるようにする。 */
 async function ensureStaticEditorialTaxonomyCatalog(env: Env) {
   const now = new Date().toISOString();
-  const statements = Object.entries(APPLICATION_SUBJECT_LABELS).map(
+  const statements = Object.entries(APPLICATION_SUBJECT_LABELS).flatMap(
     ([slug, name], index) =>
-      env.REPORTS.prepare(
-        `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
-         (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(
-        crypto.randomUUID(),
-        "atlas",
-        "subject",
-        "",
-        slug,
-        name,
-        "",
-        index * 10,
-        "active",
-        "system",
-        now,
-        now,
-      ),
+      [
+        env.REPORTS.prepare(
+          `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
+           (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at,publication_status)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ).bind(
+          crypto.randomUUID(),
+          "atlas",
+          "subject",
+          "",
+          slug,
+          name,
+          "",
+          index * 10,
+          "active",
+          "system",
+          now,
+          "system",
+          now,
+          "published",
+        ),
+        ...(EDITORIAL_STATIC_CATEGORIES[slug] ?? []).map((category) =>
+          env.REPORTS.prepare(
+            `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
+             (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at,publication_status)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          ).bind(
+            crypto.randomUUID(),
+            "atlas",
+            "category",
+            slug,
+            category.slug,
+            category.name,
+            "",
+            category.sortOrder * 10,
+            "active",
+            "system",
+            now,
+            "system",
+            now,
+            "published",
+          ),
+        ),
+      ],
   );
   try {
     await env.REPORTS.batch(statements);
@@ -3938,7 +3974,11 @@ export const editorialOutlineAutoSlug = (title: string, fallbackId: string) => {
 };
 
 /** 管理画面で追加した分野・カテゴリを記事編集の目次へ反映する。 */
-async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Response> {
+async function editorialTaxonomyCatalog(
+  request: Request,
+  env: Env,
+  ctx?: WorkerExecutionContext,
+): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const coordinatorSubjects = scope.coordinatorSubjects ?? [];
@@ -3947,7 +3987,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     await ensureStaticEditorialTaxonomyCatalog(env);
     const includeArchived = url.searchParams.get("includeArchived") === "1";
     const result = await env.REPORTS.prepare(
-      `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status
+      `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at,publication_status
        FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
        ORDER BY kind,subject_slug,sort_order,name`,
     ).all<EditorialTaxonomyRow>();
@@ -3990,9 +4030,9 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       const itemIds = [...new Set(items.map((item) => item.id))];
       if (itemIds.length !== items.length) return json({ error: "同じ項目が重複しています。" }, 400);
       const existing = await env.REPORTS.prepare(
-        `SELECT id,kind,subject_slug,status FROM admin_editorial_taxonomy_catalog
+        `SELECT id,kind,subject_slug,status,slug FROM admin_editorial_taxonomy_catalog
          WHERE project_id='atlas' AND id IN (${itemIds.map(() => "?").join(",")})`,
-      ).bind(...itemIds).all<Pick<EditorialTaxonomyRow, "id" | "kind" | "subject_slug" | "status">>();
+      ).bind(...itemIds).all<Pick<EditorialTaxonomyRow, "id" | "kind" | "subject_slug" | "slug" | "status">>();
       const existingById = new Map((existing.results ?? []).map((row) => [row.id, row]));
       if (existingById.size !== itemIds.length) return json({ error: "存在しない項目が含まれています。" }, 404);
       if ([...existingById.values()].some((row) => {
@@ -4012,25 +4052,39 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
         [...groups.values()].flatMap((group) =>
           group.map((item, index) =>
             env.REPORTS.prepare(
-              "UPDATE admin_editorial_taxonomy_catalog SET sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'",
-            ).bind(index * 10, now, item.id),
+              "UPDATE admin_editorial_taxonomy_catalog SET sort_order=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'",
+            ).bind(index * 10, scope.email, now, item.id),
           ),
         ),
       );
       await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", itemIds.join(","), "分野・カテゴリ", `分野・カテゴリの並び順を更新（${itemIds.length}件）`, { ids: itemIds });
+      const subjects = [...new Set([...existingById.values()].map((row) => row.kind === "subject" ? row.slug : row.subject_slug).filter(Boolean))];
+      subjects.forEach((subject) => queueEditorialTaxonomyPublication(env, subject, ctx));
       return json({ ok: true, updated: itemIds.length });
     }
     const current = await env.REPORTS.prepare(
-      "SELECT id,kind,subject_slug,slug,name,description,sort_order,status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
+      "SELECT id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at,publication_status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
     ).bind(id).first<EditorialTaxonomyRow>();
     if (!current) return json({ error: "分野またはカテゴリが見つかりません。" }, 404);
     const canEditCurrent = scope.allSubjects || scope.isManager || (current.kind === "category" && (coordinatorSubjects.includes(current.subject_slug) || coordinatorSubjects.includes("*")));
     if (!canEditCurrent) return json({ error: "この分野・カテゴリを変更する権限がありません。" }, 403);
+    if (action === "publish" || action === "unpublish") {
+      if (current.status === "archived") return json({ error: "アーカイブ済みの分野・カテゴリは公開できません。先に復元してください。" }, 409);
+      const publicationStatus = action === "publish" ? "published" : "preparing";
+      const now = new Date().toISOString();
+      await env.REPORTS.prepare(
+        "UPDATE admin_editorial_taxonomy_catalog SET publication_status=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'",
+      ).bind(publicationStatus, scope.email, now, id).run();
+      await recordAdminAudit(env, scope.email, action === "publish" ? "taxonomy_published" : "taxonomy_unpublished", "taxonomy", id, current.name, `分野・カテゴリを${action === "publish" ? "公開準備完了" : "準備中へ変更"}：${current.name}`, { kind: current.kind, slug: current.slug, subject: current.subject_slug });
+      queueEditorialTaxonomyPublication(env, current.kind === "subject" ? current.slug : current.subject_slug, ctx);
+      return json({ ok: true, publicationStatus });
+    }
     if (action === "archive" || action === "restore") {
       const nextStatus = action === "archive" ? "archived" : "active";
-      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET status=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(nextStatus, new Date().toISOString(), id).run();
+      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET status=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(nextStatus, scope.email, new Date().toISOString(), id).run();
       await recordAdminAudit(env, scope.email, action === "archive" ? "taxonomy_archived" : "taxonomy_restored", "taxonomy", id, current.name, `分野・カテゴリを${action === "archive" ? "アーカイブ" : "復元"}：${current.name}`, { kind: current.kind, slug: current.slug, subject: current.subject_slug });
+      queueEditorialTaxonomyPublication(env, current.kind === "subject" ? current.slug : current.subject_slug, ctx);
       return json({ ok: true, status: nextStatus });
     }
     if (action !== "update") return json({ error: "操作を確認してください。" }, 400);
@@ -4112,14 +4166,14 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       : [];
     const now = new Date().toISOString();
     const statements = [
-      env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(current.kind === "category" ? nextSubject : "", slug, name, description, sortOrder, now, id),
+      env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,slug=?,name=?,description=?,sort_order=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(current.kind === "category" ? nextSubject : "", slug, name, description, sortOrder, scope.email, now, id),
     ];
     if (identityChanged) {
       if (current.kind === "subject") {
         statements.push(
-          env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,updated_at=? WHERE project_id='atlas' AND kind='category' AND subject_slug=?")
-            .bind(nextSubject, now, oldSubject),
+          env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,updated_by=?,updated_at=? WHERE project_id='atlas' AND kind='category' AND subject_slug=?")
+            .bind(nextSubject, scope.email, now, oldSubject),
           env.REPORTS.prepare("UPDATE editorial_subject_overviews SET subject=? WHERE project_id='atlas' AND subject=?")
             .bind(nextSubject, oldSubject),
           env.REPORTS.prepare("UPDATE report_admin_permissions SET subject=? WHERE subject=?")
@@ -4171,6 +4225,12 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       throw error;
     }
     await recordAdminAudit(env, scope.email, "taxonomy_updated", "taxonomy", id, name, `分野・カテゴリを更新：${name}`, { kind: current.kind, previousSubject: oldSubject, subject: nextSubject, previousSlug: current.slug, slug, referencesMigrated: identityChanged });
+    const cleanup = oldSubject !== nextSubject
+      ? current.kind === "subject"
+        ? { subject: oldSubject, removeSubject: true }
+        : { subject: oldSubject, categorySlug: oldCategory }
+      : undefined;
+    queueEditorialTaxonomyPublication(env, nextSubject || oldSubject, ctx, cleanup);
     return json({ ok: true, id, name, description, sortOrder, subject: nextSubject, slug, referencesMigrated: identityChanged });
   }
   const payload = (await request.json().catch(() => null)) as { kind?: unknown; subject?: unknown; slug?: unknown; name?: unknown; description?: unknown; sortOrder?: unknown } | null;
@@ -4218,14 +4278,15 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   const now = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
-      `INSERT INTO admin_editorial_taxonomy_catalog (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-    ).bind(crypto.randomUUID(), "atlas", kind, kind === "category" ? subject : "", slug, name, description, sortOrder, "active", scope.email, now, now).run();
+      `INSERT INTO admin_editorial_taxonomy_catalog (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at,publication_status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(crypto.randomUUID(), "atlas", kind, kind === "category" ? subject : "", slug, name, description, sortOrder, "active", scope.email, now, scope.email, now, "preparing").run();
   } catch (error) {
     if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
     throw error;
   }
   await recordAdminAudit(env, scope.email, "taxonomy_created", "taxonomy", slug, name, `分野・カテゴリを追加：${name}`, { kind, slug, subject });
+  queueEditorialTaxonomyPublication(env, kind === "subject" ? slug : subject, ctx);
   return json({ ok: true, kind, subject, slug, name }, 201);
 }
 
@@ -5011,7 +5072,7 @@ const editorialAssetDocument = async (
     .bind(documentId)
     .first<
       Pick<EditorialDocument, "id" | "subject" | "status" | "created_by">
-    >();
+      >();
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿の素材を扱う権限がありません。" }, 403);
@@ -14900,7 +14961,18 @@ const editorialConceptYaml = (document: EditorialDocument) => {
 type EditorialTaxonomyPublicationRow = Pick<
   EditorialTaxonomyRow,
   "kind" | "subject_slug" | "slug" | "name" | "description" | "sort_order"
->;
+> & Partial<Pick<EditorialTaxonomyRow, "status" | "created_by" | "publication_status">> & {
+  entry_concept_ids?: string[];
+  outline_entries?: Array<{
+    id: string;
+    parent_id: string | null;
+    slug: string;
+    title: string;
+    summary: string;
+    concept_id: string;
+    sort_order: number;
+  }>;
+};
 
 const yamlScalar = (value: string) => JSON.stringify(value);
 const escapeRegExp = (value: string) =>
@@ -14914,7 +14986,21 @@ const editorialTaxonomyCategoryYaml = (
     `      slug: ${row.slug}`,
     `      name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`,
     `      order: ${Math.max(0, Number(row.sort_order) || 0)}`,
-    "      entryConceptIds: []",
+    `      entryConceptIds: [${(row.entry_concept_ids ?? []).map(yamlScalar).join(", ")}]`,
+    ...(row.outline_entries?.length
+      ? [
+          "      outline:",
+          ...row.outline_entries.flatMap((entry) => [
+            `        - id: ${yamlScalar(entry.id)}`,
+            ...(entry.parent_id ? [`          parentId: ${yamlScalar(entry.parent_id)}`] : []),
+            `          slug: ${yamlScalar(entry.slug)}`,
+            `          title: ${yamlScalar(entry.title)}`,
+            `          summary: ${yamlScalar(entry.summary)}`,
+            `          conceptId: ${yamlScalar(entry.concept_id)}`,
+            `          order: ${Math.max(0, Number(entry.sort_order) || 0)}`,
+          ]),
+        ]
+      : []),
     "      relatedCategoryIds: []",
   ].join("\n");
 
@@ -14965,11 +15051,12 @@ export const mergeEditorialTaxonomyYaml = (
   yaml: string,
   rows: EditorialTaxonomyPublicationRow[],
   documentSubject: string,
+  documentCategory?: string,
 ) => {
   const subjectRow = rows.find(
     (row) => row.kind === "subject" && row.slug === documentSubject,
   );
-  const categories = rows
+  const categoryRows = rows
     .filter(
       (row) =>
         row.kind === "category" && row.subject_slug === documentSubject,
@@ -14979,8 +15066,28 @@ export const mergeEditorialTaxonomyYaml = (
         (Number(left.sort_order) || 0) - (Number(right.sort_order) || 0) ||
         left.name.localeCompare(right.name, "ja"),
     );
+  const isPublic = (row: EditorialTaxonomyPublicationRow) =>
+    row.created_by === undefined ||
+    row.publication_status === undefined ||
+    row.created_by === "system" ||
+    row.publication_status === "published";
+  const categories = categoryRows.filter(
+    (row) =>
+      (row.status ?? "active") === "active" &&
+      (isPublic(row) || row.slug === documentCategory),
+  );
+  const hiddenCategories = categoryRows.filter(
+    (row) => (row.status ?? "active") !== "active" || !isPublic(row),
+  );
   let next = yaml;
   const block = topLevelSubjectBlock(next, documentSubject);
+  // 新規分野は公開準備完了になるまで学習サイトへ出さない。
+  // 既に公開済みだった分野を準備中へ戻した場合は、既存ブロックも取り除く。
+  if (subjectRow && ((subjectRow.status ?? "active") !== "active" || !isPublic(subjectRow))) {
+    return block
+      ? `${next.slice(0, block.start)}${next.slice(block.end)}`
+      : next;
+  }
   if (!block && subjectRow) {
     const suffix = next.endsWith("\n") ? "" : "\n";
     next = `${next}${suffix}\n${editorialTaxonomySubjectYaml(subjectRow, categories)}\n`;
@@ -14994,6 +15101,14 @@ export const mergeEditorialTaxonomyYaml = (
     if (/^  order:\s*\d+\s*$/m.test(blockText)) {
       blockText = blockText.replace(/^  order:\s*\d+\s*$/m, orderLine);
     }
+  }
+  // アーカイブ／準備中へ戻した管理対象カテゴリは、既存YAMLから除去する。
+  for (const row of hiddenCategories) {
+    const categoryPattern = new RegExp(
+      `^    - id: ${escapeRegExp(row.slug)}\\s*$[\\s\\S]*?(?=^    - id: |^  [^ ]|(?![\\s\\S]))`,
+      "m",
+    );
+    blockText = blockText.replace(categoryPattern, "");
   }
   if (!categories.length) {
     return `${next.slice(0, block.start)}${blockText}${next.slice(block.end)}`;
@@ -15023,6 +15138,37 @@ export const mergeEditorialTaxonomyYaml = (
     categoryBlock = /^      order:\s*\d+\s*$/m.test(categoryBlock)
       ? categoryBlock.replace(/^      order:\s*\d+\s*$/m, orderLine)
       : categoryBlock;
+    if (row.entry_concept_ids) {
+      const entryLine = `      entryConceptIds: [${row.entry_concept_ids.map(yamlScalar).join(", ")}]`;
+      categoryBlock = /^      entryConceptIds:.*$/m.test(categoryBlock)
+        ? categoryBlock.replace(/^      entryConceptIds:.*$/m, entryLine)
+        : `${categoryBlock.trimEnd()}\n${entryLine}\n`;
+    }
+    if (row.outline_entries?.length) {
+      const outlineLines = [
+        "      outline:",
+        ...row.outline_entries.flatMap((entry) => [
+          `        - id: ${yamlScalar(entry.id)}`,
+          ...(entry.parent_id
+            ? [`          parentId: ${yamlScalar(entry.parent_id)}`]
+            : []),
+          `          slug: ${yamlScalar(entry.slug)}`,
+          `          title: ${yamlScalar(entry.title)}`,
+          `          summary: ${yamlScalar(entry.summary)}`,
+          `          conceptId: ${yamlScalar(entry.concept_id)}`,
+          `          order: ${Math.max(0, Number(entry.sort_order) || 0)}`,
+        ]),
+      ].join("\n");
+      const outlinePattern = /^      outline:\n[\s\S]*?(?=^      relatedCategoryIds:|^    - id:|$)/m;
+      categoryBlock = outlinePattern.test(categoryBlock)
+        ? categoryBlock.replace(outlinePattern, `${outlineLines}\n`)
+        : /^      relatedCategoryIds:/m.test(categoryBlock)
+          ? categoryBlock.replace(
+              /^      relatedCategoryIds:/m,
+              `${outlineLines}\n      relatedCategoryIds:`,
+            )
+          : `${categoryBlock.trimEnd()}\n${outlineLines}\n`;
+    }
     blockText = `${blockText.slice(0, categoryMatch.index)}${categoryBlock}${blockText.slice(categoryMatch.index + categoryMatch[1].length)}`;
   }
   if (!missingCategories.length) return `${next.slice(0, block.start)}${blockText}${next.slice(block.end)}`;
@@ -15093,19 +15239,106 @@ async function syncEditorialTaxonomyToGitHub(
   repository: string,
   headers: Record<string, string>,
   branch: string,
+  options?: { removeCategorySlug?: string; removeSubject?: boolean },
 ) {
   const rows = (
     await env.REPORTS.prepare(
-      `SELECT kind,subject_slug,slug,name,description,sort_order
+      `SELECT kind,subject_slug,slug,name,description,sort_order,status,created_by,publication_status
        FROM admin_editorial_taxonomy_catalog
-       WHERE project_id='atlas' AND status='active'
+       WHERE project_id='atlas'
          AND (slug=? OR subject_slug=?)
        ORDER BY kind,sort_order,name`,
     )
       .bind(document.subject, document.subject)
       .all<EditorialTaxonomyPublicationRow>()
   ).results ?? [];
+  // 移動・名称変更で旧側のブロックだけを削除する場合は、DB上に
+  // 対応行が既に存在しないため、削除対象を合成してmergeへ渡す。
+  if (options?.removeSubject) {
+    rows.push({
+      kind: "subject",
+      subject_slug: "",
+      slug: document.subject,
+      name: "",
+      description: "",
+      sort_order: 0,
+      status: "archived",
+      created_by: "system",
+      publication_status: "preparing",
+    });
+  } else if (options?.removeCategorySlug) {
+    rows.push({
+      kind: "category",
+      subject_slug: document.subject,
+      slug: options.removeCategorySlug,
+      name: "",
+      description: "",
+      sort_order: 0,
+      status: "archived",
+      created_by: "system",
+      publication_status: "preparing",
+    });
+  }
   if (!rows.length) return;
+
+  // 公開済みの記事を紐付けた目次の入口を、学習サイトの
+  // `entryConceptIds` として同じカテゴリへ渡す。現在公開処理中の原稿は
+  // published_at がまだ未設定でも取りこぼさないよう、document.id も対象にする。
+  const outlineRows = (
+    await env.REPORTS.prepare(
+      `SELECT e.id, e.category_slug, e.parent_id, e.slug, e.title, e.summary, e.concept_id, e.sort_order
+       FROM editorial_outline_entries e
+       JOIN editorial_documents d ON d.id=e.document_id
+       WHERE e.project_id='atlas' AND e.subject_slug=? AND e.status='active'
+         AND (d.published_at IS NOT NULL OR d.id=?)
+       ORDER BY e.category_slug,e.sort_order,e.updated_at,e.id`,
+    )
+      .bind(document.subject, document.id)
+      .all<{
+        id: string;
+        category_slug: string;
+        parent_id: string | null;
+        slug: string;
+        title: string;
+        summary: string;
+        concept_id: string;
+        sort_order: number;
+      }>()
+  ).results ?? [];
+  const entryConceptIdsByCategory = new Map<string, string[]>();
+  const outlineEntriesByCategory = new Map<
+    string,
+    EditorialTaxonomyPublicationRow["outline_entries"]
+  >();
+  const publishedOutlineIds = new Set(outlineRows.map((entry) => entry.id));
+  for (const entry of outlineRows) {
+    const conceptId = entry.concept_id.trim();
+    if (!conceptId) continue;
+    if (!entry.parent_id || publishedOutlineIds.has(entry.parent_id)) {
+      const ids = entryConceptIdsByCategory.get(entry.category_slug) ?? [];
+      if (!entry.parent_id && !ids.includes(conceptId)) ids.push(conceptId);
+      entryConceptIdsByCategory.set(entry.category_slug, ids);
+      const outline = outlineEntriesByCategory.get(entry.category_slug) ?? [];
+      outline.push({
+        id: entry.id,
+        parent_id: entry.parent_id,
+        slug: entry.slug,
+        title: entry.title,
+        summary: entry.summary,
+        concept_id: conceptId,
+        sort_order: entry.sort_order,
+      });
+      outlineEntriesByCategory.set(entry.category_slug, outline);
+    }
+  }
+  for (const row of rows) {
+    if (row.kind === "category" && entryConceptIdsByCategory.has(row.slug)) {
+      // 管理側に目次が存在するカテゴリだけを更新する。まだ管理側へ
+      // 移行していない既存カテゴリは、学習サイト側の既存入口を保持する。
+      row.entry_concept_ids = entryConceptIdsByCategory.get(row.slug) ?? [];
+      row.outline_entries = outlineEntriesByCategory.get(row.slug) ?? [];
+    }
+  }
 
   const path = "src/content/subjects/subjects.yaml";
   const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
@@ -15128,7 +15361,15 @@ async function syncEditorialTaxonomyToGitHub(
       true,
     );
   const current = githubText(data.content);
-  const content = mergeEditorialTaxonomyYaml(current, rows, document.subject);
+  // 記事公開時は、原稿が実際に所属するカテゴリが準備中でも同じ公開
+  // ブランチへ含める。カテゴリ作成直後に記事だけを公開する導線を壊さず、
+  // 学習サイト側の検証で「存在しないカテゴリ」とならないようにする。
+  const content = mergeEditorialTaxonomyYaml(
+    current,
+    rows,
+    document.subject,
+    document.category,
+  );
   if (content === current) return;
   const response = await fetch(endpoint, {
     method: "PUT",
@@ -15147,6 +15388,121 @@ async function syncEditorialTaxonomyToGitHub(
       "github_taxonomy_write",
     );
 }
+
+/**
+ * 分野・カテゴリの変更だけでも公開サイトへ反映できるよう、
+ * 記事公開を待たずに専用の集約PRへ同期する。固定ブランチを使うことで
+ * 連続した並び替え・名称変更を同じPRへまとめ、PRの乱立を防ぐ。
+ */
+async function createEditorialTaxonomyPublicationPullRequest(
+  env: Env,
+  subject: string,
+  cleanup?: { subject: string; categorySlug?: string; removeSubject?: boolean },
+): Promise<string | null> {
+  const auth = await githubToken(env);
+  if (!auth?.token) return null;
+  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
+  const headers = githubApiHeaders(auth.token, "atlasez-editorial-taxonomy");
+  const branch = "editorial/taxonomy-atlas";
+  const baseRef = await fetch(
+    `https://api.github.com/repos/${repository}/git/ref/heads/main`,
+    { headers },
+  );
+  if (!baseRef.ok)
+    throw await githubFailure(
+      baseRef,
+      "GitHubの公開先ブランチを確認できませんでした。",
+      "github_taxonomy_base_branch",
+    );
+  const baseSha = ((await baseRef.json()) as { object?: { sha?: string } }).object
+    ?.sha;
+  if (!baseSha) throw new EditorialPublicationFailure("GitHubの公開先ブランチが不正です。", "github_taxonomy_base_sha", "github_api", true);
+  const branchEndpoint = `https://api.github.com/repos/${repository}/git/ref/heads/${encodeURIComponent(branch)}`;
+  const existingBranch = await fetch(branchEndpoint, { headers });
+  if (!existingBranch.ok && existingBranch.status !== 404)
+    throw await githubFailure(existingBranch, "公開用ブランチを確認できませんでした。", "github_taxonomy_branch_lookup");
+  if (existingBranch.status === 404) {
+    const created = await fetch(`https://api.github.com/repos/${repository}/git/refs`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseSha }),
+    });
+    if (!created.ok && created.status !== 422)
+      throw await githubFailure(created, "公開用ブランチを作成できませんでした。", "github_taxonomy_branch_create");
+  }
+  const document = {
+    id: `taxonomy-${subject}`,
+    subject,
+  } as EditorialDocument;
+  await syncEditorialTaxonomyToGitHub(env, document, repository, headers, branch);
+  if (cleanup?.subject && (cleanup.categorySlug || cleanup.removeSubject)) {
+    await syncEditorialTaxonomyToGitHub(
+      env,
+      { id: `taxonomy-cleanup-${cleanup.subject}`, subject: cleanup.subject } as EditorialDocument,
+      repository,
+      headers,
+      branch,
+      { removeCategorySlug: cleanup.categorySlug, removeSubject: cleanup.removeSubject },
+    );
+  }
+
+  const comparison = await fetch(
+    `https://api.github.com/repos/${repository}/compare/main...${encodeURIComponent(branch)}`,
+    { headers },
+  );
+  if (!comparison.ok)
+    throw await githubFailure(comparison, "分野・カテゴリの差分を確認できませんでした。", "github_taxonomy_compare");
+  const comparisonData = (await comparison.json()) as { ahead_by?: number };
+  if (!comparisonData.ahead_by) return null;
+
+  const owner = repository.split("/")[0] ?? "Atlasez";
+  const pullsResponse = await fetch(
+    `https://api.github.com/repos/${repository}/pulls?head=${encodeURIComponent(`${owner}:${branch}`)}&base=main&state=all&per_page=100`,
+    { headers },
+  );
+  if (!pullsResponse.ok)
+    throw await githubFailure(pullsResponse, "分野・カテゴリ公開PRを確認できませんでした。", "github_taxonomy_pr_lookup");
+  const pulls = (await pullsResponse.json().catch(() => [])) as Array<{ number?: number; html_url?: string; state?: string; merged_at?: string | null }>;
+  const existing = pulls.find((pull) => pull.state === "open") ?? pulls.find((pull) => !pull.merged_at);
+  if (existing?.state === "closed" && existing.number) {
+    const reopened = await fetch(`https://api.github.com/repos/${repository}/pulls/${existing.number}`, {
+      method: "PATCH",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ state: "open" }),
+    });
+    if (!reopened.ok) throw await githubFailure(reopened, "分野・カテゴリ公開PRを再開できませんでした。", "github_taxonomy_pr_reopen", existing.html_url ?? null);
+    return existing.html_url ?? null;
+  }
+  if (existing?.html_url) return existing.html_url;
+  const createdPull = await fetch(`https://api.github.com/repos/${repository}/pulls`, {
+    method: "POST",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({
+      title: "Update learning taxonomy",
+      head: branch,
+      base: "main",
+      body: "このPRは運営サイトの分野・カテゴリ・目次の変更を学習サイトへ反映するために自動作成されました。CI成功後、公開フローに従ってMergeされます。",
+    }),
+  });
+  if (!createdPull.ok)
+    throw await githubFailure(createdPull, "分野・カテゴリ公開PRを作成できませんでした。", "github_taxonomy_pr_create");
+  return ((await createdPull.json()) as { html_url?: string }).html_url ?? null;
+}
+
+const queueEditorialTaxonomyPublication = (
+  env: Env,
+  subject: string,
+  ctx?: WorkerExecutionContext,
+  cleanup?: { subject: string; categorySlug?: string; removeSubject?: boolean },
+) => {
+  if (!ctx || !subject) return;
+  if (!env.GITHUB_REPOSITORY || !(env.GITHUB_PUBLISH_TOKEN || env.GITHUB_APP_ID)) return;
+  ctx.waitUntil(
+    createEditorialTaxonomyPublicationPullRequest(env, subject, cleanup).catch((error) => {
+      console.error("editorial taxonomy publication sync failed", { subject, error });
+    }),
+  );
+};
 
 // 公開リポジトリは、運営サイトの表示用ロケール（ja/en）とは別に
 // ISO 639-3 のディレクトリ名（jpn/eng）を使っている。
@@ -15948,9 +16304,14 @@ async function editorialPublicationIntegrationStatus(
     // 公開前CIをWorkflow dispatchするには、公開用GitHub AppへActions: write
     // が必要。古いGitHub APIレスポンスで権限一覧が省略される場合は
     // 判定不能として既存の連携状態を壊さない。
-    const preflightReady = auth.app
+    const appPreflightReady = auth.app
       ? auth.permissions?.actions === undefined || auth.permissions.actions === "write"
       : null;
+    // AppにActions権限がまだ付与されていない場合は、公開用Tokenを
+    // Workflow dispatch専用のフォールバックとして利用できる。
+    const preflightReady = appPreflightReady === false && env.GITHUB_PUBLISH_TOKEN?.trim()
+      ? true
+      : appPreflightReady;
     const ready = defaultBranch === "main" && canWrite && !archived;
     const automationReady = ready && automaticMerge && automaticReview && preflightReady !== false;
     return json({
@@ -15971,7 +16332,7 @@ async function editorialPublicationIntegrationStatus(
           : {
             automationError:
                 preflightReady === false
-                  ? "公開前検証を実行するため、公開用GitHub AppにActions: write権限を付与してください。"
+                  ? "公開前検証を実行するため、GitHub Appまたは公開用TokenにActions: write権限を付与してください。"
                   : automaticMerge
                     ? reviewer.error ?? "自動承認用Tokenを確認できません。"
                     : "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
@@ -17054,44 +17415,64 @@ type EditorialPreflightWorkflowRun = {
 
 const editorialPreflightWorkflow = "ci.yml";
 
+/**
+ * 公開前CIのdispatchだけはActions権限が必要になる。
+ * 公開用AppのInstallation tokenにActions: writeが付いていない移行期間でも、
+ * 既存のリポジトリ限定PATが設定されていればCI起動だけを安全にフォールバックする。
+ * PR作成・マージなど他の書き込み操作は従来どおりApp tokenを使う。
+ */
+const editorialPreflightTokens = async (env: Env) => {
+  const auth = await githubToken(env);
+  if (!auth) return [] as string[];
+  const tokens = [auth.token];
+  const fallback = env.GITHUB_PUBLISH_TOKEN?.trim();
+  if (auth.app && fallback && fallback !== auth.token) tokens.push(fallback);
+  return tokens;
+};
+
 const dispatchEditorialPublicationPreflight = async (
   env: Env,
   branch: string,
 ) => {
-  const auth = await githubToken(env);
-  if (!auth)
+  const tokens = await editorialPreflightTokens(env);
+  if (!tokens.length)
     throw new EditorialPublicationFailure(
       "公開前検証を開始できません。GitHub公開連携が未設定です。",
       "preflight_configuration",
       "configuration",
     );
   const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const response = await fetch(
-    `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        ...githubApiHeaders(auth.token, "atlasez-editorial-preflight"),
-        "content-type": "application/json",
+  let lastResponse: Response | null = null;
+  for (const [index, token] of tokens.entries()) {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          ...githubApiHeaders(token, "atlasez-editorial-preflight"),
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ref: branch }),
       },
-      body: JSON.stringify({ ref: branch }),
-    },
-  );
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403)
-      throw new EditorialPublicationFailure(
-        "公開前検証を開始できません。GitHub AppにActionsのWorkflow dispatch権限（Actions: write）が必要です。",
-        "preflight_permission",
-        "configuration",
-        false,
-      );
-    throw await githubFailure(
-      response,
-      "公開前検証を開始できませんでした。",
-      "preflight_dispatch",
     );
+    if (response.ok) return new Date().toISOString();
+    lastResponse = response;
+    // App権限不足時だけ、次の（リポジトリ限定）フォールバックTokenを試す。
+    if ((response.status !== 401 && response.status !== 403) || index === tokens.length - 1)
+      break;
   }
-  return new Date().toISOString();
+  if (lastResponse && (lastResponse.status === 401 || lastResponse.status === 403))
+    throw new EditorialPublicationFailure(
+      "公開前検証を開始できません。GitHub Appまたは公開用TokenにActionsのWorkflow dispatch権限（Actions: write）が必要です。",
+      "preflight_permission",
+      "configuration",
+      false,
+    );
+  throw await githubFailure(
+    lastResponse!,
+    "公開前検証を開始できませんでした。",
+    "preflight_dispatch",
+  );
 };
 
 const editorialPreflightWorkflowRun = async (
@@ -20741,7 +21122,7 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/genre-role-catalog/assignments")
     return genreRoleAssignment(request, env);
   if (url.pathname === "/api/admin/editor/taxonomy")
-    return editorialTaxonomyCatalog(request, env);
+    return editorialTaxonomyCatalog(request, env, ctx);
   if (url.pathname === "/api/admin/editor/outline")
     return editorialOutlineEntries(request, env);
   if (
