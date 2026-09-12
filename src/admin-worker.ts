@@ -16308,19 +16308,12 @@ async function editorialPublicationIntegrationStatus(
     const automaticMerge = Boolean(auth?.app && canWrite);
     const reviewer = await editorialPublicationReviewerStatus(env, repository);
     const automaticReview = reviewer.canWrite;
-    // 公開前CIをWorkflow dispatchするには、公開用GitHub AppへActions: write
-    // が必要。古いGitHub APIレスポンスで権限一覧が省略される場合は
-    // 判定不能として既存の連携状態を壊さない。
-    const appPreflightReady = auth.app
-      ? auth.permissions?.actions === undefined || auth.permissions.actions === "write"
-      : null;
-    // AppにActions権限がまだ付与されていない場合は、公開用Tokenを
-    // Workflow dispatch専用のフォールバックとして利用できる。
-    const preflightReady = appPreflightReady === false && env.GITHUB_PUBLISH_TOKEN?.trim()
-      ? true
-      : appPreflightReady;
+    // 公開前検証はブランチからPRを作成し、通常の pull_request CI を利用する。
+    // そのため公開用GitHub AppにActions: write（Workflow dispatch権限）は不要。
+    // PR作成に必要なContents/Pull requests権限だけを確認する。
+    const preflightReady = true;
     const ready = defaultBranch === "main" && canWrite && !archived;
-    const automationReady = ready && automaticMerge && automaticReview && preflightReady !== false;
+    const automationReady = ready && automaticMerge && automaticReview;
     return json({
       ready,
       configured: true,
@@ -16331,6 +16324,7 @@ async function editorialPublicationIntegrationStatus(
       automaticMerge,
       automaticReview,
       preflightReady,
+      preflightMode: "pull_request_ci",
       automationReady,
       archived,
       ...(ready
@@ -16338,9 +16332,7 @@ async function editorialPublicationIntegrationStatus(
           ? {}
           : {
             automationError:
-                preflightReady === false
-                  ? "公開前検証を実行するため、GitHub Appまたは公開用TokenにActions: write権限を付与してください。"
-                  : automaticMerge
+                automaticMerge
                     ? reviewer.error ?? "自動承認用Tokenを確認できません。"
                     : "公開専用GitHub AppまたはmainルールセットのBypass設定が未完了です。",
             }
@@ -17411,244 +17403,19 @@ async function verifyEditorialPublicationDeployment(
 const publicationRunBranch = (document: EditorialDocument, run: EditorialPublicationRun) =>
   run.branch ?? `editorial/${run.action === "publish" ? "published" : "draft"}-${document.id}-${run.id}`;
 
-type EditorialPreflightWorkflowRun = {
-  id: number;
-  status: string | null;
-  conclusion: string | null;
-  html_url: string | null;
-  head_branch: string | null;
-  created_at: string | null;
-};
-
-const editorialPreflightWorkflow = "ci.yml";
-
-/**
- * 公開前CIのdispatchだけはActions権限が必要になる。
- * 公開用AppのInstallation tokenにActions: writeが付いていない移行期間でも、
- * 既存のリポジトリ限定PATが設定されていればCI起動だけを安全にフォールバックする。
- * PR作成・マージなど他の書き込み操作は従来どおりApp tokenを使う。
- */
-const editorialPreflightTokens = async (env: Env) => {
-  const auth = await githubToken(env);
-  if (!auth) return [] as string[];
-  const tokens = [auth.token];
-  const fallback = env.GITHUB_PUBLISH_TOKEN?.trim();
-  if (auth.app && fallback && fallback !== auth.token) tokens.push(fallback);
-  return tokens;
-};
-
-const dispatchEditorialPublicationPreflight = async (
-  env: Env,
-  branch: string,
-) => {
-  const tokens = await editorialPreflightTokens(env);
-  if (!tokens.length)
-    throw new EditorialPublicationFailure(
-      "公開前検証を開始できません。GitHub公開連携が未設定です。",
-      "preflight_configuration",
-      "configuration",
-    );
-  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  let lastResponse: Response | null = null;
-  for (const [index, token] of tokens.entries()) {
-    const response = await fetch(
-      `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/dispatches`,
-      {
-        method: "POST",
-        headers: {
-          ...githubApiHeaders(token, "atlasez-editorial-preflight"),
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ ref: branch }),
-      },
-    );
-    if (response.ok) return new Date().toISOString();
-    lastResponse = response;
-    // App権限不足時だけ、次の（リポジトリ限定）フォールバックTokenを試す。
-    if ((response.status !== 401 && response.status !== 403) || index === tokens.length - 1)
-      break;
-  }
-  if (lastResponse && (lastResponse.status === 401 || lastResponse.status === 403))
-    throw new EditorialPublicationFailure(
-      "公開前検証を開始できません。GitHub Appまたは公開用TokenにActionsのWorkflow dispatch権限（Actions: write）が必要です。",
-      "preflight_permission",
-      "configuration",
-      false,
-    );
-  throw await githubFailure(
-    lastResponse!,
-    "公開前検証を開始できませんでした。",
-    "preflight_dispatch",
-  );
-};
-
-const editorialPreflightWorkflowRun = async (
-  env: Env,
-  branch: string,
-  requestedAt: string,
-  runId?: number | null,
-): Promise<EditorialPreflightWorkflowRun | null> => {
-  const auth = await githubToken(env);
-  if (!auth) return null;
-  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const headers = githubApiHeaders(auth.token, "atlasez-editorial-preflight");
-  let runs: EditorialPreflightWorkflowRun[] = [];
-  if (runId) {
-    const response = await fetch(
-      `https://api.github.com/repos/${repository}/actions/runs/${runId}`,
-      { headers },
-    );
-    if (response.status === 404) return null;
-    if (!response.ok)
-      throw await githubFailure(
-        response,
-        "公開前検証の状態を取得できませんでした。",
-        "preflight_status",
-      );
-    const data = (await response.json()) as Partial<EditorialPreflightWorkflowRun>;
-    if (typeof data.id !== "number") return null;
-    runs = [
-      {
-        id: data.id,
-        status: typeof data.status === "string" ? data.status : null,
-        conclusion: typeof data.conclusion === "string" ? data.conclusion : null,
-        html_url: typeof data.html_url === "string" ? data.html_url : null,
-        head_branch: typeof data.head_branch === "string" ? data.head_branch : null,
-        created_at: typeof data.created_at === "string" ? data.created_at : null,
-      },
-    ];
-  } else {
-    const response = await fetch(
-      `https://api.github.com/repos/${repository}/actions/workflows/${editorialPreflightWorkflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(branch)}&per_page=10`,
-      { headers },
-    );
-    if (!response.ok)
-      throw await githubFailure(
-        response,
-        "公開前検証の実行一覧を取得できませんでした。",
-        "preflight_runs",
-      );
-    const data = (await response.json().catch(() => ({}))) as {
-      workflow_runs?: Partial<EditorialPreflightWorkflowRun>[];
-    };
-    runs = (data.workflow_runs ?? []).flatMap((value) =>
-      typeof value.id === "number"
-        ? [{
-            id: value.id,
-            status: typeof value.status === "string" ? value.status : null,
-            conclusion: typeof value.conclusion === "string" ? value.conclusion : null,
-            html_url: typeof value.html_url === "string" ? value.html_url : null,
-            head_branch: typeof value.head_branch === "string" ? value.head_branch : null,
-            created_at: typeof value.created_at === "string" ? value.created_at : null,
-          }]
-        : [],
-    );
-  }
-  const requestedEpoch = Date.parse(requestedAt);
-  return runs
-    .filter((run) => run.head_branch === branch)
-    .filter((run) => {
-      const createdEpoch = run.created_at ? Date.parse(run.created_at) : NaN;
-      return !Number.isFinite(requestedEpoch) || !Number.isFinite(createdEpoch) || createdEpoch >= requestedEpoch - 60_000;
-    })
-    .sort((left, right) => Date.parse(right.created_at ?? "") - Date.parse(left.created_at ?? ""))[0] ?? null;
-};
-
-const prepareEditorialPublicationBranch = async (
+const startEditorialPublicationRun = async (
   env: Env,
   document: EditorialDocument,
   run: EditorialPublicationRun,
 ) => {
-  const branch = publicationRunBranch(document, run);
-  const result = await writeEditorialDocumentToGitHub(
-    document,
-    env,
-    run.action === "publish" ? "published" : "draft",
-    `${run.action === "publish" ? "Publish" : "Unpublish"} article: ${document.title}`,
-    branch,
-    { createPullRequest: false },
-  );
-  if (result instanceof Response)
-    throw await publicationFailureFromResponse(result, "公開前の事前検証用ブランチを作成できませんでした。");
-  return { branch: result.branch };
-};
-
-const startEditorialPublicationPreflight = async (
-  env: Env,
-  document: EditorialDocument,
-  run: EditorialPublicationRun,
-) => {
-  const { branch } = await prepareEditorialPublicationBranch(env, document, run);
-  const requestedAt = await dispatchEditorialPublicationPreflight(env, branch);
-  const preflight = await editorialPreflightWorkflowRun(env, branch, requestedAt);
-  await updateEditorialPublicationRun(env, run.id, {
-    state: "checks_pending",
-    branch,
-    preflight_run_id: preflight?.id ?? null,
-    preflight_requested_at: requestedAt,
-    last_check_at: new Date().toISOString(),
-    next_attempt_at: null,
-    check_name: "公開前の事前検証",
-    check_url: preflight?.html_url ?? `https://github.com/${env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01"}/actions/workflows/${editorialPreflightWorkflow}`,
-    diagnostic_url: preflight?.html_url ?? null,
-    error_code: null,
-    error_message: "公開用PRを作成する前に、記事と学習サイトのCIを検証しています。",
-    failure_kind: null,
-    failure_detail: null,
-    failure_step: null,
-    failure_file: null,
-    failure_line: null,
-    failure_column: null,
-    failure_suggestion: null,
-    lease_until: null,
-  });
-};
-
-const getEditorialPreflightDiagnostic = async (
-  env: Env,
-  workflow: EditorialPreflightWorkflowRun,
-): Promise<EditorialPublicationDiagnostic | null> => {
-  const auth = await githubToken(env);
-  if (!auth) return null;
-  const repository = env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01";
-  const headers = githubApiHeaders(auth.token, "atlasez-editorial-preflight-diagnostics");
-  const jobsResponse = await fetch(
-    `https://api.github.com/repos/${repository}/actions/runs/${workflow.id}/jobs?per_page=100`,
-    { headers },
-  ).catch(() => null);
-  if (!jobsResponse?.ok) return null;
-  const data = (await jobsResponse.json().catch(() => ({}))) as {
-    jobs?: Array<{ id?: number; name?: string; conclusion?: string | null }>;
-  };
-  const failedJob = (data.jobs ?? []).find((job) =>
-    job.id && ["failure", "cancelled", "timed_out", "action_required"].includes(job.conclusion ?? ""),
-  );
-  if (!failedJob?.id) return null;
-  const logResponse = await fetch(
-    `https://api.github.com/repos/${repository}/actions/jobs/${failedJob.id}/logs`,
-    { headers },
-  ).catch(() => null);
-  if (!logResponse?.ok) return null;
-  const logLines = (await logResponse.text().catch(() => ""))
-    .split(/\r?\n/)
-    .map(cleanGithubLogLine)
-    .filter(Boolean);
-  const meaningful = logLines.filter((line) => !/node(?:\.js)?\s+20\s+is\s+deprecated|actions\/(?:checkout|setup-node)@|process completed with exit code|^\[command\]/i.test(line));
-  const fileReference = extractGithubFileReference(meaningful) ?? extractGithubFileReference(logLines);
-  const relevant = meaningful.filter((line) => /error|failed|failure|invalid|not found|存在しない|未対応|unsupported|directive|検証エラー|重複|循環|katex|mathjax|latex|typescript|eslint|lint|format/i.test(line));
-  const detailLines = [...new Set([
-    ...(fileReference ? [fileReference.message] : []),
-    ...relevant.filter((line) => !/^Process completed with exit code \d+\.?$/i.test(line)),
-  ])].slice(0, 5);
-  if (!detailLines.length) return null;
-  return {
-    detail: detailLines.join("\n").slice(0, 2_000),
-    step: [...logLines].reverse().find((line) => /^Run\s+.+/.test(line))?.replace(/^Run\s+/, "") ?? failedJob.name ?? null,
-    file: fileReference?.file ?? null,
-    line: fileReference?.line ?? null,
-    column: fileReference?.column ?? null,
-    suggestion: publicationSuggestionFor(detailLines.join("\n")),
-  };
+  /*
+   * 公開前にActionsのWorkflow dispatchを呼ぶ方式は使わない。
+   * GitHub AppのActions: write権限に依存し、環境ごとに必ず失敗するため、
+   * 記事ブランチから先にPRを作成してGitHub標準のpull_request CIを起動する。
+   * PR作成・CI・Mergeを同じrunで追跡するので、検証失敗時も再実行可能で、
+   * 権限不足を「公開前検証失敗」として誤表示しない。
+   */
+  await createEditorialPublicationRunPullRequest(env, document, run);
 };
 
 async function createEditorialPublicationRunPullRequest(
@@ -17864,118 +17631,6 @@ async function receiveGithubPublicationWebhook(
   return json({ ok: true, event, ...(await progress) }, 202);
 }
 
-/**
- * PR作成前に公開サイトのCIを実行し、ブランチ内容を検証する。
- * 事前検証中はPR番号を持たないため、公開PRへ失敗した変更を出さない。
- */
-async function progressEditorialPublicationPreflight(
-  env: Env,
-  document: EditorialDocument,
-  run: EditorialPublicationRun,
-) {
-  if (!run.branch) {
-    await updateEditorialPublicationRun(env, run.id, {
-      state: "failed",
-      failure_kind: "internal",
-      error_code: "preflight_branch_missing",
-      error_message: "公開前検証用ブランチが見つかりません。運営サイトから再試行してください。",
-      failure_suggestion: "公開ボタンをもう一度押して、公開処理を再試行してください。",
-    });
-    return true;
-  }
-  const workflow = await editorialPreflightWorkflowRun(
-    env,
-    run.branch,
-    run.preflight_requested_at ?? run.created_at,
-    run.preflight_run_id,
-  );
-  const workflowUrl =
-    workflow?.html_url ??
-    run.check_url ??
-    `https://github.com/${env.GITHUB_REPOSITORY ?? "Atlasez/Atlasez01"}/actions/workflows/${editorialPreflightWorkflow}`;
-  const now = new Date().toISOString();
-  if (!workflow) {
-    await updateEditorialPublicationRun(env, run.id, {
-      state: "checks_pending",
-      last_check_at: now,
-      check_name: "公開前の事前検証",
-      check_url: workflowUrl,
-      diagnostic_url: run.diagnostic_url ?? workflowUrl,
-      error_code: "preflight_pending",
-      error_message: "公開用PRを作成する前に、記事と学習サイトのCIを開始しています。",
-    });
-    return true;
-  }
-  if (workflow.status !== "completed") {
-    await updateEditorialPublicationRun(env, run.id, {
-      state: "checks_pending",
-      preflight_run_id: workflow.id,
-      last_check_at: now,
-      check_name: "公開前の事前検証",
-      check_url: workflowUrl,
-      diagnostic_url: workflowUrl,
-      error_code: "preflight_pending",
-      error_message: "公開前の事前検証を実行しています。完了までPRは作成されません。",
-    });
-    return true;
-  }
-  if (workflow.conclusion === "success") {
-    await createEditorialPublicationRunPullRequest(env, document, {
-      ...run,
-      preflight_run_id: workflow.id,
-      check_url: workflowUrl,
-    });
-    return true;
-  }
-  const transient = ["cancelled", "timed_out", "startup_failure"].includes(
-    workflow.conclusion ?? "",
-  );
-  const canRetry = transient && run.attempt < publicationMaxAttempts;
-  const failureValues: Partial<EditorialPublicationRun> = canRetry
-    ? {
-        state: "retry_wait",
-        // 次回のretry_wait処理でattemptを1つ進める。ここで増やすと
-        // 事前検証の再実行時に試行回数を二重計上してしまう。
-        attempt: run.attempt,
-        next_attempt_at: new Date(Date.now() + publicationRetryDelayMs(run.attempt)).toISOString(),
-        failure_kind: "ci",
-        error_code: "preflight_transient_failure",
-        error_message: `公開前の事前検証が一時的に失敗しました（${workflow.conclusion ?? "unknown"}）。自動再試行します。PRは作成されていません。`,
-        check_name: "公開前の事前検証",
-        check_url: workflowUrl,
-        diagnostic_url: workflowUrl,
-        failure_suggestion: "再試行後も失敗する場合は、事前検証ログを確認してください。",
-        lease_until: null,
-      }
-    : {
-        state: "failed",
-        failure_kind: "ci",
-        error_code: "preflight_failed",
-        error_message: "公開前の事前検証が失敗したため、PRは作成されませんでした。記事内容を修正して再試行してください。",
-        check_name: "公開前の事前検証",
-        check_url: workflowUrl,
-        diagnostic_url: workflowUrl,
-        failure_suggestion: "事前検証ログで示された記事・数式・画像・リンクを修正してから、運営サイトで再試行してください。",
-        lease_until: null,
-      };
-  await updateEditorialPublicationRun(env, run.id, failureValues);
-  const diagnostic = await getEditorialPreflightDiagnostic(env, workflow).catch((error) => {
-    console.error("editorial preflight diagnostic failed", { runId: run.id, error });
-    return null;
-  });
-  if (diagnostic) {
-    await updateEditorialPublicationRun(env, run.id, {
-      failure_detail: diagnostic.detail,
-      failure_step: diagnostic.step,
-      failure_file: diagnostic.file,
-      failure_line: diagnostic.line,
-      failure_column: diagnostic.column,
-      failure_suggestion: diagnostic.suggestion,
-    });
-  }
-  return true;
-}
-
 async function progressEditorialPublicationRun(env: Env, run: EditorialPublicationRun) {
   const document = await env.REPORTS.prepare(
     `${editorialDocumentSelect} WHERE id = ?`,
@@ -18005,10 +17660,11 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
   }
   if (
     run.state === "checks_pending" &&
-    run.check_name === "公開前の事前検証" &&
     !run.pull_request_number
   ) {
-    await progressEditorialPublicationPreflight(env, document, run);
+    // 旧バージョンで作成された「PR作成前」runも、Actions dispatchへ戻さず
+    // そのままPRを作成してpull_request CIへ移行する。
+    await createEditorialPublicationRunPullRequest(env, document, run);
     return;
   }
   if (run.state === "deploy_pending") {
@@ -18063,7 +17719,7 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
       await updateEditorialPublicationRun(env, run.id, { state: "failed", error_code: "retry_exhausted", error_message: "自動再試行の上限に達しました。記事内容またはCIの失敗内容を確認してください。" });
       return;
     }
-    await startEditorialPublicationPreflight(env, document, {
+    await startEditorialPublicationRun(env, document, {
       ...run,
       attempt: run.state === "retry_wait" ? run.attempt + 1 : run.attempt,
     });
@@ -18442,7 +18098,7 @@ async function writeEditorialDocumentToGitHub(
           "publish",
         );
       } catch (error) {
-        console.error("article source backup failed after preflight write", {
+        console.error("article source backup failed after publication branch write", {
           documentId: document.id,
           error,
         });
@@ -18829,7 +18485,7 @@ async function dispatchScheduledEditorialPublications(env: Env) {
         await env.REPORTS.prepare("UPDATE editorial_documents SET scheduled_publish_claimed_at = NULL WHERE id = ?").bind(document.id).run();
         continue;
       }
-      await startEditorialPublicationPreflight(env, document, runClaim.run);
+      await startEditorialPublicationRun(env, document, runClaim.run);
       await env.REPORTS.prepare(
         "UPDATE editorial_documents SET scheduled_publish_at = NULL, scheduled_publish_claimed_at = NULL WHERE id = ?",
       ).bind(document.id).run();
