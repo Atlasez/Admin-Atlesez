@@ -48,6 +48,20 @@ const subjects = defineCollection({
           order: z.number().int(),
           /** 入口となる概念 */
           entryConceptIds: z.array(conceptIdSchema).default([]),
+          /** 管理サイトの公開済み目次。親子構造をそのまま学習サイトへ渡す */
+          outline: z
+            .array(
+              z.object({
+                id: z.string().min(1),
+                parentId: z.string().min(1).optional(),
+                slug: slugSchema,
+                title: z.string().min(1),
+                summary: z.string().default(""),
+                conceptId: conceptIdSchema,
+                order: z.number().int(),
+              }),
+            )
+            .default([]),
           /** 関連カテゴリ（ミニ地図用） */
           relatedCategoryIds: z.array(slugSchema).default([]),
         }),

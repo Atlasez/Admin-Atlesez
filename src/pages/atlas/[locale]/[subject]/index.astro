@@ -2,6 +2,7 @@
 import AtlasLayout from "../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../components/Breadcrumb.astro";
 import LearningMap from "../../../../components/LearningMap.astro";
+import SubjectOutline from "../../../../components/SubjectOutline.astro";
 import { atlasPath, articlePath } from "../../../../lib/site";
 import {
   t,
@@ -219,6 +220,13 @@ const summary =
                         <p class="toc-empty">
                           <span class="badge">{t(locale, "preparing")}</span>
                         </p>
+                      ) : category.outline.length > 0 ? (
+                        <SubjectOutline
+                          entries={category.outline}
+                          locale={locale}
+                          subject={subject.data.slug}
+                          category={category.slug}
+                        />
                       ) : (
                         <ol class="toc-articles">
                           {articles.map((a) => (

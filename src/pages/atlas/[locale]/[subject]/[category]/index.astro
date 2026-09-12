@@ -3,6 +3,7 @@
 import AtlasLayout from "../../../../../layouts/AtlasLayout.astro";
 import Breadcrumb from "../../../../../components/Breadcrumb.astro";
 import LearningMap from "../../../../../components/LearningMap.astro";
+import SubjectOutline from "../../../../../components/SubjectOutline.astro";
 import { atlasPath, articlePath, formatDate } from "../../../../../lib/site";
 import {
   t,
@@ -144,6 +145,19 @@ const items = articles.map((a) => ({
       aria-labelledby="category-view-tab-tiles"
       data-article-view-panel
     >
+    {category.outline.length > 0 && (
+      <section class="category-outline" aria-labelledby="category-outline-heading">
+        <h2 id="category-outline-heading">
+          {locale === "ja" ? `${categoryName}の目次` : `${categoryName} — Contents`}
+        </h2>
+        <SubjectOutline
+          entries={category.outline}
+          locale={locale}
+          subject={subject.data.slug}
+          category={category.slug}
+        />
+      </section>
+    )}
     <ul class="article-collection" data-view="grid">
       {
         items.map(({ article: a, prereqNames, href }) => (
@@ -233,6 +247,8 @@ const items = articles.map((a) => ({
     max-width: var(--content-width);
     padding-bottom: var(--space-5);
   }
+  .category-outline { border-bottom: 1px solid var(--border-default); margin-bottom: var(--space-4); padding-bottom: var(--space-4); }
+  .category-outline h2 { font-size: 1.1rem; margin: 0 0 var(--space-2); }
   .view-bar {
     display: flex;
     align-items: flex-end;
