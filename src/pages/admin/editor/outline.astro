@@ -329,10 +329,14 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       if ((target && categoryOf(target) !== category?.dataset.outlineCategory) || (targetContainer && targetContainer.closest<HTMLElement>("[data-outline-category]") !== category) || (target && (target === source || isDescendantTarget(source, target, targetContainer)))) { draggedId = ""; return; }
       event.preventDefault();
       const nodes = sourceNodes(source);
-      const destination = targetContainer ?? target?.parentElement;
+      // 記事上へのドロップでは、targetContainerは「対象記事の親」であり、
+      // そこへ即時追加すると兄弟末尾へ移動してしまう。コンテナ自体を
+      // 直接指している場合だけ、子項目として末尾へ追加する。
+      const explicitContainer = target ? null : targetContainer;
+      const destination = explicitContainer ?? target?.parentElement ?? targetContainer;
       if (!destination) { draggedId = ""; return; }
-      if (targetContainer) {
-        nodes.forEach((node) => destination.append(node));
+      if (explicitContainer) {
+        nodes.forEach((node) => explicitContainer.append(node));
       } else if (target) {
         const rect = target.getBoundingClientRect();
         const ratio = (event.clientY - rect.top) / rect.height;
