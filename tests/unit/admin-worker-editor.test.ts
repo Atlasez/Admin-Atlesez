@@ -663,7 +663,7 @@ describe("admin worker editor APIs", () => {
             if (query.includes("SELECT id,parent_id")) {
               return {
                 results: [
-                  { id: firstId, parent_id: secondId },
+                  { id: firstId, parent_id: null },
                   { id: secondId, parent_id: firstId },
                 ],
               } as { results: T[] };
