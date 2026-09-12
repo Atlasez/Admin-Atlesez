@@ -1600,9 +1600,6 @@ test("インライン数式・表示数式を本文と別窓へ挿入できる",
   await page.goto("./admin/editor/?new=1");
   await page.locator("details.writing-tools > summary").click();
   const body = page.locator("[data-body]");
-  const editor = page.locator(
-    '.body-codemirror .cm-content[aria-label="本文（Markdown）"]',
-  );
   await body.fill("本文");
   await body.focus();
   await body.evaluate((element) =>
