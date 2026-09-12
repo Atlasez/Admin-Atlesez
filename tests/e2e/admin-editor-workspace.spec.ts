@@ -223,6 +223,27 @@ test("独立した目次ページから未着手の記事を執筆開始でき�
   }
 });
 
+test("目次APIがHTMLを返しても内部のJSON解析エラーを表示しない", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/api/admin/editor/**", (route) =>
+    route.fulfill({
+      status: 502,
+      contentType: "text/html",
+      body: "<!doctype html><title>temporary upstream error</title>",
+    }),
+  );
+  await page.goto("./admin/editor/outline/?subject=mathematics");
+  await expect(page.locator("[data-outline-list]")).toContainText(
+    "原稿一覧を読み込めませんでした。（HTTP 502）",
+  );
+  await expect(page.locator("body")).not.toContainText("Unexpected token");
+  await page.screenshot({
+    path: testInfo.outputPath("outline-html-error.png"),
+    fullPage: true,
+  });
+});
+
 test("目次APIのDB列名を画面モデルへ正規化して表示する", async ({ page }) => {
   await mockAdminApi(
     page,

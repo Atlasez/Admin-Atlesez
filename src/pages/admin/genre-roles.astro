@@ -485,7 +485,14 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       if ((source.kind === "category" && !targetGroup.startsWith("category:")) || (source.kind === "subject" && targetGroup !== "subject:")) return;
       event.preventDefault();
       const sourceId = draggedTaxonomyId;
-      const placement = card?.dataset.dropPosition === "after" ? "after" : "before";
+      // dragover はブラウザや高負荷時に取りこぼされることがあるため、
+      // drop 時にも実際のポインター位置から前後を再計算する。これにより
+      // 「後ろへドロップしたのに順序が変わらない」状態を防ぐ。
+      const dropRect = card?.getBoundingClientRect();
+      const pointerPlacement = card && dropRect
+        ? (event.clientY >= dropRect.top + dropRect.height / 2 ? "after" : "before")
+        : null;
+      const placement = pointerPlacement ?? (card?.dataset.dropPosition === "after" ? "after" : "before");
       draggedTaxonomyId = "";
       void reorderTaxonomy(sourceId, targetId, targetGroup, placement).catch((error) => {
         const message = root.querySelector<HTMLOutputElement>("[data-message]");
