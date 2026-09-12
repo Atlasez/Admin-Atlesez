@@ -3845,6 +3845,10 @@ type EditorialTaxonomyRow = {
   description: string;
   sort_order: number;
   status: "active" | "archived";
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
 };
 
 /** 動的分野では、記事とカテゴリの関連がカタログに存在することを保存前に確認する。 */
@@ -3897,8 +3901,8 @@ async function ensureStaticEditorialTaxonomyCatalog(env: Env) {
       [
         env.REPORTS.prepare(
           `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
-           (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+           (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         ).bind(
           crypto.randomUUID(),
           "atlas",
@@ -3911,13 +3915,14 @@ async function ensureStaticEditorialTaxonomyCatalog(env: Env) {
           "active",
           "system",
           now,
+          "system",
           now,
         ),
         ...(EDITORIAL_STATIC_CATEGORIES[slug] ?? []).map((category) =>
           env.REPORTS.prepare(
             `INSERT OR IGNORE INTO admin_editorial_taxonomy_catalog
-             (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+             (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           ).bind(
             crypto.randomUUID(),
             "atlas",
@@ -3930,6 +3935,7 @@ async function ensureStaticEditorialTaxonomyCatalog(env: Env) {
             "active",
             "system",
             now,
+            "system",
             now,
           ),
         ),
@@ -3970,7 +3976,7 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
     await ensureStaticEditorialTaxonomyCatalog(env);
     const includeArchived = url.searchParams.get("includeArchived") === "1";
     const result = await env.REPORTS.prepare(
-      `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status
+      `SELECT id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at
        FROM admin_editorial_taxonomy_catalog WHERE project_id='atlas' ${includeArchived ? "" : "AND status='active'"}
        ORDER BY kind,subject_slug,sort_order,name`,
     ).all<EditorialTaxonomyRow>();
@@ -4035,8 +4041,8 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
         [...groups.values()].flatMap((group) =>
           group.map((item, index) =>
             env.REPORTS.prepare(
-              "UPDATE admin_editorial_taxonomy_catalog SET sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'",
-            ).bind(index * 10, now, item.id),
+              "UPDATE admin_editorial_taxonomy_catalog SET sort_order=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'",
+            ).bind(index * 10, scope.email, now, item.id),
           ),
         ),
       );
@@ -4044,15 +4050,15 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       return json({ ok: true, updated: itemIds.length });
     }
     const current = await env.REPORTS.prepare(
-      "SELECT id,kind,subject_slug,slug,name,description,sort_order,status FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
+      "SELECT id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at FROM admin_editorial_taxonomy_catalog WHERE id=? AND project_id='atlas'",
     ).bind(id).first<EditorialTaxonomyRow>();
     if (!current) return json({ error: "分野またはカテゴリが見つかりません。" }, 404);
     const canEditCurrent = scope.allSubjects || scope.isManager || (current.kind === "category" && (coordinatorSubjects.includes(current.subject_slug) || coordinatorSubjects.includes("*")));
     if (!canEditCurrent) return json({ error: "この分野・カテゴリを変更する権限がありません。" }, 403);
     if (action === "archive" || action === "restore") {
       const nextStatus = action === "archive" ? "archived" : "active";
-      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET status=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(nextStatus, new Date().toISOString(), id).run();
+      await env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET status=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(nextStatus, scope.email, new Date().toISOString(), id).run();
       await recordAdminAudit(env, scope.email, action === "archive" ? "taxonomy_archived" : "taxonomy_restored", "taxonomy", id, current.name, `分野・カテゴリを${action === "archive" ? "アーカイブ" : "復元"}：${current.name}`, { kind: current.kind, slug: current.slug, subject: current.subject_slug });
       return json({ ok: true, status: nextStatus });
     }
@@ -4135,14 +4141,14 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
       : [];
     const now = new Date().toISOString();
     const statements = [
-      env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,slug=?,name=?,description=?,sort_order=?,updated_at=? WHERE id=? AND project_id='atlas'")
-        .bind(current.kind === "category" ? nextSubject : "", slug, name, description, sortOrder, now, id),
+      env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,slug=?,name=?,description=?,sort_order=?,updated_by=?,updated_at=? WHERE id=? AND project_id='atlas'")
+        .bind(current.kind === "category" ? nextSubject : "", slug, name, description, sortOrder, scope.email, now, id),
     ];
     if (identityChanged) {
       if (current.kind === "subject") {
         statements.push(
-          env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,updated_at=? WHERE project_id='atlas' AND kind='category' AND subject_slug=?")
-            .bind(nextSubject, now, oldSubject),
+          env.REPORTS.prepare("UPDATE admin_editorial_taxonomy_catalog SET subject_slug=?,updated_by=?,updated_at=? WHERE project_id='atlas' AND kind='category' AND subject_slug=?")
+            .bind(nextSubject, scope.email, now, oldSubject),
           env.REPORTS.prepare("UPDATE editorial_subject_overviews SET subject=? WHERE project_id='atlas' AND subject=?")
             .bind(nextSubject, oldSubject),
           env.REPORTS.prepare("UPDATE report_admin_permissions SET subject=? WHERE subject=?")
@@ -4241,9 +4247,9 @@ async function editorialTaxonomyCatalog(request: Request, env: Env): Promise<Res
   const now = new Date().toISOString();
   try {
     await env.REPORTS.prepare(
-      `INSERT INTO admin_editorial_taxonomy_catalog (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-    ).bind(crypto.randomUUID(), "atlas", kind, kind === "category" ? subject : "", slug, name, description, sortOrder, "active", scope.email, now, now).run();
+      `INSERT INTO admin_editorial_taxonomy_catalog (id,project_id,kind,subject_slug,slug,name,description,sort_order,status,created_by,created_at,updated_by,updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).bind(crypto.randomUUID(), "atlas", kind, kind === "category" ? subject : "", slug, name, description, sortOrder, "active", scope.email, now, scope.email, now).run();
   } catch (error) {
     if (String(error).toLowerCase().includes("unique")) return json({ error: "同じ対象に同じIDがすでに存在します。" }, 409);
     throw error;
