@@ -218,6 +218,55 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it("replaces a managed category outline without touching related categories", () => {
+    const yaml = [
+      "- id: mathematics",
+      "  slug: mathematics",
+      "  categories:",
+      "    - id: machine-learning",
+      "      slug: machine-learning",
+      "      name: { ja: 機械学習, en: 機械学習 }",
+      "      order: 1",
+      "      entryConceptIds: []",
+      "      outline:",
+      "        - id: old",
+      "          slug: old",
+      "          title: 旧項目",
+      "          summary: 旧概要",
+      "          conceptId: math.machine-learning.old",
+      "          order: 0",
+      "      relatedCategoryIds: [group-theory]",
+    ].join("\n");
+    const merged = mergeEditorialTaxonomyYaml(
+      yaml,
+      [
+        {
+          kind: "category",
+          subject_slug: "mathematics",
+          slug: "machine-learning",
+          name: "機械学習",
+          description: "",
+          sort_order: 1,
+          outline_entries: [
+            {
+              id: "new",
+              parent_id: null,
+              slug: "new",
+              title: "新項目",
+              summary: "新概要",
+              concept_id: "math.machine-learning.new",
+              sort_order: 0,
+            },
+          ],
+        },
+      ],
+      "mathematics",
+    );
+    expect(merged).toContain('id: "new"');
+    expect(merged).not.toContain("id: old");
+    expect(merged).toContain("relatedCategoryIds: [group-theory]");
+  });
+
   it("returns the numeric pending approval count in the portal overview", async () => {
     const portalEnv = {
       ...emptyEnv,
