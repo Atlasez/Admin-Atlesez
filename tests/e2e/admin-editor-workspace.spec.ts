@@ -1079,6 +1079,16 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   );
   expect(statusLayout.linkWidth).toBeGreaterThan(60);
   expect(statusLayout.linkHeight).toBeLessThan(44);
+  const publicationRunPseudo = await publicationRun.evaluate((element) => ({
+    before: getComputedStyle(element, "::before").display,
+    after: getComputedStyle(element, "::after").display,
+    beforeContent: getComputedStyle(element, "::before").content,
+    afterContent: getComputedStyle(element, "::after").content,
+  }));
+  expect(publicationRunPseudo.before).toBe("none");
+  expect(publicationRunPseudo.after).toBe("none");
+  expect(publicationRunPseudo.beforeContent).toBe("none");
+  expect(publicationRunPseudo.afterContent).toBe("none");
   const publicationDiagnostic = page.locator("[data-publication-diagnostic]");
   await expect(publicationDiagnostic).toBeVisible();
   // 診断欄は後続の「記事設定」と重ならないよう、状態表示の通常フローに置く。

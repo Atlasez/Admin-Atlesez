@@ -2194,6 +2194,8 @@ describe("admin worker editor APIs", () => {
         canWrite: true,
         automaticMerge: true,
         automaticReview: true,
+        preflightReady: true,
+        preflightMode: "pull_request_ci",
         automationReady: true,
       });
     } finally {
