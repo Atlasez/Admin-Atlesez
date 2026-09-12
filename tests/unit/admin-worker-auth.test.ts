@@ -583,6 +583,87 @@ describe("applicant stage server-side access", () => {
     }
   });
 
+  it("normalizes GitHub connection failures for the retry UI", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("SELECT subject FROM report_admin_permissions")
+            ? { results: [{ subject: "*" }] as T[] }
+            : { results: [] as T[] };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("network unavailable");
+    });
+    try {
+      const response = await worker.fetch(
+        new Request("https://admin.example/api/admin/update-history", {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "admin@example.com",
+          },
+        }),
+        {
+          ADMIN_AUTH_MODE: "cloudflare-access",
+          REPORTS: reports,
+          ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+        } as never,
+      );
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toMatchObject({
+        code: "GITHUB_UNAVAILABLE",
+        retryable: true,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects an unexpected GitHub response instead of throwing from the history page", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("SELECT subject FROM report_admin_permissions")
+            ? { results: [{ subject: "*" }] as T[] }
+            : { results: [] as T[] };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(JSON.stringify({ message: "rate limit" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    try {
+      const response = await worker.fetch(
+        new Request("https://admin.example/api/admin/update-history", {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "admin@example.com",
+          },
+        }),
+        {
+          ADMIN_AUTH_MODE: "cloudflare-access",
+          REPORTS: reports,
+          ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+        } as never,
+      );
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toMatchObject({
+        code: "GITHUB_INVALID_RESPONSE",
+        retryable: true,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("requires an authenticated Google session before accepting an application", async () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/apply", {

@@ -955,6 +955,64 @@ describe("admin worker editor APIs", () => {
     ).toBe(true);
   });
 
+  it("applies the caller's subject scope before outline pagination", async () => {
+    const queries: string[] = [];
+    const visibleRow = {
+      id: "00000000-0000-0000-0000-000000000051",
+      project_id: "atlas",
+      subject_slug: "mathematics",
+      category_slug: "group-theory",
+      parent_id: null,
+      document_id: null,
+      slug: "groups",
+      title: "群論",
+      summary: "",
+      concept_id: "",
+      sort_order: 10,
+      status: "active",
+      created_by: "editor@example.com",
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    };
+    const scopedEnv = {
+      ...emptyEnv,
+      ADMIN_AUTH_MODE: "cloudflare-access",
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          queries.push(query);
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("SELECT subject FROM report_admin_permissions"))
+              return { results: [{ subject: "mathematics" }] as T[] };
+            if (query.includes("FROM editorial_workflow_roles"))
+              return { results: [] as T[] };
+            if (query.includes("FROM editorial_outline_entries"))
+              return { results: [visibleRow] as T[] };
+            return { results: [] as T[] };
+          };
+          return statement;
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/api/admin/editor/outline?limit=1", {
+        headers: { "Cf-Access-Authenticated-User-Email": "editor@example.com" },
+      }),
+      scopedEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      entries: [expect.objectContaining({ subject_slug: "mathematics" })],
+      pagination: { limit: 1, hasMore: false, nextCursor: null },
+    });
+    const outlineQuery = queries.find((query) =>
+      query.includes("FROM editorial_outline_entries WHERE project_id='atlas'"),
+    );
+    expect(outlineQuery).toContain("subject_slug IN (?)");
+  });
+
   it("keeps a linked draft article in sync when an outline identity changes", async () => {
     const outlineId = "00000000-0000-0000-0000-000000000021";
     const documentId = "00000000-0000-0000-0000-000000000022";
