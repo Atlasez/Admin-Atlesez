@@ -8857,20 +8857,77 @@ async function getMyProfile(request: Request, env: Env): Promise<Response> {
   });
 }
 
-const countPendingProfileApprovals = async (env: Env) => {
-  const [memberRequests, projectRequests] = await Promise.all([
-    env.REPORTS.prepare(
-      "SELECT COUNT(*) AS count FROM editorial_member_profile_change_requests WHERE status='pending'",
-    ).first<{ count: number }>(),
-    env.REPORTS.prepare(
-      "SELECT COUNT(*) AS count FROM editorial_project_profile_change_requests WHERE status='pending'",
-    ).first<{ count: number }>(),
-  ]);
+type PendingApprovalCountOptions = {
+  /** メンバー情報申請を閲覧できる場合だけ true（運営事務局／全分野管理者）。 */
+  includeMemberRequests?: boolean;
+  /** 運営内自己紹介申請を閲覧できるプロジェクトID。空配列なら数えない。 */
+  projectIds?: string[];
+  /** 既存の承認一覧API互換。プロジェクトを横断して表示する場合に true。 */
+  includeAllProjectRequests?: boolean;
+};
+
+const countPendingProfileApprovals = async (
+  env: Env,
+  options: PendingApprovalCountOptions = {},
+) => {
+  const queries: Promise<{ count?: number } | null>[] = [];
+  if (options.includeMemberRequests !== false) {
+    queries.push(
+      env.REPORTS.prepare(
+        "SELECT COUNT(*) AS count FROM editorial_member_profile_change_requests WHERE status='pending'",
+      ).first<{ count: number }>(),
+    );
+  }
+  const projectIds = [...new Set((options.projectIds ?? []).filter(Boolean))];
+  if (options.includeAllProjectRequests) {
+    queries.push(
+      env.REPORTS.prepare(
+        "SELECT COUNT(*) AS count FROM editorial_project_profile_change_requests WHERE status='pending'",
+      ).first<{ count: number }>(),
+    );
+  } else if (projectIds.length) {
+    queries.push(
+      env.REPORTS.prepare(
+        `SELECT COUNT(*) AS count
+           FROM editorial_project_profile_change_requests
+          WHERE status='pending' AND project_id IN (${projectIds.map(() => "?").join(",")})`,
+      )
+        .bind(...projectIds)
+        .first<{ count: number }>(),
+    );
+  }
+  const results = await Promise.all(queries);
   const normalizeCount = (value: unknown) => {
     const count = Number(value ?? 0);
     return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
   };
-  return normalizeCount(memberRequests?.count) + normalizeCount(projectRequests?.count);
+  return results.reduce((total, result) => total + normalizeCount(result?.count), 0);
+};
+
+/**
+ * 承認待ち件数とアクション一覧で共有する、運営内自己紹介の可視範囲。
+ * 一般メンバーの所属プロジェクトまで数えてしまうと、Portalの件数だけが
+ * 増えて「承認待ちを開いても何もない」状態になるため、managerだけに限定する。
+ */
+const reviewableProfileProjectIds = async (
+  env: Env,
+  scope: AdminScope,
+  accessibleProjectIds: string[],
+  canReviewAtlasMemberRequests: boolean,
+) => {
+  if (scope.isManager) return accessibleProjectIds;
+  const rows = await env.REPORTS.prepare(
+    "SELECT project_id FROM atlasez_project_memberships WHERE lower(email)=lower(?) AND role='manager'",
+  )
+    .bind(scope.email)
+    .all<{ project_id: string }>();
+  const reviewable = new Set(
+    (rows.results ?? []).map((row) => String(row.project_id ?? "")).filter(Boolean),
+  );
+  // アトラスのメンバー情報を審査できる運営事務局 manager は、
+  // atlasプロジェクトの運営内自己紹介も審査対象に含める。
+  if (canReviewAtlasMemberRequests) reviewable.add("atlas");
+  return accessibleProjectIds.filter((projectId) => reviewable.has(projectId));
 };
 
 type WorkflowSummary = {
@@ -8883,7 +8940,8 @@ const getWorkflowSummary = async (
   env: Env,
   scope: AdminScope,
   projectIds: string[],
-  includeApprovals: boolean,
+  approvalProjectIds: string[] = [],
+  includeMemberApprovals = false,
 ): Promise<WorkflowSummary> => {
   const taskScopeSql = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
@@ -8902,7 +8960,12 @@ const getWorkflowSummary = async (
           .bind(...taskBindings)
           .first<{ open_count: number; due_today: number; due_soon: number }>()
       : Promise.resolve({ open_count: 0, due_today: 0, due_soon: 0 }),
-    includeApprovals ? countPendingProfileApprovals(env) : Promise.resolve(0),
+    countPendingProfileApprovals(
+      env,
+      scope.isManager && approvalProjectIds.length === 0
+        ? { includeMemberRequests: includeMemberApprovals, includeAllProjectRequests: true }
+        : { projectIds: approvalProjectIds, includeMemberRequests: includeMemberApprovals },
+    ),
   ]);
   return {
     pendingApprovals: Number(pendingApprovals ?? 0),
@@ -8955,8 +9018,20 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   // 通知件数もポータルのレスポンスに含め、ヘッダー・アクションセンターと
   // 同じ集計結果を利用できるようにする。クライアント側で別リクエストを
   // 競合させると、片方だけ更新されて件数がずれるためである。
+  const approvalProjectIds = await reviewableProfileProjectIds(
+    env,
+    scope,
+    projectIds,
+    canReviewProfileRequests,
+  );
   const [workflowSummary, notificationResponse] = await Promise.all([
-    getWorkflowSummary(env, scope, projectIds, canReviewProfileRequests),
+    getWorkflowSummary(
+      env,
+      scope,
+      projectIds,
+      approvalProjectIds,
+      canReviewProfileRequests,
+    ),
     adminNotifications(
       new Request(new URL("/api/admin/notifications?limit=100", request.url), {
         headers: request.headers,
@@ -9163,6 +9238,9 @@ const actionCenterTransition = (entityType: WorkflowEntityType, entityId: string
 async function actionCenterOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  // Portalと同じプロジェクト境界を使う。ここを省くと、secretariat managerが
+  // 担当外プロジェクトの承認申請まで一覧で受け取ってしまう。
+  await ensureAtlasMembership(env, scope);
   const now = Date.now();
   // 初期表示は未対応項目だけを返し、完了履歴は明示的に選択されたときだけ取得する。
   // 履歴は5種類のテーブルを横断するため、毎回同時取得すると件数が少なくても待ち時間が増える。
@@ -9178,10 +9256,22 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       ).bind(scope.email).all<{ id: string; slug: string; name: string }>();
   const projects = projectRows.results ?? [];
   const projectIds = projects.map((project) => project.id).filter(Boolean);
+  const approvalProjectIds = await reviewableProfileProjectIds(
+    env,
+    scope,
+    projectIds,
+    secretariatRole === "manager",
+  );
   const projectNames = new Map(projects.map((project) => [project.id, project.name || project.slug]));
   // ポータルと同じ集計関数を使い、承認待ち件数が一覧取得上限で欠落しないようにする。
   // このPromiseは一覧クエリと並行して開始し、追加の待ち時間を発生させない。
-  const workflowSummaryPromise = getWorkflowSummary(env, scope, projectIds, canReviewApplications);
+  const workflowSummaryPromise = getWorkflowSummary(
+    env,
+    scope,
+    projectIds,
+    approvalProjectIds,
+    canReviewApplications,
+  );
   const taskPredicate = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")}) AND ${scope.isManager
       ? "1=1"
@@ -9232,13 +9322,12 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
             ORDER BY r.submitted_at DESC LIMIT 50`,
         ).all<{ id: string; email: string; display_name: string; submitted_at: string; status: string }>()
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; display_name: string; submitted_at: string; status: string }> }),
-    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }) : scope.isManager || secretariatRole === "manager"
-      ? env.REPORTS.prepare(
-          `SELECT r.id,r.email,r.project_id,r.submitted_at,r.status
-             FROM editorial_project_profile_change_requests r WHERE r.status='pending'
-            ORDER BY r.submitted_at DESC LIMIT 50`,
-        ).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>()
-      : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
+    historyOnly || !approvalProjectIds.length ? Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }) : env.REPORTS.prepare(
+      `SELECT r.id,r.email,r.project_id,r.submitted_at,r.status
+         FROM editorial_project_profile_change_requests r
+        WHERE r.status='pending' AND r.project_id IN (${approvalProjectIds.map(() => "?").join(",")})
+        ORDER BY r.submitted_at DESC LIMIT 50`,
+    ).bind(...approvalProjectIds).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>(),
     historyOnly ? Promise.resolve(json({ notifications: [], unreadNotificationsCount: 0 })) : adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env),
     historyOnly ? env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,t.archived_at,
@@ -10203,7 +10292,12 @@ async function listProfileChangeRequests(
   const atlasInternalBioRequests = atlasRows.slice(0, pageLimit);
   const profileHasMore = profileRows.length > pageLimit;
   const atlasHasMore = atlasRows.length > pageLimit;
-  const pendingApprovals = await countPendingProfileApprovals(env);
+  // この画面はメンバー情報とatlasの運営内自己紹介を同時に扱うため、
+  // Portal／Action Centerと同じ合算値を返す。
+  const pendingApprovals = await countPendingProfileApprovals(env, {
+    includeMemberRequests: true,
+    includeAllProjectRequests: true,
+  });
   return json({
     requests,
     atlasInternalBioRequests,
