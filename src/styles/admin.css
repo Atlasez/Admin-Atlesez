@@ -274,3 +274,20 @@
   border-color: var(--admin-accent) !important;
   color: var(--admin-on-accent) !important;
 }
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page .intro-message,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page .intro-message,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests .approval-message,
+[data-pref-mode="black"]
+  [data-admin-shell]
+  .profile-requests
+  .approval-message {
+  color: var(--admin-danger) !important;
+}
+
+[data-pref-bg="dark"] [data-admin-shell] .introductions-page a,
+[data-pref-mode="black"] [data-admin-shell] .introductions-page a,
+[data-pref-bg="dark"] [data-admin-shell] .profile-requests a,
+[data-pref-mode="black"] [data-admin-shell] .profile-requests a {
+  color: var(--admin-accent) !important;
+}
