@@ -5701,6 +5701,15 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     width: 100%;
   }
 
+  /*
+   * 診断のsummaryは操作ボタンを押してもツールバーを動かさないよう
+   * absoluteで配置する。ただし閉じたsummaryも表示されるため、親側で
+   * その1行分を確保し、直後の「記事設定」と重ならないようにする。
+   */
+  .editor-workspace .document-statuses:has(> .publication-diagnostic:not([hidden])) {
+    padding-bottom: 2.75rem;
+  }
+
   .editor-workspace .document-statuses > .document-status-pill {
     flex: 0 1 auto;
     max-width: 100%;
