@@ -425,6 +425,9 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       const targetGroup = source.kind === "subject" ? "subject:" : (lane?.dataset.taxonomyTargetGroup ?? card?.dataset.taxonomyGroup ?? "");
       if ((source.kind === "category" && !targetGroup.startsWith("category:")) || (source.kind === "subject" && targetGroup !== "subject:")) return;
       event.preventDefault();
+      // ポインターが別カードへ移動したとき、前の候補を残さない。
+      // 複数の枠が同時に強調されると、移動先を誤認しやすくなる。
+      taxonomyContent.querySelectorAll<HTMLElement>(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
       card?.classList.add("is-drop-target");
       if (lane) lane.classList.add("is-drop-target");
       if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
