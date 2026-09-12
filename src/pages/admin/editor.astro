@@ -536,7 +536,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-split { align-items:start; display:grid; gap:1rem; grid-template-columns:repeat(3,minmax(0,1fr)); min-height:0; padding:.8rem; }.writing-area, .preview-area, .media-area, .review-panel, .memo-area { align-self:start; border:1px solid var(--border); min-width:0; overflow:visible; position:relative; }.preview-area { display:flex; flex-direction:column; height:clamp(32rem,66vh,52rem); max-height:clamp(32rem,66vh,52rem); min-height:0; }.memo-area { background:var(--surface); display:flex; flex-direction:column; min-height:clamp(38rem,72vh,60rem); }.memo-content { display:grid; flex:1 1 auto; gap:.65rem; grid-template-rows:auto minmax(0,1fr); min-height:0; padding:.85rem; }.memo-content p { color:var(--muted); font-size:.78rem; line-height:1.55; margin:0; }.memo-content textarea { background:var(--surface-alt); border:1px solid var(--border); box-sizing:border-box; color:var(--text); font:inherit; height:100%; line-height:1.6; min-height:0; padding:.7rem; resize:vertical; width:100%; }.pane-heading { background:var(--surface-alt); border-bottom:1px solid var(--border); padding:.75rem .9rem; }.pane-heading h3 { font-size:.95rem; margin:0; }.pane-heading p { color:var(--muted); font-size:.77rem; margin:.22rem 0 0; }.pane-heading code { background:var(--surface); border:1px solid var(--border); border-radius:0; padding:.03rem .2rem; }.pane-heading > span { color:var(--muted); flex:0 0 auto; font-size:.76rem; }.live-badge { color:var(--success) !important; font-weight:800; }
   .pane-resize-handle { align-items:center; background:transparent; border:0; color:var(--muted); cursor:ns-resize; display:flex; height:1rem; justify-content:center; padding:0; position:relative; touch-action:none; width:100%; z-index:6; }.pane-resize-handle span { border-top:2px solid currentColor; border-radius:999px; display:block; opacity:.65; transition:color .15s ease,opacity .15s ease,width .15s ease; width:3.2rem; }.pane-resize-handle:hover,.pane-resize-handle:focus-visible { color:var(--accent); outline:2px solid color-mix(in srgb,var(--accent),transparent 65%); outline-offset:-2px; }.pane-resize-handle:hover span,.pane-resize-handle:focus-visible span { opacity:1; width:4.5rem; }.is-resizing-pane,.is-resizing-pane * { cursor:ns-resize !important; user-select:none !important; }
   .editor-split > section.is-pane-resized { display:flex; flex-direction:column; height:var(--editor-pane-height); max-height:none; min-height:var(--editor-pane-height); overflow:hidden; }.editor-split > .writing-area.is-pane-resized > .body-editor-surface,.editor-split > .media-area.is-pane-resized > .media-studio { flex:1 1 0; height:auto; max-height:none; min-height:0; }.editor-split > .review-panel.is-pane-resized { min-height:var(--editor-pane-height); }.review-panel.is-pane-resized .comment-list { flex:1 1 0; max-height:none; min-height:6rem; overflow:auto; }.editor-split > .memo-area.is-pane-resized .memo-content { min-height:0; }
-  .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:static; z-index:15; }.editor-workspace[data-sticky-toolbar] .document-toolbar { position:sticky; top:0; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
+  .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:static; z-index:15; }.editor-workspace[data-sticky-toolbar] .document-toolbar { position:sticky; top:0; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses > span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .update-proposal-note { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-left: 3px solid var(--accent); color: var(--text); font-size: .74rem; line-height: 1.55; margin: .45rem 0 0; max-width: 38rem; padding: .45rem .6rem; }
   .document-form.is-update-proposal .metadata input:disabled,
   .document-form.is-update-proposal .metadata select:disabled { cursor: not-allowed; opacity: .72; }
@@ -738,6 +738,87 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   }
   @media (prefers-reduced-motion: reduce) {
     .publication-run-status[aria-busy="true"] .publication-run-indicator { animation: none; }
+  }
+</style>
+
+<style is:global>
+  /*
+   * 公開処理の失敗状態は、長いエラー文を含む通常のインラインカードとして
+   * 表示する。過去のテーマ／プロトタイプ由来の汎用オーブ指定が混ざると、
+   * インジケーターが数百pxの円へ拡大して本文を覆うことがあるため、ここで
+   * サイズ・配置を明示的に固定する。
+   */
+  .editor-workspace .document-statuses .publication-run-status {
+    align-items: start;
+    border-radius: .45rem;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: .65rem minmax(0, 1fr) auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    position: relative;
+  }
+
+  .editor-workspace .document-statuses .publication-run-indicator,
+  .editor-workspace .document-statuses .publication-run-indicator::before,
+  .editor-workspace .document-statuses .publication-run-indicator::after {
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: block;
+    height: 16px !important;
+    inset: auto !important;
+    margin: .2rem 0 0 !important;
+    max-height: 16px !important;
+    max-width: 16px !important;
+    min-height: 16px !important;
+    min-width: 16px !important;
+    padding: 0 !important;
+    position: static !important;
+    transform: none !important;
+    width: 16px !important;
+  }
+
+  .editor-workspace .document-statuses .publication-run-copy {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    display: grid;
+    gap: .15rem .45rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .editor-workspace .document-statuses .publication-run-message {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    line-height: 1.45;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    overflow: hidden;
+    padding: 0;
+    text-overflow: ellipsis;
+    white-space: normal;
+  }
+
+  .editor-workspace .document-statuses .publication-run-updated {
+    align-self: start;
+    max-width: 10rem;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  @media (max-width: 700px) {
+    .editor-workspace .document-statuses .publication-run-status {
+      grid-template-columns: .65rem minmax(0, 1fr);
+    }
+
+    .editor-workspace .document-statuses .publication-run-updated {
+      grid-column: 2;
+      max-width: none;
+    }
   }
 </style>
 
