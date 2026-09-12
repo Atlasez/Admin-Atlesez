@@ -5710,6 +5710,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     padding-bottom: 4rem;
   }
 
+  .editor-workspace .document-toolbar > div:first-child:has(> .document-statuses > .publication-diagnostic:not([hidden])) {
+    padding-bottom: .75rem;
+  }
+
   .editor-workspace .document-statuses > .document-status-pill {
     flex: 0 1 auto;
     max-width: 100%;
