@@ -173,6 +173,7 @@ describe("admin worker editor APIs", () => {
           name: "機械学習",
           description: "",
           sort_order: 30,
+          entry_concept_ids: ["math.machine-learning.concentration-inequality"],
         },
       ],
       "mathematics",
@@ -180,6 +181,9 @@ describe("admin worker editor APIs", () => {
     expect(merged).toContain("  order: 20");
     expect(merged).toContain('name: { ja: "機械学習", en: "機械学習" }');
     expect(merged).toContain("      order: 30");
+    expect(merged).toContain(
+      'entryConceptIds: ["math.machine-learning.concentration-inequality"]',
+    );
   });
 
   it("returns the numeric pending approval count in the portal overview", async () => {

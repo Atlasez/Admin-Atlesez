@@ -14900,7 +14900,7 @@ const editorialConceptYaml = (document: EditorialDocument) => {
 type EditorialTaxonomyPublicationRow = Pick<
   EditorialTaxonomyRow,
   "kind" | "subject_slug" | "slug" | "name" | "description" | "sort_order"
->;
+> & { entry_concept_ids?: string[] };
 
 const yamlScalar = (value: string) => JSON.stringify(value);
 const escapeRegExp = (value: string) =>
@@ -14914,7 +14914,7 @@ const editorialTaxonomyCategoryYaml = (
     `      slug: ${row.slug}`,
     `      name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`,
     `      order: ${Math.max(0, Number(row.sort_order) || 0)}`,
-    "      entryConceptIds: []",
+    `      entryConceptIds: [${(row.entry_concept_ids ?? []).map(yamlScalar).join(", ")}]`,
     "      relatedCategoryIds: []",
   ].join("\n");
 
@@ -15023,6 +15023,12 @@ export const mergeEditorialTaxonomyYaml = (
     categoryBlock = /^      order:\s*\d+\s*$/m.test(categoryBlock)
       ? categoryBlock.replace(/^      order:\s*\d+\s*$/m, orderLine)
       : categoryBlock;
+    if (row.entry_concept_ids) {
+      const entryLine = `      entryConceptIds: [${row.entry_concept_ids.map(yamlScalar).join(", ")}]`;
+      categoryBlock = /^      entryConceptIds:.*$/m.test(categoryBlock)
+        ? categoryBlock.replace(/^      entryConceptIds:.*$/m, entryLine)
+        : `${categoryBlock.trimEnd()}\n${entryLine}\n`;
+    }
     blockText = `${blockText.slice(0, categoryMatch.index)}${categoryBlock}${blockText.slice(categoryMatch.index + categoryMatch[1].length)}`;
   }
   if (!missingCategories.length) return `${next.slice(0, block.start)}${blockText}${next.slice(block.end)}`;
@@ -15106,6 +15112,37 @@ async function syncEditorialTaxonomyToGitHub(
       .all<EditorialTaxonomyPublicationRow>()
   ).results ?? [];
   if (!rows.length) return;
+
+  // 公開済みの記事を紐付けた目次の入口を、学習サイトの
+  // `entryConceptIds` として同じカテゴリへ渡す。現在公開処理中の原稿は
+  // published_at がまだ未設定でも取りこぼさないよう、document.id も対象にする。
+  const outlineRows = (
+    await env.REPORTS.prepare(
+      `SELECT e.category_slug, e.concept_id
+       FROM editorial_outline_entries e
+       JOIN editorial_documents d ON d.id=e.document_id
+       WHERE e.project_id='atlas' AND e.subject_slug=? AND e.status='active'
+         AND e.parent_id IS NULL AND (d.published_at IS NOT NULL OR d.id=?)
+       ORDER BY e.category_slug,e.sort_order,e.updated_at`,
+    )
+      .bind(document.subject, document.id)
+      .all<{ category_slug: string; concept_id: string }>()
+  ).results ?? [];
+  const entryConceptIdsByCategory = new Map<string, string[]>();
+  for (const entry of outlineRows) {
+    const conceptId = entry.concept_id.trim();
+    if (!conceptId) continue;
+    const ids = entryConceptIdsByCategory.get(entry.category_slug) ?? [];
+    if (!ids.includes(conceptId)) ids.push(conceptId);
+    entryConceptIdsByCategory.set(entry.category_slug, ids);
+  }
+  for (const row of rows) {
+    if (row.kind === "category" && entryConceptIdsByCategory.has(row.slug)) {
+      // 管理側に目次が存在するカテゴリだけを更新する。まだ管理側へ
+      // 移行していない既存カテゴリは、学習サイト側の既存入口を保持する。
+      row.entry_concept_ids = entryConceptIdsByCategory.get(row.slug) ?? [];
+    }
+  }
 
   const path = "src/content/subjects/subjects.yaml";
   const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;
