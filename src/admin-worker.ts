@@ -15312,8 +15312,15 @@ async function syncEditorialTaxonomyToGitHub(
   >();
   const publishedOutlineIds = new Set(outlineRows.map((entry) => entry.id));
   for (const entry of outlineRows) {
-    const conceptId = entry.concept_id.trim();
-    if (!conceptId) continue;
+    const rawConceptId = entry.concept_id.trim();
+    // 目次作成画面では記事URL名だけを概念IDとして保存できるが、
+    // 学習サイトの subjects.yaml は subject.category.concept の
+    // 完全修飾IDを要求する。既に完全IDの既存記事はそのまま保持し、
+    // 短縮IDだけ公開時に所属分野・カテゴリを補う。
+    if (!rawConceptId) continue;
+    const conceptId = rawConceptId.includes(".")
+      ? rawConceptId
+      : `${document.subject}.${entry.category_slug}.${rawConceptId}`;
     if (!entry.parent_id || publishedOutlineIds.has(entry.parent_id)) {
       const ids = entryConceptIdsByCategory.get(entry.category_slug) ?? [];
       if (!entry.parent_id && !ids.includes(conceptId)) ids.push(conceptId);
