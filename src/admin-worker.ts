@@ -14900,7 +14900,18 @@ const editorialConceptYaml = (document: EditorialDocument) => {
 type EditorialTaxonomyPublicationRow = Pick<
   EditorialTaxonomyRow,
   "kind" | "subject_slug" | "slug" | "name" | "description" | "sort_order"
->;
+> & {
+  entry_concept_ids?: string[];
+  outline_entries?: Array<{
+    id: string;
+    parent_id: string | null;
+    slug: string;
+    title: string;
+    summary: string;
+    concept_id: string;
+    sort_order: number;
+  }>;
+};
 
 const yamlScalar = (value: string) => JSON.stringify(value);
 const escapeRegExp = (value: string) =>
@@ -14914,7 +14925,21 @@ const editorialTaxonomyCategoryYaml = (
     `      slug: ${row.slug}`,
     `      name: { ja: ${yamlScalar(row.name)}, en: ${yamlScalar(row.name)} }`,
     `      order: ${Math.max(0, Number(row.sort_order) || 0)}`,
-    "      entryConceptIds: []",
+    `      entryConceptIds: [${(row.entry_concept_ids ?? []).map(yamlScalar).join(", ")}]`,
+    ...(row.outline_entries?.length
+      ? [
+          "      outline:",
+          ...row.outline_entries.flatMap((entry) => [
+            `        - id: ${yamlScalar(entry.id)}`,
+            ...(entry.parent_id ? [`          parentId: ${yamlScalar(entry.parent_id)}`] : []),
+            `          slug: ${yamlScalar(entry.slug)}`,
+            `          title: ${yamlScalar(entry.title)}`,
+            `          summary: ${yamlScalar(entry.summary)}`,
+            `          conceptId: ${yamlScalar(entry.concept_id)}`,
+            `          order: ${Math.max(0, Number(entry.sort_order) || 0)}`,
+          ]),
+        ]
+      : []),
     "      relatedCategoryIds: []",
   ].join("\n");
 
@@ -15023,6 +15048,37 @@ export const mergeEditorialTaxonomyYaml = (
     categoryBlock = /^      order:\s*\d+\s*$/m.test(categoryBlock)
       ? categoryBlock.replace(/^      order:\s*\d+\s*$/m, orderLine)
       : categoryBlock;
+    if (row.entry_concept_ids) {
+      const entryLine = `      entryConceptIds: [${row.entry_concept_ids.map(yamlScalar).join(", ")}]`;
+      categoryBlock = /^      entryConceptIds:.*$/m.test(categoryBlock)
+        ? categoryBlock.replace(/^      entryConceptIds:.*$/m, entryLine)
+        : `${categoryBlock.trimEnd()}\n${entryLine}\n`;
+    }
+    if (row.outline_entries?.length) {
+      const outlineLines = [
+        "      outline:",
+        ...row.outline_entries.flatMap((entry) => [
+          `        - id: ${yamlScalar(entry.id)}`,
+          ...(entry.parent_id
+            ? [`          parentId: ${yamlScalar(entry.parent_id)}`]
+            : []),
+          `          slug: ${yamlScalar(entry.slug)}`,
+          `          title: ${yamlScalar(entry.title)}`,
+          `          summary: ${yamlScalar(entry.summary)}`,
+          `          conceptId: ${yamlScalar(entry.concept_id)}`,
+          `          order: ${Math.max(0, Number(entry.sort_order) || 0)}`,
+        ]),
+      ].join("\n");
+      const outlinePattern = /^      outline:\n[\s\S]*?(?=^      relatedCategoryIds:|^    - id:|$)/m;
+      categoryBlock = outlinePattern.test(categoryBlock)
+        ? categoryBlock.replace(outlinePattern, `${outlineLines}\n`)
+        : /^      relatedCategoryIds:/m.test(categoryBlock)
+          ? categoryBlock.replace(
+              /^      relatedCategoryIds:/m,
+              `${outlineLines}\n      relatedCategoryIds:`,
+            )
+          : `${categoryBlock.trimEnd()}\n${outlineLines}\n`;
+    }
     blockText = `${blockText.slice(0, categoryMatch.index)}${categoryBlock}${blockText.slice(categoryMatch.index + categoryMatch[1].length)}`;
   }
   if (!missingCategories.length) return `${next.slice(0, block.start)}${blockText}${next.slice(block.end)}`;
@@ -15106,6 +15162,65 @@ async function syncEditorialTaxonomyToGitHub(
       .all<EditorialTaxonomyPublicationRow>()
   ).results ?? [];
   if (!rows.length) return;
+
+  // 公開済みの記事を紐付けた目次の入口を、学習サイトの
+  // `entryConceptIds` として同じカテゴリへ渡す。現在公開処理中の原稿は
+  // published_at がまだ未設定でも取りこぼさないよう、document.id も対象にする。
+  const outlineRows = (
+    await env.REPORTS.prepare(
+      `SELECT e.id, e.category_slug, e.parent_id, e.slug, e.title, e.summary, e.concept_id, e.sort_order
+       FROM editorial_outline_entries e
+       JOIN editorial_documents d ON d.id=e.document_id
+       WHERE e.project_id='atlas' AND e.subject_slug=? AND e.status='active'
+         AND (d.published_at IS NOT NULL OR d.id=?)
+       ORDER BY e.category_slug,e.sort_order,e.updated_at,e.id`,
+    )
+      .bind(document.subject, document.id)
+      .all<{
+        id: string;
+        category_slug: string;
+        parent_id: string | null;
+        slug: string;
+        title: string;
+        summary: string;
+        concept_id: string;
+        sort_order: number;
+      }>()
+  ).results ?? [];
+  const entryConceptIdsByCategory = new Map<string, string[]>();
+  const outlineEntriesByCategory = new Map<
+    string,
+    EditorialTaxonomyPublicationRow["outline_entries"]
+  >();
+  const publishedOutlineIds = new Set(outlineRows.map((entry) => entry.id));
+  for (const entry of outlineRows) {
+    const conceptId = entry.concept_id.trim();
+    if (!conceptId) continue;
+    if (!entry.parent_id || publishedOutlineIds.has(entry.parent_id)) {
+      const ids = entryConceptIdsByCategory.get(entry.category_slug) ?? [];
+      if (!entry.parent_id && !ids.includes(conceptId)) ids.push(conceptId);
+      entryConceptIdsByCategory.set(entry.category_slug, ids);
+      const outline = outlineEntriesByCategory.get(entry.category_slug) ?? [];
+      outline.push({
+        id: entry.id,
+        parent_id: entry.parent_id,
+        slug: entry.slug,
+        title: entry.title,
+        summary: entry.summary,
+        concept_id: conceptId,
+        sort_order: entry.sort_order,
+      });
+      outlineEntriesByCategory.set(entry.category_slug, outline);
+    }
+  }
+  for (const row of rows) {
+    if (row.kind === "category" && entryConceptIdsByCategory.has(row.slug)) {
+      // 管理側に目次が存在するカテゴリだけを更新する。まだ管理側へ
+      // 移行していない既存カテゴリは、学習サイト側の既存入口を保持する。
+      row.entry_concept_ids = entryConceptIdsByCategory.get(row.slug) ?? [];
+      row.outline_entries = outlineEntriesByCategory.get(row.slug) ?? [];
+    }
+  }
 
   const path = "src/content/subjects/subjects.yaml";
   const endpoint = `https://api.github.com/repos/${repository}/contents/${path}`;

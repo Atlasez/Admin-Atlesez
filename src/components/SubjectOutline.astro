@@ -1,0 +1,69 @@
+---
+import { articlePath } from "../lib/site";
+import type { Locale } from "../lib/i18n";
+
+type OutlineEntry = {
+  id: string;
+  parentId?: string;
+  slug: string;
+  title: string;
+  summary: string;
+  conceptId: string;
+  order: number;
+};
+
+interface Props {
+  entries: OutlineEntry[];
+  locale: Locale;
+  subject: string;
+  category: string;
+}
+
+const { entries, locale, subject, category } = Astro.props;
+const children = new Map<string | undefined, OutlineEntry[]>();
+for (const entry of [...entries].sort(
+  (a, b) => a.order - b.order || a.title.localeCompare(b.title, "ja"),
+)) {
+  const list = children.get(entry.parentId) ?? [];
+  list.push(entry);
+  children.set(entry.parentId, list);
+}
+const roots = children.get(undefined) ?? [];
+---
+
+<ol class="subject-outline" data-subject-outline>
+  {
+    roots.map((entry) => (
+      <li class="subject-outline__item">
+        <div class="subject-outline__row">
+          <a href={articlePath(locale, subject, category, entry.slug)}>
+            {entry.title}
+          </a>
+          {entry.summary && <span>{entry.summary}</span>}
+        </div>
+        {children.has(entry.id) && (
+          <Astro.self
+            entries={entries.filter((child) => child.parentId === entry.id)}
+            locale={locale}
+            subject={subject}
+            category={category}
+          />
+        )}
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .subject-outline { list-style: none; margin: 0; padding: 0; }
+  .subject-outline__item { border-top: 1px solid var(--border-default); }
+  .subject-outline__item:first-child { border-top: 0; }
+  .subject-outline__row { align-items: baseline; display: flex; gap: .75rem; padding: .55rem 0; }
+  .subject-outline__row a { color: var(--text-primary); font-weight: 600; text-decoration: none; }
+  .subject-outline__row a:hover { color: var(--accent-primary); text-decoration: underline; }
+  .subject-outline__row span { color: var(--text-secondary); font-size: .85em; }
+  .subject-outline .subject-outline { border-left: 1px solid var(--border-default); margin: 0 0 .35rem .65rem; padding-left: .85rem; }
+  @media (max-width: 640px) {
+    .subject-outline__row { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  }
+</style>
