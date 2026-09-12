@@ -386,6 +386,11 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await expect(
     page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
   ).toContainText("統計学");
+  // 並び順は画面内のDOMだけでなく、再読み込み後もAPIから復元される。
+  await page.reload();
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
+  ).toContainText("統計学");
 
   await page.goto("./admin/editor/outline/?subject=subject-1");
   await expect(page.locator("[data-outline-subject]")).toHaveValue("subject-1");
