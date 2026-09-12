@@ -1081,7 +1081,8 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   expect(statusLayout.linkHeight).toBeLessThan(44);
   const publicationDiagnostic = page.locator("[data-publication-diagnostic]");
   await expect(publicationDiagnostic).toBeVisible();
-  await expect(publicationDiagnostic).toHaveCSS("position", "absolute");
+  // 診断欄は後続の「記事設定」と重ならないよう、状態表示の通常フローに置く。
+  await expect(publicationDiagnostic).toHaveCSS("position", "static");
   const documentActions = page.locator(".document-actions");
   const beforeOpen = await documentActions.boundingBox();
   await publicationDiagnostic.locator("summary").click();
