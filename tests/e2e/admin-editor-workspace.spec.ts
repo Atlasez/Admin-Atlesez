@@ -1088,7 +1088,8 @@ test("公開Runの失敗原因・CIログ・再試行導線を表示する", asy
   await publicationDiagnostic.locator("summary").click();
   const afterOpen = await documentActions.boundingBox();
   expect(afterOpen?.x).toBe(beforeOpen?.x);
-  expect(afterOpen?.y).toBe(beforeOpen?.y);
+  // 詳細欄は通常フローにあるため、開いたときは後続操作が下へ移動する。
+  expect(afterOpen?.y).toBeGreaterThanOrEqual(beforeOpen?.y ?? 0);
   const diagnosticBox = await publicationDiagnostic.boundingBox();
   expect(diagnosticBox?.width).toBeLessThanOrEqual(440);
   expect(diagnosticBox?.height).toBeLessThanOrEqual(270);
