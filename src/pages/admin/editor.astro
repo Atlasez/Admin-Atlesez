@@ -270,6 +270,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 <button type="button" class="quiet-action" data-reload-conflicted-document>最新内容を読み込む</button>
               </div>
               <p class="update-proposal-note" data-update-proposal-note hidden aria-live="polite"></p>
+              <div class="document-version-switcher" data-document-version-switcher hidden aria-label="現行版と更新案の切り替え">
+                <span data-document-version-label></span>
+                <button type="button" class="quiet-action" data-open-current-version hidden>現行版を開く</button>
+                <button type="button" class="quiet-action" data-open-update-proposal hidden>更新案を開く</button>
+              </div>
             </div>
           </section>
 
@@ -538,6 +543,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   .editor-split > section.is-pane-resized { display:flex; flex-direction:column; height:var(--editor-pane-height); max-height:none; min-height:var(--editor-pane-height); overflow:hidden; }.editor-split > .writing-area.is-pane-resized > .body-editor-surface,.editor-split > .media-area.is-pane-resized > .media-studio { flex:1 1 0; height:auto; max-height:none; min-height:0; }.editor-split > .review-panel.is-pane-resized { min-height:var(--editor-pane-height); }.review-panel.is-pane-resized .comment-list { flex:1 1 0; max-height:none; min-height:6rem; overflow:auto; }.editor-split > .memo-area.is-pane-resized .memo-content { min-height:0; }
   .document-toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:.7rem 0; position:static; z-index:15; }.editor-workspace[data-sticky-toolbar] .document-toolbar { position:sticky; top:0; }.document-statuses{align-items:center;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.72rem;font-weight:700;gap:.4rem .7rem;margin-bottom:.25rem}.document-statuses > span{background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:.18rem .45rem}.document-statuses strong{color:var(--text)}.document-toolbar h2 { font-size: 1.35rem; margin: 0; }.document-toolbar output { color: var(--muted); flex: 1 1 12rem; font-size: .8rem; min-width: 10rem; }.save-status{background:var(--surface-alt);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:.35rem;color:var(--text)!important;font-weight:700;padding:.48rem .6rem;position:sticky;right:0;top:.55rem;z-index:5}.toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: end; }.toolbar-actions > .save-status { flex: 0 1 auto; max-width: min(24rem, 100%); min-width: 0; width: max-content; }.document-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }.unsaved-warning { background:#fff4d6; border-left:3px solid #c78500; color:#805500; font-size:.76rem; font-weight:700; margin:0; padding:.42rem .55rem; }.engine-control { align-items: center; color: var(--muted); display: flex; font-size:.76rem; font-weight:800; gap:.4rem; letter-spacing:.02em; margin:0; white-space:nowrap; }.engine-control select { font-size:.78rem; min-height:2.35rem; }.metadata label small{color:var(--muted);font-size:.68rem;font-weight:500;line-height:1.45}.editor-quick-actions{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0}.editor-quick-actions button{flex:1 1 auto;font-size:.72rem;min-height:2rem}.editor-tabs,.heading-outline{display:none}.heading-outline nav{display:flex;flex-wrap:wrap;gap:.3rem;padding:.55rem 0}.heading-outline button{background:transparent;border:0;color:var(--accent);cursor:pointer;font:inherit;font-size:.76rem;text-align:left}.heading-outline button:hover{text-decoration:underline}
   .update-proposal-note { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-left: 3px solid var(--accent); color: var(--text); font-size: .74rem; line-height: 1.55; margin: .45rem 0 0; max-width: 38rem; padding: .45rem .6rem; }
+  .document-version-switcher { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem .55rem; margin: .45rem 0 0; }
+  .document-version-switcher > span { color: var(--muted); font-size: .72rem; font-weight: 700; }
+  .document-version-switcher .quiet-action { min-height: 1.9rem; padding: .25rem .55rem; }
   .document-form.is-update-proposal .metadata input:disabled,
   .document-form.is-update-proposal .metadata select:disabled { cursor: not-allowed; opacity: .72; }
   .metadata { background: var(--surface-alt); border: 1px solid var(--border); border-radius: .65rem; padding: .7rem .8rem .85rem; }.metadata summary, .personal-notebook summary { align-items:center; cursor:pointer; display:flex; font-size:.88rem; font-weight:800; gap:.4rem; list-style:none; }.metadata summary::-webkit-details-marker, .personal-notebook summary::-webkit-details-marker { display:none; }.metadata summary::before, .personal-notebook summary::before { color:var(--accent); content:"▶"; display:inline-block; font-size:.7em; transition:transform .15s ease; }.metadata[open] summary::before, .personal-notebook[open] summary::before { transform:rotate(90deg); }.metadata-grid { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .85rem; }.metadata label { display: grid; font-size: .76rem; font-weight: 800; gap: .3rem; letter-spacing: .02em; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: span 2; }
@@ -1386,7 +1394,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   type CustomMathPreset = { id: string; label: string; group?: string; macros: Record<string, string> };
   type ArticleReference = { id: string; title: string; authors?: string; year?: string; publisher?: string; url?: string; note?: string };
   type PublicationRun = { id: string; state: string; action: "publish" | "unpublish"; attempt: number; pull_request_number?: number | null; pull_request_url?: string | null; branch?: string | null; head_sha?: string | null; merge_sha?: string | null; last_check_at?: string | null; next_attempt_at?: string | null; error_code?: string | null; error_message?: string | null; failure_kind?: string | null; check_name?: string | null; check_url?: string | null; diagnostic_url?: string | null; failure_detail?: string | null; failure_step?: string | null; failure_file?: string | null; failure_line?: number | null; failure_column?: number | null; failure_suggestion?: string | null; failure_history?: string; updated_at?: string };
-  type Document = { id: string; document_kind?: "canonical" | "update-proposal"; base_document_id?: string | null; base_document_updated_at?: string | null; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: PublicationRun | null; locked_ranges?: string | LockedRange[]; created_by_display_name?: string; updated_by_display_name?: string; created_by_avatar_url?: string; updated_by_avatar_url?: string };
+  type Document = { id: string; document_kind?: "canonical" | "update-proposal"; base_document_id?: string | null; base_document_updated_at?: string | null; source_article_id: string | null; subject: string; category: string; locale: string; slug: string; title: string; summary: string; concept_id: string; concept_name: string | null; concept_name_en: string | null; concept_is_new: number | boolean; body: string; writing_memo?: string; references?: string | ArticleReference[]; latex_engine: "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex"; status: "draft" | "in-review" | "on-hold" | "approved"; created_by: string; updated_by: string; created_at: string; updated_at: string; reviewed_at: string | null; published_at: string | null; archived_at?: string | null; scheduled_publish_at?: string | null; publication_review_stage?: "subject-coordinator" | "project-leader" | null; publication_review_round?: number; publication_pr_number?: number | null; publication_pr_url?: string | null; publication_branch?: string | null; publication_action?: "publish" | "unpublish" | null; publication_requested_at?: string | null; publication_run?: PublicationRun | null; locked_ranges?: string | LockedRange[]; created_by_display_name?: string; updated_by_display_name?: string; created_by_avatar_url?: string; updated_by_avatar_url?: string };
   type SelectedRange = { start: number | null; end: number | null; text: string; source: "本文" | "プレビュー" | "記事" };
   type CommentSelection = { id?: string; position?: number; selection_start: number | null; selection_end: number | null; selection_text: string };
   type CommentAction = "acknowledge" | "unacknowledge" | "resolve" | "reopen";
@@ -1591,6 +1599,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const saveButton = root.querySelector<HTMLButtonElement>("[data-save-document]")!;
     const updateProposalButton = root.querySelector<HTMLButtonElement>("[data-create-update-proposal]")!;
     const updateProposalNote = root.querySelector<HTMLElement>("[data-update-proposal-note]")!;
+    const versionSwitcher = root.querySelector<HTMLElement>("[data-document-version-switcher]")!;
+    const versionSwitcherLabel = root.querySelector<HTMLElement>("[data-document-version-label]")!;
+    const openCurrentVersionButton = root.querySelector<HTMLButtonElement>("[data-open-current-version]")!;
+    const openUpdateProposalButton = root.querySelector<HTMLButtonElement>("[data-open-update-proposal]")!;
     const publishButton = root.querySelector<HTMLButtonElement>("[data-publish-document]")!;
     const unpublishButton = root.querySelector<HTMLButtonElement>("[data-unpublish-document]")!;
     const reviewButton = root.querySelector<HTMLButtonElement>("[data-request-review]")!;
@@ -2163,6 +2175,26 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         ? "公開済みの正原稿は変更されません。更新案を作成してからフィードバックを依頼してください。"
         : "複数回、別の担当者へフィードバックを依頼できます。";
     };
+    const setDocumentVersionSwitcher = (item: Document) => {
+      const isProposal = item.document_kind === "update-proposal";
+      const canonicalId = isProposal ? item.base_document_id ?? "" : item.id;
+      const proposal = !isProposal && item.id
+        ? documents.find((candidate) => candidate.document_kind === "update-proposal" && candidate.base_document_id === item.id && !candidate.archived_at)
+        : null;
+      const proposalId = isProposal ? item.id : proposal?.id ?? "";
+      const showCurrent = Boolean(isProposal && canonicalId);
+      const showProposal = Boolean(!isProposal && proposalId);
+      versionSwitcher.hidden = !(showCurrent || showProposal);
+      openCurrentVersionButton.hidden = !showCurrent;
+      openUpdateProposalButton.hidden = !showProposal;
+      openCurrentVersionButton.dataset.documentId = canonicalId;
+      openUpdateProposalButton.dataset.documentId = proposalId;
+      versionSwitcherLabel.textContent = showCurrent
+        ? "更新案を表示中"
+        : showProposal
+          ? "現行版を表示中（更新案あり）"
+          : "";
+    };
     const beginUpdateProposal = async () => {
       if (!loadedDocumentWasPublished) return;
       const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value.trim();
@@ -2190,6 +2222,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (loadedDocumentWasPublished) updateProposalButton.disabled = false;
       }
     };
+    const openVersion = (button: HTMLButtonElement) => {
+      const id = button.dataset.documentId?.trim();
+      if (!id) return;
+      button.disabled = true;
+      saveMessage.value = "別の版を読み込み中…";
+      void openDocument(id)
+        .then(() => loadRevisions(id))
+        .catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "別の版を読み込めませんでした。"; })
+        .finally(() => { button.disabled = false; });
+    };
+    openCurrentVersionButton.addEventListener("click", () => openVersion(openCurrentVersionButton));
+    openUpdateProposalButton.addEventListener("click", () => openVersion(openUpdateProposalButton));
     const showPublishedBodyLockNotice = () => {
       if (!(loadedDocumentWasPublished && !updateProposalActive)) return;
       saveMessage.value = "公開中の記事を編集するには「更新案を作成」を押してください。";
@@ -4400,6 +4444,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       loadedDocumentIsUpdateProposal = item.document_kind === "update-proposal";
       if (item.id && item.published_at && hasUnpublishedPublicationChanges(item)) activeUpdateProposalDocumentIds.add(item.id);
       setUpdateProposalState(loadedDocumentIsUpdateProposal);
+      setDocumentVersionSwitcher(item);
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage, hasUnpublishedPublicationChanges(item)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); updatePublicationActions(item); completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
@@ -4598,11 +4643,12 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const data=await read<{revisions?:Revision[];feedbackRequests?:FeedbackRequestHistory[];error?:string}>(response);
       if (!response.ok) { revisions.textContent = data.error ?? "版履歴を読み込めませんでした。"; feedbackRequestHistory.textContent = "フィードバック依頼の履歴を読み込めませんでした。"; return; }
       const history = data.revisions ?? [];
+      const revisionStatusLabel = (value: string) => value === "published" ? "現行版（公開時点）" : statusLabel[value as keyof typeof statusLabel] ?? value;
       loadedRevisionHistory = history;
       if (currentDocument) renderDocumentProvenance(currentDocument, history.map((item) => ({ email: item.saved_by, name: item.saved_by_display_name?.trim() || personLabel(item.saved_by), avatarUrl: item.saved_by_avatar_url || "" })));
       if (!history.length) revisions.textContent = "まだ過去版はありません。次回の保存から記録されます。";
       else {
-        const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by_display_name?.trim() || personLabel(item.saved_by))}・${esc(item.status)}</option>`).join("");
+        const options = history.map((item, index) => `<option value="${index}">${date(item.saved_at)}・${esc(item.saved_by_display_name?.trim() || personLabel(item.saved_by))}・${esc(revisionStatusLabel(item.status))}</option>`).join("");
         revisions.innerHTML = `<div class="revision-compare-controls"><label>比較元<select data-revision-before>${options}</select></label><label>比較先<select data-revision-after><option value="current">現在の入力内容</option>${options}</select></label><button type="button" class="quiet-action revision-restore-action" data-revision-restore>選択した版を入力へ反映</button></div><p class="revision-restore-help">反映した内容は入力欄に入るだけで、保存するまで記事は更新されません。</p><pre class="revision-diff" data-revision-diff></pre>`;
         const before = revisions.querySelector<HTMLSelectElement>("[data-revision-before]")!;
         const after = revisions.querySelector<HTMLSelectElement>("[data-revision-after]")!;

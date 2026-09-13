@@ -14504,10 +14504,15 @@ async function listEditorialRevisions(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, document_kind, base_document_id FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string; status: EditorialDocumentStatus }>();
+    .first<{
+      subject: string;
+      status: EditorialDocumentStatus;
+      document_kind: EditorialDocument["document_kind"];
+      base_document_id: string | null;
+    }>();
   if (!document || !canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const result = await env.REPORTS.prepare(
@@ -14519,7 +14524,53 @@ async function listEditorialRevisions(
       WHERE r.document_id = ? ORDER BY r.saved_at DESC LIMIT 50`,
   )
     .bind(documentId)
-    .all();
+    .all<{
+      id: string;
+      title: string;
+      summary: string;
+      body: string;
+      status: string;
+      saved_by: string;
+      saved_at: string;
+      saved_by_display_name: string;
+      saved_by_avatar_url: string;
+    }>();
+  // 更新案の作成直後はまだ保存操作がないため、版履歴が空になる。
+  // その場合でも、比較元となった公開中の現行版を履歴の先頭に表示して、
+  // 更新案と現行版の両方をいつでも確認できるようにする。
+  let revisionRows = result.results ?? [];
+  if (document.document_kind === "update-proposal" && document.base_document_id) {
+    const base = await env.REPORTS.prepare(
+      `SELECT d.id, d.title, d.summary, d.body, d.status, d.updated_by AS saved_by, d.updated_at AS saved_at,
+              COALESCE(NULLIF(TRIM(p.display_name), ''), d.updated_by) AS saved_by_display_name,
+              COALESCE(p.avatar_url, '') AS saved_by_avatar_url
+         FROM editorial_documents d
+         LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(d.updated_by)
+        WHERE d.id = ? AND d.document_kind = 'canonical'`,
+    )
+      .bind(document.base_document_id)
+      .first<{
+        id: string;
+        title: string;
+        summary: string;
+        body: string;
+        status: string;
+        saved_by: string;
+        saved_at: string;
+        saved_by_display_name: string;
+        saved_by_avatar_url: string;
+      }>();
+    if (base) {
+      revisionRows = [
+        {
+          ...base,
+          id: `base-${base.id}`,
+          status: "published",
+        },
+        ...revisionRows,
+      ];
+    }
+  }
   const feedbackRequests = await env.REPORTS.prepare(
     `SELECT t.id AS task_id, t.title, t.details, t.status, t.assignee_email,
             t.created_by, t.created_at, t.updated_at,
@@ -14544,7 +14595,7 @@ async function listEditorialRevisions(
       requester_display_name: string;
     }>();
   return json({
-    revisions: result.results,
+    revisions: revisionRows,
     feedbackRequests: (feedbackRequests.results ?? []).map((task) => ({
       ...task,
       canUpdate:
