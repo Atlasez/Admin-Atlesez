@@ -162,6 +162,9 @@ type LatexEngine =
   "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex";
 type EditorialDocument = {
   id: string;
+  document_kind: "canonical" | "update-proposal";
+  base_document_id: string | null;
+  base_document_updated_at: string | null;
   source_article_id: string | null;
   subject: string;
   category: string;
@@ -2238,6 +2241,7 @@ type PermissionAuditAction = "grant" | "replace" | "revoke";
 type AdminAuditAction =
   | "article_created"
   | "article_updated"
+  | "article_update_proposal_created"
   | "article_approved"
   | "article_published"
   | "article_unpublished"
@@ -2271,6 +2275,7 @@ type AdminAuditTarget =
 const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   article_created: "記事を作成",
   article_updated: "記事を更新",
+  article_update_proposal_created: "記事の更新案を作成",
   article_approved: "記事を承認",
   article_published: "記事を公開",
   article_unpublished: "記事の公開を取り消し",
@@ -4928,7 +4933,7 @@ async function updateMemberDiscordRoles(
   return json({ ok: true, provisioning });
 }
 
-const editorialDocumentSelect = `SELECT id, source_article_id, subject, category, locale, slug,
+const editorialDocumentSelect = `SELECT id, document_kind, base_document_id, base_document_updated_at, source_article_id, subject, category, locale, slug,
   title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references,
   COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1)), ''), created_by) AS created_by_display_name,
   COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1)), ''), updated_by) AS updated_by_display_name,
@@ -5537,7 +5542,7 @@ async function listEditorialDocuments(
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
-    `SELECT d.id, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.latex_engine,
+    `SELECT d.id, d.document_kind, d.base_document_id, d.base_document_updated_at, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.latex_engine,
       d.status, d.created_by, d.updated_by, d.created_at, d.updated_at, d.reviewed_at, d.published_at, d.archived_at, d.archived_by, d.archive_expires_at, d.scheduled_publish_at, d.publication_review_stage,
       COALESCE(NULLIF(TRIM(cp.display_name), ''), d.created_by) AS created_by_display_name,
       COALESCE(NULLIF(TRIM(up.display_name), ''), d.updated_by) AS updated_by_display_name,
@@ -6238,6 +6243,7 @@ async function editorialIdentityConflict(
   const documents = await env.REPORTS.prepare(
     `SELECT id, source_article_id FROM editorial_documents
      WHERE locale=? AND subject=? AND category=? AND slug=?
+       AND (document_kind IS NULL OR document_kind='canonical')
      AND (? IS NULL OR id != ?)
      ORDER BY updated_at DESC`,
   )
@@ -6265,7 +6271,8 @@ async function editorialIdentityConflict(
   if (identity.sourceArticleId) {
     const sourceDocument = await env.REPORTS.prepare(
       `SELECT id, locale, subject, category, slug FROM editorial_documents
-       WHERE source_article_id=? AND (? IS NULL OR id != ?) LIMIT 1`,
+       WHERE source_article_id=? AND (document_kind IS NULL OR document_kind='canonical')
+         AND (? IS NULL OR id != ?) LIMIT 1`,
     )
       .bind(identity.sourceArticleId, excludedDocumentId, excludedDocumentId)
       .first<{
@@ -14094,7 +14101,7 @@ async function createEditorialDocument(
     `INSERT INTO editorial_documents
       (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine,
        status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (${Array.from({ length: 27 }, () => "?").join(", ")})`,
   )
     .bind(
       id,
@@ -14140,6 +14147,67 @@ async function createEditorialDocument(
   return json({ ok: true, id }, 201);
 }
 
+/**
+ * Create an isolated draft for a published article.  The canonical document
+ * remains published and immutable while this proposal goes through feedback
+ * and approval.  Repeating the request is idempotent and returns the active
+ * proposal instead of creating competing drafts.
+ */
+async function createEditorialUpdateProposal(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const canonical = await env.REPORTS.prepare(
+    `${editorialDocumentSelect} WHERE id = ?`,
+  )
+    .bind(documentId)
+    .first<EditorialDocument>();
+  if (!canonical) return json({ error: "原稿が見つかりません。" }, 404);
+  if (canonical.document_kind === "update-proposal")
+    return json({ ok: true, id: canonical.id, existing: true, document: canonical });
+  if (!canonical.published_at)
+    return json({ error: "公開済みの記事だけ更新案を作成できます。" }, 400);
+  if (!canEditSubject(scope, canonical.subject))
+    return json({ error: "この分野の更新案を作成する権限がありません。" }, 403);
+  const activeProposal = await env.REPORTS.prepare(
+    `SELECT id FROM editorial_documents
+       WHERE base_document_id=? AND document_kind='update-proposal' AND archived_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`,
+  )
+    .bind(canonical.id)
+    .first<{ id: string }>();
+  if (activeProposal)
+    return json({ ok: true, id: activeProposal.id, existing: true });
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.REPORTS.prepare(
+    `INSERT INTO editorial_documents
+      (id, document_kind, base_document_id, base_document_updated_at, source_article_id, subject, category, locale, slug, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine,
+       status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
+     SELECT ?, 'update-proposal', id, updated_at, source_article_id, subject, category, locale, slug, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine,
+       'draft', ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, locked_ranges, article_references
+       FROM editorial_documents WHERE id=?`,
+  )
+    .bind(id, scope.email, scope.email, now, now, canonical.id)
+    .run();
+  await recordAdminAudit(
+    env,
+    scope.email,
+    "article_update_proposal_created",
+    "article",
+    id,
+    canonical.title,
+    `公開記事の更新案を作成：${canonical.title}`,
+    { baseDocumentId: canonical.id, sourceArticleId: canonical.source_article_id },
+  );
+  return json({ ok: true, id, existing: false, baseDocumentId: canonical.id }, 201);
+}
+
 async function updateEditorialDocument(
   request: Request,
   env: Env,
@@ -14160,13 +14228,15 @@ async function updateEditorialDocument(
       400,
     );
   const existing = await env.REPORTS.prepare(
-    "SELECT source_article_id, subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references, updated_at, updated_by FROM editorial_documents WHERE id = ?",
+    "SELECT document_kind, base_document_id, source_article_id, subject, status, title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, category, locale, slug, latex_engine, published_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references, updated_at, updated_by FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
     .first<
       Pick<
         EditorialDocument,
         | "subject"
+        | "document_kind"
+        | "base_document_id"
         | "source_article_id"
         | "status"
         | "title"
@@ -14420,7 +14490,8 @@ async function updateEditorialDocument(
       createdAt: now,
     });
   await syncEditorialCollaborationDocument(env, documentId);
-  await syncEditorialOutlineDocument(env, documentId, { subject: values.subject, category: values.category, slug: values.slug }, text(payload.outlineId, 64));
+  if (existing.document_kind !== "update-proposal")
+    await syncEditorialOutlineDocument(env, documentId, { subject: values.subject, category: values.category, slug: values.slug }, text(payload.outlineId, 64));
   await notifyEditorialDocumentChange(env, documentId);
   return json({ ok: true, updatedAt: now });
 }
@@ -14433,10 +14504,15 @@ async function listEditorialRevisions(
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const document = await env.REPORTS.prepare(
-    "SELECT subject, status FROM editorial_documents WHERE id = ?",
+    "SELECT subject, status, document_kind, base_document_id FROM editorial_documents WHERE id = ?",
   )
     .bind(documentId)
-    .first<{ subject: string; status: EditorialDocumentStatus }>();
+    .first<{
+      subject: string;
+      status: EditorialDocumentStatus;
+      document_kind: EditorialDocument["document_kind"];
+      base_document_id: string | null;
+    }>();
   if (!document || !canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この原稿を閲覧する権限がありません。" }, 403);
   const result = await env.REPORTS.prepare(
@@ -14448,7 +14524,53 @@ async function listEditorialRevisions(
       WHERE r.document_id = ? ORDER BY r.saved_at DESC LIMIT 50`,
   )
     .bind(documentId)
-    .all();
+    .all<{
+      id: string;
+      title: string;
+      summary: string;
+      body: string;
+      status: string;
+      saved_by: string;
+      saved_at: string;
+      saved_by_display_name: string;
+      saved_by_avatar_url: string;
+    }>();
+  // 更新案の作成直後はまだ保存操作がないため、版履歴が空になる。
+  // その場合でも、比較元となった公開中の現行版を履歴の先頭に表示して、
+  // 更新案と現行版の両方をいつでも確認できるようにする。
+  let revisionRows = result.results ?? [];
+  if (document.document_kind === "update-proposal" && document.base_document_id) {
+    const base = await env.REPORTS.prepare(
+      `SELECT d.id, d.title, d.summary, d.body, d.status, d.updated_by AS saved_by, d.updated_at AS saved_at,
+              COALESCE(NULLIF(TRIM(p.display_name), ''), d.updated_by) AS saved_by_display_name,
+              COALESCE(p.avatar_url, '') AS saved_by_avatar_url
+         FROM editorial_documents d
+         LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(d.updated_by)
+        WHERE d.id = ? AND d.document_kind = 'canonical'`,
+    )
+      .bind(document.base_document_id)
+      .first<{
+        id: string;
+        title: string;
+        summary: string;
+        body: string;
+        status: string;
+        saved_by: string;
+        saved_at: string;
+        saved_by_display_name: string;
+        saved_by_avatar_url: string;
+      }>();
+    if (base) {
+      revisionRows = [
+        {
+          ...base,
+          id: `base-${base.id}`,
+          status: "published",
+        },
+        ...revisionRows,
+      ];
+    }
+  }
   const feedbackRequests = await env.REPORTS.prepare(
     `SELECT t.id AS task_id, t.title, t.details, t.status, t.assignee_email,
             t.created_by, t.created_at, t.updated_at,
@@ -14473,7 +14595,7 @@ async function listEditorialRevisions(
       requester_display_name: string;
     }>();
   return json({
-    revisions: result.results,
+    revisions: revisionRows,
     feedbackRequests: (feedbackRequests.results ?? []).map((task) => ({
       ...task,
       canUpdate:
@@ -16292,7 +16414,7 @@ async function syncEditorialPublicationStatus(env: Env, documentId?: string) {
   const normalizedDocumentId = documentId?.trim() || null;
   const documents = await env.REPORTS.prepare(
     `SELECT id, locale, subject, category, slug, published_at, publication_action
-       FROM editorial_documents${normalizedDocumentId ? " WHERE id = ?" : ""}`,
+       FROM editorial_documents${normalizedDocumentId ? " WHERE id = ?" : " WHERE (document_kind IS NULL OR document_kind='canonical')"}`,
   )
     .bind(...(normalizedDocumentId ? [normalizedDocumentId] : []))
     .all<
@@ -17963,9 +18085,74 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
     }
     const now = new Date().toISOString();
     if (run.action === "publish") {
-      await env.REPORTS.prepare(
-        `UPDATE editorial_documents SET published_at = COALESCE(published_at, ?), publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
-      ).bind(now, document.id).run();
+      if (document.base_document_id) {
+        // The PR was generated from the proposal, but the public identity is
+        // owned by the canonical document.  Apply the approved content to it
+        // only after the merged PR and deployment have been verified.
+        const base = await env.REPORTS.prepare(
+          `${editorialDocumentSelect} WHERE id = ?`,
+        )
+          .bind(document.base_document_id)
+          .first<EditorialDocument>();
+        if (!base || !base.published_at) {
+          await updateEditorialPublicationRun(env, run.id, {
+            state: "needs_operator",
+            failure_kind: "validation",
+            error_code: "update_proposal_base_missing",
+            error_message: "更新元の公開原稿を確認できないため、更新案を反映できません。",
+            next_attempt_at: null,
+          });
+          return;
+        }
+        if (document.base_document_updated_at && base.updated_at !== document.base_document_updated_at) {
+          await updateEditorialPublicationRun(env, run.id, {
+            state: "needs_operator",
+            failure_kind: "validation",
+            error_code: "update_proposal_base_changed",
+            error_message: "更新元の公開原稿が更新されたため、古い更新案の反映を停止しました。最新の公開原稿から更新案を作り直してください。",
+            next_attempt_at: null,
+          });
+          return;
+        }
+        await env.REPORTS.batch([
+          env.REPORTS.prepare(
+            `UPDATE editorial_documents SET source_article_id=?, subject=?, category=?, locale=?, slug=?, title=?, summary=?, concept_id=?, concept_name=?, concept_name_en=?, concept_is_new=?, body=?, writing_memo=?, latex_engine=?, locked_ranges=?, article_references=?, status='approved', updated_by=?, updated_at=?, reviewed_at=?, publication_pr_number=NULL, publication_pr_url=NULL, publication_branch=NULL, publication_action=NULL, publication_requested_at=NULL WHERE id=?`,
+          ).bind(
+            document.source_article_id,
+            document.subject,
+            document.category,
+            document.locale,
+            document.slug,
+            document.title,
+            document.summary,
+            document.concept_id,
+            document.concept_name,
+            document.concept_name_en,
+            document.concept_is_new,
+            document.body,
+            document.writing_memo,
+            document.latex_engine,
+            document.locked_ranges,
+            document.article_references,
+            document.updated_by,
+            now,
+            now,
+            base.id,
+          ),
+          env.REPORTS.prepare(
+            `UPDATE editorial_documents SET published_at=?, archived_at=?, archived_by=?, publication_pr_number=NULL, publication_pr_url=NULL, publication_branch=NULL, publication_action=NULL, publication_requested_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+          ).bind(now, now, document.updated_by, now, document.updated_by, document.id),
+        ]);
+        await syncEditorialOutlineDocument(env, base.id, {
+          subject: document.subject,
+          category: document.category,
+          slug: document.slug,
+        });
+      } else {
+        await env.REPORTS.prepare(
+          `UPDATE editorial_documents SET published_at = COALESCE(published_at, ?), publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
+        ).bind(now, document.id).run();
+      }
       await updateEditorialPublicationRun(env, run.id, { state: "published", error_code: null, error_message: null, last_check_at: now });
     } else {
       await env.REPORTS.prepare(
@@ -21410,6 +21597,15 @@ async function handleAdminRequest(
       env,
       editorialArchiveMatch[1],
       editorialArchiveMatch[2].toLowerCase() === "archive",
+    );
+  const editorialUpdateProposalMatch = url.pathname.match(
+    /^\/api\/admin\/editor\/documents\/([0-9a-f-]{36})\/update-proposal$/i,
+  );
+  if (editorialUpdateProposalMatch && request.method === "POST")
+    return createEditorialUpdateProposal(
+      request,
+      env,
+      editorialUpdateProposalMatch[1],
     );
   if (url.pathname === "/api/admin/editor/board" && request.method === "GET")
     return editorialBoard(request, env);
