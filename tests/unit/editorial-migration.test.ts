@@ -971,4 +971,24 @@ describe("既存公開記事の運営原稿移行契約", () => {
       "COALESCE(document_kind, 'canonical') = 'canonical'",
     );
   });
+
+  it("更新案は現行版への切り替えと公開時点の比較元を表示する", async () => {
+    const editorSource = await readFile(
+      new URL("../../src/pages/admin/editor.astro", import.meta.url),
+      "utf8",
+    );
+    const workerSource = await readFile(
+      new URL("../../src/admin-worker.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(editorSource).toContain("data-open-current-version");
+    expect(editorSource).toContain("data-open-update-proposal");
+    expect(editorSource).toContain("現行版を開く");
+    expect(editorSource).toContain("更新案を開く");
+    expect(workerSource).toContain(
+      'document.document_kind === "update-proposal"',
+    );
+    expect(workerSource).toContain("document.base_document_id");
+  });
 });
