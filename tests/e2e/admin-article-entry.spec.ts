@@ -15,6 +15,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       groups.nth(0).getByRole("link", { name: "編集・フィードバックを開く" }),
     ).toHaveAttribute("href", "/admin/articles/");
+    await expect(groups.nth(0).locator(".project-links small")).toHaveCount(0);
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(4);
     await expect(
