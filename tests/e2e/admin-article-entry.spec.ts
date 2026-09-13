@@ -8,7 +8,13 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     const groups = page.locator("[data-menu-group]");
     await expect(groups).toHaveCount(4);
-    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(4);
+    await expect(groups.nth(0).locator(".project-links > a")).toHaveCount(3);
+    await expect(
+      groups.nth(0).getByRole("link", { name: /学習サイトの目次/ }),
+    ).toHaveCount(0);
+    await expect(
+      groups.nth(0).getByRole("link", { name: "編集・フィードバックを開く" }),
+    ).toHaveAttribute("href", "/admin/articles/");
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(4);
     await expect(
@@ -134,7 +140,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await page.goto("admin/atlas/");
 
     await expect(
-      page.getByRole("link", { name: /原稿一覧を開く/ }),
+      page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveAttribute("href", "/admin/articles/");
     await expect(page.getByRole("link", { name: /新規記事作成/ })).toHaveCount(
       0,
