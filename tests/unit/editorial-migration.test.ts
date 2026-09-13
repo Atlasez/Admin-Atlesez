@@ -9,7 +9,7 @@ class RecordingStatement {
   private values: unknown[] = [];
 
   constructor(
-    private readonly query: string,
+    protected readonly query: string,
     private readonly calls: SqlCall[],
     private readonly firstResult: unknown = null,
   ) {}
@@ -555,6 +555,73 @@ describe("既存公開記事の運営原稿移行契約", () => {
     ).toBe(false);
   });
 
+  it("公開取消なしで公開記事から更新案を分離して作成できる", async () => {
+    const calls: SqlCall[] = [];
+    const canonical = {
+      id: "44444444-4444-4444-8444-444444444444",
+      document_kind: "canonical",
+      base_document_id: null,
+      base_document_updated_at: null,
+      ...importedArticle,
+      source_article_id: importedArticle.sourceArticleId,
+      concept_id: importedArticle.conceptId,
+      writing_memo: "",
+      latex_engine: importedArticle.latexEngine,
+      created_by: "author@example.com",
+      updated_by: "author@example.com",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-31T00:00:00.000Z",
+      reviewed_at: "2026-08-31T00:00:00.000Z",
+      published_at: "2026-08-31T00:00:00.000Z",
+      archived_at: null,
+      archived_by: null,
+      archive_expires_at: null,
+      scheduled_publish_at: null,
+      scheduled_publish_claimed_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+      locked_ranges: "[]",
+      article_references: "[]",
+      body: importedArticle.body,
+      status: "approved",
+    };
+    class ProposalStatement extends RecordingStatement {
+      async first<T>() {
+        if (this.query.includes("base_document_id=?")) return null as T | null;
+        if (this.query.includes("FROM editorial_documents"))
+          return canonical as T;
+        return null as T | null;
+      }
+    }
+    const env = {
+      ...baseEnv,
+      REPORTS: {
+        prepare: (query: string) => new ProposalStatement(query, calls),
+        batch: async () => [],
+      },
+    };
+    const response = await worker.fetch(
+      sameOriginJsonRequest(
+        `/api/admin/editor/documents/${canonical.id}/update-proposal`,
+        {},
+        "POST",
+      ),
+      env as never,
+    );
+    expect(response.status).toBe(201);
+    const data = (await response.json()) as {
+      id?: string;
+      baseDocumentId?: string;
+    };
+    expect(data.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(data.baseDocumentId).toBe(canonical.id);
+    const insert = calls.find((call) =>
+      call.query.includes("document_kind, base_document_id"),
+    );
+    expect(insert?.query).toContain("'update-proposal'");
+    expect(insert?.values).toContain(canonical.id);
+  });
+
   it("公開用Markdownでも既存記事のarticleIdを維持する", () => {
     const markdown = editorialMarkdown({
       id: "22222222-2222-4222-8222-222222222222",
@@ -883,5 +950,45 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(articlesSource).toContain('cache: "no-store"');
     expect(articlesSource).toContain("catalogDiagnosticsIssues.append(item)");
     expect(articlesSource).toContain("カタログを診断");
+  });
+
+  it("公開原稿と同じ識別子を持つ更新案を重複防止トリガーが拒否しない", async () => {
+    const migration = await readFile(
+      new URL(
+        "../../migrations/0115_allow_editorial_update_proposals.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+    expect(migration).toContain(
+      "DROP TRIGGER IF EXISTS editorial_documents_identity_insert",
+    );
+    expect(migration).toContain(
+      "COALESCE(NEW.document_kind, 'canonical') = 'canonical'",
+    );
+    expect(migration).toContain(
+      "COALESCE(document_kind, 'canonical') = 'canonical'",
+    );
+  });
+
+  it("更新案は現行版への切り替えと公開時点の比較元を表示する", async () => {
+    const editorSource = await readFile(
+      new URL("../../src/pages/admin/editor.astro", import.meta.url),
+      "utf8",
+    );
+    const workerSource = await readFile(
+      new URL("../../src/admin-worker.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(editorSource).toContain("data-open-current-version");
+    expect(editorSource).toContain("data-open-update-proposal");
+    expect(editorSource).toContain("現行版を開く");
+    expect(editorSource).toContain("更新案を開く");
+    expect(workerSource).toContain(
+      'document.document_kind === "update-proposal"',
+    );
+    expect(workerSource).toContain("document.base_document_id");
   });
 });

@@ -1960,6 +1960,41 @@ test("公開済み記事の本文は更新案を作成するまでロックす�
     published_at: "2026-08-30T01:34:00.000Z",
   };
   await mockAdminApi(page, undefined, publishedDocument);
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/update-proposal",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          id: "doc-1-update-proposal",
+          baseDocumentId: "doc-1",
+        }),
+      });
+    },
+  );
+  await page.route(
+    "**/api/admin/editor/documents/doc-1-update-proposal",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          document: {
+            ...publishedDocument,
+            id: "doc-1-update-proposal",
+            document_kind: "update-proposal",
+            base_document_id: "doc-1",
+            base_document_updated_at: publishedDocument.updated_at,
+            status: "draft",
+            published_at: null,
+          },
+          comments: [],
+        }),
+      });
+    },
+  );
   await page.goto("./admin/editor/?document=doc-1");
 
   const body = page.locator("[data-body]");
