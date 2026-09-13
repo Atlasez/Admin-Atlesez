@@ -951,4 +951,24 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(articlesSource).toContain("catalogDiagnosticsIssues.append(item)");
     expect(articlesSource).toContain("カタログを診断");
   });
+
+  it("公開原稿と同じ識別子を持つ更新案を重複防止トリガーが拒否しない", async () => {
+    const migration = await readFile(
+      new URL(
+        "../../migrations/0115_allow_editorial_update_proposals.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+
+    expect(migration).toContain(
+      "DROP TRIGGER IF EXISTS editorial_documents_identity_insert",
+    );
+    expect(migration).toContain(
+      "COALESCE(NEW.document_kind, 'canonical') = 'canonical'",
+    );
+    expect(migration).toContain(
+      "COALESCE(document_kind, 'canonical') = 'canonical'",
+    );
+  });
 });
