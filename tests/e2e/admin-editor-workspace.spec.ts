@@ -281,7 +281,7 @@ test("目次APIのDB列名を画面モデルへ正規化して表示する", asy
 
 test("分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める", async ({
   page,
-}) => {
+}, testInfo) => {
   const taxonomy: Array<Record<string, unknown>> = [];
   const outlineEntries: Array<Record<string, unknown>> = [];
   let sequence = 0;
@@ -444,6 +444,61 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.locator('input[name="name"]').fill("統計学");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("統計学", { exact: true })).toBeVisible();
+  const taxonomyFilter = page.locator("[data-taxonomy-filter]");
+  await expect(taxonomyFilter).toBeVisible();
+  await expect(taxonomyFilter.locator('option[value="subject-1"]')).toHaveCount(
+    1,
+  );
+  await taxonomyFilter.selectOption("subject-1");
+  await expect(page).toHaveURL(/taxonomySubject=subject-1/);
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-lane"),
+  ).toHaveCount(1);
+  await expect(page.locator("[data-taxonomy-content]")).toContainText(
+    "機械学習",
+  );
+  await page.reload();
+  await expect(taxonomyFilter).toHaveValue("subject-1");
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-lane"),
+  ).toHaveCount(1);
+  await taxonomyFilter.selectOption("");
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-lane"),
+  ).not.toHaveCount(0);
+  const taxonomyLayout = await page
+    .locator("[data-taxonomy-content]")
+    .evaluate((root) => {
+      const lanes = [...root.querySelectorAll<HTMLElement>(".taxonomy-lane")];
+      const categories = [
+        ...root.querySelectorAll<HTMLElement>(".taxonomy-category"),
+      ];
+      return {
+        maxLaneHeight: Math.max(
+          ...lanes.map((lane) => lane.getBoundingClientRect().height),
+        ),
+        maxCategoryHeight: Math.max(
+          ...categories.map(
+            (category) => category.getBoundingClientRect().height,
+          ),
+        ),
+        minCategoryMetaWidth: Math.min(
+          ...categories.map(
+            (category) =>
+              category
+                .querySelector<HTMLElement>(".taxonomy-category__label")
+                ?.getBoundingClientRect().width ?? 0,
+          ),
+        ),
+      };
+    });
+  expect(taxonomyLayout.maxLaneHeight).toBeLessThan(600);
+  expect(taxonomyLayout.maxCategoryHeight).toBeLessThan(130);
+  expect(taxonomyLayout.minCategoryMetaWidth).toBeGreaterThan(100);
+  await page.screenshot({
+    path: testInfo.outputPath("genre-roles-fixed.png"),
+    fullPage: true,
+  });
   // タイトルをクリックすると、カード内で表示名をすぐ編集できる。
   const quickEdit = page.locator(
     '[data-inline-edit-taxonomy][aria-label="機械学習の表示名を編集"]',
@@ -538,6 +593,19 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await expect(page.locator('select[name="category"]')).toHaveValue(
     "category-2",
   );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("./admin/genre-roles/?project=atlas");
+  await expect(page.locator("[data-taxonomy-filter]")).toBeVisible();
+  const mobileOverflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth,
+  );
+  expect(mobileOverflow).toBe(false);
+  await page.screenshot({
+    path: testInfo.outputPath("genre-roles-fixed-mobile.png"),
+    fullPage: true,
+  });
 });
 
 test("目次項目をドラッグして親子関係を変更し、再読込後も維持できる", async ({
