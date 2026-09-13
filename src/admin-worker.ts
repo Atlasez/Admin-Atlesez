@@ -13615,6 +13615,26 @@ async function getEditorialDocument(
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の原稿を閲覧する権限がありません。" }, 403);
+  // 現行版と更新案の関係は一覧APIのページングに依存させない。個別記事を
+  // 開いた時点で関連する両方のIDを返し、一覧に出ていない版も確実に開ける
+  // ようにする。
+  const isUpdateProposal = document.document_kind === "update-proposal";
+  const canonicalId = isUpdateProposal
+    ? document.base_document_id
+    : document.id;
+  const proposalId = isUpdateProposal
+    ? document.id
+    : (
+        await env.REPORTS.prepare(
+          `SELECT id FROM editorial_documents
+             WHERE base_document_id = ?
+               AND document_kind = 'update-proposal'
+               AND archived_at IS NULL
+             ORDER BY updated_at DESC LIMIT 1`,
+        )
+          .bind(document.id)
+          .first<{ id: string }>()
+      )?.id ?? null;
   const comments = await env.REPORTS.prepare(
     `SELECT id, document_id, parent_comment_id, body, created_by, created_at, selection_start, selection_end, selection_text,
       acknowledged_at, acknowledged_by, resolved_at, resolved_by
@@ -13927,6 +13947,7 @@ async function getEditorialDocument(
     document: { ...document, publication_run: publicationRun },
     publicationRun,
     comments: commentsWithSelections,
+    versions: { canonicalId: canonicalId ?? null, proposalId },
     comment_action_summary: {
       counts: documentActionCounts,
       actors: {
@@ -14546,7 +14567,7 @@ async function listEditorialRevisions(
               COALESCE(p.avatar_url, '') AS saved_by_avatar_url
          FROM editorial_documents d
          LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(d.updated_by)
-        WHERE d.id = ? AND d.document_kind = 'canonical'`,
+        WHERE d.id = ? AND COALESCE(d.document_kind, 'canonical') = 'canonical'`,
     )
       .bind(document.base_document_id)
       .first<{

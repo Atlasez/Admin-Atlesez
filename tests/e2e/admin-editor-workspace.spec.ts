@@ -2053,6 +2053,56 @@ test("記事一覧は保存済みの更新案を作成中として表示する",
   });
 });
 
+test("更新案の保存成功と現行版への切り替えを独立して扱う", async ({ page }) => {
+  const canonical = {
+    ...documentItem,
+    status: "approved" as const,
+    published_at: "2026-08-30T01:34:00.000Z",
+  };
+  const proposal = {
+    ...canonical,
+    id: "doc-1-update-proposal",
+    document_kind: "update-proposal",
+    base_document_id: "doc-1",
+    base_document_updated_at: canonical.updated_at,
+    status: "draft" as const,
+    published_at: null,
+    body: `${canonical.body}\n\n更新案の本文です。`,
+  };
+  await mockAdminApi(page, undefined, canonical);
+  await page.addInitScript(() => localStorage.setItem("atlasez-editor-autosave", "off"));
+  let proposalCreated = false;
+  await page.route(/\/api\/admin\/editor\/documents\/doc-1$/, async (route) => {
+    await route.fulfill({ json: { document: canonical, comments: [], ...(proposalCreated ? { versions: { canonicalId: canonical.id, proposalId: proposal.id } } : {}) } });
+  });
+  await page.route(/\/api\/admin\/editor\/documents\/doc-1\/update-proposal$/, async (route) => {
+    proposalCreated = true;
+    await route.fulfill({ json: { ok: true, id: proposal.id, baseDocumentId: canonical.id } });
+  });
+  await page.route(/\/api\/admin\/editor\/documents\/doc-1-update-proposal$/, async (route) => {
+    if (route.request().method() === "PATCH") return route.fulfill({ json: { ok: true, updatedAt: "2026-08-20T00:05:00.000Z" } });
+    await route.fulfill({ json: { document: proposal, comments: [], versions: { canonicalId: canonical.id, proposalId: proposal.id } } });
+  });
+  await page.route(/\/api\/admin\/editor\/documents\/doc-1-update-proposal\/revisions$/, async (route) => {
+    await route.fulfill({ json: { revisions: [{ id: "base-doc-1", title: canonical.title, summary: canonical.summary, body: canonical.body, status: "published", saved_by: canonical.updated_by, saved_at: canonical.updated_at }], feedbackRequests: [] } });
+  });
+  await page.route(/\/api\/admin\/editor\/documents\/doc-1-update-proposal\/publication-review$/, async (route) => {
+    await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "一時的に取得できません" }) });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await page.locator("[data-create-update-proposal]").click();
+  await expect(page.locator("[data-document-version-switcher]")).toBeVisible();
+  const bodyEditor = page.locator(".body-codemirror .cm-content").first();
+  if (await bodyEditor.count()) await bodyEditor.fill(`${proposal.body}\n\n保存確認`);
+  else await page.locator("[data-body]").fill(`${proposal.body}\n\n保存確認`);
+  await page.locator("[data-save-document]").click();
+  await expect(page.locator("[data-save-message]")).toContainText("保存しました");
+  await expect(page.locator("[data-open-current-version]")).toBeVisible();
+  await page.locator("[data-progress-dialog]").evaluate((dialog) => (dialog as HTMLDialogElement).close());
+  await page.locator("[data-open-current-version]").click();
+  await expect(page.locator("[data-document-version-label]")).toContainText("更新案あり");
+});
+
 test("保存中の連打は同じ原稿を二重保存しない", async ({ page }) => {
   await mockAdminApi(page);
   let patchCount = 0;
