@@ -73,7 +73,7 @@ CIにも同じ検査が入っています。
 3. メンバー用サイトに「タスク管理」「カレンダー」「マイページ」「管理」がある
 4. `https://admin.atlasez.org/admin/member-calendar/`でカレンダーが表示される
 5. `https://admin.atlasez.org/admin/manage/?project=atlas`で次が表示される
-   - 運営者・担当管理
+   - 権限管理
    - 運営内自己紹介の承認
    - 問題報告
    - 閲覧統計
@@ -105,7 +105,7 @@ curl -fsS https://atlasez.org/sitemap-0.xml
 - `/admin/articles/`: 編集・フィードバックの記事一覧
 - `/admin/editor/?document=<ID>`: 記事編集スペース
 - `/admin/applications/?project=atlas`: 運営参加応募の確認
-- `/admin/permissions/?project=atlas`: 運営者・担当管理
+- `/admin/permissions/?project=atlas`: 権限管理
 - `/admin/reports/?project=atlas`: 問題報告
 - `/admin/analytics/?project=atlas`: 閲覧統計
 - `/admin/calendar/?project=atlas`: 学習サイト運営のカレンダー
@@ -178,6 +178,20 @@ npx wrangler secret put RESEND_API_KEY --config wrangler.admin.jsonc
 
 管理Workerの`PUBLIC_ANALYTICS_ORIGIN`が`https://atlasez.org`になっていることを確認します。
 Google Search Consoleの数値はクロール・API更新の遅延があるため、管理画面の保存済みスナップショットとリアルタイムの閲覧統計を分けて扱います。
+
+### 指定アカウントの管理画面セッションだけを失効する
+
+`/admin/member-management/`の「指定アカウントのセッションを失効」から、対象を選び、確認入力に`失効`と入力して実行します。対象は `account-a@example.invalid` と `account-b@example.invalid` に固定されています。
+
+- 全分野管理者かつ同一オリジンの操作だけを受け付ける
+- `admin_auth_sessions`の対象行だけを失効し、プロフィール・記事・応募・権限・既存監査ログ・Discordアカウントを削除しない（今回の操作は監査ログへ新規記録する）
+- セッション削除と新しい監査行は同一D1バッチで確定し、片方だけ成功する状態を作らない
+- アカウント照会や削除が安全に成立しない場合は、全体削除へフォールバックせず停止する
+- 実行後は対象者にGoogleでの再ログインを依頼し、監査ログで失効件数を確認する
+
+本番でこの導線が表示されない場合は、未デプロイまたは旧Workerを見ている可能性があるため、`build-info.json`、Worker名、D1、ルートを確認してから対応します。
+
+2026-09-13の現在値では、`atlasez-admin`のVersion IDは`888886bb-7280-4dea-880c-82b84a44c487`、`build-info.json`のtargetは`admin`です。運営者の明示確認後にUIから実行し、`account-b@example.invalid`と`account-a@example.invalid`はいずれもセッション0件になりました。監査行は各1件で、失効件数は順に1件と0件です。slugは表示名から自動生成され、必要な場合だけ各詳細設定から編集できます。
 
 ### 検索インデックスの警告
 

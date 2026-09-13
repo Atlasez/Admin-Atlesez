@@ -30,6 +30,20 @@ class EmptyStatement {
   }
 }
 
+class CapturedStatement extends EmptyStatement {
+  values: unknown[] = [];
+
+  get sql() {
+    return this.query;
+  }
+
+  override bind(...values: unknown[]) {
+    super.bind(...values);
+    this.values = values;
+    return this;
+  }
+}
+
 const emptyEnv = {
   ADMIN_AUTH_MODE: "local",
   ADMIN_LOCAL_EMAIL: "local-editor@atlasez.test",
@@ -1080,6 +1094,7 @@ describe("admin worker editor APIs", () => {
           summary: "新要約",
           conceptId: "new-concept",
           sortOrder: 20,
+          updatedAt: "2026-01-01T00:00:00.000Z",
         }),
       }),
       outlineEnv as never,
@@ -1093,6 +1108,85 @@ describe("admin worker editor APIs", () => {
     });
     expect(batches).toHaveLength(1);
     expect(batches[0]).toHaveLength(2);
+  });
+
+  it("preserves an existing concept id when an outline edit omits it", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000023";
+    const documentId = "00000000-0000-0000-0000-000000000024";
+    const statements: CapturedStatement[] = [];
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new CapturedStatement(query);
+          statements.push(statement);
+          statement.first = async <T>() => {
+            if (query.includes("FROM editorial_outline_entries WHERE id=?"))
+              return {
+                id: outlineId,
+                project_id: "atlas",
+                subject_slug: "mathematics",
+                category_slug: "group-theory",
+                parent_id: null,
+                document_id: documentId,
+                slug: "group-definition",
+                title: "旧タイトル",
+                summary: "旧要約",
+                concept_id: "math.group-theory.group-definition",
+                sort_order: 10,
+                status: "active",
+                created_by: "local-editor@atlasez.test",
+                created_at: "2026-01-01T00:00:00.000Z",
+                updated_at: "2026-01-01T00:00:00.000Z",
+              } as T;
+            if (query.includes("FROM editorial_documents WHERE id=?"))
+              return {
+                id: documentId,
+                subject: "mathematics",
+                category: "group-theory",
+                slug: "group-definition",
+                title: "旧タイトル",
+                summary: "旧要約",
+                concept_id: "math.group-theory.group-definition",
+                updated_at: "2026-01-01T00:00:00.000Z",
+                published_at: null,
+                publication_action: null,
+                publication_review_stage: null,
+              } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+        batch: async (batchStatements: unknown[]) =>
+          batchStatements.map(() => ({ meta: { changes: 1 } })),
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: outlineId,
+          action: "update",
+          subject: "mathematics",
+          category: "group-theory",
+          title: "新タイトル",
+          summary: "新要約",
+          sortOrder: 10,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    const documentUpdate = statements.find((statement) =>
+      statement.sql.includes("UPDATE editorial_documents"),
+    );
+    expect(documentUpdate?.values).toContain(
+      "math.group-theory.group-definition",
+    );
   });
 
   it("does not let an outline edit silently change a published article URL", async () => {
@@ -1150,6 +1244,7 @@ describe("admin worker editor APIs", () => {
           id: outlineId,
           action: "update",
           slug: "new-slug",
+          updatedAt: "2026-01-01T00:00:00.000Z",
         }),
       }),
       outlineEnv as never,
@@ -1159,6 +1254,65 @@ describe("admin worker editor APIs", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "LINKED_ARTICLE_PUBLISHED",
     });
+  });
+
+  it("rejects an outline edit when the editor has a stale revision", async () => {
+    const outlineId = "00000000-0000-0000-0000-000000000041";
+    let batchCalled = false;
+    const outlineEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.first = async <T>() => {
+            if (!query.includes("FROM editorial_outline_entries WHERE id=?"))
+              return null as T | null;
+            return {
+              id: outlineId,
+              project_id: "atlas",
+              subject_slug: "mathematics",
+              category_slug: "group-theory",
+              parent_id: null,
+              document_id: null,
+              slug: "stale-outline",
+              title: "現在のタイトル",
+              summary: "現在の要約",
+              concept_id: "math.group-theory.stale-outline",
+              sort_order: 10,
+              status: "active",
+              created_by: "local-editor@atlasez.test",
+              created_at: "2026-01-01T00:00:00.000Z",
+              updated_at: "2026-01-01T00:01:00.000Z",
+            } as T;
+          };
+          return statement;
+        },
+        batch: async () => {
+          batchCalled = true;
+          return [];
+        },
+      },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/outline", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: outlineId,
+          action: "update",
+          title: "古い画面からのタイトル",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+      }),
+      outlineEnv as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "STALE_OUTLINE",
+    });
+    expect(batchCalled).toBe(false);
   });
 
   it("counts pending project profile approvals across projects", async () => {
@@ -1262,6 +1416,66 @@ describe("admin worker editor APIs", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       counts: { today: 4, dueSoon: 7 },
+    });
+  });
+
+  it("loads the assigned action-center view from the same task scope as its count", async () => {
+    const assignedTask = {
+      id: "task-1",
+      project_id: "atlas",
+      subject: "mathematics",
+      task_kind: "feedback",
+      title: "担当フィードバック",
+      details: "確認してください。",
+      status: "open",
+      due_at: null,
+      updated_at: "2026-09-13T00:00:00.000Z",
+      assigned_to_me: 1,
+      project_name: "アトラス",
+    };
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("SELECT id,slug,name FROM atlasez_projects")) {
+              return {
+                results: [
+                  { id: "atlas", slug: "atlas", name: "アトラス" },
+                  {
+                    id: "secretariat",
+                    slug: "secretariat",
+                    name: "運営事務局",
+                  },
+                ],
+              } as { results: T[] };
+            }
+            if (query.includes("assigned_to_me"))
+              return { results: [assignedTask] } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          statement.first = async <T>() => {
+            if (query.includes("SELECT COUNT(*) AS open_count"))
+              return { open_count: 1, due_today: 0, due_soon: 0 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center?view=assigned"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      view: "assigned",
+      items: [{ id: "task:task-1", kind: "task", assigned: true }],
+      counts: { assigned: 1 },
     });
   });
 
@@ -1939,8 +2153,10 @@ describe("admin worker editor APIs", () => {
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
       documents: Array<{ active_editors: unknown[] }>;
+      scope: { allSubjects?: boolean; isManager?: boolean };
     };
     expect(payload.documents).toHaveLength(20);
+    expect(payload.scope).toMatchObject({ allSubjects: true, isManager: true });
     expect(presenceRequests).toHaveLength(16);
   });
 

@@ -1,176 +1,271 @@
 ---
+import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order).map((subject) => ({ slug: subject.data.slug, name: subject.data.name.ja }));
+const interests = ["漢字", "古文", "漢文", "地理", "日本史", "世界史", "哲学", "考古学", "数学", "物理", "化学", "地質", "気象", "海洋", "天文", "生物", "情報", "水産学", "建築", "薬学", "中国語（普通話）", "台湾華語", "言語学", "ページデザイン"];
+const universities = ["北海道大学", "東北大学", "東京大学", "東京科学大学", "東京都立大学", "早稲田大学", "横浜国立大学", "静岡大学", "新潟大学", "岐阜大学", "立命館大学", "京都大学", "大阪大学", "大阪公立大学", "神戸大学", "広島大学", "九州大学", "長崎大学", "東洋大学", "UCL", "国立台湾大学", "山口大学", "慶應義塾大学", "東京理科大学", "中央大学", "名古屋大学", "筑波大学", "名古屋市立大学", "名城大学", "Korea university, School of biomedical engineering", "立教大学", "Swarthmore College", "北見工業大学", "ZEN大学"];
+const years = ["中1", "中2", "中3", "高1", "高2", "高3", "高専1", "高専2", "高専3", "高専4", "高専5", "B1", "B2", "B3", "B4", "M1", "M2", "D1", "D2", "D3", "教職員・研究者", "社会人", "その他"];
+const sessionResetAccounts = ["account-a@example.invalid", "account-b@example.invalid"];
 ---
-
-<AdminLayout title="運営メンバー管理" description="アトラス運営メンバーの名簿">
-  <main class="member-management" data-member-management data-verification-server="true">
-    <header class="page-heading"><div><h1>運営メンバー管理</h1></div><a href="/admin/manage/?project=atlas">← 管理トップ</a></header>
-    <section class="toolbar" aria-label="名簿の表示設定"><label class="search">検索<input type="search" data-search placeholder="名前・メール・担当分野" /></label><div class="view-switch" role="group" aria-label="表示形式"><button type="button" data-view="list" aria-pressed="true">一覧</button><button type="button" data-view="tiles" aria-pressed="false">タイル</button></div><span data-count>読み込み中…</span><button type="button" class="load-more" data-load-more hidden>さらに読み込む</button></section>
-    <section class="member-list-view" data-list-view aria-label="運営メンバー一覧"><div class="table-wrap"><table><thead><tr><th>メンバー</th><th>所属</th><th>役割</th><th>担当分野</th><th>最終確認</th><th>操作</th></tr></thead><tbody data-table-body><tr><td colspan="6">読み込み中…</td></tr></tbody></table></div></section>
-    <section class="member-tile-view" data-tile-view aria-label="運営メンバーのタイル表示" hidden><div class="tile-grid" data-tile-grid></div></section>
-    <AdminRetryNotice />
-    <details class="verification-archive" data-verification-archive hidden>
-      <summary><span>検証用アーカイブ</span><span class="verification-archive-count" data-verification-count>0件</span></summary>
-      <p>テスト用アカウントは通常の名簿から分けて表示しています。アカウントやプロフィールは削除せず、検証用の記録として保持します。</p>
-      <div class="verification-archive-list" data-verification-list></div>
-    </details>
+<AdminLayout title="運営メンバー管理" description="アトラス運営メンバーの名簿・プロフィール・担当範囲">
+  <main class="member-management" data-member-management><header class="page-heading"><div><p class="eyebrow">運営メンバー</p><h1>運営メンバー管理</h1><p class="lead">名簿の一行から、プロフィール・記事権限・分野統括・Discord連携をまとめて確認・編集できます。</p></div><nav class="page-links" aria-label="管理ページ"><a href="/admin/manage/?project=atlas">管理トップ</a><a href="/admin/genre-roles/?project=atlas&view=genres">ジャンル管理</a><a href="/admin/roles/?project=atlas">役割管理</a><a href="/admin/permissions/?project=atlas">権限管理</a></nav></header>
+    <section class="summary" aria-label="名簿の概要"><div><span>運営メンバー</span><strong data-summary-count>—</strong></div><div><span>Discord連携</span><strong data-summary-linked>—</strong></div><div><span>分野統括</span><strong data-summary-coordinators>—</strong></div><div><span>絞り込み結果</span><strong data-summary-filtered>—</strong></div></section>
+    <section class="session-reset-panel" aria-labelledby="session-reset-heading"><div><p class="section-kicker">認証メンテナンス</p><h2 id="session-reset-heading">指定アカウントのセッションを失効</h2><p>対象アカウントの管理画面ログインセッションだけを失効します。プロフィール・記事・応募・権限・監査履歴は保持されます。対象はゴールで指定された2アカウントに固定しています。</p></div><form data-session-reset-form><label>対象アカウント<select data-session-reset-email required><option value="">選択してください</option>{sessionResetAccounts.map((email) => <option value={email}>{email}</option>)}</select></label><label>確認入力<input data-session-reset-confirm required maxlength="20" autocomplete="off" placeholder="失効" /></label><button type="submit">セッションのみ失効</button><output data-session-reset-message aria-live="polite"></output></form></section>
+    <section class="add-panel" aria-labelledby="add-member-heading"><div><p class="section-kicker">新しいメンバー</p><h2 id="add-member-heading">運営メンバーを追加</h2><p>メールアドレスと記事を扱える分野を登録します。プロフィールは追加後に「編集」から入力できます。</p></div><form data-add-form><label>メールアドレス<input type="email" name="email" required maxlength="320" placeholder="member@example.com" /></label><label>記事権限（複数選択可）<select name="subjects" multiple required size="4"><option value="*">全分野管理者</option>{subjects.map((subject) => <option value={subject.slug}>{subject.name}（担当）</option>)}</select></label><button type="submit">追加</button><output data-add-message aria-live="polite"></output></form></section>
+    <section class="members-panel" aria-labelledby="member-list-heading"><div class="section-heading"><div><p class="section-kicker">名簿</p><h2 id="member-list-heading">登録済みメンバー</h2></div><span data-count>読み込み中…</span></div><div class="toolbar"><label>検索<input type="search" data-search placeholder="名前・メール・担当分野" autocomplete="off" /></label><label>状態<select data-filter><option value="all">すべて</option><option value="active">有効</option><option value="archived">アーカイブ済み</option><option value="unlinked">Discord未連携</option><option value="no-scope">記事権限なし</option><option value="coordinator">分野統括あり</option></select></label><button type="button" class="quiet" data-view-toggle aria-pressed="false">表形式で表示</button><button type="button" class="quiet" data-clear>条件をクリア</button></div><div class="member-grid" data-list><div class="loading-skeleton" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="member-table" data-table hidden role="table" aria-label="運営メンバー一覧"></div><AdminRetryNotice scope="members" message="メンバー情報を読み込めませんでした。" /></section>
     <output class="message" data-message aria-live="polite"></output>
+    <dialog class="member-dialog" data-dialog aria-labelledby="member-dialog-title"><form method="dialog" class="dialog-shell"><header><div><p class="section-kicker">メンバー詳細</p><h2 data-dialog-title id="member-dialog-title">メンバーを編集</h2><small data-dialog-email></small></div><button class="icon-button" value="cancel" aria-label="閉じる">×</button></header><div class="dialog-body" data-dialog-body></div><footer><output class="dialog-message" data-dialog-message aria-live="polite"></output><button class="quiet" value="cancel">キャンセル</button><button type="button" class="primary" data-save>変更を保存</button></footer></form></dialog>
+    <template data-subject-options>{subjects.map((subject) => <option value={subject.slug}>{subject.name}</option>)}</template><template data-interest-options>{interests.map((interest) => <label><input type="checkbox" value={interest} data-interest />{interest}</label>)}</template><template data-university-options>{universities.map((university) => <option value={university}>{university}</option>)}</template><template data-year-options>{years.map((year) => <option value={year}>{year}</option>)}</template>
   </main>
 </AdminLayout>
 
-<style>
-  .member-management{margin:0 auto;max-width:1200px;padding:0 1.25rem 4rem}.page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.3rem}.page-heading h1{font-size:clamp(1.8rem,4vw,2.5rem);margin:.25rem 0 .45rem}.lead{color:var(--text-secondary);line-height:1.7;margin:0}.page-heading>a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.toolbar{align-items:end;display:flex;gap:.8rem;justify-content:space-between;margin:1.2rem 0 .7rem}.search{color:var(--text-secondary);display:grid;font-size:.74rem;font-weight:800;gap:.3rem;max-width:28rem;width:100%}.search input{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;padding:.6rem .7rem}.view-switch{display:flex;gap:.35rem}.view-switch button{background:var(--background-secondary);border:1px solid var(--border-default);color:var(--text-secondary);cursor:pointer;font:inherit;font-size:.75rem;font-weight:800;padding:.52rem .75rem}.view-switch button[aria-pressed="true"]{background:var(--accent-primary);border-color:var(--accent-primary);color:var(--on-accent)}.toolbar>span{color:var(--text-secondary);font-size:.75rem;white-space:nowrap}.load-more{background:var(--background-secondary);border:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font:inherit;font-size:.72rem;padding:.5rem .7rem;white-space:nowrap}.load-more:hover{border-color:var(--accent-primary)}.load-more:disabled{cursor:wait;opacity:.65}.table-wrap{border:1px solid var(--border-default);overflow:auto}.member-list-view table{border-collapse:collapse;min-width:760px;width:100%}th,td{border-bottom:1px solid var(--border-default);padding:.72rem .8rem;text-align:left;vertical-align:middle}th{background:var(--background-secondary);color:var(--text-secondary);font-size:.7rem;letter-spacing:.03em;white-space:nowrap}td{font-size:.8rem}tbody tr:last-child td{border-bottom:0}.identity{align-items:center;display:flex;gap:.6rem;min-width:13rem}.avatar{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:50%;color:var(--accent-primary);display:inline-flex;flex:0 0 2.25rem;font-size:.8rem;font-weight:800;height:2.25rem;justify-content:center;overflow:hidden;width:2.25rem}.avatar img{height:100%;object-fit:cover;width:100%}.identity-copy{display:grid;gap:.1rem}.identity-copy strong{font-size:.82rem}.identity-copy small,.muted{color:var(--text-secondary);font-size:.7rem}.role,.assignment{display:flex;flex-wrap:wrap;gap:.25rem}.chip{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;padding:.2rem .4rem;white-space:nowrap}.chip--accent{color:var(--accent-primary)}.tile-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}.participant-card{background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.7rem;min-width:0;padding:.85rem}.participant-card:hover{border-color:var(--accent-primary)}.participant-card__top{align-items:center;display:flex;gap:.65rem;min-width:0}.participant-card .avatar{flex-basis:1.9rem;font-size:.72rem;height:1.9rem;width:1.9rem}.participant-card__identity{min-width:0}.participant-card__name{font-size:.98rem;font-weight:800;line-height:1.3}.participant-card__email{color:var(--text-secondary);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.participant-card__role{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.7rem;margin-left:auto;padding:.22rem .42rem;white-space:nowrap}.participant-card__access{display:grid;gap:.45rem}.participant-card__facts{display:flex;flex-wrap:wrap;gap:.35rem}.participant-fact{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.7rem;line-height:1.2;padding:.25rem .42rem}.participant-fact b{color:var(--accent-primary)}.participant-card__discord{border-top:1px solid var(--border-default);display:grid;gap:.4rem;padding-top:.6rem}.participant-card__discord-heading{align-items:center;display:flex;justify-content:space-between}.participant-card__discord-heading strong{font-size:.75rem}.participant-card__discord-state{border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;padding:.18rem .4rem}.participant-card__discord-state[data-state="connected"]{border-color:var(--success);color:var(--success)}.participant-role-chips{display:flex;flex-wrap:wrap;gap:.28rem}.participant-role-chip{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;padding:.2rem .38rem}.participant-role-chip--empty{color:var(--text-muted)}.empty{color:var(--text-secondary);padding:2rem;text-align:center}.message{color:var(--text-secondary);display:block;font-size:.8rem;min-height:1.3rem;padding-top:.7rem}@media(max-width:700px){.member-management{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.toolbar{align-items:stretch;display:grid}.view-switch{justify-content:flex-start}.toolbar>span,.load-more{justify-self:start}}
-  .verification-archive { border: 1px solid var(--border-default); margin-top: 1rem; }
-  .verification-archive summary { align-items: center; color: var(--text-secondary); cursor: pointer; display: flex; font-size: .8rem; font-weight: 800; gap: .6rem; justify-content: space-between; list-style: none; padding: .7rem .8rem; }
-  .verification-archive summary::-webkit-details-marker { display: none; }
-  .verification-archive summary::before { color: var(--text-muted); content: "▸"; }
-  .verification-archive[open] summary::before { content: "▾"; }
-  .verification-archive-count { color: var(--text-muted); font-size: .7rem; font-variant-numeric: tabular-nums; }
-  .verification-archive > p { border-top: 1px solid var(--border-default); color: var(--text-secondary); font-size: .74rem; line-height: 1.55; margin: 0; padding: .7rem .8rem; }
-  .verification-archive-list { border-top: 1px solid var(--border-default); display: grid; gap: .45rem; padding: .7rem .8rem; }
-  .verification-member { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); display: flex; gap: .6rem; min-width: 0; padding: .5rem .6rem; }
-  .verification-member .avatar { flex-basis: 1.8rem; height: 1.8rem; width: 1.8rem; }
-  .verification-member-copy { display: grid; gap: .1rem; min-width: 0; }
-  .verification-member-copy strong { font-size: .78rem; }
-  .verification-member-copy small { color: var(--text-secondary); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .verification-member-label { color: var(--text-muted); font-size: .66rem; margin-left: auto; white-space: nowrap; }
-</style>
-
 <style is:global>
-  /* APIから後から挿入する行はAstroのスコープ属性を持たないため、一覧の構造を明示的に共有する。 */
-  [data-member-management] .member-list-view .table-wrap { overflow-x: auto; }
-  [data-member-management] .member-list-view table { border-collapse: collapse; min-width: 760px; table-layout: auto; width: 100%; }
-  [data-member-management] .member-list-view th,
-  [data-member-management] .member-list-view td { border-bottom: 1px solid var(--border-default); padding: .72rem .8rem; text-align: left; vertical-align: middle; }
-  [data-member-management] .member-list-view th { background: var(--background-secondary); color: var(--text-secondary); font-size: .7rem; letter-spacing: .03em; white-space: nowrap; }
-  [data-member-management] .member-list-view td { font-size: .8rem; }
-  [data-member-management] .member-list-view tbody tr:last-child td { border-bottom: 0; }
-  [data-member-management] .member-list-view .identity { align-items: center; display: flex; gap: .6rem; min-width: 15rem; }
-  [data-member-management] .avatar { align-items: center; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 50%; color: var(--accent-primary); display: inline-flex; flex: 0 0 2.25rem; font-size: .8rem; font-weight: 800; height: 2.25rem; justify-content: center; overflow: hidden; width: 2.25rem; }
-  [data-member-management] .avatar img { display: block; height: 100%; object-fit: cover; width: 100%; }
-  [data-member-management] .identity-copy { display: grid; gap: .1rem; min-width: 0; }
-  [data-member-management] .identity-copy strong { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  [data-member-management] .identity-copy small,
-  [data-member-management] .muted { color: var(--text-secondary); font-size: .7rem; }
-  [data-member-management] .role,
-  [data-member-management] .assignment { display: flex; flex-wrap: wrap; gap: .25rem; }
-  [data-member-management] .chip { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: 999px; color: var(--text-secondary); font-size: .66rem; padding: .2rem .4rem; white-space: nowrap; }
-  [data-member-management] .chip--accent { color: var(--accent-primary); }
-  [data-member-management] .member-remove { background: transparent; border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border-default)); border-radius: .3rem; color: var(--danger); cursor: pointer; font: inherit; font-size: .68rem; padding: .3rem .48rem; white-space: nowrap; }
-  [data-member-management] .member-remove:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
-  [data-member-management] .member-remove:disabled { cursor: wait; opacity: .55; }
-  [data-member-management] .member-card__actions { align-items: center; display: flex; gap: .45rem; justify-content: flex-end; }
-  [data-member-management] .participant-card__actions { border-top: 1px solid var(--border-default); display: flex; justify-content: flex-end; padding-top: .6rem; }
-  [data-member-management] .empty { color: var(--text-secondary); padding: 2rem; text-align: center; }
-
-  [data-member-management] .participant-card{background:var(--background-primary);border:1px solid var(--border-default);display:grid;gap:.7rem;min-width:0;padding:.85rem}
-  [data-member-management] .participant-card:hover{border-color:var(--accent-primary)}
-  [data-member-management] .participant-card__top{align-items:center;display:flex;gap:.65rem;min-width:0}
-  [data-member-management] .participant-card .avatar{align-items:center;background:var(--background-secondary);border:1px solid var(--border-default);border-radius:50%;color:var(--accent-primary);display:inline-flex;flex:0 0 1.9rem;font-size:.72rem;font-weight:800;height:1.9rem;justify-content:center;overflow:hidden;width:1.9rem}
-  [data-member-management] .participant-card .avatar img{height:100%;object-fit:cover;width:100%}
-  [data-member-management] .participant-card__identity{min-width:0}
-  [data-member-management] .participant-card__name{font-size:.98rem;font-weight:800;line-height:1.3}
-  [data-member-management] .participant-card__email{color:var(--text-secondary);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  [data-member-management] .participant-card__role{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;font-size:.7rem;margin-left:auto;padding:.22rem .42rem;white-space:nowrap}
-  [data-member-management] .participant-card__access{display:grid;gap:.45rem}
-  [data-member-management] .participant-card__facts{display:flex;flex-wrap:wrap;gap:.35rem}
-  [data-member-management] .participant-fact{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.7rem;line-height:1.2;padding:.25rem .42rem}
-  [data-member-management] .participant-fact b{color:var(--accent-primary)}
-  [data-member-management] .participant-card__discord{border-top:1px solid var(--border-default);display:grid;gap:.4rem;padding-top:.6rem}
-  [data-member-management] .participant-card__discord-heading{align-items:center;display:flex;justify-content:space-between}
-  [data-member-management] .participant-card__discord-heading strong{font-size:.75rem}
-  [data-member-management] .participant-card__discord-state{border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;padding:.18rem .4rem}
-  [data-member-management] .participant-card__discord-state[data-state="connected"]{border-color:var(--success);color:var(--success)}
-  [data-member-management] .participant-role-chips{display:flex;flex-wrap:wrap;gap:.28rem}
-  [data-member-management] .participant-role-chip{background:var(--background-secondary);border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.66rem;padding:.2rem .38rem}
-  [data-member-management] .participant-role-chip--empty{color:var(--text-muted)}
+  .member-management { --member-bg: var(--background-primary); --member-surface: var(--background-secondary); --member-border: var(--border-default); --member-text: var(--text-primary); --member-muted: var(--text-secondary); --member-accent: var(--accent-primary); box-sizing: border-box; color: var(--member-text); margin: 0 auto; max-width: 1220px; padding: 0 clamp(.8rem, 3vw, 2rem) 4rem; }
+  .member-management * { box-sizing: border-box; }
+  .page-heading { align-items: end; border-bottom: 1px solid var(--member-border); display: flex; gap: 1.5rem; justify-content: space-between; padding: 2rem 0 1.25rem; }
+  .eyebrow, .section-kicker { color: var(--member-accent); font-size: .7rem; font-weight: 800; letter-spacing: .08em; margin: 0 0 .35rem; }
+  .page-heading h1 { font-size: clamp(1.65rem, 4vw, 2.35rem); margin: 0; }
+  .lead { color: var(--member-muted); font-size: .82rem; line-height: 1.7; margin: .5rem 0 0; max-width: 54rem; }
+  .page-links { display: flex; flex-wrap: wrap; gap: .45rem; justify-content: flex-end; }
+  .page-links a { border: 1px solid var(--member-border); color: var(--member-accent); font-size: .72rem; font-weight: 800; padding: .48rem .6rem; text-decoration: none; white-space: nowrap; }
+  .page-links a:hover, .page-links a:focus-visible { border-color: var(--member-accent); }
+  .summary { display: grid; gap: .65rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 1rem 0; }
+  .summary > div { background: var(--member-surface); border: 1px solid var(--member-border); display: grid; gap: .15rem; min-width: 0; padding: .7rem .8rem; }
+  .summary > div:first-child { border-top: 1px solid var(--member-accent); }
+  .summary span, .summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .summary span { color: var(--member-muted); font-size: .68rem; } .summary strong { font-size: 1.2rem; }
+  .session-reset-panel { background: color-mix(in srgb, var(--member-surface) 88%, var(--danger, #b3261e)); border: 1px solid color-mix(in srgb, var(--danger, #b3261e) 45%, var(--member-border)); display: grid; gap: 1rem; grid-template-columns: minmax(14rem, .9fr) minmax(0, 1.1fr); margin-top: .9rem; padding: 1rem; }
+  .session-reset-panel h2 { font-size: 1.1rem; margin: 0; } .session-reset-panel p:not(.section-kicker) { color: var(--member-muted); font-size: .74rem; line-height: 1.55; margin: .4rem 0 0; }
+  .session-reset-panel form { align-items: end; display: grid; gap: .55rem; grid-template-columns: minmax(0, 1.3fr) minmax(8rem, .7fr) auto; } .session-reset-panel label { color: var(--member-muted); display: grid; font-size: .68rem; font-weight: 800; gap: .3rem; } .session-reset-panel form > button { background: var(--danger, #b3261e); border-color: var(--danger, #b3261e); color: #fff; } .session-reset-panel output { color: var(--member-muted); font-size: .72rem; grid-column: 1 / -1; min-height: 1.1rem; }
+  .add-panel, .members-panel { background: var(--member-surface); border: 1px solid var(--member-border); margin-top: .9rem; padding: 1rem; }
+  .add-panel { display: grid; gap: 1rem; grid-template-columns: minmax(14rem, .8fr) minmax(0, 1.6fr); }
+  .add-panel h2, .section-heading h2 { font-size: 1.1rem; margin: 0; }
+  .add-panel p:not(.section-kicker) { color: var(--member-muted); font-size: .74rem; line-height: 1.55; margin: .4rem 0 0; }
+  .add-panel form { align-items: end; display: grid; gap: .55rem; grid-template-columns: minmax(0, 1fr) minmax(13rem, 1fr) auto; }
+  .add-panel label, .toolbar label, .dialog-body label { color: var(--member-muted); display: grid; font-size: .68rem; font-weight: 800; gap: .3rem; }
+  .member-management input, .member-management select { background: var(--member-bg); border: 1px solid var(--member-border); border-radius: .3rem; color: var(--member-text); font: inherit; min-height: 2.25rem; padding: .45rem .55rem; width: 100%; }
+  .member-management select[multiple] { min-height: 7rem; }
+  .member-management input:focus-visible, .member-management select:focus-visible, .member-management button:focus-visible { border-color: var(--member-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--member-accent) 22%, transparent); outline: none; }
+  .member-management button { border: 1px solid var(--member-border); border-radius: .3rem; cursor: pointer; font: inherit; font-size: .72rem; font-weight: 800; min-height: 2.25rem; padding: .45rem .65rem; }
+  .primary, .add-panel form > button { background: var(--member-accent); border-color: var(--member-accent); color: var(--on-accent, #fff); }
+  .quiet { background: transparent; color: var(--member-accent); } .quiet:hover { background: color-mix(in srgb, var(--member-accent) 9%, transparent); }
+  .add-panel output { color: var(--member-muted); font-size: .72rem; grid-column: 2 / -1; min-height: 1.1rem; }
+  .section-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: .75rem; }
+  .section-heading .section-kicker { margin-bottom: .2rem; } .section-heading > span { color: var(--member-muted); font-size: .72rem; }
+  .toolbar { align-items: end; background: color-mix(in srgb, var(--member-bg) 70%, var(--member-surface)); border: 1px solid var(--member-border); display: grid; gap: .55rem; grid-template-columns: minmax(15rem, 1fr) minmax(11rem, .4fr) auto; margin-bottom: .75rem; padding: .6rem; }
+  .member-grid { display: grid; gap: .65rem; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); min-height: 10rem; }
+  .member-card { background: var(--member-bg); border: 1px solid var(--member-border); display: grid; gap: .7rem; min-width: 0; padding: .8rem; }
+  .member-card:hover { border-color: var(--member-accent); } .member-card__top { align-items: center; display: flex; gap: .6rem; min-width: 0; }
+  .avatar { align-items: center; background: var(--member-surface); border: 1px solid var(--member-border); border-radius: 50%; color: var(--member-accent); display: inline-flex; flex: 0 0 2.35rem; font-size: .85rem; font-weight: 800; height: 2.35rem; justify-content: center; overflow: hidden; width: 2.35rem; }
+  .avatar img { height: 100%; object-fit: cover; width: 100%; } .member-card__identity { min-width: 0; }
+  .member-card__identity strong { display: block; font-size: .9rem; overflow-wrap: anywhere; } .member-card__identity small { color: var(--member-muted); display: block; font-size: .7rem; margin-top: .15rem; overflow-wrap: anywhere; }
+  .status { border: 1px solid var(--member-border); border-radius: 999px; color: var(--member-muted); font-size: .63rem; margin-left: auto; padding: .18rem .4rem; white-space: nowrap; } .status--manager { color: var(--member-accent); }
+  .facts, .chips, .card-actions, .checkbox-grid { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .fact, .chip { background: var(--member-surface); border: 1px solid var(--member-border); border-radius: .25rem; color: var(--member-muted); font-size: .67rem; line-height: 1.3; padding: .27rem .4rem; } .chip--accent { color: var(--member-accent); }
+  .card-section { border-top: 1px solid var(--member-border); display: grid; gap: .35rem; padding-top: .55rem; } .card-section > strong { color: var(--member-muted); font-size: .65rem; }
+  .empty, .message { color: var(--member-muted); font-size: .76rem; } .empty { border: 1px dashed var(--member-border); grid-column: 1 / -1; padding: 2rem; text-align: center; }
+  .card-actions { justify-content: flex-end; } .card-actions .primary { min-width: 4.5rem; } .danger { color: var(--danger, #b3261e); } .message { display: block; min-height: 1.2rem; padding-top: .65rem; }
+  .loading-skeleton { display: grid; gap: .65rem; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); } .loading-skeleton i { animation: member-pulse 1.2s ease-in-out infinite alternate; background: var(--member-surface); border: 1px solid var(--member-border); height: 11rem; } .loading-skeleton i:nth-child(2) { animation-delay: .15s; } .loading-skeleton i:nth-child(3) { animation-delay: .3s; } @keyframes member-pulse { from { opacity: .55; } to { opacity: 1; } }
+  .member-dialog { background: transparent; border: 0; height: 100dvh; margin: 0 0 0 auto; max-height: none; max-width: 100%; padding: 0; width: 100%; } .member-dialog::backdrop { background: rgb(0 0 0 / 48%); }
+  .dialog-shell { background: var(--member-surface); border-left: 1px solid var(--member-border); display: grid; grid-template-rows: auto 1fr auto; height: 100%; margin-left: auto; max-width: 760px; width: 100%; } .dialog-shell > header, .dialog-shell > footer { align-items: center; border-color: var(--member-border); display: flex; gap: .7rem; justify-content: space-between; padding: .8rem 1rem; } .dialog-shell > header { border-bottom: 1px solid var(--member-border); } .dialog-shell > footer { border-top: 1px solid var(--member-border); }
+  .dialog-shell h2 { font-size: 1.1rem; margin: 0; } .dialog-shell header small { color: var(--member-muted); display: block; font-size: .72rem; margin-top: .2rem; overflow-wrap: anywhere; } .icon-button { background: transparent; border: 1px solid var(--member-border); color: var(--member-muted); font-size: 1.2rem; min-width: 2.25rem; padding: 0; }
+  .dialog-body { display: grid; gap: .75rem; overflow: auto; padding: 1rem; } .dialog-section { background: var(--member-bg); border: 1px solid var(--member-border); display: grid; gap: .55rem; padding: .75rem; } .dialog-section h3 { font-size: .82rem; margin: 0; } .dialog-section > p, .dialog-help { color: var(--member-muted); font-size: .7rem; line-height: 1.5; margin: 0; }
+  .dialog-grid { display: grid; gap: .55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); } .checkbox-grid label { align-items: center; background: var(--member-surface); border: 1px solid var(--member-border); border-radius: .25rem; display: inline-flex; font-size: .67rem; font-weight: 600; gap: .25rem; padding: .3rem .4rem; } .checkbox-grid label:has(input:checked) { border-color: var(--member-accent); color: var(--member-accent); } .checkbox-grid input { accent-color: var(--member-accent); min-height: auto; width: auto; } .dialog-message { color: var(--member-muted); flex: 1; font-size: .7rem; min-height: 1.1rem; } .dialog-message[data-state="error"] { color: var(--danger, #b3261e); }
+  .member-table { border: 1px solid var(--member-border); overflow: hidden; } .member-table__head, .member-table__row { align-items: center; display: grid; gap: .65rem; grid-template-columns: minmax(12rem, 1.3fr) minmax(10rem, 1fr) minmax(11rem, 1.2fr) minmax(7rem, .6fr) auto; min-width: 0; padding: .65rem .75rem; } .member-table__head { background: var(--member-surface); border-bottom: 1px solid var(--member-border); color: var(--member-muted); font-size: .65rem; font-weight: 800; } .member-table__row { background: var(--member-bg); border-bottom: 1px solid var(--member-border); font-size: .7rem; } .member-table__row:last-child { border-bottom: 0; } .member-table__row--archived { opacity: .68; } .member-table__identity { align-items: center; display: flex; gap: .45rem; min-width: 0; } .member-table__identity strong { display: grid; min-width: 0; overflow-wrap: anywhere; } .member-table__identity small { color: var(--member-muted); font-size: .62rem; font-weight: 400; margin-top: .15rem; overflow-wrap: anywhere; } .member-table__actions { display: flex; flex-wrap: wrap; gap: .25rem; justify-content: flex-end; } .member-table__actions button { min-height: 2rem; padding: .32rem .45rem; } .member-table__row > span:not(.member-table__identity) { min-width: 0; overflow-wrap: anywhere; } .member-card--archived { opacity: .68; } .status--archived { color: var(--member-muted); }
+  .member-history { display: grid; gap: .35rem; list-style: none; margin: 0; padding: 0; } .member-history li { border-top: 1px solid var(--member-border); display: grid; gap: .15rem; padding-top: .4rem; } .member-history strong { font-size: .7rem; overflow-wrap: anywhere; } .member-history small { color: var(--member-muted); font-size: .63rem; overflow-wrap: anywhere; }
+  @media (max-width: 760px) { .page-heading { align-items: start; display: grid; } .page-links { justify-content: flex-start; } .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .session-reset-panel { grid-template-columns: 1fr; } .session-reset-panel form { grid-template-columns: 1fr; } .session-reset-panel output { grid-column: auto; } .add-panel { grid-template-columns: 1fr; } .add-panel form { grid-template-columns: 1fr; } .add-panel output { grid-column: auto; } .toolbar { grid-template-columns: 1fr; } .member-grid, .loading-skeleton { grid-template-columns: 1fr; } .dialog-grid { grid-template-columns: 1fr; } .member-table__head, .member-table__row { grid-template-columns: minmax(11rem, 1.3fr) minmax(8rem, 1fr) auto; } .member-table__head span:nth-child(3), .member-table__head span:nth-child(4), .member-table__row > span:nth-child(3), .member-table__row > span:nth-child(4) { display: none; } }
 </style>
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { lockAdminForm } from "../../scripts/admin-form-submit-lock";
+  import { readAdminApiJson } from "../../lib/admin-api";
+  type WorkflowRole = { role: string; subject: string };
+  type Assignment = { id: string; kind: "genre" | "role"; name: string; slug: string };
+  type MemberProject = { project_id: string; project_name: string; role: string; joined_at: string };
+  type Member = { email: string; display_name: string; university: string; year: string; interests: string; avatar_url: string; membership_role: string; subjects: string[]; workflow_subjects: string[]; workflow_roles: WorkflowRole[]; catalog_assignments: Assignment[]; discord_user_id: string; discord_role_ids: string[]; updated_at: string; status?: "active" | "archived"; projects?: MemberProject[]; first_creator?: string; first_created_at?: string; last_editor?: string; last_edited_at?: string; history_count?: number; is_global_admin?: boolean };
+  type DiscordRole = { discord_role_id: string; name: string; is_managed: number };
+  type Data = { members?: Member[]; discord_roles?: DiscordRole[]; error?: string };
 
-  type Member = { email?: string; display_name?: string; university?: string; year?: string; role?: string; avatar_url?: string; assignments?: string[]; subjectAssignments?: string[]; workflowSubjects?: string[] };
-  type Participant = { email?: string; display_name?: string; university?: string; year?: string; interests?: string; avatar_url?: string; discord_user_id?: string; discord_role_ids?: string; subjects?: string };
-  type Pagination = { limit?: number; nextCursor?: string | null; hasMore?: boolean };
-  type ResponseData = { members?: Member[]; pagination?: Pagination; error?: string };
-  type ParticipantResponse = { permissions?: Participant[]; pagination?: Pagination; error?: string };
-  type VerificationResponse = { members?: Array<{ email?: string; display_name?: string; avatar_url?: string }>; error?: string };
-  const initialize = () => { const root = document.querySelector<HTMLElement>("[data-member-management]"); if (!root || root.dataset.ready) return; root.dataset.ready = "true"; const table = root.querySelector<HTMLElement>("[data-table-body]")!; const tiles = root.querySelector<HTMLElement>("[data-tile-grid]")!; const search = root.querySelector<HTMLInputElement>("[data-search]")!; const count = root.querySelector<HTMLElement>("[data-count]")!; const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-load-more]")!; const listView = root.querySelector<HTMLElement>("[data-list-view]")!; const tileView = root.querySelector<HTMLElement>("[data-tile-view]")!; const archive = root.querySelector<HTMLElement>("[data-verification-archive]")!; const archiveList = root.querySelector<HTMLElement>("[data-verification-list]")!; const archiveCount = root.querySelector<HTMLElement>("[data-verification-count]")!; const message = root.querySelector<HTMLOutputElement>("[data-message]")!; let members: Member[] = []; let participants: Participant[] = []; let verificationAccounts: VerificationResponse["members"] = []; let memberCursor: string | null = null; let participantCursor: string | null = null; let membersHaveMore = false; let participantsHaveMore = false; let loadingMore = false;
-    const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[character] ?? character);
-    const memberName = (member: Member | Participant) => member.display_name?.trim() || "表示名未設定";
-    const avatar = (member: Member | Participant) => member.avatar_url?.trim() ? `<span class="avatar"><img src="${esc(member.avatar_url)}" alt="" loading="lazy" /></span>` : `<span class="avatar" aria-hidden="true">${esc(memberName(member).slice(0,1))}</span>`;
-    const chips = (items: string[] = [], accent = false) => items.length ? items.map((item) => `<span class="chip${accent ? " chip--accent" : ""}">${esc(item)}</span>`).join("") : '<span class="muted">未設定</span>';
-    const participantSubjects = (participant: Participant) => String(participant.subjects ?? "").split(",").map((subject) => subject.trim()).filter(Boolean);
-    const participantRoleIds = (participant: Participant) => String(participant.discord_role_ids ?? "").split(",").map((role) => role.trim()).filter(Boolean);
-    const render = () => { const query = search.value.trim().toLocaleLowerCase(); const filtered = members.filter((member) => `${memberName(member)} ${member.email ?? ""} ${member.university ?? ""} ${(member.assignments ?? []).join(" ")}`.toLocaleLowerCase().includes(query)); count.textContent = `${filtered.length} / ${members.length}人`; if (!filtered.length) { table.innerHTML = '<tr><td colspan="6" class="empty">条件に一致するメンバーはいません。</td></tr>'; return; } table.innerHTML = filtered.map((member) => `<tr><td><div class="identity">${avatar(member)}<span class="identity-copy"><strong>${esc(memberName(member))}</strong><small>${esc(member.email)}</small></span></div></td><td>${esc([member.university, member.year].filter(Boolean).join(" / ") || "未登録")}</td><td><div class="role">${chips([member.role === "manager" ? "運営統括" : "運営メンバー"], true)}</div></td><td><div class="assignment">${chips(member.assignments)}</div></td><td class="muted">現在の登録情報</td><td><button type="button" class="member-remove" data-remove-member data-email="${esc(member.email)}">削除</button></td></tr>`).join(""); };
-    const renderParticipants = () => { const query = search.value.trim().toLocaleLowerCase(); const filtered = participants.filter((participant) => `${memberName(participant)} ${participant.email ?? ""} ${participant.discord_user_id ?? ""} ${participant.university ?? ""}`.toLocaleLowerCase().includes(query)); if (!filtered.length) { tiles.innerHTML = '<p class="empty">条件に一致する参加者はいません。</p>'; return; } tiles.innerHTML = filtered.map((participant) => { const subjects = participantSubjects(participant); const roles = subjects.map((subject) => subject === "*" ? "全分野管理" : subject); const roleIds = participantRoleIds(participant); const roleChips = roleIds.length ? roleIds.slice(0, 4).map((role) => `<span class="participant-role-chip">${esc(role)}</span>`).join("") : '<span class="participant-role-chip participant-role-chip--empty">未付与</span>'; return `<article class="participant-card"><div class="participant-card__top">${avatar(participant)}<div class="participant-card__identity"><strong class="participant-card__name">${esc(memberName(participant))}</strong><div class="participant-card__email">${esc(participant.email)}</div></div><span class="participant-card__role">${esc(roles.join("・") || "担当未設定")}</span></div><div class="participant-card__access"><div class="participant-card__facts"><span class="participant-fact"><b>所属</b> ${esc(participant.university || "未登録")}</span><span class="participant-fact"><b>学年</b> ${esc(participant.year || "未登録")}</span><span class="participant-fact"><b>分野</b> ${esc(participant.interests || "未登録")}</span></div></div><div class="participant-card__discord"><div class="participant-card__discord-heading"><strong>Discord</strong><span class="participant-card__discord-state" data-state="${participant.discord_user_id ? "connected" : "unconnected"}">${participant.discord_user_id ? "連携済み" : "未連携"}</span></div><div class="participant-role-chips">${roleChips}</div></div><div class="participant-card__actions"><button type="button" class="member-remove" data-remove-member data-email="${esc(participant.email)}">削除</button></div></article>`; }).join(""); };
-    const renderVerification = () => { const entries = (verificationAccounts ?? []).filter((entry) => entry?.email?.trim()); archiveCount.textContent = `${entries.length}件`; archive.hidden = entries.length === 0; archiveList.innerHTML = entries.map((entry) => { const name = entry.display_name?.trim() || "表示名未設定"; const email = entry.email?.trim() || ""; const initial = name.slice(0, 1); const image = entry.avatar_url?.trim() ? `<img src="${esc(entry.avatar_url)}" alt="" loading="lazy" />` : esc(initial); return `<div class="verification-member">${image ? `<span class="avatar" aria-hidden="true">${image}</span>` : ""}<span class="verification-member-copy"><strong>${esc(name)}</strong><small>${esc(email)}</small></span><span class="verification-member-label">検証用・保持</span></div>`; }).join(""); };
-    const updateLoadMore = () => { const visible = membersHaveMore || participantsHaveMore; loadMoreButton.hidden = !visible; loadMoreButton.disabled = loadingMore; loadMoreButton.textContent = loadingMore ? "読み込み中…" : "さらに読み込む"; };
-    const setView = (view: string) => { const tilesMode = view === "tiles"; listView.hidden = tilesMode; tileView.hidden = !tilesMode; root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.view === view))); if (tilesMode) renderParticipants(); else render(); };
-    search.addEventListener("input", () => { render(); renderParticipants(); }); root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view ?? "list")));
-    const loadMore = async () => { if (loadingMore || (!membersHaveMore && !participantsHaveMore)) return; loadingMore = true; updateLoadMore(); message.value = "追加のメンバーを読み込んでいます…"; try { const requests: Promise<Response>[] = []; if (membersHaveMore && memberCursor) requests.push(fetch(`/api/admin/genre-overviews?project=atlas&limit=50&cursor=${encodeURIComponent(memberCursor)}`, { credentials: "same-origin", cache: "no-store" })); if (participantsHaveMore && participantCursor) requests.push(fetch(`/api/admin/report-admin-permissions?limit=50&cursor=${encodeURIComponent(participantCursor)}`, { credentials: "same-origin", cache: "no-store" })); const responses = await Promise.all(requests); for (const response of responses) { const data = await response.json() as ResponseData & ParticipantResponse; if (!response.ok) throw new Error(data.error ?? "追加のメンバーを読み込めませんでした。"); if (Array.isArray(data.members)) members = [...members, ...data.members]; if (data.pagination && Array.isArray(data.members)) { memberCursor = data.pagination.nextCursor ?? null; membersHaveMore = Boolean(data.pagination.hasMore); } if (Array.isArray(data.permissions)) participants = [...participants, ...data.permissions]; if (data.pagination && Array.isArray(data.permissions)) { participantCursor = data.pagination.nextCursor ?? null; participantsHaveMore = Boolean(data.pagination.hasMore); } } render(); renderParticipants(); message.value = "追加のメンバーを読み込みました。"; } catch (error) { message.value = error instanceof Error ? error.message : "追加のメンバーを読み込めませんでした。"; } finally { loadingMore = false; updateLoadMore(); } };
-    loadMoreButton.addEventListener("click", () => { void loadMore(); });
-    root.addEventListener("click", (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-remove-member]"); if (!button) return; const email = button.dataset.email ?? ""; if (!email || !window.confirm(`${email} を運営メンバーから削除しますか？\nプロフィールとアカウントは残ります。`)) return; button.disabled = true; message.value = "削除しています…"; void fetch(`/api/admin/member-management?email=${encodeURIComponent(email)}`, { method: "DELETE", credentials: "same-origin" }).then(async (response) => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error ?? "メンバーを削除できませんでした。"); message.value = "運営メンバーから削除しました。"; return data; }).then(() => load()).catch((error) => { message.value = error instanceof Error ? error.message : "メンバーを削除できませんでした。"; }).finally(() => { button.disabled = false; }); });
-    let load: () => Promise<void>;
-    const retry = createAdminLoadRetry(root, () => load(), "メンバー情報を読み込めませんでした。");
-    load = async () => { root.setAttribute("aria-busy", "true"); retry.begin(); try { const [memberData, participantData, verificationData] = await Promise.all([fetch("/api/admin/genre-overviews?project=atlas&limit=50", { credentials: "same-origin", cache: "no-store" }).then(async (response) => { const data = await response.json() as ResponseData; if (!response.ok) throw new Error(data.error ?? "メンバー情報を読み込めませんでした。"); return data; }), fetch("/api/admin/report-admin-permissions?limit=50", { credentials: "same-origin", cache: "no-store" }).then(async (response) => { const data = await response.json() as ParticipantResponse; if (!response.ok) throw new Error(data.error ?? "参加者一覧を読み込めませんでした。"); return data; }).catch(() => null), fetch("/api/admin/verification-members", { credentials: "same-origin", cache: "no-store" }).then(async (response) => { const data = await response.json() as VerificationResponse; if (!response.ok) throw new Error(data.error ?? "検証用アカウントを読み込めませんでした。"); return data; }).catch(() => ({ members: [] }))]); members = memberData.members ?? []; memberCursor = memberData.pagination?.nextCursor ?? null; membersHaveMore = Boolean(memberData.pagination?.hasMore); participants = participantData?.permissions ?? members.map((member) => ({ email: member.email, display_name: member.display_name, university: member.university, year: member.year, avatar_url: member.avatar_url, subjects: [...(member.subjectAssignments ?? []), ...(member.workflowSubjects ?? [])].join(",") })); participantCursor = participantData?.pagination?.nextCursor ?? null; participantsHaveMore = Boolean(participantData?.pagination?.hasMore); verificationAccounts = verificationData.members ?? []; render(); renderParticipants(); renderVerification(); updateLoadMore(); retry.success(); } catch (error) { const message = error instanceof Error ? error.message : "メンバー情報を読み込めませんでした。"; table.innerHTML = `<tr><td colspan="6" class="empty">${esc(message)}</td></tr>`; tiles.innerHTML = `<p class="empty">${esc(message)}</p>`; archive.hidden = true; archiveList.innerHTML = ""; count.textContent = "—"; loadMoreButton.hidden = true; retry.fail(error); throw error; } finally { root.removeAttribute("aria-busy"); } };
-    void load().catch(() => undefined);
-  }; document.addEventListener("astro:page-load", initialize); initialize();
-</script>
-
-<script>
-  // 検証用アカウントは通常の名簿から分離して保持する。APIやプロフィールは削除しない。
-  const isolateVerificationAccounts = () => {
+  const initialize = () => {
     const root = document.querySelector<HTMLElement>("[data-member-management]");
-    if (root?.dataset.verificationServer === "true") return;
-    if (!root || root.dataset.verificationReady === "true") return;
-    root.dataset.verificationReady = "true";
-    const table = root.querySelector<HTMLElement>("[data-table-body]");
-    const tiles = root.querySelector<HTMLElement>("[data-tile-grid]");
-    const archive = root.querySelector<HTMLElement>("[data-verification-archive]");
-    const archiveList = root.querySelector<HTMLElement>("[data-verification-list]");
-    const archiveCount = root.querySelector<HTMLElement>("[data-verification-count]");
-    if (!table || !tiles || !archive || !archiveList || !archiveCount) return;
-    const isVerificationEmail = (value: string) => { const email = value.trim().toLocaleLowerCase(); return email.endsWith("@example.com") || email.endsWith("@atlasez.test"); };
-    const escape = (value: string) => value.replace(/[&<>\"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '\"':"&quot;", "'":"&#39;" })[character] ?? character);
-    const sync = () => {
-      const records = new Map<string, { name: string; email: string }>();
-      table.querySelectorAll<HTMLElement>("tr").forEach((row) => {
-        const email = row.querySelector<HTMLElement>(".identity-copy small")?.textContent?.trim() ?? "";
-        if (!isVerificationEmail(email)) return;
-        row.hidden = true;
-        const name = row.querySelector<HTMLElement>(".identity-copy strong")?.textContent?.trim() || "表示名未設定";
-        records.set(email.toLocaleLowerCase(), { name, email });
+    if (!root || root.dataset.ready === "true") return;
+    root.dataset.ready = "true";
+    const list = root.querySelector<HTMLElement>("[data-list]")!;
+    const table = root.querySelector<HTMLElement>("[data-table]")!;
+    const search = root.querySelector<HTMLInputElement>("[data-search]")!;
+    const filter = root.querySelector<HTMLSelectElement>("[data-filter]")!;
+    const count = root.querySelector<HTMLElement>("[data-count]")!;
+    const message = root.querySelector<HTMLOutputElement>("[data-message]")!;
+    const summaryCount = root.querySelector<HTMLElement>("[data-summary-count]")!;
+    const summaryLinked = root.querySelector<HTMLElement>("[data-summary-linked]")!;
+    const summaryCoordinators = root.querySelector<HTMLElement>("[data-summary-coordinators]")!;
+    const summaryFiltered = root.querySelector<HTMLElement>("[data-summary-filtered]")!;
+    const dialog = root.querySelector<HTMLDialogElement>("[data-dialog]")!;
+    const dialogTitle = root.querySelector<HTMLElement>("[data-dialog-title]")!;
+    const dialogEmail = root.querySelector<HTMLElement>("[data-dialog-email]")!;
+    const dialogBody = root.querySelector<HTMLElement>("[data-dialog-body]")!;
+    const dialogMessage = root.querySelector<HTMLOutputElement>("[data-dialog-message]")!;
+    const subjectTemplate = root.querySelector<HTMLTemplateElement>("[data-subject-options]")!;
+    const interestTemplate = root.querySelector<HTMLTemplateElement>("[data-interest-options]")!;
+    const universityTemplate = root.querySelector<HTMLTemplateElement>("[data-university-options]")!;
+    const yearTemplate = root.querySelector<HTMLTemplateElement>("[data-year-options]")!;
+    const addForm = root.querySelector<HTMLFormElement>("[data-add-form]")!;
+    const addMessage = root.querySelector<HTMLOutputElement>("[data-add-message]")!;
+    const sessionResetForm = root.querySelector<HTMLFormElement>("[data-session-reset-form]")!;
+    const sessionResetEmail = root.querySelector<HTMLSelectElement>("[data-session-reset-email]")!;
+    const sessionResetConfirm = root.querySelector<HTMLInputElement>("[data-session-reset-confirm]")!;
+    const sessionResetMessage = root.querySelector<HTMLOutputElement>("[data-session-reset-message]")!;
+    const viewToggle = root.querySelector<HTMLButtonElement>("[data-view-toggle]")!;
+    let members: Member[] = [];
+    let discordRoles: DiscordRole[] = [];
+    let activeEmail = "";
+    let loading = false;
+    let load: () => Promise<void>;
+    const retry = createAdminLoadRetry(root, () => load(), "メンバー情報を読み込めませんでした。", { scope: "members" });
+    const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] ?? character));
+    const readJson = async (response: Response) => {
+      const data = await readAdminApiJson<Record<string, unknown>>(response, "サーバーエラーが発生しました。");
+      if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "サーバーエラー（" + response.status + "）");
+      return data;
+    };
+    const send = async (url: string, options: RequestInit = {}) => readJson(await fetch(url, { ...options, credentials: "same-origin", headers: { "content-type": "application/json", ...(options.headers ?? {}) } }));
+    const subjectLabels = new Map(Array.from(subjectTemplate.content.querySelectorAll("option")).map((option) => [option.value, option.textContent ?? option.value]));
+    const subjectNames = (values: string[]) => values.map((value) => value === "*" ? "全分野管理者" : subjectLabels.get(value) ?? value).filter(Boolean);
+    const avatar = (member: Member) => member.avatar_url ? "<span class=\"avatar\"><img src=\"" + esc(member.avatar_url) + "\" alt=\"\" loading=\"lazy\" /></span>" : "<span class=\"avatar\" aria-hidden=\"true\">" + esc((member.display_name || member.email).slice(0, 1)) + "</span>";
+    const chips = (values: string[], accent = false) => values.length ? values.map((value) => "<span class=\"chip" + (accent ? " chip--accent" : "") + "\">" + esc(value) + "</span>").join("") : "<span class=\"chip\">未設定</span>";
+    const visibleMembers = () => {
+      const query = search.value.trim().toLocaleLowerCase();
+      return members.filter((member) => {
+        const searchable = (member.display_name + " " + member.email + " " + member.university + " " + member.year + " " + member.interests + " " + subjectNames(member.subjects).join(" ") + " " + subjectNames(member.workflow_subjects).join(" ")).toLocaleLowerCase();
+        return (!query || searchable.includes(query)) && (filter.value === "all" || (filter.value === "active" && member.status !== "archived") || (filter.value === "archived" && member.status === "archived") || (filter.value === "unlinked" && !member.discord_user_id) || (filter.value === "no-scope" && !member.subjects.length) || (filter.value === "coordinator" && member.workflow_subjects.length > 0));
       });
-      tiles.querySelectorAll<HTMLElement>(".participant-card").forEach((card) => {
-        const email = card.querySelector<HTMLElement>(".participant-card__email")?.textContent?.trim() ?? "";
-        if (!isVerificationEmail(email)) return;
-        card.hidden = true;
-        const name = card.querySelector<HTMLElement>(".participant-card__name")?.textContent?.trim() || "表示名未設定";
-        records.set(email.toLocaleLowerCase(), { name, email });
-      });
-      const entries = [...records.values()];
-      archiveCount.textContent = `${entries.length}件`;
-      archive.hidden = entries.length === 0;
-      archiveList.innerHTML = entries.map((entry) => `<div class="verification-member"><span class="avatar" aria-hidden="true">${escape(entry.name.slice(0, 1))}</span><span class="verification-member-copy"><strong>${escape(entry.name)}</strong><small>${escape(entry.email)}</small></span><span class="verification-member-label">検証用・保持</span></div>`).join("");
-      const visibleRows = [...table.querySelectorAll<HTMLTableRowElement>("tr")].filter((row) => !row.hidden && row.querySelector(".identity-copy"));
-      const count = root.querySelector<HTMLElement>("[data-count]");
-      if (count) {
-        const rawCount = count.textContent ?? "";
-        if (rawCount !== count.dataset.verificationRendered) count.dataset.verificationBase = rawCount;
-        const base = count.dataset.verificationBase ?? rawCount;
-        const match = base.match(/^(\d+)\s*\/\s*(\d+)人$/);
-        const hiddenTableRows = table.querySelectorAll("tr[hidden]").length;
-        count.textContent = match ? `${Math.max(0, Number(match[1]) - hiddenTableRows)} / ${Math.max(0, Number(match[2]) - records.size)}人` : `${visibleRows.length}件（検証用を除く）`;
-        count.dataset.verificationRendered = count.textContent;
+    };
+    const render = () => {
+      const visible = visibleMembers();
+      count.textContent = visible.length + " / " + members.length + "人";
+      summaryCount.textContent = members.length + "人";
+      summaryLinked.textContent = members.filter((member) => member.discord_user_id).length + "人";
+      summaryCoordinators.textContent = members.filter((member) => member.workflow_subjects.length).length + "人";
+      summaryFiltered.textContent = visible.length + "人";
+      list.innerHTML = visible.length ? visible.map((member) => {
+        const manager = member.is_global_admin === true || member.subjects.includes("*");
+        const custom = member.catalog_assignments.map((item) => (item.kind === "genre" ? "ジャンル" : "役割") + "：" + item.name);
+        const archived = member.status === "archived";
+        const projects = (member.projects ?? []).map((project) => `${project.project_name}（${project.role}）`);
+        return "<article class=\"member-card" + (archived ? " member-card--archived" : "") + "\" data-email=\"" + esc(member.email) + "\"><div class=\"member-card__top\">" + avatar(member) + "<div class=\"member-card__identity\"><strong>" + esc(member.display_name) + "</strong><small>" + esc(member.email) + "</small></div><span class=\"status" + (archived ? " status--archived" : manager ? " status--manager" : "") + "\">" + (archived ? "アーカイブ" : manager ? "全分野管理者" : "運営メンバー") + "</span></div><div class=\"facts\"><span class=\"fact\">所属：" + esc(member.university || "未登録") + "</span><span class=\"fact\">学年：" + esc(member.year || "未登録") + "</span><span class=\"fact\">Discord：" + (member.discord_user_id ? "連携済み" : "未連携") + "</span><span class=\"fact\">履歴：" + esc(member.history_count ?? 0) + "件</span></div><div class=\"card-section\"><strong>所属プロジェクト</strong><div class=\"chips\">" + chips(projects) + "</div></div><div class=\"card-section\"><strong>記事権限</strong><div class=\"chips\">" + chips(subjectNames(member.subjects), true) + "</div></div><div class=\"card-section\"><strong>分野統括・ジャンル／役割</strong><div class=\"chips\">" + chips(subjectNames(member.workflow_subjects).map((name) => name + "統括").concat(custom)) + "</div></div><div class=\"card-section card-history\"><strong>初回作成者・最終編集</strong><span class=\"fact\">" + esc(member.first_creator || "記録なし") + " ／ " + esc(member.last_editor || "記録なし") + "</span></div><div class=\"card-actions\"><button type=\"button\" class=\"quiet\" data-preview>実効権限</button><button type=\"button\" class=\"primary\" data-edit" + (archived ? " disabled" : "") + ">編集</button>" + (archived ? "<button type=\"button\" class=\"quiet\" data-restore>復元</button>" : "<button type=\"button\" class=\"quiet danger\" data-remove>アーカイブ</button>") + "</div></article>";
+      }).join("") : "<p class=\"empty\">条件に一致するメンバーはいません。</p>";
+      table.innerHTML = visible.length ? `<div class="member-table__head" role="row"><span>メンバー</span><span>所属プロジェクト</span><span>担当範囲</span><span>状態</span><span>操作</span></div>${visible.map((member) => { const archived = member.status === "archived"; const manager = member.is_global_admin === true || member.subjects.includes("*"); const projects = (member.projects ?? []).map((project) => `${project.project_name}（${project.role}）`); return `<div class="member-table__row${archived ? " member-table__row--archived" : ""}" role="row" data-email="${esc(member.email)}"><span class="member-table__identity">${avatar(member)}<strong>${esc(member.display_name)}<small>${esc(member.email)}</small></strong></span><span>${esc(projects.join("、") || "未登録")}</span><span>${esc(subjectNames(member.subjects).concat(subjectNames(member.workflow_subjects).map((name) => name + "統括")).join("、") || "なし")}</span><span>${archived ? "アーカイブ" : manager ? "全分野管理者" : "運営メンバー"}</span><span class="member-table__actions"><button type="button" class="primary" data-edit${archived ? " disabled" : ""}>編集</button>${archived ? "<button type=\"button\" class=\"quiet\" data-restore>復元</button>" : "<button type=\"button\" class=\"quiet danger\" data-remove>アーカイブ</button>"}</span></div>`; }).join("")}` : `<p class="empty">条件に一致するメンバーはいません。</p>`;
+      list.hidden = root.dataset.view === "table";
+      table.hidden = root.dataset.view !== "table";
+      viewToggle.textContent = root.dataset.view === "table" ? "タイルで表示" : "表形式で表示";
+      viewToggle.setAttribute("aria-pressed", String(root.dataset.view === "table"));
+    };
+    const optionHtml = (template: HTMLTemplateElement, value: string) => Array.from(template.content.querySelectorAll<HTMLOptionElement>("option")).map((option) => "<option value=\"" + esc(option.value) + "\"" + (value === option.value ? " selected" : "") + ">" + esc(option.textContent) + "</option>").join("");
+    const loadHistory = async (email: string) => {
+      const status = dialogBody.querySelector<HTMLElement>("[data-history-status]");
+      const historyList = dialogBody.querySelector<HTMLOListElement>("[data-history-list]");
+      if (!status || !historyList) return;
+      try {
+        const response = await fetch("/api/admin/member-management/history?email=" + encodeURIComponent(email), { credentials: "same-origin", cache: "no-store" });
+        const data = await readAdminApiJson<{ entries?: Array<{ actor_email?: string; action?: string; summary?: string; created_at?: string }>; error?: string }>(response, "履歴を読み込めませんでした。");
+        if (!response.ok) throw new Error(data.error || "履歴を読み込めませんでした。");
+        if (activeEmail.toLowerCase() !== email.toLowerCase()) return;
+        const entries: Array<{ actor_email?: string; action?: string; summary?: string; created_at?: string }> = Array.isArray(data.entries) ? data.entries : [];
+        status.textContent = entries.length ? `${entries.length}件（最新100件）` : "記録された履歴はありません。";
+        historyList.innerHTML = entries.map((entry) => `<li><strong>${esc(entry.summary || entry.action || "変更")}</strong><small>${esc(entry.actor_email || "記録なし")} ／ ${esc(entry.created_at || "")}</small></li>`).join("");
+      } catch (error) {
+        if (activeEmail.toLowerCase() !== email.toLowerCase()) return;
+        status.textContent = error instanceof Error ? error.message : "履歴を読み込めませんでした。";
+        historyList.innerHTML = "";
       }
     };
-    const observer = new MutationObserver(sync);
-    observer.observe(table, { childList: true, subtree: true });
-    observer.observe(tiles, { childList: true, subtree: true });
-    sync();
+    const openDialog = (email: string) => {
+      const member = members.find((item) => item.email.toLowerCase() === email.toLowerCase());
+      if (!member) return;
+      activeEmail = member.email;
+      const subjectHtml = Array.from(subjectTemplate.content.querySelectorAll<HTMLOptionElement>("option")).map((option) => "<option value=\"" + esc(option.value) + "\"" + (member.subjects.includes(option.value) ? " selected" : "") + ">" + esc(option.textContent) + "</option>").join("");
+      const workflowHtml = Array.from(subjectTemplate.content.querySelectorAll<HTMLOptionElement>("option")).map((option) => "<option value=\"" + esc(option.value) + "\"" + (member.workflow_subjects.includes(option.value) ? " selected" : "") + ">" + esc(option.textContent) + "</option>").join("");
+      const selectedInterests = new Set(member.interests.split(",").map((value) => value.trim()).filter(Boolean));
+      const interestHtml = Array.from(interestTemplate.content.children).map((node) => { const input = node.querySelector<HTMLInputElement>("input")!; return "<label><input type=\"checkbox\" value=\"" + esc(input.value) + "\" data-interest" + (selectedInterests.has(input.value) ? " checked" : "") + " />" + esc(input.value) + "</label>"; }).join("");
+      const selectedRoles = new Set(member.discord_role_ids);
+      const roleHtml = discordRoles.filter((role) => !role.is_managed).map((role) => "<label><input type=\"checkbox\" value=\"" + esc(role.discord_role_id) + "\" data-discord-role" + (selectedRoles.has(role.discord_role_id) ? " checked" : "") + " />" + esc(role.name) + "</label>").join("");
+      const safeDisplayName = member.display_name === "表示名未設定" ? "" : member.display_name;
+      dialogBody.innerHTML = "<section class=\"dialog-section\"><h3>プロフィール</h3><div class=\"dialog-grid\"><label>表示名<input data-display-name maxlength=\"120\" value=\"" + esc(safeDisplayName) + "\" placeholder=\"表示名未設定\" /></label><label>アイコンURL<input data-avatar-url maxlength=\"1000\" value=\"" + esc(member.avatar_url) + "\" placeholder=\"https://… または /…\" /></label><label>所属機関<select data-university><option value=\"\">未設定</option>" + optionHtml(universityTemplate, member.university) + "</select></label><label>学年<select data-year><option value=\"\">未設定</option>" + optionHtml(yearTemplate, member.year) + "</select></label></div><div class=\"checkbox-grid\">" + interestHtml + "</div><p class=\"dialog-help\">メールアドレスはGoogleアカウント識別子のため、この画面では変更しません。</p></section><section class=\"dialog-section\"><h3>記事の権限</h3><p>記事の閲覧・編集・コメント範囲です。</p><select data-permissions multiple size=\"6\">" + (member.subjects.includes("*") ? "<option value=\"*\" selected>全分野管理者</option>" : subjectHtml) + "</select></section><section class=\"dialog-section\"><h3>公開フローの分野統括</h3><p>執筆完了後の分野審査を担当する範囲です。記事権限とは別に設定します。</p><select data-workflow multiple size=\"6\">" + workflowHtml + "</select></section><section class=\"dialog-section\"><h3>Discord連携</h3><label>DiscordユーザーID<input inputmode=\"numeric\" maxlength=\"22\" data-discord-id value=\"" + esc(member.discord_user_id) + "\" placeholder=\"未連携の場合は空欄\" /></label><p class=\"dialog-help\">入力時は対象サーバー内の本人確認を行います。空欄で連携を解除します。</p><div class=\"checkbox-grid\">" + (roleHtml || "<span class=\"dialog-help\">読み込める未管理ロールがありません。</span>") + "</div></section><section class=\"dialog-section\"><h3>カスタムジャンル／役割</h3><p>" + (member.catalog_assignments.length ? esc(member.catalog_assignments.map((item) => (item.kind === "genre" ? "ジャンル" : "役割") + "：" + item.name).join("、")) : "割り当てなし") + "。変更は各ページから行います。</p></section><section class=\"dialog-section\"><h3>編集履歴</h3><p class=\"dialog-help\" data-history-status>履歴を読み込んでいます…</p><ol class=\"member-history\" data-history-list></ol></section>";
+      dialogTitle.textContent = member.display_name + "を編集";
+      dialogEmail.textContent = member.email;
+      dialogMessage.value = "";
+      dialogMessage.dataset.state = "idle";
+      dialog.showModal();
+      void loadHistory(member.email);
+    };
+    const closeDialog = () => { if (dialog.open) dialog.close(); activeEmail = ""; };
+    sessionResetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!sessionResetEmail.value || sessionResetConfirm.value.trim() !== "失効") { sessionResetMessage.value = "対象を選び、確認入力に「失効」と入力してください。"; return; }
+      if (!window.confirm(sessionResetEmail.value + " の管理画面セッションだけを失効します。プロフィール・記事・応募・権限・既存の監査履歴は保持し、今回の操作だけを記録します。続行しますか？")) return;
+      const release = lockAdminForm(sessionResetForm, "失効中…");
+      sessionResetMessage.value = "失効中…";
+      try {
+        const result = await send("/api/admin/account-sessions/reset", { method: "POST", body: JSON.stringify({ email: sessionResetEmail.value, confirmation: "失効" }) }) as { revokedSessions?: number };
+        sessionResetMessage.value = sessionResetEmail.value + " のセッションを " + String(result.revokedSessions ?? 0) + " 件失効しました。既存の監査履歴は保持し、今回の操作を記録しました。";
+        sessionResetConfirm.value = "";
+      } catch (error) { sessionResetMessage.value = error instanceof Error ? error.message : "セッションを失効できませんでした。"; }
+      finally { release(); }
+    });
+    const saveMember = async () => {
+      const member = members.find((item) => item.email === activeEmail);
+      if (!member) return;
+      const selectedSubjects = Array.from(dialogBody.querySelector<HTMLSelectElement>("[data-permissions]")?.selectedOptions ?? []).map((option) => option.value);
+      const workflow = Array.from(dialogBody.querySelector<HTMLSelectElement>("[data-workflow]")?.selectedOptions ?? []).map((option) => option.value);
+      const interestValues = Array.from(dialogBody.querySelectorAll<HTMLInputElement>("[data-interest]:checked")).map((input) => input.value);
+      const roleIds = Array.from(dialogBody.querySelectorAll<HTMLInputElement>("[data-discord-role]:checked")).map((input) => input.value);
+      const discordUserId = dialogBody.querySelector<HTMLInputElement>("[data-discord-id]")?.value.trim() ?? "";
+      const saveButton = root.querySelector<HTMLButtonElement>("[data-save]")!;
+      saveButton.disabled = true;
+      dialogMessage.value = "保存しています…";
+      try {
+        await send("/api/admin/member-management", { method: "PUT", body: JSON.stringify({ email: member.email, displayName: dialogBody.querySelector<HTMLInputElement>("[data-display-name]")?.value.trim() ?? "", avatarUrl: dialogBody.querySelector<HTMLInputElement>("[data-avatar-url]")?.value.trim() ?? "", subjects: selectedSubjects, workflowSubjects: workflow, roleIds, university: dialogBody.querySelector<HTMLSelectElement>("[data-university]")?.value ?? "", year: dialogBody.querySelector<HTMLSelectElement>("[data-year]")?.value ?? "", interests: interestValues }) });
+        if (discordUserId !== member.discord_user_id) await send("/api/admin/member-discord-user", { method: "PUT", body: JSON.stringify({ email: member.email, discordUserId }) });
+        closeDialog();
+        message.value = "保存しました。";
+        await load();
+      } catch (error) {
+        dialogMessage.value = error instanceof Error ? error.message : "保存できませんでした。";
+        dialogMessage.dataset.state = "error";
+      } finally { saveButton.disabled = false; }
+    };
+    addForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const release = lockAdminForm(addForm, "追加中…");
+      const values = new FormData(addForm);
+      try { await send("/api/admin/report-admin-permissions", { method: "POST", body: JSON.stringify({ email: values.get("email"), subjects: values.getAll("subjects").map(String) }) }); addMessage.value = "メンバーを追加しました。"; addForm.reset(); await load(); } catch (error) { addMessage.value = error instanceof Error ? error.message : "追加できませんでした。"; } finally { release(); }
+    });
+    root.querySelector("[data-save]")?.addEventListener("click", () => void saveMember());
+    root.querySelector("[data-clear]")?.addEventListener("click", () => { search.value = ""; filter.value = "all"; render(); search.focus(); });
+    search.addEventListener("input", render); filter.addEventListener("change", render);
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const card = target.closest<HTMLElement>("[data-email]");
+      if (!card) return;
+      const email = card.dataset.email ?? "";
+      if (target.closest("[data-edit]")) { openDialog(email); return; }
+      if (target.closest("[data-preview]")) { const member = members.find((item) => item.email === email); if (member) message.value = member.display_name + "の実効権限：記事 " + (subjectNames(member.subjects).join("・") || "なし") + "／公開フロー " + (subjectNames(member.workflow_subjects).join("・") || "なし"); return; }
+      if (target.closest("[data-remove]")) { if (!window.confirm(email + " をアーカイブしますか？プロフィール・記事・応募・監査履歴は保持し、運営スコープだけを一時停止します。")) return; const button = target.closest<HTMLButtonElement>("[data-remove]")!; button.disabled = true; message.value = "アーカイブしています…"; void send("/api/admin/member-management", { method: "PATCH", body: JSON.stringify({ email, action: "archive" }) }).then(() => load()).then(() => { message.value = "アーカイブしました。"; }).catch((error) => { message.value = error instanceof Error ? error.message : "変更できませんでした。"; }).finally(() => { button.disabled = false; }); }
+      if (target.closest("[data-restore]")) { const button = target.closest<HTMLButtonElement>("[data-restore]")!; button.disabled = true; message.value = "復元しています…"; void send("/api/admin/member-management", { method: "PATCH", body: JSON.stringify({ email, action: "restore" }) }).then(() => load()).then(() => { message.value = "復元しました。"; }).catch((error) => { message.value = error instanceof Error ? error.message : "変更できませんでした。"; }).finally(() => { button.disabled = false; }); }
+    });
+    viewToggle.addEventListener("click", () => { root.dataset.view = root.dataset.view === "table" ? "cards" : "table"; render(); });
+    dialog.addEventListener("click", (event) => { if (event.target === dialog) closeDialog(); });
+    load = async () => {
+      if (loading) return;
+      loading = true;
+      retry.begin();
+      root.setAttribute("aria-busy", "true");
+      try { const data = await readJson(await fetch("/api/admin/member-management?limit=200", { credentials: "same-origin", cache: "no-store" })) as Data; members = data.members ?? []; discordRoles = data.discord_roles ?? []; render(); retry.success(); } catch (error) { list.innerHTML = "<p class=\"empty\">" + esc(error instanceof Error ? error.message : "メンバー情報を読み込めませんでした。") + "</p>"; count.textContent = "—"; retry.fail(error); } finally { loading = false; root.removeAttribute("aria-busy"); }
+    };
+    void load();
   };
-  document.addEventListener("astro:page-load", isolateVerificationAccounts);
-  isolateVerificationAccounts();
+  document.addEventListener("astro:page-load", initialize);
+  initialize();
 </script>

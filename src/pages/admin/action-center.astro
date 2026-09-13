@@ -55,9 +55,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   type Action = { entityType: string; entityId: string; fromState: string; toState: string; label: string; expectedUpdatedAt?: string };
-  type Item = { id: string; kind: string; title: string; detail: string; href: string; status: string; priority: string; updatedAt: string; dueAt: string | null; project: string | null; subject: string | null; read: boolean; groupCount?: number; notificationIds?: string[]; actions: Action[] };
-  type Payload = { view?: "action" | "history"; items?: Item[]; history?: Item[]; counts?: { today?: number; dueSoon?: number; unread?: number; approvals?: number; assigned?: number }; generatedAt?: string };
+  type Item = { id: string; kind: string; title: string; detail: string; href: string; status: string; priority: string; updatedAt: string; dueAt: string | null; project: string | null; subject: string | null; read: boolean; assigned?: boolean; groupCount?: number; notificationIds?: string[]; actions: Action[] };
+  type Payload = { view?: "action" | "assigned" | "history"; items?: Item[]; history?: Item[]; counts?: { today?: number; dueSoon?: number; unread?: number; approvals?: number; assigned?: number }; generatedAt?: string };
 
   const initActionCenter = () => {
     const root = document.querySelector<HTMLElement>("[data-action-center]");
@@ -101,7 +102,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       if (filter === "action") return item.kind !== "notification" || !item.read;
       if (filter === "urgent") return item.priority === "urgent" || item.priority === "due-soon";
       if (filter === "unread") return item.kind === "notification" && !item.read;
-      if (filter === "assigned") return item.kind !== "notification";
+      if (filter === "assigned") return item.kind === "task" && item.assigned !== false;
       if (filter === "approvals") return item.kind === "approval";
       if (filter === "history") return true;
       return true;
@@ -194,13 +195,15 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       renderBulkBar();
     };
     const setFilter = (next: string) => {
+      const previousFilter = filter;
       const changedView = (filter === "history") !== (next === "history");
       filter = next;
       selected.clear();
-      listHeading.textContent = filter === "history" ? "完了・アーカイブ済み" : filter === "approvals" ? "承認待ち" : "対応が必要な項目";
+      listHeading.textContent = filter === "history" ? "完了・アーカイブ済み" : filter === "approvals" ? "承認待ち" : filter === "assigned" ? "自分の担当項目" : "対応が必要な項目";
       root.querySelectorAll<HTMLButtonElement>("[data-action-filter]").forEach((button) => { const active = button.dataset.actionFilter === filter; button.classList.toggle("is-active", active); button.setAttribute("aria-pressed", String(active)); });
       renderItems();
-      if (changedView) void load(next === "history" ? "history" : "action");
+      const changedDataView = changedView || (previousFilter === "assigned") !== (next === "assigned");
+      if (changedDataView) void load(next === "history" ? "history" : next === "assigned" ? "assigned" : "action");
     };
     const savedViewsKey = "atlasez-admin-action-center-views";
     const readSavedViews = (): Array<{ id: string; label: string; filter: string }> => {
@@ -230,12 +233,12 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       renderSavedViews();
     });
     renderSavedViews();
-    const load = async (requestedView: "action" | "history" = filter === "history" ? "history" : "action") => {
+    const load = async (requestedView: "action" | "assigned" | "history" = filter === "history" ? "history" : filter === "assigned" ? "assigned" : "action") => {
       controller?.abort(); controller = new AbortController();
       retryController?.begin(); refresh.disabled = true; updated.value = "読み込み中…";
       try {
         const response = await fetch(`/api/admin/action-center?view=${requestedView}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
-        const data = await response.json().catch(() => ({})) as Payload & { error?: string };
+        const data = await readAdminApiJson<Payload & { error?: string }>(response, "アクションを読み込めませんでした。");
         if (!response.ok) throw new Error(data.error || "アクションを読み込めませんでした。");
         // 履歴表示の応答は履歴だけ、通常表示の応答は未対応項目だけを返す。
         // 画面上のサマリーと、直前に表示していたもう一方の一覧は保持する。
@@ -257,7 +260,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     };
     const postTransition = async (action: Action) => {
       const response = await fetch("/api/admin/workflow/transition", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...action, idempotencyKey: crypto.randomUUID() }) });
-      const result = await response.json().catch(() => ({})) as { error?: string; transition?: { updatedAt?: string } };
+      const result = await readAdminApiJson<{ error?: string; transition?: { updatedAt?: string } }>(response, "状態を変更できませんでした。");
       if (!response.ok) throw new Error(result.error || "状態を変更できませんでした。");
       return result;
     };

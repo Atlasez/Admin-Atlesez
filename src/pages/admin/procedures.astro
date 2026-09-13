@@ -78,6 +78,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   @media(max-width:760px){.procedures-page{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.back-link{justify-self:start}.procedure-grid{grid-template-columns:1fr}.history-row{grid-template-columns:1fr auto}.history-detail{grid-column:1/-1;grid-row:2}}
 </style>
 
+<style>
+  .procedures-page .notice { border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, var(--border-default)); }
+</style>
+
 <style is:global>
   .procedures-page {
     max-width: 1180px;

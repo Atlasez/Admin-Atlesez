@@ -1,0 +1,180 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+
+<AdminLayout title="通知一覧" description="新着、メンション、状態変化、応募、承認などの通知を確認します">
+  <main class="notification-page" data-notification-page aria-busy="true">
+    <header class="notification-page-header">
+      <div>
+        <h1>通知一覧</h1>
+        <p>新着、メンション、状態変化、応募、承認などを時系列で確認できます。</p>
+      </div>
+      <div class="notification-page-actions">
+        <a href="/admin/action-center/">対応が必要な項目 <span aria-hidden="true">→</span></a>
+        <button type="button" data-mark-all>すべて既読</button>
+      </div>
+    </header>
+
+    <section class="notification-summary" aria-label="通知の概要">
+      <span data-summary>読み込み中…</span>
+      <div class="notification-filters" role="group" aria-label="通知の絞り込み">
+        <button type="button" class="is-active" data-filter="all" aria-pressed="true">すべて</button>
+        <button type="button" data-filter="unread" aria-pressed="false">未読</button>
+      </div>
+    </section>
+
+    <AdminRetryNotice scope="notifications" message="通知を読み込めませんでした。" />
+    <section class="notification-list" aria-label="通知" data-list aria-live="polite">
+      <p class="notification-loading">通知を確認しています…</p>
+    </section>
+  </main>
+</AdminLayout>
+
+<script>
+  import { navigate } from "astro:transitions/client";
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
+
+  type Notification = {
+    id: string;
+    kind?: string;
+    title: string;
+    detail: string;
+    href: string;
+    updatedAt?: string;
+    read?: boolean;
+  };
+  type Payload = {
+    notifications?: Notification[];
+    unreadNotificationsCount?: number;
+    notificationsTruncated?: boolean;
+    error?: string;
+  };
+
+  const initNotifications = () => {
+    const root = document.querySelector<HTMLElement>("[data-notification-page]");
+    if (!root || root.dataset.initialized === "true") return;
+    root.dataset.initialized = "true";
+    const list = root.querySelector<HTMLElement>("[data-list]");
+    const summary = root.querySelector<HTMLElement>("[data-summary]");
+    const error = root.querySelector<HTMLElement>("[data-admin-load-error]");
+    const markAll = root.querySelector<HTMLButtonElement>("[data-mark-all]");
+    const filters = [...root.querySelectorAll<HTMLButtonElement>("[data-filter]")];
+    if (!list || !summary || !error || !markAll) return;
+
+    let notifications: Notification[] = [];
+    let unreadCount: number | null = null;
+    let notificationsTruncated = false;
+    let filter = "all";
+    let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
+    const kindLabels: Record<string, string> = {
+      comment: "コメント",
+      mention: "メンション",
+      review: "フィードバック依頼",
+      "feedback-request": "フィードバック依頼",
+      "task-request": "タスク依頼",
+      application: "応募",
+      approved: "フィードバック完了",
+      published: "公開",
+      "publication-ready": "公開準備完了",
+      "publication-review": "公開審査",
+      "publication-review-returned": "公開審査の差し戻し",
+      "task-reminder": "リマインダー",
+    };
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+    const formatTime = (value?: string) => value ? new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "日時不明";
+    const render = () => {
+      const visible = filter === "unread" ? notifications.filter((item) => !item.read) : notifications;
+      const visibleUnread = notifications.filter((item) => !item.read).length;
+      const unread = unreadCount ?? visibleUnread;
+      summary.textContent = unread ? `${notificationsTruncated ? "表示" : "全"}${notifications.length}件 ／ 未読${unread}件${notificationsTruncated ? "（続きあり）" : ""}` : `${notificationsTruncated ? "表示" : "全"}${notifications.length}件 ／ 未読なし`;
+      markAll.hidden = unread === 0;
+      markAll.textContent = notificationsTruncated ? "表示中をすべて既読" : "すべて既読";
+      if (!visible.length) {
+        list.innerHTML = `<p class="notification-empty">${filter === "unread" ? "未読の通知はありません。" : "通知はまだありません。"}</p>`;
+        return;
+      }
+      list.innerHTML = visible.map((item) => `<article class="notification-item${item.read ? " is-read" : ""}"><a href="${escape(item.href)}" data-open-notification="${escape(item.id)}"><span class="notification-kind">${escape(kindLabels[item.kind ?? ""] ?? "通知")}</span><strong>${escape(item.title)}</strong><p>${escape(item.detail)}</p><time datetime="${escape(item.updatedAt ?? "")}">${escape(formatTime(item.updatedAt))}</time></a><div class="notification-item-action">${item.read ? '<span class="notification-read">既読</span>' : `<button type="button" data-read-notification="${escape(item.id)}">既読にする</button>`}</div></article>`).join("");
+    };
+    const load = async () => {
+      retryController?.begin();
+      error.hidden = true;
+      root.setAttribute("aria-busy", "true");
+      list.innerHTML = '<p class="notification-loading">通知を確認しています…</p>';
+      try {
+        const response = await fetch("/api/admin/notifications?limit=100", { credentials: "same-origin", cache: "no-store" });
+        const data = await readAdminApiJson<Payload>(response, "通知を読み込めませんでした。時間をおいて再試行してください。");
+        if (response.status === 401) {
+          const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+          window.location.assign(`/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`);
+          return;
+        }
+        if (!response.ok) throw new Error(data.error || "通知を読み込めませんでした。時間をおいて再試行してください。");
+        if (!Array.isArray(data.notifications)) throw new Error("通知の応答を確認できませんでした。再試行してください。");
+        notifications = data.notifications;
+        unreadCount = Number.isFinite(Number(data.unreadNotificationsCount)) ? Math.max(0, Math.trunc(Number(data.unreadNotificationsCount))) : null;
+        notificationsTruncated = data.notificationsTruncated === true;
+        render();
+        retryController?.success();
+      } catch (caught) {
+        list.replaceChildren();
+        retryController?.fail(caught);
+      } finally {
+        root.setAttribute("aria-busy", "false");
+      }
+    };
+    const markRead = async (ids: string[]) => {
+      if (!ids.length) return;
+      const response = await fetch("/api/admin/notifications/read", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) });
+      const data = await readAdminApiJson<Pick<Payload, "error">>(response, "通知を既読にできませんでした。再試行してください。");
+      if (!response.ok) throw new Error(data.error || "通知を既読にできませんでした。再試行してください。");
+      const readIds = new Set(ids);
+      const unreadInPage = notifications.filter((item) => !item.read && readIds.has(item.id)).length;
+      notifications = notifications.map((item) => readIds.has(item.id) ? { ...item, read: true } : item);
+      if (unreadCount !== null) unreadCount = Math.max(0, unreadCount - unreadInPage);
+      render();
+    };
+    filters.forEach((button) => button.addEventListener("click", () => { filter = button.dataset.filter === "unread" ? "unread" : "all"; filters.forEach((item) => { const active = item === button; item.classList.toggle("is-active", active); item.setAttribute("aria-pressed", String(active)); }); render(); }));
+    list.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const readButton = target.closest<HTMLButtonElement>("[data-read-notification]");
+      if (readButton) { void markRead([readButton.dataset.readNotification ?? ""]).catch((caught) => retryController?.fail(caught)); return; }
+      const link = target.closest<HTMLAnchorElement>("[data-open-notification]");
+      if (link && !link.dataset.opened) { event.preventDefault(); link.dataset.opened = "true"; void markRead([link.dataset.openNotification ?? ""]).catch(() => undefined).finally(() => { void navigate(link.href); }); }
+    });
+    markAll.addEventListener("click", () => { void markRead(notifications.filter((item) => !item.read).map((item) => item.id)).catch((caught) => retryController?.fail(caught)); });
+    retryController = createAdminLoadRetry(root, () => load(), "通知を読み込めませんでした。", { scope: "notifications" });
+    void load();
+  };
+
+  document.addEventListener("astro:page-load", initNotifications);
+  initNotifications();
+</script>
+
+<style>
+  .notification-page { margin: 0 auto; max-width: 980px; padding: 0 1.25rem 4rem; }
+  .notification-page-header { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2rem 0 1.2rem; }
+  .notification-page h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin: 0; }
+  .notification-page-header p { color: var(--text-secondary); font-size: .85rem; line-height: 1.6; margin: .45rem 0 0; }
+  .notification-page-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; justify-content: end; }
+  .notification-page-actions a, .notification-page-actions button, .notification-filters button, .notification-item-action button { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 750; min-height: 2.35rem; padding: .45rem .7rem; text-decoration: none; }
+  .notification-page-actions a:hover, .notification-page-actions button:hover, .notification-filters button:hover, .notification-item-action button:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .notification-summary { align-items: center; display: flex; gap: 1rem; justify-content: space-between; padding: 1rem 0 .7rem; }
+  .notification-summary > span { color: var(--text-secondary); font-size: .78rem; }
+  .notification-filters { display: flex; gap: .3rem; }
+  .notification-filters button.is-active { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--on-accent); }
+  .notification-list { border-top: 1px solid var(--border-default); }
+  .notification-item { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 1rem .15rem; }
+  .notification-item.is-read { opacity: .62; }
+  .notification-item > a { color: var(--text-primary); display: grid; flex: 1; gap: .18rem; min-width: 0; text-decoration: none; }
+  .notification-item > a:hover strong { color: var(--accent-primary); }
+  .notification-kind { color: var(--accent-primary); font-size: .68rem; font-weight: 850; }
+  .notification-item strong { font-size: .92rem; line-height: 1.4; overflow-wrap: anywhere; }
+  .notification-item p { color: var(--text-secondary); font-size: .78rem; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+  .notification-item time { color: var(--text-secondary); font-size: .68rem; }
+  .notification-item-action { flex: 0 0 auto; }
+  .notification-read { color: var(--text-secondary); font-size: .72rem; }
+  .notification-loading, .notification-empty { color: var(--text-secondary); padding: 2.5rem 1rem; text-align: center; }
+  @media (max-width: 600px) { .notification-page { padding: 0 .8rem 3rem; } .notification-page-header { align-items: start; flex-direction: column; } .notification-page-actions { justify-content: start; width: 100%; } .notification-page-actions a, .notification-page-actions button { flex: 1; text-align: center; } .notification-summary { align-items: start; flex-direction: column; } .notification-item { align-items: start; flex-direction: column; gap: .55rem; } .notification-item-action { align-self: end; } }
+</style>

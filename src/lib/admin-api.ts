@@ -3,9 +3,14 @@ export async function readAdminApiJson<T>(
   fallbackMessage: string,
 ): Promise<T> {
   const contentType = response.headers.get("content-type") ?? "";
+  const isAccessRedirect =
+    response.redirected || response.url.includes("cloudflareaccess.com");
+  if (response.status === 401 || isAccessRedirect) {
+    throw new Error(
+      "認証セッションを確認できません。Cookieの期限切れまたは認証方式の不一致です。管理サイトへ戻って再認証してください。",
+    );
+  }
   if (!contentType.toLowerCase().includes("application/json")) {
-    if (response.redirected || response.url.includes("cloudflareaccess.com"))
-      throw new Error("認証が切れました。ページを再読み込みしてください。");
     throw new Error(
       response.ok
         ? fallbackMessage

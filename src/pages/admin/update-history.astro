@@ -1,7 +1,7 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
-import { ADMIN_UPDATES } from "../../data/admin-updates";
+  import { ADMIN_UPDATES } from "../../data/admin-updates";
 
 const kinds = [...new Set(ADMIN_UPDATES.map((update) => update.kind))];
 const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
@@ -44,6 +44,7 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
 </AdminLayout>
 
 <script>
+  import { readAdminApiJson } from "../../lib/admin-api";
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
 
   const initializeUpdateHistory = () => {
@@ -102,7 +103,7 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
       if (!replace) loadMore.textContent = "読み込み中…";
       try {
         const response = await fetch(`/api/admin/update-history?limit=30&page=${page}`, { credentials: "same-origin", cache: "no-store" });
-        const data = await response.json().catch(() => ({})) as { entries?: Array<Record<string, unknown>>; pagination?: { hasMore?: boolean; nextPage?: number | null } };
+        const data = await readAdminApiJson<{ entries?: Array<Record<string, unknown>>; pagination?: { hasMore?: boolean; nextPage?: number | null }; error?: string }>(response, "アップデート履歴を読み込めませんでした。");
         if (!response.ok) throw new Error(String((data as { error?: string }).error || "アップデート履歴を読み込めませんでした。"));
         const entries = Array.isArray(data.entries) ? data.entries : [];
         if (replace || entries.length) {

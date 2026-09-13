@@ -159,7 +159,22 @@ test("タスク一覧はカーソルで追加読み込みできる", async ({ pa
 
 test("進捗報告一覧はカーソルで追加読み込みできる", async ({ page }) => {
   let requests = 0;
+  let liked = false;
   await page.route("**/api/admin/progress**", async (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as {
+        action?: string;
+        liked?: boolean;
+      };
+      expect(body.action).toBe("set");
+      liked = Boolean(body.liked);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ liked, likeCount: liked ? 1 : 0 }),
+      });
+      return;
+    }
     const requestUrl = new URL(route.request().url());
     const cursor = requestUrl.searchParams.get("cursor");
     requests += 1;
@@ -173,6 +188,8 @@ test("進捗報告一覧はカーソルで追加読み込みできる", async ({
           created_at: "2026-09-01T00:00:00.000Z",
           email: "alice@example.com",
           display_name: "Alice",
+          like_count: 0,
+          liked_by_me: false,
         }
       : {
           id: "progress-first",
@@ -183,6 +200,8 @@ test("進捗報告一覧はカーソルで追加読み込みできる", async ({
           created_at: "2026-09-02T00:00:00.000Z",
           email: "alice@example.com",
           display_name: "Alice",
+          like_count: liked ? 1 : 0,
+          liked_by_me: liked,
         };
     await route.fulfill({
       status: 200,
@@ -214,4 +233,69 @@ test("進捗報告一覧はカーソルで追加読み込みできる", async ({
   );
   await expect(loadMore).toBeHidden();
   expect(requests).toBe(2);
+
+  const like = page.locator('[data-progress-like="progress-first"]');
+  await expect(like).toHaveAttribute("aria-pressed", "false");
+  await expect(like).toContainText("0");
+  await like.click();
+  await expect(like).toHaveAttribute("aria-pressed", "true");
+  await expect(like).toContainText("1");
+  await like.click();
+  await expect(like).toHaveAttribute("aria-pressed", "false");
+  await expect(like).toContainText("0");
+});
+
+test("進捗保存の失敗時は入力を保持して専用の再試行ができる", async ({
+  page,
+}) => {
+  let attempts = 0;
+  await page.route("**/api/admin/progress**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (requestUrl.pathname !== "/api/admin/progress") return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: {
+          email: "alice@example.com",
+          isManager: false,
+          subjects: ["mathematics"],
+        },
+        projects: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+        progress: [],
+        progressPagination: { limit: 50, nextCursor: null, hasMore: false },
+      }),
+    });
+  });
+  await page.route("**/api/admin/operations/progress", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: "text/html",
+        body: "temporarily unavailable",
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.goto("admin/progress/");
+  const input = page.locator("[data-progress]");
+  await input.fill("保存失敗後も残る本文");
+  await page
+    .getByRole("button", { name: "進捗を記録してDiscordへ送る" })
+    .click();
+  await expect(page.locator("[data-retry-progress]")).toBeVisible();
+  await expect(input).toHaveValue("保存失敗後も残る本文");
+  await page.locator("[data-retry-progress]").click();
+  await expect(page.locator("[data-progress-feedback]")).toHaveText(
+    "進捗を記録しました。",
+  );
+  await expect(input).toHaveValue("");
+  expect(attempts).toBe(2);
 });

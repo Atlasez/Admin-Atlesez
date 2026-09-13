@@ -99,6 +99,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
 </AdminLayout>
 
 <script>
+  import { readAdminApiJson } from "../../lib/admin-api";
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
 
   (() => {
@@ -242,8 +243,8 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
           fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }),
           fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" }).catch(() => null),
         ]);
-        const data = await response.json() as { members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string };
-        const taxonomyData = taxonomyResponse?.ok ? await taxonomyResponse.json() as { catalog?: Array<{ kind?: string; subject_slug?: string; slug?: string; name?: string; description?: string; status?: string }>; error?: string } : { catalog: [] };
+        const data = await readAdminApiJson<{ members?: GenreMember[]; overviews?: GenreOverview[]; editableSubjects?: string[]; canEditAll?: boolean; scope?: { coordinatorSubjects?: string[] }; error?: string }>(response, "ジャンル概要を読み込めませんでした。");
+        const taxonomyData = taxonomyResponse?.ok ? await readAdminApiJson<{ catalog?: Array<{ kind?: string; subject_slug?: string; slug?: string; name?: string; description?: string; status?: string }>; error?: string }>(taxonomyResponse, "分野・カテゴリを読み込めませんでした。") : { catalog: [] };
         if (!response.ok) throw new Error(data.error ?? "ジャンル概要を読み込めませんでした。");
         overviewMembers = data.members ?? [];
         membersLoaded = true;
@@ -316,7 +317,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       if (message) message.textContent = "保存中…";
       try {
         const response = await fetch("/api/admin/genre-overviews?project=atlas", { method: "PUT", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: card.id, progress: input.value }) });
-        const data = await response.json() as GenreOverview & { error?: string };
+        const data = await readAdminApiJson<GenreOverview & { error?: string }>(response, "進捗を保存できませんでした。");
         if (!response.ok) throw new Error(data.error ?? "進捗を保存できませんでした。");
         progressBySubject.set(card.id, data);
         renderProgress(card);
@@ -467,6 +468,9 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
     .genre-stats { grid-template-columns: minmax(0, 1fr) 5.5rem; }
     .category-block ul { grid-template-columns: 1fr; }
   }
+</style>
+<style is:global>
+  .genres .progress-view { border: 1px solid var(--border-default); }
 </style>
 
 <style is:global>

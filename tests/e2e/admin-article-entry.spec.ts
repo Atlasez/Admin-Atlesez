@@ -15,6 +15,7 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       groups.nth(0).getByRole("link", { name: "編集・フィードバックを開く" }),
     ).toHaveAttribute("href", "/admin/articles/");
+    await expect(groups.nth(0).locator(".project-links small")).toHaveCount(0);
     await expect(groups.nth(1).locator(".project-links > a")).toHaveCount(4);
     await expect(groups.nth(2).locator(".project-links > a")).toHaveCount(4);
     await expect(
@@ -188,6 +189,86 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
+  });
+
+  test("D-1e: 目次と原稿・フィードバックを同じ画面で連続して扱える", async ({
+    page,
+  }) => {
+    let documentRequests = 0;
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      documentRequests += 1;
+      await route.fulfill({
+        json: {
+          scope: {
+            email: "alice@example.com",
+            subjects: ["mathematics"],
+            coordinatorSubjects: [],
+            allSubjects: false,
+          },
+          documents: [
+            {
+              id: "shared-doc",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "group-definition",
+              title: "群の定義",
+              status: "draft",
+              updated_at: "2026-09-14T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
+    await page.route("**/api/admin/editor/outline**", (route) =>
+      route.fulfill({
+        json: {
+          entries: [
+            {
+              id: "shared-outline",
+              key: "mathematics/group-theory/1",
+              subject: "mathematics",
+              category: "group-theory",
+              slug: "group-definition",
+              title: "群の定義",
+              document_id: "shared-doc",
+              sort_order: 10,
+              updated_at: "2026-09-14T00:00:00.000Z",
+              status: "active",
+            },
+          ],
+        },
+      }),
+    );
+    await page.route("**/api/admin/editor/taxonomy**", (route) =>
+      route.fulfill({ json: { catalog: [] } }),
+    );
+    await page.route("**/api/admin/editor/catalog", (route) =>
+      route.fulfill({ json: { catalog: [] } }),
+    );
+
+    await page.goto("admin/articles/");
+    await expect(
+      page.getByRole("heading", { name: "編集・フィードバック", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "学習サイトの目次", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('[data-document-id="shared-doc"]')).toBeVisible();
+    await expect(
+      page.locator('[data-entry-id="shared-outline"] .outline-status'),
+    ).toHaveText("下書き");
+    await expect(
+      page.getByRole("link", { name: "原稿・フィードバックへ" }),
+    ).toHaveAttribute("href", "#article-list");
+    expect(documentRequests).toBe(1);
+
+    await page.goto("admin/editor/outline/?subject=mathematics");
+    await expect(page).toHaveURL(
+      /\/admin\/articles\/\?subject=mathematics#outline$/,
+    );
+    await expect(page.locator("[data-outline-page]")).toBeVisible();
   });
 
   test("D-2: 原稿一覧で現在編集中のメンバーと項目を確認できる", async ({
@@ -449,6 +530,57 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     );
   });
 
+  test("全分野管理者の記事一覧は権限タグと一覧範囲を一致させる", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/editor/documents", async (route) => {
+      await route.fulfill({
+        json: {
+          scope: {
+            email: "manager@example.com",
+            subjects: ["mathematics"],
+            allSubjects: true,
+            isManager: true,
+          },
+          documents: [
+            {
+              id: "manager-math-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "全分野管理者が確認できる記事",
+              status: "draft",
+              updated_at: "2026-09-01T00:00:00.000Z",
+              published_at: null,
+            },
+            {
+              id: "manager-physics-doc",
+              subject: "physics",
+              category: "mechanics",
+              title: "別分野の記事",
+              status: "draft",
+              updated_at: "2026-08-31T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=global-scope");
+    await expect(page.locator("[data-scope-note]")).toHaveText(
+      "担当範囲：全分野（管理権限）",
+    );
+    await expect(
+      page.locator('[data-document-id="manager-math-doc"]'),
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-document-id="manager-physics-doc"]'),
+    ).toBeVisible();
+    await expect(
+      page.locator("[data-subject] option:not([hidden])"),
+    ).toHaveCount(24);
+  });
+
   test("D-3d: 原稿一覧の取得失敗を共通の再試行導線で復旧できる", async ({
     page,
   }) => {
@@ -502,6 +634,32 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "aria-busy",
       "false",
     );
+  });
+
+  test("D-3e: 認証切れの原稿一覧は曖昧な再読み込み文言にならない", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/auth-status", (route) =>
+      route.fulfill({
+        json: { email: "alice@example.com", isManager: true },
+      }),
+    );
+    await page.route("**/api/admin/editor/documents**", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "ログインが必要です。" }),
+      }),
+    );
+    await page.route("**/api/admin/editor/catalog", (route) =>
+      route.fulfill({ json: { catalog: [] } }),
+    );
+
+    await page.goto("admin/articles/?verify=auth-error");
+    const notice = page.locator("[data-article-index] [data-admin-load-error]");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("認証セッションを確認できません");
+    await expect(notice).not.toContainText("ページを再読み込みしてください");
   });
 
   test("D-4: 下書きをアーカイブし、30日以内なら一覧から復元できる", async ({

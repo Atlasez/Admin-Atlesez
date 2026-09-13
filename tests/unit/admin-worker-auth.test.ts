@@ -19,7 +19,7 @@ class Statement {
 
 const env = (mode: string, extra: Record<string, string> = {}) => ({
   ADMIN_AUTH_MODE: mode,
-  ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+  ADMIN_PRIMARY_EMAIL: "operator@example.invalid",
   ...extra,
   REPORTS: {
     prepare: (query: string) => new Statement(query),
@@ -40,7 +40,7 @@ const stageEnv = (
   sessionEmail = "applicant@example.com",
 ) => ({
   ADMIN_AUTH_MODE: "google-oauth",
-  ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+  ADMIN_PRIMARY_EMAIL: "operator@example.invalid",
   REPORTS: {
     prepare: (query: string) => {
       const statement = new Statement(query);
@@ -146,6 +146,207 @@ const loggedInJsonRequest = (pathname: string, body: Record<string, unknown>) =>
     body: JSON.stringify(body),
   });
 
+describe("target account session reset contract", () => {
+  const targetEmail = "account-b@example.invalid";
+
+  const resetEnv = (queries: string[], accountRows: unknown[] = []) => {
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("FROM atlasez_accounts")
+            ? { results: accountRows as T[] }
+            : { results: [] as T[] };
+        statement.first = async <T>() =>
+          query.includes("admin_auth_sessions")
+            ? ({ email: "operator@example.invalid" } as T)
+            : null;
+        statement.run = async () => ({
+          meta: {
+            changes: query.includes("DELETE FROM admin_auth_sessions") ? 2 : 1,
+          },
+        });
+        return statement;
+      },
+      batch: async () => [{ meta: { changes: 2 } }, { meta: { changes: 1 } }],
+    };
+    return { ...env("google-oauth"), REPORTS: reports };
+  };
+
+  it("deletes only the selected account sessions and records an audit event", async () => {
+    const queries: string[] = [];
+    const response = await worker.fetch(
+      loggedInJsonRequest("/api/admin/account-sessions/reset", {
+        email: targetEmail,
+        confirmation: "失効",
+      }),
+      resetEnv(queries, [
+        { id: "account-target", canonical_email: targetEmail },
+      ]) as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      email: targetEmail,
+      revokedSessions: 2,
+    });
+    const deletes = queries.filter((query) =>
+      query.trimStart().startsWith("DELETE"),
+    );
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]).toContain("DELETE FROM admin_auth_sessions");
+    expect(deletes[0]).toContain("account_id=?");
+    expect(deletes[0]).not.toContain("report_admin_permissions");
+    expect(
+      queries.some((query) => query.includes("INSERT INTO admin_audit_log")),
+    ).toBe(true);
+  });
+
+  it("fails closed when the session deletion and audit batch cannot commit", async () => {
+    const queries: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        const statement = new Statement(query);
+        statement.all = async <T>() =>
+          query.includes("FROM atlasez_accounts")
+            ? {
+                results: [
+                  { id: "account-target", canonical_email: targetEmail },
+                ] as T[],
+              }
+            : query.includes("SELECT subject FROM report_admin_permissions")
+              ? { results: [{ subject: "*" }] as T[] }
+              : { results: [] as T[] };
+        statement.first = async <T>() =>
+          query.includes("admin_auth_sessions")
+            ? ({ email: "operator@example.invalid" } as T)
+            : null;
+        return statement;
+      },
+      batch: async () => {
+        throw new Error("transaction unavailable");
+      },
+    };
+    const response = await worker.fetch(
+      loggedInJsonRequest("/api/admin/account-sessions/reset", {
+        email: targetEmail,
+        confirmation: "失効",
+      }),
+      { ...env("google-oauth"), REPORTS: reports } as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(
+      queries.filter((query) =>
+        query.includes("DELETE FROM admin_auth_sessions"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      queries.some((query) => query.includes("INSERT INTO admin_audit_log")),
+    ).toBe(true);
+  });
+
+  it("rejects an account outside the fixed goal target list before any account lookup", async () => {
+    const queries: string[] = [];
+    const response = await worker.fetch(
+      loggedInJsonRequest("/api/admin/account-sessions/reset", {
+        email: "someone-else@example.com",
+        confirmation: "失効",
+      }),
+      resetEnv(queries) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(
+      queries.some((query) =>
+        query.includes("DELETE FROM admin_auth_sessions"),
+      ),
+    ).toBe(false);
+    expect(
+      queries.some((query) => query.includes("FROM atlasez_accounts")),
+    ).toBe(false);
+  });
+
+  it("fails closed when the canonical account lookup is unavailable", async () => {
+    const queries: string[] = [];
+    const reports = {
+      prepare: (query: string) => {
+        queries.push(query);
+        const statement = new Statement(query);
+        statement.all = async <T>() => {
+          if (query.includes("FROM atlasez_accounts"))
+            throw new Error("schema unavailable");
+          return { results: [] as T[] };
+        };
+        statement.first = async <T>() =>
+          query.includes("admin_auth_sessions")
+            ? ({ email: "operator@example.invalid" } as T)
+            : null;
+        statement.run = async () => ({ meta: { changes: 99 } });
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      loggedInJsonRequest("/api/admin/account-sessions/reset", {
+        email: targetEmail,
+        confirmation: "失効",
+      }),
+      { ...env("google-oauth"), REPORTS: reports } as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(
+      queries.some((query) =>
+        query.includes("DELETE FROM admin_auth_sessions"),
+      ),
+    ).toBe(false);
+  });
+
+  it("requires the global admin scope and same-origin request", async () => {
+    const nonGlobalResponse = await worker.fetch(
+      loggedInJsonRequest("/api/admin/account-sessions/reset", {
+        email: targetEmail,
+        confirmation: "失効",
+      }),
+      {
+        ...resetEnv([], []),
+        ADMIN_PRIMARY_EMAIL: "other@example.com",
+      } as never,
+    );
+    expect(nonGlobalResponse.status).toBe(403);
+
+    const crossOriginRequest = new Request(
+      "https://admin.example/api/admin/account-sessions/reset",
+      {
+        method: "POST",
+        headers: {
+          cookie: "atlasez_admin_session=logged-in",
+          origin: "https://evil.example",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email: targetEmail, confirmation: "失効" }),
+      },
+    );
+    const queries: string[] = [];
+    const crossOriginResponse = await worker.fetch(
+      crossOriginRequest,
+      resetEnv(queries, [
+        { id: "account-target", canonical_email: targetEmail },
+      ]) as never,
+    );
+    expect(crossOriginResponse.status).toBe(403);
+    expect(
+      queries.some((query) =>
+        query.includes("DELETE FROM admin_auth_sessions"),
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("admin logout contract", () => {
   it("logs out through Cloudflare Access without entering Google OAuth", async () => {
     const response = await worker.fetch(
@@ -206,6 +407,137 @@ describe("admin logout contract", () => {
     );
     expect(response.headers.get("set-cookie")).not.toContain("evil.example");
   });
+
+  it("starts admin OAuth directly from the custom-domain root", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/"),
+      env("google-oauth", {
+        GOOGLE_OAUTH_CLIENT_ID: "client",
+        GOOGLE_OAUTH_CLIENT_SECRET: "secret",
+      }) as never,
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://admin.example/auth/google/login?returnTo=%2Fadmin%2Fportal%2F",
+    );
+  });
+
+  it("redirects the /admin bookmark to the canonical admin portal", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/admin/"),
+      env("google-oauth") as never,
+    );
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
+  });
+
+  it("redirects the legacy outline bookmark to the integrated editorial page", async () => {
+    const response = await worker.fetch(
+      loggedInRequest(
+        "/admin/editor/outline/?project=atlas&subject=mathematics&category=group-theory&includeArchived=1&unknown=drop",
+      ),
+      stageEnv("accepted", true, true, true, true) as never,
+    );
+    expect(response.status).toBe(308);
+    expect(response.headers.get("location")).toBe(
+      "https://admin.example/admin/articles/?project=atlas&subject=mathematics&category=group-theory&includeArchived=1#outline",
+    );
+  });
+
+  it("moves OAuth initiation from a Preview host to the configured public host", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://preview.example/auth/google/login?returnTo=%2Fadmin%2Feditor%2F%3Fdocument%3Ddocument-1",
+      ),
+      env("google-oauth", {
+        ADMIN_PUBLIC_ORIGIN: "https://admin.example",
+        GOOGLE_OAUTH_CLIENT_ID: "client",
+        GOOGLE_OAUTH_CLIENT_SECRET: "secret",
+      }) as never,
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://admin.example/auth/google/login?returnTo=%2Fadmin%2Feditor%2F%3Fdocument%3Ddocument-1",
+    );
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("moves an OAuth callback from a Preview host before reading its state cookie", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://preview.example/auth/google/callback?code=oauth-code&state=oauth-state&error_description=ignored",
+      ),
+      env("google-oauth", {
+        ADMIN_PUBLIC_ORIGIN: "https://admin.example",
+        GOOGLE_OAUTH_CLIENT_ID: "client",
+        GOOGLE_OAUTH_CLIENT_SECRET: "secret",
+      }) as never,
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://admin.example/auth/google/callback?code=oauth-code&state=oauth-state&error_description=ignored",
+    );
+  });
+
+  it("keeps safe editor state in the OAuth return path without accepting unknown parameters", async () => {
+    const returnTo =
+      "/admin/editor/?document=document-1&mode=update&from=articles&title=集中不等式&evil=https%3A%2F%2Fevil.example";
+    const response = await worker.fetch(
+      new Request(
+        `https://admin.example/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
+      ),
+      env("google-oauth", {
+        GOOGLE_OAUTH_CLIENT_ID: "client",
+        GOOGLE_OAUTH_CLIENT_SECRET: "secret",
+      }) as never,
+    );
+    expect(response.status).toBe(302);
+    const cookieValue = response.headers
+      .get("set-cookie")
+      ?.split(";", 1)[0]
+      ?.split("=", 2)[1];
+    expect(cookieValue).toBeTruthy();
+    const savedState = JSON.parse(decodeURIComponent(cookieValue ?? "")) as {
+      returnTo?: string;
+    };
+    expect(savedState.returnTo).toBe(
+      "/admin/editor/?document=document-1&mode=update&from=articles&title=%E9%9B%86%E4%B8%AD%E4%B8%8D%E7%AD%89%E5%BC%8F",
+    );
+    expect(savedState.returnTo).not.toContain("evil");
+  });
+
+  it("clears every Google OAuth state cookie when the admin session is logged out", async () => {
+    const response = await worker.fetch(
+      new Request("https://admin.example/auth/logout", { method: "POST" }),
+      env("google-oauth") as never,
+    );
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("atlasez_google_oauth_state=");
+    expect(setCookie).toContain("atlasez_google_account_link_state=");
+    expect(setCookie).toContain("atlasez_search_console_oauth_state=");
+  });
+
+  it("redirects legacy combined management bookmarks to the split pages", async () => {
+    const genres = await worker.fetch(
+      new Request("https://admin.example/admin/genre-roles/"),
+      env("cloudflare-access") as never,
+    );
+    expect(genres.status).toBe(308);
+    expect(genres.headers.get("location")).toBe(
+      "https://admin.example/admin/genre-roles/?project=atlas&view=genres",
+    );
+
+    const roles = await worker.fetch(
+      new Request("https://admin.example/admin/genre-roles/?view=roles"),
+      env("cloudflare-access") as never,
+    );
+    expect(roles.status).toBe(308);
+    expect(roles.headers.get("location")).toBe(
+      "https://admin.example/admin/roles/?project=atlas",
+    );
+  });
 });
 
 describe("admin API scope gate", () => {
@@ -233,6 +565,21 @@ describe("admin API scope gate", () => {
 
     expect(response.status).toBe(200);
   });
+
+  it("protects roster and genre-role pages with the global-admin scope", async () => {
+    for (const pathname of [
+      "/admin/member-management/",
+      "/admin/genre-roles/",
+      "/admin/roles/",
+    ]) {
+      const response = await worker.fetch(
+        loggedInRequest(pathname),
+        stageEnv("accepted", false, true) as never,
+      );
+      expect(response.status, pathname).toBeGreaterThanOrEqual(300);
+      expect(response.status, pathname).toBeLessThan(400);
+    }
+  });
 });
 
 describe("applicant stage server-side access", () => {
@@ -248,7 +595,7 @@ describe("applicant stage server-side access", () => {
         0,
         false,
         false,
-        "ukyoukay0@gmail.com",
+        "operator@example.invalid",
       ) as never,
     );
     expect(rootPage.status).toBe(302);
@@ -261,7 +608,7 @@ describe("applicant stage server-side access", () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/admin/report-admin-permissions", {
         headers: {
-          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+          "Cf-Access-Authenticated-User-Email": "operator@example.invalid",
         },
       }),
       env("cloudflare-access") as never,
@@ -271,7 +618,7 @@ describe("applicant stage server-side access", () => {
     expect(await response.json()).toMatchObject({
       permissions: [
         expect.objectContaining({
-          email: "ukyoukay0@gmail.com",
+          email: "operator@example.invalid",
           subjects: "*",
           display_name: "主管理者",
         }),
@@ -291,12 +638,12 @@ describe("applicant stage server-side access", () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/admin/report-admin-permissions", {
         headers: {
-          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+          "Cf-Access-Authenticated-User-Email": "operator@example.invalid",
         },
       }),
       {
         ADMIN_AUTH_MODE: "cloudflare-access",
-        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        ADMIN_PRIMARY_EMAIL: "operator@example.invalid",
         REPORTS: reports,
         ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
       } as never,
@@ -341,12 +688,12 @@ describe("applicant stage server-side access", () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/admin/report-admin-permissions", {
         headers: {
-          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+          "Cf-Access-Authenticated-User-Email": "operator@example.invalid",
         },
       }),
       {
         ADMIN_AUTH_MODE: "cloudflare-access",
-        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        ADMIN_PRIMARY_EMAIL: "operator@example.invalid",
         REPORTS: reports,
         ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
       } as never,
@@ -386,12 +733,12 @@ describe("applicant stage server-side access", () => {
     const response = await worker.fetch(
       new Request("https://admin.example/api/admin/verification-members", {
         headers: {
-          "Cf-Access-Authenticated-User-Email": "ukyoukay0@gmail.com",
+          "Cf-Access-Authenticated-User-Email": "operator@example.invalid",
         },
       }),
       {
         ADMIN_AUTH_MODE: "cloudflare-access",
-        ADMIN_PRIMARY_EMAIL: "ukyoukay0@gmail.com",
+        ADMIN_PRIMARY_EMAIL: "operator@example.invalid",
         REPORTS: reports,
         ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
       } as never,

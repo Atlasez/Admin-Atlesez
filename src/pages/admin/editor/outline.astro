@@ -3,6 +3,14 @@ import { getCollection } from "astro:content";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../../components/admin/AdminRetryNotice.astro";
 import { getPlannedArticles, plannedArticleTitle, plannedProgress } from "../../../lib/planned";
+import AdminEmbeddedLayout from "../../../components/admin/AdminEmbeddedLayout.astro";
+
+interface Props {
+  embedded?: boolean;
+}
+
+const { embedded = false } = Astro.props;
+const PageLayout = embedded ? AdminEmbeddedLayout : AdminLayout;
 
 const sourceSubjects = (await getCollection("subjects"))
   .sort((a, b) => a.data.order - b.data.order)
@@ -24,14 +32,29 @@ const planned = sourceSubjects.flatMap((subject) => getPlannedArticles(subject.s
 const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/</g, "\\u003c");
 ---
 
-<AdminLayout title="学習サイトの目次" description="分野の構成を先に決め、目次から記事を作成します。">
-  <main class="outline-page" data-outline-page data-admin-load-surface data-admin-load-state="loading" aria-busy="true">
+<PageLayout title="学習サイトの目次" description="分野の構成を先に決め、目次から記事を作成します。">
+  <section id="outline" class="outline-page" data-outline-page data-outline-embedded={String(embedded)} data-admin-load-surface={embedded ? undefined : ""} data-admin-load-state="loading" aria-busy="true">
     <header class="outline-header">
       <div>
-        <h1>学習サイトの目次</h1>
+        <h1 hidden={embedded}>学習サイトの目次</h1>
+        <h2 hidden={!embedded}>学習サイトの目次</h2>
       </div>
-      <nav aria-label="目次の操作"><a href="/admin/editor/?new=1&choose=1">新規記事作成</a><a href="/admin/genre-roles/?project=atlas">分野・カテゴリを管理</a></nav>
+      <nav aria-label="目次の操作">{embedded && <a href="#article-list">原稿・フィードバックへ</a>}{!embedded && <a href="/admin/editor/?new=1&choose=1">新規記事作成</a>}<a href="/admin/genre-roles/?project=atlas">分野・カテゴリを管理</a></nav>
     </header>
+
+    <section class="outline-guide" aria-labelledby="outline-guide-heading">
+      <div>
+        <p class="outline-guide-eyebrow">この画面の役割</p>
+        <h2 id="outline-guide-heading">学習サイトに表示する「分野 → カテゴリ → 記事」の構成を管理します</h2>
+        <p>記事本文を書く前に、学習者がたどる順番と前提関係を目次として登録します。ここで作った項目は内部IDで記事と結び付くため、表示名やURL名を後から整えても既存の記事の関係は壊れません。</p>
+      </div>
+      <ol class="outline-guide-steps">
+        <li><strong>1. 追加</strong><span>分野・カテゴリ・記事タイトルを登録し、必要なら親項目を選びます。</span></li>
+        <li><strong>2. 整理</strong><span>上下ボタンまたはドラッグで順番・階層を調整し、「並び順を保存」を押します。</span></li>
+        <li><strong>3. 公開</strong><span>記事を保存して公開フローを進めると、承認された構成が学習サイトへ反映されます。</span></li>
+      </ol>
+      <p class="outline-guide-note">「準備中」はまだ学習者に公開しない状態です。目次をアーカイブしても記事・監査履歴・内部IDは削除されません。</p>
+    </section>
 
     <section class="outline-toolbar" aria-label="目次の絞り込み">
       <label>分野<select data-outline-subject></select></label>
@@ -55,10 +78,9 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
             <label>分野<select name="subject" data-form-subject required></select></label>
             <label>カテゴリ<select name="category" data-form-category required></select></label>
             <label>記事タイトル<input name="title" required maxlength="160" placeholder="例：ラグランジュの定理" /></label>
-            <label>URL名（任意）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" placeholder="未入力なら自動生成" /></label>
+            <details class="advanced-field"><summary>詳細設定（URL名・内部ID）</summary><label>URL名（任意・英小文字）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" placeholder="未入力なら自動生成" /></label><label>概念ID（任意）<input name="conceptId" maxlength="200" placeholder="自動設定も可能" /></label><small>タイトルから自動生成します。既存の参照関係を確認できる場合だけ指定してください。</small></details>
             <label>表示順<input name="sortOrder" type="number" min="0" max="9999" value="0" /></label>
             <label>親項目（任意）<select name="parentId" data-form-parent><option value="">最上位</option></select></label>
-            <label>概念ID（任意）<input name="conceptId" maxlength="200" placeholder="自動設定も可能" /></label>
             <label class="wide">要約（任意）<textarea name="summary" rows="2" maxlength="500" placeholder="記事一覧に表示する短い説明"></textarea></label>
           </div>
           <div class="outline-form-actions"><button type="submit">目次に追加</button><output data-outline-form-message aria-live="polite"></output></div>
@@ -70,8 +92,9 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       <form method="dialog" data-outline-edit-form>
         <h2 id="outline-edit-heading">目次項目を編集</h2>
         <input type="hidden" name="id" />
+        <input type="hidden" name="updatedAt" />
         <label>記事タイトル<input name="title" required maxlength="160" /></label>
-        <label>URL名（英小文字）<input name="slug" required pattern="[a-z0-9-]+" maxlength="80" /></label>
+        <details class="advanced-field"><summary>詳細設定（URL名・内部ID）</summary><label>URL名（任意・英小文字）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" /></label><label>概念ID（任意）<input name="conceptId" maxlength="200" placeholder="既存値を保持します" /></label><small>既存の参照関係を保つため、通常は変更しません。</small></details>
         <label>要約（任意）<textarea name="summary" rows="2" maxlength="500"></textarea></label>
         <label>親項目（任意）<select name="parentId" data-edit-parent><option value="">最上位</option></select></label>
         <label>表示順<input name="sortOrder" type="number" min="0" max="9999" /></label>
@@ -84,21 +107,33 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       <div class="outline-results-heading"><h2 id="outline-results-heading">記事の構成</h2></div>
       <div class="outline-list" data-outline-list aria-live="polite"><p class="outline-loading">目次を読み込んでいます…</p></div>
     </section>
-    <AdminRetryNotice scope="editor-outline" message="目次を読み込めませんでした。" />
+    {!embedded && <AdminRetryNotice scope="editor-outline" message="目次を読み込めませんでした。" />}
     <script is:inline type="application/json" data-outline-source set:html={payload}></script>
-  </main>
-</AdminLayout>
+  </section>
+</PageLayout>
 
-<style>
+<style is:global>
   .outline-page{margin:0 auto;max-width:1160px;padding:0 1.25rem 4rem;color:var(--text-primary)}
   .outline-header{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.25rem}
   .outline-header h1{font-size:1.8rem;margin:0}.outline-header p{color:var(--text-secondary);font-size:.82rem;margin:.45rem 0 0}
   .outline-header nav{display:flex;flex-wrap:wrap;gap:.5rem}.outline-header a,.outline-form-actions button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:var(--on-accent);font:inherit;font-size:.78rem;font-weight:800;padding:.55rem .75rem;text-decoration:none}.outline-header a+ a{background:var(--background-secondary);color:var(--text-primary);border-color:var(--border-default)}
   .outline-toolbar{align-items:end;background:var(--background-secondary);border:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:.75rem;margin:1.15rem 0 .8rem;padding:.8rem}.outline-toolbar label,.outline-form-grid label{color:var(--text-secondary);display:grid;font-size:.75rem;font-weight:800;gap:.3rem}.outline-toolbar select,.outline-form-grid input,.outline-form-grid select,.outline-form-grid textarea{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;min-height:2.25rem;padding:.45rem .55rem}.outline-toolbar label{min-width:12rem}.outline-toolbar-actions{align-items:center;display:flex;flex-wrap:wrap;gap:.5rem;margin-left:auto}.outline-count,.outline-selection-count{color:var(--text-secondary);font-size:.75rem}.outline-button{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2.1rem;padding:.4rem .6rem}.outline-button:hover:not(:disabled),.outline-button:focus-visible{border-color:var(--accent-primary);color:var(--accent-primary)}.outline-button-primary{background:var(--accent-primary);border-color:var(--accent-primary);color:var(--on-accent)}.outline-button:disabled{cursor:not-allowed;opacity:.5}
-  .outline-create{border-bottom:1px solid var(--border-default);padding-bottom:.8rem}.outline-create summary{color:var(--accent-primary);cursor:pointer;font-size:.8rem;font-weight:800}.outline-create form{background:var(--background-secondary);border:1px solid var(--border-default);margin-top:.7rem;padding:.8rem}.outline-form-grid{display:grid;gap:.65rem;grid-template-columns:repeat(3,minmax(0,1fr))}.outline-form-grid .wide{grid-column:1/-1}.outline-form-actions{align-items:center;display:flex;gap:.7rem;margin-top:.7rem}.outline-form-actions output{color:var(--text-secondary);font-size:.75rem}
+  .outline-create{border-bottom:1px solid var(--border-default);padding-bottom:.8rem}.outline-create summary{color:var(--accent-primary);cursor:pointer;font-size:.8rem;font-weight:800}.outline-create form{background:var(--background-secondary);border:1px solid var(--border-default);margin-top:.7rem;padding:.8rem}.outline-form-grid{display:grid;gap:.65rem;grid-template-columns:repeat(3,minmax(0,1fr))}.outline-form-grid .wide{grid-column:1/-1}.outline-form-grid .advanced-field{align-self:stretch;display:grid;gap:.3rem}.outline-form-grid .advanced-field summary,.outline-edit-dialog .advanced-field summary{color:var(--accent-primary);cursor:pointer;font-size:.75rem;font-weight:800}.outline-form-grid .advanced-field label,.outline-edit-dialog .advanced-field label{min-width:0}.outline-form-grid .advanced-field small,.outline-edit-dialog .advanced-field small{color:var(--text-secondary);font-size:.68rem;font-weight:400;line-height:1.45}.outline-form-actions{align-items:center;display:flex;gap:.7rem;margin-top:.7rem}.outline-form-actions output{color:var(--text-secondary);font-size:.75rem}
   .outline-results{margin-top:1.25rem}.outline-results-heading{align-items:baseline;border-bottom:1px solid var(--border-default);display:flex;gap:.75rem;justify-content:space-between;padding-bottom:.65rem}.outline-results-heading h2{font-size:1.1rem;margin:0}.outline-results-heading span{color:var(--text-secondary);font-size:.72rem}.outline-list{display:grid;gap:.75rem;margin-top:.8rem}.outline-category{border:1px solid var(--border-default);background:var(--background-secondary)}.outline-category-heading{align-items:center;background:var(--surface-alt);border-bottom:1px solid var(--border-default);display:flex;justify-content:space-between;padding:.65rem .8rem}.outline-category-heading h3{font-size:.9rem;margin:0}.outline-category-heading span{color:var(--text-secondary);font-size:.72rem}.outline-entry{align-items:center;border-bottom:1px solid var(--border-default);display:grid;gap:.65rem;grid-template-columns:auto auto minmax(0,1fr) auto auto;padding:.7rem .8rem}.outline-entry:last-child{border-bottom:0}.outline-entry.is-dragging{background:color-mix(in srgb,var(--accent-primary) 10%,var(--background-primary));opacity:.65}.outline-entry.is-drop-target{outline:2px solid var(--accent-primary);outline-offset:-2px}.outline-select{accent-color:var(--accent-primary);height:1rem;width:1rem}.outline-drag-handle{background:transparent;border:0;color:var(--text-secondary);cursor:grab;font-size:1rem;padding:.15rem}.outline-drag-handle:active{cursor:grabbing}.outline-entry-title{font-size:.84rem;font-weight:800}.outline-entry-meta{color:var(--text-secondary);font-size:.7rem;margin-top:.2rem}.outline-status{border:1px solid var(--border-default);color:var(--text-secondary);font-size:.68rem;font-weight:800;padding:.2rem .4rem;white-space:nowrap}.outline-status-ready{border-color:var(--success);color:var(--success)}.outline-status-progress{border-color:var(--warning);color:var(--warning)}.outline-entry a{border:1px solid var(--border-default);color:var(--accent-primary);font-size:.72rem;font-weight:800;padding:.35rem .5rem;text-decoration:none;white-space:nowrap}.outline-entry a:hover{border-color:var(--accent-primary)}.outline-entry-actions{display:flex;gap:.35rem}.outline-entry-actions button{background:transparent;border:1px solid var(--border-default);color:var(--text-secondary);cursor:pointer;font:inherit;font-size:.68rem;padding:.3rem .45rem}.outline-entry-actions button:hover,.outline-entry-actions button:focus-visible{border-color:var(--accent-primary);color:var(--accent-primary)}.outline-empty,.outline-loading{color:var(--text-secondary);font-size:.8rem;padding:1rem 0}.outline-create button:disabled{cursor:wait;opacity:.6}
   .outline-select{appearance:auto!important;block-size:16px!important;box-sizing:border-box;display:block;flex:0 0 16px;height:16px!important;inline-size:16px!important;margin:0;min-block-size:16px!important;min-height:16px!important;min-inline-size:16px!important;padding:0;width:16px!important}
   @media(max-width:760px){.outline-page{padding:0 .85rem 3rem}.outline-header{align-items:start;display:grid}.outline-header nav a{flex:1}.outline-toolbar{display:grid}.outline-toolbar label{min-width:0}.outline-toolbar-actions{margin-left:0}.outline-count{margin:0;padding:0}.outline-form-grid{grid-template-columns:1fr}.outline-form-grid .wide{grid-column:auto}.outline-entry{align-items:start;grid-template-columns:auto auto minmax(0,1fr) auto}.outline-entry .outline-status{grid-column:4;grid-row:1}.outline-entry a{grid-column:3/-1;text-align:center}.outline-entry-actions{grid-column:3/-1}.outline-results-heading{display:grid}}
+  </style>
+<style is:global>
+  .outline-guide { background: color-mix(in srgb, var(--accent-primary) 6%, var(--background-secondary)); border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-default)); display: grid; gap: .8rem; margin: 1.15rem 0; padding: 1rem 1.1rem; }
+  .outline-guide-eyebrow { color: var(--accent-primary); font-size: .7rem; font-weight: 850; letter-spacing: .08em; margin: 0; }
+  .outline-guide h2 { font-size: 1rem; line-height: 1.45; margin: .2rem 0 .35rem; }
+  .outline-guide p { color: var(--text-secondary); font-size: .78rem; line-height: 1.65; margin: 0; }
+  .outline-guide-steps { display: grid; gap: .55rem; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+  .outline-guide-steps li { background: var(--background-primary); border: 1px solid var(--border-default); display: grid; gap: .22rem; padding: .65rem .7rem; }
+  .outline-guide-steps strong { color: var(--text-primary); font-size: .76rem; }
+  .outline-guide-steps span { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; }
+  .outline-guide-note { border-top: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-default)); padding-top: .65rem; }
+  @media (max-width: 760px) { .outline-guide-steps { grid-template-columns: 1fr; } }
 </style>
 <style>
   .outline-entry{padding-left:calc(.8rem + (var(--outline-depth,0) * 1.2rem));}
@@ -142,21 +177,41 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
   import { readAdminApiJson } from "../../../lib/admin-api";
 
   type Subject = { slug:string; name:string; status?:string; categories:Array<{slug:string;name:string;order:number}> };
-  type Entry = { id?:string; key:string; subject:string; category:string; title:string; slug:string; summary?:string; concept_id?:string; parent_id?:string|null; document_id?:string|null; order:number; sort_order?:number; progress?:string; status?:string };
+  type Entry = { id?:string; key:string; subject:string; category:string; title:string; slug:string; summary?:string; concept_id?:string; parent_id?:string|null; document_id?:string|null; order:number; sort_order?:number; progress?:string; status?:string; updated_at?:string };
   type DocumentRow = { id:string; subject:string; category:string; slug:string; title:string; status:string; published_at?:string|null; scheduled_publish_at?:string|null; publication_pr_number?:number|null; publication_action?:string|null };
+  type DocumentScope = { subjects?:string[]; coordinatorSubjects?:string[]; allSubjects?:boolean; isManager?:boolean; isProjectLeader?:boolean };
+  type SharedDocuments = { documents:DocumentRow[]; scope:DocumentScope };
   const initialize = () => {
     const root = document.querySelector<HTMLElement>("[data-outline-page]");
     const source = root?.querySelector<HTMLScriptElement>("[data-outline-source]");
     if (!root || !source || root.dataset.ready === "true") return;
     root.dataset.ready = "true";
+    const embedded = root.dataset.outlineEmbedded === "true";
+    if (!embedded) {
+      const target = new URL("/admin/articles/", window.location.origin);
+      for (const key of ["project", "subject", "category", "includeArchived"]) {
+        const value = new URLSearchParams(window.location.search).get(key);
+        if (value) target.searchParams.set(key, value);
+      }
+      target.hash = "outline";
+      window.location.replace(target.toString());
+      return;
+    }
     const data = JSON.parse(source.textContent ?? "{}") as { subjects:Subject[]; planned:Entry[] };
-    let subjects = data.subjects ?? [];
-    let staticEntries = data.planned ?? [];
+    const sourceSubjects = data.subjects ?? [];
+    const sourceStaticEntries = data.planned ?? [];
+    let subjects = sourceSubjects;
+    let staticEntries = sourceStaticEntries;
     let customEntries:Entry[] = [];
     let documents:DocumentRow[] = [];
+    let documentsScope:DocumentScope|null = null;
+    let subjectCatalog = sourceSubjects;
+    let staticEntryCatalog = sourceStaticEntries;
     const query = new URLSearchParams(window.location.search);
     const initialSubject = query.get("subject")?.trim() ?? "";
     const initialCategory = query.get("category")?.trim() ?? "";
+    let pendingInitialSubject = initialSubject;
+    let pendingInitialCategory = initialCategory;
     const subjectSelect = root.querySelector<HTMLSelectElement>("[data-outline-subject]")!;
     const categorySelect = root.querySelector<HTMLSelectElement>("[data-outline-category]")!;
     const formSubject = root.querySelector<HTMLSelectElement>("[data-form-subject]")!;
@@ -181,12 +236,12 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       select.innerHTML = `<option value="">最上位</option>${entries.map((entry) => `<option value="${esc(entry.id)}">${esc(entry.title)}</option>`).join("")}`;
       select.value = entries.some((entry) => entry.id === selected) ? selected : "";
     };
-    const fillSubjects = (selected = subjectSelect.value || initialSubject) => {
+    const fillSubjects = (selected = pendingInitialSubject || subjectSelect.value) => {
       const options = subjects.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}${item.status === "preparing" ? "（準備中）" : ""}</option>`).join("");
       subjectSelect.innerHTML = options || '<option value="">分野がありません</option>'; formSubject.innerHTML = options;
-      const value = subjects.some((item) => item.slug === selected) ? selected : subjects[0]?.slug ?? ""; subjectSelect.value = value; formSubject.value = value; fillCategories(); fillFormCategories();
+      const value = subjects.some((item) => item.slug === selected) ? selected : subjects[0]?.slug ?? ""; subjectSelect.value = value; formSubject.value = value; if (pendingInitialSubject && value === pendingInitialSubject) pendingInitialSubject = ""; fillCategories(); fillFormCategories();
     };
-    const fillCategories = (selected = categorySelect.value || initialCategory) => { const options = categoryOptions(subjectSelect.value); categorySelect.innerHTML = `<option value="">すべてのカテゴリ</option>${options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("")}`; categorySelect.value = options.some((item) => item.slug === selected) ? selected : ""; };
+    const fillCategories = (selected = pendingInitialCategory || categorySelect.value) => { const options = categoryOptions(subjectSelect.value); categorySelect.innerHTML = `<option value="">すべてのカテゴリ</option>${options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join("")}`; categorySelect.value = options.some((item) => item.slug === selected) ? selected : ""; if (pendingInitialCategory && categorySelect.value === pendingInitialCategory) pendingInitialCategory = ""; };
     const fillFormCategories = (selected = formCategory.value) => { const options = categoryOptions(formSubject.value); formCategory.innerHTML = options.map((item) => `<option value="${esc(item.slug)}">${esc(item.name)}</option>`).join(""); formCategory.value = options.some((item) => item.slug === selected) ? selected : options[0]?.slug ?? ""; fillParentOptions(formParent, formSubject.value, formCategory.value); };
     const documentFor = (entry:Entry) => entry.document_id ? documents.find((item) => item.id === entry.document_id) : documents.find((item) => item.subject === entry.subject && item.category === entry.category && (item.slug === entry.slug || item.title === entry.title));
     const editorUrl = (entry:Entry, document?:DocumentRow) => document ? `/admin/editor/?document=${encodeURIComponent(document.id)}${entry.id ? `&outlineId=${encodeURIComponent(entry.id)}` : ""}` : `/admin/editor/?new=1&subject=${encodeURIComponent(entry.subject)}&category=${encodeURIComponent(entry.category)}&slug=${encodeURIComponent(entry.slug)}&title=${encodeURIComponent(entry.title)}${entry.summary ? `&summary=${encodeURIComponent(entry.summary)}` : ""}${entry.concept_id ? `&conceptId=${encodeURIComponent(entry.concept_id)}` : ""}${entry.id ? `&outlineId=${encodeURIComponent(entry.id)}` : ""}`;
@@ -240,15 +295,35 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       }
       return { data: first ?? ({} as T), rows };
     };
+    const applyDocumentScope = (scope:DocumentScope|null) => {
+      documentsScope = scope;
+      const permitted = scope && !scope.allSubjects && !scope.isManager && !scope.isProjectLeader && (scope.subjects?.length || scope.coordinatorSubjects?.length)
+        ? new Set([...(scope.subjects ?? []), ...(scope.coordinatorSubjects ?? [])])
+        : null;
+      subjects = subjectCatalog.filter((item) => !permitted || permitted.has(item.slug));
+      staticEntries = staticEntryCatalog.filter((entry) => !permitted || permitted.has(entry.subject));
+      fillSubjects(subjectSelect.value || initialSubject);
+      render();
+    };
+    const applySharedDocuments = (payload:SharedDocuments) => {
+      documents = payload.documents;
+      applyDocumentScope(payload.scope);
+    };
     const load = async () => {
-      const [documentsPage, outlinePage, taxonomyResponse] = await Promise.all([
-        loadPaged<{ documents?:DocumentRow[];scope?:{subjects?:string[];isManager?:boolean};error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>("/api/admin/editor/documents", "documents", 100, "原稿一覧を読み込めませんでした。"),
+      const documentsPage = embedded
+        ? Promise.resolve({ data: {} as { scope?:DocumentScope }, rows: [] as unknown[] })
+        : loadPaged<{ documents?:DocumentRow[];scope?:DocumentScope;error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>("/api/admin/editor/documents", "documents", 100, "原稿一覧を読み込めませんでした。");
+      const [documentsResult, outlinePage, taxonomyResponse] = await Promise.all([
+        documentsPage,
         loadPaged<{ entries?:Entry[];error?:string;pagination?:{hasMore?:boolean;nextCursor?:string|null}}>(`/api/admin/editor/outline?project=atlas${includeArchived.checked ? "&includeArchived=1" : ""}`, "entries", 200, "目次を読み込めませんでした。"),
         fetch("/api/admin/editor/taxonomy?project=atlas",{credentials:"same-origin",cache:"no-store"}),
       ]);
-      const documentsData = documentsPage.data; const outlineData = outlinePage.data; const taxonomyData = await readAdminApiJson<{catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string}>(taxonomyResponse, "分野・カテゴリを読み込めませんでした。");
+      const documentsData = documentsResult.data; const taxonomyData = await readAdminApiJson<{catalog?:Array<{kind:string;subject_slug:string;slug:string;name:string;sort_order?:number;status?:string}>;error?:string}>(taxonomyResponse, "分野・カテゴリを読み込めませんでした。");
       if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。");
-      documents = documentsPage.rows as DocumentRow[];
+      if (!embedded) {
+        documents = documentsResult.rows as DocumentRow[];
+        documentsScope = documentsData.scope ?? null;
+      }
       // 管理APIの目次行はDB列名（subject_slug/category_slug/parent_id）で返る。
       // 画面側のEntryモデルへ正規化しないと、フィルターの subject/category と
       // 一致せず、追加直後の目次が「0件」と表示されるためここで一度だけ変換する。
@@ -268,13 +343,21 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
         };
       });
       const catalog = (taxonomyData.catalog ?? []).filter((item) => item.status !== "archived"); const merged = new Map(subjects.map((item) => [item.slug,{...item,categories:[...item.categories]}])); catalog.filter((item) => item.kind === "subject").forEach((item) => { if (!merged.has(item.slug)) merged.set(item.slug,{slug:item.slug,name:item.name,status:"preparing",categories:[]}); }); catalog.filter((item) => item.kind === "category").forEach((item) => { const subject = merged.get(item.subject_slug); if (subject && !subject.categories.some((category) => category.slug === item.slug)) subject.categories.push({slug:item.slug,name:item.name,order:Number(item.sort_order ?? 0)}); });
-      const permitted = documentsData.scope?.isManager || !documentsData.scope?.subjects?.length ? null : new Set(documentsData.scope.subjects); subjects = [...merged.values()].filter((item) => !permitted || permitted.has(item.slug)); staticEntries = staticEntries.filter((entry) => !permitted || permitted.has(entry.subject)); fillSubjects(); render();
+      subjectCatalog = [...merged.values()];
+      staticEntryCatalog = sourceStaticEntries;
+      if (documentsScope) applyDocumentScope(documentsScope); else { subjects = subjectCatalog; staticEntries = staticEntryCatalog; fillSubjects(); render(); }
     };
     const retry = createAdminLoadRetry(root, () => load(), "目次を読み込めませんでした。");
     const run = async () => { retry.begin(); try { await load(); retry.success(); } catch (error) { retry.fail(error); list.innerHTML = `<p class="outline-empty">${esc(error instanceof Error ? error.message : "目次を読み込めませんでした。")}</p>`; } };
+    const sharedDocuments = (window as Window & { __atlasezEditorialDocuments?:SharedDocuments }).__atlasezEditorialDocuments;
+    if (sharedDocuments) applySharedDocuments(sharedDocuments);
+    window.addEventListener("atlasez:editorial-documents", (event) => {
+      const payload = (event as CustomEvent<SharedDocuments>).detail;
+      if (payload && Array.isArray(payload.documents) && payload.scope) applySharedDocuments(payload);
+    });
     const patchEntry = async (payload:Record<string,unknown>) => { const response = await fetch("/api/admin/editor/outline", { method:"PATCH", credentials:"same-origin", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) }); const result = await readAdminApiJson<{error?:string}>(response, "目次項目を更新できませんでした。"); if (!response.ok) throw new Error(result.error ?? "目次項目を更新できませんでした。"); await run(); };
     const selectedIds = () => allEntries().filter((entry) => selectedKeys.has(entry.key) && entry.id).map((entry) => entry.id as string);
-    subjectSelect.addEventListener("change", () => { fillCategories(); formSubject.value = subjectSelect.value; fillFormCategories(); selectedKeys.clear(); orderDirty.clear(); render(); }); categorySelect.addEventListener("change", () => { selectedKeys.clear(); render(); }); includeArchived.addEventListener("change", () => { selectedKeys.clear(); orderDirty.clear(); void run(); }); formSubject.addEventListener("change", () => { fillFormCategories(); }); formCategory.addEventListener("change", () => fillParentOptions(formParent, formSubject.value, formCategory.value));
+    subjectSelect.addEventListener("change", () => { pendingInitialSubject = ""; pendingInitialCategory = ""; fillCategories(); formSubject.value = subjectSelect.value; fillFormCategories(); selectedKeys.clear(); orderDirty.clear(); render(); }); categorySelect.addEventListener("change", () => { pendingInitialCategory = ""; selectedKeys.clear(); render(); }); includeArchived.addEventListener("change", () => { selectedKeys.clear(); orderDirty.clear(); void run(); }); formSubject.addEventListener("change", () => { fillFormCategories(); }); formCategory.addEventListener("change", () => fillParentOptions(formParent, formSubject.value, formCategory.value));
     root.addEventListener("change", (event) => { const input = (event.target as HTMLElement).closest<HTMLInputElement>("[data-outline-select]"); if (!input) return; const key = input.dataset.outlineSelect; if (!key) return; if (input.checked) selectedKeys.add(key); else selectedKeys.delete(key); updateToolbar(); });
     root.addEventListener("click", (event) => {
       const target = event.target as HTMLElement;
@@ -283,7 +366,7 @@ const payload = JSON.stringify({ subjects: sourceSubjects, planned }).replace(/<
       const archive = target.closest<HTMLButtonElement>("[data-archive-entry]");
       if (archive) { const id = archive.dataset.archiveEntry; const action = archive.dataset.archiveAction === "restore" ? "restore" : "archive"; if (!id || !confirm(action === "restore" ? "この目次項目を復元しますか？" : "この目次項目をアーカイブしますか？")) return; archive.disabled = true; void patchEntry({ id, action }).catch((error) => { archive.disabled = false; alert(error instanceof Error ? error.message : "目次項目を更新できませんでした。"); }); return; }
       const edit = target.closest<HTMLButtonElement>("[data-edit-entry]");
-      if (edit) { const id = edit.dataset.editEntry; const entry = allEntries().find((item) => item.id === id); if (!entry) return; (editForm.elements.namedItem("id") as HTMLInputElement).value = entry.id ?? ""; (editForm.elements.namedItem("title") as HTMLInputElement).value = entry.title; (editForm.elements.namedItem("slug") as HTMLInputElement).value = entry.slug; (editForm.elements.namedItem("summary") as HTMLTextAreaElement).value = entry.summary ?? ""; (editForm.elements.namedItem("sortOrder") as HTMLInputElement).value = String(entry.order); fillParentOptions(editParent, entry.subject, entry.category, entry.id, entry.parent_id ?? ""); editDialog.showModal(); }
+      if (edit) { const id = edit.dataset.editEntry; const entry = allEntries().find((item) => item.id === id); if (!entry) return; (editForm.elements.namedItem("id") as HTMLInputElement).value = entry.id ?? ""; (editForm.elements.namedItem("updatedAt") as HTMLInputElement).value = entry.updated_at ?? ""; (editForm.elements.namedItem("title") as HTMLInputElement).value = entry.title; (editForm.elements.namedItem("slug") as HTMLInputElement).value = entry.slug; (editForm.elements.namedItem("conceptId") as HTMLInputElement).value = entry.concept_id ?? ""; (editForm.elements.namedItem("summary") as HTMLTextAreaElement).value = entry.summary ?? ""; (editForm.elements.namedItem("sortOrder") as HTMLInputElement).value = String(entry.order); fillParentOptions(editParent, entry.subject, entry.category, entry.id, entry.parent_id ?? ""); editDialog.showModal(); }
     });
     root.querySelector<HTMLButtonElement>("[data-outline-edit-cancel]")?.addEventListener("click", () => editDialog.close());
     bulkArchiveButton.addEventListener("click", () => { const ids = selectedIds(); if (!ids.length || !confirm(`${ids.length}件をアーカイブしますか？`)) return; bulkArchiveButton.disabled = true; void patchEntry({ action:"bulk", ids, status:"archived" }).then(() => selectedKeys.clear()).catch((error) => alert(error instanceof Error ? error.message : "一括アーカイブに失敗しました。")); });

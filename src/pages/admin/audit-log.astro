@@ -12,7 +12,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     <section class="audit-panel" aria-labelledby="audit-list-title" data-admin-load-surface>
       <form class="audit-filters" data-audit-filters role="search">
         <label class="audit-search">検索<input type="search" name="q" placeholder="実行者・対象・内容を検索" autocomplete="off" /></label>
-        <label>操作<select name="action"><option value="">すべて</option><option value="article_created">記事を作成</option><option value="article_updated">記事を更新</option><option value="article_approved">記事を承認</option><option value="article_published">記事を公開</option><option value="article_unpublished">記事の公開を取り消し</option><option value="permission_granted">権限を付与</option><option value="permission_replaced">権限を変更</option><option value="permission_revoked">権限を削除</option><option value="member_removed">運営メンバーを削除</option><option value="task_archived">タスクをアーカイブ</option><option value="task_restored">タスクを復元</option><option value="workflow_transition">状態を変更</option></select></label>
+        <label>操作<select name="action"><option value="">すべて</option><option value="article_created">記事を作成</option><option value="article_updated">記事を更新</option><option value="article_approved">記事を承認</option><option value="article_published">記事を公開</option><option value="article_unpublished">記事の公開を取り消し</option><option value="permission_granted">権限を付与</option><option value="permission_replaced">権限を変更</option><option value="permission_revoked">権限を削除</option><option value="member_updated">メンバー情報を更新</option><option value="member_archived">メンバーをアーカイブ</option><option value="member_restored">メンバーを復元</option><option value="member_removed">運営メンバーを削除</option><option value="task_archived">タスクをアーカイブ</option><option value="task_restored">タスクを復元</option><option value="workflow_transition">状態を変更</option></select></label>
         <label>対象<select name="targetType"><option value="">すべて</option><option value="article">記事</option><option value="permission">権限</option><option value="member">メンバー</option><option value="task">タスク</option><option value="workflow">状態遷移</option></select></label>
         <label class="audit-archive-toggle"><span>表示範囲</span><span><input type="checkbox" name="includeArchived" /> アーカイブを含む</span></label>
         <button type="reset" class="audit-reset">条件をリセット</button>
@@ -36,6 +36,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   const initializeAuditPage = () => {
     const root = document.querySelector<HTMLElement>("[data-audit-page]");
     if (!root || root.dataset.initialized === "true") return;
@@ -77,8 +78,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       if (cursor) params.set("cursor", cursor);
       try {
         const response = await fetch(`/api/admin/audit-log?${params}`, { credentials: "same-origin", cache: "no-store" });
-        if (!response.ok) throw new Error("操作履歴を読み込めませんでした。");
-        const data = await response.json() as { entries?: Array<Record<string, unknown>>; pagination?: { nextCursor?: string | null } };
+        const data = await readAdminApiJson<{ entries?: Array<Record<string, unknown>>; pagination?: { nextCursor?: string | null }; error?: string }>(response, "操作履歴を読み込めませんでした。");
+        if (!response.ok) throw new Error(data.error ?? "操作履歴を読み込めませんでした。");
         const entries = Array.isArray(data.entries) ? data.entries : [];
         const html = entries.map((entry) => `<button type="button" class="audit-row${entry.archived_at ? " audit-row--archived" : ""}" data-audit-entry='${escape(JSON.stringify(entry))}'><time datetime="${escape(entry.created_at)}">${escape(formatDate(String(entry.created_at ?? "")))}</time><span class="audit-action">${escape(entry.actionLabel ?? entry.action)}</span><span class="audit-copy"><strong>${escape(entry.summary)}${entry.archived_at ? ' <em>アーカイブ</em>' : ""}</strong><small>${escape(entry.target_label)} · ${escape(entry.actor_email)}</small></span><span class="audit-target">${escape(targetLabel(String(entry.target_type ?? "")))}</span><span class="audit-chevron" aria-hidden="true">›</span></button>`).join("");
         if (append) list.insertAdjacentHTML("beforeend", html); else list.innerHTML = html;
@@ -92,7 +93,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       } catch (error) { count.value = "—"; state.hidden = true; retryController?.fail(error); }
       finally { loading = false; next.disabled = false; }
     };
-    retryController = createAdminLoadRetry(root, () => load(), "操作履歴を読み込めませんでした.");
+    retryController = createAdminLoadRetry(root, () => load(), "操作履歴を読み込めませんでした。");
     form.addEventListener("input", () => void load()); form.addEventListener("change", () => void load()); form.addEventListener("reset", () => requestAnimationFrame(() => void load())); next.addEventListener("click", () => void load(nextCursor, true)); void load();
   };
   document.addEventListener("astro:page-load", initializeAuditPage); initializeAuditPage();

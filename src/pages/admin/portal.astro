@@ -469,6 +469,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 </style>
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+  import { readAdminApiJson } from '../../lib/admin-api';
   type PortalProject = { id: string; slug?: string; name: string; description?: string | null; role?: string };
   type PortalTodo = { id?: string; project_id: string; project_name?: string; subject?: string | null; task_kind?: string; title: string; details?: string | null; status: string; due_at?: string | null; due_timezone?: string | null };
   type PortalCalendarEvent = { id: string; kind: 'organization' | 'personal'; title: string; details?: string | null; startsAt: string; endsAt?: string | null; timezone: string; projectName: string };
@@ -705,9 +706,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       portalRetry.textContent = '再試行中…';
       try {
         const data = await fetch('/api/admin/portal', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
-          const contentType = response.headers.get('content-type') ?? '';
-          const data = contentType.includes('application/json') ? await response.json() as PortalData : null;
-          if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。');
+          const data = await readAdminApiJson<PortalData>(response, 'ポータル情報を読み込めませんでした。');
+          if (!response.ok) throw new Error(data.error ?? 'ポータル情報を読み込めませんでした。');
           return data;
         });
         if (lifecycle.signal.aborted) return;

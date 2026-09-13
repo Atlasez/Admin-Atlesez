@@ -234,8 +234,13 @@ const japanRegionPaths = japanMap.locations
   }
 </style>
 
+<style>
+  .report-list :global(.report-card) { border: 1px solid var(--border); }
+</style>
+
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
 
   type ReportStatus = "new" | "reviewing" | "resolved";
   type Report = {
@@ -289,16 +294,8 @@ const japanRegionPaths = japanMap.locations
     const safeUrl = (value: string) => {
       try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; }
     };
-    const readApiResponse = async <T,>(response: Response): Promise<T> => {
-      const contentType = response.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) return await response.json() as T;
-      // Cloudflare Access のセッションが失効すると、API呼び出しはログイン用HTMLへ
-      // リダイレクトされる。JSONとして読もうとせず、再認証の案内を表示する。
-      if (response.redirected || contentType.includes("text/html")) {
-        throw new Error("認証の有効期限が切れました。ページを再読み込みしてログインし直してください。");
-      }
-      throw new Error("管理サーバーから想定外の応答が返されました。時間をおいて再度お試しください。");
-    };
+    const readApiResponse = <T,>(response: Response): Promise<T> =>
+      readAdminApiJson<T>(response, "管理サーバーから想定外の応答が返されました。時間をおいて再度お試しください。");
     const subjectNames = new Map<string, string>([
       ["*", "全分野"],
       ...Array.from(permissionForm?.querySelectorAll<HTMLOptionElement>('select[name="subject"] option') ?? [])

@@ -3,27 +3,29 @@ import { getCollection } from "astro:content";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order - b.data.order);
+// 旧URLのクエリなしアクセスもジャンル管理へ寄せる。役割管理は /admin/roles/ に分離済み。
+const view = "genres";
 ---
 
-<AdminLayout title="ジャンル・役割管理" description="アトラスの分野と担当役割">
-  <main class="genre-roles" data-genre-roles>
-    <header class="page-heading"><div><h1>ジャンル・役割管理</h1></div><div class="heading-actions"><a href="/admin/manage/?project=atlas">← 管理トップ</a><a class="quiet" href="/admin/permissions/?project=atlas">運営者・担当分野管理</a></div></header>
-    <section class="management-tools" aria-label="ジャンルと役割の作成">
-      <form data-catalog-form><h2>新しいジャンル／役割を作成</h2><div class="form-row"><label>種類<select name="kind"><option value="genre">ジャンル</option><option value="role">役割</option></select></label><label>ID（英数字とハイフン）<input name="slug" required pattern="[a-z0-9-]+" maxlength="80" placeholder="statistics" /></label><label class="wide">表示名<input name="name" required maxlength="120" placeholder="統計チーム" /></label><label class="wide">説明（任意）<input name="description" maxlength="500" placeholder="担当範囲の説明" /></label><button type="submit">作成</button></div><output data-form-message aria-live="polite"></output></form>
-      <form data-assignment-form><h2>メンバーをジャンル／役割へ追加</h2><div class="form-row"><label class="wide">メールアドレス<input type="email" name="email" required maxlength="320" placeholder="member@example.com" /></label><label class="wide">対象<select name="catalogId" data-catalog-select required><option value="">読み込み中…</option></select></label><button type="submit">追加</button></div><output data-assignment-message aria-live="polite"></output></form>
-      <form data-taxonomy-form><h2>学習サイトの分野／カテゴリを追加</h2><div class="form-row"><label>種類<select name="kind"><option value="subject">分野</option><option value="category">カテゴリ</option></select></label><label class="taxonomy-subject">対象分野<select name="subject"><option value="">分野を選択</option>{subjects.map((subject) => <option value={subject.data.slug}>{subject.data.name.ja}</option>)}</select></label><label>ID（任意・未入力で自動生成）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" placeholder="未入力なら自動生成" /></label><label class="wide">表示名<input name="name" required maxlength="120" placeholder="例：情報、機械学習" /></label><label class="wide">説明（任意）<input name="description" maxlength="500" placeholder="学習内容の説明" /></label><label>順番<input name="sortOrder" type="number" min="0" max="9999" value="0" /></label><button type="submit">追加</button></div><output data-taxonomy-message aria-live="polite"></output></form>
+<AdminLayout title={view === "genres" ? "ジャンル管理" : "ジャンル・役割管理"} description="アトラスの分野と担当役割">
+  <main class="genre-roles" data-genre-roles data-view={view} data-admin-load-surface data-admin-load-state="loading" aria-busy="true">
+    <header class="page-heading"><div><h1 data-genre-page-title>{view === "genres" ? "ジャンル管理" : "ジャンル・役割管理"}</h1></div><div class="heading-actions"><a href="/admin/manage/?project=atlas">← 管理トップ</a><a class="quiet" data-view-link="genres" href="/admin/genre-roles/?project=atlas&view=genres">ジャンル管理</a><a class="quiet" data-view-link="roles" href="/admin/roles/?project=atlas">役割管理</a><a class="quiet" href="/admin/permissions/?project=atlas">権限管理</a></div></header>
+    <section class="management-tools" aria-label="ジャンルの作成と担当設定">
+      <form data-catalog-form><h2 data-catalog-title>新しいジャンルを作成</h2><input type="hidden" name="kind" value="genre" /><div class="form-row"><label class="wide">表示名<input name="name" required maxlength="120" placeholder="統計" /></label><details class="advanced-field"><summary>詳細設定（内部ID）</summary><label>ID（任意・英数字とハイフン）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" placeholder="未入力なら自動生成" /></label><small>表示名から自動生成します。既存の参照関係がある場合だけ指定してください。</small></details><label class="wide">説明（任意）<input name="description" maxlength="500" placeholder="ジャンルの説明" /></label><button type="submit">作成</button></div><output data-form-message aria-live="polite"></output></form>
+      <form data-assignment-form><h2 data-assignment-title>メンバーをジャンルへ追加</h2><div class="form-row"><label class="wide">メールアドレス<input type="email" name="email" required maxlength="320" placeholder="member@example.com" /></label><label class="wide">対象<select name="catalogId" data-catalog-select required><option value="">読み込み中…</option></select></label><button type="submit">追加</button></div><output data-assignment-message aria-live="polite"></output></form>
+      <form data-taxonomy-form><h2>学習サイトの分野／カテゴリを追加</h2><div class="form-row"><label>種類<select name="kind"><option value="subject">分野</option><option value="category">カテゴリ</option></select></label><label class="taxonomy-subject">対象分野<select name="subject"><option value="">分野を選択</option>{subjects.map((subject) => <option value={subject.data.slug}>{subject.data.name.ja}</option>)}</select></label><label class="wide">表示名<input name="name" required maxlength="120" placeholder="例：情報、機械学習" /></label><details class="advanced-field"><summary>詳細設定（内部ID）</summary><label>ID（任意・英数字とハイフン）<input name="slug" pattern="[a-z0-9-]+" maxlength="80" placeholder="未入力なら自動生成" /></label><small>表示名から自動生成します。既存の参照関係がある場合だけ指定してください。</small></details><label class="wide">説明（任意）<input name="description" maxlength="500" placeholder="学習内容の説明" /></label><label>順番<input name="sortOrder" type="number" min="0" max="9999" value="0" /></label><button type="submit">追加</button></div><output data-taxonomy-message aria-live="polite"></output></form>
     </section>
-    <section class="legend" aria-label="役割の説明"><span><i class="dot dot--member"></i>分野担当</span><span><i class="dot dot--lead"></i>分野統括（公開フロー）</span><span><i class="dot dot--manager"></i>運営統括</span><span><i class="dot dot--custom"></i>カスタム項目</span></section>
-    <section class="subject-grid" aria-label="分野別の役割"><div class="loading" data-content>分野と担当を読み込んでいます…</div></section>
-    <section class="custom-section" aria-labelledby="custom-heading"><div class="panel-heading"><h2 id="custom-heading">カスタムジャンル／役割</h2><span data-custom-count>—</span></div><div class="custom-grid" data-custom-content><p class="loading">読み込み中…</p></div></section>
-    <section class="taxonomy-section" aria-labelledby="taxonomy-heading"><div class="panel-heading"><div><h2 id="taxonomy-heading">学習サイトの分野／カテゴリ</h2><p class="panel-note">カードをドラッグして分野・カテゴリの順番や所属を変更できます。変更は対象記事の公開PRへ自動で反映されます。</p></div><span data-taxonomy-count>—</span></div><div class="taxonomy-board" data-taxonomy-content><p class="loading">読み込み中…</p></div></section>
+    <section class="legend" aria-label="担当の説明"><span><i class="dot dot--member"></i>分野担当</span><span><i class="dot dot--lead"></i>分野統括（公開フロー）</span><span><i class="dot dot--custom"></i>カスタムジャンル</span></section>
+    <section class="subject-grid" aria-label="分野別の役割"><div data-content><p class="loading">分野と担当を読み込んでいます…</p></div></section>
+    <section class="custom-section" aria-labelledby="custom-heading"><div class="panel-heading"><h2 id="custom-heading" data-custom-title>カスタムジャンル／役割</h2><span data-custom-count>—</span></div><div class="custom-grid" data-custom-content><p class="loading">読み込み中…</p></div></section>
+    <section class="taxonomy-section" aria-labelledby="taxonomy-heading"><div class="panel-heading"><div><h2 id="taxonomy-heading">学習サイトの分野／カテゴリ</h2><p class="panel-note">カードをドラッグして分野・カテゴリの順番や所属を変更できます。変更は対象記事の公開PRへ自動で反映されます。</p></div><span data-taxonomy-count>—</span></div><div class="taxonomy-controls"><label class="taxonomy-filter">表示する分野<select data-taxonomy-filter aria-label="表示する分野"><option value="">すべての分野</option></select></label><p class="taxonomy-filter-note">分野を選ぶと、その分野のカテゴリだけ表示します。</p></div><div class="taxonomy-board" data-taxonomy-content><p class="loading">読み込み中…</p></div></section>
     <AdminRetryNotice />
     <output class="message" data-message aria-live="polite"></output>
   </main>
 </AdminLayout>
 
 <style>
-  .genre-roles{margin:0 auto;max-width:1250px;padding:0 1.25rem 4rem}.page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.3rem}.eyebrow{color:var(--accent-primary);font-size:.7rem;font-weight:800;letter-spacing:.1em;margin:0}.page-heading h1{font-size:clamp(1.8rem,4vw,2.5rem);margin:.25rem 0 .45rem}.lead{color:var(--text-secondary);line-height:1.7;margin:0}.heading-actions{align-items:flex-end;display:flex;flex-wrap:wrap;gap:.6rem}.heading-actions a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.heading-actions .quiet{border:1px solid var(--border-default);color:var(--text-primary);padding:.5rem .7rem}.management-tools{display:grid;gap:.75rem;grid-template-columns:repeat(2,minmax(0,1fr));margin:1.2rem 0}.management-tools form{background:var(--background-secondary);border:1px solid var(--border-default);padding:.9rem}.management-tools h2{font-size:.9rem;margin:0 0 .65rem}.form-row{align-items:end;display:flex;flex-wrap:wrap;gap:.5rem}.form-row label{color:var(--text-secondary);display:grid;font-size:.68rem;font-weight:800;gap:.25rem;min-width:8rem}.form-row label.wide{flex:1 1 11rem}.form-row input,.form-row select{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;min-height:2.2rem;padding:.4rem .5rem}.form-row button,.action-button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2.2rem;padding:.4rem .65rem}.management-tools output{color:var(--text-secondary);display:block;font-size:.7rem;min-height:1.1rem;padding-top:.45rem}.legend{color:var(--text-secondary);display:flex;flex-wrap:wrap;font-size:.75rem;gap:1rem;margin:1rem 0}.legend span{align-items:center;display:inline-flex;gap:.35rem}.dot{background:var(--text-secondary);border-radius:50%;height:.55rem;width:.55rem}.dot--member{background:#6ba6ff}.dot--lead{background:#ac8cf4}.dot--manager{background:#e8b84a}.dot--custom{background:#67c3ce}.subject-grid,.custom-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}.subject-card,.custom-card{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.65rem;padding:.9rem}.subject-card__heading,.custom-card__heading{align-items:start;display:flex;gap:.5rem;justify-content:space-between}.subject-card h2,.custom-card h3{font-size:1rem;margin:0}.subject-card code,.custom-card code{color:var(--text-secondary);font-size:.68rem}.subject-status{border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.65rem;padding:.18rem .4rem;white-space:nowrap}.subject-description,.custom-description{color:var(--text-secondary);font-size:.78rem;line-height:1.55;margin:0;min-height:2.4em}.role-list,.custom-people{border-top:1px solid var(--border-default);display:grid;gap:.45rem;padding-top:.6rem}.role-row{align-items:start;display:grid;gap:.45rem;grid-template-columns:6.5rem 1fr}.role-label{align-items:center;color:var(--text-secondary);display:flex;font-size:.7rem;gap:.3rem;padding-top:.2rem}.people,.custom-people-list{display:flex;flex-wrap:wrap;gap:.3rem}.person{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);display:inline-flex;gap:.35rem;padding:.28rem .4rem}.person span{font-size:.7rem}.person button,.custom-card button{background:transparent;border:0;color:var(--accent-primary);cursor:pointer;font-size:.65rem;padding:.1rem}.person--lead{border-color:#ac8cf4;color:#ac8cf4}.person--manager{border-color:#e8b84a;color:#e8b84a}.person-remove{color:#e27676!important}.unassigned,.loading{color:var(--text-muted);font-size:.7rem;padding-top:.25rem}.custom-section{border-top:1px solid var(--border-default);margin-top:2rem;padding-top:1.2rem}.panel-heading{align-items:end;display:flex;justify-content:space-between;margin-bottom:.75rem}.panel-heading h2{font-size:1.15rem;margin:.18rem 0 0}.panel-heading>span{color:var(--text-secondary);font-size:.72rem}.custom-card__meta{color:var(--text-secondary);font-size:.7rem}.custom-card__actions{display:flex;justify-content:space-between}.delete-catalog{color:#e27676!important}.message{color:var(--text-secondary);display:block;font-size:.8rem;min-height:1.2rem;padding-top:.7rem}@media(max-width:760px){.genre-roles{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.management-tools{grid-template-columns:1fr}.subject-grid,.custom-grid{grid-template-columns:1fr}}
+  .genre-roles{margin:0 auto;max-width:1250px;padding:0 1.25rem 4rem}.page-heading{align-items:end;border-bottom:1px solid var(--border-default);display:flex;gap:1rem;justify-content:space-between;padding:2rem 0 1.3rem}.eyebrow{color:var(--accent-primary);font-size:.7rem;font-weight:800;letter-spacing:.1em;margin:0}.page-heading h1{font-size:clamp(1.8rem,4vw,2.5rem);margin:.25rem 0 .45rem}.lead{color:var(--text-secondary);line-height:1.7;margin:0}.heading-actions{align-items:flex-end;display:flex;flex-wrap:wrap;gap:.6rem}.heading-actions a{color:var(--accent-primary);font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap}.heading-actions .quiet{border:1px solid var(--border-default);color:var(--text-primary);padding:.5rem .7rem}.management-tools{display:grid;gap:.75rem;grid-template-columns:repeat(2,minmax(0,1fr));margin:1.2rem 0}.management-tools form{background:var(--background-secondary);border:1px solid var(--border-default);padding:.9rem}.management-tools h2{font-size:.9rem;margin:0 0 .65rem}.form-row{align-items:end;display:flex;flex-wrap:wrap;gap:.5rem}.form-row label{color:var(--text-secondary);display:grid;font-size:.68rem;font-weight:800;gap:.25rem;min-width:8rem}.form-row label.wide{flex:1 1 11rem}.form-row input,.form-row select{background:var(--background-primary);border:1px solid var(--border-default);color:var(--text-primary);font:inherit;min-height:2.2rem;padding:.4rem .5rem}.form-row button,.action-button{background:var(--accent-primary);border:1px solid var(--accent-primary);color:#fff;cursor:pointer;font:inherit;font-size:.72rem;font-weight:800;min-height:2.2rem;padding:.4rem .65rem}.management-tools output{color:var(--text-secondary);display:block;font-size:.7rem;min-height:1.1rem;padding-top:.45rem}.legend{color:var(--text-secondary);display:flex;flex-wrap:wrap;font-size:.75rem;gap:1rem;margin:1rem 0}.legend span{align-items:center;display:inline-flex;gap:.35rem}.dot{background:var(--text-secondary);border-radius:50%;height:.55rem;width:.55rem}.dot--member{background:#6ba6ff}.dot--lead{background:#ac8cf4}.dot--custom{background:#67c3ce}.subject-grid,.custom-grid{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}.subject-card,.custom-card{background:var(--background-secondary);border:1px solid var(--border-default);display:grid;gap:.65rem;padding:.9rem}.subject-card__heading,.custom-card__heading{align-items:start;display:flex;gap:.5rem;justify-content:space-between}.subject-card h2,.custom-card h3{font-size:1rem;margin:0}.subject-card code,.custom-card code{color:var(--text-secondary);font-size:.68rem}.subject-status{border:1px solid var(--border-default);border-radius:999px;color:var(--text-secondary);font-size:.65rem;padding:.18rem .4rem;white-space:nowrap}.subject-description,.custom-description{color:var(--text-secondary);font-size:.78rem;line-height:1.55;margin:0;min-height:2.4em}.role-list,.custom-people{border-top:1px solid var(--border-default);display:grid;gap:.45rem;padding-top:.6rem}.role-row{align-items:start;display:grid;gap:.45rem;grid-template-columns:6.5rem 1fr}.role-label{align-items:center;color:var(--text-secondary);display:flex;font-size:.7rem;gap:.3rem;padding-top:.2rem}.people,.custom-people-list{display:flex;flex-wrap:wrap;gap:.3rem}.person{align-items:center;background:var(--background-primary);border:1px solid var(--border-default);display:inline-flex;gap:.35rem;padding:.28rem .4rem}.person span{font-size:.7rem}.person button,.custom-card button{background:transparent;border:0;color:var(--accent-primary);cursor:pointer;font-size:.65rem;padding:.1rem}.person--lead{border-color:#ac8cf4;color:#ac8cf4}.person-remove{color:#e27676!important}.unassigned,.loading{color:var(--text-muted);font-size:.7rem;padding-top:.25rem}.custom-section{border-top:1px solid var(--border-default);margin-top:2rem;padding-top:1.2rem}.panel-heading{align-items:end;display:flex;justify-content:space-between;margin-bottom:.75rem}.panel-heading h2{font-size:1.15rem;margin:.18rem 0 0}.panel-heading>span{color:var(--text-secondary);font-size:.72rem}.custom-card__meta{color:var(--text-secondary);font-size:.7rem}.custom-card__actions{display:flex;justify-content:space-between}.delete-catalog{color:#e27676!important}.message{color:var(--text-secondary);display:block;font-size:.8rem;min-height:1.2rem;padding-top:.7rem}.form-row .advanced-field{align-self:stretch;display:grid;gap:.25rem;min-width:11rem}.form-row .advanced-field summary{color:var(--accent-primary);cursor:pointer;font-size:.68rem;font-weight:800;list-style-position:inside}.form-row .advanced-field label{min-width:0}.form-row .advanced-field small{color:var(--text-secondary);font-size:.62rem;font-weight:400;line-height:1.45;max-width:18rem}@media(max-width:760px){.genre-roles{padding:0 .8rem 3rem}.page-heading{align-items:start;display:grid}.management-tools{grid-template-columns:1fr}.subject-grid,.custom-grid{grid-template-columns:1fr}}
 </style>
 
 <style is:global>
@@ -157,17 +159,14 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
     color: #ac8cf4;
   }
 
-  .genre-roles .person--manager {
-    border-color: #e8b84a;
-    color: #e8b84a;
-  }
-
   .genre-roles .person-remove {
     color: #e27676 !important;
   }
 
   .genre-roles .unassigned,
-  .genre-roles .loading {
+  .genre-roles .loading,
+  .genre-roles .empty-state,
+  .genre-roles .error-state {
     color: var(--text-muted);
     font-size: 0.7rem;
     padding-top: 0.25rem;
@@ -183,13 +182,25 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
     justify-content: space-between;
   }
 
+  .genre-roles .custom-card__assignment { align-items: end; border-top: 1px solid var(--border-default); display: grid; gap: .4rem; grid-template-columns: minmax(0, 1fr) auto; padding-top: .6rem; }
+  .genre-roles .custom-card__assignment label { color: var(--text-secondary); display: grid; font-size: .65rem; font-weight: 800; gap: .2rem; }
+  .genre-roles .custom-card__assignment input { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 2rem; min-width: 0; padding: .35rem .4rem; }
+  .genre-roles .custom-card__assignment button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: #fff; cursor: pointer; font: inherit; font-size: .67rem; font-weight: 800; min-height: 2rem; padding: .35rem .5rem; }
+  .genre-roles .custom-card__assignment button:disabled { cursor: wait; opacity: .65; }
+  .genre-roles .custom-card__assignment output { color: var(--text-secondary); font-size: .65rem; grid-column: 1 / -1; min-height: 1rem; }
+  @media (max-width: 520px) { .genre-roles .custom-card__assignment { grid-template-columns: 1fr; } }
+
   .genre-roles .taxonomy-section { border-top: 1px solid var(--border-default); margin-top: 2rem; padding-top: 1.2rem; }
   .genre-roles .panel-note { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .3rem 0 0; }
+  .genre-roles .taxonomy-controls { align-items: end; display: flex; flex-wrap: wrap; gap: .45rem .8rem; justify-content: space-between; margin: .35rem 0 .65rem; }
+  .genre-roles .taxonomy-filter { color: var(--text-secondary); display: grid; font-size: .68rem; font-weight: 800; gap: .25rem; min-width: min(100%, 18rem); }
+  .genre-roles .taxonomy-filter select { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 2rem; min-width: 0; padding: .3rem .45rem; }
+  .genre-roles .taxonomy-filter-note { color: var(--text-muted); font-size: .68rem; margin: 0 0 .1rem; }
   .genre-roles .taxonomy-board { display: grid; gap: .8rem; }
-  .genre-roles .taxonomy-lanes { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); }
+  .genre-roles .taxonomy-lanes { align-items: start; display: grid; gap: .7rem; grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr)); }
   .genre-roles .taxonomy-subjects { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
   .genre-roles .taxonomy-subject-card,
-  .genre-roles .taxonomy-lane { background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .45rem; min-width: 0; position: relative; }
+  .genre-roles .taxonomy-lane { align-content: start; align-self: start; background: var(--background-secondary); border: 1px solid var(--border-default); border-radius: .45rem; min-width: 0; position: relative; }
   .genre-roles .taxonomy-subject-card { display: grid; gap: .5rem; padding: .7rem .8rem; }
   .genre-roles .taxonomy-subject-card[draggable="true"] { cursor: grab; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
   .genre-roles .taxonomy-subject-card[draggable="true"]:hover { background: var(--background-inset); border-color: var(--accent-primary); transform: translateY(-1px); }
@@ -197,8 +208,8 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
   .genre-roles .taxonomy-subject-card.is-dragging,
   .genre-roles .taxonomy-category.is-dragging { opacity: .45; }
   .genre-roles .taxonomy-subject-card__heading,
-  .genre-roles .taxonomy-lane__heading { align-items: center; display: flex; gap: .6rem; justify-content: space-between; min-width: 0; }
-  .genre-roles .taxonomy-subject-card__title { align-items: center; display: flex; gap: .45rem; min-width: 0; }
+  .genre-roles .taxonomy-lane__heading { align-items: flex-start; display: flex; flex-wrap: wrap; gap: .6rem; justify-content: space-between; min-width: 0; }
+  .genre-roles .taxonomy-subject-card__title { align-items: center; display: flex; flex: 1 1 12rem; gap: .45rem; min-width: 0; }
   .genre-roles .taxonomy-drag-handle { color: var(--text-muted); cursor: grab; font-size: .9rem; letter-spacing: -.1em; user-select: none; }
   .genre-roles .taxonomy-title-button { background: transparent; border: 0; color: var(--text-primary); cursor: text; display: block; font: inherit; margin: 0; max-width: 100%; min-width: 0; padding: 0; text-align: left; }
   .genre-roles .taxonomy-category > .taxonomy-title-button { flex: 1 1 9rem; min-width: 5rem; }
@@ -215,7 +226,7 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
   .genre-roles .taxonomy-lane__heading small { color: var(--text-secondary); display: block; font-size: .64rem; margin-top: .15rem; }
   .genre-roles .taxonomy-lane__heading .subject-status { font-size: .6rem; }
   .genre-roles .taxonomy-category-list { display: grid; gap: .4rem; list-style: none; margin: 0; min-height: 2.7rem; padding: .55rem; }
-  .genre-roles .taxonomy-category { align-items: center; background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .3rem; display: flex; gap: .5rem; justify-content: space-between; min-width: 0; padding: .45rem .55rem; position: relative; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+  .genre-roles .taxonomy-category { align-items: start; background: var(--background-primary); border: 1px solid var(--border-default); border-radius: .3rem; display: grid; gap: .2rem .5rem; grid-template-areas: "handle title" "handle label" "handle actions" "handle editor"; grid-template-columns: auto minmax(0, 1fr); justify-content: stretch; min-width: 0; padding: .45rem .55rem; position: relative; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
   .genre-roles .taxonomy-category:hover { background: var(--background-inset); border-color: var(--border-strong); }
   .genre-roles .taxonomy-category[draggable="true"] { cursor: grab; }
   .genre-roles .taxonomy-category[draggable="true"]:active { cursor: grabbing; }
@@ -233,32 +244,61 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
   .genre-roles .taxonomy-lane.is-dragging { box-shadow: 0 10px 24px color-mix(in srgb, var(--text-primary) 18%, transparent); transform: scale(1.01); }
   .genre-roles .taxonomy-category.is-dragging { box-shadow: 0 8px 18px color-mix(in srgb, var(--text-primary) 16%, transparent); transform: scale(1.015); }
   .genre-roles .taxonomy-drag-preview { background: var(--background-secondary); border: 1px solid var(--accent-primary); border-radius: .45rem; box-shadow: 0 12px 28px rgb(0 0 0 / 28%); left: -9999px; max-width: 22rem; opacity: .96; padding: .55rem .7rem; pointer-events: none; position: fixed; top: -9999px; width: 18rem; z-index: 9999; }
-  .genre-roles .taxonomy-category__label { min-width: 0; }
+  .genre-roles .taxonomy-category > .taxonomy-drag-handle { align-self: start; grid-area: handle; padding-top: .1rem; }
+  .genre-roles .taxonomy-category > .taxonomy-title-button { flex: none; grid-area: title; min-width: 0; width: 100%; }
+  .genre-roles .taxonomy-category__label { align-items: center; display: flex; flex-wrap: wrap; gap: .25rem .45rem; grid-area: label; min-width: 0; }
   .genre-roles .taxonomy-category__label strong { color: var(--text-primary); display: block; font-size: .73rem; overflow-wrap: anywhere; }
   .genre-roles .taxonomy-category__label code { color: var(--text-secondary); display: block; font-size: .6rem; margin-top: .12rem; overflow-wrap: anywhere; }
   .genre-roles .taxonomy-category__actions,
-  .genre-roles .taxonomy-subject-card__actions { align-items: center; display: inline-flex; flex: 0 0 auto; gap: .15rem; }
+  .genre-roles .taxonomy-subject-card__actions { align-items: center; display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; gap: .15rem; max-width: 100%; }
+  .genre-roles .taxonomy-category__actions { grid-area: actions; justify-content: flex-start; }
   .genre-roles .taxonomy-category__actions button,
   .genre-roles .taxonomy-subject-card__actions button { background: transparent; border: 1px solid transparent; border-radius: .25rem; color: var(--accent-primary); cursor: pointer; font: inherit; font-size: .63rem; padding: .24rem .35rem; }
   .genre-roles .taxonomy-category__actions button:hover,
   .genre-roles .taxonomy-subject-card__actions button:hover { background: var(--background-inset); border-color: var(--border-default); }
   .genre-roles .taxonomy-order-actions { display: inline-flex; gap: .15rem; }
   .genre-roles .taxonomy-order-actions button:disabled { cursor: not-allowed; opacity: .4; }
-  .genre-roles .taxonomy-editor { border-top: 1px solid var(--border-default); display: grid; gap: .4rem; margin-top: .4rem; padding-top: .55rem; }
+  .genre-roles .taxonomy-editor { border-top: 1px solid var(--border-default); display: grid; gap: .4rem; grid-area: editor; margin-top: .4rem; padding-top: .55rem; }
   .genre-roles .taxonomy-editor[hidden] { display: none; }
   .genre-roles .taxonomy-editor label { color: var(--text-secondary); display: grid; font-size: .63rem; gap: .2rem; }
   .genre-roles .taxonomy-editor input { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 1.9rem; padding: .3rem .4rem; }
+  .genre-roles .taxonomy-editor .advanced-field { display: grid; gap: .25rem; }
+  .genre-roles .taxonomy-editor .advanced-field summary { color: var(--accent-primary); cursor: pointer; font-size: .63rem; font-weight: 800; }
+  .genre-roles .taxonomy-editor .advanced-field label { min-width: 0; }
+  .genre-roles .taxonomy-editor .advanced-field small { color: var(--text-secondary); font-size: .6rem; line-height: 1.45; }
   .genre-roles .taxonomy-editor__actions { display: flex; gap: .3rem; }
   .genre-roles .taxonomy-empty { color: var(--text-muted); font-size: .68rem; margin: 0; padding: .45rem .2rem; }
   .genre-roles .taxonomy-card[data-status="archived"],
   .genre-roles .taxonomy-subject-card[data-status="archived"],
   .genre-roles .taxonomy-category[data-status="archived"] { opacity: .72; }
 
+  @media (min-width: 761px) {
+    .genre-roles .taxonomy-category { align-items: center; grid-template-areas: "handle title label actions"; grid-template-columns: auto minmax(5rem, 1fr) minmax(6.5rem, .8fr) auto; padding: .35rem .45rem; }
+    .genre-roles .taxonomy-category__label { justify-content: flex-end; }
+    .genre-roles .taxonomy-category__actions { justify-content: flex-end; }
+    .genre-roles .taxonomy-category__label code { margin-top: 0; }
+    .genre-roles .taxonomy-editor { grid-column: 2 / -1; }
+  }
+
   .genre-roles .delete-catalog {
     color: #e27676 !important;
   }
+  .genre-roles .custom-card--archived { opacity: .68; }
+  .genre-roles .custom-card__buttons { display: inline-flex; flex-wrap: wrap; gap: .35rem; }
+  .genre-roles .catalog-editor { border-top: 1px solid var(--border-default); display: grid; gap: .4rem; padding-top: .6rem; }
+  .genre-roles .catalog-editor[hidden] { display: none; }
+  .genre-roles .catalog-editor label { color: var(--text-secondary); display: grid; font-size: .66rem; font-weight: 800; gap: .2rem; }
+  .genre-roles .catalog-editor input { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; min-height: 2rem; min-width: 0; padding: .35rem .4rem; }
+  .genre-roles .catalog-editor .advanced-field { display: grid; gap: .25rem; }
+  .genre-roles .catalog-editor .advanced-field summary { color: var(--accent-primary); cursor: pointer; font-size: .66rem; font-weight: 800; }
+  .genre-roles .catalog-editor .advanced-field label { min-width: 0; }
+  .genre-roles .catalog-editor .advanced-field small { color: var(--text-secondary); font-size: .61rem; font-weight: 400; line-height: 1.45; }
+  .genre-roles .catalog-editor div { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .genre-roles .catalog-editor button { background: var(--accent-primary); border: 1px solid var(--accent-primary); color: #fff; cursor: pointer; font: inherit; font-size: .67rem; font-weight: 800; min-height: 2rem; padding: .35rem .5rem; }
 
   @media (max-width: 760px) {
+    .genre-roles .taxonomy-controls { align-items: stretch; display: grid; }
+    .genre-roles .taxonomy-filter { min-width: 0; }
     .genre-roles .subject-grid,
     .genre-roles .custom-grid {
       grid-template-columns: 1fr;
@@ -274,42 +314,66 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
   }
 </style>
 
+<style is:global>
+</style>
+
+<script is:inline>
+  const legacyView = new URLSearchParams(window.location.search).get("view");
+  if (legacyView === "roles") {
+    const roleUrl = new URL("/admin/roles/", window.location.origin);
+    roleUrl.searchParams.set("project", "atlas");
+    window.location.replace(`${roleUrl.pathname}${roleUrl.search}`);
+  } else if (legacyView !== "genres") {
+    const compatibleUrl = new URL(window.location.href);
+    compatibleUrl.searchParams.set("view", "genres");
+    window.history.replaceState({}, "", compatibleUrl);
+  }
+</script>
+
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   import { lockAdminForm } from "../../scripts/admin-form-submit-lock";
+  import { readAdminApiJson } from "../../lib/admin-api";
 
   type Member = { display_name?: string; email?: string; subjectAssignments?: string[]; workflowSubjects?: string[]; role?: string };
   type GenreResponse = { members?: Member[]; error?: string };
-  type Catalog = { id: string; kind: "genre" | "role"; slug: string; name: string; description?: string };
+  type Catalog = { id: string; kind: "genre" | "role"; slug: string; name: string; description?: string; status?: "active" | "archived" };
   type Assignment = { catalog_id: string; email: string; display_name?: string };
   type CatalogResponse = { catalog?: Catalog[]; assignments?: Assignment[]; canEdit?: boolean; error?: string };
   type Taxonomy = { id: string; kind: "subject" | "category"; subject_slug: string; slug: string; name: string; description?: string; sort_order?: number; status?: "active" | "archived"; publication_status?: "preparing" | "published"; created_by?: string; updated_by?: string; updated_at?: string };
-  const initialize = () => { const root = document.querySelector<HTMLElement>("[data-genre-roles]"); if (!root || root.dataset.ready) return; root.dataset.ready = "true"; const content = root.querySelector<HTMLElement>("[data-content]")!; const customContent = root.querySelector<HTMLElement>("[data-custom-content]")!; const customCount = root.querySelector<HTMLElement>("[data-custom-count]")!; const taxonomyContent = root.querySelector<HTMLElement>("[data-taxonomy-content]")!; const taxonomyCount = root.querySelector<HTMLElement>("[data-taxonomy-count]")!; const catalogSelect = root.querySelector<HTMLSelectElement>("[data-catalog-select]")!; const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[character] ?? character); let genreMembers: Member[] = []; let catalog: Catalog[] = []; let assignments: Assignment[] = []; let taxonomy: Taxonomy[] = [];
+  const initialize = () => { const root = document.querySelector<HTMLElement>("[data-genre-roles]"); if (!root || root.dataset.ready) return; root.dataset.ready = "true"; const genresOnly = new URLSearchParams(window.location.search).get("view") === "genres"; root.dataset.view = genresOnly ? "genres" : "legacy"; const pageTitle = root.querySelector<HTMLElement>("[data-genre-page-title]"); const catalogTitle = root.querySelector<HTMLElement>("[data-catalog-title]"); const assignmentTitle = root.querySelector<HTMLElement>("[data-assignment-title]"); const customTitle = root.querySelector<HTMLElement>("[data-custom-title]"); const viewLinks = root.querySelectorAll<HTMLElement>("[data-view-link]"); if (pageTitle) pageTitle.textContent = genresOnly ? "ジャンル管理" : "ジャンル・役割管理"; if (catalogTitle) catalogTitle.textContent = genresOnly ? "新しいジャンルを作成" : "新しいジャンル／役割を作成"; if (assignmentTitle) assignmentTitle.textContent = genresOnly ? "メンバーをジャンルへ追加" : "メンバーをジャンル／役割へ追加"; if (customTitle) customTitle.textContent = genresOnly ? "カスタムジャンル" : "カスタムジャンル／役割"; viewLinks.forEach((link) => { link.hidden = genresOnly ? link.dataset.viewLink === "genres" : link.dataset.viewLink === "roles"; }); const catalogKind = root.querySelector<HTMLSelectElement>('[data-catalog-form] select[name="kind"]'); if (genresOnly) catalogKind?.querySelector('option[value="role"]')?.remove(); const content = root.querySelector<HTMLElement>("[data-content]")!; const customContent = root.querySelector<HTMLElement>("[data-custom-content]")!; const customCount = root.querySelector<HTMLElement>("[data-custom-count]")!; const taxonomyContent = root.querySelector<HTMLElement>("[data-taxonomy-content]")!; const taxonomyCount = root.querySelector<HTMLElement>("[data-taxonomy-count]")!; const taxonomyFilter = root.querySelector<HTMLSelectElement>("[data-taxonomy-filter]"); const catalogSelect = root.querySelector<HTMLSelectElement>("[data-catalog-select]")!; const esc = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[character] ?? character); let genreMembers: Member[] = []; let catalog: Catalog[] = []; let assignments: Assignment[] = []; let taxonomy: Taxonomy[] = [];
     const memberName = (member: Member | Assignment) => member.display_name?.trim() || member.email || "表示名未設定";
     const people = (items: Array<Member | Assignment>, className = "", remove?: (item: Member | Assignment) => string) => items.length ? items.map((item) => `<span class="person ${className}"><span>${esc(memberName(item))}</span>${remove ? `<button type="button" class="person-remove" data-remove-assignment="${esc(remove(item))}" aria-label="${esc(memberName(item))}を削除">削除</button>` : ""}</span>`).join("") : '<span class="unassigned">未割り当て</span>';
     const subjectRows = () => { const rows = new Map<string, { slug: string; name: string; status: string; description: string }>(); Array.from(document.querySelectorAll<HTMLElement>("[data-subject-data]")).forEach((subject) => { const slug = subject.dataset.slug ?? ""; if (slug) rows.set(slug, { slug, name: subject.dataset.name ?? slug, status: subject.dataset.status ?? "公開中", description: subject.dataset.description ?? "" }); }); taxonomy.filter((item) => item.kind === "subject").forEach((item) => { rows.set(item.slug, { slug: item.slug, name: item.name, status: item.status === "archived" ? "アーカイブ" : item.publication_status === "published" ? "公開中" : "準備中", description: item.description ?? "" }); }); return [...rows.values()]; };
     const renderTaxonomySubjectOptions = () => { if (!taxonomySubject) return; const current = taxonomySubject.value; const options = subjectRows().filter((subject) => subject.status !== "アーカイブ").map((subject) => `<option value="${esc(subject.slug)}">${esc(subject.name)}${subject.status === "準備中" ? "（準備中）" : ""}</option>`).join(""); taxonomySubject.innerHTML = `<option value="">分野を選択</option>${options}`; taxonomySubject.value = subjectRows().some((subject) => subject.slug === current && subject.status !== "アーカイブ") ? current : ""; };
-    const renderCatalogSelect = () => { const system = subjectRows().map((subject) => `<option value="system-member|${esc(subject.slug)}">分野担当：${esc(subject.name)}</option><option value="system-lead|${esc(subject.slug)}">分野統括：${esc(subject.name)}</option>`).join(""); catalogSelect.innerHTML = `<option value="">選択してください</option>${system}${catalog.map((item) => `<option value="${esc(item.id)}">${esc(item.kind === "genre" ? "ジャンル" : "役割")}：${esc(item.name)}</option>`).join("")}`; };
-    const renderSubjects = () => { const subjectElements = subjectRows(); content.innerHTML = subjectElements.map((subject) => { const slug = subject.slug; const assigned = genreMembers.filter((member) => (member.subjectAssignments ?? []).includes(slug)); const leads = genreMembers.filter((member) => (member.workflowSubjects ?? []).includes(slug)); const managers = genreMembers.filter((member) => member.role === "manager"); const memberButtons = assigned.map((member) => `<span class="person"><span>${esc(memberName(member))}</span><button type="button" class="person-remove" data-remove-standard="member|${esc(member.email)}|${esc(slug)}">削除</button></span>`).join("") || '<span class="unassigned">未割り当て</span>'; const leadButtons = leads.map((member) => `<span class="person person--lead"><span>${esc(memberName(member))}</span><button type="button" class="person-remove" data-remove-standard="lead|${esc(member.email)}|${esc(slug)}">削除</button></span>`).join("") || '<span class="unassigned">未割り当て</span>'; return `<article class="subject-card"><div class="subject-card__heading"><div><h2>${esc(subject.name)}</h2><code>${esc(slug)}</code></div><span class="subject-status">${esc(subject.status)}</span></div><p class="subject-description">${esc(subject.description)}</p><div class="role-list"><div class="role-row"><span class="role-label"><i class="dot dot--member"></i>分野担当</span><div class="people">${memberButtons}</div></div><div class="role-row"><span class="role-label"><i class="dot dot--lead"></i>分野統括</span><div class="people">${leadButtons}</div></div><div class="role-row"><span class="role-label"><i class="dot dot--manager"></i>運営統括</span><div class="people">${people(managers, "person--manager")}</div></div></div></article>`; }).join("") || '<p class="loading">分野情報がありません。</p>'; };
-    const renderCustom = () => { customCount.textContent = `${catalog.length}件`; customContent.innerHTML = catalog.length ? catalog.map((item) => { const itemAssignments = assignments.filter((assignment) => assignment.catalog_id === item.id); return `<article class="custom-card"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${esc(item.slug)}</code></div><span class="subject-status">${item.kind === "genre" ? "ジャンル" : "役割"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-people"><strong class="custom-card__meta">参加メンバー</strong><div class="custom-people-list">${people(itemAssignments, "", (assignment) => `${item.id}|${assignment.email}`)}</div></div><div class="custom-card__actions"><span class="custom-card__meta">${itemAssignments.length}人</span><button type="button" class="delete-catalog" data-delete-catalog="${esc(item.id)}">項目を削除</button></div></article>`; }).join("") : '<p class="loading">カスタム項目はまだありません。</p>'; };
+    const readTaxonomyFilter = () => taxonomyFilter?.value || new URLSearchParams(window.location.search).get("taxonomySubject") || "";
+    const renderTaxonomyFilter = () => { if (!taxonomyFilter) return; const current = readTaxonomyFilter(); const availableSubjects = subjectRows().filter((subject) => subject.status !== "アーカイブ"); taxonomyFilter.innerHTML = `<option value="">すべての分野</option>${availableSubjects.map((subject) => `<option value="${esc(subject.slug)}">${esc(subject.name)}${subject.status === "準備中" ? "（準備中）" : ""}</option>`).join("")}`; taxonomyFilter.value = availableSubjects.some((subject) => subject.slug === current) ? current : ""; };
+    const renderCatalogSelect = () => { const system = subjectRows().map((subject) => `<option value="system-member|${esc(subject.slug)}">分野担当：${esc(subject.name)}</option><option value="system-lead|${esc(subject.slug)}">分野統括：${esc(subject.name)}</option>`).join(""); const customItems = catalog.filter((item) => (!genresOnly || item.kind === "genre") && item.status !== "archived"); catalogSelect.innerHTML = `<option value="">選択してください</option>${system}${customItems.map((item) => `<option value="${esc(item.id)}">${esc(item.kind === "genre" ? "ジャンル" : "役割")}：${esc(item.name)}</option>`).join("")}`; catalogSelect.disabled = false; };
+    const renderSubjects = () => { const subjectElements = subjectRows(); content.innerHTML = subjectElements.map((subject) => { const slug = subject.slug; const assigned = genreMembers.filter((member) => (member.subjectAssignments ?? []).includes(slug)); const leads = genreMembers.filter((member) => (member.workflowSubjects ?? []).includes(slug)); const memberButtons = assigned.map((member) => `<span class="person"><span>${esc(memberName(member))}</span><button type="button" class="person-remove" data-remove-standard="member|${esc(member.email)}|${esc(slug)}">削除</button></span>`).join("") || '<span class="unassigned">未割り当て</span>'; const leadButtons = leads.map((member) => `<span class="person person--lead"><span>${esc(memberName(member))}</span><button type="button" class="person-remove" data-remove-standard="lead|${esc(member.email)}|${esc(slug)}">削除</button></span>`).join("") || '<span class="unassigned">未割り当て</span>'; return `<article class="subject-card"><div class="subject-card__heading"><div><h2>${esc(subject.name)}</h2><code>${esc(slug)}</code></div><span class="subject-status">${esc(subject.status)}</span></div><p class="subject-description">${esc(subject.description)}</p><div class="role-list"><div class="role-row"><span class="role-label"><i class="dot dot--member"></i>分野担当</span><div class="people">${memberButtons}</div></div><div class="role-row"><span class="role-label"><i class="dot dot--lead"></i>分野統括</span><div class="people">${leadButtons}</div></div></div></article>`; }).join("") || '<p class="empty-state">分野情報がありません。</p>'; };
+    const renderCustom = () => { const visibleCatalog = catalog.filter((item) => !genresOnly || item.kind === "genre"); customCount.textContent = `${visibleCatalog.length}件`; customContent.innerHTML = visibleCatalog.length ? visibleCatalog.map((item) => { const itemAssignments = assignments.filter((assignment) => assignment.catalog_id === item.id); const archived = item.status === "archived"; return `<article class="custom-card${archived ? " custom-card--archived" : ""}" data-custom-id="${esc(item.id)}" data-status="${esc(item.status ?? "active")}"><div class="custom-card__heading"><div><h3>${esc(item.name)}</h3><code>${esc(item.slug)}</code></div><span class="subject-status">${archived ? "アーカイブ" : item.kind === "genre" ? "ジャンル" : "役割"}</span></div><p class="custom-description">${esc(item.description || "説明はまだ登録されていません。")}</p><div class="custom-people"><strong class="custom-card__meta">参加メンバー</strong><div class="custom-people-list">${people(itemAssignments, "", (assignment) => `${item.id}|${assignment.email}`)}</div></div><div class="custom-card__actions"><span class="custom-card__meta">${itemAssignments.length}人</span><span class="custom-card__buttons"><button type="button" class="quiet" data-edit-catalog="${esc(item.id)}">編集</button><button type="button" class="delete-catalog" data-toggle-catalog="${esc(item.id)}" data-next-status="${archived ? "restore" : "archive"}">${archived ? "復元" : "アーカイブ"}</button></span></div><form class="catalog-editor" data-catalog-editor="${esc(item.id)}" hidden><label>表示名<input name="name" value="${esc(item.name)}" maxlength="120" required /></label><details class="advanced-field"><summary>詳細設定（内部ID）</summary><label>ID（任意・英数字とハイフン）<input name="slug" value="${esc(item.slug)}" pattern="[a-z0-9-]+" maxlength="80" /></label><small>参照関係を保つため、通常は変更しません。</small></details><label>説明<input name="description" value="${esc(item.description ?? "")}" maxlength="500" /></label><div><button type="submit">保存</button><button type="button" class="quiet" data-cancel-catalog="${esc(item.id)}">キャンセル</button></div></form></article>`; }).join("") : '<p class="empty-state">カスタム項目はまだありません。</p>'; };
+    const attachCustomAssignmentForms = () => { customContent.querySelectorAll<HTMLElement>("[data-custom-id]").forEach((card) => { if (card.querySelector("[data-custom-assignment]")) return; const item = catalog.find((entry) => entry.id === card.dataset.customId); if (!item || item.status === "archived") return; card.querySelector<HTMLElement>(".custom-card__actions")?.insertAdjacentHTML("beforebegin", `<form class="custom-card__assignment" data-custom-assignment="${esc(item.id)}"><label>この${item.kind === "genre" ? "ジャンル" : "役割"}の担当メンバー<input type="email" name="email" required maxlength="320" placeholder="member@example.com" /></label><button type="submit">追加</button><output aria-live="polite"></output></form>`); }); };
+    new MutationObserver(attachCustomAssignmentForms).observe(customContent, { childList: true });
     const taxonomyGroupKey = (item: Taxonomy) => `${item.kind}:${item.subject_slug}`;
     const taxonomyEntries = () => taxonomy.slice().sort((a, b) => a.kind.localeCompare(b.kind) || a.subject_slug.localeCompare(b.subject_slug) || (Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)) || a.name.localeCompare(b.name, "ja"));
-    const taxonomyEditor = (item: Taxonomy) => `<form class="taxonomy-editor" data-taxonomy-editor="${esc(item.id)}" hidden><label>表示名<input name="name" value="${esc(item.name)}" maxlength="120" required /></label><label>ID<input name="slug" value="${esc(item.slug)}" pattern="[a-z0-9-]+" maxlength="80" required /></label><label>説明<input name="description" value="${esc(item.description ?? "")}" maxlength="500" /></label><div class="taxonomy-editor__actions"><button type="submit" data-save-taxonomy="${esc(item.id)}">保存</button><button type="button" data-cancel-taxonomy="${esc(item.id)}">キャンセル</button></div></form>`;
+    const taxonomyEditor = (item: Taxonomy) => `<form class="taxonomy-editor" data-taxonomy-editor="${esc(item.id)}" hidden><label>表示名<input name="name" value="${esc(item.name)}" maxlength="120" required /></label><details class="advanced-field"><summary>詳細設定（内部ID）</summary><label>ID（任意・英数字とハイフン）<input name="slug" value="${esc(item.slug)}" pattern="[a-z0-9-]+" maxlength="80" /></label><small>参照関係を保つため、通常は変更しません。</small></details><label>説明<input name="description" value="${esc(item.description ?? "")}" maxlength="500" /></label><div class="taxonomy-editor__actions"><button type="submit" data-save-taxonomy="${esc(item.id)}">保存</button><button type="button" data-cancel-taxonomy="${esc(item.id)}">キャンセル</button></div></form>`;
     const taxonomyPublicationAction = (item: Taxonomy) => item.created_by && item.created_by !== "system" ? `<button type="button" data-publish-taxonomy="${esc(item.id)}" data-next-publication="${item.publication_status === "published" ? "unpublish" : "publish"}">${item.publication_status === "published" ? "準備中へ戻す" : "公開準備完了"}</button>` : "";
     const renderTaxonomy = () => {
       const entries = taxonomyEntries();
       const subjectItems = new Map(entries.filter((item) => item.kind === "subject").map((item) => [item.slug, item]));
       const categoriesBySubject = new Map<string, Taxonomy[]>();
       entries.filter((item) => item.kind === "category").forEach((item) => { const list = categoriesBySubject.get(item.subject_slug) ?? []; list.push(item); categoriesBySubject.set(item.subject_slug, list); });
-      const visibleSubjects = subjectRows().sort((left, right) => {
+      const allSubjects = subjectRows().sort((left, right) => {
         const leftItem = subjectItems.get(left.slug); const rightItem = subjectItems.get(right.slug);
         if (leftItem && rightItem) return (Number(leftItem.sort_order ?? 0) - Number(rightItem.sort_order ?? 0)) || left.name.localeCompare(right.name, "ja");
         if (leftItem) return 1;
         if (rightItem) return -1;
         return left.name.localeCompare(right.name, "ja");
       });
-      taxonomyCount.textContent = `${entries.length}件・${visibleSubjects.length}分野`;
-      if (!visibleSubjects.length) { taxonomyContent.innerHTML = '<p class="loading">追加した分野・カテゴリはまだありません。</p>'; return; }
+      const selectedSubject = readTaxonomyFilter();
+      const visibleSubjects = allSubjects.filter((subject) => !selectedSubject || subject.slug === selectedSubject);
+      const selectedSubjectRow = allSubjects.find((subject) => subject.slug === selectedSubject);
+      taxonomyCount.textContent = selectedSubjectRow ? `${selectedSubjectRow.name}・${categoriesBySubject.get(selectedSubjectRow.slug)?.length ?? 0}カテゴリ` : `${entries.length}件・${allSubjects.length}分野`;
+      if (!visibleSubjects.length) { taxonomyContent.innerHTML = '<p class="empty-state">追加した分野・カテゴリはまだありません。</p>'; return; }
       const renderCategory = (item: Taxonomy, position: number, siblings: Taxonomy[]) => `<li class="taxonomy-category taxonomy-card" data-status="${esc(item.status ?? "active")}" data-taxonomy-id="${esc(item.id)}" data-taxonomy-group="${esc(taxonomyGroupKey(item))}" draggable="true" aria-grabbed="false" aria-label="${esc(item.name)}。タイトルをクリックして編集。ドラッグしてカテゴリの順番または所属分野を変更"><span class="taxonomy-drag-handle" aria-hidden="true">⠿</span><button type="button" class="taxonomy-title-button" data-inline-edit-taxonomy="${esc(item.id)}" aria-label="${esc(item.name)}の表示名を編集"><strong>${esc(item.name)}</strong></button><div class="taxonomy-category__label"><code>${esc(item.slug)}</code><small>${item.publication_status === "published" ? "公開中" : "準備中"}</small></div><div class="taxonomy-category__actions"><span class="taxonomy-order-actions"><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="up" aria-label="${esc(item.name)}を上へ" ${position <= 0 ? "disabled" : ""}>↑</button><button type="button" data-move-taxonomy="${esc(item.id)}" data-direction="down" aria-label="${esc(item.name)}を下へ" ${position >= siblings.length - 1 ? "disabled" : ""}>↓</button></span><button type="button" data-edit-taxonomy="${esc(item.id)}">編集</button>${taxonomyPublicationAction(item)}<button type="button" data-toggle-taxonomy="${esc(item.id)}" data-next-status="${item.status === "archived" ? "restore" : "archive"}">${item.status === "archived" ? "復元" : "アーカイブ"}</button></div>${taxonomyEditor(item)}</li>`;
       taxonomyContent.innerHTML = `<div class="taxonomy-lanes">${visibleSubjects.map((subject) => { const subjectItem = subjectItems.get(subject.slug); const categories = categoriesBySubject.get(subject.slug) ?? []; const subjectSiblings = entries.filter((entry) => entry.kind === "subject"); const subjectPosition = subjectItem ? subjectSiblings.findIndex((entry) => entry.id === subjectItem.id) : -1; const subjectStatus = subjectItem?.status === "archived" ? "アーカイブ" : subjectItem?.publication_status === "published" ? "公開中" : "準備中"; const subjectActions = subjectItem ? `<div class="taxonomy-subject-card__actions"><span class="taxonomy-order-actions"><button type="button" data-move-taxonomy="${esc(subjectItem.id)}" data-direction="up" aria-label="${esc(subject.name)}を上へ" ${subjectPosition <= 0 ? "disabled" : ""}>↑</button><button type="button" data-move-taxonomy="${esc(subjectItem.id)}" data-direction="down" aria-label="${esc(subject.name)}を下へ" ${subjectPosition >= subjectSiblings.length - 1 ? "disabled" : ""}>↓</button></span><button type="button" data-edit-taxonomy="${esc(subjectItem.id)}">編集</button>${taxonomyPublicationAction(subjectItem)}<button type="button" data-toggle-taxonomy="${esc(subjectItem.id)}" data-next-status="${subjectItem.status === "archived" ? "restore" : "archive"}">${subjectItem.status === "archived" ? "復元" : "アーカイブ"}</button></div>` : ""; return `<article class="taxonomy-lane${subjectItem ? " taxonomy-subject-card" : ""}" data-taxonomy-lane data-taxonomy-target-group="category:${esc(subject.slug)}" data-status="${esc(subjectItem?.status ?? "active")}" ${subjectItem ? `data-taxonomy-id="${esc(subjectItem.id)}" data-taxonomy-group="subject:" draggable="true" aria-grabbed="false" aria-label="${esc(subject.name)}。タイトルをクリックして編集。ドラッグして分野の順番を変更"` : ""}><header class="taxonomy-lane__heading"><div class="taxonomy-subject-card__title">${subjectItem ? '<span class="taxonomy-drag-handle" aria-hidden="true">⠿</span>' : ""}<div><button type="button" class="taxonomy-title-button" data-inline-edit-taxonomy="${subjectItem ? esc(subjectItem.id) : ""}" ${subjectItem ? `aria-label="${esc(subject.name)}の表示名を編集"` : "disabled"}><h3>${esc(subject.name)}</h3></button><code>${esc(subject.slug)}</code><small>${subjectItem ? `分野・${subjectStatus}` : "既存の分野"}・カテゴリ ${categories.length}件</small></div></div>${subjectActions}</header>${categories.length ? `<ul class="taxonomy-category-list">${categories.map((item, index) => renderCategory(item, index, categories)).join("")}</ul>` : '<p class="taxonomy-empty">カテゴリをここへドロップ、または上のフォームから追加できます。</p>'}${subjectItem ? taxonomyEditor(subjectItem) : ""}</article>`; }).join("")}</div>`;
     };
@@ -355,15 +419,18 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       const target = siblings[position + (direction === "up" ? -1 : 1)];
       if (target) await reorderTaxonomy(id, target.id);
     };
+
+    let setLoadPlaceholders: (message: string, state?: "loading" | "error") => void = () => undefined;
     let load: () => Promise<void>;
     const retry = createAdminLoadRetry(root, () => load(), "役割情報を読み込めませんでした。");
-    load = async () => { retry.begin(); try { const [genreResponse, catalogResponse, taxonomyResponse] = await Promise.all([fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }), fetch("/api/admin/genre-role-catalog?project=atlas", { credentials: "same-origin", cache: "no-store" }), fetch("/api/admin/editor/taxonomy?project=atlas&includeArchived=1", { credentials: "same-origin", cache: "no-store" })]); const genre = await genreResponse.json() as GenreResponse; const catalogData = await catalogResponse.json() as CatalogResponse; const taxonomyData = await taxonomyResponse.json() as { catalog?: Taxonomy[]; error?: string }; if (!genreResponse.ok) throw new Error(genre.error ?? "担当情報を読み込めませんでした。"); if (!catalogResponse.ok) throw new Error(catalogData.error ?? "カタログを読み込めませんでした。"); if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。"); genreMembers = genre.members ?? []; catalog = catalogData.catalog ?? []; assignments = catalogData.assignments ?? []; taxonomy = taxonomyData.catalog ?? []; renderTaxonomySubjectOptions(); renderCatalogSelect(); renderSubjects(); renderCustom(); renderTaxonomy(); retry.success(); } catch (error) { retry.fail(error); throw error; } };
-    const send = async (url: string, options: RequestInit) => { const response = await fetch(url, { ...options, credentials: "same-origin", headers: { "content-type": "application/json", ...(options.headers ?? {}) } }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error ?? "保存できませんでした。"); return data; };
+    load = async () => { retry.begin(); root.setAttribute("aria-busy", "true"); root.dataset.adminLoadState = "loading"; setLoadPlaceholders("読み込み中…"); try { const [genreResponse, catalogResponse, taxonomyResponse] = await Promise.all([fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }), fetch("/api/admin/genre-role-catalog?project=atlas&includeArchived=1", { credentials: "same-origin", cache: "no-store" }), fetch("/api/admin/editor/taxonomy?project=atlas&includeArchived=1", { credentials: "same-origin", cache: "no-store" })]); const genre = await readAdminApiJson<GenreResponse>(genreResponse, "担当情報を読み込めませんでした。"); const catalogData = await readAdminApiJson<CatalogResponse>(catalogResponse, "カタログを読み込めませんでした。"); const taxonomyData = await readAdminApiJson<{ catalog?: Taxonomy[]; error?: string }>(taxonomyResponse, "分野・カテゴリを読み込めませんでした。"); if (!genreResponse.ok) throw new Error(genre.error ?? "担当情報を読み込めませんでした。"); if (!catalogResponse.ok) throw new Error(catalogData.error ?? "カタログを読み込めませんでした。"); if (!taxonomyResponse.ok) throw new Error(taxonomyData.error ?? "分野・カテゴリを読み込めませんでした。"); genreMembers = genre.members ?? []; catalog = catalogData.catalog ?? []; assignments = catalogData.assignments ?? []; taxonomy = taxonomyData.catalog ?? []; renderTaxonomySubjectOptions(); renderTaxonomyFilter(); renderCatalogSelect(); renderSubjects(); renderCustom(); attachCustomAssignmentForms(); renderTaxonomy(); root.setAttribute("aria-busy", "false"); root.dataset.adminLoadState = "ready"; retry.success(); } catch (error) { setLoadPlaceholders(error instanceof Error ? error.message : "役割情報を読み込めませんでした。"); root.setAttribute("aria-busy", "false"); root.dataset.adminLoadState = "error"; retry.fail(error); throw error; } };
+    const send = async (url: string, options: RequestInit) => { const response = await fetch(url, { ...options, credentials: "same-origin", headers: { "content-type": "application/json", ...(options.headers ?? {}) } }); const data = await readAdminApiJson<{ error?: string }>(response, "保存できませんでした。"); if (!response.ok) throw new Error(data.error ?? "保存できませんでした。"); return data; };
     const taxonomyForm = root.querySelector<HTMLFormElement>("[data-taxonomy-form]");
     const taxonomyKind = taxonomyForm?.elements.namedItem("kind") as HTMLSelectElement | null;
     const taxonomySubject = taxonomyForm?.elements.namedItem("subject") as HTMLSelectElement | null;
     const syncTaxonomySubject = () => { if (!taxonomyKind || !taxonomySubject) return; const isCategory = taxonomyKind.value === "category"; taxonomySubject.disabled = !isCategory; taxonomySubject.required = isCategory; if (!isCategory) taxonomySubject.value = ""; };
     taxonomyKind?.addEventListener("change", syncTaxonomySubject); syncTaxonomySubject();
+    taxonomyFilter?.addEventListener("change", () => { const value = taxonomyFilter.value; const url = new URL(window.location.href); if (value) url.searchParams.set("taxonomySubject", value); else url.searchParams.delete("taxonomySubject"); window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`); renderTaxonomy(); });
     taxonomyForm?.addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const output = form.querySelector<HTMLOutputElement>("[data-taxonomy-message]")!; const values = Object.fromEntries(new FormData(form).entries()); const release = lockAdminForm(form, "追加中…"); try { await send("/api/admin/editor/taxonomy", { method: "POST", body: JSON.stringify(values) }); output.textContent = "追加しました。記事編集の目次へ反映されます。"; form.reset(); syncTaxonomySubject(); await load(); } catch (error) { output.textContent = error instanceof Error ? error.message : "追加できませんでした。"; } finally { release(); } });
     root.querySelector<HTMLFormElement>("[data-catalog-form]")?.addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const output = form.querySelector<HTMLOutputElement>("[data-form-message]")!; const values = Object.fromEntries(new FormData(form).entries()); const release = lockAdminForm(form, "作成中…"); try { await send("/api/admin/genre-role-catalog", { method: "POST", body: JSON.stringify(values) }); output.textContent = "作成しました。"; form.reset(); await load(); } catch (error) { output.textContent = error instanceof Error ? error.message : "作成できませんでした。"; } finally { release(); } });
     root.querySelector<HTMLFormElement>("[data-assignment-form]")?.addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const output = form.querySelector<HTMLOutputElement>("[data-assignment-message]")!; const values = Object.fromEntries(new FormData(form).entries()); const [systemKind, systemSlug] = String(values.catalogId ?? "").split("|"); const item = catalog.find((entry) => entry.id === values.catalogId); const release = lockAdminForm(form, "追加中…"); try { if (systemKind === "system-member" && systemSlug) await send("/api/admin/report-admin-permissions", { method: "POST", body: JSON.stringify({ email: values.email, subject: systemSlug }) }); else if (systemKind === "system-lead" && systemSlug) await send("/api/admin/editorial-workflow-roles", { method: "POST", body: JSON.stringify({ email: values.email, role: "subject-coordinator", subjects: [systemSlug] }) }); else if (item) await send("/api/admin/genre-role-catalog/assignments", { method: "POST", body: JSON.stringify({ catalogId: item.id, email: values.email }) }); else throw new Error("対象を選択してください。"); output.textContent = "追加しました。"; form.reset(); await load(); } catch (error) { output.textContent = error instanceof Error ? error.message : "追加できませんでした。"; } finally { release(); } });
@@ -371,14 +438,27 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       const target = event.target as HTMLElement;
       const removeStandard = target.closest<HTMLElement>("[data-remove-standard]");
       const removeCustom = target.closest<HTMLElement>("[data-remove-assignment]");
-      const deleteCatalog = target.closest<HTMLElement>("[data-delete-catalog]");
+      const editCatalog = target.closest<HTMLElement>("[data-edit-catalog]");
+      const cancelCatalog = target.closest<HTMLElement>("[data-cancel-catalog]");
+      const toggleCatalog = target.closest<HTMLElement>("[data-toggle-catalog]");
       const toggleTaxonomy = target.closest<HTMLElement>("[data-toggle-taxonomy]");
       const publishTaxonomy = target.closest<HTMLElement>("[data-publish-taxonomy]");
       const editTaxonomy = target.closest<HTMLElement>("[data-edit-taxonomy]");
       const inlineEditTaxonomy = target.closest<HTMLElement>("[data-inline-edit-taxonomy]");
       const moveTaxonomyButton = target.closest<HTMLButtonElement>("[data-move-taxonomy]");
       try {
-        if (moveTaxonomyButton) {
+        if (editCatalog) {
+          const editor = root.querySelector<HTMLElement>(`[data-catalog-editor="${CSS.escape(editCatalog.dataset.editCatalog ?? "")}"]`);
+          if (editor) { editor.hidden = false; editor.querySelector<HTMLInputElement>("input[name=name]")?.focus(); }
+        } else if (cancelCatalog) {
+          const editor = root.querySelector<HTMLElement>(`[data-catalog-editor="${CSS.escape(cancelCatalog.dataset.cancelCatalog ?? "")}"]`);
+          if (editor) editor.hidden = true;
+        } else if (toggleCatalog) {
+          const action = toggleCatalog.dataset.nextStatus === "restore" ? "restore" : "archive";
+          if (!window.confirm(action === "restore" ? "このジャンルを復元しますか？" : "このジャンルをアーカイブしますか？担当割り当てと履歴は保持されます。")) return;
+          await send("/api/admin/genre-role-catalog", { method: "PATCH", body: JSON.stringify({ id: toggleCatalog.dataset.toggleCatalog, action }) });
+          await load();
+        } else if (moveTaxonomyButton) {
           const id = moveTaxonomyButton.dataset.moveTaxonomy;
           const direction = moveTaxonomyButton.dataset.direction;
           if (id && (direction === "up" || direction === "down")) await moveTaxonomy(id, direction);
@@ -402,9 +482,6 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
         } else if (removeCustom) {
           const [catalogId, email] = (removeCustom.dataset.removeAssignment ?? "").split("|");
           await send(`/api/admin/genre-role-catalog/assignments?catalogId=${encodeURIComponent(catalogId)}&email=${encodeURIComponent(email)}`, { method: "DELETE" }); await load();
-        } else if (deleteCatalog) {
-          if (!confirm("このカスタム項目と割り当てを削除しますか？")) return;
-          await send(`/api/admin/genre-role-catalog?id=${encodeURIComponent(deleteCatalog.dataset.deleteCatalog ?? "")}`, { method: "DELETE" }); await load();
         }
       } catch (error) { const message = root.querySelector<HTMLOutputElement>("[data-message]"); if (message) message.value = error instanceof Error ? error.message : "更新できませんでした。"; }
     });
@@ -414,6 +491,36 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       if (cancel) { const editor = root.querySelector<HTMLElement>(`[data-taxonomy-editor="${CSS.escape(cancel.dataset.cancelTaxonomy ?? "")}"]`); if (editor) editor.hidden = true; }
     });
     root.addEventListener("submit", async (event) => {
+      const customAssignment = (event.target as HTMLElement).closest<HTMLFormElement>("[data-custom-assignment]");
+      if (customAssignment) {
+        event.preventDefault();
+        const output = customAssignment.querySelector<HTMLOutputElement>("output");
+        const values = Object.fromEntries(new FormData(customAssignment).entries());
+        const release = lockAdminForm(customAssignment, "追加中…");
+        try {
+          await send("/api/admin/genre-role-catalog/assignments", { method: "POST", body: JSON.stringify({ catalogId: customAssignment.dataset.customAssignment, email: values.email }) });
+          if (output) output.textContent = "追加しました。";
+          customAssignment.reset();
+          await load();
+        } catch (error) {
+          if (output) output.textContent = error instanceof Error ? error.message : "追加できませんでした。";
+        } finally { release(); }
+        return;
+      }
+      const catalogEditor = (event.target as HTMLElement).closest<HTMLFormElement>("[data-catalog-editor]");
+      if (catalogEditor) {
+        event.preventDefault();
+        const values = Object.fromEntries(new FormData(catalogEditor).entries());
+        const release = lockAdminForm(catalogEditor, "保存中…");
+        try {
+          await send("/api/admin/genre-role-catalog", { method: "PATCH", body: JSON.stringify({ id: catalogEditor.dataset.catalogEditor, action: "update", ...values }) });
+          await load();
+        } catch (error) {
+          const message = root.querySelector<HTMLOutputElement>("[data-message]");
+          if (message) message.value = error instanceof Error ? error.message : "ジャンルを更新できませんでした。";
+        } finally { release(); }
+        return;
+      }
       const editor = (event.target as HTMLElement).closest<HTMLFormElement>("[data-taxonomy-editor]");
       if (!editor) return;
       event.preventDefault();
@@ -504,7 +611,18 @@ const subjects = (await getCollection("subjects")).sort((a, b) => a.data.order -
       target.closest<HTMLElement>(".is-drop-target")?.classList.remove("is-drop-target");
     });
     taxonomyContent.addEventListener("dragend", (event) => { const dragged = (event.target as HTMLElement).closest<HTMLElement>(".is-dragging"); dragged?.classList.remove("is-dragging"); dragged?.setAttribute("aria-grabbed", "false"); root.querySelectorAll<HTMLElement>(".is-drop-target").forEach((item) => item.classList.remove("is-drop-target")); root.querySelectorAll<HTMLElement>("[data-drop-position]").forEach((item) => item.removeAttribute("data-drop-position")); dragPreview?.remove(); dragPreview = null; draggedTaxonomyId = ""; });
-    void load().catch((error) => { content.innerHTML = `<p class="loading">${esc(error instanceof Error ? error.message : "役割情報を読み込めませんでした。")}</p>`; customContent.innerHTML = ""; });
+
+    setLoadPlaceholders = (message: string, state: "loading" | "error" = message === "読み込み中…" ? "loading" : "error") => {
+      const className = state === "loading" ? "loading" : "error-state";
+      const placeholder = `<p class="${className}">${esc(message)}</p>`;
+      content.innerHTML = placeholder;
+      customContent.innerHTML = placeholder;
+      taxonomyContent.innerHTML = placeholder;
+      catalogSelect.innerHTML = `<option value="">${esc(message)}</option>`;
+      catalogSelect.disabled = true;
+    };
+
+    void load().catch(() => undefined);
   }; document.addEventListener("astro:page-load", initialize); initialize();
 </script>
 

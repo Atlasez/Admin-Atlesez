@@ -68,6 +68,7 @@ const publishedSubjectCount = subjects.filter((subject) => subject.data.status =
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   type Member = { subjectAssignments?: string[]; workflowSubjects?: string[]; role?: string; university?: string; year?: string; country?: string };
   type GenreData = { members?: Member[]; overviews?: Array<{ subject?: string; progress?: string; updated_at?: string }>; error?: string };
   type OperationsData = { tasks?: Array<{ status?: string; updated_at?: string }>; events?: Array<{ created_at?: string }>; error?: string };
@@ -105,17 +106,17 @@ const publishedSubjectCount = subjects.filter((subject) => subject.data.status =
       try {
         const [genre, operations, progress] = await Promise.all([
           fetch("/api/admin/genre-overviews?project=atlas", { credentials: "same-origin", cache: "no-store" }).then(async (response) => {
-            const data = await response.json() as GenreData;
+            const data = await readAdminApiJson<GenreData>(response, "分野統計を読み込めませんでした。");
             if (!response.ok) throw new Error(data.error ?? "分野統計を読み込めませんでした。");
             return data;
           }),
           fetch("/api/admin/operations?project=atlas", { credentials: "same-origin", cache: "no-store" }).then(async (response) => {
-            const data = await response.json() as OperationsData;
+            const data = await readAdminApiJson<OperationsData>(response, "タスク統計を読み込めませんでした。");
             if (!response.ok) throw new Error(data.error ?? "タスク統計を読み込めませんでした。");
             return data;
           }),
           fetch("/api/admin/progress", { credentials: "same-origin", cache: "no-store" }).then(async (response) => {
-            const data = await response.json() as ProgressData;
+            const data = await readAdminApiJson<ProgressData>(response, "進捗統計を読み込めませんでした。");
             if (!response.ok) throw new Error(data.error ?? "進捗統計を読み込めませんでした。");
             return data;
           }),

@@ -70,8 +70,12 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
     .event-list { grid-template-columns: 1fr; }
   }
 </style>
+<style>
+  .co-working .scope-note { border: 1px solid var(--border-default); padding: .55rem .7rem; }
+</style>
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+  import { readAdminApiJson } from '../../lib/admin-api';
 
   type CoWorkingEvent = {
     title?: string;
@@ -100,9 +104,8 @@ const operationProject = ["secretariat", "seminar-platform", "student-council-ex
       list.innerHTML = '<p class="loading-state">読み込み中…</p>';
       try {
         const response = await fetch(`/api/admin/operations?project=${encodeURIComponent(projectId)}`, { credentials: 'same-origin', cache: 'no-store' });
-      const contentType = response.headers.get('content-type') ?? '';
-      const data = contentType.includes('application/json') ? await response.json() as OperationsResponse : null;
-      if (!response.ok || !data) throw new Error(data?.error ?? '日程を読み込めませんでした。');
+      const data = await readAdminApiJson<OperationsResponse>(response, '日程を読み込めませんでした。');
+      if (!response.ok) throw new Error(data.error ?? '日程を読み込めませんでした。');
       const now = Date.now();
       const events = (data.events ?? []).filter((event) => event.starts_at && new Date(event.starts_at).getTime() >= now).sort((a, b) => new Date(a.starts_at!).getTime() - new Date(b.starts_at!).getTime());
       if (!events.length) { list.hidden = true; empty.hidden = false; retry.success(); return; }

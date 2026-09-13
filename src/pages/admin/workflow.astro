@@ -31,6 +31,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   const initWorkflowPage = () => {
     const root = document.querySelector<HTMLElement>("[data-workflow-page]");
     if (!root || root.dataset.initialized === "true") return;
@@ -50,15 +51,15 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
           fetch("/api/admin/workflow/transitions", { credentials: "same-origin", cache: "no-store" }),
           fetch("/api/admin/workflow/diagnostics", { credentials: "same-origin", cache: "no-store" }),
         ]);
+        const data = await readAdminApiJson<{ entities?: Record<string, { label: string; states: string[]; counts: Record<string, number> }>; transitions?: Array<{ entityType: string; from: string; to: string; label: string; requiredRole: string }>; generatedAt?: string }>(response, "状態遷移を読み込めませんでした。");
         if (!response.ok) throw new Error("状態遷移を読み込めませんでした。");
-        const data = await response.json() as { entities?: Record<string, { label: string; states: string[]; counts: Record<string, number> }>; transitions?: Array<{ entityType: string; from: string; to: string; label: string; requiredRole: string }>; generatedAt?: string };
         const entityRows = Object.entries(data.entities ?? {}).map(([, entity]) => `<article class="workflow-entity"><h3>${escape(entity.label)}</h3><div class="workflow-states">${entity.states.map((state) => `<div class="workflow-state"><span>${escape(labels[state] ?? state)}</span><strong>${Number(entity.counts?.[state] ?? 0)}</strong></div>`).join("")}</div></article>`).join("");
         entities.innerHTML = entityRows || `<p class="workflow-empty">状態データはありません。</p>`;
         const roleLabels: Record<string, string> = { assignee: "担当者", reviewer: "査読者", manager: "運営内運営" };
         rules.innerHTML = (data.transitions ?? []).map((item) => `<div class="workflow-rule"><span class="workflow-rule-entity">${escape(data.entities?.[item.entityType]?.label ?? item.entityType)}</span><span class="workflow-state-chip">${escape(labels[item.from] ?? item.from)}</span><span class="workflow-arrow" aria-hidden="true">→</span><span class="workflow-state-chip">${escape(labels[item.to] ?? item.to)}</span><span class="workflow-rule-label">${escape(item.label)}</span><span class="workflow-role">${escape(roleLabels[item.requiredRole] ?? item.requiredRole)}</span></div>`).join("") || `<p class="workflow-empty">遷移ルールはありません。</p>`;
         updated.value = data.generatedAt ? `最終確認：${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.generatedAt))}` : "最新状態";
         if (diagnosticsResponse.ok) {
-          const diagnosticData = await diagnosticsResponse.json() as { issues?: Array<{ id: string; entityType: string; entityId: string; fromState: string; expectedState: string; currentState: string | null; kind: string; actorEmail: string; createdAt: string }>; generatedAt?: string };
+          const diagnosticData = await readAdminApiJson<{ issues?: Array<{ id: string; entityType: string; entityId: string; fromState: string; expectedState: string; currentState: string | null; kind: string; actorEmail: string; createdAt: string }>; generatedAt?: string }>(diagnosticsResponse, "整合性情報を読み込めませんでした。");
           const issues = diagnosticData.issues ?? [];
           diagnostics.innerHTML = issues.length
             ? `<p class="workflow-diagnostics-warning">${issues.length}件の不整合を検出しました。対象データを確認してから状態遷移を再実行してください。</p><ul>${issues.map((issue) => `<li><span><strong>${escape(issue.entityType)}:${escape(issue.entityId)}</strong> ${escape(issue.kind === "missing_entity" ? "対象が見つかりません" : `${issue.fromState} → ${issue.expectedState}（現在：${issue.currentState ?? "不明"}）`)}<small>${escape(issue.actorEmail)}</small></span>${issue.kind === "state_mismatch" ? `<button type="button" data-workflow-repair="${escape(issue.id)}">再同期</button>` : ""}</li>`).join("")}</ul>`

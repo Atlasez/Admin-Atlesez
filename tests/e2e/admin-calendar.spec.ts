@@ -46,15 +46,25 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
   );
 
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
-  await page
-    .getByRole("link", { name: /学習サイト「アトラス」運営/ })
-    .last()
-    .click();
+  await expect(page).toHaveURL(/\/admin\/portal\/?$/);
+  const atlasProjectLink = page
+    .locator('[data-project-group="managed"] a')
+    .filter({ hasText: "学習サイト「アトラス」運営" });
+  await expect(atlasProjectLink).toHaveCount(1);
+  await expect(atlasProjectLink).toBeVisible();
+  await atlasProjectLink.click();
+  await expect(page).toHaveURL(/\/admin\/atlas\/?$/);
   await expect(
     page.getByRole("link", { name: "管理", exact: true }),
   ).toHaveAttribute("href", "/admin/manage/?project=atlas");
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
-  await page.getByRole("link", { name: /Atlasez運営事務局/ }).click();
+  await expect(page).toHaveURL(/\/admin\/portal\/?$/);
+  const secretariatProjectLink = page.getByRole("link", {
+    name: /Atlasez運営事務局/,
+  });
+  await expect(secretariatProjectLink).toBeVisible();
+  await secretariatProjectLink.click();
+  await expect(page).toHaveURL(/\/admin\/secretariat\/?$/);
   await expect(
     page.getByRole("link", { name: "管理", exact: true }),
   ).toHaveAttribute("href", "/admin/manage/?project=secretariat");

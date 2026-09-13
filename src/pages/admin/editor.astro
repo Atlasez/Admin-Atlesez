@@ -564,7 +564,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   @media (max-width: 1080px) { .editor-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }.article-preview { height: auto; min-height: 28rem; }.workspace-grid, .editor-workspace.sidebar-collapsed .workspace-grid { grid-template-columns: 1fr; }.document-sidebar { border-bottom: 1px solid var(--border); border-right: 0; }.editor-workspace.sidebar-collapsed .document-sidebar { align-items:start; }.editor-workspace.sidebar-collapsed .sidebar-collapse-toggle { font-size:1.05rem; }.document-list { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); max-height: 16rem; }.workspace-header { display: grid; }.workspace-header nav { justify-content: start; }.document-toolbar { display: grid; }.toolbar-actions { justify-content: start; }.metadata-grid { grid-template-columns: 1fr; }.metadata label:nth-child(1), .metadata label:nth-child(2) { grid-column: auto; } }
   @media (max-width: 700px) { .editor-workspace { padding: 0 .8rem 3rem; }.workspace-header nav form, .workspace-header nav button { box-sizing: border-box; width: 100%; }.workflow-guide { font-size: .7rem; }.workflow-guide ol { gap: .2rem; }.workflow-guide li { gap: .2rem; }.workflow-guide li:not(:last-child)::after { left: calc(50% + .72rem); right: calc(-50% + .72rem); top: .62rem; }.workflow-guide b { font-size: .66rem; height: 1.1rem; width: 1.1rem; }.workflow-guide li span { line-height: 1.25; }.sidebar-heading { display: grid; }.primary-action, .quiet-action { width: 100%; }.toolbar-actions, .document-actions { display: grid; }.toolbar-actions output { max-width: none; }.pane-heading { display: grid; }.metadata { padding: .65rem; }.editor-tabs{display:flex;border-bottom:1px solid var(--border);gap:.3rem;margin:.5rem 0}.editor-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font:inherit;font-size:.8rem;font-weight:800;padding:.5rem .75rem}.editor-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent)}.editor-split{grid-template-columns:1fr!important}.media-studio-actions{grid-template-columns:1fr}.heading-outline{display:block;background:var(--surface-alt);border:1px solid var(--border);font-size:.78rem;margin:.5rem 0;padding:.4rem .6rem}.document-statuses{font-size:.68rem}.personal-notebook-actions{align-items:stretch;display:grid}.personal-notebook-actions small{margin-left:0}.personal-notebook-actions .quiet-action{width:100%} }
 </style>
-
 <style>
   /* GitHub/CI の状態は、短いバッジだけでなく「何を待っているか」まで読める状態カードにする。 */
   .document-statuses {
@@ -740,7 +739,6 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     .publication-run-status[aria-busy="true"] .publication-run-indicator { animation: none; }
   }
 </style>
-
 <style is:global>
   /*
    * 公開処理の失敗状態は、長いエラー文を含む通常のインラインカードとして
@@ -1353,6 +1351,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
 <style>.diagnostics-trigger{align-items:center;background:color-mix(in srgb,var(--danger,#c62828) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--danger,#c62828) 35%,var(--border));border-radius:.35rem;color:var(--danger,#c62828);display:inline-flex;gap:.3rem}.diagnostics-trigger b{background:var(--danger,#c62828);border-radius:999px;color:#fff;font-size:.64rem;min-width:1.1rem;padding:.08rem .25rem;text-align:center}.editor-diagnostics-dialog{background:var(--surface);border:1px solid color-mix(in srgb,var(--danger,#c62828) 35%,var(--border));border-left:4px solid var(--danger,#c62828);border-radius:.7rem;box-shadow:0 1.5rem 5rem rgb(0 0 0 / .3);color:var(--text);max-height:min(82vh,38rem);padding:0;width:min(92vw,42rem)}.editor-diagnostics-dialog::backdrop{background:rgb(5 12 18 / .62)}.editor-diagnostics-inner{max-height:min(82vh,38rem);overflow:auto;padding:1rem 1.1rem 1.1rem}.editor-diagnostics-header{align-items:start;border-bottom:1px solid var(--border);display:flex;gap:1rem;justify-content:space-between;padding-bottom:.8rem}.editor-diagnostics-header h2{font-size:1.05rem;margin:.12rem 0 .25rem}.editor-diagnostics-header p:last-child{color:var(--muted);font-size:.75rem;line-height:1.5;margin:0}.editor-diagnostics-summary{align-items:baseline;display:flex;flex-wrap:wrap;gap:.5rem;margin:.9rem 0 .55rem}.editor-diagnostics-summary strong{color:var(--danger,#c62828);font-size:.82rem}.editor-diagnostics-summary span{color:var(--muted);font-size:.72rem}.editor-diagnostics-dialog ul{display:grid;gap:.5rem;list-style:none;margin:0;padding:0}.editor-diagnostics-dialog li{background:color-mix(in srgb,var(--danger,#c62828) 7%,var(--surface-alt));border:1px solid color-mix(in srgb,var(--danger,#c62828) 25%,var(--border));border-left:3px solid var(--warning,#a66a00);border-radius:.35rem;font-size:.76rem;line-height:1.55;padding:.6rem .7rem}.editor-diagnostics-dialog li b{font-variant-numeric:tabular-nums;margin-right:.35rem}.editor-diagnostics-dialog li.is-warning b{color:var(--warning,#a66a00)}.editor-diagnostics-dialog li.is-error{border-left-color:var(--danger,#c62828)}.editor-diagnostics-dialog li.is-error b{color:var(--danger,#c62828)}[data-pref-bg="dark"] .editor-diagnostics-dialog li{background:#3b1720;border-color:#a64756;color:#ffe8eb}</style><style>.publication-diagnostic{background:var(--surface-alt);border:1px solid #d9a429;border-radius:.45rem;flex:1 1 100%;min-width:min(100%,28rem);padding:.35rem .55rem}.publication-diagnostic summary{color:#805500;cursor:pointer;font-size:.72rem;font-weight:800}.publication-diagnostic-body{padding:.35rem 0 .1rem}.publication-diagnostic dl{display:grid;gap:.35rem;margin:0}.publication-diagnostic dl>div{display:grid;gap:.15rem;grid-template-columns:7rem minmax(0,1fr)}.publication-diagnostic dt{color:var(--muted);font-size:.68rem;font-weight:800}.publication-diagnostic dd{font-size:.72rem;line-height:1.5;margin:0;min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}.publication-diagnostic dd[data-publication-failure-detail]{font-family:var(--font-mono);font-size:.69rem}.publication-diagnostic dd:empty::before{color:var(--muted);content:"CIログに詳細がありません。右のCIログリンクを確認してください。";font-family:inherit}.publication-diagnostic[hidden]{display:none}</style><style>.media-width-control{align-items:end;color:var(--muted);display:flex;flex-wrap:wrap;font-size:.7rem;gap:.45rem}.media-width-control>label{align-items:center;display:flex;gap:.25rem}.media-width-control select{background:var(--surface);border:1px solid var(--border);color:var(--text);font:inherit;min-height:1.9rem;min-width:8.5rem;padding:.25rem .4rem}.media-width-custom-label input{background:var(--surface);border:1px solid var(--border);color:var(--muted);font:inherit;min-height:1.9rem;padding:.25rem .4rem;width:5rem}.media-width-custom-label span{color:var(--muted)}</style><script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   import "katex/dist/katex.min.css";
   import * as Y from "yjs";
   import { diagnoseArticleSource } from "../../lib/article-diagnostics.mjs";
@@ -1917,7 +1916,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       };
       const syncPopupFields = () => sourceFields.forEach((field, index) => { if (popupFields[index]) copyField(field, popupFields[index]); });
       const syncPopupContent = () => {
-        ["[data-preview]", "[data-media-list]", "[data-comment-list]", "[data-selected-ranges]", "[data-lock-status]", "[data-word-count]", "[data-diagnostics-trigger-count]", "[data-writing-memo]"].forEach((selector) => {
+        ["[data-preview]", "[data-media-list]", "[data-comment-list]", ".review-pane-content > .comment-tags", "[data-selected-ranges]", "[data-lock-status]", "[data-word-count]", "[data-diagnostics-trigger-count]", "[data-writing-memo]"].forEach((selector) => {
           const source = panel.querySelector<HTMLElement>(selector);
           const target = popupPanel.querySelector<HTMLElement>(selector);
           if (!source || !target) return;
@@ -1945,6 +1944,64 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       popupPanel.addEventListener("change", forwardPopupInput);
       panel.addEventListener("input", forwardSourceInput);
       panel.addEventListener("change", forwardSourceInput);
+      const popupCommentDatasetKeys = [
+        "commentAction",
+        "commentReaction",
+        "sendComment",
+        "sendReply",
+        "openReply",
+        "quoteReply",
+        "showCommentSelection",
+        "toggleReplies",
+        "cancelReply",
+        "editComment",
+        "editCommentTag",
+        "cancelEdit",
+        "saveEdit",
+        "deleteComment",
+        "commentTag",
+      ] as const;
+      const forwardPopupCommentClick = (event: Event) => {
+        const popupButton = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
+        if (!popupButton || !popupPanel.contains(popupButton)) return;
+        const datasetKey = popupCommentDatasetKeys.find((key) => popupButton.dataset[key] !== undefined);
+        if (!datasetKey) return;
+        const value = popupButton.dataset[datasetKey] ?? "";
+        const replyId = popupButton.closest<HTMLElement>("[data-reply-entry]")?.dataset.replyEntry;
+        const sourceButtons = [...panel.querySelectorAll<HTMLButtonElement>("button")];
+        const sourceButton = sourceButtons.find((button) => {
+          if (button.dataset[datasetKey] !== value) return false;
+          if (datasetKey === "commentTag") {
+            const sourceReplyId = button.closest<HTMLElement>("[data-reply-entry]")?.dataset.replyEntry;
+            return replyId ? sourceReplyId === replyId : !sourceReplyId && Boolean(button.closest(".review-pane-content > .comment-tags"));
+          }
+          if (replyId && button.closest<HTMLElement>("[data-reply-entry]")?.dataset.replyEntry !== replyId) return false;
+          return !replyId || Boolean(button.closest("[data-reply-entry]"));
+        });
+        if (!sourceButton) return;
+        if (datasetKey === "commentTag") {
+          const selected = replyId ? (selectedReplyTags.get(replyId) ?? []) : selectedCommentTags;
+          const next = selected.includes(value) ? selected.filter((item) => item !== value) : selected.length < 6 ? [...selected, value] : selected;
+          if (replyId) selectedReplyTags.set(replyId, next); else selectedCommentTags = next;
+          panel.querySelectorAll<HTMLButtonElement>(replyId ? `[data-reply-entry="${CSS.escape(replyId)}"] [data-comment-tag]` : ".review-pane-content > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", String(next.includes(button.dataset.commentTag ?? ""))));
+          popupPanel.querySelectorAll<HTMLButtonElement>(replyId ? `[data-reply-entry="${CSS.escape(replyId)}"] [data-comment-tag]` : ".review-pane-content > .comment-tags [data-comment-tag]").forEach((button) => button.setAttribute("aria-pressed", String(next.includes(button.dataset.commentTag ?? ""))));
+          return;
+        }
+        if (datasetKey === "sendComment") {
+          const sourceBody = panel.querySelector<HTMLTextAreaElement>("[data-comment-body]");
+          if (sourceBody) {
+            const popupBody = popupPanel.querySelector<HTMLTextAreaElement>("[data-comment-body]");
+            if (popupBody) sourceBody.value = popupBody.value;
+          }
+        } else if (datasetKey === "sendReply" && value) {
+          const sourceBody = panel.querySelector<HTMLTextAreaElement>(`[data-reply-body="${CSS.escape(value)}"]`);
+          const popupBody = popupPanel.querySelector<HTMLTextAreaElement>(`[data-reply-body="${CSS.escape(value)}"]`);
+          if (sourceBody && popupBody) sourceBody.value = popupBody.value;
+        }
+        sourceButton.click();
+      };
+      const popupCommentClickListener = key === "review" ? forwardPopupCommentClick : null;
+      if (popupCommentClickListener) popup.document.addEventListener("click", popupCommentClickListener);
       // 別窓では本文枠を複製しているため、複製元のイベントリスナーは引き継がれない。
       // 数式ボタンは別窓側のカーソル位置を本文側へ移してから、既存の挿入処理を呼び出す。
       const popupBody = popupPanel.querySelector<HTMLTextAreaElement>("[data-body]");
@@ -1990,6 +2047,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         panel.removeEventListener("change", forwardSourceInput);
         popupPanel.removeEventListener("input", forwardPopupInput);
         popupPanel.removeEventListener("change", forwardPopupInput);
+        if (popupCommentClickListener) popup.document.removeEventListener("click", popupCommentClickListener);
         popup.removeEventListener("beforeunload", restore);
         if (key === "review" && typeof mentionSuggestions !== "undefined") document.body.append(mentionSuggestions);
         const otherOpenPopouts = new Set(
@@ -2698,21 +2756,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }, 250);
     };
     const read = async <T,>(response: Response) => {
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        if (response.status === 401) {
-          redirectToAdminLogin();
-          throw new Error("ログインの有効期限が切れました。ログインし直してください。");
-        }
-        if (response.status === 403) throw new Error("認証が切れました。ページを再読み込みしてログインし直してください。");
-        throw new Error(`サーバーエラーが発生しました（${response.status || "応答形式不明"}）。時間をおいて再試行してください。`);
+      try {
+        const data = await readAdminApiJson<T>(response, "サーバーから想定外の応答が返されました。時間をおいて再試行してください。");
+        if (response.status === 401) redirectToAdminLogin();
+        return data;
+      } catch (error) {
+        if (response.status === 401 || response.redirected) redirectToAdminLogin();
+        throw error;
       }
-      const data = await response.json() as T;
-      if (response.status === 401 && typeof data === "object" && data !== null && "error" in data) {
-        const message = String((data as { error?: unknown }).error ?? "");
-        if (message === "ログインが必要です。" || message.includes("認証が切れ")) redirectToAdminLogin();
-      }
-      return data;
     };
     const articleIdentity = (article: Pick<SourceArticle, "subject" | "category" | "slug">) => `${article.subject}/${article.category}/${article.slug}`;
     const normalizePublicCatalog = (raw: unknown): SourceArticle[] | null => {
@@ -4392,7 +4443,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const categoryValue = source?.category ?? selected.categories[0]?.slug ?? "";
       const now = new Date().toISOString();
       const defaultSlug = (source?.slug ?? "new-article").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "new-article";
-      const defaultId = source?.conceptId ?? `${conceptPrefix(source?.subject ?? selected.slug)}.${categoryValue || "general"}.${defaultSlug}`;
+      // 目次項目は概念IDをまだ持たない状態でも先に作成できる。
+      // 空文字を「指定済み」と扱うと、目次から記事を始めた後の保存で
+      // 必須の概念ID検証に失敗するため、空値は記事用の安定した候補へ補う。
+      const defaultId = source?.conceptId || `${conceptPrefix(source?.subject ?? selected.slug)}.${categoryValue || "general"}.${defaultSlug}`;
       setDocument({ id: "", source_article_id: source?.articleId || null, subject: source?.subject ?? selected.slug, category: categoryValue || "general", locale: "ja", slug: source?.slug ?? "new-article", title: source?.title ?? "", summary: source?.summary ?? "", concept_id: defaultId, concept_name: null, concept_name_en: null, concept_is_new: false, body: source?.body ?? "", references: [], writing_memo: "", latex_engine: "uplatex", status: "draft", created_by: "", updated_by: "", created_at: now, updated_at: now, reviewed_at: null, published_at: null });
       defaultConceptId = source?.conceptId ? "" : defaultId;
       conceptId.value = defaultId;
@@ -4447,8 +4501,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const loadEditorialTaxonomy = async () => {
       try {
         const response = await fetch("/api/admin/editor/taxonomy?project=atlas", { credentials: "same-origin", cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json() as { catalog?: Array<{ kind: "subject" | "category"; subject_slug: string; slug: string; name: string; sort_order?: number; status?: string }> };
+        const data = await readAdminApiJson<{ catalog?: Array<{ kind: "subject" | "category"; subject_slug: string; slug: string; name: string; sort_order?: number; status?: string }>; error?: string }>(response, "目次情報を読み込めませんでした。");
+        if (!response.ok) throw new Error(data.error ?? "目次情報を読み込めませんでした。");
         const rows = (data.catalog ?? []).filter((row) => row.status !== "archived");
         const additions = rows.filter((row) => row.kind === "subject").map((row) => ({ slug: row.slug, name: row.name, status: "preparing" as const, categories: [] as Subject["categories"] }));
         const merged = new Map(subjects.map((item) => [item.slug, { ...item, categories: [...item.categories] }]));
@@ -4458,7 +4512,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           item.categories.push({ slug: row.slug, name: row.name, order: Number(row.sort_order ?? 0) });
         });
         subjects = [...merged.values()];
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && (error.message.includes("認証") || error.message.includes("ログイン"))) throw error;
         // 動的カタログが未適用の環境では静的な目次をそのまま使う。
       }
     };
@@ -4833,7 +4888,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const documentId = (form.elements.namedItem("documentId") as HTMLInputElement).value;
       const detail = progressBody.value.trim() || `${heading.textContent || "原稿"}の編集を保存しました。`;
       void fetch("/api/admin/operations/progress", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ documentId, subject: subject.value, body: detail }) })
-        .then(async (response) => { const data = await response.json() as { error?: string }; if (!response.ok) throw new Error(data.error ?? "進捗を記録できませんでした。"); progressBody.value = ""; saveMessage.value = "進捗を記録しました。"; })
+        .then(async (response) => { const data = await readAdminApiJson<{ error?: string }>(response, "進捗を記録できませんでした。"); if (!response.ok) throw new Error(data.error ?? "進捗を記録できませんでした。"); progressBody.value = ""; saveMessage.value = "進捗を記録しました。"; })
         .catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "進捗を記録できませんでした。"; });
     });
     let appendSelectionMode = false;
@@ -5275,7 +5330,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       initialScrollRestoreUntil = performance.now() + 15_000;
       [0, 50, 250, 750, 1_500, 3_000, 4_500, 8_000, 12_000].forEach((delay) => window.setTimeout(restoreInitialEditorScroll, delay));
       const activateStickyToolbar = () => { initialScrollRestoreCancelled = true; root.setAttribute("data-sticky-toolbar", ""); };
-      ["keydown", "pointerdown", "touchstart", "wheel"].forEach((eventName) => window.addEventListener(eventName, activateStickyToolbar, { once: true, passive: true, capture: true }));
+      // 初期スクロール補正が入力中のフォーカス移動やキーボード操作と
+      // 競合すると、保存ボタンなどの操作対象を画面外へ戻してしまう。
+      // ユーザーが編集を始めた時点で補正を終え、以降の操作を妨げない。
+      ["keydown", "pointerdown", "touchstart", "wheel", "focusin", "input", "change"].forEach((eventName) => window.addEventListener(eventName, activateStickyToolbar, { once: true, passive: true, capture: true }));
     } else {
       root.setAttribute("data-sticky-toolbar", "");
     }
@@ -5855,4 +5913,33 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     }
   }
 
+</style>
+<style is:global>
+  /* Callouts use the shared border token; the reply rail and text cursor remain structural. */
+  .editor-workspace :where(
+    .document-card,
+    .reference-library-item,
+    .document-conflict,
+    .save-status,
+    .unsaved-warning,
+    .update-proposal-note,
+    .media-hint,
+    .personal-notebook,
+    .comment,
+    .comment-quote,
+    .selection-hint,
+    .reply-target,
+    .review-panel .reply-target,
+    .review-panel .comment-edit-entry,
+    .math-preset-card,
+    .help-tip,
+    .editor-diagnostics-dialog,
+    .editor-diagnostics-dialog li,
+    .feedback-request-history-item
+  ) {
+    border-left-width: 1px;
+  }
+  .editor-workspace .writing-area .locked-range-markup mark.locked-range-mark {
+    border-left-width: 1px !important;
+  }
 </style>

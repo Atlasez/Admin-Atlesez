@@ -102,11 +102,14 @@ async function mockAdminApi(
     const url = new URL(request.url());
     let payload: unknown = {};
     if (url.pathname === "/api/admin/editor/documents") {
-      payload = {
-        documents: [document],
-        mentionNames: ["Alice", "Bob"],
-        scope,
-      };
+      payload =
+        request.method() === "POST"
+          ? { id: "new-doc", updatedAt: "2026-08-20T00:00:00.000Z" }
+          : {
+              documents: [document],
+              mentionNames: ["Alice", "Bob"],
+              scope,
+            };
     } else if (url.pathname === "/api/admin/editor/outline") {
       payload = {
         entries: outlineEntries.length
@@ -120,7 +123,9 @@ async function mockAdminApi(
                 slug: "lagrange-theorem",
                 title: "ラグランジュの定理",
                 summary: "群の位数と部分群の関係",
+                concept_id: "math.group-theory.lagrange-theorem",
                 order: 2,
+                updated_at: "2026-08-20T00:00:00.000Z",
                 status: "active",
               },
             ],
@@ -234,8 +239,8 @@ test("目次APIがHTMLを返しても内部のJSON解析エラーを表示しな
     }),
   );
   await page.goto("./admin/editor/outline/?subject=mathematics");
-  await expect(page.locator("[data-outline-list]")).toContainText(
-    "原稿一覧を読み込めませんでした。（HTTP 502）",
+  await expect(page.locator("[data-list]")).toContainText(
+    "原稿一覧を取得できませんでした。（HTTP 502）",
   );
   await expect(page.locator("body")).not.toContainText("Unexpected token");
   await page.screenshot({
@@ -423,6 +428,10 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
 
   await page.goto("./admin/genre-roles/?project=atlas");
   const taxonomyForm = page.locator("[data-taxonomy-form]");
+  await expect(taxonomyForm.locator('input[name="slug"]')).not.toHaveAttribute(
+    "required",
+  );
+  await expect(taxonomyForm.locator("details.advanced-field")).toBeVisible();
   await taxonomyForm.locator('select[name="kind"]').selectOption("subject");
   await taxonomyForm.locator('input[name="name"]').fill("情報");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
@@ -444,6 +453,59 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await taxonomyForm.locator('input[name="name"]').fill("統計学");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
   await expect(page.getByText("統計学", { exact: true })).toBeVisible();
+  const taxonomyFilter = page.locator("[data-taxonomy-filter]");
+  await expect(taxonomyFilter).toBeVisible();
+  await expect(taxonomyFilter.locator('option[value="subject-1"]')).toHaveCount(
+    1,
+  );
+  await taxonomyFilter.selectOption("subject-1");
+  await expect(page).toHaveURL(/taxonomySubject=subject-1/);
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-lane"),
+  ).toHaveCount(1);
+  await expect(page.locator("[data-taxonomy-content]")).toContainText(
+    "機械学習",
+  );
+  await page.reload();
+  await expect(taxonomyFilter).toHaveValue("subject-1");
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-lane"),
+  ).toHaveCount(1);
+  await taxonomyFilter.selectOption("");
+  await expect(
+    page.locator("[data-taxonomy-content] .taxonomy-lane"),
+  ).not.toHaveCount(0);
+  // 分野カードのグリッド行が空き領域で引き伸ばされず、カテゴリのメタ情報も
+  // 1文字ずつ縦折りにならないことを、実寸で検証する。
+  const taxonomyLayout = await page
+    .locator("[data-taxonomy-content]")
+    .evaluate((root) => {
+      const lanes = [...root.querySelectorAll<HTMLElement>(".taxonomy-lane")];
+      const categories = [
+        ...root.querySelectorAll<HTMLElement>(".taxonomy-category"),
+      ];
+      return {
+        maxLaneHeight: Math.max(
+          ...lanes.map((lane) => lane.getBoundingClientRect().height),
+        ),
+        maxCategoryHeight: Math.max(
+          ...categories.map(
+            (category) => category.getBoundingClientRect().height,
+          ),
+        ),
+        minCategoryMetaWidth: Math.min(
+          ...categories.map(
+            (category) =>
+              category
+                .querySelector<HTMLElement>(".taxonomy-category__label")
+                ?.getBoundingClientRect().width ?? 0,
+          ),
+        ),
+      };
+    });
+  expect(taxonomyLayout.maxLaneHeight).toBeLessThan(600);
+  expect(taxonomyLayout.maxCategoryHeight).toBeLessThan(130);
+  expect(taxonomyLayout.minCategoryMetaWidth).toBeGreaterThan(100);
   // タイトルをクリックすると、カード内で表示名をすぐ編集できる。
   const quickEdit = page.locator(
     '[data-inline-edit-taxonomy][aria-label="機械学習の表示名を編集"]',
@@ -504,12 +566,21 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   await expect(page.locator("[data-outline-subject]")).toHaveValue("subject-1");
   await page.getByText("目次項目を追加", { exact: true }).click();
   await expect(
+    page.locator('[data-outline-form] input[name="slug"]'),
+  ).not.toHaveAttribute("required");
+  await expect(
+    page.locator("[data-outline-form] details.advanced-field"),
+  ).toBeVisible();
+  await expect(
     page.locator('[data-form-category] option[value="category-2"]'),
   ).toHaveText("機械学習（基礎）");
   await page.locator("[data-form-category]").selectOption("category-2");
   await page
     .locator('[data-outline-form] input[name="title"]')
     .fill("集中不等式");
+  await page
+    .locator("[data-outline-form] details.advanced-field summary")
+    .click();
   await page
     .locator('[data-outline-form] input[name="slug"]')
     .fill("concentration-inequality");
@@ -770,6 +841,84 @@ test("目次項目の編集はダイアログで行える", async ({ page }) => 
   await expect(
     page.locator("[data-outline-edit-dialog] input[name=title]"),
   ).toHaveValue("ラグランジュの定理");
+  await expect(
+    page.locator("[data-outline-edit-dialog] input[name=conceptId]"),
+  ).toHaveValue("math.group-theory.lagrange-theorem");
+  await expect(
+    page.locator("[data-outline-edit-dialog] input[name=updatedAt]"),
+  ).toHaveValue("2026-08-20T00:00:00.000Z");
+});
+
+test("目次項目のタイトル変更は概念IDを保持して送信する", async ({ page }) => {
+  let updatePayload: Record<string, unknown> | null = null;
+  await mockAdminApi(page);
+  page.on("request", (request) => {
+    if (
+      request.url().includes("/api/admin/editor/outline") &&
+      request.method() === "PATCH"
+    ) {
+      updatePayload = JSON.parse(request.postData() ?? "{}") as Record<
+        string,
+        unknown
+      >;
+    }
+  });
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  await page.locator("[data-edit-entry]").first().click();
+  await page
+    .locator("[data-outline-edit-dialog] input[name=title]")
+    .fill("ラグランジュの定理（改訂）");
+  await page
+    .locator("[data-outline-edit-dialog]")
+    .getByRole("button", { name: "保存", exact: true })
+    .click();
+  await expect
+    .poll(() => updatePayload)
+    .toMatchObject({
+      action: "update",
+      title: "ラグランジュの定理（改訂）",
+      conceptId: "math.group-theory.lagrange-theorem",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    });
+});
+
+test("概念IDがない目次からでも保存可能な記事を開始できる", async ({ page }) => {
+  await mockAdminApi(page, undefined, undefined, undefined, [
+    {
+      id: "outline-without-concept",
+      key: "outline-without-concept",
+      subject: "mathematics",
+      category: "group-theory",
+      slug: "concentration-inequalities",
+      title: "集中不等式",
+      summary: "",
+      concept_id: "",
+      order: 1,
+      status: "active",
+    },
+  ]);
+  await page.goto("./admin/editor/outline/");
+  await page.locator("[data-outline-subject]").selectOption("mathematics");
+  const articleLink = page
+    .locator('[data-entry-id="outline-without-concept"] a')
+    .first();
+  await expect(articleLink).toHaveAttribute("href", /new=1/);
+  await articleLink.click();
+  await expect(
+    page.locator('[data-document-form] input[name="title"]'),
+  ).toHaveValue("集中不等式");
+  await expect(
+    page.locator('[data-document-form] input[name="conceptId"]'),
+  ).toHaveValue("math.group-theory.concentration-inequalities");
+  await page
+    .locator('[data-document-form] input[name="summary"]')
+    .fill("保存確認用の要約");
+  await page.locator('[data-document-form] textarea[name="body"]').fill("本文");
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await expect(page.locator("[data-save-message]")).toContainText(
+    "保存しました",
+  );
 });
 
 test("既存記事では設定を要約表示し、本文までの占有高を抑える", async ({
@@ -3070,6 +3219,42 @@ test("コメント枠をスクロールしても見出しと別窓ボタンは�
   const after = await heading.boundingBox();
   expect(Math.abs((after?.y ?? 0) - before.y)).toBeLessThan(1);
   await expect(heading.locator('[data-pane-popout="review"]')).toBeInViewport();
+});
+
+test("コメント別窓からタグとコメント送信を操作できる", async ({ page }) => {
+  await mockAdminApi(page);
+  let commentPayload: Record<string, unknown> | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments",
+    async (route) => {
+      if (route.request().method() === "POST") {
+        commentPayload = route.request().postDataJSON();
+        await route.fulfill({ json: { ok: true } });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const popupPromise = page.waitForEvent("popup");
+  await page
+    .locator('[data-editor-pane="review"] [data-pane-popout="review"]')
+    .click();
+  const popup = await popupPromise;
+  const popupTag = popup.locator(
+    '.review-pane-content > .comment-tags [data-comment-tag="定義不足"]',
+  );
+  await popupTag.click();
+  await expect(popupTag).toHaveAttribute("aria-pressed", "true");
+  await popup.locator("[data-comment-body]").fill("別窓からコメント");
+  await popup.locator("[data-send-comment]").click();
+  await expect
+    .poll(() => commentPayload)
+    .toMatchObject({ body: "別窓からコメント", tags: ["定義不足"] });
+
+  await popup.close();
+  await expect(page.locator('[data-editor-pane="review"]')).toBeVisible();
 });
 
 for (const returnVia of ["popup", "close", "toggle", "tab"] as const) {

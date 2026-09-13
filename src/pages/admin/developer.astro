@@ -101,6 +101,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   const initializeDeveloperPage = () => {
     const root = document.querySelector<HTMLElement>('[data-developer-page]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -119,7 +120,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       state.dataset.state = 'loading'; state.textContent = '確認しています…'; state.hidden = false; list.hidden = true; retry.disabled = true;
       try {
         const response = await fetch('/api/admin/developer/diagnostics', { credentials: 'same-origin', cache: 'no-store' });
-        const data = await response.json() as { error?: string; generatedAt?: string; checks?: Array<{ id: string; label: string; status: string; detail: string; durationMs?: number }>; build?: Record<string, unknown> | null };
+        const data = await readAdminApiJson<{ error?: string; generatedAt?: string; checks?: Array<{ id: string; label: string; status: string; detail: string; durationMs?: number }>; build?: Record<string, unknown> | null }>(response, '診断情報を取得できませんでした。');
         if (!response.ok) throw new Error(data.error || '診断情報を取得できませんでした。');
         const checks = Array.isArray(data.checks) ? data.checks : [];
         list.innerHTML = checks.map((check) => `<div class="diagnostic-row"><span class="diagnostic-label">${escape(check.label)}</span><span class="diagnostic-status" data-status="${escape(check.status)}">${check.status === 'ok' ? '正常' : check.status === 'warning' ? '確認が必要' : 'エラー'}</span><span class="diagnostic-detail">${escape(check.detail)}</span>${check.durationMs !== undefined ? `<span class="diagnostic-duration">${escape(check.durationMs)}ms</span>` : ''}</div>`).join('');

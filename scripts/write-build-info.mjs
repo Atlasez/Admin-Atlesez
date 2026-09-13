@@ -12,6 +12,17 @@ function gitCommit() {
   }
 }
 
+function gitRef() {
+  try {
+    return execFileSync("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
 const commit =
   process.env.CF_COMMIT_SHA ||
   process.env.CF_PAGES_COMMIT_SHA ||
@@ -27,9 +38,10 @@ await writeFile(
       repository: process.env.GITHUB_REPOSITORY ?? "Atlasez/Admin-Atlesez",
       commit: commit || "unknown",
       ref:
-        process.env.GITHUB_REF_NAME ??
-        process.env.CF_BRANCH ??
-        process.env.CF_PAGES_BRANCH ??
+        process.env.GITHUB_REF_NAME ||
+        process.env.CF_BRANCH ||
+        process.env.CF_PAGES_BRANCH ||
+        gitRef() ||
         "unknown",
       target: process.env.ATLASEZ_BUILD_TARGET ?? "unknown",
       builtAt: new Date().toISOString(),

@@ -187,6 +187,10 @@ test("通知panelをtoggle・外側・Escape・閉じるボタンで操作でき
   await expect(panel).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(panel).toContainText("原稿へのコメント");
+  await expect(panel.getByRole("link", { name: "一覧" })).toHaveAttribute(
+    "href",
+    "/admin/notifications/",
+  );
 
   await panel.getByText("通知", { exact: true }).click();
   await expect(panel).toBeVisible();
@@ -208,6 +212,42 @@ test("通知panelをtoggle・外側・Escape・閉じるボタンで操作でき
   await panel.getByRole("button", { name: "通知を閉じる" }).click();
   await expect(panel).toBeHidden();
   await expect(toggle).toBeFocused();
+});
+
+test("通知一覧はアクションセンターと分かれた時系列の確認画面を提供する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.goto("admin/notifications/");
+
+  await expect(
+    page.getByRole("heading", { name: "通知一覧", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("[data-list] .notification-item")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "未読" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await page.getByRole("button", { name: "未読" }).click();
+  await expect(page.getByRole("button", { name: "未読" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator("[data-list] .notification-item")).toHaveCount(1);
+});
+
+test("通知一覧は表示上限を超えた未読数もサーバー集計で表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page, { unreadNotificationsCount: 23 });
+  await page.goto("admin/notifications/");
+
+  await expect(page.locator("[data-summary]")).toHaveText(
+    "表示1件 ／ 未読23件（続きあり）",
+  );
+  await expect(page.locator("[data-mark-all]")).toHaveText(
+    "表示中をすべて既読",
+  );
 });
 
 test("通知取得失敗を空状態や内部エラーに置き換えない", async ({ page }) => {

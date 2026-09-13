@@ -29,5 +29,11 @@ if (!/^[0-9a-f]{40}$/i.test(info.commit)) {
     `build-info.jsonのcommitがSHA-1形式ではありません: ${info.commit}`,
   );
 }
+const expectedTarget = process.env.EXPECTED_BUILD_TARGET;
+if (expectedTarget && info.target !== expectedTarget) {
+  throw new Error(
+    `build-info.jsonのtargetが不一致です: expected=${expectedTarget}, actual=${info.target}`,
+  );
+}
 
 console.log(`build-info.jsonを検証しました: ${info.commit}`);

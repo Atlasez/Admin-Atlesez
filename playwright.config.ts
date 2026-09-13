@@ -1,6 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
-const baseURL = `${(process.env.E2E_BASE_URL ?? "http://localhost:4321").replace(/\/$/, "")}/`;
+const testPort = Number(process.env.E2E_PORT ?? 4321);
+const baseURL = `${(
+  process.env.E2E_BASE_URL ?? `http://localhost:${testPort}`
+).replace(/\/$/, "")}/`;
 const remoteBaseURL =
   /^https?:\/\/(?!localhost(?::|\/)|127\.0\.0\.1(?::|\/))/i.test(baseURL);
 
@@ -14,8 +17,8 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: "node scripts/serve-dist.mjs",
-          port: 4321,
+          command: `PORT=${testPort} node scripts/serve-dist.mjs`,
+          port: testPort,
           reuseExistingServer: true,
         },
       }),

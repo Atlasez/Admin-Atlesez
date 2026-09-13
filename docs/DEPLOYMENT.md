@@ -35,7 +35,7 @@ curl -fsS https://atlasez.org/robots.txt
 curl -fsS https://atlasez.org/sitemap-0.xml
 ```
 
-さらにChromeのログイン済みセッションで、管理トップにカレンダー・応募管理・運営者・担当管理・閲覧統計が表示されることを確認します。
+さらにChromeのログイン済みセッションで、管理トップにカレンダー・応募管理・権限管理・閲覧統計が表示されることを確認します。
 
 ## ロールバック
 

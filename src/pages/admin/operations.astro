@@ -50,6 +50,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
             placeholder="例：群の定義を修正し、フィードバック3件に対応しました。"
           ></textarea></label
         ><button data-send-progress>進捗を記録してDiscordへ送る</button
+        ><button type="button" class="progress-retry" data-retry-progress hidden>保存を再試行</button
         ><output data-progress-feedback aria-live="polite"></output>
         <div class="progress-list-heading">
           <h3 class="subheading">進捗報告一覧</h3>
@@ -494,7 +495,6 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .progress-report {
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
-    border-left: 3px solid var(--accent-primary);
     border-radius: 0.35rem;
     display: grid;
     gap: 0.55rem;
@@ -502,6 +502,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     padding: 0.85rem 1rem;
   }
   .progress-report-body { line-height: 1.7; white-space: pre-wrap; }
+  .progress-report-actions { align-items: center; display: flex; gap: .55rem; justify-content: space-between; }
+  .progress-report-like { background: transparent !important; border: 1px solid var(--border-default) !important; border-radius: 999px; color: var(--text-secondary) !important; cursor: pointer; font-size: .72rem !important; margin: 0 !important; padding: .28rem .55rem !important; }
+  .progress-report-like:hover, .progress-report-like[aria-pressed="true"] { border-color: var(--accent-primary) !important; color: var(--accent-primary) !important; }
+  .progress-report-like:disabled { cursor: wait; opacity: .6; }
+  .progress-report-like-retry { background: transparent !important; border: 1px solid var(--danger) !important; color: var(--danger) !important; cursor: pointer; font-size: .72rem !important; margin: 0 !important; padding: .28rem .55rem !important; }
+  .progress-report-like-retry[hidden], .progress-retry[hidden] { display: none; }
   .progress-report-meta { color: var(--text-secondary); font-size: 0.78rem; }
   .progress-report-meta strong { color: var(--text-primary); }
   .progress-report-tag {
@@ -1311,15 +1317,22 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     .task-workspace .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   }
 </style>
+<style>
+  .operations .calendar-selection-summary,
+  .operations .calendar-event,
+  .operations .discord-notice { border-left-width: 1px; }
+</style>
 <script>
   import { createAdminLoadRetry } from '../../scripts/admin-load-retry';
+  import { readAdminApiJson } from '../../lib/admin-api';
   type OperationMember = { email: string; display_name?: string };
   type OperationParticipant = { displayName: string; availability: string; isSelf: boolean };
   type OperationEvent = { id: string; title: string; starts_at: string; ends_at?: string | null; details?: string | null; timezone?: string; source?: string; availability?: string | null; availabilityCounts?: Record<string, number>; participants?: OperationParticipant[] };
   type ReminderRule = { id?: string; remind_at?: string; timezone?: string; label?: string; relative_kind?: string; relative_amount?: number | null; relative_unit?: string | null; relative_start?: string | null; repeat?: string | null };
   type AvailabilityBlock = { id: string; email?: string; display_name?: string; starts_at: string; ends_at: string; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
   type AvailabilityRule = { id: string; email?: string; display_name?: string; weekday: number; timezone: string; label?: string; kind: 'available' | 'unavailable'; isSelf?: boolean };
-  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: Array<Record<string, any>>; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; eventPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; progressPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
+  type ProgressReport = Record<string, any> & { id: string; like_count?: number; liked_by_me?: boolean };
+  type OperationData = { scope: { isManager: boolean; email?: string }; project?: { id: string; slug: string; name: string }; projects?: Array<{ id: string; slug: string; name: string; role?: string }>; tasks?: Array<Record<string, any>>; events?: OperationEvent[]; progress?: ProgressReport[]; members?: OperationMember[]; availabilityBlocks?: AvailabilityBlock[]; availabilityRules?: AvailabilityRule[]; pagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; eventPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean }; progressPagination?: { limit?: number; nextCursor?: string | null; hasMore?: boolean } };
   const initializeOperations = async () => {
     const root = document.querySelector<HTMLElement>('[data-operations]');
     if (!root || root.dataset.initialized === 'true') return;
@@ -1370,6 +1383,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     const taskReminderEmail = get<HTMLInputElement>('[data-task-reminder-email]');
     const taskReminderRepeat = get<HTMLSelectElement>('[data-task-reminder-repeat]');
     const progressFeedback = get<HTMLOutputElement>('[data-progress-feedback]');
+    const progressRetry = get<HTMLButtonElement>('[data-retry-progress]');
     const taskFeedback = get<HTMLOutputElement>('[data-task-feedback]');
     const taskListFeedback = get<HTMLOutputElement>('[data-task-list-feedback]');
     const taskCreateDialog = get<HTMLDialogElement>('[data-task-create-dialog]');
@@ -1414,6 +1428,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     let eventLoadingMore = false;
     let progressNextCursor: string | null = null;
     let progressLoadingMore = false;
+    let progressRetryPayload: { projectId: string; subject: string; body: string } | null = null;
+    const progressLikeRetryIds = new Set<string>();
+    const progressLikePendingIds = new Set<string>();
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const renderHolidayTags = () => {
       holidayTags.innerHTML = [...holidayCountry.selectedOptions].map((option) => `<button type="button" data-remove-holiday="${escapeHtml(option.value)}" aria-label="${escapeHtml(option.textContent || option.value)}を外す">${escapeHtml(option.textContent || option.value)} ×</button>`).join('') || '<span>祝日を表示しない</span>';
@@ -1483,7 +1500,12 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const reporter = String(item.display_name || item.email || '投稿者不明');
         const email = item.email && item.email !== reporter ? `（${String(item.email)}）` : '';
         const projectName = String(item.project_name || item.project_id || 'プロジェクト不明');
-        return `<article class="progress-report"><div class="progress-report-body">${escapeHtml(String(item.body ?? ''))}</div><div class="progress-report-meta"><span class="progress-report-tag">${escapeHtml(subjectText)}</span><span class="progress-report-tag">${escapeHtml(projectName)}</span><strong>${escapeHtml(reporter)}</strong>${escapeHtml(email)} ・ ${escapeHtml(formatDate(String(item.created_at)))}</div></article>`;
+        const likeCount = Math.max(0, Number(item.like_count ?? 0));
+        const likedByMe = Boolean(item.liked_by_me);
+        const reportId = String(item.id);
+        const pending = progressLikePendingIds.has(reportId);
+        const retry = progressLikeRetryIds.has(reportId);
+        return `<article class="progress-report" data-progress-id="${escapeHtml(reportId)}"><div class="progress-report-body">${escapeHtml(String(item.body ?? ''))}</div><div class="progress-report-actions"><div class="progress-report-meta"><span class="progress-report-tag">${escapeHtml(subjectText)}</span><span class="progress-report-tag">${escapeHtml(projectName)}</span><strong>${escapeHtml(reporter)}</strong>${escapeHtml(email)} ・ ${escapeHtml(formatDate(String(item.created_at)))}</div><button type="button" class="progress-report-like" data-progress-like="${escapeHtml(reportId)}" aria-pressed="${likedByMe}" ${pending ? 'disabled' : ''}>♡ いいね <span data-progress-like-count>${likeCount}</span></button><button type="button" class="progress-report-like-retry" data-progress-like-retry="${escapeHtml(reportId)}" ${retry ? '' : 'hidden'}>再試行</button></div></article>`;
       }).join('') || `<p>${progressOverview ? '条件に一致する進捗報告はありません。' : '進捗報告はまだありません。'}</p>`;
       progressPagination.hidden = !progressOverview || !progressNextCursor;
       progressPaginationSummary.textContent = progressNextCursor ? `${allReports.length}件を読み込み済み` : '';
@@ -1532,9 +1554,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     if (calendarPage || memberPage) populateTimezones();
     const api = async <T,>(url: string, method = 'GET', body?: unknown): Promise<T> => {
       const response = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', headers: body === undefined ? {} : { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-      const contentType = response.headers.get('content-type') ?? '';
-      const data = contentType.includes('application/json') ? await response.json() as T & { error?: string } : null;
-      if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。ページを再読み込みしてください。');
+      const data = await readAdminApiJson<T & { error?: string }>(response, '操作データを読み込めませんでした。');
+      if (!response.ok) throw new Error(data.error ?? '操作データを読み込めませんでした。');
       return data;
     };
     let data: OperationData = { scope: { isManager: false } };
@@ -1832,8 +1853,66 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     get<HTMLButtonElement>('[data-close-task-create]').addEventListener('click', () => taskCreateDialog.close());
     taskCreateDialog.addEventListener('click', (event) => { if (event.target === taskCreateDialog) taskCreateDialog.close(); });
     taskCreateDialog.addEventListener('close', () => taskCreateOpen.focus());
-    get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => { const button = event.currentTarget as HTMLButtonElement; void runButtonAction(button, progressFeedback, async () => { await api('/api/admin/operations/progress', 'POST', { projectId, subject: progressSubject.value, body: progress.value }); progress.value = ''; }, '進捗を記録しました。'); });
+    const submitProgress = async (button: HTMLButtonElement, payload: { projectId: string; subject: string; body: string }) => {
+      button.disabled = true;
+      progressRetry.hidden = true;
+      progressFeedback.value = '保存中…';
+      let saved = false;
+      try {
+        await api('/api/admin/operations/progress', 'POST', payload);
+        saved = true;
+        progress.value = '';
+        progressRetryPayload = null;
+        progressFeedback.value = '進捗を記録しました。';
+        await load();
+      } catch (error) {
+        if (!saved) {
+          progressRetryPayload = payload;
+          progressRetry.hidden = false;
+        }
+        progressFeedback.value = error instanceof Error ? error.message : '進捗を保存できませんでした。';
+      } finally {
+        button.disabled = false;
+      }
+    };
+    get<HTMLButtonElement>('[data-send-progress]').addEventListener('click', (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      const payload = { projectId, subject: progressSubject.value, body: progress.value };
+      if (!payload.body.trim()) { progressFeedback.value = '進捗内容を入力してください。'; return; }
+      void submitProgress(button, payload);
+    });
+    progressRetry.addEventListener('click', () => {
+      if (!progressRetryPayload) return;
+      void submitProgress(progressRetry, progressRetryPayload);
+    });
     progressProjectFilter.addEventListener('change', renderProgressReports);
+    const updateProgressLike = async (report: ProgressReport) => {
+      const reportId = String(report.id);
+      if (progressLikePendingIds.has(reportId)) return;
+      const desiredLiked = !Boolean(report.liked_by_me);
+      progressLikePendingIds.add(reportId);
+      progressLikeRetryIds.delete(reportId);
+      renderProgressReports();
+      try {
+        const result = await api<{ liked: boolean; likeCount: number }>(`/api/admin/progress/${encodeURIComponent(reportId)}/reaction`, 'POST', { action: 'set', liked: desiredLiked });
+        report.liked_by_me = result.liked;
+        report.like_count = result.likeCount;
+      } catch (error) {
+        progressLikeRetryIds.add(reportId);
+        progressFeedback.value = error instanceof Error ? error.message : 'いいねを更新できませんでした。';
+      } finally {
+        progressLikePendingIds.delete(reportId);
+        renderProgressReports();
+      }
+    };
+    reports.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-progress-like]');
+      const retryButton = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-progress-like-retry]');
+      const reportId = button?.dataset.progressLike || retryButton?.dataset.progressLikeRetry || '';
+      const report = (data.progress ?? []).find((item) => String(item.id) === reportId);
+      if (!report || (!button && !retryButton)) return;
+      void updateProgressLike(report);
+    });
     progressSubjectFilters.forEach((input) => input.addEventListener('change', () => {
       const all = progressSubjectFilters.find((item) => item.dataset.progressSubjectFilter === 'all');
       if (input.dataset.progressSubjectFilter === 'all' && input.checked) progressSubjectFilters.filter((item) => item !== input).forEach((item) => { item.checked = false; });

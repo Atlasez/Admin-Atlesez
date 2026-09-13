@@ -323,6 +323,44 @@ test("横断タスク管理はカーソルで追加読み込みできる", async
   await expect(loadMore).toBeHidden();
 });
 
+test("タスク概要はページ上限ではなくサーバーの全件集計を表示する", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/member-tasks**", async (route) => {
+    await route.fulfill({
+      json: {
+        scope: { email: "manager@example.com" },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        members: [],
+        tasks: [
+          {
+            id: "page-task-1",
+            project_id: "atlas",
+            title: "先頭ページのタスク",
+            status: "open",
+            assignee_email: "manager@example.com",
+            created_by: "manager@example.com",
+          },
+        ],
+        summary: {
+          all: { total: 6, open: 2, doing: 2, done: 2 },
+          assigned: { total: 4, open: 1, doing: 1, done: 2 },
+          created: { total: 3, open: 1, doing: 1, done: 1 },
+        },
+        pagination: { nextCursor: "next-page", hasMore: true },
+      },
+    });
+  });
+
+  await page.goto("admin/member-tasks/");
+  await expect(page.locator("[data-summary-total]")).toHaveText("4");
+  await expect(page.locator("[data-summary-open]")).toHaveText("1");
+  await expect(page.locator("[data-summary-doing]")).toHaveText("1");
+  await expect(page.locator("[data-summary-done]")).toHaveText("2");
+  await expect(page.locator("[data-result-count]")).toHaveText("1件（全4件）");
+});
+
 test("タスク一覧の再読み込み要求をまとめ、最新の条件だけを反映する", async ({
   page,
 }) => {

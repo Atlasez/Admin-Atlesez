@@ -100,6 +100,7 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
 </style>
 
 <script>
+  import { readAdminApiJson } from "../../lib/admin-api";
   import { renderSafeLinks } from "../../lib/safe-links";
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
 
@@ -163,7 +164,7 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
         const params = new URLSearchParams({ project, limit: "100" });
         if (append && nextCursor) params.set("cursor", nextCursor);
         const response = await fetch(`/api/admin/project-introductions?${params.toString()}`, { credentials: "same-origin", cache: "no-store" });
-        const data = await response.json() as { entries?: IntroductionEntry[]; pagination?: Pagination; error?: string };
+        const data = await readAdminApiJson<{ entries?: IntroductionEntry[]; pagination?: Pagination; error?: string }>(response, "自己紹介を読み込めませんでした。");
         if (!response.ok) throw new Error(data.error ?? "自己紹介を読み込めませんでした。");
         const page = data.entries ?? [];
         entries = append ? [...entries, ...page] : page;
