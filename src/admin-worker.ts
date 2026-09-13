@@ -14404,21 +14404,6 @@ async function updateEditorialDocument(
   )
     .bind(documentId)
     .first<EditorialDocument>();
-  if (previous)
-    await env.REPORTS.prepare(
-      "INSERT INTO editorial_document_revisions (id, document_id, title, summary, body, status, saved_by, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-      .bind(
-        crypto.randomUUID(),
-        documentId,
-        previous.title,
-        previous.summary,
-        previous.body,
-        previous.status,
-        scope.email,
-        now,
-      )
-      .run();
   const updateResult = (await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
       slug = ?, title = ?, summary = ?, concept_id = ?, concept_name = ?, concept_name_en = ?, concept_is_new = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
@@ -14477,6 +14462,35 @@ async function updateEditorialDocument(
       },
       409,
     );
+  // 競合や検証失敗で更新されなかったリクエストは版履歴へ記録しない。
+  // 先に履歴を挿入すると、保存失敗なのに「過去版」だけが増えてしまう。
+  let revisionWarning = false;
+  if (previous) {
+    try {
+      await env.REPORTS.prepare(
+        "INSERT INTO editorial_document_revisions (id, document_id, title, summary, body, status, saved_by, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+        .bind(
+          crypto.randomUUID(),
+          documentId,
+          previous.title,
+          previous.summary,
+          previous.body,
+          previous.status,
+          scope.email,
+          now,
+        )
+        .run();
+    } catch (error) {
+      // 本文の更新は成功しているため、版履歴テーブルが未適用の環境や
+      // 一時的なD1障害で保存全体を失敗扱いにしない。次回保存時に再試行する。
+      revisionWarning = true;
+      console.error("editorial revision recording failed after document save", {
+        documentId,
+        error,
+      });
+    }
+  }
   const changedFields = [
     ["title", existing.title, values.title],
     ["summary", existing.summary, values.summary],
@@ -14511,10 +14525,19 @@ async function updateEditorialDocument(
       createdAt: now,
     });
   await syncEditorialCollaborationDocument(env, documentId);
-  if (existing.document_kind !== "update-proposal")
-    await syncEditorialOutlineDocument(env, documentId, { subject: values.subject, category: values.category, slug: values.slug }, text(payload.outlineId, 64));
+  if (existing.document_kind !== "update-proposal") {
+    try {
+      await syncEditorialOutlineDocument(env, documentId, { subject: values.subject, category: values.category, slug: values.slug }, text(payload.outlineId, 64));
+    } catch (error) {
+      // 目次の補助リンクが一時的に更新できなくても、本文の保存結果は保持する。
+      console.error("editorial outline synchronization failed after document save", {
+        documentId,
+        error,
+      });
+    }
+  }
   await notifyEditorialDocumentChange(env, documentId);
-  return json({ ok: true, updatedAt: now });
+  return json({ ok: true, updatedAt: now, revisionWarning });
 }
 
 async function listEditorialRevisions(
