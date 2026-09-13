@@ -9,7 +9,7 @@ class RecordingStatement {
   private values: unknown[] = [];
 
   constructor(
-    private readonly query: string,
+    protected readonly query: string,
     private readonly calls: SqlCall[],
     private readonly firstResult: unknown = null,
   ) {}
@@ -553,6 +553,73 @@ describe("既存公開記事の運営原稿移行契約", () => {
         call.query.includes("INSERT INTO editorial_documents"),
       ),
     ).toBe(false);
+  });
+
+  it("公開取消なしで公開記事から更新案を分離して作成できる", async () => {
+    const calls: SqlCall[] = [];
+    const canonical = {
+      id: "44444444-4444-4444-8444-444444444444",
+      document_kind: "canonical",
+      base_document_id: null,
+      base_document_updated_at: null,
+      ...importedArticle,
+      source_article_id: importedArticle.sourceArticleId,
+      concept_id: importedArticle.conceptId,
+      writing_memo: "",
+      latex_engine: importedArticle.latexEngine,
+      created_by: "author@example.com",
+      updated_by: "author@example.com",
+      created_at: "2026-08-30T00:00:00.000Z",
+      updated_at: "2026-08-31T00:00:00.000Z",
+      reviewed_at: "2026-08-31T00:00:00.000Z",
+      published_at: "2026-08-31T00:00:00.000Z",
+      archived_at: null,
+      archived_by: null,
+      archive_expires_at: null,
+      scheduled_publish_at: null,
+      scheduled_publish_claimed_at: null,
+      publication_review_stage: null,
+      publication_review_round: 0,
+      locked_ranges: "[]",
+      article_references: "[]",
+      body: importedArticle.body,
+      status: "approved",
+    };
+    class ProposalStatement extends RecordingStatement {
+      async first<T>() {
+        if (this.query.includes("base_document_id=?")) return null as T | null;
+        if (this.query.includes("FROM editorial_documents"))
+          return canonical as T;
+        return null as T | null;
+      }
+    }
+    const env = {
+      ...baseEnv,
+      REPORTS: {
+        prepare: (query: string) => new ProposalStatement(query, calls),
+        batch: async () => [],
+      },
+    };
+    const response = await worker.fetch(
+      sameOriginJsonRequest(
+        `/api/admin/editor/documents/${canonical.id}/update-proposal`,
+        {},
+        "POST",
+      ),
+      env as never,
+    );
+    expect(response.status).toBe(201);
+    const data = (await response.json()) as {
+      id?: string;
+      baseDocumentId?: string;
+    };
+    expect(data.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(data.baseDocumentId).toBe(canonical.id);
+    const insert = calls.find((call) =>
+      call.query.includes("document_kind, base_document_id"),
+    );
+    expect(insert?.query).toContain("'update-proposal'");
+    expect(insert?.values).toContain(canonical.id);
   });
 
   it("公開用Markdownでも既存記事のarticleIdを維持する", () => {
