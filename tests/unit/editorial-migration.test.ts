@@ -990,5 +990,21 @@ describe("既存公開記事の運営原稿移行契約", () => {
       'document.document_kind === "update-proposal"',
     );
     expect(workerSource).toContain("document.base_document_id");
+    expect(workerSource).toContain(
+      "COALESCE(d.document_kind, 'canonical') = 'canonical'",
+    );
+    expect(workerSource).toContain(
+      "versions: { canonicalId: canonicalId ?? null, proposalId }",
+    );
+    expect(editorSource).toContain(
+      "PATCHの成功時点で本文と版履歴の保存は完了している",
+    );
+    expect(workerSource).toContain(
+      "競合や検証失敗で更新されなかったリクエストは版履歴へ記録しない",
+    );
+    expect(workerSource).toContain(
+      "editorial revision recording failed after document save",
+    );
+    expect(workerSource).toContain("revisionWarning");
   });
 });

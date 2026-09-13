@@ -13615,6 +13615,26 @@ async function getEditorialDocument(
   if (!document) return json({ error: "原稿が見つかりません。" }, 404);
   if (!canReviewDocument(scope, document.subject, document.status))
     return json({ error: "この分野の原稿を閲覧する権限がありません。" }, 403);
+  // 現行版と更新案の関係は一覧APIのページングに依存させない。個別記事を
+  // 開いた時点で関連する両方のIDを返し、一覧に出ていない版も確実に開ける
+  // ようにする。
+  const isUpdateProposal = document.document_kind === "update-proposal";
+  const canonicalId = isUpdateProposal
+    ? document.base_document_id
+    : document.id;
+  const proposalId = isUpdateProposal
+    ? document.id
+    : (
+        await env.REPORTS.prepare(
+          `SELECT id FROM editorial_documents
+             WHERE base_document_id = ?
+               AND document_kind = 'update-proposal'
+               AND archived_at IS NULL
+             ORDER BY updated_at DESC LIMIT 1`,
+        )
+          .bind(document.id)
+          .first<{ id: string }>()
+      )?.id ?? null;
   const comments = await env.REPORTS.prepare(
     `SELECT id, document_id, parent_comment_id, body, created_by, created_at, selection_start, selection_end, selection_text,
       acknowledged_at, acknowledged_by, resolved_at, resolved_by
@@ -13927,6 +13947,7 @@ async function getEditorialDocument(
     document: { ...document, publication_run: publicationRun },
     publicationRun,
     comments: commentsWithSelections,
+    versions: { canonicalId: canonicalId ?? null, proposalId },
     comment_action_summary: {
       counts: documentActionCounts,
       actors: {
@@ -14383,21 +14404,6 @@ async function updateEditorialDocument(
   )
     .bind(documentId)
     .first<EditorialDocument>();
-  if (previous)
-    await env.REPORTS.prepare(
-      "INSERT INTO editorial_document_revisions (id, document_id, title, summary, body, status, saved_by, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-      .bind(
-        crypto.randomUUID(),
-        documentId,
-        previous.title,
-        previous.summary,
-        previous.body,
-        previous.status,
-        scope.email,
-        now,
-      )
-      .run();
   const updateResult = (await env.REPORTS.prepare(
     `UPDATE editorial_documents SET source_article_id = ?, subject = ?, category = ?, locale = ?,
       slug = ?, title = ?, summary = ?, concept_id = ?, concept_name = ?, concept_name_en = ?, concept_is_new = ?, body = ?, writing_memo = ?, latex_engine = ?, status = ?, updated_by = ?, locked_ranges = ?, article_references = ?,
@@ -14456,6 +14462,35 @@ async function updateEditorialDocument(
       },
       409,
     );
+  // 競合や検証失敗で更新されなかったリクエストは版履歴へ記録しない。
+  // 先に履歴を挿入すると、保存失敗なのに「過去版」だけが増えてしまう。
+  let revisionWarning = false;
+  if (previous) {
+    try {
+      await env.REPORTS.prepare(
+        "INSERT INTO editorial_document_revisions (id, document_id, title, summary, body, status, saved_by, saved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+        .bind(
+          crypto.randomUUID(),
+          documentId,
+          previous.title,
+          previous.summary,
+          previous.body,
+          previous.status,
+          scope.email,
+          now,
+        )
+        .run();
+    } catch (error) {
+      // 本文の更新は成功しているため、版履歴テーブルが未適用の環境や
+      // 一時的なD1障害で保存全体を失敗扱いにしない。次回保存時に再試行する。
+      revisionWarning = true;
+      console.error("editorial revision recording failed after document save", {
+        documentId,
+        error,
+      });
+    }
+  }
   const changedFields = [
     ["title", existing.title, values.title],
     ["summary", existing.summary, values.summary],
@@ -14490,10 +14525,19 @@ async function updateEditorialDocument(
       createdAt: now,
     });
   await syncEditorialCollaborationDocument(env, documentId);
-  if (existing.document_kind !== "update-proposal")
-    await syncEditorialOutlineDocument(env, documentId, { subject: values.subject, category: values.category, slug: values.slug }, text(payload.outlineId, 64));
+  if (existing.document_kind !== "update-proposal") {
+    try {
+      await syncEditorialOutlineDocument(env, documentId, { subject: values.subject, category: values.category, slug: values.slug }, text(payload.outlineId, 64));
+    } catch (error) {
+      // 目次の補助リンクが一時的に更新できなくても、本文の保存結果は保持する。
+      console.error("editorial outline synchronization failed after document save", {
+        documentId,
+        error,
+      });
+    }
+  }
   await notifyEditorialDocumentChange(env, documentId);
-  return json({ ok: true, updatedAt: now });
+  return json({ ok: true, updatedAt: now, revisionWarning });
 }
 
 async function listEditorialRevisions(
@@ -14546,7 +14590,7 @@ async function listEditorialRevisions(
               COALESCE(p.avatar_url, '') AS saved_by_avatar_url
          FROM editorial_documents d
          LEFT JOIN editorial_member_profiles p ON lower(p.email)=lower(d.updated_by)
-        WHERE d.id = ? AND d.document_kind = 'canonical'`,
+        WHERE d.id = ? AND COALESCE(d.document_kind, 'canonical') = 'canonical'`,
     )
       .bind(document.base_document_id)
       .first<{
