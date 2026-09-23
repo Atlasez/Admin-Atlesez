@@ -504,6 +504,26 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
   .progress-report-body { line-height: 1.7; white-space: pre-wrap; }
   .progress-report-meta { color: var(--text-secondary); font-size: 0.78rem; }
   .progress-report-meta strong { color: var(--text-primary); }
+  .progress-report-reaction {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 0.78rem;
+    gap: 0.35rem;
+    justify-self: start;
+    padding: 0.25rem 0.65rem;
+  }
+  .progress-report-reaction[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+  }
+  .progress-report-reaction:disabled { cursor: wait; opacity: 0.65; }
   .progress-report-tag {
     background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
     border: 1px solid color-mix(in srgb, var(--accent-primary) 38%, transparent);
@@ -1483,7 +1503,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         const reporter = String(item.display_name || item.email || '投稿者不明');
         const email = item.email && item.email !== reporter ? `（${String(item.email)}）` : '';
         const projectName = String(item.project_name || item.project_id || 'プロジェクト不明');
-        return `<article class="progress-report"><div class="progress-report-body">${escapeHtml(String(item.body ?? ''))}</div><div class="progress-report-meta"><span class="progress-report-tag">${escapeHtml(subjectText)}</span><span class="progress-report-tag">${escapeHtml(projectName)}</span><strong>${escapeHtml(reporter)}</strong>${escapeHtml(email)} ・ ${escapeHtml(formatDate(String(item.created_at)))}</div></article>`;
+        const reactionCount = Math.max(0, Number(item.reaction_count) || 0);
+        const reactedByMe = Boolean(Number(item.reacted_by_me) || item.reacted_by_me === true);
+        return `<article class="progress-report"><div class="progress-report-body">${escapeHtml(String(item.body ?? ''))}</div><div class="progress-report-meta"><span class="progress-report-tag">${escapeHtml(subjectText)}</span><span class="progress-report-tag">${escapeHtml(projectName)}</span><strong>${escapeHtml(reporter)}</strong>${escapeHtml(email)} ・ ${escapeHtml(formatDate(String(item.created_at)))}</div><button type="button" class="progress-report-reaction" data-progress-reaction="${escapeHtml(String(item.id))}" aria-pressed="${reactedByMe}" aria-label="いいね ${reactionCount}件">${reactedByMe ? '♥' : '♡'} いいね <span>${reactionCount}</span></button></article>`;
       }).join('') || `<p>${progressOverview ? '条件に一致する進捗報告はありません。' : '進捗報告はまだありません。'}</p>`;
       progressPagination.hidden = !progressOverview || !progressNextCursor;
       progressPaginationSummary.textContent = progressNextCursor ? `${allReports.length}件を読み込み済み` : '';
@@ -1781,6 +1803,25 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         progressNextCursor = page.progressPagination?.nextCursor ?? null;
       } catch (error) { progressFeedback.value = error instanceof Error ? error.message : '追加の進捗報告を読み込めませんでした。'; }
       finally { progressLoadingMore = false; render(); }
+    });
+    reports.addEventListener('click', async (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-progress-reaction]');
+      if (!button || button.disabled) return;
+      const reportId = button.dataset.progressReaction || '';
+      const report = (data.progress ?? []).find((item) => String(item.id) === reportId);
+      if (!report) return;
+      const reacted = !Boolean(Number(report.reacted_by_me) || report.reacted_by_me === true);
+      button.disabled = true;
+      try {
+        const result = await api<{ reactionCount: number; reactedByMe: boolean }>(`/api/admin/progress/${encodeURIComponent(reportId)}/reaction`, 'PUT', { reacted });
+        report.reaction_count = result.reactionCount;
+        report.reacted_by_me = result.reactedByMe;
+        progressFeedback.value = '';
+        renderProgressReports();
+      } catch (error) {
+        button.disabled = false;
+        progressFeedback.value = error instanceof Error ? error.message : 'いいねを更新できませんでした。';
+      }
     });
     const runButtonAction = async (button: HTMLButtonElement, feedback: HTMLOutputElement, action: () => Promise<void>, success: string) => { button.disabled = true; feedback.value = '保存中…'; try { await action(); feedback.value = success; await load(); return true; } catch (error) { feedback.value = error instanceof Error ? error.message : '保存できませんでした。'; return false; } finally { button.disabled = false; } };
     let activeAvailabilityTrigger: HTMLButtonElement | null = null;
