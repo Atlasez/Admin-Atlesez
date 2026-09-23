@@ -650,6 +650,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
 </style>
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+  import { readAdminApiJson } from "../../lib/admin-api";
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
@@ -979,16 +980,15 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           const endpoint = queryString ? `/api/admin/editor/documents?${queryString}` : "/api/admin/editor/documents";
           const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store" });
           const catalogPromise = catalogReady ? Promise.resolve() : loadCatalog();
-          const contentType = response.headers.get("content-type") ?? "";
-          const data = contentType.includes("application/json") ? await response.json() as { documents?: Article[]; scope?: ArticleScope; pagination?: ArticlePagination; error?: string } : {};
-          if (!response.ok) throw Error(data.error ?? "認証情報を取得できませんでした。ページを再読み込みしてください。");
+          const data = await readAdminApiJson<{ documents?: Article[]; scope?: ArticleScope; pagination?: ArticlePagination; error?: string }>(response, "原稿一覧を読み込めませんでした。");
+          if (!response.ok) throw Error(data.error ?? `原稿一覧の読み込みに失敗しました。（HTTP ${response.status}）`);
           const pageDocuments = data.documents ?? [];
           items = append ? [...items, ...pageDocuments] : pageDocuments;
           nextCursor = data.pagination?.nextCursor ?? null;
           hasMore = Boolean(data.pagination?.hasMore);
           loadedPageCount += 1;
           scopeEmail = data.scope?.email ?? "";
-          if (!data.scope) throw new Error("担当範囲を確認できませんでした。ページを再読み込みしてください。");
+          if (!data.scope) throw new Error("ログイン状態または担当範囲を確認できません。ログインを確認して再試行してください。");
           applySubjectScope(data.scope);
           // Render the editorial rows immediately. The remote catalog is an
           // enrichment step and must not block the first useful screen.
