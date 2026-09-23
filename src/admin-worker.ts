@@ -17830,6 +17830,21 @@ async function verifyEditorialPublicationDeployment(
 const publicationRunBranch = (document: EditorialDocument, run: EditorialPublicationRun) =>
   run.branch ?? `editorial/${run.action === "publish" ? "published" : "draft"}-${document.id}-${run.id}`;
 
+/**
+ * D1 の batch 結果から更新件数を安全に取り出す。ローカルの簡易
+ * アダプターは meta を返さないことがあるため、その場合は null とし、
+ * 実D1でだけ compare-and-set の失敗を厳密に検出する。
+ */
+const batchChangeCount = (results: unknown, index: number): number | null => {
+  if (!Array.isArray(results)) return null;
+  const result = results[index];
+  if (!result || typeof result !== "object") return null;
+  const meta = (result as { meta?: unknown }).meta;
+  if (!meta || typeof meta !== "object") return null;
+  const changes = (meta as { changes?: unknown }).changes;
+  return typeof changes === "number" ? changes : null;
+};
+
 const startEditorialPublicationRun = async (
   env: Env,
   document: EditorialDocument,
@@ -18158,9 +18173,9 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
           });
           return;
         }
-        await env.REPORTS.batch([
+        const batchResults = await env.REPORTS.batch([
           env.REPORTS.prepare(
-            `UPDATE editorial_documents SET source_article_id=?, subject=?, category=?, locale=?, slug=?, title=?, summary=?, concept_id=?, concept_name=?, concept_name_en=?, concept_is_new=?, body=?, writing_memo=?, latex_engine=?, locked_ranges=?, article_references=?, status='approved', updated_by=?, updated_at=?, reviewed_at=?, publication_pr_number=NULL, publication_pr_url=NULL, publication_branch=NULL, publication_action=NULL, publication_requested_at=NULL WHERE id=?`,
+            `UPDATE editorial_documents SET source_article_id=?, subject=?, category=?, locale=?, slug=?, title=?, summary=?, concept_id=?, concept_name=?, concept_name_en=?, concept_is_new=?, body=?, writing_memo=?, latex_engine=?, locked_ranges=?, article_references=?, status='approved', updated_by=?, updated_at=?, reviewed_at=?, publication_pr_number=NULL, publication_pr_url=NULL, publication_branch=NULL, publication_action=NULL, publication_requested_at=NULL WHERE id=? AND updated_at=?`,
           ).bind(
             document.source_article_id,
             document.subject,
@@ -18182,26 +18197,67 @@ async function progressEditorialPublicationRun(env: Env, run: EditorialPublicati
             now,
             now,
             base.id,
+            base.updated_at,
           ),
           env.REPORTS.prepare(
-            `UPDATE editorial_documents SET published_at=?, archived_at=?, archived_by=?, publication_pr_number=NULL, publication_pr_url=NULL, publication_branch=NULL, publication_action=NULL, publication_requested_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
-          ).bind(now, now, document.updated_by, now, document.updated_by, document.id),
+            `UPDATE editorial_documents SET published_at=?, archived_at=?, archived_by=?, publication_pr_number=NULL, publication_pr_url=NULL, publication_branch=NULL, publication_action=NULL, publication_requested_at=NULL, updated_at=?, updated_by=? WHERE id=? AND updated_at=?`,
+          ).bind(now, now, document.updated_by, now, document.updated_by, document.id, document.updated_at),
         ]);
+        const baseChanges = batchChangeCount(batchResults, 0);
+        const proposalChanges = batchChangeCount(batchResults, 1);
+        if (baseChanges !== null && (baseChanges !== 1 || proposalChanges !== 1)) {
+          await updateEditorialPublicationRun(env, run.id, {
+            state: "needs_operator",
+            failure_kind: "validation",
+            error_code: "publication_compare_and_set_failed",
+            error_message: "公開確認中に記事または更新元が変更されたため、反映を停止しました。最新内容を確認して再試行してください。",
+            failure_suggestion: "現行版と更新案を確認し、最新の更新案からもう一度公開してください。",
+            next_attempt_at: null,
+            lease_until: null,
+          });
+          return;
+        }
         await syncEditorialOutlineDocument(env, base.id, {
           subject: document.subject,
           category: document.category,
           slug: document.slug,
         });
       } else {
-        await env.REPORTS.prepare(
-          `UPDATE editorial_documents SET published_at = COALESCE(published_at, ?), publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
-        ).bind(now, document.id).run();
+        const canonicalResult = await env.REPORTS.prepare(
+          `UPDATE editorial_documents SET published_at = COALESCE(published_at, ?), publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ? AND updated_at = ?`,
+        ).bind(now, document.id, document.updated_at).run();
+        const canonicalChanges = batchChangeCount([canonicalResult], 0);
+        if (canonicalChanges !== null && canonicalChanges !== 1) {
+          await updateEditorialPublicationRun(env, run.id, {
+            state: "needs_operator",
+            failure_kind: "validation",
+            error_code: "publication_compare_and_set_failed",
+            error_message: "公開確認中に記事が更新されたため、反映を停止しました。最新内容を確認して再試行してください。",
+            failure_suggestion: "最新内容を保存・確認してから、もう一度公開してください。",
+            next_attempt_at: null,
+            lease_until: null,
+          });
+          return;
+        }
       }
       await updateEditorialPublicationRun(env, run.id, { state: "published", error_code: null, error_message: null, last_check_at: now });
     } else {
-      await env.REPORTS.prepare(
-        `UPDATE editorial_documents SET status = 'draft', published_at = NULL, publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ?`,
-      ).bind(document.id).run();
+      const unpublishResult = await env.REPORTS.prepare(
+        `UPDATE editorial_documents SET status = 'draft', published_at = NULL, publication_pr_number = NULL, publication_pr_url = NULL, publication_branch = NULL, publication_action = NULL, publication_requested_at = NULL WHERE id = ? AND updated_at = ?`,
+      ).bind(document.id, document.updated_at).run();
+      const unpublishChanges = batchChangeCount([unpublishResult], 0);
+      if (unpublishChanges !== null && unpublishChanges !== 1) {
+        await updateEditorialPublicationRun(env, run.id, {
+          state: "needs_operator",
+          failure_kind: "validation",
+          error_code: "publication_compare_and_set_failed",
+          error_message: "公開取り消し中に記事が更新されたため、反映を停止しました。最新内容を確認して再試行してください。",
+          failure_suggestion: "最新内容を保存・確認してから、もう一度公開を取り消してください。",
+          next_attempt_at: null,
+          lease_until: null,
+        });
+        return;
+      }
       await updateEditorialPublicationRun(env, run.id, { state: "unpublished", error_code: null, error_message: null, last_check_at: now });
     }
     return;
