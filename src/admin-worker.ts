@@ -11906,6 +11906,29 @@ async function operationsOverview(
   });
 }
 
+function progressReportVisibility(
+  scope: { email: string; isManager: boolean; subjects: string[] },
+  projects: Array<{ id: string; role?: string }>,
+) {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+  for (const project of projects) {
+    if (scope.isManager || project.role === "manager") {
+      conditions.push("r.project_id = ?");
+      values.push(project.id);
+      continue;
+    }
+    const subjectCondition = scope.subjects.length
+      ? ` OR r.subject IN (${scope.subjects.map(() => "?").join(",")})`
+      : "";
+    conditions.push(
+      `(r.project_id = ? AND (lower(r.email) = lower(?) OR r.subject IS NULL${subjectCondition}))`,
+    );
+    values.push(project.id, scope.email, ...scope.subjects);
+  }
+  return { sql: conditions.length ? `(${conditions.join(" OR ")})` : "0", values };
+}
+
 async function progressReportsOverview(
   request: Request,
   env: Env,
@@ -11948,22 +11971,8 @@ async function progressReportsOverview(
     }
   }
 
-  const conditions: string[] = [];
-  const values: unknown[] = [];
-  for (const project of projects) {
-    if (scope.isManager || project.role === "manager") {
-      conditions.push("r.project_id = ?");
-      values.push(project.id);
-      continue;
-    }
-    const subjectCondition = scope.subjects.length
-      ? ` OR r.subject IN (${scope.subjects.map(() => "?").join(",")})`
-      : "";
-    conditions.push(
-      `(r.project_id = ? AND (lower(r.email) = lower(?) OR r.subject IS NULL${subjectCondition}))`,
-    );
-    values.push(project.id, scope.email, ...scope.subjects);
-  }
+  const visibility = progressReportVisibility(scope, projects);
+  const values: unknown[] = [scope.email.toLowerCase(), ...visibility.values];
 
   const cursorCondition = cursor
     ? " AND (r.created_at < ? OR (r.created_at = ? AND r.id < ?))"
@@ -11972,11 +11981,20 @@ async function progressReportsOverview(
   const reports = await env.REPORTS.prepare(
     `SELECT r.id,r.project_id,r.subject,r.document_id,r.body,r.created_at,r.email,
       COALESCE(NULLIF(TRIM(profile.display_name),''),r.email) AS display_name,
-      COALESCE(p.name,r.project_id) AS project_name
+      COALESCE(p.name,r.project_id) AS project_name,
+      COALESCE(reaction_counts.reaction_count,0) AS reaction_count,
+      CASE WHEN my_reaction.progress_id IS NULL THEN 0 ELSE 1 END AS reacted_by_me
      FROM editorial_progress_reports r
      LEFT JOIN editorial_member_profiles profile ON lower(profile.email)=lower(r.email)
      LEFT JOIN atlasez_projects p ON p.id=r.project_id
-     WHERE (${conditions.join(" OR ")})${cursorCondition}
+     LEFT JOIN (
+       SELECT progress_id,COUNT(*) AS reaction_count
+       FROM editorial_progress_reactions WHERE reaction='like' GROUP BY progress_id
+     ) reaction_counts ON reaction_counts.progress_id=r.id
+     LEFT JOIN editorial_progress_reactions my_reaction
+       ON my_reaction.progress_id=r.id AND my_reaction.actor_email=lower(?)
+       AND my_reaction.reaction='like'
+     WHERE ${visibility.sql}${cursorCondition}
      ORDER BY r.created_at DESC,r.id DESC
      LIMIT ?`,
   )
@@ -12003,6 +12021,67 @@ async function progressReportsOverview(
     projects,
     progress: pageReports,
     progressPagination: { limit: pageLimit, nextCursor, hasMore },
+  });
+}
+
+async function setProgressReportReaction(
+  request: Request,
+  env: Env,
+  reportId: string,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  let payload: { reacted?: unknown };
+  try {
+    payload = (await request.json()) as { reacted?: unknown };
+  } catch {
+    return json({ error: "リアクションの内容を読み取れませんでした。" }, 400);
+  }
+  if (typeof payload.reacted !== "boolean")
+    return json({ error: "リアクションの状態を指定してください。" }, 400);
+
+  await ensureAtlasMembership(env, scope);
+  const projects = await accessibleOperationProjects(env, scope);
+  const visibility = progressReportVisibility(scope, projects);
+  const visibleReport = await env.REPORTS.prepare(
+    `SELECT r.id FROM editorial_progress_reports r
+     WHERE r.id=? AND ${visibility.sql} LIMIT 1`,
+  )
+    .bind(reportId, ...visibility.values)
+    .first<{ id: string }>();
+  if (!visibleReport)
+    return json({ error: "進捗報告が見つからないか、閲覧権限がありません。" }, 404);
+
+  const actorEmail = scope.email.trim().toLowerCase();
+  if (payload.reacted) {
+    await env.REPORTS.prepare(
+      `INSERT OR IGNORE INTO editorial_progress_reactions
+       (id,progress_id,actor_email,reaction,created_at) VALUES (?,?,?,?,?)`,
+    )
+      .bind(crypto.randomUUID(), reportId, actorEmail, "like", new Date().toISOString())
+      .run();
+  } else {
+    await env.REPORTS.prepare(
+      "DELETE FROM editorial_progress_reactions WHERE progress_id=? AND actor_email=? AND reaction='like'",
+    )
+      .bind(reportId, actorEmail)
+      .run();
+  }
+
+  const result = await env.REPORTS.prepare(
+    `SELECT COUNT(*) AS reaction_count,
+      EXISTS(SELECT 1 FROM editorial_progress_reactions
+        WHERE progress_id=? AND actor_email=? AND reaction='like') AS reacted_by_me
+     FROM editorial_progress_reactions WHERE progress_id=? AND reaction='like'`,
+  )
+    .bind(reportId, actorEmail, reportId)
+    .first<{ reaction_count: number; reacted_by_me: number }>();
+  return json({
+    ok: true,
+    reactionCount: Number(result?.reaction_count ?? 0),
+    reactedByMe: Boolean(result?.reacted_by_me),
   });
 }
 
@@ -21601,6 +21680,15 @@ async function handleAdminRequest(
     return operationsOverview(request, env);
   if (url.pathname === "/api/admin/progress" && request.method === "GET")
     return progressReportsOverview(request, env);
+  const progressReactionMatch = url.pathname.match(
+    /^\/api\/admin\/progress\/([^/]+)\/reaction$/,
+  );
+  if (progressReactionMatch && request.method === "PUT")
+    return setProgressReportReaction(
+      request,
+      env,
+      decodeURIComponent(progressReactionMatch[1]),
+    );
   if (
     url.pathname === "/api/admin/operations/tasks" &&
     request.method === "POST"

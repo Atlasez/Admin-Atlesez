@@ -215,3 +215,72 @@ test("進捗報告一覧はカーソルで追加読み込みできる", async ({
   await expect(loadMore).toBeHidden();
   expect(requests).toBe(2);
 });
+
+test("進捗報告のいいねは状態と件数を更新できる", async ({ page }) => {
+  const writes: { reacted: boolean; pathname: string }[] = [];
+  await page.route("**/api/admin/progress**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "PUT") {
+      const body = request.postDataJSON() as { reacted: boolean };
+      writes.push({ reacted: body.reacted, pathname: url.pathname });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          reactionCount: body.reacted ? 3 : 2,
+          reactedByMe: body.reacted,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: {
+          email: "alice@example.com",
+          isManager: false,
+          subjects: ["mathematics"],
+        },
+        projects: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+        progress: [
+          {
+            id: "progress-react",
+            project_id: "atlas",
+            project_name: "アトラス",
+            subject: "mathematics",
+            body: "リアクション対象の進捗",
+            created_at: "2026-09-02T00:00:00.000Z",
+            email: "alice@example.com",
+            display_name: "Alice",
+            reaction_count: 2,
+            reacted_by_me: 0,
+          },
+        ],
+        progressPagination: { limit: 50, nextCursor: null, hasMore: false },
+      }),
+    });
+  });
+
+  await page.goto("admin/progress/");
+  const reaction = page.locator('[data-progress-reaction="progress-react"]');
+  await expect(reaction).toHaveAttribute("aria-pressed", "false");
+  await expect(reaction).toContainText("2");
+  await reaction.click();
+  await expect(
+    page.locator('[data-progress-reaction="progress-react"]'),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.locator('[data-progress-reaction="progress-react"]'),
+  ).toContainText("3");
+  await page.locator('[data-progress-reaction="progress-react"]').click();
+  await expect(
+    page.locator('[data-progress-reaction="progress-react"]'),
+  ).toHaveAttribute("aria-pressed", "false");
+  expect(writes).toEqual([
+    { reacted: true, pathname: "/api/admin/progress/progress-react/reaction" },
+    { reacted: false, pathname: "/api/admin/progress/progress-react/reaction" },
+  ]);
+});
