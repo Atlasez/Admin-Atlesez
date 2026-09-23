@@ -2142,6 +2142,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     let loadedDocumentIsUpdateProposal = false;
     let updateProposalActive = false;
     const updateProposalIdentityFields = new Set(["locale", "subject", "category", "slug", "conceptId"]);
+    type DocumentVersionLinks = { canonicalId: string | null; proposalId: string | null };
+    let loadedVersionLinks: DocumentVersionLinks = { canonicalId: null, proposalId: null };
     const setUpdateProposalState = (active: boolean) => {
       updateProposalActive = loadedDocumentIsUpdateProposal || (loadedDocumentWasPublished && active);
       form.classList.toggle("is-update-proposal", updateProposalActive);
@@ -2175,13 +2177,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         ? "公開済みの正原稿は変更されません。更新案を作成してからフィードバックを依頼してください。"
         : "複数回、別の担当者へフィードバックを依頼できます。";
     };
-    const setDocumentVersionSwitcher = (item: Document) => {
+    const setDocumentVersionSwitcher = (item: Document, links: DocumentVersionLinks = loadedVersionLinks) => {
       const isProposal = item.document_kind === "update-proposal";
-      const canonicalId = isProposal ? item.base_document_id ?? "" : item.id;
+      const canonicalId = isProposal ? item.base_document_id ?? links.canonicalId ?? "" : links.canonicalId || item.id;
       const proposal = !isProposal && item.id
         ? documents.find((candidate) => candidate.document_kind === "update-proposal" && candidate.base_document_id === item.id && !candidate.archived_at)
         : null;
-      const proposalId = isProposal ? item.id : proposal?.id ?? "";
+      const proposalId = isProposal ? item.id : proposal?.id ?? links.proposalId ?? "";
       const showCurrent = Boolean(isProposal && canonicalId);
       const showProposal = Boolean(!isProposal && proposalId);
       versionSwitcher.hidden = !(showCurrent || showProposal);
@@ -2211,8 +2213,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         const data = await read<{ error?: string; id?: string }>(response);
         if (!response.ok || !data.id) throw new Error(data.error ?? "更新案を作成できませんでした。");
         activeUpdateProposalDocumentIds.add(documentId);
-        await loadDocuments();
         await openDocument(data.id);
+        // 更新案の作成自体は個別APIで完了している。一覧の再取得が一時的に
+        // 失敗しても、保存済みの更新案を「作成失敗」と誤表示しない。
+        try { await loadDocuments(); } catch { /* 次回の再読み込みで一覧を同期する */ }
         await loadRevisions(data.id);
         saveMessage.value = "更新案を作成しました。公開中の記事は保持されています。内容を確認して保存・フィードバック依頼を進めてください。";
       } catch (error) {
@@ -3954,10 +3958,13 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           if (outlineId) nextQuery.set("outlineId", outlineId);
           window.history.replaceState({}, "", `${window.location.pathname}?${nextQuery.toString()}${window.location.hash}`);
         }
+        // PATCHの成功時点で本文と版履歴の保存は完了している。以降の
+        // 表示更新が失敗しても、保存失敗として扱わない。
         await loadMediaAssets(savedId);
         persistedDocumentValues = { title: formValue("title"), summary: formValue("summary"), body: body.value };
         setUnsavedChanges(false);
-        await loadDocuments();
+        persistedDocumentUpdatedAt = data.updatedAt || persistedDocumentUpdatedAt;
+        try { await loadDocuments(); } catch { /* 補助一覧は次回再読み込みで復旧 */ }
         const refreshed = documents.find((item) => item.id === savedId);
         persistedDocumentUpdatedAt = data.updatedAt || refreshed?.updated_at || persistedDocumentUpdatedAt;
         documentConflict.hidden = true;
@@ -3971,8 +3978,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
             ? "保存しました。公開内容を更新する場合は「公開内容を更新して再試行」を押してください。"
             : "フィードバック済みとして保存しました。公開する場合は「公開」ボタンを押してください。"
           : "保存しました。";
-        await loadPublicationReview(savedId);
-        await loadRevisions(savedId);
+        try { await loadPublicationReview(savedId); } catch { /* 保存結果には影響させない */ }
+        try { await loadRevisions(savedId); } catch { /* 保存結果には影響させない */ }
         collaborationSaveState.succeeded();
         if (showProgress) { closeAllPanePopouts(); progressDialog.showModal(); }
         return savedId;
@@ -4411,7 +4418,11 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       }
       collaborationReconnectNow?.();
     });
-    const setDocument = (item: Document, commentsForDocument: Comment[] = []) => {
+    const setDocument = (item: Document, commentsForDocument: Comment[] = [], versionLinks?: DocumentVersionLinks) => {
+      loadedVersionLinks = versionLinks ?? {
+        canonicalId: item.document_kind === "update-proposal" ? item.base_document_id ?? null : item.id || null,
+        proposalId: item.document_kind === "update-proposal" ? item.id : null,
+      };
       currentDocument = item;
       slugEdited = Boolean(item.id);
       empty.hidden = true; form.hidden = false;
@@ -4443,8 +4454,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       loadedDocumentWasPublished = Boolean(item.published_at) && item.document_kind !== "update-proposal";
       loadedDocumentIsUpdateProposal = item.document_kind === "update-proposal";
       if (item.id && item.published_at && hasUnpublishedPublicationChanges(item)) activeUpdateProposalDocumentIds.add(item.id);
-      setUpdateProposalState(loadedDocumentIsUpdateProposal);
-      setDocumentVersionSwitcher(item);
+      setUpdateProposalState(loadedDocumentIsUpdateProposal || Boolean(loadedVersionLinks.proposalId && item.document_kind !== "update-proposal"));
+      setDocumentVersionSwitcher(item, loadedVersionLinks);
       heading.textContent = item.title || "新規原稿"; state.textContent = statusLabel[item.status]; setPublicationState(item); monitorPublicationRun(item); updateWorkflow(item.status, Boolean(item.published_at), item.publication_review_stage, hasUnpublishedPublicationChanges(item)); currentComments = commentsForDocument; renderComments(); renderHeadingOutline(); void renderPreview(); void loadMediaAssets(item.id); updatePublicationActions(item); completeWritingButton.hidden = true; publicationReviewButton.hidden = true; saveMessage.value = item.id ? "保存済み" : "未保存の新規原稿"; setUnsavedChanges(false); connectCollaboration(item.id); if (item.id) void loadPublicationReview(item.id, item).catch((error: unknown) => { saveMessage.value = error instanceof Error ? error.message : "公開審査状態を読み込めませんでした。"; });
     };
     const emptyDocument = (source?: SourceArticle) => {
@@ -4566,13 +4577,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       const loadGeneration = ++documentLoadGeneration;
       saveMessage.value = "原稿を読み込み中…";
       const response = await fetch(`/api/admin/editor/documents/${encodeURIComponent(id)}`, { credentials: "same-origin" });
-      const data = await read<{ document?: Document; comments?: Comment[]; error?: string }>(response);
+      const data = await read<{ document?: Document; comments?: Comment[]; versions?: Partial<DocumentVersionLinks>; error?: string }>(response);
       if (!response.ok || !data.document) throw new Error(data.error ?? "原稿を読み込めませんでした。");
       // A slower response for a previously selected article must never replace
       // the article the user has opened most recently.
       if (loadGeneration !== documentLoadGeneration || (id && activeDocumentId !== id)) return;
       expandedReplyThreadIds.clear();
-      setDocument(data.document, data.comments ?? []);
+      const versions: DocumentVersionLinks = {
+        canonicalId: data.versions?.canonicalId ?? (data.document.document_kind === "update-proposal" ? data.document.base_document_id ?? null : data.document.id || null),
+        proposalId: data.versions?.proposalId ?? (data.document.document_kind === "update-proposal" ? data.document.id : null),
+      };
+      setDocument(data.document, data.comments ?? [], versions);
       // 一部の認証付きレスポンス／古いキャッシュでは本文は返るのに
       // document.id が欠落することがある。呼び出し元のIDを復元して、
       // 画像アップロード等が新規原稿POSTへ誤分岐しないようにする。
