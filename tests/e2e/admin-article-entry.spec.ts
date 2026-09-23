@@ -505,6 +505,41 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     );
   });
 
+  test("記事一覧のHTMLエラーを認証情報エラーと誤認せず、HTTP状態を示して再試行できる", async ({
+    page,
+  }) => {
+    let attempts = 0;
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await route.fulfill({
+          status: 502,
+          contentType: "text/html",
+          body: "<!doctype html><title>temporary upstream error</title>",
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", subjects: ["mathematics"] },
+          documents: [],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=html-error");
+    await expect(page.locator("[data-admin-load-error]")).toContainText(
+      "原稿一覧を読み込めませんでした。（HTTP 502）",
+    );
+    await expect(page.locator("body")).not.toContainText("Unexpected token");
+    await page.getByRole("button", { name: "再試行" }).click();
+    await expect(page.locator("[data-admin-load-error]")).toBeHidden();
+    await expect(page.locator("[data-list]")).toContainText(
+      "条件に一致する原稿はありません",
+    );
+  });
+
   test("D-4: 下書きをアーカイブし、30日以内なら一覧から復元できる", async ({
     page,
   }) => {
