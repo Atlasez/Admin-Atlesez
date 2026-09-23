@@ -11983,16 +11983,17 @@ async function progressReportsOverview(
       COALESCE(NULLIF(TRIM(profile.display_name),''),r.email) AS display_name,
       COALESCE(p.name,r.project_id) AS project_name,
       COALESCE(reaction_counts.reaction_count,0) AS reaction_count,
-      CASE WHEN my_reaction.report_id IS NULL THEN 0 ELSE 1 END AS reacted_by_me
+      CASE WHEN my_reaction.progress_id IS NULL THEN 0 ELSE 1 END AS reacted_by_me
      FROM editorial_progress_reports r
      LEFT JOIN editorial_member_profiles profile ON lower(profile.email)=lower(r.email)
      LEFT JOIN atlasez_projects p ON p.id=r.project_id
      LEFT JOIN (
-       SELECT report_id,COUNT(*) AS reaction_count
-       FROM editorial_progress_reactions GROUP BY report_id
-     ) reaction_counts ON reaction_counts.report_id=r.id
+       SELECT progress_id,COUNT(*) AS reaction_count
+       FROM editorial_progress_reactions WHERE reaction='like' GROUP BY progress_id
+     ) reaction_counts ON reaction_counts.progress_id=r.id
      LEFT JOIN editorial_progress_reactions my_reaction
-       ON my_reaction.report_id=r.id AND my_reaction.actor_email=lower(?)
+       ON my_reaction.progress_id=r.id AND my_reaction.actor_email=lower(?)
+       AND my_reaction.reaction='like'
      WHERE ${visibility.sql}${cursorCondition}
      ORDER BY r.created_at DESC,r.id DESC
      LIMIT ?`,
@@ -12056,14 +12057,14 @@ async function setProgressReportReaction(
   const actorEmail = scope.email.trim().toLowerCase();
   if (payload.reacted) {
     await env.REPORTS.prepare(
-      `INSERT OR IGNORE INTO editorial_progress_reactions (report_id,actor_email,created_at)
-       VALUES (?,?,?)`,
+      `INSERT OR IGNORE INTO editorial_progress_reactions
+       (id,progress_id,actor_email,reaction,created_at) VALUES (?,?,?,?,?)`,
     )
-      .bind(reportId, actorEmail, new Date().toISOString())
+      .bind(crypto.randomUUID(), reportId, actorEmail, "like", new Date().toISOString())
       .run();
   } else {
     await env.REPORTS.prepare(
-      "DELETE FROM editorial_progress_reactions WHERE report_id=? AND actor_email=?",
+      "DELETE FROM editorial_progress_reactions WHERE progress_id=? AND actor_email=? AND reaction='like'",
     )
       .bind(reportId, actorEmail)
       .run();
@@ -12072,8 +12073,8 @@ async function setProgressReportReaction(
   const result = await env.REPORTS.prepare(
     `SELECT COUNT(*) AS reaction_count,
       EXISTS(SELECT 1 FROM editorial_progress_reactions
-        WHERE report_id=? AND actor_email=?) AS reacted_by_me
-     FROM editorial_progress_reactions WHERE report_id=?`,
+        WHERE progress_id=? AND actor_email=? AND reaction='like') AS reacted_by_me
+     FROM editorial_progress_reactions WHERE progress_id=? AND reaction='like'`,
   )
     .bind(reportId, actorEmail, reportId)
     .first<{ reaction_count: number; reacted_by_me: number }>();
