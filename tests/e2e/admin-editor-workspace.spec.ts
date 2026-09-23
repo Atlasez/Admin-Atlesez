@@ -397,7 +397,13 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          members: [],
+          members: [
+            {
+              email: "manager@example.com",
+              display_name: "運営担当",
+              role: "manager",
+            },
+          ],
           overviews: [],
           editableSubjects: [],
           canEditAll: true,
@@ -422,6 +428,10 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   });
 
   await page.goto("./admin/genre-roles/?project=atlas");
+  await expect(
+    page.getByRole("link", { name: "運営者・担当分野管理" }),
+  ).toHaveCount(0);
+  await expect(page.locator("[data-content]")).not.toContainText("運営統括");
   const taxonomyForm = page.locator("[data-taxonomy-form]");
   await taxonomyForm.locator('select[name="kind"]').selectOption("subject");
   await taxonomyForm.locator('input[name="name"]').fill("情報");
