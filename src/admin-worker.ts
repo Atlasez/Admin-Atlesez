@@ -21077,15 +21077,29 @@ async function adminNotifications(
     : 0;
   // 表示用のページ上限とは別に、未読件数は全候補を対象に集計する。
   const readNotificationIds = sortedNotifications.map((item) => item.id);
-  const readIds = readNotificationIds.length
-    ? await env.REPORTS.prepare(
-        `SELECT notification_id FROM admin_notification_reads WHERE email = ? AND notification_id IN (${readNotificationIds.map(() => "?").join(",")})`,
-      )
-        .bind(scope.email, ...readNotificationIds)
-        .all<{ notification_id: string }>()
-    : { results: [] as { notification_id: string }[] };
+  // D1 allows at most 100 bound parameters per query. Keep one parameter for
+  // email and query IDs in batches of 99 so notification growth cannot make
+  // the entire inbox fail to load.
+  const READ_NOTIFICATION_ID_BATCH_SIZE = 99;
+  const readNotificationRows: { notification_id: string }[] = [];
+  for (
+    let index = 0;
+    index < readNotificationIds.length;
+    index += READ_NOTIFICATION_ID_BATCH_SIZE
+  ) {
+    const batchIds = readNotificationIds.slice(
+      index,
+      index + READ_NOTIFICATION_ID_BATCH_SIZE,
+    );
+    const batch = await env.REPORTS.prepare(
+      `SELECT notification_id FROM admin_notification_reads WHERE email = ? AND notification_id IN (${batchIds.map(() => "?").join(",")})`,
+    )
+      .bind(scope.email, ...batchIds)
+      .all<{ notification_id: string }>();
+    readNotificationRows.push(...(batch.results ?? []));
+  }
   const read = new Set(
-    (readIds.results ?? []).map((item) => item.notification_id),
+    readNotificationRows.map((item) => item.notification_id),
   );
   const unreadNotificationIds = sortedNotifications
     .filter((item) => !read.has(item.id))

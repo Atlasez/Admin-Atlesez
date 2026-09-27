@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
 class Statement {
-  constructor(_query: string) {}
-  bind() {
+  boundValues: unknown[] = [];
+
+  constructor(readonly query: string) {}
+  bind(...values: unknown[]) {
+    this.boundValues = values;
     return this;
   }
   async run() {
@@ -1202,6 +1205,91 @@ describe("applicant stage server-side access", () => {
       ["applicant@example.com", "comment-unread123", expect.any(String)],
       ["applicant@example.com", "comment-unread456", expect.any(String)],
     ]);
+  });
+
+  it("keeps notification read-state queries within D1's 100-bind limit", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const readStateQueries: Array<{ query: string; values: unknown[] }> = [];
+    const readNotificationIds = new Set<string>();
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
+        statement.all = async <T>() => ({
+          results: Array.from({ length: 205 }, (_, index) => ({
+            id: `unread${String(index).padStart(4, "0")}`,
+            body: `Notification ${index}`,
+            parent_comment_id: null,
+            created_at: `2026-08-${String(22 - Math.floor(index / 24)).padStart(2, "0")}T00:00:00.000Z`,
+            document_id: `document-${index}`,
+            title: `Article ${index}`,
+          })) as T[],
+        });
+      }
+      if (
+        query.startsWith("SELECT notification_id FROM admin_notification_reads")
+      ) {
+        statement.all = async <T>() => {
+          const batchIds = statement.boundValues.slice(1) as string[];
+          const selectedReadIds = [batchIds[0], batchIds.at(-1)].filter(
+            (id): id is string => Boolean(id),
+          );
+          selectedReadIds.forEach((id) => readNotificationIds.add(id));
+          readStateQueries.push({
+            query,
+            values: [...statement.boundValues],
+          });
+          return {
+            results: selectedReadIds.map((notification_id) => ({
+              notification_id,
+            })) as T[],
+          };
+        };
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest(
+        "/api/admin/notifications?limit=100&includeUnreadIds=true",
+      ),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      notifications: Array<{ id: string; read: boolean }>;
+      unreadNotificationsCount: number;
+      unreadNotificationIds: string[];
+    };
+    expect(data.notifications).toHaveLength(100);
+    expect(data.unreadNotificationsCount).toBe(199);
+    expect(data.unreadNotificationIds).toHaveLength(199);
+    expect(
+      data.notifications.every(
+        (notification) =>
+          readNotificationIds.has(notification.id) === notification.read,
+      ),
+    ).toBe(true);
+    expect(
+      data.unreadNotificationIds.every((id) => !readNotificationIds.has(id)),
+    ).toBe(true);
+    expect(readStateQueries).toHaveLength(3);
+    expect(readStateQueries.map(({ values }) => values.length)).toEqual([
+      100, 100, 8,
+    ]);
+    expect(
+      readStateQueries.every(
+        ({ values }) => values[0] === "applicant@example.com",
+      ),
+    ).toBe(true);
+    expect(
+      readStateQueries.every(
+        ({ query, values }) =>
+          (query.match(/\?/g) ?? []).length === values.length &&
+          values.length <= 100,
+      ),
+    ).toBe(true);
   });
 
   it("keeps the application directory open for an existing member", async () => {
