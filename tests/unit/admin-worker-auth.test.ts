@@ -175,6 +175,103 @@ const projectManagerScopeEnv = () => ({
   },
 });
 
+const genreOverviewScopeEnv = (
+  permissionSubject: "mathematics" | "*",
+  projectRole: "member" | "manager",
+) => ({
+  ADMIN_AUTH_MODE: "cloudflare-access",
+  REPORTS: {
+    prepare: (query: string) => {
+      const statement = new Statement(query);
+      statement.all = async <T>() => {
+        if (
+          query.includes(
+            "SELECT subject FROM report_admin_permissions WHERE email = ?",
+          )
+        )
+          return { results: [{ subject: permissionSubject }] as T[] };
+        if (
+          query.includes("FROM editorial_workflow_roles") &&
+          query.includes("lower(email) = lower(?)")
+        )
+          return { results: [] as T[] };
+        if (query.includes("WITH raw_members AS"))
+          return {
+            results: [
+              {
+                email: "math@example.com",
+                role: "member",
+                display_name: "Math",
+                avatar_url: "",
+                university: "A",
+                year: "1",
+                country: "JP",
+              },
+              {
+                email: "physics@example.com",
+                role: "member",
+                display_name: "Physics",
+                avatar_url: "",
+                university: "B",
+                year: "2",
+                country: "US",
+              },
+              {
+                email: "unassigned@example.com",
+                role: "member",
+                display_name: "Unassigned",
+                avatar_url: "",
+                university: "C",
+                year: "3",
+                country: "UK",
+              },
+            ] as T[],
+          };
+        if (query.includes("FROM editorial_subject_overviews"))
+          return {
+            results: [
+              {
+                subject: "mathematics",
+                progress: "math progress",
+                updated_by: "private@example.com",
+                updated_at: "2026-09-28",
+              },
+              {
+                subject: "physics",
+                progress: "physics progress",
+                updated_by: "other@example.com",
+                updated_at: "2026-09-27",
+              },
+            ] as T[],
+          };
+        if (query.includes("SELECT lower(email) AS email, subject"))
+          return {
+            results: [
+              { email: "math@example.com", subject: "mathematics" },
+              { email: "physics@example.com", subject: "physics" },
+            ] as T[],
+          };
+        return { results: [] as T[] };
+      };
+      statement.first = async <T>() => {
+        if (query.includes("FROM atlasez_projects"))
+          return {
+            id: "atlas",
+            slug: "atlas",
+            name: "Atlas",
+            description: "",
+          } as T;
+        if (query.includes("SELECT role FROM atlasez_project_memberships"))
+          return { role: projectRole } as T;
+        return null as T | null;
+      };
+      return statement;
+    },
+    batch: async () => [],
+  },
+  ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+});
+
 describe("admin logout contract", () => {
   it("logs out through Cloudflare Access without entering Google OAuth", async () => {
     const response = await worker.fetch(
@@ -288,95 +385,6 @@ describe("admin API scope gate", () => {
   );
 
   it("limits the unpaginated genre overview to assigned subjects and removes other members' private fields", async () => {
-    const reports = {
-      prepare: (query: string) => {
-        const statement = new Statement(query);
-        statement.all = async <T>() => {
-          if (
-            query.includes(
-              "SELECT subject FROM report_admin_permissions WHERE email = ?",
-            )
-          )
-            return { results: [{ subject: "mathematics" }] as T[] };
-          if (
-            query.includes("FROM editorial_workflow_roles") &&
-            query.includes("lower(email) = lower(?)")
-          )
-            return { results: [] as T[] };
-          if (query.includes("WITH raw_members AS"))
-            return {
-              results: [
-                {
-                  email: "math@example.com",
-                  role: "member",
-                  display_name: "Math",
-                  avatar_url: "",
-                  university: "A",
-                  year: "1",
-                  country: "JP",
-                },
-                {
-                  email: "physics@example.com",
-                  role: "member",
-                  display_name: "Physics",
-                  avatar_url: "",
-                  university: "B",
-                  year: "2",
-                  country: "US",
-                },
-                {
-                  email: "unassigned@example.com",
-                  role: "member",
-                  display_name: "Unassigned",
-                  avatar_url: "",
-                  university: "C",
-                  year: "3",
-                  country: "UK",
-                },
-              ] as T[],
-            };
-          if (query.includes("FROM editorial_subject_overviews"))
-            return {
-              results: [
-                {
-                  subject: "mathematics",
-                  progress: "math progress",
-                  updated_by: "private@example.com",
-                  updated_at: "2026-09-28",
-                },
-                {
-                  subject: "physics",
-                  progress: "physics progress",
-                  updated_by: "other@example.com",
-                  updated_at: "2026-09-27",
-                },
-              ] as T[],
-            };
-          if (query.includes("SELECT lower(email) AS email, subject"))
-            return {
-              results: [
-                { email: "math@example.com", subject: "mathematics" },
-                { email: "physics@example.com", subject: "physics" },
-              ] as T[],
-            };
-          return { results: [] as T[] };
-        };
-        statement.first = async <T>() => {
-          if (query.includes("FROM atlasez_projects"))
-            return {
-              id: "atlas",
-              slug: "atlas",
-              name: "Atlas",
-              description: "",
-            } as T;
-          if (query.includes("SELECT role FROM atlasez_project_memberships"))
-            return { role: "member" } as T;
-          return null as T | null;
-        };
-        return statement;
-      },
-      batch: async () => [],
-    };
     const response = await worker.fetch(
       new Request(
         "https://admin.example/api/admin/genre-overviews?project=atlas",
@@ -386,11 +394,7 @@ describe("admin API scope gate", () => {
           },
         },
       ),
-      {
-        ADMIN_AUTH_MODE: "cloudflare-access",
-        REPORTS: reports,
-        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
-      } as never,
+      genreOverviewScopeEnv("mathematics", "member") as never,
     );
 
     expect(response.status).toBe(200);
@@ -413,6 +417,57 @@ describe("admin API scope gate", () => {
       },
     ]);
     expect(data.overviews[0]).not.toHaveProperty("updated_by");
+  });
+
+  it("lets a project manager read project progress without exposing the full member roster", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/genre-overviews?project=atlas",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      genreOverviewScopeEnv("mathematics", "manager") as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<Record<string, unknown>>;
+      overviews: Array<Record<string, unknown>>;
+    };
+    expect(data.members).toHaveLength(1);
+    expect(data.members[0]).toMatchObject({ display_name: "Math" });
+    expect(data.members[0]).not.toHaveProperty("email");
+    expect(data.members[0]).not.toHaveProperty("university");
+    expect(data.overviews).toHaveLength(2);
+    expect(data.overviews[0]).not.toHaveProperty("updated_by");
+  });
+
+  it("preserves full genre overviews for a global administrator", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/genre-overviews?project=atlas",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      genreOverviewScopeEnv("*", "member") as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<Record<string, unknown>>;
+      overviews: Array<Record<string, unknown>>;
+    };
+    expect(data.members).toHaveLength(3);
+    expect(data.members[0]).toHaveProperty("email");
+    expect(data.members[0]).toHaveProperty("university");
+    expect(data.overviews).toHaveLength(2);
+    expect(data.overviews[0]).toHaveProperty("updated_by");
   });
 });
 
