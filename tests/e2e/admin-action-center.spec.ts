@@ -214,10 +214,34 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/action-center/");
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "atlasez-command-history",
+      JSON.stringify([
+        {
+          label: "編集・フィードバック",
+          detail: "記事とフィードバック",
+          href: "/admin/articles/",
+          count: 2,
+          lastUsed: Date.now(),
+        },
+      ]),
+    );
+  });
   await page.keyboard.press("Meta+K");
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "最近使った操作" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "クイック操作" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /編集・フィードバック/ }),
+  ).toBeVisible();
   await page.locator("[data-admin-command-input]").fill("群の");
+  await expect(dialog.getByRole("heading", { name: "検索結果" })).toBeVisible();
   await expect(dialog).toContainText("群の定義");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
