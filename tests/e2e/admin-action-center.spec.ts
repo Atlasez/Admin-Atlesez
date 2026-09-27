@@ -240,6 +240,9 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(
     dialog.getByRole("option", { name: /編集・フィードバック/ }),
   ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /編集・フィードバック/ }),
+  ).toContainText("記事とフィードバック・2回");
   await page.locator("[data-admin-command-input]").fill("群の");
   await expect(dialog.getByRole("heading", { name: "検索結果" })).toBeVisible();
   await expect(dialog).toContainText("群の定義");

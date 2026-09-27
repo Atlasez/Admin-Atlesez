@@ -532,7 +532,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           return Array.isArray(value) ? value.filter((item): item is CommandHistory => Boolean(item && typeof item === "object" && typeof (item as CommandHistory).label === "string" && typeof (item as CommandHistory).count === "number" && typeof (item as CommandHistory).lastUsed === "number")).slice(0, 8) : [];
         } catch { return []; }
       };
-      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => ({ label: item.label, detail: `${item.detail || "最近使った操作"}・${item.count}回`, group: 'recent', icon: 'history', ...(item.href ? { href: item.href } : {}) }));
+      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => {
+        const quickCommand = staticCommands.find((command) => command.label === item.label && (!item.href || command.href === item.href));
+        const savedDetail = typeof item.detail === "string" ? item.detail.replace(/・\d+回$/, "") : "";
+        const detail = quickCommand?.detail ?? (savedDetail || "最近使った操作");
+        return { label: item.label, detail: `${detail}・${item.count}回`, group: 'recent', icon: 'history', ...(item.href ? { href: item.href } : {}) };
+      });
       const recordUsage = (command: Command) => {
         try {
           const now = Date.now();
