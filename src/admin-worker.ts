@@ -11866,12 +11866,23 @@ async function operationsOverview(
   const where = filters.length
     ? ` WHERE ${filters.join(" AND ")}${includeArchived ? "" : " AND archived_at IS NULL"}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}`
     : includeArchived ? (taskCursorCondition ? ` WHERE ${taskCursorCondition}` : "") : ` WHERE archived_at IS NULL${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}`;
-  const memberWhere = canSeeAllProjectOperations
+  // 担当者候補は選択中プロジェクトの所属者を正本にする。
+  // report_admin_permissionsだけから取得すると、別プロジェクトのmanagerにも
+  // 全分野担当者のメールアドレスが返ってしまう。分野担当者にはさらに
+  // 自分の担当分野だけを許可する。
+  const memberSubjectFilter = canSeeAllProjectOperations
     ? ""
-    : ` WHERE subject = '*' OR subject IN (${scope.subjects.map(() => "?").join(",")})`;
-  const memberValues: unknown[] = canSeeAllProjectOperations
-    ? []
-    : scope.subjects;
+    : ` AND EXISTS (
+        SELECT 1 FROM report_admin_permissions permission
+        WHERE lower(permission.email)=lower(m.email)
+          AND (permission.subject='*'${scope.subjects.length
+            ? ` OR permission.subject IN (${scope.subjects.map(() => "?").join(",")})`
+            : ""})
+      )`;
+  const memberValues: unknown[] = [
+    project.id,
+    ...(canSeeAllProjectOperations ? [] : scope.subjects),
+  ];
   // プロジェクト manager は参加者の可用性を確認できるが、一般メンバーは
   // 自分のブロック／曜日ルールだけを返す。ラベルを空にするだけでなく、
   // SQLの行自体を絞り込み、他人のメールアドレスや時刻を漏らさない。
@@ -11910,7 +11921,11 @@ async function operationsOverview(
         .bind(project.id, scope.email)
         .all(),
       env.REPORTS.prepare(
-        `SELECT DISTINCT p.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name FROM report_admin_permissions p LEFT JOIN editorial_member_profiles profile ON profile.email = p.email${memberWhere.replaceAll("subject", "p.subject")} ORDER BY display_name, p.email`,
+        `SELECT DISTINCT m.email, COALESCE(NULLIF(TRIM(profile.display_name), ''), '表示名未設定') AS display_name
+         FROM atlasez_project_memberships m
+         LEFT JOIN editorial_member_profiles profile ON lower(profile.email)=lower(m.email)
+         WHERE m.project_id=?${memberSubjectFilter}
+         ORDER BY display_name, m.email`,
       )
         .bind(...memberValues)
         .all<{ email: string; display_name: string }>(),

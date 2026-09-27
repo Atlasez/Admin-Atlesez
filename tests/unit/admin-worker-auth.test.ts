@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
 class Statement {
-  constructor(_query: string) {}
-  bind() {
+  boundValues: unknown[] = [];
+
+  constructor(readonly query: string) {}
+  bind(...values: unknown[]) {
+    this.boundValues = values;
     return this;
   }
   async run() {
@@ -287,6 +290,69 @@ const genreOverviewScopeEnv = (
   ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
 });
 
+const projectOperationsRosterEnv = (
+  projectRole: "member" | "manager" = "manager",
+  queryLog: Statement[] = [],
+) => ({
+  ADMIN_AUTH_MODE: "cloudflare-access",
+  REPORTS: {
+    prepare: (query: string) => {
+      const statement = new Statement(query);
+      queryLog.push(statement);
+      statement.all = async <T>() => {
+        if (
+          query.includes(
+            "SELECT subject FROM report_admin_permissions WHERE email = ?",
+          )
+        )
+          return { results: [{ subject: "mathematics" }] as T[] };
+        if (query.includes("FROM editorial_workflow_roles"))
+          return { results: [] as T[] };
+        if (query.includes("SELECT DISTINCT m.email"))
+          return {
+            results: [
+              { email: "manager@example.com", display_name: "Project manager" },
+              { email: "member@example.com", display_name: "Project member" },
+            ] as T[],
+          };
+        if (query.includes("FROM report_admin_permissions p"))
+          return {
+            results: [
+              {
+                email: "atlas-only@example.com",
+                display_name: "Atlas operator",
+              },
+              {
+                email: "secretariat-only@example.com",
+                display_name: "Secretariat operator",
+              },
+            ] as T[],
+          };
+        return { results: [] as T[] };
+      };
+      statement.first = async <T>() => {
+        if (query.includes("FROM atlasez_projects WHERE id = ? OR slug = ?"))
+          return {
+            id: "secretariat",
+            slug: "secretariat",
+            name: "運営事務局",
+            description: "",
+          } as T;
+        if (query.includes("SELECT role FROM atlasez_project_memberships"))
+          return { role: projectRole } as T;
+        if (query.includes("SELECT 1 AS found FROM report_admin_permissions"))
+          return { found: 1 } as T;
+        return null as T | null;
+      };
+      return statement;
+    },
+    batch: async () => [],
+  },
+  ASSETS: {
+    fetch: async () => new Response("protected page", { status: 200 }),
+  },
+});
+
 describe("admin logout contract", () => {
   it("logs out through Cloudflare Access without entering Google OAuth", async () => {
     const response = await worker.fetch(
@@ -458,6 +524,64 @@ describe("admin API scope gate", () => {
     expect(data.members[0]).not.toHaveProperty("university");
     expect(data.overviews).toHaveLength(2);
     expect(data.overviews[0]).not.toHaveProperty("updated_by");
+  });
+
+  it("limits operations assignee candidates to the selected project roster", async () => {
+    const queryLog: Statement[] = [];
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/operations?project=secretariat",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      projectOperationsRosterEnv("manager", queryLog) as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<{ email: string; display_name: string }>;
+    };
+    expect(data.members).toEqual([
+      { email: "manager@example.com", display_name: "Project manager" },
+      { email: "member@example.com", display_name: "Project member" },
+    ]);
+    expect(data.members.map((member) => member.email)).not.toContain(
+      "atlas-only@example.com",
+    );
+    expect(data.members.map((member) => member.email)).not.toContain(
+      "secretariat-only@example.com",
+    );
+    const rosterQuery = queryLog.find((entry) =>
+      entry.query.includes("SELECT DISTINCT m.email"),
+    );
+    expect(rosterQuery?.query).toContain("WHERE m.project_id=?");
+    expect(rosterQuery?.boundValues).toEqual(["secretariat"]);
+  });
+
+  it("intersects project member candidates with a limited operator's assigned subjects", async () => {
+    const queryLog: Statement[] = [];
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/operations?project=secretariat",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "member@example.com",
+          },
+        },
+      ),
+      projectOperationsRosterEnv("member", queryLog) as never,
+    );
+
+    expect(response.status).toBe(200);
+    const rosterQuery = queryLog.find((entry) =>
+      entry.query.includes("SELECT DISTINCT m.email"),
+    );
+    expect(rosterQuery?.query).toContain("WHERE m.project_id=?");
+    expect(rosterQuery?.query).toContain("permission.subject IN (?)");
+    expect(rosterQuery?.boundValues).toEqual(["secretariat", "mathematics"]);
   });
 
   it("preserves full genre overviews for a global administrator", async () => {
