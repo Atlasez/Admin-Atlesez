@@ -1,9 +1,13 @@
 name: Deploy admin from GitHub
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      confirm_main:
+        description: "mainの内容を本番へ反映することを確認しました"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -17,6 +21,7 @@ env:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_main == true
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: production
