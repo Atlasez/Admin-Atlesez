@@ -231,6 +231,12 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await page.keyboard.press("Meta+K");
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toBeVisible();
+  const dialogSize = await dialog.evaluate((element) => ({
+    width: Number.parseFloat(getComputedStyle(element).width),
+    rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+  }));
+  expect(dialogSize.width).toBeGreaterThan(40 * dialogSize.rem);
+  expect(dialogSize.width).toBeLessThan(57 * dialogSize.rem);
   await expect(
     dialog.getByRole("heading", { name: "最近使った操作" }),
   ).toBeVisible();
@@ -240,6 +246,9 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(
     dialog.getByRole("option", { name: /編集・フィードバック/ }),
   ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /編集・フィードバック/ }),
+  ).toContainText("記事とフィードバック・2回");
   await page.locator("[data-admin-command-input]").fill("群の");
   await expect(dialog.getByRole("heading", { name: "検索結果" })).toBeVisible();
   await expect(dialog).toContainText("群の定義");
