@@ -62,6 +62,7 @@ const mockAdminApis = async (page: Page) => {
 
 const pages = [
   "admin/portal/",
+  "admin/notifications/",
   "admin/member-tasks/",
   "admin/articles/",
   "admin/editor/",

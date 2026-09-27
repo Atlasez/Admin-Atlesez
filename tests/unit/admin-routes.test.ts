@@ -3,7 +3,7 @@ import { ADMIN_PAGE_PATHS, isAdminPagePath } from "../../src/lib/admin-routes";
 
 describe("admin page routes", () => {
   it("exposes every generated admin page through the Worker", () => {
-    expect(ADMIN_PAGE_PATHS).toHaveLength(41);
+    expect(ADMIN_PAGE_PATHS).toHaveLength(42);
 
     for (const path of ADMIN_PAGE_PATHS) {
       expect(isAdminPagePath(path)).toBe(true);
@@ -20,6 +20,12 @@ describe("admin page routes", () => {
     expect(isAdminPagePath("/admin/member-profile/edit")).toBe(true);
     expect(isAdminPagePath("/admin/member-profile/edit/")).toBe(true);
     expect(ADMIN_PAGE_PATHS).not.toContain("/admin/member-profile/edit");
+  });
+
+  it("exposes the member notification inbox as a top-level admin route", () => {
+    expect(isAdminPagePath("/admin/notifications")).toBe(true);
+    expect(isAdminPagePath("/admin/notifications/")).toBe(true);
+    expect(ADMIN_PAGE_PATHS).toContain("/admin/notifications");
   });
 
   it("exposes the nested outline editor and prototype pages", () => {
