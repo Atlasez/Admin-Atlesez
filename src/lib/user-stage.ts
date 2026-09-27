@@ -28,7 +28,8 @@ export type UserStageInput = {
   isAdmin: boolean;
 };
 
-export type UserArea = "application" | "applicant" | "onboarding" | "admin";
+export type UserArea =
+  "application" | "applicant" | "onboarding" | "member" | "admin";
 
 /**
  * DB に保存されている応募状態と既存の運営権限表からステージを決める。
@@ -74,6 +75,7 @@ export function getUserStage({
  * UI のタイル表示にもこの関数を使うことで、段階ごとの条件を散らさない。
  */
 export function canAccess(stage: UserStage, area: UserArea): boolean {
+  if (area === "member") return stage === "MEMBER" || stage === "ADMIN";
   if (area === "application")
     return (
       stage === "NEW_USER" ||
