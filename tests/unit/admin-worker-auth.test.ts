@@ -832,6 +832,13 @@ describe("applicant stage server-side access", () => {
       false,
       true,
     );
+    const membershipWrites: string[] = [];
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      if (query.includes("INSERT OR IGNORE INTO atlasez_project_memberships"))
+        membershipWrites.push(query);
+      return prepare(query);
+    };
     for (const pathname of [
       "/api/admin/portal",
       "/api/admin/member-tasks",
@@ -852,6 +859,7 @@ describe("applicant stage server-side access", () => {
       memberEnvironment as never,
     );
     expect(notificationRead.status).toBe(200);
+    expect(membershipWrites).toEqual([]);
 
     const adminApi = await worker.fetch(
       loggedInRequest("/api/admin/article-reports"),

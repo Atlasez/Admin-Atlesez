@@ -798,6 +798,7 @@ type AdminScope = {
   subjects: string[];
   allSubjects: boolean;
   isManager: boolean;
+  memberAccess?: boolean;
   coordinatorSubjects?: string[];
   isProjectLeader?: boolean;
 };
@@ -1419,6 +1420,7 @@ async function getMemberOperationScope(
     subjects: [],
     allSubjects: false,
     isManager: false,
+    memberAccess: true,
     coordinatorSubjects: [],
     isProjectLeader: false,
   };
@@ -9054,7 +9056,7 @@ const getWorkflowSummary = async (
 async function portalOverview(request: Request, env: Env): Promise<Response> {
   const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
   const canReviewProfileRequests =
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
@@ -9793,7 +9795,7 @@ async function memberTasksOverview(
 ): Promise<Response> {
   const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   if (!projectIds.length) return json({ projects: [], tasks: [], members: [] });
@@ -9888,7 +9890,7 @@ async function memberCalendarOverview(
 ): Promise<Response> {
   const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   const searchParams = new URL(request.url).searchParams;
