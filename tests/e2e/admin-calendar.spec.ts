@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const expectProjectManageLink = async (page: Page, project: string) => {
+  await expect(page.locator(".admin-nav")).toHaveAttribute(
+    "data-current-slug",
+    project,
+  );
   const menuToggle = page.locator("[data-admin-menu-toggle]");
   if (
     (await menuToggle.isVisible()) &&
