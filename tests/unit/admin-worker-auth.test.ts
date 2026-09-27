@@ -146,6 +146,35 @@ const loggedInJsonRequest = (pathname: string, body: Record<string, unknown>) =>
     body: JSON.stringify(body),
   });
 
+const projectManagerScopeEnv = () => ({
+  ADMIN_AUTH_MODE: "cloudflare-access",
+  REPORTS: {
+    prepare: (query: string) => {
+      const statement = new Statement(query);
+      statement.all = async <T>() => {
+        if (query.includes("SELECT subject FROM report_admin_permissions"))
+          return { results: [{ subject: "mathematics" }] as T[] };
+        return { results: [] as T[] };
+      };
+      statement.first = async <T>() => {
+        if (
+          query.includes("atlasez_project_memberships") &&
+          query.includes("role='manager'")
+        )
+          return { found: 1 } as T;
+        if (query.includes("SELECT 1 AS found FROM report_admin_permissions"))
+          return { found: 1 } as T;
+        return null as T | null;
+      };
+      return statement;
+    },
+    batch: async () => [],
+  },
+  ASSETS: {
+    fetch: async () => new Response("protected page", { status: 200 }),
+  },
+});
+
 describe("admin logout contract", () => {
   it("logs out through Cloudflare Access without entering Google OAuth", async () => {
     const response = await worker.fetch(
@@ -232,6 +261,158 @@ describe("admin API scope gate", () => {
     );
 
     expect(response.status).toBe(200);
+  });
+
+  it.each([
+    "/admin/member-management/?project=atlas",
+    "/admin/genre-roles/?project=atlas",
+    "/admin/operations-statistics/?project=atlas",
+    "/api/admin/genre-overviews?project=atlas&limit=50",
+    "/api/admin/audit-log",
+    "/api/admin/workflow/transitions",
+    "/api/admin/workflow/diagnostics",
+  ])(
+    "keeps global member and operations data out of project-manager scope: %s",
+    async (path) => {
+      const response = await worker.fetch(
+        new Request(`https://admin.example${path}`, {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        }),
+        projectManagerScopeEnv() as never,
+      );
+
+      expect(response.status).toBe(403);
+    },
+  );
+
+  it("limits the unpaginated genre overview to assigned subjects and removes other members' private fields", async () => {
+    const reports = {
+      prepare: (query: string) => {
+        const statement = new Statement(query);
+        statement.all = async <T>() => {
+          if (
+            query.includes(
+              "SELECT subject FROM report_admin_permissions WHERE email = ?",
+            )
+          )
+            return { results: [{ subject: "mathematics" }] as T[] };
+          if (
+            query.includes("FROM editorial_workflow_roles") &&
+            query.includes("lower(email) = lower(?)")
+          )
+            return { results: [] as T[] };
+          if (query.includes("WITH raw_members AS"))
+            return {
+              results: [
+                {
+                  email: "math@example.com",
+                  role: "member",
+                  display_name: "Math",
+                  avatar_url: "",
+                  university: "A",
+                  year: "1",
+                  country: "JP",
+                },
+                {
+                  email: "physics@example.com",
+                  role: "member",
+                  display_name: "Physics",
+                  avatar_url: "",
+                  university: "B",
+                  year: "2",
+                  country: "US",
+                },
+                {
+                  email: "unassigned@example.com",
+                  role: "member",
+                  display_name: "Unassigned",
+                  avatar_url: "",
+                  university: "C",
+                  year: "3",
+                  country: "UK",
+                },
+              ] as T[],
+            };
+          if (query.includes("FROM editorial_subject_overviews"))
+            return {
+              results: [
+                {
+                  subject: "mathematics",
+                  progress: "math progress",
+                  updated_by: "private@example.com",
+                  updated_at: "2026-09-28",
+                },
+                {
+                  subject: "physics",
+                  progress: "physics progress",
+                  updated_by: "other@example.com",
+                  updated_at: "2026-09-27",
+                },
+              ] as T[],
+            };
+          if (query.includes("SELECT lower(email) AS email, subject"))
+            return {
+              results: [
+                { email: "math@example.com", subject: "mathematics" },
+                { email: "physics@example.com", subject: "physics" },
+              ] as T[],
+            };
+          return { results: [] as T[] };
+        };
+        statement.first = async <T>() => {
+          if (query.includes("FROM atlasez_projects"))
+            return {
+              id: "atlas",
+              slug: "atlas",
+              name: "Atlas",
+              description: "",
+            } as T;
+          if (query.includes("SELECT role FROM atlasez_project_memberships"))
+            return { role: "member" } as T;
+          return null as T | null;
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/genre-overviews?project=atlas",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      {
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<Record<string, unknown>>;
+      overviews: Array<Record<string, unknown>>;
+    };
+    expect(data.members).toHaveLength(1);
+    expect(data.members[0]).toMatchObject({
+      display_name: "Math",
+      subjectAssignments: ["mathematics"],
+    });
+    expect(data.members[0]).not.toHaveProperty("email");
+    expect(data.members[0]).not.toHaveProperty("university");
+    expect(data.overviews).toEqual([
+      {
+        subject: "mathematics",
+        progress: "math progress",
+        updated_at: "2026-09-28",
+      },
+    ]);
+    expect(data.overviews[0]).not.toHaveProperty("updated_by");
   });
 });
 
@@ -852,6 +1033,12 @@ describe("applicant stage server-side access", () => {
       expect(response.status, pathname).toBe(200);
     }
 
+    const notificationPage = await worker.fetch(
+      loggedInRequest("/admin/notifications/"),
+      memberEnvironment as never,
+    );
+    expect(notificationPage.status).toBe(200);
+
     const notificationRead = await worker.fetch(
       loggedInJsonRequest("/api/admin/notifications/read", {
         ids: ["comment-12345678"],
@@ -860,6 +1047,16 @@ describe("applicant stage server-side access", () => {
     );
     expect(notificationRead.status).toBe(200);
     expect(membershipWrites).toEqual([]);
+
+    const markAllNotificationsRead = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+    expect(markAllNotificationsRead.status).toBe(200);
+    expect(await markAllNotificationsRead.json()).toMatchObject({
+      ok: true,
+      markedCount: 0,
+    });
 
     const adminApi = await worker.fetch(
       loggedInRequest("/api/admin/article-reports"),
@@ -878,6 +1075,78 @@ describe("applicant stage server-side access", () => {
       memberEnvironment as never,
     );
     expect(unauthenticatedApi.status).toBe(401);
+  });
+
+  it("marks every currently unread notification candidate for the signed-in member", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const insertedReadValues: unknown[][] = [];
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
+        statement.all = async <T>() => ({
+          results: [
+            {
+              id: "unread123",
+              body: "First notification",
+              parent_comment_id: null,
+              created_at: "2026-08-22T00:00:00.000Z",
+              document_id: "document-1",
+              title: "First article",
+            },
+            {
+              id: "unread456",
+              body: "Second notification",
+              parent_comment_id: null,
+              created_at: "2026-08-21T00:00:00.000Z",
+              document_id: "document-2",
+              title: "Second article",
+            },
+          ] as T[],
+        });
+      }
+      if (query.startsWith("INSERT INTO admin_notification_reads")) {
+        statement.bind = (...values: unknown[]) => {
+          insertedReadValues.push(values);
+          return statement;
+        };
+      }
+      return statement;
+    };
+
+    const secondPage = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=1&offset=1"),
+      memberEnvironment as never,
+    );
+    expect(secondPage.status).toBe(200);
+    expect(await secondPage.json()).toMatchObject({
+      notifications: [{ id: "comment-unread456", read: false }],
+      unreadNotificationsCount: 2,
+      totalNotifications: 2,
+      nextOffset: null,
+    });
+
+    const unreadPage = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=1&unreadOnly=true"),
+      memberEnvironment as never,
+    );
+    expect(await unreadPage.json()).toMatchObject({
+      notifications: [{ id: "comment-unread123", read: false }],
+      totalNotifications: 2,
+      nextOffset: 1,
+    });
+
+    const response = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, markedCount: 2 });
+    expect(insertedReadValues).toEqual([
+      ["applicant@example.com", "comment-unread123", expect.any(String)],
+      ["applicant@example.com", "comment-unread456", expect.any(String)],
+    ]);
   });
 
   it("keeps the application directory open for an existing member", async () => {

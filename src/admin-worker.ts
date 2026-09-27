@@ -2417,8 +2417,8 @@ const workflowTransitionsFor = (entityType: WorkflowEntityType, from: string) =>
 const workflowTransitionPolicyError = (role: WorkflowTransition["requiredRole"]) =>
   role === "manager" ? "運営内運営のみ状態を変更できます。" : role === "reviewer" ? "担当査読者のみ状態を変更できます。" : "担当者のみ状態を変更できます。";
 
-async function listWorkflowTransitions(request: Request, env: Env, developerAccess = false): Promise<Response> {
-  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
+async function listWorkflowTransitions(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const [taskCounts, documentCounts, applicationCounts, approvalCounts] = await Promise.all([
     env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_tasks WHERE archived_at IS NULL GROUP BY status").all<{ state: string; count: number }>(),
@@ -2444,8 +2444,8 @@ async function listWorkflowTransitions(request: Request, env: Env, developerAcce
  * 状態イベントと現在レコードのずれを検出する読み取り専用の診断API。
  * 自動修復は行わず、管理者が確認してから個別の遷移APIを再実行できるようにする。
  */
-async function workflowDiagnostics(request: Request, env: Env, developerAccess = false): Promise<Response> {
-  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
+async function workflowDiagnostics(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
     `SELECT e.id,e.entity_type,e.entity_id,e.from_state,e.to_state,e.actor_email,e.created_at,
@@ -2778,9 +2778,8 @@ async function listPermissionAudit(
 async function listAdminAuditLog(
   request: Request,
   env: Env,
-  developerAccess = false,
 ): Promise<Response> {
-  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const url = new URL(request.url);
   const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
@@ -6979,6 +6978,21 @@ async function genreOverviews(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const searchParams = new URL(request.url).searchParams;
+  // カーソル付きの名簿取得は運営メンバー管理専用で、全分野権限を要求する。
+  // 通常の分野概要取得は担当分野に絞った安全な表示用データを返す。
+  if (
+    method === "GET" &&
+    (searchParams.has("limit") || searchParams.has("cursor"))
+  ) {
+    const globalScope = await requireAdminScope(
+      request,
+      env,
+      { requireGlobal: true },
+      scope,
+    );
+    if (isResponse(globalScope)) return globalScope;
+  }
   await ensureAtlasMembership(env, scope);
   const project = await resolveOperationProject(
     env,
@@ -7026,7 +7040,6 @@ async function genreOverviews(
     return json({ ok: true, subject, progress, updatedBy: scope.email, updatedAt });
   }
 
-  const searchParams = new URL(request.url).searchParams;
   // 大規模な名簿を利用する画面だけが limit/cursor を指定する。既存の
   // 集計画面はパラメータを指定しないため、これまで通り全件を返す。
   const paginated = searchParams.has("limit");
@@ -7115,6 +7128,50 @@ async function genreOverviews(
       workflowSubjects: details.workflowSubjects,
     };
   });
+  const visibleSubjects = new Set([
+    ...scope.subjects,
+    ...(scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*"),
+  ]);
+  const canReadAllSubjects =
+    scope.allSubjects ||
+    projectRole === "manager" ||
+    Boolean(scope.isProjectLeader) ||
+    Boolean(scope.coordinatorSubjects?.includes("*"));
+  // プロジェクト運営内運営・プロジェクトリーダーは分野進捗を横断確認できても、
+  // メンバー名簿の個人情報は全分野管理者だけに限る。
+  const visibleMembers = scope.allSubjects
+    ? memberRows
+        : memberRows
+        .filter((member) =>
+          [...member.subjectAssignments, ...member.workflowSubjects].some((subject) =>
+            visibleSubjects.has(subject),
+          ),
+        )
+        .map((member) => {
+          const subjectAssignments = member.subjectAssignments.filter((subject) =>
+            visibleSubjects.has(subject),
+          );
+          const workflowSubjects = member.workflowSubjects.filter((subject) =>
+            visibleSubjects.has(subject),
+          );
+          const visibleLabels = new Set(
+            [...subjectAssignments, ...workflowSubjects].flatMap((subject) => {
+              const name = APPLICATION_SUBJECT_LABELS[subject] ?? subject;
+              return [`${name}担当`, `${name}統括`];
+            }),
+          );
+          return {
+            display_name: member.display_name,
+            avatar_url: member.avatar_url,
+            assignments: member.assignments.filter((label) => visibleLabels.has(label)),
+            subjectAssignments,
+            workflowSubjects,
+          };
+        });
+  const visibleOverviews = (overviews.results ?? []).filter(
+    (overview) =>
+      canReadAllSubjects || visibleSubjects.has(String(overview.subject ?? "")),
+  );
   return json({
     project,
     scope: {
@@ -7123,12 +7180,18 @@ async function genreOverviews(
       isProjectLeader: Boolean(scope.isProjectLeader),
       coordinatorSubjects: scope.coordinatorSubjects ?? [],
     },
-    members: memberRows,
-    overviews: overviews.results ?? [],
+    members: visibleMembers,
+    overviews: scope.allSubjects
+      ? visibleOverviews
+      : visibleOverviews.map(({ subject, progress, updated_at }) => ({
+          subject,
+          progress,
+          updated_at,
+        })),
     ...(paginated
       ? { pagination: { limit: pageLimit, nextCursor: nextMemberCursor, hasMore: hasMoreMembers } }
       : {}),
-    editableSubjects: (overviews.results ?? [])
+    editableSubjects: visibleOverviews
       .map((row) => String(row.subject ?? ""))
       .filter((subject) => canEditSubject(subject)),
     canEditAll: scope.allSubjects || projectRole === "manager" || Boolean(scope.isProjectLeader),
@@ -19637,6 +19700,8 @@ const isOnboardingPath = (pathname: string) =>
 const memberPagePaths = new Set([
   "/admin/portal",
   "/admin/portal/",
+  "/admin/notifications",
+  "/admin/notifications/",
   "/admin/member-profile",
   "/admin/member-profile/",
   "/admin/member-profile/edit",
@@ -21006,10 +21071,11 @@ async function adminNotifications(
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 20;
-  const notificationsTruncated = sortedNotifications.length > limit;
-  const notifications = sortedNotifications.slice(0, limit);
-  // 画面には最新20件だけを返すが、未読件数は全候補を対象に集計する。
-  // 表示用の上限をそのまま件数に使うと、古い未読がある場合にポータルの数字がずれる。
+  const requestedOffset = Number(new URL(request.url).searchParams.get("offset") ?? "0");
+  const offset = Number.isFinite(requestedOffset)
+    ? Math.min(Math.max(Math.trunc(requestedOffset), 0), 10_000)
+    : 0;
+  // 表示用のページ上限とは別に、未読件数は全候補を対象に集計する。
   const readNotificationIds = sortedNotifications.map((item) => item.id);
   const readIds = readNotificationIds.length
     ? await env.REPORTS.prepare(
@@ -21021,13 +21087,27 @@ async function adminNotifications(
   const read = new Set(
     (readIds.results ?? []).map((item) => item.notification_id),
   );
+  const unreadNotificationIds = sortedNotifications
+    .filter((item) => !read.has(item.id))
+    .map((item) => item.id);
+  const unreadOnly = new URL(request.url).searchParams.get("unreadOnly") === "true";
+  const filteredNotifications = unreadOnly
+    ? sortedNotifications.filter((item) => !read.has(item.id))
+    : sortedNotifications;
+  const notificationsTruncated = filteredNotifications.length > offset + limit;
+  const notifications = filteredNotifications.slice(offset, offset + limit);
   return json({
     notifications: notifications.map((item) => ({
       ...item,
       read: read.has(item.id),
     })),
     notificationsTruncated,
-    unreadNotificationsCount: sortedNotifications.filter((item) => !read.has(item.id)).length,
+    unreadNotificationsCount: unreadNotificationIds.length,
+    totalNotifications: filteredNotifications.length,
+    nextOffset: notificationsTruncated ? offset + limit : null,
+    ...(new URL(request.url).searchParams.get("includeUnreadIds") === "true"
+      ? { unreadNotificationIds }
+      : {}),
   });
 }
 
@@ -21041,8 +21121,9 @@ async function markAdminNotificationsRead(
     return json({ error: "許可されていない送信元です。" }, 403);
   const payload = (await request.json().catch(() => null)) as {
     ids?: unknown;
+    all?: unknown;
   } | null;
-  const ids = Array.isArray(payload?.ids)
+  let ids = Array.isArray(payload?.ids)
     ? [
         ...new Set(
           payload!.ids
@@ -21052,22 +21133,46 @@ async function markAdminNotificationsRead(
                 /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
-            )
-            .slice(0, 32),
+            ),
         ),
       ]
     : [];
-  if (!ids.length)
+  if (payload?.all === true) {
+    const notificationResponse = await adminNotifications(
+      new Request(
+        new URL("/api/admin/notifications?limit=100&includeUnreadIds=true", request.url),
+        { headers: request.headers },
+      ),
+      env,
+      scope,
+    );
+    if (!notificationResponse.ok) return notificationResponse;
+    const notificationData = (await notificationResponse.json()) as {
+      unreadNotificationIds?: unknown;
+    };
+    ids = Array.isArray(notificationData.unreadNotificationIds)
+      ? notificationData.unreadNotificationIds.filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
+        )
+      : [];
+  }
+  if (ids.length > 500)
+    return json({ error: "一度に既読にできる通知は500件までです。" }, 400);
+  if (!ids.length && payload?.all !== true)
     return json({ error: "既読にする通知を選択してください。" }, 400);
   const now = new Date().toISOString();
-  await env.REPORTS.batch(
-    ids.map((id) =>
-      env.REPORTS.prepare(
-        "INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
-      ).bind(scope.email, id, now),
-    ),
-  );
-  return json({ ok: true });
+  for (let index = 0; index < ids.length; index += 32) {
+    await env.REPORTS.batch(
+      ids.slice(index, index + 32).map((id) =>
+        env.REPORTS.prepare(
+          "INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
+        ).bind(scope.email, id, now),
+      ),
+    );
+  }
+  return json({ ok: true, markedCount: ids.length });
 }
 
 async function connectEditorialCollaboration(
@@ -21470,11 +21575,11 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
-    return listAdminAuditLog(request, env, true);
+    return listAdminAuditLog(request, env);
   if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
-    return listWorkflowTransitions(request, env, true);
+    return listWorkflowTransitions(request, env);
   if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
-    return workflowDiagnostics(request, env, true);
+    return workflowDiagnostics(request, env);
   if (url.pathname === "/api/admin/workflow/repair" && request.method === "POST")
     return repairWorkflowIssue(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
@@ -22022,6 +22127,12 @@ async function handleAdminRequest(
       "/admin/permissions/",
       "/admin/applications",
       "/admin/applications/",
+      "/admin/member-management",
+      "/admin/member-management/",
+      "/admin/genre-roles",
+      "/admin/genre-roles/",
+      "/admin/operations-statistics",
+      "/admin/operations-statistics/",
       "/admin/onboarding-demo",
       "/admin/onboarding-demo/",
       "/admin/developer",
