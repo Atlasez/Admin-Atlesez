@@ -761,6 +761,8 @@ test.describe("A-2 管理導線", () => {
     await page.goto("admin/atlas/");
 
     await expect(page.locator(".admin-management-menu")).toHaveCount(0);
+    const menuToggle = page.locator("[data-admin-menu-toggle]");
+    if (await menuToggle.isVisible()) await menuToggle.click();
     await expect(
       page.getByRole("link", { name: "管理", exact: true }),
     ).toHaveAttribute("href", "/admin/manage/?project=atlas");

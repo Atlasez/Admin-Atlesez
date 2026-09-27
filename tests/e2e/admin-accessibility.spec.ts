@@ -89,3 +89,21 @@ for (const path of pages) {
     ).toEqual([]);
   });
 }
+
+test("1280px幅ではナビを折りたたみ、末尾リンクを操作できる", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.goto("admin/articles/");
+
+  const menuToggle = page.locator(".admin-menu-toggle");
+  const nav = page.locator(".admin-nav nav");
+  await expect(menuToggle).toBeVisible();
+  await menuToggle.click();
+  await expect(menuToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(nav).toBeVisible();
+  await expect(page.locator(".admin-management-link")).toBeVisible();
+  await menuToggle.click();
+  await expect(menuToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(nav).toBeHidden();
+});

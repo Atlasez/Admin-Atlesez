@@ -182,7 +182,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-management-link" href={`/admin/manage/?project=${projectSlug}`} hidden={site === "portal"} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理</a>
   </nav>
   <div class="admin-account" data-admin-account hidden>
-    <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog"><kbd>⌘ K</kbd><span>操作を検索</span></button>
+    <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog" aria-label="操作を検索（⌘K）" title="操作を検索（⌘K）"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2"/></svg></button>
     <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-controls="admin-notification-panel" aria-haspopup="dialog" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
     <div id="admin-notification-panel" class="admin-notification-panel" data-admin-notification-panel role="dialog" aria-labelledby="admin-notification-heading" hidden><div class="notification-panel-heading"><strong id="admin-notification-heading">通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list aria-live="polite"><span class="admin-notification-loading">通知を確認しています…</span></div></div>
@@ -609,11 +609,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   }
 </style>
 <style>
-  .admin-command-button { align-items:center; background:transparent; border:1px solid var(--border-default); border-radius:.35rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; gap:.35rem; min-height:2.35rem; padding:.3rem .55rem; white-space:nowrap; }
-  .admin-command-button:hover,.admin-command-button:focus-visible { border-color:var(--accent-primary); color:var(--text-primary); outline:0; }
+  .admin-command-button { align-items:center; background:transparent; border:0; border-radius:.4rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; height:2.5rem; justify-content:center; padding:0; width:2.5rem; }
+  .admin-command-button svg { fill:none; height:1.4rem; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.7; width:1.4rem; }
+  .admin-command-button:hover { background:var(--background-secondary); color:var(--text-primary); }
+  .admin-command-button:focus-visible { outline:2px solid var(--accent-primary); outline-offset:2px; }
   .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:999px; color:var(--text-muted); font:inherit; font-size:.68rem; padding:.16rem .45rem; white-space:nowrap; }
-  .admin-command-button kbd { border-radius:.2rem; font-size:.62rem; padding:.1rem .28rem; }
-  .admin-command-button span { font-size:.7rem; }
   .admin-command-dialog { background:var(--background-secondary); border:1px solid var(--border-strong); border-radius:1rem; box-shadow:0 1rem 3rem rgb(0 0 0 / .4); color:var(--text-primary); margin:auto; max-height:min(34rem,calc(100vh - 2rem)); padding:0; width:min(40rem,calc(100vw - 2rem)); }
   .admin-command-dialog::backdrop { background:rgb(0 0 0 / .62); backdrop-filter:blur(3px); }
   .admin-command-inner { padding:.85rem; }
@@ -651,8 +651,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-command-hint kbd { margin-right:.1rem; }
   @media(max-width:980px) { .admin-command-button { grid-column:1/-1; grid-row:2; justify-self:end; } .admin-account { align-items:center; flex-wrap:wrap; } }
   @media(max-width:620px) {
-    .admin-command-button span { display:none; }
-    .admin-command-button { min-width:2.35rem; justify-content:center; }
+    .admin-command-button { height:2.5rem; width:2.5rem; }
     .admin-command-dialog { border-radius:1.1rem; max-height:calc(100dvh - 1rem); width:calc(100vw - 1rem); }
     .admin-command-inner { padding:.8rem; }
     .admin-command-close { min-height:2rem; width:2rem; }
@@ -748,5 +747,20 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-nav nav > .admin-action-center-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
   @media (max-width: 980px) {
     .admin-nav nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
+  }
+  @media (max-width: 1280px) {
+    .admin-nav[data-admin-nav][data-current-site] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; padding-block: .45rem; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-nav-brand-logo { grid-column: 1; grid-row: 1; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-project-switcher { grid-column: 2; grid-row: 1; max-width: none; min-width: 0; width: 100%; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-menu-toggle { display: inline-flex; grid-column: 3; grid-row: 1; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-account { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; margin-left: 0; }
+    .admin-nav[data-admin-nav][data-current-site] nav { display: none; grid-column: 1 / -1; grid-row: 3; min-height: 0; padding: .35rem 0 .1rem; }
+    .admin-nav[data-admin-nav][data-current-site] nav.is-open { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-nav[data-admin-nav][data-current-site] nav > a { border-width: 0 0 1px; font-size: .8rem; min-height: 2.6rem; padding: .2rem .45rem; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu { align-items: center; display: block; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu summary { height: 2.6rem; padding: .2rem .45rem; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu > div { box-shadow: none; position: static; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu > div a { display: block; }
+    .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
   }
 </style>

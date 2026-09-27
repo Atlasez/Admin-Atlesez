@@ -214,6 +214,16 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {
   await mockShell(page);
   await page.goto("admin/action-center/");
+  const commandButton = page.getByRole("button", {
+    name: "操作を検索（⌘K）",
+  });
+  await expect(commandButton).toBeVisible();
+  await expect(commandButton.locator("svg")).toHaveAttribute(
+    "viewBox",
+    "0 0 24 24",
+  );
+  await expect(commandButton.locator("kbd")).toHaveCount(0);
+  await expect(commandButton).toHaveCSS("border-top-width", "0px");
   await page.evaluate(() => {
     localStorage.setItem(
       "atlasez-command-history",
