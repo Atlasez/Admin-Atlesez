@@ -279,6 +279,106 @@ test("目次APIのDB列名を画面モデルへ正規化して表示する", asy
   ).toHaveCount(1);
 });
 
+test("分野情報APIの失敗時は読み込み中を残さず、再試行で表示を復旧する", async ({
+  page,
+}, testInfo) => {
+  let taxonomyFailed = false;
+  await page.route("**/api/admin/**", async (route) => {
+    const { pathname } = new URL(route.request().url());
+    if (pathname === "/api/admin/genre-overviews") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          members: [],
+          overviews: [],
+          editableSubjects: [],
+          canEditAll: true,
+          scope: { coordinatorSubjects: ["*"] },
+        }),
+      });
+      return;
+    }
+    if (pathname === "/api/admin/genre-role-catalog") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ catalog: [], assignments: [] }),
+      });
+      return;
+    }
+    if (pathname === "/api/admin/editor/taxonomy") {
+      if (!taxonomyFailed) {
+        taxonomyFailed = true;
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "分野データを読み込めませんでした。" }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          catalog: [
+            {
+              id: "subject-information",
+              kind: "subject",
+              subject_slug: "",
+              slug: "information",
+              name: "情報",
+              description: "",
+              sort_order: 10,
+              status: "active",
+              publication_status: "preparing",
+            },
+          ],
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({}),
+    });
+  });
+
+  await page.goto("./admin/genre-roles/?project=atlas");
+  const retryNotice = page.locator("[data-admin-load-error]");
+  await expect(retryNotice).toBeVisible();
+  await expect(page.locator("[data-genre-roles]")).toHaveAttribute(
+    "aria-busy",
+    "false",
+  );
+  await expect(page.locator("[data-content]")).toContainText(
+    "分野データを読み込めませんでした。",
+  );
+  await expect(page.locator("[data-taxonomy-content]")).toContainText(
+    "再試行してください。",
+  );
+  await expect(page.locator("[data-taxonomy-content]")).not.toContainText(
+    "読み込み中",
+  );
+  await expect(page.locator("[data-genre-roles] .loading")).toHaveCount(0);
+  await expect(page.locator("[data-catalog-select]")).toBeDisabled();
+  await page.screenshot({
+    path: testInfo.outputPath("genre-roles-load-error.png"),
+    fullPage: true,
+  });
+
+  await retryNotice.getByRole("button", { name: "再試行" }).click();
+  await expect(retryNotice).toBeHidden();
+  await expect(page.locator("[data-taxonomy-content]")).toContainText("情報");
+  await expect(page.locator("[data-catalog-select]")).toBeEnabled();
+  await expect(page.locator("[data-genre-roles]")).toHaveAttribute(
+    "data-admin-load-state",
+    "ready",
+  );
+  await expect(page.locator("[data-genre-roles] .loading")).toHaveCount(0);
+});
+
 test("分野・カテゴリ・目次を順に追加して、目次から記事作成へ進める", async ({
   page,
 }, testInfo) => {
