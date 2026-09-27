@@ -288,7 +288,7 @@ test("承認待ちは履歴通知ではなくpending申請の件数を表示す�
   page,
 }) => {
   await mockAdminShell(page, { pendingApprovals: 0 });
-  await page.route("**/api/admin/notifications", async (route) => {
+  await page.route("**/api/admin/notifications**", async (route) => {
     await route.fulfill({
       json: {
         notifications: [
@@ -326,6 +326,194 @@ test("ポータルのサマリーは表示上限を超えたタスク・通知�
   await expect(page.locator('[data-summary-detail="unread"]')).toHaveText(
     "通知を確認",
   );
+});
+
+test("通知panelは全体の未読件数を示し、通知一覧へ移動できる", async ({
+  page,
+}) => {
+  await mockAdminShell(page, { unreadNotificationsCount: 24 });
+  await page.goto("admin/portal/");
+
+  const toggle = page.locator("[data-admin-notifications]");
+  await expect(toggle.locator("[data-admin-notification-count]")).toHaveText(
+    "24",
+  );
+  await toggle.click();
+  await page
+    .locator("[data-admin-notification-panel]")
+    .getByRole("link", {
+      name: "通知一覧を見る",
+    })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/notifications\/$/);
+});
+
+test("通知一覧はページ送り・未読全体の絞り込み・すべて既読を扱う", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  const readPayloads: unknown[] = [];
+  await page.route("**/api/admin/notifications**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("unreadOnly") === "true") {
+      await route.fulfill({
+        json: {
+          notifications: [
+            {
+              id: "comment-older12345678",
+              kind: "comment",
+              title: "古い未読通知",
+              detail: "未読フィルターで見つかる通知です。",
+              href: "/admin/editor/",
+              updatedAt: "2026-08-01T00:00:00.000Z",
+              read: false,
+            },
+          ],
+          unreadNotificationsCount: 1,
+          totalNotifications: 1,
+          nextOffset: null,
+        },
+      });
+      return;
+    }
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    await route.fulfill({
+      json: {
+        notifications:
+          offset === 0
+            ? [
+                {
+                  id: "comment-newest12345678",
+                  kind: "comment",
+                  title: "新しい通知",
+                  detail: "新しい通知です。",
+                  href: "/admin/editor/",
+                  updatedAt: "2026-08-22T00:00:00.000Z",
+                  read: false,
+                },
+              ]
+            : [
+                {
+                  id: "comment-older12345678",
+                  kind: "comment",
+                  title: "古い通知",
+                  detail: "2件目の通知です。",
+                  href: "/admin/editor/",
+                  updatedAt: "2026-08-01T00:00:00.000Z",
+                  read: true,
+                },
+              ],
+        unreadNotificationsCount: 1,
+        totalNotifications: 2,
+        nextOffset: offset === 0 ? 1 : null,
+      },
+    });
+  });
+  await page.route("**/api/admin/notifications/read", async (route) => {
+    readPayloads.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ok: true, markedCount: 1 } });
+  });
+
+  await page.goto("admin/notifications/");
+  await expect(
+    page.getByRole("heading", { name: "通知", exact: true }),
+  ).toBeVisible();
+  const newestNotification = page.getByRole("link", { name: "新しい通知" });
+  await expect(newestNotification).toBeVisible();
+  const modifiedClickPrevented = await newestNotification.evaluate((link) => {
+    const href = link.getAttribute("href");
+    // Ctrl+click default navigation is browser-controlled; detach the href only
+    // during this synthetic event so the test observes our handler, not that default.
+    link.removeAttribute("href");
+    const event = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+    });
+    link.dispatchEvent(event);
+    if (href !== null) link.setAttribute("href", href);
+    return event.defaultPrevented;
+  });
+  expect(modifiedClickPrevented).toBe(false);
+  await page.getByRole("button", { name: "さらに読み込む" }).click();
+  await expect(page.getByRole("link", { name: "古い通知" })).toBeVisible();
+
+  await page.getByRole("button", { name: "未読", exact: true }).click();
+  await expect(page.getByRole("link", { name: "古い未読通知" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "新しい通知" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "一覧をすべて既読" }).click();
+  await expect.poll(() => readPayloads).toEqual([{ all: true }]);
+});
+
+test("通知の絞り込み中に古い応答が新しい一覧を上書きしない", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  let releaseAllResponse!: () => void;
+  let signalAllRequest!: () => void;
+  const allResponseGate = new Promise<void>((resolve) => {
+    releaseAllResponse = resolve;
+  });
+  const allRequestStarted = new Promise<void>((resolve) => {
+    signalAllRequest = resolve;
+  });
+  await page.route("**/api/admin/notifications**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("unreadOnly") === "true") {
+      await route.fulfill({
+        json: {
+          notifications: [
+            {
+              id: "comment-unread123",
+              kind: "comment",
+              title: "未読フィルターの通知",
+              detail: "新しい条件の応答です。",
+              href: "/admin/editor/",
+              read: false,
+            },
+          ],
+          unreadNotificationsCount: 1,
+          totalNotifications: 1,
+          nextOffset: null,
+        },
+      });
+      return;
+    }
+    signalAllRequest();
+    await allResponseGate;
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-oldread123",
+            kind: "comment",
+            title: "古い条件の通知",
+            detail: "遅れて到着した応答です。",
+            href: "/admin/editor/",
+            read: true,
+          },
+        ],
+        unreadNotificationsCount: 0,
+        totalNotifications: 1,
+        nextOffset: null,
+      },
+    });
+  });
+
+  await page.goto("admin/notifications/");
+  await allRequestStarted;
+  await page.getByRole("button", { name: "未読", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "未読フィルターの通知" }),
+  ).toBeVisible();
+  releaseAllResponse();
+  await expect(page.getByRole("link", { name: "古い条件の通知" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("link", { name: "未読フィルターの通知" }),
+  ).toBeVisible();
 });
 
 test("ポータルの読み込みエラーから再試行できる", async ({ page }) => {

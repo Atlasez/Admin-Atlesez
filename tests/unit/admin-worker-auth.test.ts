@@ -146,6 +146,147 @@ const loggedInJsonRequest = (pathname: string, body: Record<string, unknown>) =>
     body: JSON.stringify(body),
   });
 
+const loggedInApiRequest = (
+  pathname: string,
+  method: string,
+  body?: Record<string, unknown>,
+) =>
+  new Request(`https://admin.example${pathname}`, {
+    method,
+    headers: {
+      cookie: "atlasez_admin_session=logged-in",
+      origin: "https://admin.example",
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+const projectManagerScopeEnv = () => ({
+  ADMIN_AUTH_MODE: "cloudflare-access",
+  REPORTS: {
+    prepare: (query: string) => {
+      const statement = new Statement(query);
+      statement.all = async <T>() => {
+        if (query.includes("SELECT subject FROM report_admin_permissions"))
+          return { results: [{ subject: "mathematics" }] as T[] };
+        return { results: [] as T[] };
+      };
+      statement.first = async <T>() => {
+        if (
+          query.includes("atlasez_project_memberships") &&
+          query.includes("role='manager'")
+        )
+          return { found: 1 } as T;
+        if (query.includes("SELECT 1 AS found FROM report_admin_permissions"))
+          return { found: 1 } as T;
+        return null as T | null;
+      };
+      return statement;
+    },
+    batch: async () => [],
+  },
+  ASSETS: {
+    fetch: async () => new Response("protected page", { status: 200 }),
+  },
+});
+
+const genreOverviewScopeEnv = (
+  permissionSubject: "mathematics" | "*",
+  projectRole: "member" | "manager",
+) => ({
+  ADMIN_AUTH_MODE: "cloudflare-access",
+  REPORTS: {
+    prepare: (query: string) => {
+      const statement = new Statement(query);
+      statement.all = async <T>() => {
+        if (
+          query.includes(
+            "SELECT subject FROM report_admin_permissions WHERE email = ?",
+          )
+        )
+          return { results: [{ subject: permissionSubject }] as T[] };
+        if (
+          query.includes("FROM editorial_workflow_roles") &&
+          query.includes("lower(email) = lower(?)")
+        )
+          return { results: [] as T[] };
+        if (query.includes("WITH raw_members AS"))
+          return {
+            results: [
+              {
+                email: "math@example.com",
+                role: "member",
+                display_name: "Math",
+                avatar_url: "",
+                university: "A",
+                year: "1",
+                country: "JP",
+              },
+              {
+                email: "physics@example.com",
+                role: "member",
+                display_name: "Physics",
+                avatar_url: "",
+                university: "B",
+                year: "2",
+                country: "US",
+              },
+              {
+                email: "unassigned@example.com",
+                role: "member",
+                display_name: "Unassigned",
+                avatar_url: "",
+                university: "C",
+                year: "3",
+                country: "UK",
+              },
+            ] as T[],
+          };
+        if (query.includes("FROM editorial_subject_overviews"))
+          return {
+            results: [
+              {
+                subject: "mathematics",
+                progress: "math progress",
+                updated_by: "private@example.com",
+                updated_at: "2026-09-28",
+              },
+              {
+                subject: "physics",
+                progress: "physics progress",
+                updated_by: "other@example.com",
+                updated_at: "2026-09-27",
+              },
+            ] as T[],
+          };
+        if (query.includes("SELECT lower(email) AS email, subject"))
+          return {
+            results: [
+              { email: "math@example.com", subject: "mathematics" },
+              { email: "physics@example.com", subject: "physics" },
+            ] as T[],
+          };
+        return { results: [] as T[] };
+      };
+      statement.first = async <T>() => {
+        if (query.includes("FROM atlasez_projects"))
+          return {
+            id: "atlas",
+            slug: "atlas",
+            name: "Atlas",
+            description: "",
+          } as T;
+        if (query.includes("SELECT role FROM atlasez_project_memberships"))
+          return { role: projectRole } as T;
+        return null as T | null;
+      };
+      return statement;
+    },
+    batch: async () => [],
+  },
+  ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+});
+
 describe("admin logout contract", () => {
   it("logs out through Cloudflare Access without entering Google OAuth", async () => {
     const response = await worker.fetch(
@@ -232,6 +373,203 @@ describe("admin API scope gate", () => {
     );
 
     expect(response.status).toBe(200);
+  });
+
+  it.each([
+    "/admin/member-management/?project=atlas",
+    "/admin/genre-roles/?project=atlas",
+    "/admin/operations-statistics/?project=atlas",
+    "/api/admin/genre-overviews?project=atlas&limit=50",
+    "/api/admin/audit-log",
+    "/api/admin/workflow/transitions",
+    "/api/admin/workflow/diagnostics",
+  ])(
+    "keeps global member and operations data out of project-manager scope: %s",
+    async (path) => {
+      const response = await worker.fetch(
+        new Request(`https://admin.example${path}`, {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        }),
+        projectManagerScopeEnv() as never,
+      );
+
+      expect(response.status).toBe(403);
+    },
+  );
+
+  it("limits the unpaginated genre overview to assigned subjects and removes other members' private fields", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/genre-overviews?project=atlas",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      genreOverviewScopeEnv("mathematics", "member") as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<Record<string, unknown>>;
+      overviews: Array<Record<string, unknown>>;
+    };
+    expect(data.members).toHaveLength(1);
+    expect(data.members[0]).toMatchObject({
+      display_name: "Math",
+      subjectAssignments: ["mathematics"],
+    });
+    expect(data.members[0]).not.toHaveProperty("email");
+    expect(data.members[0]).not.toHaveProperty("university");
+    expect(data.overviews).toEqual([
+      {
+        subject: "mathematics",
+        progress: "math progress",
+        updated_at: "2026-09-28",
+      },
+    ]);
+    expect(data.overviews[0]).not.toHaveProperty("updated_by");
+  });
+
+  it("lets a project manager read project progress without exposing the full member roster", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/genre-overviews?project=atlas",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      genreOverviewScopeEnv("mathematics", "manager") as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<Record<string, unknown>>;
+      overviews: Array<Record<string, unknown>>;
+    };
+    expect(data.members).toHaveLength(1);
+    expect(data.members[0]).toMatchObject({ display_name: "Math" });
+    expect(data.members[0]).not.toHaveProperty("email");
+    expect(data.members[0]).not.toHaveProperty("university");
+    expect(data.overviews).toHaveLength(2);
+    expect(data.overviews[0]).not.toHaveProperty("updated_by");
+  });
+
+  it("preserves full genre overviews for a global administrator", async () => {
+    const response = await worker.fetch(
+      new Request(
+        "https://admin.example/api/admin/genre-overviews?project=atlas",
+        {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "manager@example.com",
+          },
+        },
+      ),
+      genreOverviewScopeEnv("*", "member") as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      members: Array<Record<string, unknown>>;
+      overviews: Array<Record<string, unknown>>;
+    };
+    expect(data.members).toHaveLength(3);
+    expect(data.members[0]).toHaveProperty("email");
+    expect(data.members[0]).toHaveProperty("university");
+    expect(data.overviews).toHaveLength(2);
+    expect(data.overviews[0]).toHaveProperty("updated_by");
+  });
+
+  it("does not expose member email addresses as display-name fallbacks in task data", async () => {
+    const memberEnvironment = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      true,
+      "member@example.com",
+    );
+    const memberEmails = [
+      "assignee-private@example.com",
+      "author-private@example.com",
+    ];
+    let memberNamesQuery = "";
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (query.includes("SELECT p.id,p.slug,p.name,p.description,m.role")) {
+        statement.all = async <T>() => ({
+          results: [
+            {
+              id: "atlas",
+              slug: "atlas",
+              name: "Atlas",
+              description: "",
+              role: "member",
+            },
+          ] as T[],
+        });
+      } else if (query.includes("SELECT m.project_id,m.email")) {
+        memberNamesQuery = query;
+        statement.all = async <T>() => ({
+          results: memberEmails.map((email) => ({
+            project_id: "atlas",
+            email,
+            display_name: "",
+          })) as T[],
+        });
+      } else if (
+        query.includes(
+          "SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone",
+        )
+      ) {
+        statement.all = async <T>() => ({
+          results: [
+            {
+              id: "task-private-identities",
+              project_id: "atlas",
+              subject: null,
+              assignee_email: memberEmails[0],
+              task_kind: "task",
+              title: "共有タスク",
+              details: "詳細",
+              status: "open",
+              due_at: null,
+              due_timezone: "Asia/Tokyo",
+              created_by: memberEmails[1],
+              created_at: "2026-09-28T00:00:00.000Z",
+              updated_at: "2026-09-28T00:00:00.000Z",
+              archived_at: null,
+              archived_by: null,
+            },
+          ] as T[],
+        });
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/member-tasks"),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).not.toContain(memberEmails[0]);
+    expect(body).not.toContain(memberEmails[1]);
+    expect(memberNamesQuery).toContain(
+      "COALESCE(NULLIF(TRIM(p.display_name),''),'') AS display_name",
+    );
+    expect(body).toContain('"assignee_display_name":"メンバー"');
+    expect(body).toContain('"created_by_display_name":"メンバー"');
   });
 });
 
@@ -852,6 +1190,12 @@ describe("applicant stage server-side access", () => {
       expect(response.status, pathname).toBe(200);
     }
 
+    const notificationPage = await worker.fetch(
+      loggedInRequest("/admin/notifications/"),
+      memberEnvironment as never,
+    );
+    expect(notificationPage.status).toBe(200);
+
     const notificationRead = await worker.fetch(
       loggedInJsonRequest("/api/admin/notifications/read", {
         ids: ["comment-12345678"],
@@ -860,6 +1204,16 @@ describe("applicant stage server-side access", () => {
     );
     expect(notificationRead.status).toBe(200);
     expect(membershipWrites).toEqual([]);
+
+    const markAllNotificationsRead = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+    expect(markAllNotificationsRead.status).toBe(200);
+    expect(await markAllNotificationsRead.json()).toMatchObject({
+      ok: true,
+      markedCount: 0,
+    });
 
     const adminApi = await worker.fetch(
       loggedInRequest("/api/admin/article-reports"),
@@ -878,6 +1232,213 @@ describe("applicant stage server-side access", () => {
       memberEnvironment as never,
     );
     expect(unauthenticatedApi.status).toBe(401);
+  });
+
+  it("allows only the explicitly member-scoped operation methods through the common admin gate", async () => {
+    const memberEnvironment = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      true,
+      "member@example.com",
+    );
+    const memberMethods = [
+      [
+        "POST",
+        "/api/admin/operations/availability-blocks",
+        { startsAt: "2026-10-01T10:00", endsAt: "2026-10-01T11:00" },
+        200,
+      ],
+      ["POST", "/api/admin/operations/availability-rules", { weekday: 1 }, 200],
+      [
+        "DELETE",
+        "/api/admin/operations/availability-blocks/123e4567-e89b-12d3-a456-426614174000",
+        undefined,
+        200,
+      ],
+      [
+        "DELETE",
+        "/api/admin/operations/availability-rules/123e4567-e89b-12d3-a456-426614174000",
+        undefined,
+        200,
+      ],
+      [
+        "PATCH",
+        "/api/admin/operations/tasks/123e4567-e89b-12d3-a456-426614174000",
+        { status: "doing" },
+        404,
+      ],
+      [
+        "PUT",
+        "/api/admin/operations/events/123e4567-e89b-12d3-a456-426614174000/availability",
+        { availability: "available" },
+        404,
+      ],
+    ] as const;
+
+    for (const [method, path, body, expectedStatus] of memberMethods) {
+      const response = await worker.fetch(
+        loggedInApiRequest(path, method, body),
+        memberEnvironment as never,
+      );
+      expect(response.status, `${method} ${path}`).toBe(expectedStatus);
+    }
+
+    const adminOnlyApi = await worker.fetch(
+      loggedInApiRequest("/api/admin/operations/progress", "POST", {
+        body: "test",
+      }),
+      memberEnvironment as never,
+    );
+    expect(adminOnlyApi.status).toBe(403);
+  });
+
+  it("does not create a workflow or audit event when a task is saved in its current state", async () => {
+    const memberEnvironment = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      true,
+      "member@example.com",
+    );
+    const sideEffectQueries: string[] = [];
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (
+        query.includes(
+          "SELECT id, slug, name, description FROM atlasez_projects",
+        )
+      ) {
+        statement.first = async <T>() =>
+          ({ id: "atlas", slug: "atlas", name: "Atlas", description: "" }) as T;
+      } else if (
+        query.includes("SELECT role FROM atlasez_project_memberships")
+      ) {
+        statement.first = async <T>() => ({ role: "member" }) as T;
+      } else if (query.includes("FROM editorial_tasks WHERE id=?")) {
+        statement.first = async <T>() =>
+          ({
+            project_id: "atlas",
+            subject: null,
+            assignee_email: "member@example.com",
+            task_kind: "task",
+            title: "確認タスク",
+            created_by: "member@example.com",
+            due_at: null,
+            due_timezone: "Asia/Tokyo",
+            status: "open",
+            updated_at: "2026-09-28T00:00:00.000Z",
+            archived_at: null,
+          }) as T;
+      } else if (query.includes("workflow_transition_events")) {
+        statement.first = async <T>() => null as T | null;
+      }
+      if (
+        query.includes("UPDATE editorial_tasks SET status=") ||
+        query.includes("INSERT INTO workflow_transition_events") ||
+        query.includes("INSERT INTO admin_audit_log")
+      ) {
+        sideEffectQueries.push(query);
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInApiRequest(
+        "/api/admin/operations/tasks/123e4567-e89b-12d3-a456-426614174000",
+        "PATCH",
+        {
+          status: "open",
+          expectedUpdatedAt: "2026-09-28T00:00:00.000Z",
+        },
+      ),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, unchanged: true });
+    expect(sideEffectQueries).toEqual([]);
+  });
+
+  it("marks every currently unread notification candidate for the signed-in member", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const insertedReadValues: unknown[][] = [];
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
+        statement.all = async <T>() => ({
+          results: [
+            {
+              id: "unread123",
+              body: "First notification",
+              parent_comment_id: null,
+              created_at: "2026-08-22T00:00:00.000Z",
+              document_id: "document-1",
+              title: "First article",
+            },
+            {
+              id: "unread456",
+              body: "Second notification",
+              parent_comment_id: null,
+              created_at: "2026-08-21T00:00:00.000Z",
+              document_id: "document-2",
+              title: "Second article",
+            },
+          ] as T[],
+        });
+      }
+      if (query.startsWith("INSERT INTO admin_notification_reads")) {
+        statement.bind = (...values: unknown[]) => {
+          insertedReadValues.push(values);
+          return statement;
+        };
+      }
+      return statement;
+    };
+
+    const secondPage = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=1&offset=1"),
+      memberEnvironment as never,
+    );
+    expect(secondPage.status).toBe(200);
+    expect(await secondPage.json()).toMatchObject({
+      notifications: [{ id: "comment-unread456", read: false }],
+      unreadNotificationsCount: 2,
+      totalNotifications: 2,
+      nextOffset: null,
+    });
+
+    const unreadPage = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=1&unreadOnly=true"),
+      memberEnvironment as never,
+    );
+    expect(await unreadPage.json()).toMatchObject({
+      notifications: [{ id: "comment-unread123", read: false }],
+      totalNotifications: 2,
+      nextOffset: 1,
+    });
+
+    const response = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, markedCount: 2 });
+    expect(insertedReadValues).toEqual([
+      ["applicant@example.com", "comment-unread123", expect.any(String)],
+      ["applicant@example.com", "comment-unread456", expect.any(String)],
+    ]);
   });
 
   it("keeps the application directory open for an existing member", async () => {

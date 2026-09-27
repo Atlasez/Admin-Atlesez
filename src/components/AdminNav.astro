@@ -2,7 +2,7 @@
 import SettingsMenu from "./SettingsMenu.astro";
 
 interface Props {
-  current?: "portal" | "action-center" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "publication-runs" | "onboarding-demo" | "update-history" | "audit-log";
+  current?: "portal" | "action-center" | "notifications" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "editor" | "articles" | "workspace" | "member-profile" | "member-profile-edit" | "member-tasks" | "member-calendar" | "profile-requests" | "project-profile-requests" | "operations" | "progress" | "calendar" | "genres" | "review" | "reports" | "analytics" | "permissions" | "guide" | "rules" | "applications" | "application-interview" | "introductions" | "secretariat" | "co-working" | "management" | "procedures" | "member-management" | "genre-roles" | "operations-statistics" | "publication-runs" | "onboarding-demo" | "update-history" | "audit-log";
   site?: "portal" | "atlas" | "semi-platform" | "student-council" | "thinking-cafe" | "secretariat";
 }
 const { current: requestedCurrent, site: requestedSite } = Astro.props;
@@ -12,7 +12,7 @@ type SiteKey = "portal" | "atlas" | "semi-platform" | "student-council" | "think
 const siteForProject = (project: string | null): SiteKey => project === "secretariat" ? "secretariat" : project === "seminar-platform" ? "semi-platform" : project === "student-council-exchange" ? "student-council" : project === "thinking-cafe" ? "thinking-cafe" : project === "portal" ? "portal" : "atlas";
 const operationProject = ["secretariat", "seminar-platform", "student-council-exchange", "thinking-cafe"].includes(requestedProject ?? "") ? requestedProject! : "atlas";
 const querySite = siteForProject(requestedProject);
-const portalRoutes = new Set(["/admin/portal", "/admin/action-center", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/member-calendar"]);
+const portalRoutes = new Set(["/admin/portal", "/admin/action-center", "/admin/notifications", "/admin/member-profile", "/admin/member-profile/edit", "/admin/member-tasks", "/admin/member-calendar"]);
 const routeSite: SiteKey = portalRoutes.has(normalizedPath)
   ? "portal"
   : normalizedPath === "/admin/profile-requests" || normalizedPath === "/admin/secretariat"
@@ -30,6 +30,8 @@ const routeCurrent = normalizedPath === "/admin/portal"
   ? "portal"
   : normalizedPath === "/admin/action-center"
     ? "action-center"
+  : normalizedPath === "/admin/notifications"
+    ? "notifications"
   : normalizedPath === "/admin/atlas"
     ? "atlas"
     : normalizedPath === "/admin/secretariat"
@@ -114,6 +116,7 @@ const brandLabel = site === "portal" ? "Atlasezメンバー用サイト" : site 
 const pageLabel = ({
   portal: "Atlasezメンバー用サイト",
   "action-center": "アクションセンター",
+  notifications: "通知",
   atlas: "学習サイトHome",
   "semi-platform": "ゼミプラットフォームHome",
   "student-council": "日本生徒会協会Home",
@@ -182,10 +185,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-management-link" href={`/admin/manage/?project=${projectSlug}`} hidden={site === "portal"} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理</a>
   </nav>
   <div class="admin-account" data-admin-account hidden>
-    <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog"><kbd>⌘ K</kbd><span>操作を検索</span></button>
+    <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog" aria-label="操作を検索（⌘K）" title="操作を検索（⌘K）"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2"/></svg></button>
     <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-controls="admin-notification-panel" aria-haspopup="dialog" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
-    <div id="admin-notification-panel" class="admin-notification-panel" data-admin-notification-panel role="dialog" aria-labelledby="admin-notification-heading" hidden><div class="notification-panel-heading"><strong id="admin-notification-heading">通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list aria-live="polite"><span class="admin-notification-loading">通知を確認しています…</span></div></div>
+    <div id="admin-notification-panel" class="admin-notification-panel" data-admin-notification-panel role="dialog" aria-labelledby="admin-notification-heading" hidden><div class="notification-panel-heading"><strong id="admin-notification-heading">通知</strong><button type="button" class="mark-all-read" data-mark-all-notifications-read>すべて既読</button><button type="button" data-close-notifications aria-label="通知を閉じる">×</button></div><div data-admin-notification-list aria-live="polite"><span class="admin-notification-loading">通知を確認しています…</span></div><a class="notification-inbox-link" href="/admin/notifications/">通知一覧を見る <span aria-hidden="true">→</span></a></div>
     <a class="admin-account-profile" data-admin-account-profile href={site === "portal" ? "/admin/member-profile/" : `/admin/workspace/?project=${projectSlug}`} aria-label="マイページを開く">
       <span class="admin-account-avatar" data-admin-account-avatar aria-hidden="true"><img data-admin-account-image alt="" hidden /><span data-admin-account-fallback>A</span></span>
       <span class="admin-account-email" data-admin-account-email>アカウント</span>
@@ -274,6 +277,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           link.tabIndex = -1;
           return;
         }
+        if (isManagementLink) link.hidden = false;
         link.removeAttribute('aria-hidden');
         link.removeAttribute('tabindex');
         link.dataset.adminSite = state.site;
@@ -437,10 +441,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           const response = await fetch('/api/admin/notifications', { credentials: 'same-origin', cache: 'no-store' });
           const contentType = response.headers.get('content-type') ?? '';
           if (!response.ok || !contentType.includes('application/json')) throw new Error('notification request failed');
-          const data = await response.json() as { notifications?: typeof notifications };
+          const data = await response.json() as { notifications?: typeof notifications; unreadNotificationsCount?: number };
           if (!Array.isArray(data.notifications)) throw new Error('invalid notification response');
           notifications = data.notifications;
-          const unreadCount = notifications.filter((item) => !item.read).length;
+          const unreadCount = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? notifications.filter((item) => !item.read).length)));
           if (notificationCount) { notificationCount.textContent = unreadCount > 99 ? "99+" : String(unreadCount); notificationCount.hidden = unreadCount === 0; }
           if (markAllRead) markAllRead.hidden = unreadCount === 0;
           const kindLabel = (kind: string) => ({ comment: 'コメント', mention: 'メンション', review: 'フィードバック依頼', 'feedback-request': 'フィードバック依頼', 'task-request': 'タスク依頼', application: '応募', approved: 'フィードバック完了', published: '公開', 'publication-ready': '公開準備完了' } as Record<string, string>)[kind] ?? '記事';
@@ -474,9 +478,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         setNotificationPanelOpen(false, true);
       });
       document.addEventListener('astro:before-swap', () => { setNotificationPanelOpen(false); });
-      const markRead = async (ids: string[]) => {
-        if (!ids.length) return;
-        const response = await fetch('/api/admin/notifications/read', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) });
+      const markRead = async (ids: string[], all = false) => {
+        if (!ids.length && !all) return;
+        const response = await fetch('/api/admin/notifications/read', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(all ? { all: true } : { ids }) });
         if (!response.ok) throw new Error('通知を既読にできませんでした。');
         await loadNotifications();
       };
@@ -490,7 +494,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           void markRead([link.dataset.openNotification ?? '']).catch(() => undefined).finally(() => { void navigate(link.href); });
         }
       });
-      markAllRead?.addEventListener('click', () => { void markRead(notifications.filter((item) => !item.read).map((item) => item.id)).catch(() => { if (notificationList) notificationList.textContent = '通知を既読にできませんでした'; }); });
+      markAllRead?.addEventListener('click', () => { void markRead([], true).catch(() => { if (notificationList) notificationList.textContent = '通知を既読にできませんでした'; }); });
       void loadNotifications();
       // ベルの未読件数を開き直さなくても更新できるよう、短い間隔で再確認します。
       window.setInterval(() => { void loadNotifications(); }, 60_000);
@@ -609,11 +613,11 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   }
 </style>
 <style>
-  .admin-command-button { align-items:center; background:transparent; border:1px solid var(--border-default); border-radius:.35rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; gap:.35rem; min-height:2.35rem; padding:.3rem .55rem; white-space:nowrap; }
-  .admin-command-button:hover,.admin-command-button:focus-visible { border-color:var(--accent-primary); color:var(--text-primary); outline:0; }
+  .admin-command-button { align-items:center; background:transparent; border:0; border-radius:.4rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; height:2.5rem; justify-content:center; padding:0; width:2.5rem; }
+  .admin-command-button svg { fill:none; height:1.4rem; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; stroke-width:1.7; width:1.4rem; }
+  .admin-command-button:hover { background:var(--background-secondary); color:var(--text-primary); }
+  .admin-command-button:focus-visible { outline:2px solid var(--accent-primary); outline-offset:2px; }
   .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:999px; color:var(--text-muted); font:inherit; font-size:.68rem; padding:.16rem .45rem; white-space:nowrap; }
-  .admin-command-button kbd { border-radius:.2rem; font-size:.62rem; padding:.1rem .28rem; }
-  .admin-command-button span { font-size:.7rem; }
   .admin-command-dialog { background:var(--background-secondary); border:1px solid var(--border-strong); border-radius:1rem; box-shadow:0 1rem 3rem rgb(0 0 0 / .4); color:var(--text-primary); margin:auto; max-height:min(34rem,calc(100vh - 2rem)); padding:0; width:min(40rem,calc(100vw - 2rem)); }
   .admin-command-dialog::backdrop { background:rgb(0 0 0 / .62); backdrop-filter:blur(3px); }
   .admin-command-inner { padding:.85rem; }
@@ -651,8 +655,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-command-hint kbd { margin-right:.1rem; }
   @media(max-width:980px) { .admin-command-button { grid-column:1/-1; grid-row:2; justify-self:end; } .admin-account { align-items:center; flex-wrap:wrap; } }
   @media(max-width:620px) {
-    .admin-command-button span { display:none; }
-    .admin-command-button { min-width:2.35rem; justify-content:center; }
+    .admin-command-button { height:2.5rem; width:2.5rem; }
     .admin-command-dialog { border-radius:1.1rem; max-height:calc(100dvh - 1rem); width:calc(100vw - 1rem); }
     .admin-command-inner { padding:.8rem; }
     .admin-command-close { min-height:2rem; width:2rem; }
@@ -717,6 +720,8 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-nav .admin-notification-item > button { border: 1px solid var(--border-default); border-radius: 999px; flex: 0 0 auto; margin: 0 .35rem 0 0; padding: .4rem .55rem; }
   .admin-nav .admin-notification-item > button:hover { border-color: var(--accent-primary); }
   .admin-nav .notification-read-label { align-self: center; color: var(--text-secondary); flex: 0 0 auto; font-size: .68rem; font-weight: 700; margin-right: .4rem; }
+  .admin-nav .notification-inbox-link { border-top: 1px solid var(--border-default); color: var(--accent-primary); display: flex; font-size: .75rem; font-weight: 800; gap: .35rem; justify-content: flex-end; margin-top: .35rem; padding: .65rem .35rem .2rem; text-decoration: none; }
+  .admin-nav .notification-inbox-link:hover { text-decoration: underline; }
   .admin-nav .admin-notification-empty { display: block; padding: 1.25rem .8rem; text-align: center; }
   .admin-nav [data-manager-only][hidden] { display: none !important; }
   /* 管理画面の共通クロームは低彩度・単色で統一する。 */
@@ -748,5 +753,20 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   .admin-nav nav > .admin-action-center-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
   @media (max-width: 980px) {
     .admin-nav nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
+  }
+  @media (max-width: 1280px) {
+    .admin-nav[data-admin-nav][data-current-site] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; padding-block: .45rem; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-nav-brand-logo { grid-column: 1; grid-row: 1; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-project-switcher { grid-column: 2; grid-row: 1; max-width: none; min-width: 0; width: 100%; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-menu-toggle { display: inline-flex; grid-column: 3; grid-row: 1; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-account { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; margin-left: 0; }
+    .admin-nav[data-admin-nav][data-current-site] nav { display: none; grid-column: 1 / -1; grid-row: 3; min-height: 0; padding: .35rem 0 .1rem; }
+    .admin-nav[data-admin-nav][data-current-site] nav.is-open { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-nav[data-admin-nav][data-current-site] nav > a { border-width: 0 0 1px; font-size: .8rem; min-height: 2.6rem; padding: .2rem .45rem; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu { align-items: center; display: block; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu summary { height: 2.6rem; padding: .2rem .45rem; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu > div { box-shadow: none; position: static; }
+    .admin-nav[data-admin-nav][data-current-site] .admin-management-menu > div a { display: block; }
+    .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
   }
 </style>

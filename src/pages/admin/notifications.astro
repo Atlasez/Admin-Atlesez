@@ -1,0 +1,253 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+
+<AdminLayout title="通知" description="新着や状態変化を時系列で確認します">
+  <main class="notification-page" data-notification-inbox data-admin-load-surface data-admin-load-state="loading" aria-busy="true">
+    <header class="notification-heading">
+      <div>
+        <h1>通知</h1>
+        <p>通知元ごとの最近の通知を時系列で確認できます。古い記録や対応が必要な作業は、各対象画面やアクションセンターで確認してください。</p>
+      </div>
+      <a class="action-center-link" href="/admin/action-center/">アクションセンター <span aria-hidden="true">→</span></a>
+    </header>
+
+    <section class="notification-summary" aria-label="通知の件数">
+      <strong data-unread-count>—</strong><span>件が未読</span>
+      <span class="summary-divider" aria-hidden="true"></span>
+      <span data-visible-count>読み込み中…</span>
+    </section>
+
+    <section class="notification-list-panel" aria-labelledby="notification-list-heading">
+      <div class="notification-list-toolbar">
+        <div>
+          <h2 id="notification-list-heading">最近の通知</h2>
+          <div class="notification-filters" role="group" aria-label="通知の絞り込み">
+            <button type="button" data-notification-filter="all" aria-pressed="true">すべて</button>
+            <button type="button" data-notification-filter="unread" aria-pressed="false">未読</button>
+          </div>
+        </div>
+        <button type="button" class="mark-all-read" data-mark-all-notifications-read>一覧をすべて既読</button>
+      </div>
+      <div class="notification-list" data-notification-list aria-live="polite">
+        <p class="notification-loading" role="status">通知を読み込んでいます…</p>
+      </div>
+      <p class="notification-truncation" data-notification-truncation hidden>新しい通知を先に表示しています。</p>
+      <div class="notification-pagination" data-notification-pagination hidden>
+        <span data-pagination-summary></span>
+        <button type="button" data-load-more>さらに読み込む</button>
+      </div>
+      <div class="notification-empty" data-admin-empty-state hidden></div>
+      <AdminRetryNotice scope="notification-inbox" message="通知を読み込めませんでした。" />
+    </section>
+  </main>
+</AdminLayout>
+
+<script>
+  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
+
+  type Notification = {
+    id: string;
+    kind?: string;
+    title: string;
+    detail: string;
+    href: string;
+    updatedAt?: string;
+    read: boolean;
+  };
+  type ResponseData = {
+    notifications?: Notification[];
+    unreadNotificationsCount?: number;
+    totalNotifications?: number;
+    nextOffset?: number | null;
+  };
+
+  const initNotificationInbox = () => {
+    const root = document.querySelector<HTMLElement>("[data-notification-inbox]");
+    if (!root || root.dataset.initialized === "true") return;
+    root.dataset.initialized = "true";
+    const list = root.querySelector<HTMLElement>("[data-notification-list]")!;
+    const unreadCount = root.querySelector<HTMLElement>("[data-unread-count]")!;
+    const visibleCount = root.querySelector<HTMLElement>("[data-visible-count]")!;
+    const pagination = root.querySelector<HTMLElement>("[data-notification-pagination]")!;
+    const paginationSummary = root.querySelector<HTMLElement>("[data-pagination-summary]")!;
+    const loadMore = root.querySelector<HTMLButtonElement>("[data-load-more]")!;
+    const truncation = root.querySelector<HTMLElement>("[data-notification-truncation]")!;
+    const markAll = root.querySelector<HTMLButtonElement>("[data-mark-all-notifications-read]")!;
+    const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
+    const labels: Record<string, string> = {
+      comment: "コメント", mention: "メンション", review: "フィードバック依頼",
+      "feedback-request": "フィードバック依頼", "task-request": "タスク依頼",
+      application: "応募", approved: "フィードバック完了", published: "公開",
+      "publication-ready": "公開準備完了", "publication-review": "公開審査",
+      "publication-review-returned": "公開審査から差し戻し", "task-reminder": "リマインダー",
+    };
+    const formatTime = (value?: string) => {
+      if (!value || Number.isNaN(new Date(value).getTime())) return "";
+      return new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    };
+    const safeHref = (value: string) => {
+      try {
+        const url = new URL(value, location.origin);
+        return url.origin === location.origin && url.pathname.startsWith("/admin/")
+          ? `${url.pathname}${url.search}${url.hash}`
+          : "/admin/notifications/";
+      } catch { return "/admin/notifications/"; }
+    };
+    let rows: Notification[] = [];
+    let unreadTotal = 0;
+    let total = 0;
+    let nextOffset: number | null = 0;
+    let requestGeneration = 0;
+    let filter: "all" | "unread" = "all";
+    let retry: ReturnType<typeof createAdminLoadRetry>;
+
+    const render = () => {
+      const visible = rows;
+      unreadCount.textContent = String(unreadTotal);
+      visibleCount.textContent = `${rows.length}件を表示`;
+      markAll.hidden = unreadTotal === 0;
+      root.querySelectorAll<HTMLButtonElement>("[data-notification-filter]").forEach((button) => {
+        const active = button.dataset.notificationFilter === filter;
+        button.setAttribute("aria-pressed", String(active));
+      });
+      if (!visible.length) {
+        list.innerHTML = "";
+        retry.empty(filter === "unread" ? "未読の通知はありません。" : "通知はまだありません。");
+      } else {
+        list.innerHTML = visible.map((item) => `
+          <article class="notification-row${item.read ? " is-read" : " is-unread"}">
+            <div class="notification-row-main">
+              <div class="notification-row-meta"><span>${escape(labels[item.kind ?? ""] ?? "通知")}</span>${item.updatedAt ? `<time datetime="${escape(item.updatedAt)}">${escape(formatTime(item.updatedAt))}</time>` : ""}</div>
+              <a class="notification-title" href="${escape(safeHref(item.href))}" data-notification-open="${escape(item.id)}">${escape(item.title)}</a>
+              <p>${escape(item.detail)}</p>
+            </div>
+            <div class="notification-row-state">${item.read ? "既読" : `<button type="button" data-notification-read="${escape(item.id)}">既読にする</button>`}</div>
+          </article>`).join("");
+        retry.success();
+      }
+      truncation.hidden = total <= rows.length;
+      pagination.hidden = nextOffset === null;
+      paginationSummary.textContent = `${rows.length} / ${total}件`;
+    };
+
+    const load = async (append = false) => {
+      if (!append) retry.begin();
+      const generation = append ? requestGeneration : ++requestGeneration;
+      const requestFilter = filter;
+      const offset = append ? nextOffset : 0;
+      if (offset === null) return;
+      let response: Response;
+      try {
+        response = await fetch(`/api/admin/notifications?limit=100&offset=${offset}${requestFilter === "unread" ? "&unreadOnly=true" : ""}`, { credentials: "same-origin", cache: "no-store" });
+      } catch (error) {
+        if (generation !== requestGeneration || requestFilter !== filter) return;
+        throw error;
+      }
+      if (generation !== requestGeneration || requestFilter !== filter) return;
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!response.ok || !contentType.includes("application/json")) throw new Error(response.status === 401 ? "ログイン状態を確認してください。" : "通知を読み込めませんでした。");
+      const data = await response.json() as ResponseData;
+      if (generation !== requestGeneration || requestFilter !== filter) return;
+      if (!Array.isArray(data.notifications)) throw new Error("通知の形式を確認できませんでした。");
+      const incoming = data.notifications;
+      rows = append ? [...rows, ...incoming] : incoming;
+      unreadTotal = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? 0)));
+      total = Math.max(rows.length, Math.trunc(Number(data.totalNotifications ?? rows.length)));
+      nextOffset = typeof data.nextOffset === "number" ? data.nextOffset : null;
+      render();
+    };
+    retry = createAdminLoadRetry(root, () => load(), "通知を読み込めませんでした。", { scope: "notification-inbox" });
+
+    const setRead = async (ids: string[] = [], all = false) => {
+      const response = await fetch("/api/admin/notifications/read", {
+        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify(all ? { all: true } : { ids }),
+      });
+      if (!response.ok) throw new Error("通知を既読にできませんでした。");
+      await load();
+    };
+
+    root.querySelectorAll<HTMLButtonElement>("[data-notification-filter]").forEach((button) => button.addEventListener("click", () => {
+      const nextFilter = button.dataset.notificationFilter === "unread" ? "unread" : "all";
+      if (nextFilter === filter) return;
+      filter = nextFilter;
+      requestGeneration += 1;
+      rows = [];
+      nextOffset = 0;
+      void load().catch((error) => retry.fail(error));
+    }));
+    markAll.addEventListener("click", () => { void setRead([], true).catch((error) => retry.fail(error)); });
+    loadMore.addEventListener("click", () => {
+      loadMore.disabled = true;
+      void load(true).catch((error) => retry.fail(error)).finally(() => { loadMore.disabled = false; });
+    });
+    list.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const button = target.closest<HTMLButtonElement>("[data-notification-read]");
+      if (button) {
+        void setRead([button.dataset.notificationRead ?? ""]).catch((error) => retry.fail(error));
+        return;
+      }
+      const link = target.closest<HTMLAnchorElement>("[data-notification-open]");
+      if (
+        !link ||
+        link.dataset.opened ||
+        event instanceof MouseEvent &&
+          (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      ) return;
+      event.preventDefault();
+      link.dataset.opened = "true";
+      void setRead([link.dataset.notificationOpen ?? ""]).catch(() => undefined).finally(() => { window.location.assign(link.href); });
+    });
+    void load().catch((error) => retry.fail(error));
+  };
+
+  document.addEventListener("astro:page-load", initNotificationInbox);
+  initNotificationInbox();
+</script>
+
+<style>
+  .notification-page { color: var(--text-primary); margin: 0 auto; max-width: 1050px; min-height: 60vh; padding: 1.25rem 1.25rem 4rem; }
+  .notification-heading { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: .6rem 0 1rem; }
+  .notification-heading h1 { font-size: clamp(1.6rem, 3vw, 2.15rem); margin: 0; }
+  .notification-heading p { color: var(--text-secondary); font-size: .84rem; line-height: 1.6; margin: .4rem 0 0; }
+  .action-center-link { align-items: center; border: 1px solid var(--border-default); color: var(--text-primary); display: inline-flex; flex: 0 0 auto; font-size: .78rem; font-weight: 750; gap: .45rem; min-height: 2.6rem; padding: .45rem .7rem; text-decoration: none; }
+  .action-center-link:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+  .notification-summary { align-items: baseline; color: var(--text-secondary); display: flex; gap: .35rem; padding: .85rem .1rem; }
+  .notification-summary strong { color: var(--accent-primary); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .summary-divider { background: var(--border-default); height: 1rem; margin: 0 .45rem; width: 1px; }
+  .notification-list-panel { border: 1px solid var(--border-default); padding: 1rem; }
+  .notification-list-toolbar { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: .8rem; justify-content: space-between; padding-bottom: .8rem; }
+  .notification-list-toolbar h2 { font-size: 1.05rem; margin: 0 0 .65rem; }
+  .notification-filters { display: flex; gap: .3rem; }
+  .notification-filters button, .mark-all-read, .notification-row-state button, .notification-pagination button { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); cursor: pointer; font: inherit; font-size: .75rem; min-height: 2.1rem; padding: .35rem .65rem; }
+  .notification-filters button[aria-pressed="true"] { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--on-accent, #fff); }
+  .mark-all-read { flex: 0 0 auto; font-weight: 750; }
+  .notification-filters button:focus-visible, .mark-all-read:focus-visible, .notification-row a:focus-visible, .notification-row-state button:focus-visible, .notification-pagination button:focus-visible, .action-center-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+  .notification-row { align-items: start; border-bottom: 1px solid var(--border-default); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; padding: .9rem .2rem; }
+  .notification-row:last-child { border-bottom: 0; }
+  .notification-row.is-read { opacity: .68; }
+  .notification-row-meta { align-items: center; color: var(--text-secondary); display: flex; flex-wrap: wrap; font-size: .7rem; gap: .7rem; }
+  .notification-row-meta span { color: var(--accent-primary); font-weight: 800; }
+  .notification-row-meta time { font-variant-numeric: tabular-nums; }
+  .notification-title { color: var(--text-primary); display: inline-block; font-size: .95rem; font-weight: 800; margin-top: .4rem; text-decoration: none; }
+  .notification-title:hover { color: var(--accent-primary); text-decoration: underline; }
+  .notification-row p { color: var(--text-secondary); font-size: .8rem; line-height: 1.55; margin: .3rem 0 0; overflow-wrap: anywhere; }
+  .notification-row-state { color: var(--text-secondary); font-size: .72rem; padding-top: .4rem; white-space: nowrap; }
+  .notification-row-state button { color: var(--accent-primary); }
+  .notification-loading, .notification-empty { color: var(--text-secondary); display: block; padding: 2rem 1rem; text-align: center; }
+  .notification-truncation { color: var(--text-secondary); font-size: .75rem; margin: .5rem 0 0; text-align: center; }
+  .notification-pagination { align-items: center; color: var(--text-secondary); display: flex; font-size: .75rem; gap: .75rem; justify-content: center; padding-top: .8rem; }
+  .notification-pagination[hidden], .notification-truncation[hidden] { display: none; }
+  .notification-pagination button:disabled { cursor: wait; opacity: .6; }
+  @media (max-width: 620px) {
+    .notification-page { padding: .7rem .75rem 3rem; }
+    .notification-heading { align-items: start; flex-direction: column; }
+    .notification-heading p { font-size: .78rem; }
+    .notification-list-panel { padding: .75rem; }
+    .notification-row { gap: .4rem; grid-template-columns: 1fr; }
+    .notification-row-state { padding-top: 0; }
+  }
+</style>

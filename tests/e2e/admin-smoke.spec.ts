@@ -79,6 +79,7 @@ const mockAdminApis = async (page: Page) => {
 
 const pages = [
   ["ポータル", "admin/portal/", "Atlasezメンバー用サイト"],
+  ["通知", "admin/notifications/", "通知"],
   ["記事一覧", "admin/articles/", "編集・フィードバック"],
   ["ジャンル概要", "admin/genres/", "各ジャンル概要"],
   ["ジャンル・役割管理", "admin/genre-roles/", "ジャンル・役割管理"],
@@ -223,6 +224,7 @@ test("作業の進め方に運営画面のスクリーンショットが表示�
 
 const responsiveSmokePages = [
   ["ポータル", "admin/portal/"],
+  ["通知", "admin/notifications/"],
   ["アクションセンター", "admin/action-center/"],
   ["タスク管理", "admin/member-tasks/"],
   ["記事一覧", "admin/articles/"],

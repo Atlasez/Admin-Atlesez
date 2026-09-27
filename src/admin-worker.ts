@@ -2417,8 +2417,8 @@ const workflowTransitionsFor = (entityType: WorkflowEntityType, from: string) =>
 const workflowTransitionPolicyError = (role: WorkflowTransition["requiredRole"]) =>
   role === "manager" ? "運営内運営のみ状態を変更できます。" : role === "reviewer" ? "担当査読者のみ状態を変更できます。" : "担当者のみ状態を変更できます。";
 
-async function listWorkflowTransitions(request: Request, env: Env, developerAccess = false): Promise<Response> {
-  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
+async function listWorkflowTransitions(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const [taskCounts, documentCounts, applicationCounts, approvalCounts] = await Promise.all([
     env.REPORTS.prepare("SELECT status AS state,COUNT(*) AS count FROM editorial_tasks WHERE archived_at IS NULL GROUP BY status").all<{ state: string; count: number }>(),
@@ -2444,8 +2444,8 @@ async function listWorkflowTransitions(request: Request, env: Env, developerAcce
  * 状態イベントと現在レコードのずれを検出する読み取り専用の診断API。
  * 自動修復は行わず、管理者が確認してから個別の遷移APIを再実行できるようにする。
  */
-async function workflowDiagnostics(request: Request, env: Env, developerAccess = false): Promise<Response> {
-  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
+async function workflowDiagnostics(request: Request, env: Env): Promise<Response> {
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const rows = await env.REPORTS.prepare(
     `SELECT e.id,e.entity_type,e.entity_id,e.from_state,e.to_state,e.actor_email,e.created_at,
@@ -2542,6 +2542,7 @@ async function transitionTaskState(
   taskId: string,
   scope: AdminScope,
   payload: WorkflowTransitionPayload,
+  canManageProject = false,
 ): Promise<Response> {
   const fromState = text(payload.fromState, 20);
   const toState = text(payload.toState, 20);
@@ -2561,12 +2562,24 @@ async function transitionTaskState(
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
   const project = await resolveOperationProject(env, scope, task.project_id);
   if (isResponse(project)) return project;
-  if (!scope.isManager && !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) && task.created_by !== scope.email)
+  if (!scope.isManager && !canManageProject && !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) && task.created_by.toLowerCase() !== scope.email.toLowerCase())
     return json({ error: workflowTransitionPolicyError("assignee"), code: "FORBIDDEN_TRANSITION" }, 403);
   if (task.status !== fromState)
     return json({ error: "他の更新が先に反映されています。再読み込みしてから再試行してください。", code: "STALE_STATE", currentState: task.status, updatedAt: task.updated_at }, 409);
   if (expectedUpdatedAt && task.updated_at !== expectedUpdatedAt)
     return json({ error: "古い編集内容です。再読み込みしてから再試行してください。", code: "STALE_STATE", currentState: task.status, updatedAt: task.updated_at }, 409);
+  if (fromState === toState)
+    return json({
+      ok: true,
+      unchanged: true,
+      transition: {
+        entityType: "task",
+        entityId: taskId,
+        fromState,
+        toState,
+        updatedAt: task.updated_at,
+      },
+    });
   const now = new Date().toISOString();
   const update = await env.REPORTS.prepare(
     "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=? AND status=? AND updated_at=?",
@@ -2778,9 +2791,8 @@ async function listPermissionAudit(
 async function listAdminAuditLog(
   request: Request,
   env: Env,
-  developerAccess = false,
 ): Promise<Response> {
-  const scope = developerAccess ? await getDeveloperScope(request, env) : await getGlobalAdminScope(request, env);
+  const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
   const url = new URL(request.url);
   const requestedLimit = Number(url.searchParams.get("limit") ?? "50");
@@ -6979,6 +6991,21 @@ async function genreOverviews(
 ): Promise<Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const searchParams = new URL(request.url).searchParams;
+  // カーソル付きの名簿取得は運営メンバー管理専用で、全分野権限を要求する。
+  // 通常の分野概要取得は担当分野に絞った安全な表示用データを返す。
+  if (
+    method === "GET" &&
+    (searchParams.has("limit") || searchParams.has("cursor"))
+  ) {
+    const globalScope = await requireAdminScope(
+      request,
+      env,
+      { requireGlobal: true },
+      scope,
+    );
+    if (isResponse(globalScope)) return globalScope;
+  }
   await ensureAtlasMembership(env, scope);
   const project = await resolveOperationProject(
     env,
@@ -7026,7 +7053,6 @@ async function genreOverviews(
     return json({ ok: true, subject, progress, updatedBy: scope.email, updatedAt });
   }
 
-  const searchParams = new URL(request.url).searchParams;
   // 大規模な名簿を利用する画面だけが limit/cursor を指定する。既存の
   // 集計画面はパラメータを指定しないため、これまで通り全件を返す。
   const paginated = searchParams.has("limit");
@@ -7115,6 +7141,50 @@ async function genreOverviews(
       workflowSubjects: details.workflowSubjects,
     };
   });
+  const visibleSubjects = new Set([
+    ...scope.subjects,
+    ...(scope.coordinatorSubjects ?? []).filter((subject) => subject !== "*"),
+  ]);
+  const canReadAllSubjects =
+    scope.allSubjects ||
+    projectRole === "manager" ||
+    Boolean(scope.isProjectLeader) ||
+    Boolean(scope.coordinatorSubjects?.includes("*"));
+  // プロジェクト運営内運営・プロジェクトリーダーは分野進捗を横断確認できても、
+  // メンバー名簿の個人情報は全分野管理者だけに限る。
+  const visibleMembers = scope.allSubjects
+    ? memberRows
+        : memberRows
+        .filter((member) =>
+          [...member.subjectAssignments, ...member.workflowSubjects].some((subject) =>
+            visibleSubjects.has(subject),
+          ),
+        )
+        .map((member) => {
+          const subjectAssignments = member.subjectAssignments.filter((subject) =>
+            visibleSubjects.has(subject),
+          );
+          const workflowSubjects = member.workflowSubjects.filter((subject) =>
+            visibleSubjects.has(subject),
+          );
+          const visibleLabels = new Set(
+            [...subjectAssignments, ...workflowSubjects].flatMap((subject) => {
+              const name = APPLICATION_SUBJECT_LABELS[subject] ?? subject;
+              return [`${name}担当`, `${name}統括`];
+            }),
+          );
+          return {
+            display_name: member.display_name,
+            avatar_url: member.avatar_url,
+            assignments: member.assignments.filter((label) => visibleLabels.has(label)),
+            subjectAssignments,
+            workflowSubjects,
+          };
+        });
+  const visibleOverviews = (overviews.results ?? []).filter(
+    (overview) =>
+      canReadAllSubjects || visibleSubjects.has(String(overview.subject ?? "")),
+  );
   return json({
     project,
     scope: {
@@ -7123,12 +7193,18 @@ async function genreOverviews(
       isProjectLeader: Boolean(scope.isProjectLeader),
       coordinatorSubjects: scope.coordinatorSubjects ?? [],
     },
-    members: memberRows,
-    overviews: overviews.results ?? [],
+    members: visibleMembers,
+    overviews: scope.allSubjects
+      ? visibleOverviews
+      : visibleOverviews.map(({ subject, progress, updated_at }) => ({
+          subject,
+          progress,
+          updated_at,
+        })),
     ...(paginated
       ? { pagination: { limit: pageLimit, nextCursor: nextMemberCursor, hasMore: hasMoreMembers } }
       : {}),
-    editableSubjects: (overviews.results ?? [])
+    editableSubjects: visibleOverviews
       .map((row) => String(row.subject ?? ""))
       .filter((subject) => canEditSubject(subject)),
     canEditAll: scope.allSubjects || projectRole === "manager" || Boolean(scope.isProjectLeader),
@@ -9829,6 +9905,7 @@ async function memberTasksOverview(
   const managerProjectIds = projects
     .filter((project) => project.role === "manager")
     .map((project) => project.id);
+  const managerProjectIdSet = new Set(managerProjectIds);
   // 可視範囲をLIMITの前に適用する。取得後のfilterでは、担当外タスクが
   // 先頭ページを消費して担当者のタスクが欠落するため、カーソルも正しく
   // 継続できない。
@@ -9857,7 +9934,7 @@ async function memberTasksOverview(
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT m.project_id,m.email,
-        COALESCE(NULLIF(TRIM(p.display_name),''),m.email) AS display_name
+        COALESCE(NULLIF(TRIM(p.display_name),''),'') AS display_name
        FROM atlasez_project_memberships m
        LEFT JOIN editorial_member_profiles p ON p.email=m.email
        WHERE m.project_id IN (${placeholders})
@@ -9869,17 +9946,72 @@ async function memberTasksOverview(
   const fetchedTasks = tasks.results ?? [];
   const hasMoreTasks = fetchedTasks.length > pageLimit;
   const pageTasks = fetchedTasks.slice(0, pageLimit);
-  // 可視範囲はSQLで適用済み。ここでは型の揺れを吸収するだけで再filterしない。
-  const visibleTasks = pageTasks;
+  // 可視範囲はSQLで適用済み。ここでは型の揺れと、非管理メンバー向けの
+  // 個人情報を含まない表示用フィールドだけを調整する。
+  const memberNames = new Map(
+    (members.results ?? []).map((member) => [
+      String(member.email ?? "").trim().toLowerCase(),
+      String(member.display_name ?? "").trim() || "メンバー",
+    ]),
+  );
+  const visibleTasks = pageTasks.map((task) => {
+    const projectId = String(task.project_id ?? "");
+    const createdBy = String(task.created_by ?? "").trim().toLowerCase();
+    const isAssignedToMe = taskAssignedTo(
+      task.assignee_email,
+      scope.email,
+      task.task_kind,
+    );
+    const isCreatedByMe = createdBy === scope.email.trim().toLowerCase();
+    if (scope.isManager || managerProjectIdSet.has(projectId))
+      return {
+        ...task,
+        assigned_to_me: isAssignedToMe,
+        created_by_me: isCreatedByMe,
+      };
+
+    const rawAssignees = String(task.assignee_email ?? "").trim();
+    const assigneeDisplayName =
+      rawAssignees === "*"
+        ? "分野担当者全員"
+        : normalizedTaskAssignees(rawAssignees)
+            .map((email) =>
+              email === scope.email.trim().toLowerCase()
+                ? "自分"
+                : (memberNames.get(email) ?? "他のメンバー"),
+            )
+            .join("、");
+    const safeTask = { ...task };
+    delete safeTask.assignee_email;
+    delete safeTask.created_by;
+    delete safeTask.archived_by;
+    return {
+      ...safeTask,
+      assigned_to_me: isAssignedToMe,
+      created_by_me: isCreatedByMe,
+      assignee_display_name: assigneeDisplayName,
+      created_by_display_name: isCreatedByMe
+        ? "自分"
+        : (memberNames.get(createdBy) ?? "メンバー"),
+    };
+  });
+  const visibleMembers = (members.results ?? []).filter(
+    (member) =>
+      scope.isManager || managerProjectIdSet.has(String(member.project_id)),
+  );
   const lastTask = pageTasks.at(-1);
   const nextTaskCursor = hasMoreTasks && lastTask
     ? encodeURIComponent(JSON.stringify({ status: lastTask.status === "done" ? 1 : 0, archived: lastTask.archived_at ? 1 : 0, due: !lastTask.due_at ? 1 : 0, dueAt: String(lastTask.due_at ?? ""), updatedAt: String(lastTask.updated_at ?? ""), id: String(lastTask.id ?? "") }))
     : null;
   return json({
-    scope: { email: scope.email, isManager: scope.isManager },
+    scope: {
+      ...(scope.memberAccess ? {} : { email: scope.email }),
+      isManager: scope.isManager,
+      memberAccess: Boolean(scope.memberAccess),
+    },
     projects,
     tasks: visibleTasks,
-    members: members.results ?? [],
+    members: visibleMembers,
     pagination: { limit: pageLimit, nextCursor: nextTaskCursor, hasMore: hasMoreTasks },
   });
 }
@@ -12111,7 +12243,10 @@ async function createOperation(
   env: Env,
   type: "task" | "progress" | "event",
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope =
+    type === "task"
+      ? await getMemberOperationScope(request, env)
+      : await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -12128,6 +12263,10 @@ async function createOperation(
     text(payload.projectId, 80) || "atlas",
   );
   if (isResponse(project)) return project;
+  const projectRole = await operationProjectRole(env, scope, project.id);
+  if (!projectRole)
+    return json({ error: "このプロジェクトのメンバーではありません。" }, 403);
+  const canManageProject = scope.isManager || projectRole === "manager";
   const subject = text(payload.subject, 80) || null;
   if (subject && !scope.allSubjects && !scope.subjects.includes(subject))
     return json({ error: "この分野を指定する権限がありません。" }, 403);
@@ -12159,21 +12298,40 @@ async function createOperation(
   if (type === "task") {
     const title = text(payload.title, 200);
     if (!title) return json({ error: "タスク名を入力してください。" }, 400);
-    const assignees = normalizedTaskAssignees(
-      payload.assigneeEmails,
-      payload.assigneeEmail,
-    );
+    const assignees =
+      scope.memberAccess && !canManageProject
+        ? [scope.email.trim().toLowerCase()]
+        : normalizedTaskAssignees(
+            payload.assigneeEmails,
+            payload.assigneeEmail,
+          );
     if (assignees.some((email) => !EMAIL_PATTERN.test(email)))
       return json({ error: "担当者のメールアドレスを確認してください。" }, 400);
     if (
       assignees.length &&
-      !scope.isManager &&
+      !canManageProject &&
       assignees.some((email) => email !== scope.email.toLowerCase())
     )
       return json(
         { error: "他の運営者への依頼は運営内運営のみ作成できます。" },
         403,
       );
+    if (assignees.length) {
+      const projectAssignees = await env.REPORTS.prepare(
+        `SELECT lower(email) AS email FROM atlasez_project_memberships
+         WHERE project_id=? AND lower(email) IN (${assignees.map(() => "?").join(",")})`,
+      )
+        .bind(project.id, ...assignees)
+        .all<{ email: string }>();
+      const allowedAssignees = new Set(
+        (projectAssignees.results ?? []).map((member) => member.email),
+      );
+      if (assignees.some((email) => !allowedAssignees.has(email)))
+        return json(
+          { error: "選択した担当者はこのプロジェクトに参加していません。" },
+          403,
+        );
+    }
     const assignee = assignees.length ? assignees.join(",") : null;
     const dueAt = text(payload.dueAt, 32);
     const dueTimezone = text(payload.dueTimezone, 80) || "Asia/Tokyo";
@@ -12346,7 +12504,7 @@ async function updateTask(
   env: Env,
   taskId: string,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -12396,10 +12554,14 @@ async function updateTask(
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
   const project = await resolveOperationProject(env, scope, task.project_id);
   if (isResponse(project)) return project;
+  const projectRole = await operationProjectRole(env, scope, project.id);
+  if (!projectRole)
+    return json({ error: "このプロジェクトのメンバーではありません。" }, 403);
+  const canManageProject = scope.isManager || projectRole === "manager";
   if (
-    !scope.isManager &&
+    !canManageProject &&
     !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) &&
-    task.created_by !== scope.email
+    task.created_by.toLowerCase() !== scope.email.toLowerCase()
   )
     return json({ error: "このタスクを更新する権限がありません。" }, 403);
   // 状態変更だけは共通Workflow APIへ委譲する。既存のリマインダー・
@@ -12412,7 +12574,7 @@ async function updateTask(
       toState: requestedStatus,
       expectedUpdatedAt: payload.expectedUpdatedAt,
       idempotencyKey: payload.idempotencyKey,
-    });
+    }, canManageProject);
   const now = new Date().toISOString();
   const effectiveStatus = requestedStatus ?? task.status;
   if (requestedArchived === true && effectiveStatus !== "done")
@@ -12539,7 +12701,7 @@ async function updateEventAvailability(
   env: Env,
   eventId: string,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -12608,7 +12770,7 @@ async function createAvailabilityBlock(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -12652,7 +12814,7 @@ async function deleteAvailabilityBlock(
   env: Env,
   blockId: string,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -12668,7 +12830,7 @@ async function createAvailabilityRule(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -12710,7 +12872,7 @@ async function deleteAvailabilityRule(
   env: Env,
   ruleId: string,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "この送信元からは受け付けられません。" }, 403);
@@ -19637,6 +19799,8 @@ const isOnboardingPath = (pathname: string) =>
 const memberPagePaths = new Set([
   "/admin/portal",
   "/admin/portal/",
+  "/admin/notifications",
+  "/admin/notifications/",
   "/admin/member-profile",
   "/admin/member-profile/",
   "/admin/member-profile/edit",
@@ -19654,7 +19818,38 @@ const memberScopedApiMethods = new Map<string, ReadonlySet<string>>([
   ["/api/admin/member-calendar", new Set(["GET"])],
   ["/api/admin/notifications", new Set(["GET"])],
   ["/api/admin/notifications/read", new Set(["POST"])],
+  ["/api/admin/operations/tasks", new Set(["POST"])],
+  ["/api/admin/operations/availability-blocks", new Set(["POST"])],
+  ["/api/admin/operations/availability-rules", new Set(["POST"])],
 ]);
+const memberScopedApiDynamicMethods: Array<{
+  path: RegExp;
+  methods: ReadonlySet<string>;
+}> = [
+  {
+    path: /^\/api\/admin\/operations\/tasks\/[0-9a-f-]{36}$/i,
+    methods: new Set(["PATCH"]),
+  },
+  {
+    path: /^\/api\/admin\/operations\/events\/[0-9a-f-]{36}\/availability$/i,
+    methods: new Set(["PUT"]),
+  },
+  {
+    path: /^\/api\/admin\/operations\/availability-blocks\/[0-9a-f-]{36}$/i,
+    methods: new Set(["DELETE"]),
+  },
+  {
+    path: /^\/api\/admin\/operations\/availability-rules\/[0-9a-f-]{36}$/i,
+    methods: new Set(["DELETE"]),
+  },
+];
+const isMemberScopedApiMethod = (pathname: string, method: string) =>
+  Boolean(
+    memberScopedApiMethods.get(pathname)?.has(method) ||
+      memberScopedApiDynamicMethods.some(
+        (route) => route.path.test(pathname) && route.methods.has(method),
+      ),
+  );
 
 const userAreaForPath = (pathname: string): UserArea | null => {
   if (isApplicationPath(pathname)) return "application";
@@ -21006,10 +21201,11 @@ async function adminNotifications(
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
     : 20;
-  const notificationsTruncated = sortedNotifications.length > limit;
-  const notifications = sortedNotifications.slice(0, limit);
-  // 画面には最新20件だけを返すが、未読件数は全候補を対象に集計する。
-  // 表示用の上限をそのまま件数に使うと、古い未読がある場合にポータルの数字がずれる。
+  const requestedOffset = Number(new URL(request.url).searchParams.get("offset") ?? "0");
+  const offset = Number.isFinite(requestedOffset)
+    ? Math.min(Math.max(Math.trunc(requestedOffset), 0), 10_000)
+    : 0;
+  // 表示用のページ上限とは別に、未読件数は全候補を対象に集計する。
   const readNotificationIds = sortedNotifications.map((item) => item.id);
   const readIds = readNotificationIds.length
     ? await env.REPORTS.prepare(
@@ -21021,13 +21217,27 @@ async function adminNotifications(
   const read = new Set(
     (readIds.results ?? []).map((item) => item.notification_id),
   );
+  const unreadNotificationIds = sortedNotifications
+    .filter((item) => !read.has(item.id))
+    .map((item) => item.id);
+  const unreadOnly = new URL(request.url).searchParams.get("unreadOnly") === "true";
+  const filteredNotifications = unreadOnly
+    ? sortedNotifications.filter((item) => !read.has(item.id))
+    : sortedNotifications;
+  const notificationsTruncated = filteredNotifications.length > offset + limit;
+  const notifications = filteredNotifications.slice(offset, offset + limit);
   return json({
     notifications: notifications.map((item) => ({
       ...item,
       read: read.has(item.id),
     })),
     notificationsTruncated,
-    unreadNotificationsCount: sortedNotifications.filter((item) => !read.has(item.id)).length,
+    unreadNotificationsCount: unreadNotificationIds.length,
+    totalNotifications: filteredNotifications.length,
+    nextOffset: notificationsTruncated ? offset + limit : null,
+    ...(new URL(request.url).searchParams.get("includeUnreadIds") === "true"
+      ? { unreadNotificationIds }
+      : {}),
   });
 }
 
@@ -21041,8 +21251,9 @@ async function markAdminNotificationsRead(
     return json({ error: "許可されていない送信元です。" }, 403);
   const payload = (await request.json().catch(() => null)) as {
     ids?: unknown;
+    all?: unknown;
   } | null;
-  const ids = Array.isArray(payload?.ids)
+  let ids = Array.isArray(payload?.ids)
     ? [
         ...new Set(
           payload!.ids
@@ -21052,22 +21263,46 @@ async function markAdminNotificationsRead(
                 /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(
                   id,
                 ),
-            )
-            .slice(0, 32),
+            ),
         ),
       ]
     : [];
-  if (!ids.length)
+  if (payload?.all === true) {
+    const notificationResponse = await adminNotifications(
+      new Request(
+        new URL("/api/admin/notifications?limit=100&includeUnreadIds=true", request.url),
+        { headers: request.headers },
+      ),
+      env,
+      scope,
+    );
+    if (!notificationResponse.ok) return notificationResponse;
+    const notificationData = (await notificationResponse.json()) as {
+      unreadNotificationIds?: unknown;
+    };
+    ids = Array.isArray(notificationData.unreadNotificationIds)
+      ? notificationData.unreadNotificationIds.filter(
+          (id): id is string =>
+            typeof id === "string" &&
+            /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
+        )
+      : [];
+  }
+  if (ids.length > 500)
+    return json({ error: "一度に既読にできる通知は500件までです。" }, 400);
+  if (!ids.length && payload?.all !== true)
     return json({ error: "既読にする通知を選択してください。" }, 400);
   const now = new Date().toISOString();
-  await env.REPORTS.batch(
-    ids.map((id) =>
-      env.REPORTS.prepare(
-        "INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
-      ).bind(scope.email, id, now),
-    ),
-  );
-  return json({ ok: true });
+  for (let index = 0; index < ids.length; index += 32) {
+    await env.REPORTS.batch(
+      ids.slice(index, index + 32).map((id) =>
+        env.REPORTS.prepare(
+          "INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
+        ).bind(scope.email, id, now),
+      ),
+    );
+  }
+  return json({ ok: true, markedCount: ids.length });
 }
 
 async function connectEditorialCollaboration(
@@ -21439,7 +21674,7 @@ async function handleAdminRequest(
     url.pathname.startsWith("/api/admin/") &&
     url.pathname !== "/api/admin/profile" &&
     url.pathname !== "/api/admin/developer/diagnostics" &&
-    !memberScopedApiMethods.get(url.pathname)?.has(request.method)
+    !isMemberScopedApiMethod(url.pathname, request.method)
   ) {
     const baselineScope = await getAdminScope(request, env);
     if (isResponse(baselineScope)) return baselineScope;
@@ -21470,11 +21705,11 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/permission-audit" && request.method === "GET")
     return listPermissionAudit(request, env);
   if (url.pathname === "/api/admin/audit-log" && request.method === "GET")
-    return listAdminAuditLog(request, env, true);
+    return listAdminAuditLog(request, env);
   if (url.pathname === "/api/admin/workflow/transitions" && request.method === "GET")
-    return listWorkflowTransitions(request, env, true);
+    return listWorkflowTransitions(request, env);
   if (url.pathname === "/api/admin/workflow/diagnostics" && request.method === "GET")
-    return workflowDiagnostics(request, env, true);
+    return workflowDiagnostics(request, env);
   if (url.pathname === "/api/admin/workflow/repair" && request.method === "POST")
     return repairWorkflowIssue(request, env);
   if (url.pathname === "/api/admin/workflow/transition" && request.method === "POST")
@@ -22022,6 +22257,12 @@ async function handleAdminRequest(
       "/admin/permissions/",
       "/admin/applications",
       "/admin/applications/",
+      "/admin/member-management",
+      "/admin/member-management/",
+      "/admin/genre-roles",
+      "/admin/genre-roles/",
+      "/admin/operations-statistics",
+      "/admin/operations-statistics/",
       "/admin/onboarding-demo",
       "/admin/onboarding-demo/",
       "/admin/developer",
