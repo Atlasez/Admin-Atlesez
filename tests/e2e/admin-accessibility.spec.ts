@@ -81,7 +81,10 @@ for (const path of pages) {
       results.violations.map((violation) => ({
         id: violation.id,
         impact: violation.impact,
-        nodes: violation.nodes.length,
+        nodes: violation.nodes.map((node) => ({
+          target: node.target,
+          summary: node.failureSummary,
+        })),
       })),
     ).toEqual([]);
   });
