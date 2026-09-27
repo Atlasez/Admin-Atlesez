@@ -1,4 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+const expectProjectManageLink = async (page: Page, project: string) => {
+  const menuToggle = page.locator("[data-admin-menu-toggle]");
+  if (
+    (await menuToggle.isVisible()) &&
+    (await menuToggle.getAttribute("aria-expanded")) !== "true"
+  ) {
+    await menuToggle.click();
+  }
+  await expect(
+    page.getByRole("link", { name: "管理", exact: true }),
+  ).toHaveAttribute("href", `/admin/manage/?project=${project}`);
+};
 
 test("管理タブはプロジェクト遷移後も管理トップへ直接遷移する", async ({
   page,
@@ -39,25 +52,17 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
   );
 
   await page.goto("admin/atlas/");
-  const manageLink = page.getByRole("link", { name: "管理", exact: true });
-  await expect(manageLink).toHaveAttribute(
-    "href",
-    "/admin/manage/?project=atlas",
-  );
+  await expectProjectManageLink(page, "atlas");
 
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
   await page
     .getByRole("link", { name: /学習サイト「アトラス」運営/ })
     .last()
     .click();
-  await expect(
-    page.getByRole("link", { name: "管理", exact: true }),
-  ).toHaveAttribute("href", "/admin/manage/?project=atlas");
+  await expectProjectManageLink(page, "atlas");
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
   await page.getByRole("link", { name: /Atlasez運営事務局/ }).click();
-  await expect(
-    page.getByRole("link", { name: "管理", exact: true }),
-  ).toHaveAttribute("href", "/admin/manage/?project=secretariat");
+  await expectProjectManageLink(page, "secretariat");
 });
 
 test("予定の取得に失敗してもカレンダーを表示する", async ({ page }) => {
