@@ -56,7 +56,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <button type="button" data-workflow-action="review"><strong>フィードバック</strong></button>
     </nav>
     <div class="catalog-toolbar">
-      <p class="catalog-note" data-catalog-summary>公開記事との対応状態を確認しています…</p>
+      <p class="catalog-note" data-catalog-summary data-state="loading">公開記事との対応状態を確認しています…</p>
       <button type="button" class="article-action" data-reset-filters>絞り込みをリセット</button>
       <button type="button" class="article-action" data-run-catalog-diagnostics>カタログを診断</button>
     </div>
@@ -139,8 +139,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <output data-count></output>
     </section>
     <p class="catalog-feedback" data-catalog-feedback role="status" aria-live="polite"></p>
-    <section class="list loading-state" data-list data-admin-load-surface>原稿一覧を取得しています…</section>
-    <p class="article-scope-note" data-scope-note role="status" aria-live="polite">担当範囲を確認しています…</p>
+    <section class="list loading-state" data-list data-admin-load-surface aria-busy="true">原稿一覧を取得しています…</section>
+    <p class="article-scope-note" data-scope-note data-state="loading" role="status" aria-live="polite">担当範囲を確認しています…</p>
     <AdminRetryNotice />
     <div class="article-pagination" data-article-pagination hidden>
       <span data-article-pagination-status aria-live="polite"></span>
@@ -187,7 +187,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .article-pagination { align-items: center; border-top: 1px solid var(--border-default); display: flex; gap: .75rem; justify-content: space-between; margin-top: 1rem; padding-top: .8rem; }
   .article-pagination[hidden] { display: none; }
   .article-pagination > span { color: var(--text-secondary); font-size: .76rem; }
-  .article-scope-note { color: var(--text-secondary); font-size: .76rem; margin: .65rem 0 0; min-height: 1.2rem; }
+  .article-scope-note { color: var(--text-secondary); font-size: .76rem; margin: .65rem auto 0; min-height: 1.2rem; text-align: center; }
+  .article-scope-note[data-state="loading"],
+  .catalog-note[data-state="loading"] { text-align: center; }
+  .article-scope-note[data-state="error"],
+  .catalog-note[data-state="error"] { color: var(--danger); }
+  .article-scope-note[data-state="error"]::before { content: none; }
   .article-scope-note::before { color: var(--accent-primary); content: "●"; font-size: .6rem; margin-right: .4rem; vertical-align: .08em; }
   .article-pagination button { min-height: 2.25rem; }
   .article-pagination button:disabled { cursor: wait; opacity: .65; }
@@ -283,16 +288,21 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     font-size: 0.78rem;
     margin: 0 auto 0.55rem;
     max-width: 60rem;
+    text-align: center;
   }
   .catalog-toolbar {
-    align-items: center;
-    display: flex;
+    display: grid;
     gap: 0.75rem;
-    justify-content: space-between;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 0.75rem auto;
     max-width: 60rem;
   }
-  .catalog-toolbar .catalog-note { margin: 0; }
+  .catalog-toolbar .catalog-note {
+    grid-column: 1 / -1;
+    margin: 0;
+    width: 100%;
+  }
+  .catalog-toolbar > button { justify-self: center; max-width: 100%; }
   .catalog-diagnostics {
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
@@ -320,6 +330,30 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);
     gap: 0.45rem;
+  }
+  [data-article-index] > .list.loading-state,
+  [data-article-index] > .list.error-state {
+    align-content: center;
+    justify-items: center;
+    margin-inline: auto;
+    min-height: 8rem;
+    padding: 1rem;
+    text-align: center;
+    width: min(100%, 60rem);
+  }
+  [data-article-index] > .list.error-state {
+    background: color-mix(in srgb, var(--danger) 7%, var(--background-secondary));
+    border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--border-default));
+    color: var(--danger);
+  }
+  [data-article-index] > .admin-retry-notice {
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    margin: .75rem auto 0;
+    max-width: 60rem;
+    text-align: center;
+    width: 100%;
   }
   .article {
     align-items: center;
@@ -532,6 +566,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     grid-auto-flow: row;
     grid-template-columns: minmax(0, 1fr);
     place-items: center;
+    align-content: center;
+    margin-inline: auto;
+    min-height: 8rem;
+    padding: 1rem;
+    text-align: center;
+    width: min(100%, 60rem);
   }
   .article {
     gap: 0.45rem;
@@ -688,7 +728,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     let retry: ReturnType<typeof createAdminLoadRetry> | null = null;
     const catalogElement = root.querySelector<HTMLScriptElement>("[data-public-articles]");
     let publicArticles = catalogElement ? JSON.parse(catalogElement.textContent ?? "[]") as PublicArticle[] : [];
-    let catalogSource: "api" | "static" = "static";
+    let catalogSource: "api" | "unavailable" = "unavailable";
     let catalogReady = false;
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
@@ -780,6 +820,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     };
     const applySubjectScope = (scope: ArticleScope) => {
       articleScope = scope;
+      scopeNote.dataset.state = "ready";
       const directSubjects = Array.isArray(scope.subjects) ? scope.subjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const coordinatorSubjects = Array.isArray(scope.coordinatorSubjects) ? scope.coordinatorSubjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const unrestricted = Boolean(scope.allSubjects || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
@@ -856,8 +897,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const rows = catalogRows();
       const registeredCount = rows.filter((row) => (row.kind === "editorial" && row.publicArticle) || row.kind === "registered").length;
       const unregisteredCount = rows.filter((row) => row.kind === "unregistered").length;
+      catalogSummary.dataset.state = catalogReady ? catalogSource === "api" ? "ready" : "error" : "loading";
       catalogSummary.textContent = catalogReady
-        ? `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件（${catalogSource === "api" ? "APIカタログ" : "静的データ"}）`
+        ? catalogSource === "api"
+          ? `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件（APIカタログ）`
+          : "公開記事カタログを確認できませんでした。原稿一覧は表示しています。"
         : "公開記事カタログを確認しています…";
       const filtered = rows.filter((row) => {
         const isUnregistered = row.kind === "unregistered";
@@ -936,8 +980,10 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       });
     };
     const loadCatalog = async () => {
+      catalogSummary.dataset.state = "loading";
+      catalogSummary.textContent = "公開記事カタログを確認しています…";
       try {
-        const response = await fetch("/api/admin/editor/catalog", { credentials: "same-origin", cache: "no-store" });
+        const response = await fetch("/api/admin/editor/catalog", { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10000) });
         const contentType = response.headers.get("content-type") ?? "";
         const data = contentType.includes("application/json") ? await response.json() as { catalog?: unknown[]; error?: string } : {};
         if (!response.ok) throw new Error(data.error ?? `公開記事カタログを取得できませんでした（${response.status}）。`);
@@ -945,12 +991,16 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (!normalized) throw new Error("公開記事カタログの形式を確認できませんでした。");
         publicArticles = normalized;
         catalogSource = "api";
+        catalogSummary.dataset.state = "ready";
+        catalogSummary.textContent = `公開記事カタログを確認しました（${publicArticles.length}件）。原稿一覧と照合しています…`;
       } catch (error) {
         // APIに接続できない場合は、ビルド時の古いカタログを混ぜない。
         // 原稿一覧の状態と公開サイトの状態が食い違うため、未確認の公開記事を
         // 運営原稿として表示するよりも、カタログを空にして診断を促す。
         publicArticles = [];
-        catalogSource = "static";
+        catalogSource = "unavailable";
+        catalogSummary.dataset.state = "error";
+        catalogSummary.textContent = "公開記事カタログを確認できませんでした。";
         setCatalogFeedback(`公開記事カタログAPIに接続できないため、公開記事カタログを表示できません。${error instanceof Error ? `（${error.message}）` : ""}`);
       } finally {
         catalogReady = true;
@@ -965,6 +1015,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         try {
           retry?.begin();
           if (!append) list.classList.add("loading-state");
+          if (!append) {
+            subject.disabled = true;
+            subject.setAttribute("aria-busy", "true");
+            scopeNote.dataset.state = "loading";
+            scopeNote.textContent = "担当範囲を確認しています…";
+          }
           const includeArchived = archive.value !== "active";
           if (!append) {
             nextCursor = null;
@@ -979,7 +1035,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           const queryString = params.toString();
           const endpoint = queryString ? `/api/admin/editor/documents?${queryString}` : "/api/admin/editor/documents";
           const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store" });
-          const catalogPromise = catalogReady ? Promise.resolve() : loadCatalog();
           const data = await readAdminApiJson<{ documents?: Article[]; scope?: ArticleScope; pagination?: ArticlePagination; error?: string }>(response, "原稿一覧を読み込めませんでした。");
           if (!response.ok) throw Error(data.error ?? `原稿一覧の読み込みに失敗しました。（HTTP ${response.status}）`);
           const pageDocuments = data.documents ?? [];
@@ -989,6 +1044,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           loadedPageCount += 1;
           scopeEmail = data.scope?.email ?? "";
           if (!data.scope) throw new Error("ログイン状態または担当範囲を確認できません。ログインを確認して再試行してください。");
+          const catalogPromise = catalogReady ? Promise.resolve() : loadCatalog();
           applySubjectScope(data.scope);
           // Render the editorial rows immediately. The remote catalog is an
           // enrichment step and must not block the first useful screen.
@@ -1000,6 +1056,16 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           list.classList.remove("loading-state");
           list.classList.add("error-state");
           list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";
+          if (!append) {
+            subject.disabled = true;
+            subject.removeAttribute("aria-busy");
+            scopeNote.dataset.state = "error";
+            scopeNote.textContent = "担当範囲を確認できませんでした。原稿一覧を再試行してください。";
+            if (!catalogReady) {
+              catalogSummary.dataset.state = "error";
+              catalogSummary.textContent = "原稿一覧を取得できないため、公開記事との対応状態を確認できません。";
+            }
+          }
           retry?.fail(error);
         }
       })();
