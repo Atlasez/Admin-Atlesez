@@ -490,15 +490,49 @@ test.describe("A/D 原稿一覧の作業導線", () => {
 
     await page.goto("admin/articles/?verify=retry");
     await expect(page.locator("[data-admin-load-error]")).toBeVisible();
+    await expect(page.locator("[data-catalog-summary]")).not.toContainText(
+      "確認しています",
+    );
+    await expect(page.locator("[data-scope-note]")).toHaveAttribute(
+      "data-state",
+      "error",
+    );
+    await expect(page.locator("[data-scope-note]")).not.toContainText(
+      "確認しています",
+    );
+    await expect(page.locator("[data-subject]")).not.toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    await expect(page.locator("[data-subject]")).toBeDisabled();
     await expect(page.locator("[data-admin-load-surface]")).toHaveAttribute(
       "aria-busy",
       "false",
     );
+    await expect(page.locator("[data-list]")).toHaveCSS("text-align", "center");
+    await expect(page.locator("[data-admin-load-error]")).toHaveCSS(
+      "text-align",
+      "center",
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileError = await page.locator("[data-list]").boundingBox();
+    const mobileRetry = await page
+      .locator("[data-admin-load-error]")
+      .boundingBox();
+    expect(mobileError).not.toBeNull();
+    expect(mobileRetry).not.toBeNull();
+    expect(mobileError!.x + mobileError!.width / 2).toBeCloseTo(195, 0);
+    expect(mobileRetry!.x + mobileRetry!.width / 2).toBeCloseTo(195, 0);
     await page.getByRole("button", { name: "再試行" }).click();
     await expect(page.locator('[data-document-id="retry-doc"]')).toContainText(
       "再試行で表示される記事",
     );
     await expect(page.locator("[data-admin-load-error]")).toBeHidden();
+    await expect(page.locator("[data-scope-note]")).toHaveAttribute(
+      "data-state",
+      "ready",
+    );
+    await expect(page.locator("[data-subject]")).toBeEnabled();
     await expect(page.locator("[data-admin-load-surface]")).toHaveAttribute(
       "aria-busy",
       "false",
