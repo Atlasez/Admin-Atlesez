@@ -798,6 +798,7 @@ type AdminScope = {
   subjects: string[];
   allSubjects: boolean;
   isManager: boolean;
+  memberAccess?: boolean;
   coordinatorSubjects?: string[];
   isProjectLeader?: boolean;
 };
@@ -1405,6 +1406,26 @@ async function getUserStageForEmail(
 }
 
 /** 共通プロフィールだけは、受入済みメンバー本人にも確認させる。 */
+async function getMemberOperationScope(
+  request: Request,
+  env: Env,
+): Promise<AdminScope | Response> {
+  const current = await getCurrentUserStage(request, env);
+  if (isResponse(current)) return current;
+  if (current.stage === "ADMIN") return getAdminScope(request, env);
+  if (!canAccess(current.stage, "member"))
+    return json({ error: "メンバー用画面を利用できる段階ではありません。" }, 403);
+  return {
+    email: current.email,
+    subjects: [],
+    allSubjects: false,
+    isManager: false,
+    memberAccess: true,
+    coordinatorSubjects: [],
+    isProjectLeader: false,
+  };
+}
+
 async function getMemberProfileScope(
   request: Request,
   env: Env,
@@ -9033,9 +9054,9 @@ const getWorkflowSummary = async (
 };
 
 async function portalOverview(request: Request, env: Env): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
   const canReviewProfileRequests =
     scope.isManager ||
     (await operationProjectRole(env, scope, "secretariat")) === "manager";
@@ -9407,7 +9428,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
         WHERE r.status='pending' AND r.project_id IN (${approvalProjectIds.map(() => "?").join(",")})
         ORDER BY r.submitted_at DESC LIMIT 50`,
     ).bind(...approvalProjectIds).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>(),
-    historyOnly ? Promise.resolve(json({ notifications: [], unreadNotificationsCount: 0 })) : adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env),
+    historyOnly ? Promise.resolve(json({ notifications: [], unreadNotificationsCount: 0 })) : adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env, scope),
     historyOnly ? env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,t.archived_at,
               COALESCE(p.name,t.project_id) AS project_name
@@ -9772,9 +9793,9 @@ async function memberTasksOverview(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   if (!projectIds.length) return json({ projects: [], tasks: [], members: [] });
@@ -9867,9 +9888,9 @@ async function memberCalendarOverview(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   const searchParams = new URL(request.url).searchParams;
@@ -19613,10 +19634,33 @@ const isApplicantPath = (pathname: string) =>
 const isOnboardingPath = (pathname: string) =>
   pathname === "/onboarding" || pathname.startsWith("/onboarding/");
 
+const memberPagePaths = new Set([
+  "/admin/portal",
+  "/admin/portal/",
+  "/admin/member-profile",
+  "/admin/member-profile/",
+  "/admin/member-profile/edit",
+  "/admin/member-profile/edit/",
+  "/admin/member-tasks",
+  "/admin/member-tasks/",
+  "/admin/member-calendar",
+  "/admin/member-calendar/",
+]);
+// These exact methods use getMemberOperationScope in their handlers instead of
+// the generic admin-only API gate; no other /api/admin endpoint is exempt.
+const memberScopedApiMethods = new Map<string, ReadonlySet<string>>([
+  ["/api/admin/portal", new Set(["GET"])],
+  ["/api/admin/member-tasks", new Set(["GET"])],
+  ["/api/admin/member-calendar", new Set(["GET"])],
+  ["/api/admin/notifications", new Set(["GET"])],
+  ["/api/admin/notifications/read", new Set(["POST"])],
+]);
+
 const userAreaForPath = (pathname: string): UserArea | null => {
   if (isApplicationPath(pathname)) return "application";
   if (isApplicantPath(pathname)) return "applicant";
   if (isOnboardingPath(pathname)) return "onboarding";
+  if (memberPagePaths.has(pathname)) return "member";
   if (isAdminPagePath(pathname)) return "admin";
   return null;
 };
@@ -20591,7 +20635,7 @@ async function adminNotifications(
   env: Env,
   preloadedScope?: AdminScope,
 ): Promise<Response> {
-  const scope = preloadedScope ?? (await getAdminScope(request, env));
+  const scope = preloadedScope ?? (await getMemberOperationScope(request, env));
   if (isResponse(scope)) return scope;
   const profile = await env.REPORTS.prepare(
     "SELECT display_name FROM editorial_member_profiles WHERE email = ?",
@@ -20991,7 +21035,7 @@ async function markAdminNotificationsRead(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  const scope = await getAdminScope(request, env);
+  const scope = await getMemberOperationScope(request, env);
   if (isResponse(scope)) return scope;
   if (!isSameOrigin(request))
     return json({ error: "許可されていない送信元です。" }, 403);
@@ -21389,12 +21433,13 @@ async function handleAdminRequest(
   // すべての管理APIは、個別ハンドラの処理へ入る前に共通の管理スコープを
   // 解決する。各ハンドラはプロジェクト・分野・操作種別に応じた追加境界を
   // 引き続き検証するが、ここで認証・基本的な管理権限のチェック漏れを防ぐ。
-  // auth-status と profile は、受入済みメンバー自身にも利用を許可する既存の
-  // 専用スコープを持つため、この共通ゲートの対象外とする。
+  // auth-status/profile と、メンバー用の取得・本人通知APIは専用スコープを
+  // 各ハンドラで検証するため、この管理者ゲートの対象外とする。
   if (
     url.pathname.startsWith("/api/admin/") &&
     url.pathname !== "/api/admin/profile" &&
-    url.pathname !== "/api/admin/developer/diagnostics"
+    url.pathname !== "/api/admin/developer/diagnostics" &&
+    !memberScopedApiMethods.get(url.pathname)?.has(request.method)
   ) {
     const baselineScope = await getAdminScope(request, env);
     if (isResponse(baselineScope)) return baselineScope;

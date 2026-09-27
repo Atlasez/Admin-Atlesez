@@ -783,6 +783,103 @@ describe("applicant stage server-side access", () => {
     );
   });
 
+  it("lets completed members use member pages and prevents a portal self-redirect", async () => {
+    const memberEnvironment = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      true,
+    );
+    for (const pathname of [
+      "/admin/portal/",
+      "/admin/member-tasks/",
+      "/admin/member-calendar/",
+    ]) {
+      const response = await worker.fetch(
+        loggedInRequest(pathname),
+        memberEnvironment as never,
+      );
+      expect(response.status, pathname).toBe(200);
+    }
+
+    const adminPage = await worker.fetch(
+      loggedInRequest("/admin/permissions/"),
+      memberEnvironment as never,
+    );
+    expect(adminPage.status).toBe(302);
+    expect(adminPage.headers.get("location")).toBe(
+      "https://admin.example/admin/portal/",
+    );
+    const memberHome = await worker.fetch(
+      loggedInRequest("/admin/portal/"),
+      memberEnvironment as never,
+    );
+    expect(memberHome.status).toBe(200);
+  });
+
+  it("limits completed members to their portal and member-only APIs", async () => {
+    const memberEnvironment = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      true,
+    );
+    const membershipWrites: string[] = [];
+    const prepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      if (query.includes("INSERT OR IGNORE INTO atlasez_project_memberships"))
+        membershipWrites.push(query);
+      return prepare(query);
+    };
+    for (const pathname of [
+      "/api/admin/portal",
+      "/api/admin/member-tasks",
+      "/api/admin/member-calendar",
+      "/api/admin/notifications",
+    ]) {
+      const response = await worker.fetch(
+        loggedInRequest(pathname),
+        memberEnvironment as never,
+      );
+      expect(response.status, pathname).toBe(200);
+    }
+
+    const notificationRead = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", {
+        ids: ["comment-12345678"],
+      }),
+      memberEnvironment as never,
+    );
+    expect(notificationRead.status).toBe(200);
+    expect(membershipWrites).toEqual([]);
+
+    const adminApi = await worker.fetch(
+      loggedInRequest("/api/admin/article-reports"),
+      memberEnvironment as never,
+    );
+    expect(adminApi.status).toBe(403);
+
+    const applicantApi = await worker.fetch(
+      loggedInRequest("/api/admin/portal"),
+      stageEnv("new", false, true) as never,
+    );
+    expect(applicantApi.status).toBe(403);
+
+    const unauthenticatedApi = await worker.fetch(
+      new Request("https://admin.example/api/admin/portal"),
+      memberEnvironment as never,
+    );
+    expect(unauthenticatedApi.status).toBe(401);
+  });
+
   it("keeps the application directory open for an existing member", async () => {
     const applicationPage = await worker.fetch(
       loggedInRequest("/apply/"),
@@ -850,10 +947,7 @@ describe("applicant stage server-side access", () => {
       loggedInRequest("/admin/portal/"),
       stageEnv("accepted", false, true) as never,
     );
-    expect(memberPage.status).toBe(302);
-    expect(memberPage.headers.get("location")).toBe(
-      "https://admin.example/admin/portal/",
-    );
+    expect(memberPage.status).toBe(200);
   });
 
   it("opens project setup and the member profile after basic profile setup", async () => {
