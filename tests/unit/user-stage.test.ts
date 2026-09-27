@@ -15,6 +15,9 @@ describe("user stages", () => {
     expect(applicant).toBe("APPLICANT");
     expect(canAccess(applicant, "applicant")).toBe(true);
     expect(canAccess(applicant, "admin")).toBe(false);
+    expect(canAccess("MEMBER", "member")).toBe(true);
+    expect(canAccess("ADMIN", "member")).toBe(true);
+    expect(canAccess(applicant, "member")).toBe(false);
     expect(canAccess("NEW_USER", "applicant")).toBe(true);
     expect(canAccess("MEMBER", "application")).toBe(true);
     expect(canAccess("ADMIN", "application")).toBe(true);

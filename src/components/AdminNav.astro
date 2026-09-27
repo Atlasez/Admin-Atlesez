@@ -198,7 +198,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <form method="dialog" class="admin-command-inner">
       <div class="admin-command-head"><h2 id="admin-command-heading">操作を検索</h2><button type="submit" class="admin-command-close" aria-label="操作検索を閉じる">×</button></div>
       <label class="admin-command-search"><span aria-hidden="true">⌕</span><input type="search" data-admin-command-input placeholder="記事・タスク・操作を検索" autocomplete="off" /><kbd>Esc</kbd></label>
-      <div class="admin-command-list" data-admin-command-list role="listbox" aria-label="検索結果"></div>
+      <div class="admin-command-list" data-admin-command-list role="listbox" aria-label="操作候補"></div>
       <p class="admin-command-hint"><kbd>↑</kbd><kbd>↓</kbd>で移動 <kbd>Enter</kbd>で開く</p>
     </form>
   </dialog>
@@ -515,14 +515,14 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const list = document.querySelector<HTMLElement>("[data-admin-command-list]");
       if (!button || !dialog || !input || !list || button.dataset.initialized === "true") return;
       button.dataset.initialized = "true";
-      type Command = { label: string; detail: string; href?: string; run?: () => void };
+      type Command = { label: string; detail: string; group: 'recent' | 'quick' | 'result'; icon: string; href?: string; run?: () => void };
       const staticCommands: Command[] = [
-        { label: "アクションセンター", detail: "対応が必要な項目をまとめて確認", href: "/admin/action-center/" },
-        { label: "編集・フィードバック", detail: "記事の状態とフィードバック", href: "/admin/articles/" },
-        { label: "タスク管理", detail: "担当タスクと期限", href: "/admin/operations/?project=atlas" },
-        { label: "カレンダー", detail: "予定と締切", href: "/admin/calendar/?project=atlas" },
-        { label: "管理トップ", detail: "設定・権限・状態遷移", href: "/admin/manage/?project=atlas" },
-        { label: "表示設定を開く", detail: "テーマ・文字サイズ・コントラスト", run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
+        { label: "アクションセンター", detail: "対応が必要な項目", group: 'quick', icon: 'actions', href: "/admin/action-center/" },
+        { label: "編集・フィードバック", detail: "記事とフィードバック", group: 'quick', icon: 'articles', href: "/admin/articles/" },
+        { label: "タスク管理", detail: "担当タスクと期限", group: 'quick', icon: 'tasks', href: "/admin/operations/?project=atlas" },
+        { label: "カレンダー", detail: "予定と締切", group: 'quick', icon: 'calendar', href: "/admin/calendar/?project=atlas" },
+        { label: "管理トップ", detail: "設定・権限・状態", group: 'quick', icon: 'manage', href: "/admin/manage/?project=atlas" },
+        { label: "表示設定を開く", detail: "テーマ・文字サイズ", group: 'quick', icon: 'settings', run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
       ];
       type CommandHistory = { label: string; detail: string; href?: string; count: number; lastUsed: number };
       const historyKey = "atlasez-command-history";
@@ -532,7 +532,12 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           return Array.isArray(value) ? value.filter((item): item is CommandHistory => Boolean(item && typeof item === "object" && typeof (item as CommandHistory).label === "string" && typeof (item as CommandHistory).count === "number" && typeof (item as CommandHistory).lastUsed === "number")).slice(0, 8) : [];
         } catch { return []; }
       };
-      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => ({ label: item.label, detail: `最近使った操作・${item.count}回`, ...(item.href ? { href: item.href } : {}) }));
+      const recentCommands = (): Command[] => readHistory().sort((a, b) => (b.count - a.count) || (b.lastUsed - a.lastUsed)).slice(0, 5).map((item) => {
+        const quickCommand = staticCommands.find((command) => command.label === item.label && (!item.href || command.href === item.href));
+        const savedDetail = typeof item.detail === "string" ? item.detail.replace(/・\d+回$/, "") : "";
+        const detail = quickCommand?.detail ?? (savedDetail || "最近使った操作");
+        return { label: item.label, detail: `${detail}・${item.count}回`, group: 'recent', icon: 'history', ...(item.href ? { href: item.href } : {}) };
+      });
       const recordUsage = (command: Command) => {
         try {
           const now = Date.now();
@@ -549,17 +554,19 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const close = () => { if (dialog.open) dialog.close(); };
       const run = (command: Command) => { recordUsage(command); close(); if (command.href) void navigate(command.href); else command.run?.(); };
       const render = () => {
-        list.innerHTML = commands.length ? commands.map((command, index) => `<button type="button" class="admin-command-item${index === activeIndex ? " is-active" : ""}" role="option" aria-selected="${index === activeIndex}" data-command-index="${index}"><strong>${escape(command.label)}</strong><small>${escape(command.detail)}</small></button>`).join("") : `<p class="admin-command-empty">一致する項目はありません。</p>`;
+        const sectionTitles = { recent: '最近使った操作', quick: 'クイック操作', result: '検索結果' } as const;
+        const sections = (['recent', 'quick', 'result'] as const).map((group) => ({ group, items: commands.map((command, index) => ({ command, index })).filter(({ command }) => command.group === group) })).filter(({ items }) => items.length > 0);
+        list.innerHTML = commands.length ? sections.map(({ group, items }) => `<section class="admin-command-section"><h3>${sectionTitles[group]}</h3><div class="admin-command-options" role="group" aria-label="${sectionTitles[group]}">${items.map(({ command, index }) => `<button type="button" class="admin-command-item${index === activeIndex ? " is-active" : ""}" role="option" aria-selected="${index === activeIndex}" data-command-index="${index}"><span class="admin-command-item-icon" data-command-icon="${escape(command.icon)}" aria-hidden="true"></span><span class="admin-command-item-copy"><strong>${escape(command.label)}</strong><small>${escape(command.detail)}</small></span><span class="admin-command-item-arrow" aria-hidden="true">↗</span></button>`).join("")}</div></section>`).join("") : `<p class="admin-command-empty">一致する項目はありません。</p>`;
         list.querySelectorAll<HTMLButtonElement>("[data-command-index]").forEach((item) => item.addEventListener("click", () => run(commands[Number(item.dataset.commandIndex ?? 0)])));
       };
       const search = async () => {
         const query = input.value.trim();
         if (query.length < 2) { commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
-        const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query));
+        const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query)).map((command) => ({ ...command, group: 'result' as const }));
         try {
           const response = await fetch(`/api/admin/command-search?q=${encodeURIComponent(query)}`, { credentials: "same-origin", cache: "no-store" });
           const data = await response.json().catch(() => ({})) as { results?: Array<{ type?: string; title?: string; detail?: string; href?: string }> };
-          const remote = (data.results ?? []).map((result) => ({ label: result.title ?? "", detail: `${result.type ?? ""} ／ ${result.detail ?? ""}`, href: result.href ?? "/admin/portal/" }));
+          const remote = (data.results ?? []).map((result) => ({ label: result.title ?? "", detail: `${result.type ?? ""} ／ ${result.detail ?? ""}`, group: 'result' as const, icon: 'search', href: result.href ?? "/admin/portal/" }));
           commands = [...local, ...remote]; activeIndex = 0; render();
         } catch { commands = local; activeIndex = 0; render(); }
       };
@@ -604,26 +611,59 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
 <style>
   .admin-command-button { align-items:center; background:transparent; border:1px solid var(--border-default); border-radius:.35rem; color:var(--text-secondary); cursor:pointer; display:inline-flex; gap:.35rem; min-height:2.35rem; padding:.3rem .55rem; white-space:nowrap; }
   .admin-command-button:hover,.admin-command-button:focus-visible { border-color:var(--accent-primary); color:var(--text-primary); outline:0; }
-  .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:.2rem; color:var(--text-muted); font:inherit; font-size:.62rem; padding:.1rem .28rem; white-space:nowrap; }
+  .admin-command-button kbd,.admin-command-hint kbd,.admin-command-search kbd { border:1px solid var(--border-default); border-radius:999px; color:var(--text-muted); font:inherit; font-size:.68rem; padding:.16rem .45rem; white-space:nowrap; }
+  .admin-command-button kbd { border-radius:.2rem; font-size:.62rem; padding:.1rem .28rem; }
   .admin-command-button span { font-size:.7rem; }
-  .admin-command-dialog { background:var(--background-primary); border:1px solid var(--border-strong); border-radius:.55rem; box-shadow:0 1.2rem 3rem rgb(0 0 0 / .32); color:var(--text-primary); margin:auto; max-height:min(32rem,calc(100vh - 4rem)); padding:0; width:min(38rem,calc(100vw - 2rem)); }
-  .admin-command-dialog::backdrop { background:rgb(0 0 0 / .48); }
-  .admin-command-inner { padding:1rem; }
+  .admin-command-dialog { background:var(--background-secondary); border:1px solid var(--border-strong); border-radius:1rem; box-shadow:0 1rem 3rem rgb(0 0 0 / .4); color:var(--text-primary); margin:auto; max-height:min(34rem,calc(100vh - 2rem)); padding:0; width:min(40rem,calc(100vw - 2rem)); }
+  .admin-command-dialog::backdrop { background:rgb(0 0 0 / .62); backdrop-filter:blur(3px); }
+  .admin-command-inner { padding:.85rem; }
   .admin-command-head { align-items:center; display:flex; justify-content:space-between; }
   .admin-command-head h2 { font-size:1rem; margin:0; }
-  .admin-command-close { background:transparent; border:1px solid var(--border-default); border-radius:.3rem; color:var(--text-secondary); cursor:pointer; font-size:1.1rem; line-height:1; min-height:1.9rem; width:1.9rem; }
-  .admin-command-search { align-items:center; border:1px solid var(--accent-primary); border-radius:.35rem; display:flex; gap:.45rem; margin-top:.75rem; padding:0 .55rem; }
-  .admin-command-search > span { color:var(--accent-primary); font-size:1.1rem; }
-  .admin-command-search input { background:transparent; border:0; color:var(--text-primary); flex:1; font:inherit; font-size:.82rem; min-height:2.45rem; outline:0; }
-  .admin-command-list { display:grid; gap:.2rem; margin-top:.7rem; max-height:20rem; overflow:auto; }
-  .admin-command-item { align-items:start; background:transparent; border:1px solid transparent; border-radius:.3rem; color:var(--text-primary); cursor:pointer; display:grid; gap:.12rem; padding:.52rem .6rem; text-align:left; width:100%; }
-  .admin-command-item:hover,.admin-command-item.is-active { background:var(--background-secondary); border-color:color-mix(in srgb,var(--accent-primary) 32%,var(--border-default)); }
-  .admin-command-item strong { font-size:.78rem; }
-  .admin-command-item small { color:var(--text-secondary); font-size:.67rem; }
-  .admin-command-hint { color:var(--text-secondary); font-size:.67rem; margin:.7rem 0 0; }
-  .admin-command-hint kbd { margin-right:.2rem; }
+  .admin-command-close { background:transparent; border:0; border-radius:50%; color:var(--text-secondary); cursor:pointer; font-size:1.25rem; line-height:1; min-height:2.25rem; width:2.25rem; }
+  .admin-command-close:hover,.admin-command-close:focus-visible { background:var(--background-primary); color:var(--text-primary); outline:2px solid var(--accent-primary); }
+  .admin-command-search { align-items:center; background:var(--background-primary); border:1px solid var(--border-default); border-radius:999px; display:flex; gap:.55rem; margin-top:.3rem; min-height:2.9rem; padding:0 .75rem; }
+  .admin-command-search:focus-within { border-color:var(--accent-primary); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-primary) 22%,transparent); }
+  .admin-command-search > span { color:var(--text-secondary); font-size:1.35rem; line-height:1; }
+  .admin-command-search input { background:transparent; border:0; color:var(--text-primary); flex:1; font:inherit; font-size:.92rem; min-height:2.6rem; min-width:0; outline:0; }
+  .admin-command-search input::placeholder { color:var(--text-secondary); opacity:1; }
+  .admin-command-list { display:grid; gap:.55rem; margin-top:.6rem; max-height:min(22rem,calc(100vh - 14rem)); overflow:auto; padding:.05rem .15rem; scrollbar-gutter:stable; }
+  :global(.admin-command-section) { display:grid; gap:.3rem; }
+  :global(.admin-command-section h3) { color:var(--text-secondary); font-size:.82rem; font-weight:600; margin:0; padding:.1rem .8rem .18rem; }
+  :global(.admin-command-options) { display:grid; gap:.08rem; }
+  :global(.admin-command-item) { align-items:center; background:transparent; border:1px solid transparent; border-radius:.65rem; color:var(--text-primary); cursor:pointer; display:grid; gap:.6rem; grid-template-columns:1.7rem minmax(0,1fr) auto; min-height:2.7rem; padding:.34rem .6rem; text-align:left; width:100%; }
+  :global(.admin-command-item:hover),:global(.admin-command-item.is-active) { background:color-mix(in srgb,var(--text-primary) 8%,var(--background-secondary)); border-color:transparent; }
+  :global(.admin-command-item:focus-visible) { outline:2px solid var(--accent-primary); outline-offset:1px; }
+  :global(.admin-command-item-icon) { align-items:center; color:var(--text-secondary); display:inline-flex; font-size:1.2rem; height:1.7rem; justify-content:center; width:1.7rem; }
+  :global(.admin-command-item-icon::before) { content:"↗"; }
+  :global(.admin-command-item-icon[data-command-icon="actions"]::before) { content:"☷"; }
+  :global(.admin-command-item-icon[data-command-icon="articles"]::before) { content:"▤"; }
+  :global(.admin-command-item-icon[data-command-icon="tasks"]::before) { content:"✓"; }
+  :global(.admin-command-item-icon[data-command-icon="calendar"]::before) { content:"▦"; }
+  :global(.admin-command-item-icon[data-command-icon="manage"]::before) { content:"⚙"; }
+  :global(.admin-command-item-icon[data-command-icon="settings"]::before) { content:"Aa"; font-size:.85rem; font-weight:700; }
+  :global(.admin-command-item-icon[data-command-icon="history"]::before) { content:"◷"; }
+  :global(.admin-command-item-copy) { align-items:baseline; display:flex; gap:.65rem; min-width:0; }
+  :global(.admin-command-item strong) { font-size:.9rem; font-weight:600; line-height:1.35; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  :global(.admin-command-item small) { color:var(--text-secondary); flex:0 1 auto; font-size:.72rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  :global(.admin-command-item-arrow) { color:var(--text-secondary); font-size:.9rem; padding-inline:.15rem; }
+  :global(.admin-command-empty) { color:var(--text-secondary); font-size:.9rem; margin:.5rem; padding:.8rem; }
+  .admin-command-hint { align-items:center; color:var(--text-secondary); display:flex; font-size:.7rem; gap:.3rem; margin:.65rem .2rem 0; }
+  .admin-command-hint kbd { margin-right:.1rem; }
   @media(max-width:980px) { .admin-command-button { grid-column:1/-1; grid-row:2; justify-self:end; } .admin-account { align-items:center; flex-wrap:wrap; } }
-  @media(max-width:620px) { .admin-command-button span { display:none; } .admin-command-button { min-width:2.35rem; justify-content:center; } }
+  @media(max-width:620px) {
+    .admin-command-button span { display:none; }
+    .admin-command-button { min-width:2.35rem; justify-content:center; }
+    .admin-command-dialog { border-radius:1.1rem; max-height:calc(100dvh - 1rem); width:calc(100vw - 1rem); }
+    .admin-command-inner { padding:.8rem; }
+    .admin-command-close { min-height:2rem; width:2rem; }
+    .admin-command-search { gap:.45rem; min-height:3rem; padding:0 .75rem; }
+    .admin-command-search input { font-size:.9rem; min-height:2.8rem; }
+    .admin-command-list { max-height:calc(100dvh - 12rem); }
+    :global(.admin-command-item) { gap:.55rem; grid-template-columns:1.7rem minmax(0,1fr) auto; min-height:3rem; padding:.42rem .55rem; }
+    :global(.admin-command-item-copy) { align-items:flex-start; flex-direction:column; gap:.02rem; }
+    :global(.admin-command-item strong) { font-size:.88rem; width:100%; }
+    :global(.admin-command-item small) { font-size:.7rem; max-width:100%; }
+  }
 </style>
 <style>
   .admin-breadcrumbs { align-items:center; color:var(--text-secondary); display:flex; flex-wrap:wrap; font-size:.72rem; gap:.4rem; line-height:1.4; margin:0 auto; max-width:1500px; padding:.55rem max(1rem,calc((100vw - 1500px)/2)); }
