@@ -231,6 +231,12 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await page.keyboard.press("Meta+K");
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toBeVisible();
+  const dialogSize = await dialog.evaluate((element) => ({
+    width: Number.parseFloat(getComputedStyle(element).width),
+    rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+  }));
+  expect(dialogSize.width).toBeGreaterThan(40 * dialogSize.rem);
+  expect(dialogSize.width).toBeLessThan(57 * dialogSize.rem);
   await expect(
     dialog.getByRole("heading", { name: "最近使った操作" }),
   ).toBeVisible();
