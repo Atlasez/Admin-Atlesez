@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function mockWorkspaceApi(page: Page) {
+async function mockWorkspaceApi(page: Page, avatarUrl = "") {
   let savedProjectProfile: Record<string, string> | undefined;
   await page.route("**/api/admin/**", async (route) => {
     const request = route.request();
@@ -40,7 +40,7 @@ async function mockWorkspaceApi(page: Page) {
           project: { id: "atlas", name: "アトラス", role: "member" },
           memberProfile: {
             display_name: "山田 花子",
-            avatar_url: "",
+            avatar_url: avatarUrl,
             university: "既存大学 既存学部",
             year: "M1",
           },
@@ -121,6 +121,19 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   });
   expect(heights.card).toBeLessThan(140);
   expect(heights.documents).toBeLessThan(heights.note);
+});
+
+test("個人アイコンは円形カード内で中央トリミングして表示する", async ({
+  page,
+}) => {
+  await mockWorkspaceApi(page, "https://cdn.example.com/profile.png");
+  await page.goto("admin/workspace/?project=atlas");
+
+  const avatar = page.locator("[data-avatar-preview]");
+  await expect(avatar).toHaveCSS("background-size", "cover");
+  await expect(avatar).toHaveCSS("background-position", "50% 50%");
+  await expect(avatar).toHaveCSS("background-repeat", "no-repeat");
+  await expect(avatar).toHaveCSS("background-image", /profile\.png/);
 });
 
 test("個人ワークスペースの読み込み失敗を共通の再試行で復帰できる", async ({
