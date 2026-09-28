@@ -65,6 +65,16 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <p data-catalog-diagnostics-summary>診断を実行してください。</p>
       <ul data-catalog-diagnostics-issues></ul>
     </details>
+    <section class="subject-browser" aria-labelledby="subject-browser-heading">
+      <div class="subject-browser__heading">
+        <div>
+          <h2 id="subject-browser-heading">分野から見る</h2>
+          <p data-subject-browser-summary>分野を選ぶと、その分野の記事だけを表示します。</p>
+        </div>
+        <button type="button" class="article-action" data-subject-browser-all>すべて表示</button>
+      </div>
+      <div class="subject-browser__items" data-subject-browser></div>
+    </section>
     <section class="filters" id="article-list" aria-label="原稿一覧の絞り込み">
       <label class="filter-control filter-control-search">
         <span>キーワード</span>
@@ -318,6 +328,47 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .catalog-diagnostics li { font-size: 0.78rem; line-height: 1.5; }
   .catalog-diagnostics li strong { color: var(--accent-primary); }
   .catalog-diagnostics.is-error { border-left-color: #b24b38; }
+  .subject-browser {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 1rem;
+    margin: 0 auto 1rem;
+    max-width: 60rem;
+    padding: .85rem 1rem 1rem;
+  }
+  .subject-browser__heading { align-items: center; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .7rem; }
+  .subject-browser__heading h2 { font-size: .98rem; margin: 0; }
+  .subject-browser__heading p { color: var(--text-secondary); font-size: .74rem; margin: .2rem 0 0; }
+  .subject-browser__heading .article-action { flex: 0 0 auto; min-height: 2.15rem; }
+  .subject-browser__items { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .subject-browser__item {
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: .55rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    gap: .45rem;
+    justify-content: space-between;
+    min-height: 2.55rem;
+    padding: .35rem .6rem;
+    text-align: left;
+  }
+  .subject-browser__item:hover,
+  .subject-browser__item[aria-pressed="true"] { background: color-mix(in srgb, var(--accent-primary) 10%, var(--background-primary)); border-color: var(--accent-primary); }
+  .subject-browser__item[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 24%, transparent); }
+  .subject-browser__item strong { font-size: .78rem; }
+  .subject-browser__item small { color: var(--text-secondary); font-size: .68rem; white-space: nowrap; }
+  .subject-browser__item small::before { content: "表示 "; }
+  .subject-browser__item em { color: var(--text-secondary); display: block; font-size: .64rem; font-style: normal; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subject-browser__item--all { border-style: dashed; }
+  @media (max-width: 600px) {
+    .subject-browser { border-radius: .75rem; padding: .75rem; }
+    .subject-browser__heading { align-items: start; }
+    .subject-browser__heading p { line-height: 1.45; }
+    .subject-browser__item { flex: 1 1 calc(50% - .45rem); min-width: 8.5rem; }
+  }
   .catalog-feedback {
     color: var(--accent-primary);
     font-size: 0.78rem;
@@ -722,6 +773,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const catalogDiagnosticsSummary = root.querySelector<HTMLElement>("[data-catalog-diagnostics-summary]")!;
     const catalogDiagnosticsIssues = root.querySelector<HTMLUListElement>("[data-catalog-diagnostics-issues]")!;
     const resetFiltersButton = root.querySelector<HTMLButtonElement>("[data-reset-filters]")!;
+    const subjectBrowser = root.querySelector<HTMLElement>("[data-subject-browser]")!;
+    const subjectBrowserSummary = root.querySelector<HTMLElement>("[data-subject-browser-summary]");
+    const subjectBrowserAll = root.querySelector<HTMLButtonElement>("[data-subject-browser-all]")!;
     const pagination = root.querySelector<HTMLElement>("[data-article-pagination]")!;
     const paginationStatus = root.querySelector<HTMLElement>("[data-article-pagination-status]")!;
     const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-article-load-more]")!;
@@ -859,6 +913,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     };
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
+    const categoryLabels = new Map([...category.options].map((option) => [option.value, option.textContent ?? option.value]));
     const catalogRows = (): CatalogRow[] => {
       const rows: CatalogRow[] = items.map((article) => ({ kind: "editorial", article, publicArticle: publicArticles.find((source) => article.source_article_id === source.articleId || publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`), management: "managed" }));
       // The document list is useful before the remote catalog responds. Do not
@@ -884,6 +939,25 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const rowSubject = (row: CatalogRow) => row.kind === "editorial" ? row.article.subject : row.publicArticle.subject;
     const rowCategory = (row: CatalogRow) => row.kind === "editorial" ? row.article.category : row.publicArticle.category;
     const rowUpdatedAt = (row: CatalogRow) => row.kind === "editorial" ? row.article.updated_at : row.publicArticle.updatedAt;
+    const renderSubjectBrowser = (shown: CatalogRow[]) => {
+      const counts = new Map<string, CatalogRow[]>();
+      for (const row of shown) counts.set(rowSubject(row), [...(counts.get(rowSubject(row)) ?? []), row]);
+      const options = [...subject.options].filter((option) => option.value !== "all" && !option.hidden && !option.disabled);
+      const renderButton = (value: string, label: string, rows: CatalogRow[], all = false) => {
+        const categories = [...new Set(rows.map(rowCategory))].map((slug) => categoryLabels.get(slug) ?? slug).slice(0, 3);
+        const categorySummary = categories.length ? `<em>${esc(categories.join("・"))}${new Set(rows.map(rowCategory)).size > categories.length ? "・ほか" : ""}</em>` : "<em>該当記事なし</em>";
+        return `<button type="button" class="subject-browser__item${all ? " subject-browser__item--all" : ""}" data-subject-quick="${esc(value)}" aria-pressed="${String(subject.value === value)}" aria-label="${esc(label)}（${rows.length}件）"><strong>${esc(label)}</strong>${categorySummary}<small>${rows.length}件</small></button>`;
+      };
+      subjectBrowser.innerHTML = [
+        renderButton("all", "すべての分野", shown, true),
+        ...options.map((option) => renderButton(option.value, option.textContent ?? option.value, counts.get(option.value) ?? [])),
+      ].join("");
+      if (subjectBrowserSummary) {
+        subjectBrowserSummary.textContent = subject.value === "all"
+          ? `${shown.length}件を分野ごとに表示中。分野を選ぶと、その分野だけに絞り込めます。`
+          : `${subject.selectedOptions[0]?.textContent ?? subject.value}を表示中。別の分野へすぐ切り替えられます。`;
+      }
+    };
     const hasUnpublishedPublicationChanges = (article: Pick<Article, "published_at" | "updated_at">) => {
       if (!article.published_at) return false;
       const updatedAt = Date.parse(article.updated_at);
@@ -935,6 +1009,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       // 未登録の公開記事も同じ一覧に補い、公開記事の管理漏れを見える化する。
       const shown = [...new Map(sorted.map((row) => [row.kind === "editorial" ? row.article.source_article_id || row.article.id : `public:${row.publicArticle.articleId}`, row])).values()];
       count.textContent = `${shown.length}件`;
+      renderSubjectBrowser(shown);
       const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
       const formatSchedule = (value: string) => {
         const instant = new Date(value);
@@ -1202,6 +1277,21 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       history.replaceState({}, "", `${location.pathname}#article-list`);
       render();
     });
+    const selectSubjectFromBrowser = (value: string) => {
+      if (![...subject.options].some((option) => option.value === value && !option.disabled && !option.hidden)) return;
+      subject.value = value;
+      category.value = "all";
+      updateCategoryOptions();
+      saveFilterState();
+      render();
+      root.querySelector("#article-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    subjectBrowser.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-subject-quick]");
+      if (!button) return;
+      selectSubjectFromBrowser(button.dataset.subjectQuick ?? "all");
+    });
+    subjectBrowserAll.addEventListener("click", () => selectSubjectFromBrowser("all"));
     loadingFallbackTimer = window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
     query.addEventListener("input", render);
