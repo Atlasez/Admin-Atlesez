@@ -920,7 +920,9 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(articlesSource).toContain(
       "registeredPublicArticleIds.set(publicArticleKey(source), data.documentId)",
     );
-    expect(articlesSource).toContain('publicArticle.managementState === "managed"');
+    expect(articlesSource).toContain(
+      'publicArticle.managementState === "managed"',
+    );
     expect(articlesSource).toContain("editorial_document_id");
     expect(articlesSource).toContain("instead of reloading the editorial");
   });
