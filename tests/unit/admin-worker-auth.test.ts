@@ -2100,6 +2100,329 @@ describe("applicant stage server-side access", () => {
     expect(sideEffectQueries).toEqual([]);
   });
 
+  it.each([
+    ["task update", "update"],
+    ["workflow event insert", "event"],
+  ] as const)(
+    "rolls back the task transition when the %s fails",
+    async (_failureName, failurePoint) => {
+      const state = {
+        status: "open",
+        updatedAt: "2026-09-28T00:00:00.000Z",
+        events: [] as Array<{
+          entity_id: string;
+          from_state: string;
+          to_state: string;
+          actor_email: string;
+          idempotency_key: string;
+          created_at: string;
+        }>,
+      };
+      const reports = {
+        prepare(query: string) {
+          const statement = new Statement(query);
+          statement.first = async <T>() => {
+            if (
+              query.includes(
+                "FROM workflow_transition_events WHERE actor_email=?",
+              )
+            ) {
+              const [, idempotencyKey] = statement.boundValues;
+              return (state.events.find(
+                (event) => event.idempotency_key === idempotencyKey,
+              ) ?? null) as T | null;
+            }
+            if (query.includes("FROM editorial_tasks WHERE id=?"))
+              return {
+                project_id: "atlas",
+                subject: null,
+                assignee_email: "task-admin@example.com",
+                task_kind: "task",
+                title: "Atomic task",
+                created_by: "task-admin@example.com",
+                status: state.status,
+                updated_at: state.updatedAt,
+                archived_at: null,
+              } as T;
+            if (
+              query.includes("FROM atlasez_projects WHERE id = ? OR slug = ?")
+            )
+              return {
+                id: "atlas",
+                slug: "atlas",
+                name: "Atlas",
+                description: "",
+              } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+        async batch(statements: Statement[]) {
+          const previous = {
+            status: state.status,
+            updatedAt: state.updatedAt,
+            events: [...state.events],
+          };
+          const results: Array<{ meta: { changes: number } }> = [];
+          let lastChanges = 0;
+          try {
+            for (const statement of statements) {
+              if (
+                statement.query.startsWith("UPDATE editorial_tasks SET status=")
+              ) {
+                if (failurePoint === "update")
+                  throw new Error("injected task update failure");
+                const [
+                  toState,
+                  updatedAt,
+                  taskId,
+                  fromState,
+                  expectedUpdatedAt,
+                ] = statement.boundValues;
+                const changed =
+                  taskId === "task-1" &&
+                  state.status === fromState &&
+                  state.updatedAt === expectedUpdatedAt;
+                if (changed) {
+                  state.status = String(toState);
+                  state.updatedAt = String(updatedAt);
+                }
+                lastChanges = Number(changed);
+                results.push({ meta: { changes: lastChanges } });
+                continue;
+              }
+              if (
+                statement.query.startsWith(
+                  "INSERT INTO workflow_transition_events",
+                )
+              ) {
+                if (failurePoint === "event")
+                  throw new Error("injected workflow event failure");
+                const [
+                  ,
+                  ,
+                  entityId,
+                  fromState,
+                  toState,
+                  actorEmail,
+                  idempotencyKey,
+                  ,
+                  ,
+                  createdAt,
+                ] = statement.boundValues;
+                if (lastChanges === 1)
+                  state.events.push({
+                    entity_id: String(entityId),
+                    from_state: String(fromState),
+                    to_state: String(toState),
+                    actor_email: String(actorEmail),
+                    idempotency_key: String(idempotencyKey),
+                    created_at: String(createdAt),
+                  });
+                lastChanges = Number(lastChanges === 1);
+                results.push({ meta: { changes: lastChanges } });
+              }
+            }
+            return results;
+          } catch (error) {
+            state.status = previous.status;
+            state.updatedAt = previous.updatedAt;
+            state.events = previous.events;
+            throw error;
+          }
+        },
+      };
+      const testEnv = {
+        ADMIN_AUTH_MODE: "local",
+        ADMIN_LOCAL_EMAIL: "task-admin@example.com",
+        REPORTS: reports,
+        ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+      };
+      const request = new Request(
+        "http://localhost:8787/api/admin/workflow/transition",
+        {
+          method: "POST",
+          headers: {
+            origin: "http://localhost:8787",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            entityType: "task",
+            entityId: "task-1",
+            fromState: "open",
+            toState: "doing",
+            expectedUpdatedAt: "2026-09-28T00:00:00.000Z",
+            idempotencyKey: "atomic-transition-1",
+          }),
+        },
+      );
+
+      const response = await worker.fetch(request, testEnv as never);
+
+      expect(response.status).toBe(500);
+      expect(state).toMatchObject({
+        status: "open",
+        updatedAt: "2026-09-28T00:00:00.000Z",
+        events: [],
+      });
+    },
+  );
+
+  it("commits one task event and idempotency outcome with the state transition", async () => {
+    const state = {
+      status: "open",
+      updatedAt: "2026-09-28T00:00:00.000Z",
+      events: [] as Array<{
+        entity_id: string;
+        from_state: string;
+        to_state: string;
+        actor_email: string;
+        idempotency_key: string;
+        created_at: string;
+      }>,
+    };
+    const reports = {
+      prepare(query: string) {
+        const statement = new Statement(query);
+        statement.first = async <T>() => {
+          if (
+            query.includes(
+              "FROM workflow_transition_events WHERE actor_email=?",
+            )
+          ) {
+            const [, idempotencyKey] = statement.boundValues;
+            return (state.events.find(
+              (event) => event.idempotency_key === idempotencyKey,
+            ) ?? null) as T | null;
+          }
+          if (query.includes("FROM editorial_tasks WHERE id=?"))
+            return {
+              project_id: "atlas",
+              subject: null,
+              assignee_email: "task-admin@example.com",
+              task_kind: "task",
+              title: "Atomic task",
+              created_by: "task-admin@example.com",
+              status: state.status,
+              updated_at: state.updatedAt,
+              archived_at: null,
+            } as T;
+          if (query.includes("FROM atlasez_projects WHERE id = ? OR slug = ?"))
+            return {
+              id: "atlas",
+              slug: "atlas",
+              name: "Atlas",
+              description: "",
+            } as T;
+          return null as T | null;
+        };
+        return statement;
+      },
+      async batch(statements: Statement[]) {
+        const results: Array<{ meta: { changes: number } }> = [];
+        let lastChanges = 0;
+        for (const statement of statements) {
+          if (
+            statement.query.startsWith("UPDATE editorial_tasks SET status=")
+          ) {
+            const [toState, updatedAt, taskId, fromState, expectedUpdatedAt] =
+              statement.boundValues;
+            const changed =
+              taskId === "task-1" &&
+              state.status === fromState &&
+              state.updatedAt === expectedUpdatedAt;
+            if (changed) {
+              state.status = String(toState);
+              state.updatedAt = String(updatedAt);
+            }
+            lastChanges = Number(changed);
+            results.push({ meta: { changes: lastChanges } });
+            continue;
+          }
+          if (
+            statement.query.startsWith("INSERT INTO workflow_transition_events")
+          ) {
+            const [
+              ,
+              ,
+              entityId,
+              fromState,
+              toState,
+              actorEmail,
+              idempotencyKey,
+              ,
+              ,
+              createdAt,
+            ] = statement.boundValues;
+            if (lastChanges === 1)
+              state.events.push({
+                entity_id: String(entityId),
+                from_state: String(fromState),
+                to_state: String(toState),
+                actor_email: String(actorEmail),
+                idempotency_key: String(idempotencyKey),
+                created_at: String(createdAt),
+              });
+            lastChanges = Number(lastChanges === 1);
+            results.push({ meta: { changes: lastChanges } });
+          }
+        }
+        return results;
+      },
+    };
+    const testEnv = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "task-admin@example.com",
+      REPORTS: reports,
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const transitionRequest = () =>
+      new Request("http://localhost:8787/api/admin/workflow/transition", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:8787",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          entityType: "task",
+          entityId: "task-1",
+          fromState: "open",
+          toState: "doing",
+          expectedUpdatedAt: "2026-09-28T00:00:00.000Z",
+          idempotencyKey: "atomic-transition-1",
+        }),
+      });
+
+    const firstResponse = await worker.fetch(
+      transitionRequest(),
+      testEnv as never,
+    );
+    const replayResponse = await worker.fetch(
+      transitionRequest(),
+      testEnv as never,
+    );
+
+    expect(firstResponse.status).toBe(200);
+    expect(await firstResponse.json()).toMatchObject({
+      ok: true,
+      replayed: false,
+    });
+    expect(replayResponse.status).toBe(200);
+    expect(await replayResponse.json()).toMatchObject({
+      ok: true,
+      replayed: true,
+    });
+    expect(state.status).toBe("doing");
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0]).toMatchObject({
+      entity_id: "task-1",
+      from_state: "open",
+      to_state: "doing",
+      actor_email: "task-admin@example.com",
+      idempotency_key: "atomic-transition-1",
+    });
+  });
+
   it("marks every currently unread notification candidate for the signed-in member", async () => {
     const memberEnvironment = stageEnv("accepted", false, true);
     const insertedReadValues: unknown[][] = [];
