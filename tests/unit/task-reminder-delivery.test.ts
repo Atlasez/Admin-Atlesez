@@ -17,8 +17,9 @@ class FakeStatement {
     return this;
   }
   async all<T>() {
-    if (this.query.includes("WHERE remind_at_utc IS NULL"))
-      return { results: [] as T[] };
+    this.db.queries.push(this.query);
+    if (this.query.includes("SELECT r.id,r.remind_at,r.timezone"))
+      return { results: this.db.legacyRows as T[] };
     if (this.query.includes("SELECT r.id AS reminder_id"))
       return { results: this.db.dueRows as T[] };
     if (this.query.includes("SELECT a.delivery_key"))
@@ -45,6 +46,8 @@ class FakeStatement {
 
 class FakeDb {
   queries: string[] = [];
+  legacyRows: Array<{ id: string; remind_at: string; timezone: string }> = [];
+  normalizedValues: unknown[][] = [];
   claimChanges = 1;
   readonly dueRows = [
     {
@@ -88,6 +91,9 @@ class FakeDb {
   }
   async batch<T = unknown>(statements: FakeStatement[]) {
     this.queries.push(...statements.map((statement) => statement["query"]));
+    this.normalizedValues.push(
+      ...statements.map((statement) => statement.values),
+    );
     return statements.map(() => ({ meta: { changes: 1 } })) as T[];
   }
 }
@@ -108,6 +114,81 @@ describe("task reminder delivery", () => {
         { now, fetcher },
       ),
     ).rejects.toThrow("configuration is incomplete");
+  });
+
+  it("normalizes legacy reminders even when email delivery is misconfigured", async () => {
+    const db = new FakeDb();
+    db.legacyRows = [
+      {
+        id: "legacy-reminder",
+        remind_at: "2026-01-15T09:00",
+        timezone: "Asia/Tokyo",
+      },
+    ];
+
+    await expect(
+      dispatchDueTaskReminders(
+        { REPORTS: db, RESEND_API_KEY: "re_test_secret" },
+        { now, fetcher: async () => new Response(null, { status: 200 }) },
+      ),
+    ).rejects.toThrow("configuration is incomplete");
+
+    expect(db.normalizedValues).toEqual([
+      [
+        "2026-01-15T00:00:00.000Z",
+        "legacy-reminder",
+        "2026-01-15T09:00",
+        "Asia/Tokyo",
+      ],
+      ["legacy-reminder"],
+    ]);
+  });
+
+  it("records invalid legacy reminders so they cannot starve later valid rows", async () => {
+    const db = new FakeDb();
+    db.legacyRows = [
+      { id: "invalid-time", remind_at: "not-a-date", timezone: "Asia/Tokyo" },
+      {
+        id: "invalid-zone",
+        remind_at: "2026-01-15T09:00",
+        timezone: "Mars/Olympus",
+      },
+    ];
+    const logger = { info: () => undefined, error: () => undefined };
+
+    await expect(
+      dispatchDueTaskReminders(
+        { REPORTS: db },
+        {
+          now,
+          logger,
+          fetcher: async () => new Response(null, { status: 200 }),
+        },
+      ),
+    ).rejects.toThrow("configuration is incomplete");
+
+    expect(db.queries[0]).toContain(
+      "LEFT JOIN editorial_task_reminder_normalization_issues",
+    );
+    expect(db.queries[0]).toContain(
+      "i.remind_at=r.remind_at AND i.timezone=r.timezone",
+    );
+    expect(db.normalizedValues).toEqual([
+      [
+        "invalid-time",
+        "not-a-date",
+        "Asia/Tokyo",
+        "invalid_time",
+        now.toISOString(),
+      ],
+      [
+        "invalid-zone",
+        "2026-01-15T09:00",
+        "Mars/Olympus",
+        "invalid_timezone",
+        now.toISOString(),
+      ],
+    ]);
   });
 
   it("sends a due reminder with a stable idempotency key and safe logs", async () => {

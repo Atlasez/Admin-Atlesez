@@ -28,11 +28,13 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
             <button type="button" data-notification-filter="unread" aria-pressed="false">未読</button>
           </div>
         </div>
-        <button type="button" class="mark-all-read" data-mark-all-notifications-read>一覧をすべて既読</button>
+        <button type="button" class="mark-all-read" data-mark-all-notifications-read aria-describedby="legacy-reminder-status">一覧をすべて既読</button>
       </div>
       <div class="notification-list" data-notification-list aria-live="polite">
         <p class="notification-loading" role="status">通知を読み込んでいます…</p>
       </div>
+      <p class="notification-reminder-status" id="legacy-reminder-status" data-legacy-reminder-status role="status" hidden>古いタスクリマインダーを準備中です。表示件数に反映されるまで時間がかかる場合があります。一括既読は準備完了後に利用できます。</p>
+      <p class="notification-reminder-status" data-legacy-reminder-failed role="status" hidden>日時またはタイムゾーンが不正なタスクリマインダーがあります。該当タスクを修正してください。他の通知は引き続き利用できます。</p>
       <p class="notification-truncation" data-notification-truncation hidden aria-live="polite">新しい通知を先に表示しています。</p>
       <div class="notification-pagination" data-notification-pagination hidden>
         <span data-pagination-summary></span>
@@ -61,6 +63,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     unreadNotificationsCount?: number;
     totalNotifications?: number;
     nextCursor?: string | null;
+    legacyReminderNormalizationPending?: boolean;
+    legacyReminderNormalizationFailed?: boolean;
   };
 
   const initNotificationInbox = () => {
@@ -74,6 +78,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const paginationSummary = root.querySelector<HTMLElement>("[data-pagination-summary]")!;
     const loadMore = root.querySelector<HTMLButtonElement>("[data-load-more]")!;
     const truncation = root.querySelector<HTMLElement>("[data-notification-truncation]")!;
+    const legacyReminderStatus = root.querySelector<HTMLElement>("[data-legacy-reminder-status]")!;
+    const legacyReminderFailed = root.querySelector<HTMLElement>("[data-legacy-reminder-failed]")!;
     const markAll = root.querySelector<HTMLButtonElement>("[data-mark-all-notifications-read]")!;
     const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
     const labels: Record<string, string> = {
@@ -98,6 +104,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     let rows: Notification[] = [];
     let unreadTotal = 0;
     let total = 0;
+    let legacyReminderNormalizationPending = false;
+    let legacyReminderNormalizationFailed = false;
     let nextCursor: string | null = null;
     let requestGeneration = 0;
     let filter: "all" | "unread" = "all";
@@ -108,6 +116,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       unreadCount.textContent = String(unreadTotal);
       visibleCount.textContent = `${rows.length}件を表示`;
       markAll.hidden = unreadTotal === 0;
+      markAll.disabled = legacyReminderNormalizationPending;
+      legacyReminderStatus.hidden = !legacyReminderNormalizationPending;
+      legacyReminderFailed.hidden = !legacyReminderNormalizationFailed;
       root.querySelectorAll<HTMLButtonElement>("[data-notification-filter]").forEach((button) => {
         const active = button.dataset.notificationFilter === filter;
         button.setAttribute("aria-pressed", String(active));
@@ -160,6 +171,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       unreadTotal = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? 0)));
       total = Math.max(rows.length, Math.trunc(Number(data.totalNotifications ?? rows.length)));
       nextCursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
+      legacyReminderNormalizationPending = data.legacyReminderNormalizationPending === true;
+      legacyReminderNormalizationFailed = data.legacyReminderNormalizationFailed === true;
       render();
     };
     retry = createAdminLoadRetry(root, () => load(), "通知を読み込めませんでした。", { scope: "notification-inbox" });
@@ -169,7 +182,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
         body: JSON.stringify(all ? { all: true } : { ids }),
       });
-      if (!response.ok) throw new Error("通知を既読にできませんでした。");
+      if (!response.ok) {
+        const data = await response.json().catch(() => null) as { error?: unknown } | null;
+        throw new Error(typeof data?.error === "string" ? data.error : "通知を既読にできませんでした。");
+      }
       await load();
     };
 
@@ -243,6 +259,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .notification-row-state button { color: var(--accent-primary); }
   .notification-loading, .notification-empty { color: var(--text-secondary); display: block; padding: 2rem 1rem; text-align: center; }
   .notification-truncation { color: var(--text-secondary); font-size: .75rem; margin: .5rem 0 0; text-align: center; }
+  .notification-reminder-status { border: 1px solid var(--border-default); color: var(--text-secondary); font-size: .8rem; line-height: 1.55; margin: .65rem 0 0; padding: .65rem .8rem; }
   .notification-pagination { align-items: center; color: var(--text-secondary); display: flex; font-size: .75rem; gap: .75rem; justify-content: center; padding-top: .8rem; }
   .notification-pagination[hidden], .notification-truncation[hidden] { display: none; }
   .notification-pagination button:disabled { cursor: wait; opacity: .6; }
