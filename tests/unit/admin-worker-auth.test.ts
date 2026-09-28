@@ -2464,7 +2464,8 @@ describe("applicant stage server-side access", () => {
       }
       if (query.startsWith("INSERT INTO admin_notification_reads")) {
         statement.bind = (...values: unknown[]) => {
-          insertedReadValues.push(values);
+          for (let index = 0; index < values.length; index += 3)
+            insertedReadValues.push(values.slice(index, index + 3));
           return statement;
         };
       }
@@ -2631,16 +2632,25 @@ describe("applicant stage server-side access", () => {
     expect(deepPageData.nextOffset).toBe(10_001);
 
     const originalPrepare = memberEnvironment.REPORTS.prepare;
+    const notificationBatchSizes: number[] = [];
+    const originalBatch = memberEnvironment.REPORTS.batch;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = originalPrepare(query);
       if (query.startsWith("INSERT INTO admin_notification_reads")) {
         statement.bind = (...values: unknown[]) => {
-          insertedNotificationIds.push(String(values[1]));
+          for (let index = 1; index < values.length; index += 3)
+            insertedNotificationIds.push(String(values[index]));
           return statement;
         };
       }
       return statement;
     };
+    const batchRecorder = async (statements: unknown[]) => {
+      notificationBatchSizes.push(statements.length);
+      return originalBatch();
+    };
+    memberEnvironment.REPORTS.batch =
+      batchRecorder as typeof memberEnvironment.REPORTS.batch;
 
     const markAllResponse = await worker.fetch(
       loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
@@ -2652,6 +2662,8 @@ describe("applicant stage server-side access", () => {
       markedCount: 10_389,
     });
     expect(insertedNotificationIds).toHaveLength(10_389);
+    expect(notificationBatchSizes).toHaveLength(1);
+    expect(notificationBatchSizes[0]).toBe(315);
     expect(insertedNotificationIds).toEqual(
       Array.from(
         { length: candidateCount },

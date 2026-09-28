@@ -21474,13 +21474,25 @@ async function markAdminNotificationsRead(
   if (!ids.length && payload?.all !== true)
     return json({ error: "既読にする通知を選択してください。" }, 400);
   const now = new Date().toISOString();
-  for (let index = 0; index < ids.length; index += 32) {
+  // D1 allows at most 100 bound values per statement. Insert 33 markers per
+  // statement (99 values), then keep each transactional batch below 1,000
+  // statements so mark-all does not make one D1 round trip per 32 markers.
+  const READ_MARKERS_PER_STATEMENT = 33;
+  const MAX_STATEMENTS_PER_BATCH = 1_000;
+  const statements: D1PreparedStatement[] = [];
+  for (let index = 0; index < ids.length; index += READ_MARKERS_PER_STATEMENT) {
+    const markerIds = ids.slice(index, index + READ_MARKERS_PER_STATEMENT);
+    const values = markerIds.map(() => "(?, ?, ?)").join(", ");
+    const bindings = markerIds.flatMap((id) => [scope.email, id, now]);
+    statements.push(
+      env.REPORTS.prepare(
+        `INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES ${values} ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at`,
+      ).bind(...bindings),
+    );
+  }
+  for (let index = 0; index < statements.length; index += MAX_STATEMENTS_PER_BATCH) {
     await env.REPORTS.batch(
-      ids.slice(index, index + 32).map((id) =>
-        env.REPORTS.prepare(
-          "INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
-        ).bind(scope.email, id, now),
-      ),
+      statements.slice(index, index + MAX_STATEMENTS_PER_BATCH),
     );
   }
   return json({ ok: true, markedCount: ids.length });
