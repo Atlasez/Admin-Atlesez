@@ -155,6 +155,7 @@ test("ブランド・通知・プロフィールの各アイコンを表示す�
   const avatar = page.locator("[data-admin-account-image]");
   const notification = page.locator("[data-admin-notifications] svg");
   await expect(brand).toBeVisible();
+  await expect(brand).toHaveAttribute("src", /atlasez-logo\.png$/);
   await expect(avatar).toBeVisible();
   await expect(notification).toBeVisible();
   await expect(brand).toHaveJSProperty("complete", true);
@@ -165,6 +166,43 @@ test("ブランド・通知・プロフィールの各アイコンを表示す�
   expect(
     await avatar.evaluate((image) => (image as HTMLImageElement).naturalWidth),
   ).toBeGreaterThan(0);
+});
+
+test("プロジェクト遷移後にヘッダーとタブのアイコンをサイトごとに同期する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.goto("admin/portal/");
+
+  await expect(page.locator(".admin-nav-brand-logo img")).toHaveAttribute(
+    "src",
+    /atlasez-logo\.png$/,
+  );
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
+    "href",
+    /atlasez-logo\.png$/,
+  );
+
+  await page.locator('a[href="/admin/atlas/"]').click();
+  await expect(page).toHaveURL(/\/admin\/atlas\/$/);
+  await expect(page.locator(".admin-nav-brand-logo img")).toHaveAttribute(
+    "src",
+    /atlas-logo\.svg$/,
+  );
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
+    "href",
+    /atlas-logo\.svg$/,
+  );
+
+  await page.goto("admin/workspace/?project=atlas");
+  await expect(page.locator(".admin-nav-brand-logo img")).toHaveAttribute(
+    "src",
+    /atlas-logo\.svg$/,
+  );
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
+    "href",
+    /atlas-logo\.svg$/,
+  );
 });
 
 test("通知panelをtoggle・外側・Escape・閉じるボタンで操作できる", async ({
