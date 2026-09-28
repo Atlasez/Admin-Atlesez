@@ -113,7 +113,6 @@ const site = requestedSite ?? routeSite;
 const projectSlug = site === "secretariat" ? "secretariat" : site === "semi-platform" ? "seminar-platform" : site === "student-council" ? "student-council-exchange" : site === "thinking-cafe" ? "thinking-cafe" : "atlas";
 const homePath = site === "portal" ? "/admin/portal/" : site === "secretariat" ? "/admin/secretariat/" : site === "semi-platform" ? "/admin/semi-platform/" : site === "student-council" ? "/admin/student-council/" : site === "thinking-cafe" ? "/admin/thinking-cafe/" : "/admin/atlas/";
 const brandLabel = site === "portal" ? "Atlasezメンバー用サイト" : site === "secretariat" ? "Atlasez運営事務局" : site === "semi-platform" ? "ゼミプラットフォーム" : site === "student-council" ? "日本生徒会協会" : site === "thinking-cafe" ? "考えるカフェ" : "学習サイト「アトラス」運営用サイト";
-const brandLogoPath = site === "atlas" ? "/images/atlas-logo.svg" : "/images/atlasez-logo.png";
 const pageLabel = ({
   portal: "Atlasezメンバー用サイト",
   "action-center": "アクションセンター",
@@ -159,7 +158,7 @@ const pageLabel = ({
 const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platform", "student-council", "thinking-cafe", "secretariat"]);
 ---
 <header class="admin-nav" data-admin-nav data-current-site={site} data-current-slug={projectSlug} transition:persist="admin-nav">
-  <a class="admin-nav-brand-logo" href={homePath} aria-label={`${brandLabel}のトップへ戻る`}><img data-admin-brand-logo-image src={brandLogoPath} alt="" width="34" height="34" /></a>
+  <a class="admin-nav-brand-logo" href={homePath} aria-label={`${brandLabel}のトップへ戻る`}><img src="/images/atlasez-logo.png" alt="" width="34" height="34" /></a>
   <div class="admin-project-switcher" data-project-switcher data-current-site={site} data-current-slug={projectSlug}>
     <div class="admin-project-switcher-content">
     <a class="admin-project-switcher-title" href={homePath} data-project-current-link data-admin-i18n data-admin-ja={brandLabel} data-admin-en={site === "portal" ? "Atlasez member site" : site === "secretariat" ? "Atlasez Secretariat" : site === "semi-platform" ? "Seminar platform" : site === "student-council" ? "Japan Student Council Association" : site === "thinking-cafe" ? "Thinking Cafe" : "Atlas learning site operations"}>{brandLabel}</a>
@@ -246,7 +245,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     const slugForSite = (site: RouteState['site']) => site === 'secretariat' ? 'secretariat' : site === 'semi-platform' ? 'seminar-platform' : site === 'student-council' ? 'student-council-exchange' : site === 'thinking-cafe' ? 'thinking-cafe' : 'atlas';
     const homeForSite = (site: RouteState['site']) => site === 'portal' ? '/admin/portal/' : site === 'secretariat' ? '/admin/secretariat/' : site === 'semi-platform' ? '/admin/semi-platform/' : site === 'student-council' ? '/admin/student-council/' : site === 'thinking-cafe' ? '/admin/thinking-cafe/' : '/admin/atlas/';
     const labelForSite = (site: RouteState['site']) => site === 'portal' ? 'Atlasezメンバー用サイト' : site === 'secretariat' ? 'Atlasez運営事務局' : site === 'semi-platform' ? 'ゼミプラットフォーム' : site === 'student-council' ? '日本生徒会協会' : site === 'thinking-cafe' ? '考えるカフェ' : '学習サイト「アトラス」運営用サイト';
-    const logoForSite = (site: RouteState['site']) => site === 'atlas' ? '/images/atlas-logo.svg' : '/images/atlasez-logo.png';
     const readRouteState = (): RouteState => {
       const path = window.location.pathname.replace(/\/$/, '') || '/';
       const project = new URLSearchParams(window.location.search).get('project');
@@ -264,8 +262,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const title = document.querySelector<HTMLAnchorElement>('[data-project-current-link]');
       const switcher = document.querySelector<HTMLElement>('[data-project-switcher]');
       const accountProfile = document.querySelector<HTMLAnchorElement>('[data-admin-account-profile]');
-      const logoImage = document.querySelector<HTMLImageElement>('[data-admin-brand-logo-image]');
-      const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
       nav?.setAttribute('data-current-site', state.site);
       nav?.setAttribute('data-current-slug', state.slug);
       switcher?.setAttribute('data-current-site', state.site);
@@ -304,12 +300,6 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
             ? `${logoName}のトップへ戻る`
             : `Back to ${logoName} home`,
         );
-      }
-      const logoPath = logoForSite(state.site);
-      if (logoImage && logoImage.getAttribute('src') !== logoPath) logoImage.src = logoPath;
-      if (favicon && favicon.getAttribute('href') !== logoPath) {
-        favicon.href = logoPath;
-        favicon.type = logoPath.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
       }
       if (breadcrumbs) {
         breadcrumbs.hidden = state.site === 'portal';
