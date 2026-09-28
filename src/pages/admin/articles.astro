@@ -825,7 +825,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       scopeNote.dataset.state = "ready";
       const directSubjects = Array.isArray(scope.subjects) ? scope.subjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const coordinatorSubjects = Array.isArray(scope.coordinatorSubjects) ? scope.coordinatorSubjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
-      const unrestricted = Boolean(scope.allSubjects || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
+      const unrestricted = Boolean(scope.allSubjects || scope.isManager || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
       const subjectLabels = new Map(subjectOptions.map((option) => [option.value, option.label]));
       const requestedSubject = subject.value;
       if (unrestricted) {
@@ -868,7 +868,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const managedKeys = new Set(rows.flatMap((row) => row.publicArticle ? [publicArticleKey(row.publicArticle)] : []));
       const scopeAllowsSubject = (value: string) => {
         if (!articleScope) return false;
-        if (articleScope.allSubjects || articleScope.isProjectLeader || (articleScope.subjects === undefined && articleScope.coordinatorSubjects === undefined)) return true;
+        if (articleScope.allSubjects || articleScope.isManager || articleScope.isProjectLeader || (articleScope.subjects === undefined && articleScope.coordinatorSubjects === undefined)) return true;
         const allowed = new Set([...(articleScope.subjects ?? []), ...(articleScope.coordinatorSubjects ?? [])]);
         return allowed.has(value);
       };

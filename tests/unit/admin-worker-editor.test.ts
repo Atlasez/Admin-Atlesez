@@ -2099,6 +2099,67 @@ describe("admin worker editor APIs", () => {
     );
   });
 
+  it("returns all article scope for the designated primary operator", async () => {
+    const documentQueries: string[] = [];
+    class GlobalStatement extends EmptyStatement {
+      async all<T>() {
+        if (this.query.includes("SELECT subject FROM report_admin_permissions"))
+          return { results: [{ subject: "*" }] as T[] };
+        if (
+          this.query.includes(
+            "SELECT role, subject FROM editorial_workflow_roles",
+          )
+        )
+          return { results: [] as T[] };
+        if (this.query.includes("FROM editorial_documents d")) {
+          documentQueries.push(this.query);
+          return {
+            results: [
+              {
+                id: "global-doc",
+                subject: "physics",
+                category: "mechanics",
+                title: "全分野で確認できる記事",
+                updated_at: "2026-09-10T00:00:00.000Z",
+              },
+            ] as T[],
+          };
+        }
+        return { results: [] as T[] };
+      }
+    }
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/editor/documents", {
+        headers: {
+          "Cf-Access-Authenticated-User-Email": "Ukyoukay0@gmail.com",
+        },
+      }),
+      {
+        ...emptyEnv,
+        ADMIN_AUTH_MODE: "cloudflare-access",
+        REPORTS: {
+          ...emptyEnv.REPORTS,
+          prepare: (query: string) => new GlobalStatement(query),
+        },
+      } as never,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      documents: Array<{ id: string }>;
+      scope: { email: string; allSubjects: boolean; isManager: boolean };
+    };
+    expect(payload.documents).toHaveLength(1);
+    expect(payload.scope).toMatchObject({
+      email: "ukyoukay0@gmail.com",
+      allSubjects: true,
+      isManager: true,
+    });
+    expect(documentQueries).toHaveLength(1);
+    expect(documentQueries[0]).not.toContain("d.subject IN");
+  });
+
   it("bounds collaboration presence lookups for large article lists", async () => {
     const presenceRequests: string[] = [];
     const documents = Array.from({ length: 20 }, (_, index) => ({

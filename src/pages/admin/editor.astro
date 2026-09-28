@@ -5929,7 +5929,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     box-sizing: border-box;
     flex: 1 1 100%;
     margin-top: .15rem;
-    max-width: 100%;
+    max-width: min(100%, 27.5rem);
     min-width: 0;
     padding: .35rem .5rem;
     position: static;
@@ -5967,7 +5967,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
   .editor-workspace .toolbar-actions {
     align-content: start;
-    justify-content: end;
+    justify-content: flex-start !important;
   }
 
   .editor-workspace .toolbar-actions > .collaboration-status,
@@ -5978,7 +5978,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
   .editor-workspace .toolbar-actions > .document-actions {
     flex: 1 1 auto;
-    justify-content: end;
+    justify-content: flex-start !important;
   }
 
   .editor-workspace .toolbar-actions > .save-status {
@@ -5986,6 +5986,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     max-width: min(18rem, 100%);
     overflow-wrap: anywhere;
     width: auto;
+  }
+
+  @media (min-width: 1081px) {
+    .editor-workspace .document-toolbar {
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.4fr);
+    }
+
+    .editor-workspace .document-toolbar > div:first-child {
+      align-content: center;
+      align-self: stretch;
+    }
   }
 
   @media (max-width: 1080px) {

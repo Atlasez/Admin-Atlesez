@@ -6120,6 +6120,7 @@ async function listEditorialDocuments(
     scope: {
       email: scope.email,
       subjects: scope.subjects,
+      allSubjects: scope.allSubjects,
       isManager: scope.isManager,
       isProjectLeader: scope.isProjectLeader,
       coordinatorSubjects: scope.coordinatorSubjects,
