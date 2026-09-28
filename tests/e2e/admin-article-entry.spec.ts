@@ -276,7 +276,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
           borderTopWidth: style.borderTopWidth,
           borderTopColor: style.borderTopColor,
           borderColor: style.borderColor,
-          boxShadow: style.boxShadow,
+          outlineStyle: style.outlineStyle,
+          outlineWidth: style.outlineWidth,
+          outlineColor: style.outlineColor,
+          outlineOffset: style.outlineOffset,
         };
       });
     expect(workflowCardStyle.textAlign).toBe("center");
@@ -285,8 +288,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       workflowCardStyle.borderColor,
     );
     expect(workflowCardStyle.borderColor).not.toBe("rgb(255, 255, 255)");
-    expect(workflowCardStyle.boxShadow).toContain("rgb(255, 255, 255)");
-    expect(workflowCardStyle.boxShadow).toContain("0px 0px 0px 3px");
+    expect(workflowCardStyle.outlineStyle).toBe("solid");
+    expect(workflowCardStyle.outlineWidth).toBe("3px");
+    expect(workflowCardStyle.outlineColor).toBe("rgb(255, 255, 255)");
+    expect(workflowCardStyle.outlineOffset).toBe("2px");
     await expect(
       page.getByRole("link", { name: /編集・フィードバックを開く/ }),
     ).toHaveCount(0);
