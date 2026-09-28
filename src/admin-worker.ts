@@ -2350,7 +2350,7 @@ const recordAdminAudit = async (
     .catch(() => undefined);
 };
 
-const recordWorkflowEvent = async (
+const workflowEventStatement = (
   env: Env,
   event: {
     entityType: WorkflowEntityType | string;
@@ -2363,26 +2363,33 @@ const recordWorkflowEvent = async (
     metadata?: Record<string, unknown>;
     createdAt?: string;
   },
+  onlyAfterSuccessfulStatement = false,
 ) => {
-  await env.REPORTS.prepare(
-    `INSERT INTO workflow_transition_events
-      (id,entity_type,entity_id,from_state,to_state,actor_email,idempotency_key,expected_updated_at,metadata_json,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-  )
-    .bind(
-      crypto.randomUUID(),
-      event.entityType,
-      event.entityId,
-      event.fromState,
-      event.toState,
-      event.actorEmail,
-      event.idempotencyKey ?? crypto.randomUUID(),
-      event.expectedUpdatedAt ?? null,
-      JSON.stringify(event.metadata ?? {}),
-      event.createdAt ?? new Date().toISOString(),
-    )
-    .run()
-    .catch(() => undefined);
+  const insert = `INSERT INTO workflow_transition_events
+    (id,entity_type,entity_id,from_state,to_state,actor_email,idempotency_key,expected_updated_at,metadata_json,created_at)`;
+  return env.REPORTS.prepare(
+    onlyAfterSuccessfulStatement
+      ? `${insert} SELECT ?,?,?,?,?,?,?,?,?,? WHERE changes()=1`
+      : `${insert} VALUES (?,?,?,?,?,?,?,?,?,?)`,
+  ).bind(
+    crypto.randomUUID(),
+    event.entityType,
+    event.entityId,
+    event.fromState,
+    event.toState,
+    event.actorEmail,
+    event.idempotencyKey ?? crypto.randomUUID(),
+    event.expectedUpdatedAt ?? null,
+    JSON.stringify(event.metadata ?? {}),
+    event.createdAt ?? new Date().toISOString(),
+  );
+};
+
+const recordWorkflowEvent = async (
+  env: Env,
+  event: Parameters<typeof workflowEventStatement>[1],
+) => {
+  await workflowEventStatement(env, event).run().catch(() => undefined);
 };
 
 type WorkflowEntityType = "task" | "document" | "application" | "approval";
@@ -2581,11 +2588,20 @@ async function transitionTaskState(
       },
     });
   const now = new Date().toISOString();
-  const update = await env.REPORTS.prepare(
-    "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=? AND status=? AND updated_at=?",
-  ).bind(toState, now, taskId, fromState, task.updated_at).run();
-  if (!Number((update as { meta?: { changes?: number } }).meta?.changes ?? 0)) return json({ error: "同時更新を検知しました。最新状態を読み込んでください。", code: "STALE_STATE" }, 409);
-  await recordWorkflowEvent(env, { entityType: "task", entityId: taskId, fromState, toState, actorEmail: scope.email, idempotencyKey, expectedUpdatedAt, metadata: { projectId: task.project_id }, createdAt: now });
+  // D1 batch is transactional; changes() ties the event/idempotency row to the CAS update.
+  const [update, event] = (await env.REPORTS.batch([
+    env.REPORTS.prepare(
+      "UPDATE editorial_tasks SET status=?,updated_at=? WHERE id=? AND status=? AND updated_at=?",
+    ).bind(toState, now, taskId, fromState, task.updated_at),
+    workflowEventStatement(
+      env,
+      { entityType: "task", entityId: taskId, fromState, toState, actorEmail: scope.email, idempotencyKey, expectedUpdatedAt, metadata: { projectId: task.project_id }, createdAt: now },
+      true,
+    ),
+  ])) as [{ meta?: { changes?: number } }, { meta?: { changes?: number } }];
+  if (!Number(update?.meta?.changes ?? 0)) return json({ error: "同時更新を検知しました。最新状態を読み込んでください。", code: "STALE_STATE" }, 409);
+  if (Number(event?.meta?.changes ?? 0) !== 1)
+    throw new Error("Task transition event was not recorded with its state update.");
   await recordAdminAudit(env, scope.email, "workflow_transition", "workflow", taskId, task.title, `タスクの状態を変更：${task.title}`, { entityType: "task", fromState, toState, projectId: task.project_id, idempotencyKey });
   return json({ ok: true, replayed: false, transition: { entityType: "task", entityId: taskId, fromState, toState, updatedAt: now, idempotencyKey } });
 }
