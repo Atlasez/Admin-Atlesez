@@ -21213,6 +21213,8 @@ async function adminNotifications(
     return json({ error: "カーソルとoffsetは同時に指定できません。" }, 400);
   const notificationReadIds = new Set<string>();
   const notificationSourceCounts: Array<{ total: number; unread: number }> = [];
+  let legacyReminderNormalizationPending = false;
+  let legacyReminderNormalizationFailed = false;
   const notificationFetchLimit = cursor || includeUnreadIds ? limit + 1 : offset + limit;
   const notificationSourceMetadata = (sql: string) => {
     if (sql.includes("FROM editorial_task_reminders"))
@@ -21238,6 +21240,7 @@ async function adminNotifications(
     const metadata = notificationSourceMetadata(sql);
     if (!metadata) throw new Error("Unknown notification source query");
     const source = `(${sql}) AS s`;
+    const sourceWithoutOrder = `(${sql.replace(/\s+ORDER BY\s+[\s\S]*$/i, "")}) AS s`;
     const dueClause = "dueReminder" in metadata
       ? "s.remind_at_utc IS NOT NULL AND s.remind_at_utc <= ? AND "
       : "";
@@ -21250,7 +21253,7 @@ async function adminNotifications(
     const cursorBindings = cursor
       ? [cursor.updatedAt, cursor.updatedAt, cursor.id]
       : [];
-    const [page, counts] = await Promise.all([
+    const [page, counts, legacyReminderPending, legacyReminderFailed] = await Promise.all([
       env.REPORTS.prepare(
         `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
       ).bind(scope.email, ...bindings, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
@@ -21259,7 +21262,35 @@ async function adminNotifications(
         `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${dueClause}1=1`,
       ).bind(scope.email, ...bindings, ...dueBindings)
         .first<{ total: number; unread: number }>(),
+      "dueReminder" in metadata
+        ? env.REPORTS.prepare(
+            `SELECT 1 AS pending FROM ${sourceWithoutOrder}
+              WHERE s.remind_at_utc IS NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM editorial_task_reminder_normalization_issues i
+                   WHERE i.reminder_id=s.reminder_id
+                     AND i.remind_at=s.remind_at AND i.timezone=s.timezone
+                ) LIMIT 1`,
+          )
+            .bind(...bindings)
+            .first<{ pending: number }>()
+        : Promise.resolve(null),
+      "dueReminder" in metadata
+        ? env.REPORTS.prepare(
+            `SELECT 1 AS failed FROM ${sourceWithoutOrder}
+              WHERE s.remind_at_utc IS NULL
+                AND EXISTS (
+                  SELECT 1 FROM editorial_task_reminder_normalization_issues i
+                   WHERE i.reminder_id=s.reminder_id
+                     AND i.remind_at=s.remind_at AND i.timezone=s.timezone
+                ) LIMIT 1`,
+          )
+            .bind(...bindings)
+            .first<{ failed: number }>()
+        : Promise.resolve(null),
     ]);
+    if (legacyReminderPending?.pending) legacyReminderNormalizationPending = true;
+    if (legacyReminderFailed?.failed) legacyReminderNormalizationFailed = true;
     notificationSourceCounts.push({ total: Number(counts?.total ?? 0), unread: Number(counts?.unread ?? 0) });
     for (const row of page.results ?? []) {
       if (row.__notification_read) notificationReadIds.add(row.__notification_id);
@@ -21578,6 +21609,8 @@ async function adminNotifications(
     notificationsTruncated,
     unreadNotificationsCount,
     totalNotifications: filteredCount,
+    legacyReminderNormalizationPending,
+    legacyReminderNormalizationFailed,
     nextOffset: cursorMode ? null : notificationsTruncated ? offset + limit : null,
     nextCursor,
     ...(includeUnreadIds
@@ -21652,7 +21685,13 @@ async function markAdminNotificationsRead(
       const notificationData = (await notificationResponse.json()) as {
         unreadNotificationIds?: unknown;
         nextCursor?: unknown;
+        legacyReminderNormalizationPending?: unknown;
       };
+      if (notificationData.legacyReminderNormalizationPending === true)
+        return json(
+          { error: "古いタスクリマインダーを準備中です。時間をおいてから一括既読を再試行してください。" },
+          409,
+        );
       ids = Array.isArray(notificationData.unreadNotificationIds)
         ? notificationData.unreadNotificationIds.filter(
             (id): id is string =>

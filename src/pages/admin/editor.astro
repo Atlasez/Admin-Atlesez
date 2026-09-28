@@ -2013,13 +2013,17 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           topLevelTags: Boolean(candidate.closest(".review-pane-content > .comment-tags")),
         });
         const popupContext = context(button);
-        const sourceButton = [...panel.querySelectorAll<HTMLButtonElement>(delegatedCommentClickSelector)].find((candidate) => {
+        const matchingSourceButtons = [...panel.querySelectorAll<HTMLButtonElement>(delegatedCommentClickSelector)].filter((candidate) => {
           const candidateData = Object.entries(candidate.dataset);
           return candidateData.length === dataAttributes.length
             && dataAttributes.every(([key, value]) => candidate.dataset[key] === value)
             && JSON.stringify(context(candidate)) === JSON.stringify(popupContext);
         });
-        if (!sourceButton || sourceButton.disabled) return;
+        // A stale or ambiguous clone must never dispatch an operation to a
+        // different comment/control in the owning editor.
+        if (matchingSourceButtons.length !== 1) return;
+        const [sourceButton] = matchingSourceButtons;
+        if (!sourceButton.isConnected || !panel.contains(sourceButton) || sourceButton.disabled) return;
         event.preventDefault();
         sourceButton.click();
         syncPopupContent();
