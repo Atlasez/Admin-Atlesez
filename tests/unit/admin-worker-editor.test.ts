@@ -1573,6 +1573,62 @@ describe("admin worker editor APIs", () => {
     ).toBe(true);
   });
 
+  it("keeps active assigned counts accurate while loading action-center history", async () => {
+    const historyEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("SELECT id,slug,name FROM atlasez_projects"))
+              return {
+                results: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+              } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          statement.first = async <T>() => {
+            if (query.includes("SELECT COUNT(*) AS open_count"))
+              return { open_count: 60, due_today: 0, due_soon: 0 } as T;
+            if (
+              query.includes("SELECT COUNT(*) AS count FROM editorial_tasks t")
+            )
+              return { count: 60 } as T;
+            if (
+              query.includes(
+                "SELECT COUNT(*) AS count FROM editorial_documents d",
+              )
+            )
+              return { count: 4 } as T;
+            if (
+              query.includes(
+                "SELECT COUNT(*) AS count FROM atlasez_member_applications",
+              )
+            )
+              return { count: 1 } as T;
+            if (query.includes("editorial_member_profile_change_requests"))
+              return { count: 2 } as T;
+            if (query.includes("editorial_project_profile_change_requests"))
+              return { count: 3 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center?view=history"),
+      historyEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      view: "history",
+      counts: { assigned: 70, assignedItemsTruncated: false },
+    });
+  });
+
   it("limits active action-center articles to states that require work", async () => {
     let documentQuery = "";
     let documentBindings: unknown[] = [];
