@@ -6032,10 +6032,14 @@ async function listEditorialDocuments(
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
   if (!includeArchived) filters.push("d.archived_at IS NULL");
   const searchParams = new URL(request.url).searchParams;
-  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  // Keep the first page small enough for Cloudflare's Worker CPU budget. The
+  // article index can load additional pages explicitly, so a smaller default
+  // does not reduce coverage while avoiding 503s when the D1 result contains
+  // many enriched rows.
+  const requestedLimit = Number(searchParams.get("limit") ?? "20");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-    : 50;
+    : 20;
   const rawCursor = searchParams.get("cursor");
   if (rawCursor) {
     const separator = rawCursor.indexOf("|");

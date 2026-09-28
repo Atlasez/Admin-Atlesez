@@ -1170,7 +1170,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (!response.ok || data.ok !== true) throw new Error(data.error ?? "公開記事を運営管理へ登録できませんでした。");
         registeredPublicArticleIds.set(publicArticleKey(source), data.documentId);
         setCatalogFeedback(data.registered === false ? `「${source.title}」はすでに運営管理へ登録されています。外部公開やPRは開始していません。` : `「${source.title}」を運営管理へ登録しました。外部公開やPRは開始していません。`);
-        await load();
+        // Registration already returns the authoritative document id. Update
+        // the local catalog immediately instead of reloading the editorial
+        // list and GitHub catalog after every item; repeated reloads can
+        // exhaust the Worker CPU budget during bulk registration.
+        render();
       } catch (error) {
         setCatalogFeedback(error instanceof Error ? error.message : "公開記事を運営管理へ登録できませんでした。", true);
         link.textContent = "運営管理へ登録";
