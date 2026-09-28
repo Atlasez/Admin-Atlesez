@@ -9460,9 +9460,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   const documentVisibility = documentVisibilityFor(scope);
   // 一覧のLIMITとは独立して、同じ可視条件の全件数を数える。表示上限で切れた
   // 件数を「担当項目」の実数として見せないため、5種類を一覧取得と並行集計する。
-  const assignedCountPromise = historyOnly
-    ? Promise.resolve(0)
-    : Promise.all([
+  const assignedCountPromise = Promise.all([
         env.REPORTS.prepare(
           `SELECT COUNT(*) AS count FROM editorial_tasks t
             WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'`,
@@ -9761,7 +9759,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
       approvals: workflowSummary.pendingApprovals,
       assigned: assignedCount,
-      assignedItemsTruncated: assignedCount > items.filter((item) => item.kind !== "notification").length,
+      assignedItemsTruncated: !historyOnly && assignedCount > items.filter((item) => item.kind !== "notification").length,
     },
     scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects, projects: projectIds },
   });
