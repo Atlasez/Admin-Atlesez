@@ -26,6 +26,8 @@ jobs:
         run: npm ci
       - name: Cloudflare本番ターゲット検証
         run: npm run verify:deploy-config
+      - name: Wrangler CLI の依存解決確認
+        run: npm run verify:deploy-cli
       - name: コンテンツスキーマ・重複ID・循環検査
         run: node scripts/validate-content.mjs
       - name: 数式のKaTeX描画検査
