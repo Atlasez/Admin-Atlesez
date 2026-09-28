@@ -555,6 +555,75 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     );
   });
 
+  test("記事一覧のバックグラウンド更新中も表示を消さず、完了後に差し替える", async ({
+    page,
+  }) => {
+    let requestCount = 0;
+    let releaseRefresh: (() => void) | null = null;
+    await page.route("**/api/admin/editor/documents**", async (route) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await route.fulfill({
+          json: {
+            scope: { email: "alice@example.com", allSubjects: true },
+            documents: [
+              {
+                id: "stable-doc",
+                subject: "mathematics",
+                category: "algebra",
+                title: "更新前も表示される記事",
+                status: "draft",
+                updated_at: "2026-09-01T00:00:00.000Z",
+                published_at: null,
+              },
+            ],
+            pagination: { hasMore: false, nextCursor: null },
+          },
+        });
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        releaseRefresh = resolve;
+      });
+      await route.fulfill({
+        json: {
+          scope: { email: "alice@example.com", allSubjects: true },
+          documents: [
+            {
+              id: "stable-doc",
+              subject: "mathematics",
+              category: "algebra",
+              title: "更新後に差し替わる記事",
+              status: "draft",
+              updated_at: "2026-09-02T00:00:00.000Z",
+              published_at: null,
+            },
+          ],
+          pagination: { hasMore: false, nextCursor: null },
+        },
+      });
+    });
+
+    await page.goto("admin/articles/?verify=background-refresh");
+    await expect(page.locator("[data-list]")).toContainText(
+      "更新前も表示される記事",
+    );
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect.poll(() => requestCount).toBe(2);
+    await expect(page.locator("[data-list]")).toContainText(
+      "更新前も表示される記事",
+    );
+    await expect(page.locator("[data-list]")).not.toHaveClass(/loading-state/);
+    expect(releaseRefresh).not.toBeNull();
+    const release = releaseRefresh as unknown as () => void;
+    release();
+    await expect(page.locator("[data-list]")).toContainText(
+      "更新後に差し替わる記事",
+    );
+  });
+
   test("D-3d: 原稿一覧の取得失敗を共通の再試行導線で復旧できる", async ({
     page,
   }) => {
