@@ -294,6 +294,33 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
 });
 
+test("ヘッダーのアクションセンターはページ遷移せずポップアップで対応項目を開く", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  const actionCenterTab = page.getByRole("link", {
+    name: "アクションセンター",
+  });
+  await expect(actionCenterTab).toHaveAttribute(
+    "href",
+    "/admin/action-center/",
+  );
+  await actionCenterTab.click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "アクションセンター" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "対応が必要な項目" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /定義を確認/ }),
+  ).toContainText("タスク");
+  await expect(page).toHaveURL(/\/admin\/articles\//);
+});
+
 test("アクションセンターをタブで開いた履歴を別画面の操作検索から再利用できる", async ({
   page,
 }) => {
