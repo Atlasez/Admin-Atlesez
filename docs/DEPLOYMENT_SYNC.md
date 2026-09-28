@@ -13,6 +13,8 @@ Cloudflare本番がGitHub `main`と一致しているかを、定期的にGitHub
 - `https://admin.atlasez.org/build-info.json`
 - `https://atlasez.org/build-info.json`
 
+`.github/workflows/verify-admin-production.yml`は`main`へのMerge後と15分ごとに、現在の`main` SHAと公開ADMINの`build-info.json`を照合する。反映待ちのため段階的に再確認するが、Cloudflareへの書き込みや手動Deployは行わない。不一致のまま終了したWorkflowは、本番反映済みと扱わず、Workers Buildsの接続・Build/Deployログ・Versionの100%配信を調査する。
+
 差分がある場合だけ、`ops/cloudflare-deployment-sync`ブランチへ記録をCommitし、`main`向けの同期PRを作成または更新する。差分がない場合はPRを作成しない。
 
 記録ファイルは[`docs/deployments/cloudflare-latest.json`](deployments/cloudflare-latest.json)である。これは本番コードの正本ではなく、CloudflareとGitHubの状態を突き合わせる証跡である。
