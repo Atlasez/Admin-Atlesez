@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
@@ -2495,24 +2496,64 @@ describe("applicant stage server-side access", () => {
     ]);
   });
 
-  it("keeps notification read-state queries within D1's 100-bind limit", async () => {
+  it("counts every SQL notification candidate and marks all unread rows beyond 500", async () => {
     const memberEnvironment = stageEnv("accepted", false, true);
+    const notificationDb = new DatabaseSync(":memory:");
+    notificationDb.exec(`
+      CREATE TABLE editorial_documents (id TEXT PRIMARY KEY, title TEXT, created_by TEXT);
+      CREATE TABLE editorial_comments (
+        id TEXT PRIMARY KEY,
+        body TEXT,
+        parent_comment_id TEXT,
+        created_at TEXT,
+        document_id TEXT,
+        created_by TEXT
+      );
+    `);
+    const insertDocument = notificationDb.prepare(
+      "INSERT INTO editorial_documents (id, title, created_by) VALUES (?, ?, ?)",
+    );
+    const insertComment = notificationDb.prepare(
+      "INSERT INTO editorial_comments (id, body, parent_comment_id, created_at, document_id, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    const candidateCount = 10_605;
+    for (let index = 0; index < candidateCount; index++) {
+      const id = `unread${String(index).padStart(4, "0")}`;
+      const documentId = `document-${index}`;
+      insertDocument.run(
+        documentId,
+        `Article ${index}`,
+        "applicant@example.com",
+      );
+      insertComment.run(
+        id,
+        `Notification ${index}`,
+        null,
+        new Date(Date.UTC(2026, 0, 1) - index * 1_000).toISOString(),
+        documentId,
+        "commenter@example.com",
+      );
+    }
     const readStateQueries: Array<{ query: string; values: unknown[] }> = [];
     const readNotificationIds = new Set<string>();
+    const insertedNotificationIds: string[] = [];
+    const notificationCandidateQueries: string[] = [];
     const prepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = prepare(query);
       if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
-        statement.all = async <T>() => ({
-          results: Array.from({ length: 205 }, (_, index) => ({
-            id: `unread${String(index).padStart(4, "0")}`,
-            body: `Notification ${index}`,
-            parent_comment_id: null,
-            created_at: `2026-08-${String(22 - Math.floor(index / 24)).padStart(2, "0")}T00:00:00.000Z`,
-            document_id: `document-${index}`,
-            title: `Article ${index}`,
-          })) as T[],
-        });
+        notificationCandidateQueries.push(query);
+        statement.all = async <T>() => {
+          return {
+            results: notificationDb
+              .prepare(query)
+              .all(
+                ...(statement.boundValues as (
+                  string | number | bigint | null | Uint8Array
+                )[]),
+              ) as T[],
+          };
+        };
       }
       if (
         query.startsWith("SELECT notification_id FROM admin_notification_reads")
@@ -2547,30 +2588,54 @@ describe("applicant stage server-side access", () => {
     expect(response.status).toBe(200);
     const data = (await response.json()) as {
       notifications: Array<{ id: string; read: boolean }>;
+      totalNotifications: number;
       unreadNotificationsCount: number;
       unreadNotificationIds: string[];
     };
     expect(data.notifications).toHaveLength(100);
-    expect(data.unreadNotificationsCount).toBe(199);
-    expect(data.unreadNotificationIds).toHaveLength(199);
+    expect(data.totalNotifications).toBe(candidateCount);
+    expect(data.unreadNotificationsCount).toBe(10_389);
+    expect(data.unreadNotificationIds).toHaveLength(10_389);
     expect(
       data.notifications.every(
         (notification) =>
           readNotificationIds.has(notification.id) === notification.read,
       ),
     ).toBe(true);
+    expect(notificationCandidateQueries).not.toHaveLength(0);
+    expect(
+      notificationCandidateQueries.every((query) =>
+        /\bLIMIT\s+\d+/i.test(query),
+      ),
+    ).toBe(false);
     expect(
       data.unreadNotificationIds.every((id) => !readNotificationIds.has(id)),
     ).toBe(true);
-    expect(readStateQueries).toHaveLength(3);
+    expect(readStateQueries).toHaveLength(108);
     expect(readStateQueries.map(({ values }) => values.length)).toEqual([
-      100, 100, 8,
+      ...Array<number>(107).fill(100),
+      13,
     ]);
     expect(
       readStateQueries.every(
         ({ values }) => values[0] === "applicant@example.com",
       ),
     ).toBe(true);
+
+    const deepPageResponse = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=100&offset=10001"),
+      memberEnvironment as never,
+    );
+    expect(deepPageResponse.status).toBe(200);
+    const deepPageData = (await deepPageResponse.json()) as {
+      notifications: Array<{ id: string }>;
+      totalNotifications: number;
+      nextOffset: number | null;
+    };
+    expect(deepPageData.notifications).toHaveLength(100);
+    expect(deepPageData.notifications[0]?.id).toBe("comment-unread10001");
+    expect(deepPageData.totalNotifications).toBe(candidateCount);
+    expect(deepPageData.nextOffset).toBe(10_101);
     expect(
       readStateQueries.every(
         ({ query, values }) =>
@@ -2578,6 +2643,36 @@ describe("applicant stage server-side access", () => {
           values.length <= 100,
       ),
     ).toBe(true);
+
+    const originalPrepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = originalPrepare(query);
+      if (query.startsWith("INSERT INTO admin_notification_reads")) {
+        statement.bind = (...values: unknown[]) => {
+          insertedNotificationIds.push(String(values[1]));
+          return statement;
+        };
+      }
+      return statement;
+    };
+
+    const markAllResponse = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+    expect(markAllResponse.status).toBe(200);
+    expect(await markAllResponse.json()).toMatchObject({
+      ok: true,
+      markedCount: 10_389,
+    });
+    expect(insertedNotificationIds).toHaveLength(10_389);
+    expect(insertedNotificationIds).toEqual(
+      Array.from(
+        { length: candidateCount },
+        (_, index) => `comment-unread${String(index).padStart(4, "0")}`,
+      ).filter((id) => !readNotificationIds.has(id)),
+    );
+    notificationDb.close();
   });
 
   it("keeps the application directory open for an existing member", async () => {

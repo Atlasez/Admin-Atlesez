@@ -21059,7 +21059,7 @@ async function adminNotifications(
     taskRows,
   ] = await Promise.all([
     env.REPORTS.prepare(
-      "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
+      "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC",
     )
       .bind(scope.email, scope.email)
       .all<{
@@ -21077,7 +21077,7 @@ async function adminNotifications(
              JOIN editorial_documents d ON d.id = c.document_id
             WHERE ${documentVisibility.sql}
               AND d.created_by != ? AND c.created_by != ? AND instr(c.body, ?) > 0
-            ORDER BY c.created_at DESC LIMIT 12`,
+            ORDER BY c.created_at DESC`,
         )
           .bind(...documentVisibility.bindings, scope.email, scope.email, mentionNeedle)
           .all<{
@@ -21099,18 +21099,18 @@ async function adminNotifications(
           }[],
         }),
     env.REPORTS.prepare(
-      "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
+      "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC",
     )
       .bind(scope.email)
       .all<{ id: string; title: string; updated_at: string }>(),
     env.REPORTS.prepare(
-      "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC LIMIT 12",
+      "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC",
     )
       .bind(scope.email)
       .all<{ id: string; title: string; published_at: string }>(),
     scope.isManager
       ? env.REPORTS.prepare(
-          "SELECT id, title, subject, updated_at FROM editorial_documents WHERE status = 'approved' AND published_at IS NULL AND publication_pr_number IS NULL ORDER BY updated_at DESC LIMIT 30",
+          "SELECT id, title, subject, updated_at FROM editorial_documents WHERE status = 'approved' AND published_at IS NULL AND publication_pr_number IS NULL ORDER BY updated_at DESC",
         ).all<{
           id: string;
           title: string;
@@ -21127,7 +21127,7 @@ async function adminNotifications(
         }),
     scope.isManager
       ? env.REPORTS.prepare(
-          "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC LIMIT 30",
+        "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC",
         ).all<{
           id: string;
           subject: string;
@@ -21149,7 +21149,7 @@ async function adminNotifications(
           `SELECT id,name,email,project_slug,created_at
              FROM atlasez_member_applications
             WHERE status='new'${applicationProjectFilter}
-            ORDER BY created_at DESC LIMIT 20`,
+            ORDER BY created_at DESC`,
         ).bind(...applicationProjectSlugs).all<{
           id: string;
           name: string;
@@ -21172,7 +21172,7 @@ async function adminNotifications(
          JOIN atlasez_projects p ON p.id=t.project_id
          WHERE t.status != 'done' AND t.archived_at IS NULL AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))${notificationProjectFilter}
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
-         ORDER BY r.remind_at ASC LIMIT 50`,
+         ORDER BY r.remind_at ASC`,
     )
       .bind(scope.email, scope.email, scope.email, ...notificationProjectBindings, scope.email)
       .all<{
@@ -21202,7 +21202,7 @@ async function adminNotifications(
              }` 
        }
        ${notificationProjectFilter}
-       ORDER BY t.updated_at DESC LIMIT 40`,
+       ORDER BY t.updated_at DESC`,
     )
       .bind(
         ...(scope.isManager
@@ -21240,7 +21240,7 @@ async function adminNotifications(
            WHERE r.role='project-leader' AND lower(r.email)=lower(?)
          ))
        )
-       ORDER BY d.updated_at DESC LIMIT 20`,
+       ORDER BY d.updated_at DESC`,
     )
       .bind(scope.email, scope.email)
       .all<{
@@ -21256,7 +21256,7 @@ async function adminNotifications(
        JOIN editorial_documents d ON d.id=r.document_id
        WHERE r.decision='rejected' AND lower(d.created_by)=lower(?)
          AND r.created_at=(SELECT MAX(r2.created_at) FROM editorial_publication_reviews r2 WHERE r2.document_id=r.document_id)
-       ORDER BY r.created_at DESC LIMIT 20`,
+       ORDER BY r.created_at DESC`,
     )
       .bind(scope.email)
       .all<{
@@ -21372,7 +21372,7 @@ async function adminNotifications(
     : 20;
   const requestedOffset = Number(new URL(request.url).searchParams.get("offset") ?? "0");
   const offset = Number.isFinite(requestedOffset)
-    ? Math.min(Math.max(Math.trunc(requestedOffset), 0), 10_000)
+    ? Math.min(Math.max(Math.trunc(requestedOffset), 0), Number.MAX_SAFE_INTEGER - limit)
     : 0;
   // 表示用のページ上限とは別に、未読件数は全候補を対象に集計する。
   const readNotificationIds = sortedNotifications.map((item) => item.id);
@@ -21471,7 +21471,7 @@ async function markAdminNotificationsRead(
         )
       : [];
   }
-  if (ids.length > 500)
+  if (payload?.all !== true && ids.length > 500)
     return json({ error: "一度に既読にできる通知は500件までです。" }, 400);
   if (!ids.length && payload?.all !== true)
     return json({ error: "既読にする通知を選択してください。" }, 400);
