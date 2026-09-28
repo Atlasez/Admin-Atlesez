@@ -270,8 +270,8 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
     width: Number.parseFloat(getComputedStyle(element).width),
     rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
   }));
-  expect(dialogSize.width).toBeGreaterThan(38 * dialogSize.rem);
-  expect(dialogSize.width).toBeLessThan(41 * dialogSize.rem);
+  expect(dialogSize.width).toBeGreaterThan(52 * dialogSize.rem);
+  expect(dialogSize.width).toBeLessThan(57 * dialogSize.rem);
   await expect(
     dialog.getByRole("heading", { name: "最近使った操作" }),
   ).toBeVisible();
@@ -319,6 +319,36 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
     dialog.getByRole("option", { name: /定義を確認/ }),
   ).toContainText("タスク");
   await expect(page).toHaveURL(/\/admin\/articles\//);
+});
+
+test("アクションセンターのモーダルから対応操作と通知の既読化を実行できる", async ({
+  page,
+}) => {
+  let transitionBody: Record<string, unknown> | null = null;
+  await mockShell(page, (body) => {
+    transitionBody = body as Record<string, unknown>;
+  });
+  await page.goto("admin/articles/");
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  await expect(dialog.getByRole("button", { name: "着手" })).toBeVisible();
+  await dialog.getByRole("button", { name: "着手" }).click();
+  expect(transitionBody).toMatchObject({
+    entityType: "task",
+    entityId: "task-1",
+    fromState: "open",
+    toState: "doing",
+  });
+  await expect(
+    dialog.getByRole("button", { name: "既読にする" }),
+  ).toBeVisible();
+  const readRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/admin/notifications/read") &&
+      request.method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "既読にする" }).click();
+  expect((await readRequest).postDataJSON()).toEqual({ ids: ["n-1"] });
 });
 
 test("アクションセンターをタブで開いた履歴を別画面の操作検索から再利用できる", async ({
