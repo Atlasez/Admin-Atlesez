@@ -2560,10 +2560,10 @@ async function transitionTaskState(
   if (fromState !== toState && !workflowTransitionsFor("task", fromState).some((item) => item.to === toState))
     return json({ error: "許可されていない状態遷移です。", code: "INVALID_TRANSITION" }, 400);
   const replay = await env.REPORTS.prepare(
-    "SELECT entity_id,from_state,to_state,created_at FROM workflow_transition_events WHERE actor_email=? AND idempotency_key=?",
-  ).bind(scope.email, idempotencyKey).first<{ entity_id: string; from_state: string; to_state: string; created_at: string }>().catch(() => null);
-  if (replay)
-    return json({ ok: true, replayed: true, transition: { entityId: replay.entity_id, fromState: replay.from_state, toState: replay.to_state, createdAt: replay.created_at } });
+    "SELECT entity_type,entity_id,from_state,to_state,created_at FROM workflow_transition_events WHERE actor_email=? AND idempotency_key=?",
+  ).bind(scope.email, idempotencyKey).first<{ entity_type: string; entity_id: string; from_state: string; to_state: string; created_at: string }>().catch(() => null);
+  if (replay && (replay.entity_type !== "task" || replay.entity_id !== taskId || replay.from_state !== fromState || replay.to_state !== toState))
+    return json({ error: "この操作キーは別の状態変更に使われています。", code: "IDEMPOTENCY_KEY_REUSED" }, 409);
   const task = await env.REPORTS.prepare(
     "SELECT project_id,subject,assignee_email,task_kind,title,created_by,status,updated_at,archived_at FROM editorial_tasks WHERE id=?",
   ).bind(taskId).first<{ project_id: string; subject: string | null; assignee_email: string | null; task_kind: string; title: string; created_by: string; status: string; updated_at: string; archived_at: string | null }>();
@@ -2572,6 +2572,8 @@ async function transitionTaskState(
   if (isResponse(project)) return project;
   if (!scope.isManager && !canManageProject && !taskAssignedTo(task.assignee_email, scope.email, task.task_kind) && task.created_by.toLowerCase() !== scope.email.toLowerCase())
     return json({ error: workflowTransitionPolicyError("assignee"), code: "FORBIDDEN_TRANSITION" }, 403);
+  if (replay)
+    return json({ ok: true, replayed: true, transition: { entityType: "task", entityId: replay.entity_id, fromState: replay.from_state, toState: replay.to_state, createdAt: replay.created_at } });
   if (task.status !== fromState)
     return json({ error: "他の更新が先に反映されています。再読み込みしてから再試行してください。", code: "STALE_STATE", currentState: task.status, updatedAt: task.updated_at }, 409);
   if (expectedUpdatedAt && task.updated_at !== expectedUpdatedAt)

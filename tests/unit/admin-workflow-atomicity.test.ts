@@ -471,6 +471,53 @@ it("records and replays application status changes only once", async () => {
   ).toEqual({ count: 1 });
 });
 
+it("rejects task workflow idempotency keys already used by another entity", async () => {
+  const { db, environment } = createEnvironment();
+  db.prepare(
+    `INSERT INTO workflow_transition_events
+    (id,entity_type,entity_id,from_state,to_state,actor_email,idempotency_key,metadata_json,created_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`,
+  ).run(
+    "application-event",
+    "application",
+    "223e4567-e89b-12d3-a456-426614174000",
+    "reviewing",
+    "rejected",
+    "reviewer@example.com",
+    "cross-entity-key",
+    "{}",
+    "2026-09-28T00:00:00.000Z",
+  );
+
+  const response = await worker.fetch(
+    new Request("http://localhost/api/admin/workflow/transition", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        entityType: "task",
+        entityId: "task-1",
+        fromState: "open",
+        toState: "doing",
+        idempotencyKey: "cross-entity-key",
+      }),
+    }),
+    environment as never,
+  );
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: "IDEMPOTENCY_KEY_REUSED",
+  });
+  expect(
+    db
+      .prepare("SELECT status FROM atlasez_member_applications WHERE id=?")
+      .get("223e4567-e89b-12d3-a456-426614174000"),
+  ).toEqual({ status: "reviewing" });
+});
+
 it("rejects a delegated application transition when its state changes after the workflow read", async () => {
   const { db, environment } = createEnvironment({ raceApplicationRead: true });
 
@@ -508,8 +555,12 @@ it("commits application acceptance, profile, membership, and event as one operat
     db.prepare("SELECT display_name FROM editorial_member_profiles").get(),
   ).toEqual({ display_name: "Applicant Example" });
   expect(
-    db.prepare("SELECT project_id,role FROM atlasez_project_memberships").get(),
-  ).toEqual({ project_id: "atlas", role: "manager" });
+    db
+      .prepare(
+        "SELECT project_id,role FROM atlasez_project_memberships WHERE email='applicant@example.com'",
+      )
+      .get(),
+  ).toEqual({ project_id: "atlas", role: "member" });
   expect(
     db
       .prepare(
