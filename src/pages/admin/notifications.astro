@@ -33,7 +33,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <div class="notification-list" data-notification-list aria-live="polite">
         <p class="notification-loading" role="status">通知を読み込んでいます…</p>
       </div>
-      <p class="notification-truncation" data-notification-truncation hidden>新しい通知を先に表示しています。</p>
+      <p class="notification-truncation" data-notification-truncation hidden aria-live="polite">新しい通知を先に表示しています。</p>
       <div class="notification-pagination" data-notification-pagination hidden>
         <span data-pagination-summary></span>
         <button type="button" data-load-more>さらに読み込む</button>
@@ -60,7 +60,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     notifications?: Notification[];
     unreadNotificationsCount?: number;
     totalNotifications?: number;
-    nextOffset?: number | null;
+    nextCursor?: string | null;
   };
 
   const initNotificationInbox = () => {
@@ -98,7 +98,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     let rows: Notification[] = [];
     let unreadTotal = 0;
     let total = 0;
-    let nextOffset: number | null = 0;
+    let nextCursor: string | null = null;
     let requestGeneration = 0;
     let filter: "all" | "unread" = "all";
     let retry: ReturnType<typeof createAdminLoadRetry>;
@@ -128,7 +128,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         retry.success();
       }
       truncation.hidden = total <= rows.length;
-      pagination.hidden = nextOffset === null;
+      truncation.textContent = "新しい通知を先に表示しています。";
+      pagination.hidden = nextCursor === null;
       paginationSummary.textContent = `${rows.length} / ${total}件`;
     };
 
@@ -136,11 +137,14 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       if (!append) retry.begin();
       const generation = append ? requestGeneration : ++requestGeneration;
       const requestFilter = filter;
-      const offset = append ? nextOffset : 0;
-      if (offset === null) return;
+      const cursor = append ? nextCursor : null;
+      if (append && cursor === null) return;
       let response: Response;
       try {
-        response = await fetch(`/api/admin/notifications?limit=100&offset=${offset}${requestFilter === "unread" ? "&unreadOnly=true" : ""}`, { credentials: "same-origin", cache: "no-store" });
+        const parameters = new URLSearchParams({ limit: "100" });
+        if (cursor) parameters.set("cursor", cursor);
+        if (requestFilter === "unread") parameters.set("unreadOnly", "true");
+        response = await fetch(`/api/admin/notifications?${parameters}`, { credentials: "same-origin", cache: "no-store" });
       } catch (error) {
         if (generation !== requestGeneration || requestFilter !== filter) return;
         throw error;
@@ -155,7 +159,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       rows = append ? [...rows, ...incoming] : incoming;
       unreadTotal = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? 0)));
       total = Math.max(rows.length, Math.trunc(Number(data.totalNotifications ?? rows.length)));
-      nextOffset = typeof data.nextOffset === "number" ? data.nextOffset : null;
+      nextCursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
       render();
     };
     retry = createAdminLoadRetry(root, () => load(), "通知を読み込めませんでした。", { scope: "notification-inbox" });
@@ -175,7 +179,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       filter = nextFilter;
       requestGeneration += 1;
       rows = [];
-      nextOffset = 0;
+      nextCursor = null;
       void load().catch((error) => retry.fail(error));
     }));
     markAll.addEventListener("click", () => { void setRead([], true).catch((error) => retry.fail(error)); });

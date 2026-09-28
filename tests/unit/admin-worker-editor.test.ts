@@ -1239,6 +1239,8 @@ describe("admin worker editor APIs", () => {
             results: [
               {
                 id: "comment-newest1",
+                __notification_id: "comment-comment-newest1",
+                __notification_read: 1,
                 body: "最新のコメント",
                 parent_comment_id: null,
                 created_at: "2026-09-28T09:00:00.000Z",
@@ -1247,6 +1249,8 @@ describe("admin worker editor APIs", () => {
               },
               {
                 id: "comment-older001",
+                __notification_id: "comment-comment-older001",
+                __notification_read: 0,
                 body: "前のコメント",
                 parent_comment_id: null,
                 created_at: "2026-09-27T09:00:00.000Z",
@@ -1267,9 +1271,13 @@ describe("admin worker editor APIs", () => {
       }
 
       override async first<T>() {
-        if (this.query.includes("SELECT COUNT(*) AS open_count"))
-          return { open_count: 0, due_today: 0, due_soon: 0 } as T;
-        if (this.query.includes("SELECT COUNT(*)")) return { count: 0 } as T;
+        if (
+          this.query.includes("COUNT(*) AS total") &&
+          this.query.includes("FROM (SELECT c.id")
+        )
+          return { total: 2, unread: 1 } as T;
+        if (this.query.includes("COUNT(*) AS total"))
+          return { total: 0, unread: 0 } as T;
         return null as T | null;
       }
     }
@@ -1344,20 +1352,14 @@ describe("admin worker editor APIs", () => {
 
   it("keeps a grouped action-center notification unread when any event is unread", async () => {
     class NotificationStatement extends EmptyStatement {
-      private boundValues: unknown[] = [];
-
-      override bind(...values: unknown[]) {
-        super.bind(...values);
-        this.boundValues = values;
-        return this;
-      }
-
       override async all<T>() {
         if (this.query.includes("WHERE d.created_by = ? AND c.created_by != ?"))
           return {
             results: [
               {
                 id: "newest123",
+                __notification_id: "comment-newest123",
+                __notification_read: 1,
                 body: "既読の新しいコメント",
                 parent_comment_id: null,
                 created_at: "2026-09-20T12:00:00.000Z",
@@ -1366,6 +1368,8 @@ describe("admin worker editor APIs", () => {
               },
               {
                 id: "older1234",
+                __notification_id: "comment-older1234",
+                __notification_read: 0,
                 body: "未読の古いコメント",
                 parent_comment_id: null,
                 created_at: "2026-09-19T12:00:00.000Z",
@@ -1374,18 +1378,18 @@ describe("admin worker editor APIs", () => {
               },
             ] as T[],
           };
-        if (
-          this.query.startsWith(
-            "SELECT notification_id FROM admin_notification_reads",
-          )
-        )
-          return {
-            results: this.boundValues
-              .slice(1)
-              .filter((id) => id === "comment-newest123")
-              .map((notification_id) => ({ notification_id })) as T[],
-          };
         return { results: [] as T[] };
+      }
+
+      override async first<T>() {
+        if (
+          this.query.includes("COUNT(*) AS total") &&
+          this.query.includes("FROM (SELECT c.id")
+        )
+          return { total: 2, unread: 1 } as T;
+        if (this.query.includes("COUNT(*) AS total"))
+          return { total: 0, unread: 0 } as T;
+        return null as T | null;
       }
     }
     const actionCenterEnv = {
@@ -1503,7 +1507,15 @@ describe("admin worker editor APIs", () => {
     expect(applicationQueries.length).toBeGreaterThanOrEqual(2);
     for (const query of applicationQueries) {
       expect(query.sql).toContain("project_slug IN (?)");
-      expect(query.bindings).toEqual(["secretariat"]);
+      if (query.sql.includes("SELECT s.*")) {
+        expect(query.bindings).toEqual([
+          "member@example.com",
+          "secretariat",
+          100,
+        ]);
+      } else {
+        expect(query.bindings).toEqual(["secretariat"]);
+      }
     }
   });
 

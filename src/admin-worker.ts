@@ -21169,6 +21169,103 @@ async function adminNotifications(
   const applicationProjectFilter = applicationProjectSlugs.length
     ? ` AND project_slug IN (${applicationProjectSlugs.map(() => "?").join(",")})`
     : " AND 0=1";
+  const notificationParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(notificationParams.get("limit") ?? "20");
+  const includeUnreadIds = notificationParams.get("includeUnreadIds") === "true";
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), includeUnreadIds ? 1_000 : 100)
+    : 20;
+  const requestedOffset = Number(notificationParams.get("offset") ?? "0");
+  if (!Number.isSafeInteger(requestedOffset) || requestedOffset < 0)
+    return json({ error: "通知ページの位置が不正です。" }, 400);
+  // Offset pagination is retained for older clients, but no longer permits
+  // deep scans. The inbox uses a keyset cursor for pages beyond the first.
+  if (requestedOffset > 10_000)
+    return json({ error: "深いページにはカーソルを使用してください。" }, 400);
+  const offset = requestedOffset;
+  const unreadOnly = notificationParams.get("unreadOnly") === "true";
+  const encodedCursor = notificationParams.get("cursor");
+  let cursor: { updatedAt: string; id: string } | null = null;
+  if (encodedCursor) {
+    try {
+      if (encodedCursor.length > 2_048) throw new Error("cursor too long");
+      const base64 = encodedCursor.replace(/-/g, "+").replace(/_/g, "/");
+      const binary = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const value = JSON.parse(new TextDecoder().decode(bytes)) as {
+        updatedAt?: unknown;
+        id?: unknown;
+      };
+      if (
+        typeof value.updatedAt !== "string" ||
+        !Number.isFinite(Date.parse(value.updatedAt)) ||
+        typeof value.id !== "string" ||
+        value.id.length < 1 ||
+        value.id.length > 512 ||
+        /[\u0000-\u001f\u007f]/.test(value.id)
+      ) throw new Error("invalid cursor");
+      cursor = { updatedAt: value.updatedAt, id: value.id };
+    } catch {
+      return json({ error: "通知ページのカーソルが不正です。" }, 400);
+    }
+  }
+  if (cursor && offset !== 0)
+    return json({ error: "カーソルとoffsetは同時に指定できません。" }, 400);
+  const notificationReadIds = new Set<string>();
+  const notificationSourceCounts: Array<{ total: number; unread: number }> = [];
+  const notificationFetchLimit = cursor || includeUnreadIds ? limit + 1 : offset + limit;
+  const notificationSourceMetadata = (sql: string) => {
+    if (sql.includes("FROM editorial_task_reminders"))
+      return { id: "'task-reminder-rule-' || s.reminder_id || '-' || s.remind_at", time: "remind_at", dueReminder: true };
+    if (sql.includes("instr(c.body, ?) > 0")) return { id: "'mention-' || s.id", time: "created_at" };
+    if (sql.includes("d.created_by = ? AND c.created_by != ?")) return { id: "'comment-' || s.id", time: "created_at" };
+    if (sql.includes("FROM atlasez_member_applications")) return { id: "'application-' || s.id", time: "created_at" };
+    if (sql.includes("FROM editorial_publication_reviews")) return { id: "'publication-review-returned-' || s.id || '-' || s.created_at", time: "created_at" };
+    if (sql.includes("publication_review_stage")) return { id: "'publication-review-' || s.id || '-' || s.publication_review_stage", time: "updated_at" };
+    if (sql.includes("publication_pr_number IS NULL")) return { id: "'publication-ready-' || s.id", time: "updated_at" };
+    if (sql.includes("FROM editorial_review_assignments") || sql.includes("JOIN editorial_review_assignments")) return { id: "'review-' || s.id", time: "updated_at" };
+    if (sql.includes("FROM editorial_tasks t")) return { id: "CASE WHEN s.task_kind='feedback' THEN 'feedback-request-' ELSE 'task-request-' END || s.id", time: "updated_at" };
+    if (sql.includes("status = 'approved'") && sql.includes("published_at IS NULL")) return { id: "'approved-' || s.id", time: "updated_at" };
+    if (sql.includes("published_at IS NOT NULL")) return { id: "'published-' || s.id", time: "published_at" };
+    return null;
+  };
+  const queryNotificationSource = async <T>(
+    sql: string,
+    bindings: unknown[],
+  ): Promise<{
+    results: Array<T & { __notification_id: string; __notification_read: number }>;
+  }> => {
+    const metadata = notificationSourceMetadata(sql);
+    if (!metadata) throw new Error("Unknown notification source query");
+    const source = `(${sql}) AS s`;
+    const dueClause = "dueReminder" in metadata
+      ? "s.remind_at_utc IS NOT NULL AND s.remind_at_utc <= ? AND "
+      : "";
+    const dueBindings = "dueReminder" in metadata ? [new Date().toISOString()] : [];
+    const readExpr = `EXISTS (SELECT 1 FROM admin_notification_reads nr WHERE nr.email = ? AND nr.notification_id = ${metadata.id})`;
+    const unreadClause = unreadOnly || includeUnreadIds ? `NOT ${readExpr} AND ` : "";
+    const cursorClause = cursor
+      ? `AND (s.${metadata.time} < ? OR (s.${metadata.time} = ? AND ${metadata.id} < ?)) `
+      : "";
+    const cursorBindings = cursor
+      ? [cursor.updatedAt, cursor.updatedAt, cursor.id]
+      : [];
+    const [page, counts] = await Promise.all([
+      env.REPORTS.prepare(
+        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
+      ).bind(scope.email, ...bindings, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
+        .all<T & { __notification_id: string; __notification_read: number }>(),
+      env.REPORTS.prepare(
+        `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${dueClause}1=1`,
+      ).bind(scope.email, ...bindings, ...dueBindings)
+        .first<{ total: number; unread: number }>(),
+    ]);
+    notificationSourceCounts.push({ total: Number(counts?.total ?? 0), unread: Number(counts?.unread ?? 0) });
+    for (const row of page.results ?? []) {
+      if (row.__notification_read) notificationReadIds.add(row.__notification_id);
+    }
+    return page;
+  };
   const [
     commentRows,
     mentionRows,
@@ -21180,36 +21277,26 @@ async function adminNotifications(
     taskReminderRows,
     taskRows,
   ] = await Promise.all([
-    env.REPORTS.prepare(
-      "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC LIMIT 12",
-    )
-      .bind(scope.email, scope.email)
-      .all<{
-        id: string;
-        body: string;
-        parent_comment_id: string | null;
-        created_at: string;
-        document_id: string;
-        title: string;
-      }>(),
+    queryNotificationSource<{
+      id: string; body: string; parent_comment_id: string | null; created_at: string;
+      document_id: string; title: string;
+    }>(
+      "SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title FROM editorial_comments c JOIN editorial_documents d ON d.id = c.document_id WHERE d.created_by = ? AND c.created_by != ? ORDER BY c.created_at DESC",
+      [scope.email, scope.email],
+    ),
     mentionNeedle
-      ? env.REPORTS.prepare(
+      ? queryNotificationSource<{
+          id: string; body: string; parent_comment_id: string | null; created_at: string;
+          document_id: string; title: string;
+        }>(
           `SELECT c.id, c.body, c.parent_comment_id, c.created_at, d.id AS document_id, d.title
              FROM editorial_comments c
              JOIN editorial_documents d ON d.id = c.document_id
             WHERE ${documentVisibility.sql}
               AND d.created_by != ? AND c.created_by != ? AND instr(c.body, ?) > 0
-            ORDER BY c.created_at DESC LIMIT 12`,
+        ORDER BY c.created_at DESC`,
+          [...documentVisibility.bindings, scope.email, scope.email, mentionNeedle],
         )
-          .bind(...documentVisibility.bindings, scope.email, scope.email, mentionNeedle)
-          .all<{
-            id: string;
-            body: string;
-            parent_comment_id: string | null;
-            created_at: string;
-            document_id: string;
-            title: string;
-          }>()
       : Promise.resolve({
           results: [] as {
             id: string;
@@ -21220,25 +21307,19 @@ async function adminNotifications(
             title: string;
           }[],
         }),
-    env.REPORTS.prepare(
-      "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC LIMIT 12",
-    )
-      .bind(scope.email)
-      .all<{ id: string; title: string; updated_at: string }>(),
-    env.REPORTS.prepare(
-      "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC LIMIT 12",
-    )
-      .bind(scope.email)
-      .all<{ id: string; title: string; published_at: string }>(),
+    queryNotificationSource<{ id: string; title: string; updated_at: string }>(
+      "SELECT id, title, updated_at FROM editorial_documents WHERE created_by = ? AND status = 'approved' AND published_at IS NULL ORDER BY updated_at DESC",
+      [scope.email],
+    ),
+    queryNotificationSource<{ id: string; title: string; published_at: string }>(
+      "SELECT id, title, published_at FROM editorial_documents WHERE created_by = ? AND published_at IS NOT NULL ORDER BY published_at DESC",
+      [scope.email],
+    ),
     scope.isManager
-      ? env.REPORTS.prepare(
-          "SELECT id, title, subject, updated_at FROM editorial_documents WHERE status = 'approved' AND published_at IS NULL AND publication_pr_number IS NULL ORDER BY updated_at DESC LIMIT 30",
-        ).all<{
-          id: string;
-          title: string;
-          subject: string;
-          updated_at: string;
-        }>()
+      ? queryNotificationSource<{ id: string; title: string; subject: string; updated_at: string }>(
+          "SELECT id, title, subject, updated_at FROM editorial_documents WHERE status = 'approved' AND published_at IS NULL AND publication_pr_number IS NULL ORDER BY updated_at DESC",
+          [],
+        )
       : Promise.resolve({
           results: [] as {
             id: string;
@@ -21248,15 +21329,10 @@ async function adminNotifications(
           }[],
         }),
     scope.isManager
-      ? env.REPORTS.prepare(
-          "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC LIMIT 30",
-        ).all<{
-          id: string;
-          subject: string;
-          title: string;
-          updated_by: string;
-          updated_at: string;
-        }>()
+      ? queryNotificationSource<{ id: string; subject: string; title: string; updated_by: string; updated_at: string }>(
+        "SELECT d.id, d.subject, d.title, d.updated_by, d.updated_at FROM editorial_documents d LEFT JOIN editorial_review_assignments r ON r.document_id = d.id WHERE d.status = 'in-review' AND r.task_id IS NULL ORDER BY d.updated_at ASC",
+        [],
+      )
       : Promise.resolve({
           results: [] as {
             id: string;
@@ -21267,18 +21343,13 @@ async function adminNotifications(
           }[],
         }),
     canReviewApplications
-      ? env.REPORTS.prepare(
+      ? queryNotificationSource<{ id: string; name: string; email: string; project_slug: string; created_at: string }>(
           `SELECT id,name,email,project_slug,created_at
              FROM atlasez_member_applications
             WHERE status='new'${applicationProjectFilter}
-            ORDER BY created_at DESC LIMIT 20`,
-        ).bind(...applicationProjectSlugs).all<{
-          id: string;
-          name: string;
-          email: string;
-          project_slug: string;
-          created_at: string;
-        }>()
+            ORDER BY created_at DESC`,
+          applicationProjectSlugs,
+        )
       : Promise.resolve({
           results: [] as {
             id: string;
@@ -21288,26 +21359,22 @@ async function adminNotifications(
             created_at: string;
           }[],
         }),
-    env.REPORTS.prepare(
-      `SELECT r.id AS reminder_id,r.remind_at,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
+    queryNotificationSource<{
+      reminder_id: string; remind_at: string; remind_at_utc: string | null; timezone: string;
+      label: string; id: string; title: string; project_id: string; project_slug: string;
+    }>(
+      `SELECT r.id AS reminder_id,r.remind_at,r.remind_at_utc,r.timezone,r.label,t.id,t.title,t.project_id,p.slug AS project_slug
          FROM editorial_task_reminders r JOIN editorial_tasks t ON t.id=r.task_id
          JOIN atlasez_projects p ON p.id=t.project_id
          WHERE t.status != 'done' AND t.archived_at IS NULL AND (lower(t.created_by)=lower(?) OR lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*'))${notificationProjectFilter}
            AND (NULLIF(TRIM(t.reminder_email),'') IS NULL OR lower(TRIM(t.reminder_email))=lower(?))
-         ORDER BY r.remind_at ASC LIMIT 50`,
-    )
-      .bind(scope.email, scope.email, scope.email, ...notificationProjectBindings, scope.email)
-      .all<{
-        reminder_id: string;
-        remind_at: string;
-        timezone: string;
-        label: string;
-        id: string;
-        title: string;
-        project_id: string;
-        project_slug: string;
-      }>(),
-    env.REPORTS.prepare(
+         ORDER BY r.remind_at ASC`,
+      [scope.email, scope.email, scope.email, ...notificationProjectBindings, scope.email],
+    ),
+    queryNotificationSource<{
+      id: string; title: string; task_kind: string; details: string; project_id: string;
+      feedback_document_id: string | null; project_slug: string; updated_at: string;
+    }>(
       `SELECT t.id,t.title,t.task_kind,t.details,t.project_id,t.updated_at,
          feedback_link.document_id AS feedback_document_id,
          COALESCE(p.slug,t.project_id) AS project_slug
@@ -21324,32 +21391,23 @@ async function adminNotifications(
              }` 
        }
        ${notificationProjectFilter}
-       ORDER BY t.updated_at DESC LIMIT 40`,
-    )
-      .bind(
-        ...(scope.isManager
-          ? []
-          : [
+       ORDER BY t.updated_at DESC`,
+      scope.isManager
+        ? [...notificationProjectBindings]
+        : [
               scope.email,
               scope.email,
               scope.email,
               ...(!scope.allSubjects ? scope.subjects : []),
               ...notificationProjectBindings,
-            ]),
-      )
-      .all<{
-        id: string;
-        title: string;
-        task_kind: string;
-        details: string;
-        project_id: string;
-        feedback_document_id: string | null;
-        project_slug: string;
-        updated_at: string;
-      }>(),
+            ],
+    ),
   ]);
   const [publicationReviewRows, publicationReturnedRows] = await Promise.all([
-    env.REPORTS.prepare(
+    queryNotificationSource<{
+      id: string; title: string; subject: string;
+      publication_review_stage: EditorialPublicationReviewStage; updated_at: string;
+    }>(
       `SELECT d.id, d.title, d.subject, d.publication_review_stage, d.updated_at
        FROM editorial_documents d
        WHERE d.published_at IS NULL AND (
@@ -21362,32 +21420,20 @@ async function adminNotifications(
            WHERE r.role='project-leader' AND lower(r.email)=lower(?)
          ))
        )
-       ORDER BY d.updated_at DESC LIMIT 20`,
-    )
-      .bind(scope.email, scope.email)
-      .all<{
-        id: string;
-        title: string;
-        subject: string;
-        publication_review_stage: EditorialPublicationReviewStage;
-        updated_at: string;
-      }>(),
-    env.REPORTS.prepare(
+       ORDER BY d.updated_at DESC`,
+      [scope.email, scope.email],
+    ),
+    queryNotificationSource<{
+      id: string; title: string; stage: EditorialPublicationReviewStage; note: string; created_at: string;
+    }>(
       `SELECT d.id, d.title, r.stage, r.note, r.created_at
        FROM editorial_publication_reviews r
        JOIN editorial_documents d ON d.id=r.document_id
        WHERE r.decision='rejected' AND lower(d.created_by)=lower(?)
          AND r.created_at=(SELECT MAX(r2.created_at) FROM editorial_publication_reviews r2 WHERE r2.document_id=r.document_id)
-       ORDER BY r.created_at DESC LIMIT 20`,
-    )
-      .bind(scope.email)
-      .all<{
-        id: string;
-        title: string;
-        stage: EditorialPublicationReviewStage;
-        note: string;
-        created_at: string;
-      }>(),
+       ORDER BY r.created_at DESC`,
+      [scope.email],
+    ),
   ]);
   const sortedNotifications = [
     ...(commentRows.results ?? []).map((item) => ({
@@ -21487,61 +21533,55 @@ async function adminNotifications(
         href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
         updatedAt: item.remind_at,
       })),
-  ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const requestedLimit = Number(new URL(request.url).searchParams.get("limit") ?? "20");
-  const limit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-    : 20;
-  const requestedOffset = Number(new URL(request.url).searchParams.get("offset") ?? "0");
-  const offset = Number.isFinite(requestedOffset)
-    ? Math.min(Math.max(Math.trunc(requestedOffset), 0), 10_000)
-    : 0;
-  // 表示用のページ上限とは別に、未読件数は全候補を対象に集計する。
-  const readNotificationIds = sortedNotifications.map((item) => item.id);
-  // D1 allows at most 100 bound parameters per query. Keep one parameter for
-  // email and query IDs in batches of 99 so notification growth cannot make
-  // the entire inbox fail to load.
-  const READ_NOTIFICATION_ID_BATCH_SIZE = 99;
-  const readNotificationRows: { notification_id: string }[] = [];
-  for (
-    let index = 0;
-    index < readNotificationIds.length;
-    index += READ_NOTIFICATION_ID_BATCH_SIZE
-  ) {
-    const batchIds = readNotificationIds.slice(
-      index,
-      index + READ_NOTIFICATION_ID_BATCH_SIZE,
-    );
-    const batch = await env.REPORTS.prepare(
-      `SELECT notification_id FROM admin_notification_reads WHERE email = ? AND notification_id IN (${batchIds.map(() => "?").join(",")})`,
-    )
-      .bind(scope.email, ...batchIds)
-      .all<{ notification_id: string }>();
-    readNotificationRows.push(...(batch.results ?? []));
-  }
-  const read = new Set(
-    readNotificationRows.map((item) => item.notification_id),
+  ].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
   );
-  const unreadNotificationIds = sortedNotifications
-    .filter((item) => !read.has(item.id))
-    .map((item) => item.id);
-  const unreadOnly = new URL(request.url).searchParams.get("unreadOnly") === "true";
-  const filteredNotifications = unreadOnly
-    ? sortedNotifications.filter((item) => !read.has(item.id))
-    : sortedNotifications;
-  const notificationsTruncated = filteredNotifications.length > offset + limit;
-  const notifications = filteredNotifications.slice(offset, offset + limit);
+  const totalNotifications = notificationSourceCounts.reduce(
+    (sum, source) => sum + source.total,
+    0,
+  );
+  const unreadNotificationsCount = notificationSourceCounts.reduce(
+    (sum, source) => sum + source.unread,
+    0,
+  );
+  const filteredCount = unreadOnly || includeUnreadIds
+    ? unreadNotificationsCount
+    : totalNotifications;
+  const cursorMode = Boolean(cursor) || includeUnreadIds;
+  const notificationsTruncated = cursorMode
+    ? sortedNotifications.length > limit
+    : filteredCount > offset + limit;
+  const notifications = sortedNotifications.slice(
+    cursorMode ? 0 : offset,
+    (cursorMode ? 0 : offset) + limit,
+  );
+  const lastNotification = notifications.at(-1);
+  const nextCursor = notificationsTruncated && lastNotification
+    ? (() => {
+        const bytes = new TextEncoder().encode(JSON.stringify({
+          updatedAt: lastNotification.updatedAt,
+          id: lastNotification.id,
+        }));
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        return btoa(binary)
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/g, "");
+      })()
+    : null;
   return json({
     notifications: notifications.map((item) => ({
       ...item,
-      read: read.has(item.id),
+      read: notificationReadIds.has(item.id),
     })),
     notificationsTruncated,
-    unreadNotificationsCount: unreadNotificationIds.length,
-    totalNotifications: filteredNotifications.length,
-    nextOffset: notificationsTruncated ? offset + limit : null,
-    ...(new URL(request.url).searchParams.get("includeUnreadIds") === "true"
-      ? { unreadNotificationIds }
+    unreadNotificationsCount,
+    totalNotifications: filteredCount,
+    nextOffset: cursorMode ? null : notificationsTruncated ? offset + limit : null,
+    nextCursor,
+    ...(includeUnreadIds
+      ? { unreadNotificationIds: notifications.map((item) => item.id) }
       : {}),
   });
 }
@@ -21558,6 +21598,25 @@ async function markAdminNotificationsRead(
     ids?: unknown;
     all?: unknown;
   } | null;
+  const writeReadIds = async (notificationIds: string[]) => {
+    const idsPerInsert = 500;
+    const insertsPerBatch = 10;
+    const idsPerBatch = idsPerInsert * insertsPerBatch;
+    const readAt = new Date().toISOString();
+    for (let offset = 0; offset < notificationIds.length; offset += idsPerBatch) {
+      const batchIds = notificationIds.slice(offset, offset + idsPerBatch);
+      const statements = [];
+      for (let index = 0; index < batchIds.length; index += idsPerInsert) {
+        const insertIds = batchIds.slice(index, index + idsPerInsert);
+        statements.push(
+          env.REPORTS.prepare(
+            "INSERT INTO admin_notification_reads (email, notification_id, read_at) SELECT ?, value, ? FROM json_each(?) WHERE 1 ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
+          ).bind(scope.email, readAt, JSON.stringify(insertIds)),
+        );
+      }
+      await env.REPORTS.batch(statements);
+    }
+  };
   let ids = Array.isArray(payload?.ids)
     ? [
         ...new Set(
@@ -21573,40 +21632,50 @@ async function markAdminNotificationsRead(
       ]
     : [];
   if (payload?.all === true) {
-    const notificationResponse = await adminNotifications(
-      new Request(
-        new URL("/api/admin/notifications?limit=100&includeUnreadIds=true", request.url),
-        { headers: request.headers },
-      ),
-      env,
-      scope,
-    );
-    if (!notificationResponse.ok) return notificationResponse;
-    const notificationData = (await notificationResponse.json()) as {
-      unreadNotificationIds?: unknown;
-    };
-    ids = Array.isArray(notificationData.unreadNotificationIds)
-      ? notificationData.unreadNotificationIds.filter(
-          (id): id is string =>
-            typeof id === "string" &&
-            /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
-        )
-      : [];
+    let cursor: string | null = null;
+    let markedCount = 0;
+    do {
+      const params = new URLSearchParams({
+        limit: "1000",
+        includeUnreadIds: "true",
+      });
+      if (cursor) params.set("cursor", cursor);
+      const notificationResponse = await adminNotifications(
+        new Request(
+          new URL(`/api/admin/notifications?${params}`, request.url),
+          { headers: request.headers },
+        ),
+        env,
+        scope,
+      );
+      if (!notificationResponse.ok) return notificationResponse;
+      const notificationData = (await notificationResponse.json()) as {
+        unreadNotificationIds?: unknown;
+        nextCursor?: unknown;
+      };
+      ids = Array.isArray(notificationData.unreadNotificationIds)
+        ? notificationData.unreadNotificationIds.filter(
+            (id): id is string =>
+              typeof id === "string" &&
+              /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
+          )
+        : [];
+      await writeReadIds(ids);
+      markedCount += ids.length;
+      const nextCursor = typeof notificationData.nextCursor === "string"
+        ? notificationData.nextCursor
+        : null;
+      if (nextCursor && nextCursor === cursor)
+        return json({ error: "通知の一括既読処理を続行できませんでした。" }, 500);
+      cursor = ids.length ? nextCursor : null;
+    } while (cursor);
+    return json({ ok: true, markedCount });
   }
-  if (ids.length > 500)
+  if (payload?.all !== true && ids.length > 500)
     return json({ error: "一度に既読にできる通知は500件までです。" }, 400);
   if (!ids.length && payload?.all !== true)
     return json({ error: "既読にする通知を選択してください。" }, 400);
-  const now = new Date().toISOString();
-  for (let index = 0; index < ids.length; index += 32) {
-    await env.REPORTS.batch(
-      ids.slice(index, index + 32).map((id) =>
-        env.REPORTS.prepare(
-          "INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
-        ).bind(scope.email, id, now),
-      ),
-    );
-  }
+  await writeReadIds(ids);
   return json({ ok: true, markedCount: ids.length });
 }
 

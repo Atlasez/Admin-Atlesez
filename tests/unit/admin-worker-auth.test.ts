@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import worker from "../../src/admin-worker";
 
@@ -2431,31 +2432,44 @@ describe("applicant stage server-side access", () => {
     const prepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = prepare(query);
-      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
+      if (query.includes("d.created_by = ? AND c.created_by != ?")) {
         statement.all = async <T>() => ({
-          results: [
-            {
-              id: "unread123",
-              body: "First notification",
-              parent_comment_id: null,
-              created_at: "2026-08-22T00:00:00.000Z",
-              document_id: "document-1",
-              title: "First article",
-            },
-            {
-              id: "unread456",
-              body: "Second notification",
-              parent_comment_id: null,
-              created_at: "2026-08-21T00:00:00.000Z",
-              document_id: "document-2",
-              title: "Second article",
-            },
-          ] as T[],
+          results: query.includes("AS notification_id")
+            ? ([
+                { notification_id: "comment-unread123" },
+                { notification_id: "comment-unread456" },
+              ] as T[])
+            : ([
+                {
+                  id: "unread123",
+                  __notification_id: "comment-unread123",
+                  __notification_read: 0,
+                  body: "First notification",
+                  parent_comment_id: null,
+                  created_at: "2026-08-22T00:00:00.000Z",
+                  document_id: "document-1",
+                  title: "First article",
+                },
+                {
+                  id: "unread456",
+                  __notification_id: "comment-unread456",
+                  __notification_read: 0,
+                  body: "Second notification",
+                  parent_comment_id: null,
+                  created_at: "2026-08-21T00:00:00.000Z",
+                  document_id: "document-2",
+                  title: "Second article",
+                },
+              ] as T[]),
         });
+        statement.first = async <T>() => ({ total: 2, unread: 2 }) as T;
       }
       if (query.startsWith("INSERT INTO admin_notification_reads")) {
         statement.bind = (...values: unknown[]) => {
-          insertedReadValues.push(values);
+          const notificationIds = JSON.parse(String(values[2])) as string[];
+          for (const id of notificationIds) {
+            insertedReadValues.push([values[0], id, values[1]]);
+          }
           return statement;
         };
       }
@@ -2497,90 +2511,229 @@ describe("applicant stage server-side access", () => {
     ]);
   });
 
-  it("keeps notification read-state queries within D1's 100-bind limit", async () => {
+  it("counts every SQL notification candidate and marks all unread rows beyond 500", async () => {
     const memberEnvironment = stageEnv("accepted", false, true);
-    const readStateQueries: Array<{ query: string; values: unknown[] }> = [];
+    const notificationDb = new DatabaseSync(":memory:");
+    notificationDb.exec(`
+      CREATE TABLE editorial_documents (id TEXT PRIMARY KEY, title TEXT, created_by TEXT);
+      CREATE TABLE editorial_comments (
+        id TEXT PRIMARY KEY,
+        body TEXT,
+        parent_comment_id TEXT,
+        created_at TEXT,
+        document_id TEXT,
+        created_by TEXT
+      );
+      CREATE TABLE admin_notification_reads (
+        email TEXT,
+        notification_id TEXT,
+        read_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (email, notification_id)
+      );
+    `);
+    const insertDocument = notificationDb.prepare(
+      "INSERT INTO editorial_documents (id, title, created_by) VALUES (?, ?, ?)",
+    );
+    const insertComment = notificationDb.prepare(
+      "INSERT INTO editorial_comments (id, body, parent_comment_id, created_at, document_id, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    const candidateCount = 10_605;
+    for (let index = 0; index < candidateCount; index++) {
+      const id = `unread${String(index).padStart(4, "0")}`;
+      const documentId = `document-${index}`;
+      insertDocument.run(
+        documentId,
+        `Article ${index}`,
+        "applicant@example.com",
+      );
+      insertComment.run(
+        id,
+        `Notification ${index}`,
+        null,
+        new Date(Date.UTC(2026, 0, 1) - index * 1_000).toISOString(),
+        documentId,
+        "commenter@example.com",
+      );
+    }
     const readNotificationIds = new Set<string>();
+    const insertRead = notificationDb.prepare(
+      "INSERT INTO admin_notification_reads (email, notification_id) VALUES (?, ?)",
+    );
+    for (let index = 0; index < 216; index++) {
+      const id = `comment-unread${String(index).padStart(4, "0")}`;
+      insertRead.run("applicant@example.com", id);
+      readNotificationIds.add(id);
+    }
+    const insertedNotificationIds: string[] = [];
+    const insertStatementQueries: string[] = [];
+    const notificationReadBatchSizes: number[] = [];
+    memberEnvironment.REPORTS.batch = async (statements: Statement[] = []) => {
+      notificationReadBatchSizes.push(statements.length);
+      for (const statement of statements) await statement.run();
+      return [];
+    };
+    const notificationCandidateQueries: string[] = [];
     const prepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = prepare(query);
-      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
-        statement.all = async <T>() => ({
-          results: Array.from({ length: 205 }, (_, index) => ({
-            id: `unread${String(index).padStart(4, "0")}`,
-            body: `Notification ${index}`,
-            parent_comment_id: null,
-            created_at: `2026-08-${String(22 - Math.floor(index / 24)).padStart(2, "0")}T00:00:00.000Z`,
-            document_id: `document-${index}`,
-            title: `Article ${index}`,
-          })) as T[],
-        });
-      }
-      if (
-        query.startsWith("SELECT notification_id FROM admin_notification_reads")
-      ) {
+      if (query.includes("d.created_by = ? AND c.created_by != ?")) {
+        notificationCandidateQueries.push(query);
         statement.all = async <T>() => {
-          const batchIds = statement.boundValues.slice(1) as string[];
-          const selectedReadIds = [batchIds[0], batchIds.at(-1)].filter(
-            (id): id is string => Boolean(id),
-          );
-          selectedReadIds.forEach((id) => readNotificationIds.add(id));
-          readStateQueries.push({
-            query,
-            values: [...statement.boundValues],
-          });
           return {
-            results: selectedReadIds.map((notification_id) => ({
-              notification_id,
-            })) as T[],
+            results: notificationDb
+              .prepare(query)
+              .all(
+                ...(statement.boundValues as (
+                  string | number | bigint | null | Uint8Array
+                )[]),
+              ) as T[],
           };
         };
+        statement.first = async <T>() =>
+          notificationDb
+            .prepare(query)
+            .get(
+              ...(statement.boundValues as (
+                string | number | bigint | null | Uint8Array
+              )[]),
+            ) as T;
       }
       return statement;
     };
 
     const response = await worker.fetch(
-      loggedInRequest(
-        "/api/admin/notifications?limit=100&includeUnreadIds=true",
-      ),
+      loggedInRequest("/api/admin/notifications?limit=100"),
       memberEnvironment as never,
     );
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as {
       notifications: Array<{ id: string; read: boolean }>;
+      totalNotifications: number;
       unreadNotificationsCount: number;
-      unreadNotificationIds: string[];
     };
     expect(data.notifications).toHaveLength(100);
-    expect(data.unreadNotificationsCount).toBe(199);
-    expect(data.unreadNotificationIds).toHaveLength(199);
+    expect(data.totalNotifications).toBe(candidateCount);
+    expect(data.unreadNotificationsCount).toBe(10_389);
+    expect(
+      notificationCandidateQueries.some((query) => /\bLIMIT\s+\?/i.test(query)),
+    ).toBe(true);
+    expect(
+      notificationCandidateQueries.some((query) =>
+        query.includes("COUNT(*) AS total"),
+      ),
+    ).toBe(true);
     expect(
       data.notifications.every(
         (notification) =>
           readNotificationIds.has(notification.id) === notification.read,
       ),
     ).toBe(true);
+    expect(notificationCandidateQueries).not.toHaveLength(0);
+    expect(readNotificationIds.size).toBe(216);
+
+    const deepCursor = btoa(
+      JSON.stringify({
+        updatedAt: new Date(
+          Date.UTC(2026, 0, 1) - 10_000 * 1_000,
+        ).toISOString(),
+        id: "comment-unread10000",
+      }),
+    )
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+    const deepPageResponse = await worker.fetch(
+      loggedInRequest(
+        `/api/admin/notifications?limit=100&cursor=${deepCursor}`,
+      ),
+      memberEnvironment as never,
+    );
+    expect(deepPageResponse.status).toBe(200);
+    const deepPageData = (await deepPageResponse.json()) as {
+      notifications: Array<{ id: string }>;
+      totalNotifications: number;
+      nextCursor: string | null;
+    };
+    expect(deepPageData.notifications).toHaveLength(100);
+    expect(deepPageData.notifications[0]?.id).toBe("comment-unread10001");
+    expect(deepPageData.totalNotifications).toBe(candidateCount);
+    expect(deepPageData.nextCursor).toEqual(expect.any(String));
+
+    const unsupportedOffset = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=100&offset=10001"),
+      memberEnvironment as never,
+    );
+    expect(unsupportedOffset.status).toBe(400);
+
+    const originalPrepare = memberEnvironment.REPORTS.prepare;
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = originalPrepare(query);
+      if (query.startsWith("INSERT INTO admin_notification_reads")) {
+        insertStatementQueries.push(query);
+        statement.bind = (...values: unknown[]) => {
+          statement.boundValues = values;
+          insertedNotificationIds.push(
+            ...(JSON.parse(String(values[2])) as string[]),
+          );
+          return statement;
+        };
+        statement.run = async () => {
+          const result = notificationDb
+            .prepare(query)
+            .run(
+              ...(statement.boundValues as (
+                string | number | bigint | null | Uint8Array
+              )[]),
+            );
+          return { meta: { changes: Number(result.changes) } };
+        };
+      }
+      return statement;
+    };
+    const markAllResponse = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+    expect(markAllResponse.status).toBe(200);
+    expect(await markAllResponse.json()).toMatchObject({
+      ok: true,
+      markedCount: 10_389,
+    });
+    expect(insertStatementQueries).toHaveLength(21);
     expect(
-      data.unreadNotificationIds.every((id) => !readNotificationIds.has(id)),
+      insertStatementQueries.every(
+        (query) =>
+          query.includes("json_each(?)") &&
+          (query.match(/\?/g) ?? []).length === 3,
+      ),
     ).toBe(true);
-    expect(readStateQueries).toHaveLength(3);
-    expect(readStateQueries.map(({ values }) => values.length)).toEqual([
-      100, 100, 8,
+    expect(notificationReadBatchSizes).toEqual([
+      ...Array<number>(10).fill(2),
+      1,
     ]);
+    expect(insertedNotificationIds).toHaveLength(10_389);
+    expect(insertedNotificationIds).toEqual(
+      Array.from(
+        { length: candidateCount },
+        (_, index) => `comment-unread${String(index).padStart(4, "0")}`,
+      ).filter((id) => !readNotificationIds.has(id)),
+    );
     expect(
-      readStateQueries.every(
-        ({ values }) => values[0] === "applicant@example.com",
-      ),
-    ).toBe(true);
-    expect(
-      readStateQueries.every(
-        ({ query, values }) =>
-          (query.match(/\?/g) ?? []).length === values.length &&
-          values.length <= 100,
-      ),
-    ).toBe(true);
-  });
+      notificationDb
+        .prepare(
+          "SELECT notification_id FROM admin_notification_reads WHERE email = ? ORDER BY notification_id",
+        )
+        .all("applicant@example.com")
+        .map((row) => (row as { notification_id: string }).notification_id),
+    ).toEqual(
+      Array.from(
+        { length: candidateCount },
+        (_, index) => `comment-unread${String(index).padStart(4, "0")}`,
+      ).sort(),
+    );
+    notificationDb.close();
+  }, 15_000);
 
   it("keeps the application directory open for an existing member", async () => {
     const applicationPage = await worker.fetch(
