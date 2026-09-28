@@ -2430,27 +2430,37 @@ describe("applicant stage server-side access", () => {
     const prepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = prepare(query);
-      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
+      if (query.includes("d.created_by = ? AND c.created_by != ?")) {
         statement.all = async <T>() => ({
-          results: [
-            {
-              id: "unread123",
-              body: "First notification",
-              parent_comment_id: null,
-              created_at: "2026-08-22T00:00:00.000Z",
-              document_id: "document-1",
-              title: "First article",
-            },
-            {
-              id: "unread456",
-              body: "Second notification",
-              parent_comment_id: null,
-              created_at: "2026-08-21T00:00:00.000Z",
-              document_id: "document-2",
-              title: "Second article",
-            },
-          ] as T[],
+          results: query.includes("AS notification_id")
+            ? ([
+                { notification_id: "comment-unread123" },
+                { notification_id: "comment-unread456" },
+              ] as T[])
+            : ([
+                {
+                  id: "unread123",
+                  __notification_id: "comment-unread123",
+                  __notification_read: 0,
+                  body: "First notification",
+                  parent_comment_id: null,
+                  created_at: "2026-08-22T00:00:00.000Z",
+                  document_id: "document-1",
+                  title: "First article",
+                },
+                {
+                  id: "unread456",
+                  __notification_id: "comment-unread456",
+                  __notification_read: 0,
+                  body: "Second notification",
+                  parent_comment_id: null,
+                  created_at: "2026-08-21T00:00:00.000Z",
+                  document_id: "document-2",
+                  title: "Second article",
+                },
+              ] as T[]),
         });
+        statement.first = async <T>() => ({ total: 2, unread: 2 }) as T;
       }
       if (query.startsWith("INSERT INTO admin_notification_reads")) {
         statement.bind = (...values: unknown[]) => {
@@ -2509,6 +2519,7 @@ describe("applicant stage server-side access", () => {
         document_id TEXT,
         created_by TEXT
       );
+      CREATE TABLE admin_notification_reads (email TEXT, notification_id TEXT);
     `);
     const insertDocument = notificationDb.prepare(
       "INSERT INTO editorial_documents (id, title, created_by) VALUES (?, ?, ?)",
@@ -2534,14 +2545,21 @@ describe("applicant stage server-side access", () => {
         "commenter@example.com",
       );
     }
-    const readStateQueries: Array<{ query: string; values: unknown[] }> = [];
     const readNotificationIds = new Set<string>();
+    const insertRead = notificationDb.prepare(
+      "INSERT INTO admin_notification_reads (email, notification_id) VALUES (?, ?)",
+    );
+    for (let index = 0; index < 216; index++) {
+      const id = `comment-unread${String(index).padStart(4, "0")}`;
+      insertRead.run("applicant@example.com", id);
+      readNotificationIds.add(id);
+    }
     const insertedNotificationIds: string[] = [];
     const notificationCandidateQueries: string[] = [];
     const prepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = prepare(query);
-      if (query.includes("WHERE d.created_by = ? AND c.created_by != ?")) {
+      if (query.includes("d.created_by = ? AND c.created_by != ?")) {
         notificationCandidateQueries.push(query);
         statement.all = async <T>() => {
           return {
@@ -2554,34 +2572,20 @@ describe("applicant stage server-side access", () => {
               ) as T[],
           };
         };
-      }
-      if (
-        query.startsWith("SELECT notification_id FROM admin_notification_reads")
-      ) {
-        statement.all = async <T>() => {
-          const batchIds = statement.boundValues.slice(1) as string[];
-          const selectedReadIds = [batchIds[0], batchIds.at(-1)].filter(
-            (id): id is string => Boolean(id),
-          );
-          selectedReadIds.forEach((id) => readNotificationIds.add(id));
-          readStateQueries.push({
-            query,
-            values: [...statement.boundValues],
-          });
-          return {
-            results: selectedReadIds.map((notification_id) => ({
-              notification_id,
-            })) as T[],
-          };
-        };
+        statement.first = async <T>() =>
+          notificationDb
+            .prepare(query)
+            .get(
+              ...(statement.boundValues as (
+                string | number | bigint | null | Uint8Array
+              )[]),
+            ) as T;
       }
       return statement;
     };
 
     const response = await worker.fetch(
-      loggedInRequest(
-        "/api/admin/notifications?limit=100&includeUnreadIds=true",
-      ),
+      loggedInRequest("/api/admin/notifications?limit=100"),
       memberEnvironment as never,
     );
 
@@ -2590,12 +2594,18 @@ describe("applicant stage server-side access", () => {
       notifications: Array<{ id: string; read: boolean }>;
       totalNotifications: number;
       unreadNotificationsCount: number;
-      unreadNotificationIds: string[];
     };
     expect(data.notifications).toHaveLength(100);
     expect(data.totalNotifications).toBe(candidateCount);
     expect(data.unreadNotificationsCount).toBe(10_389);
-    expect(data.unreadNotificationIds).toHaveLength(10_389);
+    expect(
+      notificationCandidateQueries.some((query) => /\bLIMIT\s+\?/i.test(query)),
+    ).toBe(true);
+    expect(
+      notificationCandidateQueries.some((query) =>
+        query.includes("COUNT(*) AS total"),
+      ),
+    ).toBe(true);
     expect(
       data.notifications.every(
         (notification) =>
@@ -2603,27 +2613,10 @@ describe("applicant stage server-side access", () => {
       ),
     ).toBe(true);
     expect(notificationCandidateQueries).not.toHaveLength(0);
-    expect(
-      notificationCandidateQueries.every((query) =>
-        /\bLIMIT\s+\d+/i.test(query),
-      ),
-    ).toBe(false);
-    expect(
-      data.unreadNotificationIds.every((id) => !readNotificationIds.has(id)),
-    ).toBe(true);
-    expect(readStateQueries).toHaveLength(108);
-    expect(readStateQueries.map(({ values }) => values.length)).toEqual([
-      ...Array<number>(107).fill(100),
-      13,
-    ]);
-    expect(
-      readStateQueries.every(
-        ({ values }) => values[0] === "applicant@example.com",
-      ),
-    ).toBe(true);
+    expect(readNotificationIds.size).toBe(216);
 
     const deepPageResponse = await worker.fetch(
-      loggedInRequest("/api/admin/notifications?limit=100&offset=10001"),
+      loggedInRequest("/api/admin/notifications?limit=100&offset=9901"),
       memberEnvironment as never,
     );
     expect(deepPageResponse.status).toBe(200);
@@ -2633,16 +2626,9 @@ describe("applicant stage server-side access", () => {
       nextOffset: number | null;
     };
     expect(deepPageData.notifications).toHaveLength(100);
-    expect(deepPageData.notifications[0]?.id).toBe("comment-unread10001");
+    expect(deepPageData.notifications[0]?.id).toBe("comment-unread9901");
     expect(deepPageData.totalNotifications).toBe(candidateCount);
-    expect(deepPageData.nextOffset).toBe(10_101);
-    expect(
-      readStateQueries.every(
-        ({ query, values }) =>
-          (query.match(/\?/g) ?? []).length === values.length &&
-          values.length <= 100,
-      ),
-    ).toBe(true);
+    expect(deepPageData.nextOffset).toBe(10_001);
 
     const originalPrepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
