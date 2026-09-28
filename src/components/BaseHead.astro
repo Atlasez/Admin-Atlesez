@@ -15,7 +15,6 @@ interface AlternateLink {
 interface Props {
   title: string;
   description: string;
-  iconPath?: string;
   lang?: string;
   ogType?: "website" | "article";
   alternates?: AlternateLink[];
@@ -32,7 +31,6 @@ interface Props {
 const {
   title,
   description,
-  iconPath,
   ogType = "website",
   alternates = [],
   structuredData,
@@ -45,7 +43,6 @@ const ogImage = new URL(
   `${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/og-default.svg`,
   Astro.site,
 );
-const siteIconPath = iconPath ?? `${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-logo.png`;
 ---
 
 <meta charset="utf-8" />
@@ -61,8 +58,8 @@ const siteIconPath = iconPath ?? `${import.meta.env.BASE_URL.replace(/\/$/, "")}
 }
 <link
   rel="icon"
-  href={siteIconPath}
-  type={siteIconPath.endsWith(".svg") ? "image/svg+xml" : "image/png"}
+  href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/images/atlasez-logo.png`}
+  type="image/png"
 />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
