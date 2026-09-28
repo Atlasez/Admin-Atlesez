@@ -73,6 +73,104 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     ).toHaveAttribute("href", "/admin/developer/?mode=developer");
   });
 
+  test("管理トップは実際の権限範囲を表示し、権限がない入口を隠す", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/auth-status", (route) =>
+      route.fulfill({
+        json: {
+          email: "subject-editor@example.com",
+          isManager: false,
+          canAccessAdmin: true,
+          canAccessScopedAdminPages: true,
+          managerProjects: [],
+        },
+      }),
+    );
+    await page.goto("admin/manage/?project=atlas");
+
+    const reports = page.locator('a[data-admin-scope][href*="reports"]');
+    const analytics = page.locator('a[data-admin-scope][href*="analytics"]');
+    const publicationRuns = page.locator(
+      'a[data-admin-scope][href="/admin/publication-runs/"]',
+    );
+    await expect(reports).toBeVisible();
+    await expect(reports.locator(".role-tags")).toContainText(
+      "分野担当者（担当分野のみ）",
+    );
+    await expect(analytics).toBeVisible();
+    await expect(analytics.locator(".role-tags")).toContainText(
+      "分野担当者（担当記事のみ）",
+    );
+    await expect(publicationRuns).toBeVisible();
+    await expect(publicationRuns.locator(".role-tags")).toContainText(
+      "分野担当者（担当記事のみ）",
+    );
+    await expect(page.locator("a[data-manager-only]:visible")).toHaveCount(0);
+    await expect(
+      page.locator("a[data-project-manager-only]:visible"),
+    ).toHaveCount(0);
+    for (const decorativeLabel of ["名簿", "担当確認", "失敗確認"]) {
+      await expect(
+        page.getByText(decorativeLabel, { exact: true }),
+      ).toHaveCount(0);
+    }
+  });
+
+  test("管理権限の取得に失敗した利用者には管理APIの入口を表示しない", async ({
+    page,
+  }) => {
+    await page.route("**/api/admin/auth-status", (route) =>
+      route.fulfill({
+        json: {
+          email: "member@example.com",
+          isManager: false,
+          canAccessAdmin: false,
+          canAccessScopedAdminPages: false,
+          managerProjects: [],
+        },
+      }),
+    );
+    await page.goto("admin/manage/?project=atlas");
+
+    await expect(page.locator("a[data-admin-scope]:visible")).toHaveCount(0);
+    await expect(page.locator("a[data-manager-only]:visible")).toHaveCount(0);
+    await expect(
+      page.locator("a[data-project-manager-only]:visible"),
+    ).toHaveCount(0);
+  });
+
+  test("管理権限の確認に失敗したら再試行から復旧できる", async ({ page }) => {
+    let attempts = 0;
+    await page.route("**/api/admin/auth-status", (route) => {
+      attempts += 1;
+      return route.fulfill(
+        attempts === 2
+          ? { status: 503, json: { error: "一時的な障害" } }
+          : {
+              json: {
+                email: "subject-editor@example.com",
+                isManager: false,
+                canAccessAdmin: true,
+                canAccessScopedAdminPages: true,
+                managerProjects: [],
+              },
+            },
+      );
+    });
+    await page.goto("admin/manage/?project=atlas");
+
+    const notice = page.locator(
+      '[data-admin-load-error-scope="management-access"]',
+    );
+    await expect(notice).toBeVisible();
+    await expect(page.locator("a[data-admin-scope]:visible")).toHaveCount(0);
+    await notice.getByRole("button", { name: "再試行" }).click();
+    await expect(notice).toBeHidden();
+    await expect(page.locator("a[data-admin-scope]:visible")).toHaveCount(3);
+    expect(attempts).toBe(3);
+  });
+
   test("公開処理の状況は失敗を優先表示し、CIログと再試行を提供する", async ({
     page,
   }) => {

@@ -138,6 +138,29 @@ const loggedInRequest = (pathname: string) =>
     headers: { cookie: "atlasez_admin_session=logged-in" },
   });
 
+describe("admin auth-status access capability", () => {
+  it.each([
+    { isGlobalManager: true, expected: true },
+    { isGlobalManager: false, expected: false },
+  ])(
+    "reports whether the current user can open scoped admin pages",
+    async ({ isGlobalManager, expected }) => {
+      const response = await worker.fetch(
+        loggedInRequest("/api/admin/auth-status"),
+        stageEnv("accepted", false, true, false, isGlobalManager) as never,
+      );
+
+      expect(response.status).toBe(200);
+      const status = (await response.json()) as {
+        canAccessAdmin: boolean;
+        canAccessScopedAdminPages: boolean;
+      };
+      expect(status.canAccessAdmin).toBe(expected);
+      expect(status.canAccessScopedAdminPages).toBe(expected);
+    },
+  );
+});
+
 const loggedInJsonRequest = (pathname: string, body: Record<string, unknown>) =>
   new Request(`https://admin.example${pathname}`, {
     method: "POST",
