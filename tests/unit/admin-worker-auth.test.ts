@@ -564,6 +564,57 @@ describe("admin logout contract", () => {
     );
     expect(response.headers.get("set-cookie")).not.toContain("evil.example");
   });
+
+  it("does not create Atlas membership when a scoped admin is denied application access", async () => {
+    const scopedAdminEnvironment = stageEnv(
+      "accepted",
+      false,
+      true,
+      false,
+      false,
+      0,
+      false,
+      true,
+      "editor@example.com",
+    );
+    const membershipWrites: string[] = [];
+    const prepare = scopedAdminEnvironment.REPORTS.prepare;
+    scopedAdminEnvironment.REPORTS.prepare = (query: string) => {
+      if (query.includes("INSERT OR IGNORE INTO atlasez_project_memberships"))
+        membershipWrites.push(query);
+      const statement = prepare(query);
+      if (query.includes("SELECT subject FROM report_admin_permissions")) {
+        statement.all = async <T>() => ({
+          results: [{ subject: "physics" }] as T[],
+        });
+      }
+      if (
+        query.includes(
+          "SELECT id, slug, name, description FROM atlasez_projects",
+        )
+      ) {
+        statement.first = async <T>() =>
+          ({
+            id: "atlas",
+            slug: "atlas",
+            name: "アトラス",
+            description: "",
+          }) as T;
+      }
+      if (query.includes("SELECT role FROM atlasez_project_memberships")) {
+        statement.first = async <T>() => ({ role: "member" }) as T;
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/applications?project=atlas"),
+      scopedAdminEnvironment as never,
+    );
+
+    expect(response.status).toBe(403);
+    expect(membershipWrites).toEqual([]);
+  });
 });
 
 describe("Google OAuth login callback", () => {

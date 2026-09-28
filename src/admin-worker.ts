@@ -7284,7 +7284,6 @@ async function getProjectReviewerScope(
 ): Promise<ProjectReviewerScope | Response> {
   const scope = await getAdminScope(request, env);
   if (isResponse(scope)) return scope;
-  await ensureAtlasMembership(env, scope);
   const project = await resolveOperationProject(env, scope, requestedProject);
   if (isResponse(project)) return project;
   const reviewerScope = await requireAdminScope(
@@ -7294,6 +7293,7 @@ async function getProjectReviewerScope(
     scope,
   );
   if (isResponse(reviewerScope)) return reviewerScope;
+  await ensureAtlasMembership(env, reviewerScope);
   return { scope: reviewerScope, project };
 }
 
