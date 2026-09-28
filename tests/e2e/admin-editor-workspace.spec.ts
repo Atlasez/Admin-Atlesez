@@ -3553,6 +3553,9 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
     tags: string[];
   } | null = null;
   let submittedReply: { body: string; parentCommentId: string } | null = null;
+  const submittedCommentActions: { commentId: string; action: string }[] = [];
+  let aliceUnacknowledged = false;
+  let aliceLiked = false;
   await page.route(
     "**/api/admin/editor/documents/doc-1/comments",
     async (route) => {
@@ -3581,6 +3584,21 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
       await route.fallback();
     },
   );
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments/comment-1",
+    async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.fallback();
+        return;
+      }
+      const { action } = route.request().postDataJSON() as { action: string };
+      submittedCommentActions.push({ commentId: "comment-1", action });
+      if (action === "unacknowledge")
+        aliceUnacknowledged = !aliceUnacknowledged;
+      if (action === "like") aliceLiked = !aliceLiked;
+      await route.fulfill({ json: {} });
+    },
+  );
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
     if (
       route.request().method() !== "GET" ||
@@ -3589,11 +3607,42 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
       await route.fallback();
       return;
     }
+    const original = comments[0];
+    const unacknowledgeActors =
+      original.action_actor_counts.unacknowledge.filter(
+        (actor) => actor.actor_email !== "alice@example.com",
+      );
+    if (aliceUnacknowledged) {
+      unacknowledgeActors.push({
+        actor_email: "alice@example.com",
+        actor_display_name: "Alice",
+        count: 1,
+      });
+    }
     await route.fulfill({
       json: {
         document: documentItem,
         comments: [
-          ...comments,
+          {
+            ...original,
+            unacknowledged_by_emails: unacknowledgeActors.map(
+              (actor) => actor.actor_email,
+            ),
+            action_actor_counts: {
+              ...original.action_actor_counts,
+              unacknowledge: unacknowledgeActors,
+            },
+            like_actor_counts: aliceLiked
+              ? [
+                  {
+                    actor_email: "alice@example.com",
+                    actor_display_name: "Alice",
+                    count: 1,
+                  },
+                ]
+              : [],
+          },
+          ...comments.slice(1),
           ...(submittedComment
             ? [
                 {
@@ -3671,6 +3720,24 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
     "別窓から送った返信",
   );
 
+  const popupUnacknowledge = popup.locator(
+    '[data-comment-history="comment-1"] [data-comment-action="unacknowledge"]',
+  );
+  await popupUnacknowledge.click();
+  await expect(popupUnacknowledge).toHaveClass(/is-acted-by-me/);
+  const popupLike = popup.locator(
+    '[data-comment-history="comment-1"] [data-comment-reaction="smile"]',
+  );
+  await popupLike.click();
+  await expect(popupLike).toHaveAttribute("aria-pressed", "true");
+  await expect(popupLike.locator(".comment-action-count")).toHaveText("1");
+  await expect
+    .poll(() => submittedCommentActions)
+    .toEqual([
+      { commentId: "comment-1", action: "unacknowledge" },
+      { commentId: "comment-1", action: "like" },
+    ]);
+
   await popup.close();
   await expect(panel.locator("[data-comment-list]")).toContainText(
     "別窓から投稿したコメント",
@@ -3678,6 +3745,19 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
   await expect(panel.locator("[data-comment-list]")).toContainText(
     "別窓から送った返信",
   );
+  const sourceLike = panel.locator(
+    '[data-comment-history="comment-1"] [data-comment-reaction="smile"]',
+  );
+  await sourceLike.click();
+  await expect(sourceLike).toHaveAttribute("aria-pressed", "false");
+  await expect(sourceLike.locator(".comment-action-count")).toHaveText("0");
+  await expect
+    .poll(() => submittedCommentActions)
+    .toEqual([
+      { commentId: "comment-1", action: "unacknowledge" },
+      { commentId: "comment-1", action: "like" },
+      { commentId: "comment-1", action: "like" },
+    ]);
 });
 
 test("CM-RT: コメント変更通知を受けると一覧をリアルタイム更新する", async ({
