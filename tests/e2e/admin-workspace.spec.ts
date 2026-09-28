@@ -98,15 +98,38 @@ test("プロジェクト側マイページで運営内自己紹介と担当を�
   await expect(
     page.getByRole("link", { name: "共通の基本情報を確認・変更する" }),
   ).toHaveAttribute("href", "/admin/member-profile/");
+  const avatarRequest = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/api/admin/profile") &&
+      request.method() === "PUT",
+  );
+  await page.locator("[data-avatar-file]").setInputFiles({
+    name: "profile.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("profile-image"),
+  });
+  await expect(page.locator("[data-avatar-save]")).toBeEnabled();
+  await page.locator("[data-avatar-save]").click();
+  expect((await avatarRequest).postDataJSON()).toMatchObject({
+    avatarUrl: expect.stringMatching(/^data:image\/png;base64,/),
+  });
+  await expect(page.locator("[data-avatar-message]")).toHaveText(
+    "アイコンを更新しました。",
+  );
 
-  await page.getByLabel("運営内自己紹介").fill("更新後の運営内自己紹介");
+  await page
+    .getByLabel("運営内自己紹介")
+    .fill("更新後の運営内自己紹介 https://example.com/profile");
+  await expect(
+    page.locator("[data-project-profile-preview] a"),
+  ).toHaveAttribute("href", "https://example.com/profile");
   await page.getByRole("button", { name: "変更を承認申請" }).click();
   await expect(page.locator("[data-profile-message]")).toContainText(
     "運営事務局へ承認申請を送りました",
   );
   expect(getSavedProjectProfile()).toMatchObject({
     projectId: "atlas",
-    internalBio: "更新後の運営内自己紹介",
+    internalBio: "更新後の運営内自己紹介 https://example.com/profile",
   });
 
   const heights = await page.locator(".workspace-grid").evaluate(() => {

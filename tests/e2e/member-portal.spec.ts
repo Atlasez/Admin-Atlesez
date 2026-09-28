@@ -30,7 +30,7 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
           affiliation_type: "student",
           country: "日本",
           timezone: "Asia/Tokyo",
-          bio: "運営外向けプロフィール",
+          bio: "運営外向けプロフィール https://example.com/profile",
         },
         discordUserId: "",
         profileChangeRequest: null,
@@ -47,7 +47,13 @@ test("マイページは基本情報を表示し、編集画面から公開プ�
     "Atlasez大学",
   );
   await expect(page.locator("[data-fact=year]")).toHaveText("B2");
-  await expect(page.locator("[data-bio]")).toHaveText("運営外向けプロフィール");
+  await expect(page.locator("[data-bio]")).toContainText(
+    "運営外向けプロフィール",
+  );
+  await expect(page.locator("[data-bio] a")).toHaveAttribute(
+    "href",
+    "https://example.com/profile",
+  );
   await expect(
     page.getByRole("link", { name: "プロフィールを編集" }),
   ).toHaveAttribute("href", "/admin/member-profile/edit/");
