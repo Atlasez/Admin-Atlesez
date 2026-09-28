@@ -550,7 +550,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       type Command = { label: string; detail: string; group: 'recent' | 'quick' | 'result' | 'action'; icon: string; href?: string; run?: () => void; kind?: string; status?: string; priority?: string; read?: boolean; notificationIds?: string[]; actions?: CommandAction[] };
       type ActionCenterResponse = { items?: Array<{ title?: string; detail?: string; href?: string; kind?: string; status?: string; priority?: string; read?: boolean; notificationIds?: string[]; actions?: CommandAction[] }>; counts?: { today?: number; unread?: number; approvals?: number; assigned?: number }; error?: string };
       const staticCommands: Command[] = [
-        { label: "要対応", detail: "今日の作業・承認・未読", group: 'quick', icon: 'actions', href: "/admin/action-center/" },
+        { label: "アクションセンター", detail: "対応が必要な項目", group: 'quick', icon: 'actions', href: "/admin/action-center/" },
         { label: "編集・フィードバック", detail: "記事とフィードバック", group: 'quick', icon: 'articles', href: "/admin/articles/" },
         { label: "タスク管理", detail: "担当タスクと期限", group: 'quick', icon: 'tasks', href: "/admin/operations/?project=atlas" },
         { label: "カレンダー", detail: "予定と締切", group: 'quick', icon: 'calendar', href: "/admin/calendar/?project=atlas" },
@@ -687,7 +687,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         actionFilter = 'all';
         actionCounts = {};
         actionToolbar?.removeAttribute('hidden');
-        if (heading) heading.textContent = '要対応';
+        if (heading) heading.textContent = 'アクションセンター';
         input.placeholder = '対応項目を検索';
         if (!dialog.open) dialog.showModal();
         input.value = '';
