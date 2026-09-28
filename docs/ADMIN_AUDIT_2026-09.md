@@ -134,6 +134,6 @@ Chromeのモック認証セッションで、ポータル・横断タスク・�
 - GitHub `production` Environmentの`protection_rules`は空で、required reviewerは設定されていない。`main` branch protectionはCI check `verify`を必須にし、force-push/deletionを禁止するが、required pull request reviewsは設定されていない。active rulesetもdeletion/non-fast-forward禁止のみ。
 - Cloudflare Workers Buildsの接続先、production branch、build/deploy command、cache設定はDashboardで再確認できていない。ChromeはGoogle OAuth account chooserまで遷移し、認証済み運営画面のライブ確認は未実施。
 - 今回は本番デプロイ、D1操作、rollback、promote、cache purge、route変更を実行していない。SHA不一致の間はこれらを推測で実行しない。追跡Issueは[#407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。
-- PR #414はGoogle OAuth callbackのCSRF、メール検証、subject必須条件に関するテスト追加でopen/behind。専用worktree `/Users/user/Downloads/atlasez-admin-member-portal-auth-loop` が存在するため、この監査ではそのブランチを変更していない。
+- PR #414はGoogle OAuth callbackのCSRF、メール検証、subject必須条件に関するテスト追加でopen/behind。別の作業ツリーで進行中のため、この監査ではそのブランチを変更していない。
 
 この節の本番状態は上記の再監査日時点の観測値であり、前段に記録した過去の「本番デプロイ成功」「build-info一致」を現在状態の根拠として扱わない。
