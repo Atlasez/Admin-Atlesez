@@ -11,20 +11,28 @@
 
 1. `main`へマージする前にCIを通す
 2. ローカルで `npm run verify:deploy-config` を実行する
-3. 公開サイトは `npm run deploy:public`
-4. 運営用サイトは `npm run deploy:admin`
+3. 公開サイトは既存の公開サイト向け手順に従う。
+4. 運営用サイトはGitHub `main`をソースにしたCloudflare Workers Buildsを通常経路とする。`npm run deploy:admin`は通常手順ではなく、ADMIN緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
 5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
-デプロイコマンドには本番ターゲット検証が組み込まれているため、Worker名・アカウント・ルート・D1が違う設定では停止します。CIでも同じ検証を実行します。
+本番Worker名・アカウント・ルート・D1は設定ファイルに固定し、`npm run verify:deploy-config`で確認します。ADMINのローカル緊急deployは、これに加えてmain由来の承認SHAとbuild-infoを検証します。
 
 ## ビルド設定
 
-本番ビルドでは次を固定します。
+公開サイト本番ビルドでは次を固定します。
 
 ```bash
 SITE_URL=https://atlasez.org
 BASE_PATH=/
 ```
+
+ADMINのCloudflare Workers Buildsは次を固定します。
+
+```bash
+ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/
+```
+
+`npm run deploy:admin`はこのADMIN設定を使い、デプロイ前にcleanな`main`・remote main由来・明示承認SHA一致・build-info SHA一致を検証します。ローカルからの実デプロイは緊急例外として別途明示承認された場合以外は行いません。
 
 `main`以外のプレビューは検索インデックスに入らないよう`noindex`になります。公開前に本番URLへ向けてビルドし直してください。
 

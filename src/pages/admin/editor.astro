@@ -1929,7 +1929,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       };
       const syncPopupFields = () => sourceFields.forEach((field, index) => { if (popupFields[index]) copyField(field, popupFields[index]); });
       const syncPopupContent = () => {
-        ["[data-preview]", "[data-media-list]", "[data-comment-list]", "[data-selected-ranges]", "[data-lock-status]", "[data-word-count]", "[data-diagnostics-trigger-count]", "[data-writing-memo]"].forEach((selector) => {
+        ["[data-preview]", "[data-media-list]", "[data-comment-list]", ".review-pane-content > .comment-tags", "[data-comment-selection]", "[data-selection-action]", "[data-selected-ranges]", "[data-lock-status]", "[data-word-count]", "[data-diagnostics-trigger-count]", "[data-writing-memo]"].forEach((selector) => {
           const source = panel.querySelector<HTMLElement>(selector);
           const target = popupPanel.querySelector<HTMLElement>(selector);
           if (!source || !target) return;
@@ -1957,6 +1957,53 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       popupPanel.addEventListener("change", forwardPopupInput);
       panel.addEventListener("input", forwardSourceInput);
       panel.addEventListener("change", forwardSourceInput);
+      // The comments pane is cloned into the popup, so its delegated click
+      // handlers remain on the original document. Forward those controls to
+      // the corresponding source button; this keeps all existing handlers and
+      // their state/API updates on the owning page.
+      const delegatedCommentClickSelector = [
+        "[data-send-comment]",
+        "[data-comment-action]",
+        "[data-comment-reaction]",
+        "[data-send-reply]",
+        "[data-open-reply]",
+        "[data-quote-reply]",
+        "[data-show-comment-selection]",
+        "[data-toggle-replies]",
+        "[data-cancel-reply]",
+        "[data-edit-comment]",
+        "[data-edit-comment-tag]",
+        "[data-cancel-edit]",
+        "[data-save-edit]",
+        "[data-delete-comment]",
+        "[data-comment-tag]",
+        "[data-use-selection]",
+        "[data-enable-selection-append]",
+        "[data-remove-selection]",
+      ].join(",");
+      const forwardPopupCommentClick = (event: MouseEvent) => {
+        const button = (event.target as Element | null)?.closest<HTMLButtonElement>(delegatedCommentClickSelector);
+        if (!button || !popupPanel.contains(button) || button.disabled) return;
+        const dataAttributes = Object.entries(button.dataset);
+        const context = (candidate: HTMLButtonElement) => ({
+          comment: candidate.closest<HTMLElement>("[data-comment-context]")?.dataset.commentContext ?? "",
+          history: candidate.closest<HTMLElement>("[data-comment-history]")?.dataset.commentHistory ?? "",
+          reply: candidate.closest<HTMLElement>("[data-reply-entry]")?.dataset.replyEntry ?? "",
+          topLevelTags: Boolean(candidate.closest(".review-pane-content > .comment-tags")),
+        });
+        const popupContext = context(button);
+        const sourceButton = [...panel.querySelectorAll<HTMLButtonElement>(delegatedCommentClickSelector)].find((candidate) => {
+          const candidateData = Object.entries(candidate.dataset);
+          return candidateData.length === dataAttributes.length
+            && dataAttributes.every(([key, value]) => candidate.dataset[key] === value)
+            && JSON.stringify(context(candidate)) === JSON.stringify(popupContext);
+        });
+        if (!sourceButton || sourceButton.disabled) return;
+        event.preventDefault();
+        sourceButton.click();
+        syncPopupContent();
+      };
+      popupPanel.addEventListener("click", forwardPopupCommentClick);
       // 別窓では本文枠を複製しているため、複製元のイベントリスナーは引き継がれない。
       // 数式ボタンは別窓側のカーソル位置を本文側へ移してから、既存の挿入処理を呼び出す。
       const popupBody = popupPanel.querySelector<HTMLTextAreaElement>("[data-body]");
@@ -2002,6 +2049,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         panel.removeEventListener("change", forwardSourceInput);
         popupPanel.removeEventListener("input", forwardPopupInput);
         popupPanel.removeEventListener("change", forwardPopupInput);
+        popupPanel.removeEventListener("click", forwardPopupCommentClick);
         popup.removeEventListener("beforeunload", restore);
         if (key === "review" && typeof mentionSuggestions !== "undefined") document.body.append(mentionSuggestions);
         const otherOpenPopouts = new Set(

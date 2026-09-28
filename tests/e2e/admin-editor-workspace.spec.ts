@@ -3513,6 +3513,85 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   await expect(reply).toHaveValue("@Alice ");
 });
 
+test("コメント別窓から新規コメントを追加し、閉じた後も元画面へ反映する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  let submittedComment: {
+    body: string;
+    selections: unknown[];
+    tags: string[];
+  } | null = null;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments",
+    async (route) => {
+      if (route.request().method() === "POST") {
+        submittedComment = route.request().postDataJSON() as {
+          body: string;
+          selections: unknown[];
+          tags: string[];
+        };
+        await route.fulfill({ json: {} });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "GET" || !submittedComment) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        document: documentItem,
+        comments: [
+          ...comments,
+          {
+            ...comments[0],
+            id: "comment-from-popup",
+            body: submittedComment.body,
+            tags: submittedComment.tags,
+            created_by: "alice@example.com",
+            author_display_name: "Alice",
+            acknowledged_at: null,
+            acknowledged_by: null,
+            acknowledged_by_emails: [],
+            unacknowledged_by_emails: [],
+            action_actor_counts: { acknowledge: [], unacknowledge: [] },
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const panel = page.locator('[data-editor-pane="review"]');
+  const popupPromise = page.waitForEvent("popup");
+  await panel.locator('[data-pane-popout="review"]').click();
+  const popup = await popupPromise;
+  const commentTag = popup.locator(
+    '.review-pane-content > .comment-tags [data-comment-tag="定義不足"]',
+  );
+  await commentTag.click();
+  await expect(commentTag).toHaveAttribute("aria-pressed", "true");
+  await popup.locator("[data-comment-body]").fill("別窓から投稿したコメント");
+  await popup.locator("[data-send-comment]").click();
+
+  await expect(popup.locator("[data-comment-list]")).toContainText(
+    "別窓から投稿したコメント",
+  );
+  expect(submittedComment).toEqual({
+    body: "別窓から投稿したコメント",
+    selections: [],
+    tags: ["定義不足"],
+  });
+  await popup.close();
+  await expect(panel.locator("[data-comment-list]")).toContainText(
+    "別窓から投稿したコメント",
+  );
+});
+
 test("CM-RT: コメント変更通知を受けると一覧をリアルタイム更新する", async ({
   page,
 }) => {

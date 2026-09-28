@@ -50,17 +50,17 @@ npm run format:check
 npm test
 ```
 
-デプロイは次のコマンドだけを使います。
+公開サイト・学習サイトのデプロイには次のコマンドを使います。
 
 ```bash
 # 公開サイト・学習サイト
 npm run deploy:public
 
-# 運営用サイト
-npm run deploy:admin
 ```
 
-これらは実行前に、Worker名・Cloudflareアカウント・ドメインルート・D1が正しいか検査します。
+ADMIN本番の通常経路は、GitHub `main`をProduction branchに固定したCloudflare Workers Buildsです。`npm run deploy:admin`は緊急時の例外手順に限り、cleanな`main` checkout、正本remote main由来、レビュー済みSHAの明示指定、別途の実行承認が必要です。詳細は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)を参照してください。
+
+デプロイ前のターゲット検証では、Worker名・Cloudflareアカウント・ドメインルート・D1が正しいか確認します。
 検査に失敗した場合は、設定を手で書き換えて続行せず、正しい設定ファイルを確認してください。
 CIにも同じ検査が入っています。
 
@@ -155,11 +155,11 @@ npx wrangler secret put RESEND_API_KEY --config wrangler.admin.jsonc
 
 ### 管理トップからカレンダーや応募管理が消えた
 
-1. `git log`とデプロイ元ブランチを確認する
-2. `npm run verify:deploy-config`を実行する
-3. `wrangler.admin.jsonc`を使って`atlasez-admin`へ現行`main`をデプロイする
-4. Chromeで`/admin/portal/`と`/admin/manage/?project=atlas`を確認する
-5. 古い一時cloneや、別アカウントのWorkerへ再デプロイしない
+1. `git log`、公開`build-info.json`、Cloudflare Versionのデプロイ元SHAを照合する
+2. `npm run verify:deploy-config`とGitHub `main`のCI状態を確認する
+3. Workers Buildsが正常なら、PRレビュー済みの変更を`main`へマージし、対象SHAの配信完了を確認する
+4. Workers Buildsが停止中、SHAが不明、または不一致ならdeployを止めてIssueへ記録する。緊急時の例外は[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認・ガード条件を満たす場合だけ実施する
+5. Chromeで`/admin/portal/`と`/admin/manage/?project=atlas`を確認し、古い一時cloneや別アカウントのWorkerを使わない
 
 ### 記事が開けない
 
@@ -202,7 +202,7 @@ Google Search Consoleの数値はクロール・API更新の遅延があるた�
 
 - `verify-deployment-config.mjs`を追加
 - CIで本番ターゲット検証を必須化
-- `npm run deploy:public` / `npm run deploy:admin`を正規コマンド化
+- 公開サイトのdeployコマンドと、ADMINのmain正本・緊急時ガード方針を文書化
 - Pages前提の古い説明を削除し、Workers構成へ統一
 - PR #29で現行版を同期し、PR #30でデプロイガードをmainへマージ
 

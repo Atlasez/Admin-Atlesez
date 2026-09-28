@@ -9458,7 +9458,40 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   // 完了履歴も未対応一覧と同じ原稿の可視範囲に限定する。履歴だけ全件を
   // 返すと、担当外分野のタイトルや更新者がアクションセンターから漏れる。
   const documentVisibility = documentVisibilityFor(scope);
-  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary] = await Promise.all([
+  // 一覧のLIMITとは独立して、同じ可視条件の全件数を数える。表示上限で切れた
+  // 件数を「担当項目」の実数として見せないため、5種類を一覧取得と並行集計する。
+  const assignedCountPromise = historyOnly
+    ? Promise.resolve(0)
+    : Promise.all([
+        env.REPORTS.prepare(
+          `SELECT COUNT(*) AS count FROM editorial_tasks t
+            WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'`,
+        ).bind(...taskBindings).first<{ count: number }>(),
+        env.REPORTS.prepare(
+          `SELECT COUNT(*) AS count FROM editorial_documents d
+            WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
+              AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
+                OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))`,
+        ).bind(...documentVisibility.bindings, scope.email).first<{ count: number }>(),
+        canReviewApplications
+          ? env.REPORTS.prepare(
+              `SELECT COUNT(*) AS count FROM atlasez_member_applications
+                WHERE status IN ('new','reviewing')${applicationProjectFilter}`,
+            ).bind(...applicationProjectSlugs).first<{ count: number }>()
+          : Promise.resolve({ count: 0 }),
+        scope.isManager || secretariatRole === "manager"
+          ? env.REPORTS.prepare(
+              "SELECT COUNT(*) AS count FROM editorial_member_profile_change_requests WHERE status='pending'",
+            ).first<{ count: number }>()
+          : Promise.resolve({ count: 0 }),
+        approvalProjectIds.length
+          ? env.REPORTS.prepare(
+              `SELECT COUNT(*) AS count FROM editorial_project_profile_change_requests
+                WHERE status='pending' AND project_id IN (${approvalProjectIds.map(() => "?").join(",")})`,
+            ).bind(...approvalProjectIds).first<{ count: number }>()
+          : Promise.resolve({ count: 0 }),
+      ]).then((rows) => rows.reduce((total, row) => total + Number(row?.count ?? 0), 0));
+  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary, assignedCount] = await Promise.all([
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
               COALESCE(p.name,t.project_id) AS project_name
@@ -9553,6 +9586,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> })
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
     workflowSummaryPromise,
+    assignedCountPromise,
   ]);
   const notificationData = notificationResponse.ok
     ? await notificationResponse.json().catch(() => ({})) as { notifications?: Array<Record<string, unknown>>; unreadNotificationsCount?: number }
@@ -9677,9 +9711,8 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     if (existing) {
       existing.groupCount = (existing.groupCount ?? 1) + 1;
       existing.notificationIds = [...(existing.notificationIds ?? []), id];
-      // A grouped card represents every notification in the group. Keep it
-      // unread if any constituent notification is unread, even when the newest
-      // notification (which creates the card) has already been read.
+      // グループ内に未読が1件でもあれば、まとめた項目も未読として残す。
+      // 最初に既読通知が来た場合でも、後続の未読通知をフィルターで隠さない。
       if (raw.read !== true) {
         existing.read = false;
         existing.status = "unread";
@@ -9727,7 +9760,8 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       dueSoon: workflowSummary.taskSummary.dueSoon,
       unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
       approvals: workflowSummary.pendingApprovals,
-      assigned: items.filter((item) => item.kind !== "notification").length,
+      assigned: assignedCount,
+      assignedItemsTruncated: assignedCount > items.filter((item) => item.kind !== "notification").length,
     },
     scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects, projects: projectIds },
   });

@@ -18,11 +18,11 @@
 
 ## 絶対ルール
 
-- 本番の正本はGitHub `main`。作業ツリー、feature branch、未コミット変更から本番へ出さない。
-- 本番経路は、GitHub `main`をProduction branchに固定したCloudflare Workers Buildsだけにする。
+- 本番の正本はGitHub `main`。`main`以外の作業ツリー、feature branch、未コミット変更から本番へ出さない。
+- 通常の本番経路は、GitHub `main`をProduction branchに固定したCloudflare Workers Buildsだけにする。
 - Dashboard Editorからの手動Upload、`wrangler versions upload`、ローカルfeature branchからの直接deployを通常運用で行わない。
-- `npm run verify:deploy-config` と `npm run build` を通し、`dist/build-info.json` のSHAを検証してからデプロイする。
-- 手動の緊急デプロイでは、cleanなmain固定SHAから `DEPLOY_MAIN_SHA=$(git rev-parse HEAD) npm run deploy:admin` のように明示承認SHAを渡す。feature branch、未コミット変更、SHA省略のDeployはスクリプトで停止する。
+- `npm run verify:deploy-config`、対象に合ったbuild設定での `npm run build`、`npm run verify:build-info` を通してからデプロイする。ADMINは `ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/`、公開サイトは `SITE_URL=https://atlasez.org BASE_PATH=/` を使う。
+- 手動の緊急デプロイはWorkers Buildsが使えず、レビュー済みmain commitを本番へ出す明示承認がある場合だけ許可する。cleanな`main` checkoutから、承認済みSHAをリテラルで`DEPLOY_MAIN_SHA`に指定する。スクリプトはbranch、remote main由来、未コミット変更、SHA一致を検証し、feature branch・detached HEAD・SHA省略を停止する。
 - デプロイ後はCloudflare Version/DeploymentのWorker名・100%配信・時刻を確認し、認証済みChromeで主要ADMIN画面を確認する。
 - SHA不一致、Worker名不一致、想定外のVersion、古い画面、CI失敗を見つけたら停止する。rollback、promote、cache purge、Route変更を推測で実行しない。
 - 既存の未コミット変更を破棄、reset、上書きしない。
@@ -55,7 +55,7 @@ npm run check
 npm run lint
 npm test
 npm run format:check
-SITE_URL=https://atlasez.org BASE_PATH=/ npm run build
+ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ npm run build
 npm run verify:build-info
 git diff --check
 ```
