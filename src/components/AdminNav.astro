@@ -573,6 +573,13 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           window.localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 8)));
         } catch { /* localStorageが無効でも操作自体は継続 */ }
       };
+      const recordCurrentRoute = () => {
+        if ((window.location.pathname.replace(/\/$/, '') || '/') !== '/admin/action-center') return;
+        const actionCenter = staticCommands.find((command) => command.href === '/admin/action-center/');
+        if (!actionCenter) return;
+        const alreadyRecorded = readHistory().some((item) => item.href === actionCenter.href && Date.now() - item.lastUsed < 1500);
+        if (!alreadyRecorded) recordUsage(actionCenter);
+      };
       let commands = [...staticCommands];
       let activeIndex = 0;
       let searchTimer: number | undefined;
@@ -598,6 +605,8 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       };
       const open = () => { if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
       button.addEventListener("click", open);
+      document.addEventListener('astro:page-load', recordCurrentRoute);
+      recordCurrentRoute();
       input.addEventListener("input", () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void search(), 120); });
       input.addEventListener("keydown", (event) => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); if (!commands.length) return; activeIndex = (activeIndex + (event.key === "ArrowDown" ? 1 : -1) + commands.length) % commands.length; render(); }
