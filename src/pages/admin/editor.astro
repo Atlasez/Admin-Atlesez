@@ -1912,8 +1912,18 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
 
       type FormField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
       const isFormField = (value: EventTarget | null): value is FormField => Boolean(value && (value as HTMLElement).matches?.("input,textarea,select"));
-      const sourceFields = [...panel.querySelectorAll<FormField>("input,textarea,select")];
-      const popupFields = [...popupPanel.querySelectorAll<FormField>("input,textarea,select")];
+      const getFormFields = (container: ParentNode) => [...container.querySelectorAll<FormField>("input,textarea,select")];
+      const findFormFieldCounterpart = (field: FormField, candidates: FormField[], fallbackIndex: number) => {
+        const dataAttributes = Object.entries(field.dataset);
+        if (dataAttributes.length) {
+          return candidates.find((candidate) => candidate.tagName === field.tagName
+            && dataAttributes.every(([key, value]) => candidate.dataset[key] === value)) ?? null;
+        }
+        if (field.id) return candidates.find((candidate) => candidate.tagName === field.tagName && candidate.id === field.id) ?? null;
+        if (field.name) return candidates.find((candidate) => candidate.tagName === field.tagName && candidate.name === field.name) ?? null;
+        const positional = candidates[fallbackIndex];
+        return positional?.tagName === field.tagName ? positional : null;
+      };
       const copyField = (from: FormField, to: FormField) => {
         if (from.tagName === "INPUT" && (from as HTMLInputElement).type === "checkbox") (to as HTMLInputElement).checked = (from as HTMLInputElement).checked;
         else if (from.tagName === "INPUT" && (from as HTMLInputElement).type === "radio") (to as HTMLInputElement).checked = (from as HTMLInputElement).checked;
@@ -1927,7 +1937,14 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
           host?.querySelector<HTMLElement>(".cm-content")?.setAttribute("contenteditable", String(!locked));
         }
       };
-      const syncPopupFields = () => sourceFields.forEach((field, index) => { if (popupFields[index]) copyField(field, popupFields[index]); });
+      const syncPopupFields = () => {
+        const sourceFields = getFormFields(panel);
+        const popupFields = getFormFields(popupPanel);
+        sourceFields.forEach((field, index) => {
+          const popupField = findFormFieldCounterpart(field, popupFields, index);
+          if (popupField) copyField(field, popupField);
+        });
+      };
       const syncPopupContent = () => {
         ["[data-preview]", "[data-media-list]", "[data-comment-list]", ".review-pane-content > .comment-tags", "[data-comment-selection]", "[data-selection-action]", "[data-selected-ranges]", "[data-lock-status]", "[data-word-count]", "[data-diagnostics-trigger-count]", "[data-writing-memo]"].forEach((selector) => {
           const source = panel.querySelector<HTMLElement>(selector);
@@ -1941,16 +1958,20 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       };
       const forwardPopupInput = (event: Event) => {
         if (!isFormField(event.target)) return;
+        const sourceFields = getFormFields(panel);
+        const popupFields = getFormFields(popupPanel);
         const index = popupFields.indexOf(event.target);
-        const sourceField = sourceFields[index];
+        const sourceField = findFormFieldCounterpart(event.target, sourceFields, index);
         if (!sourceField) return;
         copyField(event.target, sourceField);
         sourceField.dispatchEvent(new Event(event.type, { bubbles: true }));
       };
       const forwardSourceInput = (event: Event) => {
         if (!isFormField(event.target)) return;
+        const sourceFields = getFormFields(panel);
+        const popupFields = getFormFields(popupPanel);
         const index = sourceFields.indexOf(event.target);
-        const popupField = popupFields[index];
+        const popupField = findFormFieldCounterpart(event.target, popupFields, index);
         if (popupField) copyField(event.target, popupField);
       };
       popupPanel.addEventListener("input", forwardPopupInput);
