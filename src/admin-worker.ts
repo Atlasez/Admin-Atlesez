@@ -9677,6 +9677,14 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     if (existing) {
       existing.groupCount = (existing.groupCount ?? 1) + 1;
       existing.notificationIds = [...(existing.notificationIds ?? []), id];
+      // A grouped card represents every notification in the group. Keep it
+      // unread if any constituent notification is unread, even when the newest
+      // notification (which creates the card) has already been read.
+      if (raw.read !== true) {
+        existing.read = false;
+        existing.status = "unread";
+        existing.priority = "new";
+      }
       continue;
     }
     const updatedAt = String(raw.updatedAt ?? new Date().toISOString());
