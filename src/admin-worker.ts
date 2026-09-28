@@ -6692,24 +6692,22 @@ async function getPublicArticleForIdentity(
       "GitHub公開連携がまだ設定されていません。公開記事を取得できません。",
     );
   const path = editorialArticlePath(identity);
-  const tree = await githubArticleTree(client.repository, client.headers);
-  const entry = tree.find((item) => item.path === path);
-  if (!entry) return null;
-  const markdown = await githubArticleMarkdown(
+  const content = await githubArticleContent(
     client.repository,
     client.headers,
-    entry,
+    path,
   );
-  const article = parsePublicArticle(path, markdown, entry.sha);
+  if (!content) return null;
+  const article = parsePublicArticle(path, content.markdown, content.gitSha);
   if (!article) return null;
   article.repository = client.repository;
   article.sourceKind = "github-published-markdown";
   article.sourceRef = githubArticleSourceRef(
     client.repository,
-    entry.path,
-    entry.sha,
+    path,
+    content.gitSha,
   );
-  article.sourceChecksum = await sha256Hex(markdown);
+  article.sourceChecksum = await sha256Hex(content.markdown);
   article.sourceBodyChecksum = await sha256Hex(article.body);
   article.sourceFetchedAt = new Date().toISOString();
   article.sourceAuthority = "reference-only";
@@ -17092,6 +17090,37 @@ const githubArticleMarkdown = async (
   if (!payload.content || payload.encoding !== "base64")
     throw new Error(`GitHubの記事本文を読み取れませんでした: ${entry.path}`);
   return githubText(payload.content);
+};
+
+const githubArticleContent = async (
+  repository: string,
+  headers: Record<string, string>,
+  path: string,
+) => {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=main`,
+    { headers },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok)
+    throw new Error(`GitHubの記事を取得できませんでした: ${path}`);
+  const payload = (await response.json()) as {
+    content?: string;
+    encoding?: string;
+    sha?: string;
+    type?: string;
+  };
+  if (
+    payload.type !== "file" ||
+    !payload.content ||
+    payload.encoding !== "base64"
+  )
+    throw new Error(`GitHubの記事本文を読み取れませんでした: ${path}`);
+  return {
+    markdown: githubText(payload.content),
+    gitSha: typeof payload.sha === "string" ? payload.sha : null,
+  };
 };
 
 const upsertEditorialArticleCatalog = async (
