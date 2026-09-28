@@ -348,6 +348,102 @@ test("通知panelは全体の未読件数を示し、通知一覧へ移動でき
   await expect(page).toHaveURL(/\/admin\/notifications\/$/);
 });
 
+test("通知panelは旧リマインダー準備中を示し、一括既読を止める", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-current12345678",
+            title: "現在の通知",
+            detail: "確認が必要です。",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        legacyReminderNormalizationPending: true,
+        legacyReminderNormalizationFailed: false,
+      },
+    });
+  });
+  await page.goto("admin/portal/");
+  const panel = page.locator("[data-admin-notification-panel]");
+  await page.locator("[data-admin-notifications]").click();
+  await expect(panel.locator("[data-legacy-reminder-status]")).toBeVisible();
+  await expect(
+    panel.locator("[data-mark-all-notifications-read]"),
+  ).toBeDisabled();
+  await expect(panel.locator("[data-legacy-reminder-failed]")).toBeHidden();
+});
+
+test("不正リマインダーの警告中も他の通知を一括既読できる", async ({ page }) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-current12345678",
+            title: "現在の通知",
+            detail: "確認が必要です。",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        legacyReminderNormalizationPending: false,
+        legacyReminderNormalizationFailed: true,
+      },
+    });
+  });
+  await page.goto("admin/portal/");
+  const panel = page.locator("[data-admin-notification-panel]");
+  await page.locator("[data-admin-notifications]").click();
+  await expect(panel.locator("[data-legacy-reminder-failed]")).toBeVisible();
+  await expect(
+    panel.locator("[data-mark-all-notifications-read]"),
+  ).toBeEnabled();
+});
+
+test("旧リマインダー準備中は不完全な一括既読を防ぎ状態を表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-current12345678",
+            title: "現在の通知",
+            detail: "確認が必要です。",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        totalNotifications: 1,
+        legacyReminderNormalizationPending: true,
+      },
+    });
+  });
+
+  await page.goto("admin/notifications/");
+
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "古いタスクリマインダーを準備中です。",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "一覧をすべて既読" }),
+  ).toBeDisabled();
+});
+
 test("通知一覧はカーソルページ送り・未読絞り込み・すべて既読を扱う", async ({
   page,
 }) => {
