@@ -9814,6 +9814,7 @@ type ActionCenterAction = {
   label: string;
   /** 表示時点の更新時刻。状態遷移APIで古い表示からの上書きを拒否する。 */
   expectedUpdatedAt?: string;
+  approvalRequestType?: "member-profile" | "project-profile";
 };
 
 type ActionCenterItem = {
@@ -10134,7 +10135,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: "運営事務局",
       subject: null,
       read: false,
-      actions: actionCenterTransition("approval", row.id, "pending"),
+      actions: actionCenterTransition("approval", row.id, "pending").map((action) => ({ ...action, approvalRequestType: "member-profile" as const })),
     });
   }
   for (const row of projectApprovalRows.results ?? []) {
@@ -10151,7 +10152,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: row.project_id,
       subject: null,
       read: false,
-      actions: actionCenterTransition("approval", row.id, "pending"),
+      actions: actionCenterTransition("approval", row.id, "pending").map((action) => ({ ...action, approvalRequestType: "project-profile" as const })),
     });
   }
   const history: ActionCenterItem[] = [];
