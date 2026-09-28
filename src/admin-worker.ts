@@ -6036,10 +6036,10 @@ async function listEditorialDocuments(
   // article index can load additional pages explicitly, so a smaller default
   // does not reduce coverage while avoiding 503s when the D1 result contains
   // many enriched rows.
-  const requestedLimit = Number(searchParams.get("limit") ?? "25");
+  const requestedLimit = Number(searchParams.get("limit") ?? "20");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-    : 25;
+    : 20;
   const rawCursor = searchParams.get("cursor");
   if (rawCursor) {
     const separator = rawCursor.indexOf("|");
