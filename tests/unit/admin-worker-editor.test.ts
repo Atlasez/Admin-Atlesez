@@ -1265,6 +1265,90 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("keeps a grouped action-center notification unread when any event is unread", async () => {
+    class NotificationStatement extends EmptyStatement {
+      private boundValues: unknown[] = [];
+
+      override bind(...values: unknown[]) {
+        super.bind(...values);
+        this.boundValues = values;
+        return this;
+      }
+
+      override async all<T>() {
+        if (this.query.includes("WHERE d.created_by = ? AND c.created_by != ?"))
+          return {
+            results: [
+              {
+                id: "newest123",
+                body: "既読の新しいコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-20T12:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+              {
+                id: "older1234",
+                body: "未読の古いコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-19T12:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+            ] as T[],
+          };
+        if (
+          this.query.startsWith(
+            "SELECT notification_id FROM admin_notification_reads",
+          )
+        )
+          return {
+            results: this.boundValues
+              .slice(1)
+              .filter((id) => id === "comment-newest123")
+              .map((notification_id) => ({ notification_id })) as T[],
+          };
+        return { results: [] as T[] };
+      }
+    }
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new NotificationStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      items: Array<{
+        kind: string;
+        read: boolean;
+        status: string;
+        priority: string;
+        groupCount?: number;
+        notificationIds?: string[];
+      }>;
+      counts: { unread: number };
+    };
+    const groupedNotification = data.items.find(
+      (item) => item.kind === "notification",
+    );
+    expect(groupedNotification).toMatchObject({
+      read: false,
+      status: "unread",
+      priority: "new",
+      groupCount: 2,
+      notificationIds: ["comment-newest123", "comment-older1234"],
+    });
+    expect(data.counts.unread).toBe(1);
+  });
+
   it("keeps action-center application data inside manager project scope", async () => {
     const applicationQueries: Array<{ sql: string; bindings: unknown[] }> = [];
     class ScopedStatement extends EmptyStatement {
