@@ -527,12 +527,25 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
     });
   });
 
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("./admin/genre-roles/?project=atlas");
   await expect(
     page.getByRole("link", { name: "運営者・担当分野管理" }),
   ).toHaveCount(0);
   await expect(page.locator("[data-content]")).not.toContainText("運営統括");
   const taxonomyForm = page.locator("[data-taxonomy-form]");
+  const managementFormWidths = await page
+    .locator(".management-tools")
+    .evaluate((tools) => {
+      const forms = [...tools.querySelectorAll("form")];
+      return {
+        catalog: forms[0]?.getBoundingClientRect().width ?? 0,
+        taxonomy: forms[2]?.getBoundingClientRect().width ?? 0,
+      };
+    });
+  expect(managementFormWidths.taxonomy).toBeGreaterThan(
+    managementFormWidths.catalog * 1.8,
+  );
   await taxonomyForm.locator('select[name="kind"]').selectOption("subject");
   await taxonomyForm.locator('input[name="name"]').fill("情報");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
@@ -622,6 +635,25 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
     page.getByText("機械学習（基礎）", { exact: true }),
   ).toBeVisible();
   // ドラッグ中のポインター位置（カード下半分）どおりに、後ろへ挿入される。
+  const waitForReorderSave = () =>
+    page.waitForResponse((response) => {
+      const request = response.request();
+      if (
+        request.method() !== "PATCH" ||
+        !response.url().includes("/api/admin/editor/taxonomy")
+      ) {
+        return false;
+      }
+      try {
+        return request.postDataJSON()?.action === "reorder";
+      } catch {
+        return false;
+      }
+    });
+  const reorderSaves = Promise.all([
+    waitForReorderSave(),
+    waitForReorderSave(),
+  ]);
   const dragPosition = await page.evaluate(() => {
     const source = document.querySelector<HTMLElement>(
       '[data-taxonomy-id="category-2"]',
@@ -656,9 +688,7 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   });
   expect(dragPosition.position).toBe("after");
   expect(dragPosition.order).toEqual(["category-3", "category-2"]);
-  await expect(
-    page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
-  ).toContainText("統計学");
+  await reorderSaves;
   // 並び順は画面内のDOMだけでなく、再読み込み後もAPIから復元される。
   await page.reload();
   await expect(
