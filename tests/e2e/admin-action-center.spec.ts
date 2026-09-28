@@ -4,6 +4,8 @@ async function mockShell(
   page: Page,
   onTransition?: (body: unknown) => void,
   includeBulkTasks = false,
+  assignedCount = 1,
+  assignedItemsTruncated = false,
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
@@ -105,7 +107,8 @@ async function mockShell(
             dueSoon: 1,
             unread: 1,
             approvals: 0,
-            assigned: 1,
+            assigned: assignedCount,
+            assignedItemsTruncated,
           },
           items,
           history: [
@@ -209,6 +212,33 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await page.getByRole("button", { name: "完了・履歴" }).click();
   await expect(page.locator("[data-action-items]")).toContainText("完了タスク");
+});
+
+test("担当件数が一覧取得上限を超える場合は全件数と表示上限を案内する", async ({
+  page,
+}) => {
+  await mockShell(page, undefined, false, 51, true);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("admin/action-center/");
+  await page.getByRole("button", { name: "自分の担当", exact: true }).click();
+
+  await expect(page.locator("[data-action-summary]")).toContainText("51");
+  await expect(page.locator("[data-action-count]")).toHaveText("51件中1件表示");
+  await expect(page.locator("[data-assigned-cap-notice]")).toBeVisible();
+  await expect(page.locator("[data-assigned-cap-notice]")).toContainText(
+    "取得上限のため1件を表示しています",
+  );
+  await expect(
+    page.locator("[data-assigned-cap-notice] a[href='/admin/member-tasks/']"),
+  ).toBeVisible();
+  await expect(page.locator("[data-assigned-cap-notice]")).toBeInViewport();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileNotice = await page
+    .locator("[data-assigned-cap-notice]")
+    .boundingBox();
+  expect(mobileNotice).not.toBeNull();
+  expect(mobileNotice!.x + mobileNotice!.width).toBeLessThanOrEqual(390);
 });
 
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {

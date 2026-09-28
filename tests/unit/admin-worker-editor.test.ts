@@ -1228,6 +1228,78 @@ describe("admin worker editor APIs", () => {
     });
   });
 
+  it("counts all scoped assigned action-center items beyond the row limit", async () => {
+    const taskRow = {
+      id: "task-visible",
+      project_id: "atlas",
+      subject: "数学",
+      task_kind: "task",
+      title: "表示対象のタスク",
+      details: "確認してください",
+      status: "open",
+      due_at: null,
+      updated_at: "2026-09-28T00:00:00.000Z",
+      project_name: "アトラス",
+    };
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("SELECT id,slug,name FROM atlasez_projects"))
+              return {
+                results: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+              } as { results: T[] };
+            if (
+              query.includes("SELECT t.id,t.project_id,t.subject,t.task_kind")
+            )
+              return { results: [taskRow] as T[] };
+            return { results: [] as T[] };
+          };
+          statement.first = async <T>() => {
+            if (
+              query.includes("SELECT COUNT(*) AS count FROM editorial_tasks t")
+            )
+              return { count: 60 } as T;
+            if (
+              query.includes(
+                "SELECT COUNT(*) AS count FROM editorial_documents d",
+              )
+            )
+              return { count: 0 } as T;
+            if (
+              query.includes(
+                "SELECT COUNT(*) AS count FROM atlasez_member_applications",
+              )
+            )
+              return { count: 0 } as T;
+            if (query.includes("editorial_member_profile_change_requests"))
+              return { count: 2 } as T;
+            if (query.includes("editorial_project_profile_change_requests"))
+              return { count: 3 } as T;
+            if (query.includes("SELECT COUNT(*) AS open_count"))
+              return { open_count: 60, due_today: 0, due_soon: 0 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [{ id: "task:task-visible" }],
+      counts: { assigned: 65, assignedItemsTruncated: true },
+    });
+  });
+
   it("uses the shared task summary for action-center due counts", async () => {
     const actionCenterEnv = {
       ...emptyEnv,

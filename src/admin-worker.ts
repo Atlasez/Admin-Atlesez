@@ -9455,9 +9455,29 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   const taskBindings = projectIds.length
     ? [...projectIds, ...(scope.isManager ? [] : [scope.email, scope.email, scope.email])]
     : [];
+  const documentVisibility = documentVisibilityFor(scope);
+  // 一覧クエリはソースごとに上限を設けているため、担当件数は同じ可視範囲で
+  // COUNTし、取得行数から逆算しない。承認は共有サマリーを件数の正本にする。
+  const assignedSourceCountsPromise = Promise.all([
+    env.REPORTS.prepare(
+      `SELECT COUNT(*) AS count FROM editorial_tasks t
+        WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'`,
+    ).bind(...taskBindings).first<{ count: number }>(),
+    env.REPORTS.prepare(
+      `SELECT COUNT(*) AS count FROM editorial_documents d
+        WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
+          AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
+            OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))`,
+    ).bind(...documentVisibility.bindings, scope.email).first<{ count: number }>(),
+    canReviewApplications
+      ? env.REPORTS.prepare(
+          `SELECT COUNT(*) AS count FROM atlasez_member_applications
+            WHERE status IN ('new','reviewing')${applicationProjectFilter}`,
+        ).bind(...applicationProjectSlugs).first<{ count: number }>()
+      : Promise.resolve({ count: 0 }),
+  ]);
   // 完了履歴も未対応一覧と同じ原稿の可視範囲に限定する。履歴だけ全件を
   // 返すと、担当外分野のタイトルや更新者がアクションセンターから漏れる。
-  const documentVisibility = documentVisibilityFor(scope);
   const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary] = await Promise.all([
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
@@ -9554,6 +9574,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       : Promise.resolve({ results: [] as Array<{ id: string; email: string; project_id: string; submitted_at: string; status: string }> }),
     workflowSummaryPromise,
   ]);
+  const assignedSourceCounts = await assignedSourceCountsPromise;
   const notificationData = notificationResponse.ok
     ? await notificationResponse.json().catch(() => ({})) as { notifications?: Array<Record<string, unknown>>; unreadNotificationsCount?: number }
     : {};
@@ -9714,6 +9735,11 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   });
   sortItems(items);
   sortItems(history);
+  const assigned = assignedSourceCounts.reduce(
+    (total, result) => total + Number(result?.count ?? 0),
+    workflowSummary.pendingApprovals,
+  );
+  const loadedAssigned = items.filter((item) => item.kind !== "notification").length;
   return json({
     view: historyOnly ? "history" : "action",
     generatedAt: new Date().toISOString(),
@@ -9727,7 +9753,8 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       dueSoon: workflowSummary.taskSummary.dueSoon,
       unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
       approvals: workflowSummary.pendingApprovals,
-      assigned: items.filter((item) => item.kind !== "notification").length,
+      assigned,
+      assignedItemsTruncated: !historyOnly && assigned > loadedAssigned,
     },
     scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects, projects: projectIds },
   });

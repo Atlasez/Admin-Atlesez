@@ -48,6 +48,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         <button type="button" class="item-action" data-action-bulk-apply disabled>適用</button>
         <button type="button" class="item-action" data-action-clear-selection>選択解除</button>
       </div>
+      <p class="action-cap-notice" data-assigned-cap-notice role="status" hidden></p>
       <div class="action-items" data-action-items aria-live="polite"></div>
     </section>
   </main>
@@ -57,7 +58,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   type Action = { entityType: string; entityId: string; fromState: string; toState: string; label: string; expectedUpdatedAt?: string };
   type Item = { id: string; kind: string; title: string; detail: string; href: string; status: string; priority: string; updatedAt: string; dueAt: string | null; project: string | null; subject: string | null; read: boolean; groupCount?: number; notificationIds?: string[]; actions: Action[] };
-  type Payload = { view?: "action" | "history"; items?: Item[]; history?: Item[]; counts?: { today?: number; dueSoon?: number; unread?: number; approvals?: number; assigned?: number }; generatedAt?: string };
+  type Payload = { view?: "action" | "history"; items?: Item[]; history?: Item[]; counts?: { today?: number; dueSoon?: number; unread?: number; approvals?: number; assigned?: number; assignedItemsTruncated?: boolean }; generatedAt?: string };
 
   const initActionCenter = () => {
     const root = document.querySelector<HTMLElement>("[data-action-center]");
@@ -68,6 +69,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     const refresh = root.querySelector<HTMLButtonElement>("[data-action-refresh]")!;
     const updated = root.querySelector<HTMLOutputElement>("[data-action-updated]")!;
     const count = root.querySelector<HTMLElement>("[data-action-count]")!;
+    const assignedCapNotice = root.querySelector<HTMLElement>("[data-assigned-cap-notice]")!;
     const listHeading = root.querySelector<HTMLElement>("[data-action-list-heading]")!;
     const selectVisible = root.querySelector<HTMLInputElement>("[data-action-select-visible]")!;
     const bulkBar = root.querySelector<HTMLElement>("[data-action-bulkbar]")!;
@@ -151,7 +153,15 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     };
     const renderItems = () => {
       const rows = filteredItems();
-      count.textContent = `${rows.length}件`;
+      const isAssignedView = filter === "assigned" && payload.view !== "history";
+      const assignedTotal = Number(payload.counts?.assigned ?? 0);
+      const loadedAssigned = (payload.items ?? []).filter((item) => item.kind !== "notification").length;
+      const isTruncated = isAssignedView && payload.counts?.assignedItemsTruncated === true;
+      count.textContent = isTruncated ? `${assignedTotal}件中${loadedAssigned}件表示` : `${rows.length}件`;
+      assignedCapNotice.hidden = !isTruncated;
+      assignedCapNotice.innerHTML = isTruncated
+        ? `担当項目は全${assignedTotal}件です。取得上限のため${loadedAssigned}件を表示しています。残りは <a href="/admin/member-tasks/">タスク管理</a>・<a href="/admin/editor/">記事管理</a>・<a href="/admin/applications/">応募管理</a>・<a href="/admin/profile-requests/">承認管理</a> で確認してください。`
+        : "";
       if (!rows.length) {
         itemsNode.innerHTML = `<div class="action-empty"><strong>${filter === "history" ? "完了・アーカイブ済みの項目はありません。" : filter === "approvals" ? "承認待ちの項目はありません。" : "対応が必要な項目はありません。"}</strong><span>${filter === "history" ? "対応を完了するとここに表示されます。" : "新しい項目が追加されるとここに表示されます。"}</span></div>`;
         renderBulkBar();
@@ -416,6 +426,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .action-empty { border: 1px dashed var(--border-default); color: var(--text-secondary); display: grid; gap: .2rem; padding: 2rem 1rem; text-align: center; }
   .action-empty strong { color: var(--text-primary); font-size: .86rem; }
   .action-empty span { font-size: .72rem; }
+  .action-cap-notice { background: var(--surface-raised); border: 1px solid var(--border-default); color: var(--text-secondary); font-size: .75rem; line-height: 1.6; margin: 0 0 .7rem; padding: .65rem .8rem; }
+  .action-cap-notice a { color: var(--accent-primary); font-weight: 700; }
   @media (max-width: 820px) { .action-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .summary-item:nth-child(4) { border-left: 0; border-top: 1px solid var(--border-default); } .summary-item:nth-child(n + 4) { border-top: 1px solid var(--border-default); } .action-item { grid-template-columns: 2rem minmax(0, 1fr); } .item-actions { grid-column: 2; justify-content: start; min-width: 0; } }
   @media (max-width: 560px) { .action-center { padding: 0 .8rem 3rem; } .action-center-heading { align-items: start; } .action-center-heading-actions { align-items: stretch; flex-direction: column-reverse; } .action-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--border-default); } .action-center-toolbar { align-items: start; display: grid; } }
   @media (prefers-reduced-motion: reduce) { .action-item { transition: none; } }
