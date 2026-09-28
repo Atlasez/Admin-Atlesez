@@ -696,8 +696,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
-  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string};
-  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown};
+  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string};
+  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown};
   type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
@@ -874,7 +874,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       for (const publicArticle of publicArticles.filter((article) => scopeAllowsSubject(article.subject))) {
         const key = publicArticleKey(publicArticle);
         if (managedKeys.has(key)) continue;
-        if (registeredPublicArticleIds.has(key)) rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key), management: "managed" });
+        if (registeredPublicArticleIds.has(key) || publicArticle.managementState === "managed") rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key) ?? publicArticle.documentId, management: "managed" });
         else rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
       }
       return rows;
@@ -977,7 +977,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const title = typeof entry.title === "string" ? entry.title : "";
         if (locale !== "ja" || publicStatus !== "published" || !articleId || !subject || !category || !slug || !title) return [];
         const updatedAt = typeof entry.public_updated_at === "string" ? entry.public_updated_at : typeof entry.editorial_updated_at === "string" ? entry.editorial_updated_at : new Date().toISOString();
-        return [{ articleId, subject, category, slug, title, updatedAt }];
+        const managementState = typeof entry.state === "string" ? entry.state : undefined;
+        const documentId = typeof entry.editorial_document_id === "string" ? entry.editorial_document_id : undefined;
+        return [{ articleId, subject, category, slug, title, updatedAt, managementState, documentId }];
       });
     };
     const loadCatalog = async (abortSignal?: AbortSignal) => {
