@@ -42,7 +42,7 @@
     "@svg-maps/japan": "^2.0.0",
     "@svg-maps/world": "^2.0.0",
     "@vvo/tzdb": "^6.196.0",
-    "astro": "^7.1.3",
+    "astro": "^7.2.8",
     "cytoscape": "^3.30.0",
     "date-holidays": "^3.35.0",
     "hast-util-from-html": "^2.0.3",
