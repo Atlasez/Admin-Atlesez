@@ -2274,6 +2274,7 @@ describe("applicant stage server-side access", () => {
       status: "open",
       updatedAt: "2026-09-28T00:00:00.000Z",
       events: [] as Array<{
+        entity_type: string;
         entity_id: string;
         from_state: string;
         to_state: string;
@@ -2345,7 +2346,7 @@ describe("applicant stage server-side access", () => {
           ) {
             const [
               ,
-              ,
+              entityType,
               entityId,
               fromState,
               toState,
@@ -2357,6 +2358,7 @@ describe("applicant stage server-side access", () => {
             ] = statement.boundValues;
             if (lastChanges === 1)
               state.events.push({
+                entity_type: String(entityType),
                 entity_id: String(entityId),
                 from_state: String(fromState),
                 to_state: String(toState),
