@@ -40,7 +40,7 @@ Cloudflare Dashboardで次を設定・維持する。
 6. Custom Domainは `admin.atlasez.org` のProductionだけを本番入口にする。
 7. Production Worker URLとPreview URLは本番確認先として使わない。設定ファイルでも`workers_dev`と`preview_urls`を無効にする。
 
-通常の本番デプロイ経路はCloudflare Workers Buildsだけとし、GitHub Actionsに別の本番deploy経路を追加・併用しない。Workers Buildsの接続が未成立なら、本番デプロイは復旧するまで停止する。既存の手動GitHub Actions workflowは、この運用方針におけるデプロイ許可や承認の代替にはならず、実行しない。
+通常の本番デプロイ経路はCloudflare Workers Buildsだけとし、GitHub Actionsに別の本番deploy経路を追加・併用しない。Workers Buildsの接続が未成立なら、本番デプロイは復旧するまで停止する。手動Wrangler DeployのGitHub Actions workflowは廃止し、緊急時もセクション5のcleanな`main` checkoutからの例外手順だけを使う。
 
 なお、Cloudflare DashboardのGit repository接続が内部エラーで未成立の間は、自動経路は「復旧待ち」であり、本番自動デプロイ済みとはみなさない。接続復旧前に手動Uploadやfeature branchからのdeployで代替しない。
 
@@ -81,6 +81,7 @@ curl -fsS https://admin.atlasez.org/build-info.json
 - Build cacheが無効であることを確認する。
 - Build/Deployログのcommit SHA、Worker名、Version ID、時刻を記録する。
 - Versionが対象Workerへ100%配信されるまで本番完了とみなさない。
+- `.github/workflows/verify-admin-production.yml`がMerge後に公開`build-info.json`と対象`main` SHAの一致を確認するまで、本番完了とみなさない。
 
 Workers Builds未接続時は本番反映を停止し、既存のGitHub Actions手動workflowを実行しない。緊急対応が必要な場合だけ、セクション5のローカル例外手順とIssue記録・明示承認を適用する。
 

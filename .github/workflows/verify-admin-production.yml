@@ -1,0 +1,66 @@
+name: Verify admin production sync
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-admin-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Resolve expected main SHA
+        id: main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            sha="${GITHUB_SHA}"
+          else
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          fi
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "main SHAを解決できませんでした: $sha" >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "expected main SHA: $sha"
+
+      - name: Checkout expected main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.main.outputs.sha }}
+          fetch-depth: 1
+
+      - name: Verify live build identity after merge
+        env:
+          EXPECTED_COMMIT: ${{ steps.main.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if node scripts/verify-live-admin-production.mjs; then
+              echo "ADMIN本番がmain SHAに一致しました（試行 ${attempt}/12）。"
+              exit 0
+            fi
+            if [ "$attempt" -lt 12 ]; then
+              delay=$((attempt * 10))
+              echo "Workers Buildsの反映を待機します（${delay}秒後、試行 ${attempt}/12）。"
+              sleep "$delay"
+            fi
+          done
+          echo "ADMIN本番のbuild-infoがmain SHAに一致しません。Workers Builds接続・Build/Deployログ・Version 100%配信を確認してください。" >&2
+          exit 1
