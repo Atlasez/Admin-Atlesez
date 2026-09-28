@@ -512,6 +512,9 @@ it("rejects task workflow idempotency keys already used by another entity", asyn
     code: "IDEMPOTENCY_KEY_REUSED",
   });
   expect(
+    db.prepare("SELECT status FROM editorial_tasks WHERE id='task-1'").get(),
+  ).toEqual({ status: "open" });
+  expect(
     db
       .prepare("SELECT status FROM atlasez_member_applications WHERE id=?")
       .get("223e4567-e89b-12d3-a456-426614174000"),
