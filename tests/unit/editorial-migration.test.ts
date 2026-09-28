@@ -391,6 +391,13 @@ const withSuccessfulGithubApi = async <T>(
         content: utf8Base64(publicArticleMarkdown),
         encoding: "base64",
       });
+    if (url.includes(`/contents/${publicArticlePath}?ref=main`))
+      return Response.json({
+        content: utf8Base64(publicArticleMarkdown),
+        encoding: "base64",
+        sha: "sha-ring",
+        type: "file",
+      });
     throw new Error(`Unexpected GitHub request in catalog test: ${url}`);
   }) as typeof fetch;
   try {
