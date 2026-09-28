@@ -235,7 +235,10 @@ test("担当項目が表示上限を超えた場合は全件数と一覧への�
 
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {
   await mockShell(page);
-  await page.goto("admin/action-center/");
+  await page.goto("admin/articles/");
+  await expect(
+    page.getByRole("link", { name: "アクションセンター" }),
+  ).toHaveAttribute("href", "/admin/action-center/");
   const commandButton = page.getByRole("button", {
     name: "操作を検索（⌘K）",
   });
@@ -267,14 +270,17 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
     width: Number.parseFloat(getComputedStyle(element).width),
     rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
   }));
-  expect(dialogSize.width).toBeGreaterThan(38 * dialogSize.rem);
-  expect(dialogSize.width).toBeLessThan(41 * dialogSize.rem);
+  expect(dialogSize.width).toBeGreaterThan(52 * dialogSize.rem);
+  expect(dialogSize.width).toBeLessThan(57 * dialogSize.rem);
   await expect(
     dialog.getByRole("heading", { name: "最近使った操作" }),
   ).toBeVisible();
   await expect(
     dialog.getByRole("heading", { name: "クイック操作" }),
   ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /アクションセンター/ }),
+  ).toContainText("対応が必要な項目");
   await expect(
     dialog.getByRole("option", { name: /編集・フィードバック/ }),
   ).toBeVisible();
@@ -286,6 +292,84 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(dialog).toContainText("群の定義");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
+});
+
+test("ヘッダーのアクションセンターはページ遷移せずポップアップで対応項目を開く", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  const actionCenterTab = page.getByRole("link", {
+    name: "アクションセンター",
+  });
+  await expect(actionCenterTab).toHaveAttribute(
+    "href",
+    "/admin/action-center/",
+  );
+  await actionCenterTab.click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "アクションセンター" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "対応が必要な項目" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /定義を確認/ }),
+  ).toContainText("タスク");
+  await expect(page).toHaveURL(/\/admin\/articles\//);
+});
+
+test("アクションセンターのモーダルから対応操作と通知の既読化を実行できる", async ({
+  page,
+}) => {
+  let transitionBody: Record<string, unknown> | null = null;
+  await mockShell(page, (body) => {
+    transitionBody = body as Record<string, unknown>;
+  });
+  await page.goto("admin/articles/");
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await page.getByRole("link", { name: "アクションセンター" }).click();
+  await expect(dialog.getByRole("button", { name: "着手" })).toBeVisible();
+  await dialog.getByRole("button", { name: "着手" }).click();
+  expect(transitionBody).toMatchObject({
+    entityType: "task",
+    entityId: "task-1",
+    fromState: "open",
+    toState: "doing",
+  });
+  await expect(
+    dialog.getByRole("button", { name: "既読にする" }),
+  ).toBeVisible();
+  const readRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/admin/notifications/read") &&
+      request.method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "既読にする" }).click();
+  expect((await readRequest).postDataJSON()).toEqual({ ids: ["n-1"] });
+});
+
+test("アクションセンターをタブで開いた履歴を別画面の操作検索から再利用できる", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/action-center/");
+  await page.goto("admin/atlas/");
+  await page.keyboard.press("Meta+K");
+
+  const dialog = page.locator("[data-admin-command-dialog]");
+  const recentSection = dialog.locator(".admin-command-section").filter({
+    has: page.getByRole("heading", { name: "最近使った操作" }),
+  });
+  await expect(
+    recentSection.getByRole("option", { name: /アクションセンター/ }),
+  ).toContainText("対応が必要な項目・1回");
+  await recentSection
+    .getByRole("option", { name: /アクションセンター/ })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/action-center\//);
 });
 
 test("選択したタスクを一括完了し、直後に元へ戻せる", async ({ page }) => {

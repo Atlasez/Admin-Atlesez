@@ -65,6 +65,16 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <p data-catalog-diagnostics-summary>診断を実行してください。</p>
       <ul data-catalog-diagnostics-issues></ul>
     </details>
+    <section class="subject-browser" aria-labelledby="subject-browser-heading">
+      <div class="subject-browser__heading">
+        <div>
+          <h2 id="subject-browser-heading">分野から見る</h2>
+          <p data-subject-browser-summary>分野を選ぶと、その分野の記事だけを表示します。</p>
+        </div>
+        <button type="button" class="article-action" data-subject-browser-all>すべて表示</button>
+      </div>
+      <div class="subject-browser__items" data-subject-browser></div>
+    </section>
     <section class="filters" id="article-list" aria-label="原稿一覧の絞り込み">
       <label class="filter-control filter-control-search">
         <span>キーワード</span>
@@ -224,6 +234,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     font: inherit;
     min-height: 4.25rem;
     padding: 0.85rem;
+    box-shadow: 0 0 0 3px #fff;
     text-align: center;
     text-decoration: none;
   }
@@ -231,7 +242,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .workflow-actions button:hover,
   .workflow-actions button[aria-pressed="true"] {
     border-color: var(--accent-primary);
-    box-shadow: 0 0.25rem 0.8rem #153c6618;
+    box-shadow: 0 0 0 3px #fff, 0 0.25rem 0.8rem #153c6618;
   }
   .workflow-actions strong { font-size: 1.18rem; }
   .admin-page > header:not(.admin-nav) .quiet-header-action {
@@ -317,6 +328,47 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .catalog-diagnostics li { font-size: 0.78rem; line-height: 1.5; }
   .catalog-diagnostics li strong { color: var(--accent-primary); }
   .catalog-diagnostics.is-error { border-left-color: #b24b38; }
+  .subject-browser {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 1rem;
+    margin: 0 auto 1rem;
+    max-width: 60rem;
+    padding: .85rem 1rem 1rem;
+  }
+  .subject-browser__heading { align-items: center; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .7rem; }
+  .subject-browser__heading h2 { font-size: .98rem; margin: 0; }
+  .subject-browser__heading p { color: var(--text-secondary); font-size: .74rem; margin: .2rem 0 0; }
+  .subject-browser__heading .article-action { flex: 0 0 auto; min-height: 2.15rem; }
+  .subject-browser__items { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .subject-browser__item {
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--border-default);
+    border-radius: .55rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    gap: .45rem;
+    justify-content: space-between;
+    min-height: 2.55rem;
+    padding: .35rem .6rem;
+    text-align: left;
+  }
+  .subject-browser__item:hover,
+  .subject-browser__item[aria-pressed="true"] { background: color-mix(in srgb, var(--accent-primary) 10%, var(--background-primary)); border-color: var(--accent-primary); }
+  .subject-browser__item[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 24%, transparent); }
+  .subject-browser__item strong { font-size: .78rem; }
+  .subject-browser__item small { color: var(--text-secondary); font-size: .68rem; white-space: nowrap; }
+  .subject-browser__item small::before { content: "表示 "; }
+  .subject-browser__item em { color: var(--text-secondary); display: block; font-size: .64rem; font-style: normal; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subject-browser__item--all { border-style: dashed; }
+  @media (max-width: 600px) {
+    .subject-browser { border-radius: .75rem; padding: .75rem; }
+    .subject-browser__heading { align-items: start; }
+    .subject-browser__heading p { line-height: 1.45; }
+    .subject-browser__item { flex: 1 1 calc(50% - .45rem); min-width: 8.5rem; }
+  }
   .catalog-feedback {
     color: var(--accent-primary);
     font-size: 0.78rem;
@@ -695,8 +747,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
-  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string};
-  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown};
+  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string};
+  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown};
   type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
@@ -721,6 +773,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const catalogDiagnosticsSummary = root.querySelector<HTMLElement>("[data-catalog-diagnostics-summary]")!;
     const catalogDiagnosticsIssues = root.querySelector<HTMLUListElement>("[data-catalog-diagnostics-issues]")!;
     const resetFiltersButton = root.querySelector<HTMLButtonElement>("[data-reset-filters]")!;
+    const subjectBrowser = root.querySelector<HTMLElement>("[data-subject-browser]")!;
+    const subjectBrowserSummary = root.querySelector<HTMLElement>("[data-subject-browser-summary]");
+    const subjectBrowserAll = root.querySelector<HTMLButtonElement>("[data-subject-browser-all]")!;
     const pagination = root.querySelector<HTMLElement>("[data-article-pagination]")!;
     const paginationStatus = root.querySelector<HTMLElement>("[data-article-pagination-status]")!;
     const loadMoreButton = root.querySelector<HTMLButtonElement>("[data-article-load-more]")!;
@@ -823,7 +878,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       scopeNote.dataset.state = "ready";
       const directSubjects = Array.isArray(scope.subjects) ? scope.subjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
       const coordinatorSubjects = Array.isArray(scope.coordinatorSubjects) ? scope.coordinatorSubjects.filter((value) => typeof value === "string" && value && value !== "*") : [];
-      const unrestricted = Boolean(scope.allSubjects || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
+      const unrestricted = Boolean(scope.allSubjects || scope.isManager || scope.isProjectLeader || (scope.subjects === undefined && scope.coordinatorSubjects === undefined));
       const subjectLabels = new Map(subjectOptions.map((option) => [option.value, option.label]));
       const requestedSubject = subject.value;
       if (unrestricted) {
@@ -858,6 +913,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     };
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
+    const categoryLabels = new Map([...category.options].map((option) => [option.value, option.textContent ?? option.value]));
     const catalogRows = (): CatalogRow[] => {
       const rows: CatalogRow[] = items.map((article) => ({ kind: "editorial", article, publicArticle: publicArticles.find((source) => article.source_article_id === source.articleId || publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`), management: "managed" }));
       // The document list is useful before the remote catalog responds. Do not
@@ -866,14 +922,14 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const managedKeys = new Set(rows.flatMap((row) => row.publicArticle ? [publicArticleKey(row.publicArticle)] : []));
       const scopeAllowsSubject = (value: string) => {
         if (!articleScope) return false;
-        if (articleScope.allSubjects || articleScope.isProjectLeader || (articleScope.subjects === undefined && articleScope.coordinatorSubjects === undefined)) return true;
+        if (articleScope.allSubjects || articleScope.isManager || articleScope.isProjectLeader || (articleScope.subjects === undefined && articleScope.coordinatorSubjects === undefined)) return true;
         const allowed = new Set([...(articleScope.subjects ?? []), ...(articleScope.coordinatorSubjects ?? [])]);
         return allowed.has(value);
       };
       for (const publicArticle of publicArticles.filter((article) => scopeAllowsSubject(article.subject))) {
         const key = publicArticleKey(publicArticle);
         if (managedKeys.has(key)) continue;
-        if (registeredPublicArticleIds.has(key)) rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key), management: "managed" });
+        if (registeredPublicArticleIds.has(key) || publicArticle.managementState === "managed") rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key) ?? publicArticle.documentId, management: "managed" });
         else rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
       }
       return rows;
@@ -883,6 +939,25 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const rowSubject = (row: CatalogRow) => row.kind === "editorial" ? row.article.subject : row.publicArticle.subject;
     const rowCategory = (row: CatalogRow) => row.kind === "editorial" ? row.article.category : row.publicArticle.category;
     const rowUpdatedAt = (row: CatalogRow) => row.kind === "editorial" ? row.article.updated_at : row.publicArticle.updatedAt;
+    const renderSubjectBrowser = (shown: CatalogRow[]) => {
+      const counts = new Map<string, CatalogRow[]>();
+      for (const row of shown) counts.set(rowSubject(row), [...(counts.get(rowSubject(row)) ?? []), row]);
+      const options = [...subject.options].filter((option) => option.value !== "all" && !option.hidden && !option.disabled);
+      const renderButton = (value: string, label: string, rows: CatalogRow[], all = false) => {
+        const categories = [...new Set(rows.map(rowCategory))].map((slug) => categoryLabels.get(slug) ?? slug).slice(0, 3);
+        const categorySummary = categories.length ? `<em>${esc(categories.join("・"))}${new Set(rows.map(rowCategory)).size > categories.length ? "・ほか" : ""}</em>` : "<em>該当記事なし</em>";
+        return `<button type="button" class="subject-browser__item${all ? " subject-browser__item--all" : ""}" data-subject-quick="${esc(value)}" aria-pressed="${String(subject.value === value)}" aria-label="${esc(label)}（${rows.length}件）"><strong>${esc(label)}</strong>${categorySummary}<small>${rows.length}件</small></button>`;
+      };
+      subjectBrowser.innerHTML = [
+        renderButton("all", "すべての分野", shown, true),
+        ...options.map((option) => renderButton(option.value, option.textContent ?? option.value, counts.get(option.value) ?? [])),
+      ].join("");
+      if (subjectBrowserSummary) {
+        subjectBrowserSummary.textContent = subject.value === "all"
+          ? `${shown.length}件を分野ごとに表示中。分野を選ぶと、その分野だけに絞り込めます。`
+          : `${subject.selectedOptions[0]?.textContent ?? subject.value}を表示中。別の分野へすぐ切り替えられます。`;
+      }
+    };
     const hasUnpublishedPublicationChanges = (article: Pick<Article, "published_at" | "updated_at">) => {
       if (!article.published_at) return false;
       const updatedAt = Date.parse(article.updated_at);
@@ -934,6 +1009,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       // 未登録の公開記事も同じ一覧に補い、公開記事の管理漏れを見える化する。
       const shown = [...new Map(sorted.map((row) => [row.kind === "editorial" ? row.article.source_article_id || row.article.id : `public:${row.publicArticle.articleId}`, row])).values()];
       count.textContent = `${shown.length}件`;
+      renderSubjectBrowser(shown);
       const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
       const formatSchedule = (value: string) => {
         const instant = new Date(value);
@@ -976,14 +1052,18 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const title = typeof entry.title === "string" ? entry.title : "";
         if (locale !== "ja" || publicStatus !== "published" || !articleId || !subject || !category || !slug || !title) return [];
         const updatedAt = typeof entry.public_updated_at === "string" ? entry.public_updated_at : typeof entry.editorial_updated_at === "string" ? entry.editorial_updated_at : new Date().toISOString();
-        return [{ articleId, subject, category, slug, title, updatedAt }];
+        const managementState = typeof entry.state === "string" ? entry.state : undefined;
+        const documentId = typeof entry.editorial_document_id === "string" ? entry.editorial_document_id : undefined;
+        return [{ articleId, subject, category, slug, title, updatedAt, managementState, documentId }];
       });
     };
-    const loadCatalog = async () => {
+    const loadCatalog = async (abortSignal?: AbortSignal) => {
       catalogSummary.dataset.state = "loading";
       catalogSummary.textContent = "公開記事カタログを確認しています…";
       try {
-        const response = await fetch("/api/admin/editor/catalog", { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10000) });
+        const timeoutSignal = AbortSignal.timeout(10000);
+        const signal = abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
+        const response = await fetch("/api/admin/editor/catalog", { credentials: "same-origin", cache: "no-store", signal });
         const contentType = response.headers.get("content-type") ?? "";
         const data = contentType.includes("application/json") ? await response.json() as { catalog?: unknown[]; error?: string } : {};
         if (!response.ok) throw new Error(data.error ?? `公開記事カタログを取得できませんでした（${response.status}）。`);
@@ -994,6 +1074,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         catalogSummary.dataset.state = "ready";
         catalogSummary.textContent = `公開記事カタログを確認しました（${publicArticles.length}件）。原稿一覧と照合しています…`;
       } catch (error) {
+        if (abortSignal?.aborted) throw error;
         // APIに接続できない場合は、ビルド時の古いカタログを混ぜない。
         // 原稿一覧の状態と公開サイトの状態が食い違うため、未確認の公開記事を
         // 運営原稿として表示するよりも、カタログを空にして診断を促す。
@@ -1007,26 +1088,34 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       }
     };
     let loadRequest: Promise<void> | null = null;
-    const load = (append = false) => {
+    let activeLoadController: AbortController | null = null;
+    let disposed = false;
+    let loadingFallbackTimer: number | null = null;
+    type LoadOptions = { silent?: boolean; preserveLoadedPages?: boolean };
+    const load = (append = false, options: LoadOptions = {}) => {
       // pageshow and visibility events can arrive together on a cold load.
       // Share the in-flight request so the same list is not fetched twice.
-      if (loadRequest) return loadRequest;
+      if (disposed || loadRequest) return loadRequest ?? Promise.resolve();
+      const silent = Boolean(options.silent);
+      const preserveLoadedPages = Boolean(options.preserveLoadedPages && silent && !append && loadedPageCount > 1);
+      const controller = new AbortController();
+      activeLoadController = controller;
       const request = (async () => {
         try {
-          retry?.begin();
-          if (!append) list.classList.add("loading-state");
-          if (!append) {
+          if (!silent) retry?.begin();
+          if (!append && !silent) list.classList.add("loading-state");
+          if (!append && !silent) {
             subject.disabled = true;
             subject.setAttribute("aria-busy", "true");
             scopeNote.dataset.state = "loading";
             scopeNote.textContent = "担当範囲を確認しています…";
           }
           const includeArchived = archive.value !== "active";
-          if (!append) {
+          if (!append && !preserveLoadedPages) {
             nextCursor = null;
             hasMore = false;
             loadedPageCount = 0;
-            items = [];
+            if (!silent) items = [];
           }
           const params = new URLSearchParams();
           if (includeArchived) params.set("includeArchived", "1");
@@ -1034,25 +1123,36 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           if (append) params.set("limit", "50");
           const queryString = params.toString();
           const endpoint = queryString ? `/api/admin/editor/documents?${queryString}` : "/api/admin/editor/documents";
-          const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store" });
+          const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
           const data = await readAdminApiJson<{ documents?: Article[]; scope?: ArticleScope; pagination?: ArticlePagination; error?: string }>(response, "原稿一覧を読み込めませんでした。");
           if (!response.ok) throw Error(data.error ?? `原稿一覧の読み込みに失敗しました。（HTTP ${response.status}）`);
-          const pageDocuments = data.documents ?? [];
-          items = append ? [...items, ...pageDocuments] : pageDocuments;
-          nextCursor = data.pagination?.nextCursor ?? null;
-          hasMore = Boolean(data.pagination?.hasMore);
-          loadedPageCount += 1;
-          scopeEmail = data.scope?.email ?? "";
           if (!data.scope) throw new Error("ログイン状態または担当範囲を確認できません。ログインを確認して再試行してください。");
-          const catalogPromise = catalogReady ? Promise.resolve() : loadCatalog();
+          const pageDocuments = data.documents ?? [];
+          if (append) {
+            items = [...items, ...pageDocuments];
+            nextCursor = data.pagination?.nextCursor ?? null;
+            hasMore = Boolean(data.pagination?.hasMore);
+            loadedPageCount += 1;
+          } else if (preserveLoadedPages) {
+            const refreshedIds = new Set(pageDocuments.map((article) => article.id));
+            items = [...pageDocuments, ...items.filter((article) => !refreshedIds.has(article.id))];
+          } else {
+            items = pageDocuments;
+            nextCursor = data.pagination?.nextCursor ?? null;
+            hasMore = Boolean(data.pagination?.hasMore);
+            loadedPageCount = 1;
+          }
+          scopeEmail = data.scope?.email ?? "";
+          const catalogPromise = catalogReady ? Promise.resolve() : loadCatalog(controller.signal);
           applySubjectScope(data.scope);
           // Render the editorial rows immediately. The remote catalog is an
           // enrichment step and must not block the first useful screen.
           render();
           await catalogPromise;
           render();
-          retry?.success();
+          if (!silent) retry?.success();
         } catch (error) {
+          if (disposed || controller.signal.aborted || silent) return;
           list.classList.remove("loading-state");
           list.classList.add("error-state");
           list.textContent = error instanceof Error ? error.message : "原稿一覧を取得できませんでした。";
@@ -1067,6 +1167,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
             }
           }
           retry?.fail(error);
+        } finally {
+          if (activeLoadController === controller) activeLoadController = null;
         }
       })();
       const wrapped = request.finally(() => { if (loadRequest === wrapped) loadRequest = null; });
@@ -1145,7 +1247,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (!response.ok || data.ok !== true) throw new Error(data.error ?? "公開記事を運営管理へ登録できませんでした。");
         registeredPublicArticleIds.set(publicArticleKey(source), data.documentId);
         setCatalogFeedback(data.registered === false ? `「${source.title}」はすでに運営管理へ登録されています。外部公開やPRは開始していません。` : `「${source.title}」を運営管理へ登録しました。外部公開やPRは開始していません。`);
-        await load();
+        // Registration already returns the authoritative document id. Update
+        // the local catalog immediately instead of reloading the editorial
+        // list and GitHub catalog after every item; repeated reloads can
+        // exhaust the Worker CPU budget during bulk registration.
+        render();
       } catch (error) {
         setCatalogFeedback(error instanceof Error ? error.message : "公開記事を運営管理へ登録できませんでした。", true);
         link.textContent = "運営管理へ登録";
@@ -1171,10 +1277,26 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       history.replaceState({}, "", `${location.pathname}#article-list`);
       render();
     });
-    window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
+    const selectSubjectFromBrowser = (value: string) => {
+      if (![...subject.options].some((option) => option.value === value && !option.disabled && !option.hidden)) return;
+      subject.value = value;
+      category.value = "all";
+      updateCategoryOptions();
+      saveFilterState();
+      render();
+      root.querySelector("#article-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    subjectBrowser.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-subject-quick]");
+      if (!button) return;
+      selectSubjectFromBrowser(button.dataset.subjectQuick ?? "all");
+    });
+    subjectBrowserAll.addEventListener("click", () => selectSubjectFromBrowser("all"));
+    loadingFallbackTimer = window.setTimeout(() => { if (list.textContent?.includes("取得しています")) list.textContent = "原稿一覧を取得できませんでした。ページを再読み込みしてください。"; }, 6_000);
     subject.addEventListener("change", () => { updateCategoryOptions(); render(); });
-    [query, category, status, publication, test, workflow, archive].forEach((element) => element.addEventListener("input", render));
-    archive.addEventListener("change", () => { void load(); });
+    query.addEventListener("input", render);
+    [category, status, publication, management, test, workflow].forEach((element) => element.addEventListener("change", render));
+    archive.addEventListener("change", () => { render(); void load(false, { silent: true }); });
     loadMoreButton.addEventListener("click", () => { if (!hasMore || loadMoreButton.disabled) return; loadMoreButton.disabled = true; paginationStatus.textContent = "次の原稿を読み込んでいます…"; void load(true); });
     list.addEventListener("click", async (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-archive-action]");
@@ -1199,7 +1321,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         window.alert(error instanceof Error ? error.message : "アーカイブ操作に失敗しました。");
       }
     });
-    [query, category, status, publication, management, test, workflow, archive].forEach((element) => element.addEventListener("input", render));
     root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.addEventListener("click", () => {
       workflow.value = button.dataset.workflowAction ?? "all";
       history.replaceState({}, "", `${location.pathname}?mode=${encodeURIComponent(workflow.value)}#article-list`);
@@ -1214,10 +1335,20 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       event.preventDefault();
       void registerPublicArticle(link);
     });
-    window.addEventListener("pageshow", () => { void load(); });
-    const refreshPresence = () => { if (document.visibilityState === "visible") void load(); };
-    window.setInterval(refreshPresence, 15_000);
+    const handlePageShow = () => { void load(false, { silent: true, preserveLoadedPages: true }); };
+    const refreshPresence = () => { if (document.visibilityState === "visible") void load(false, { silent: true, preserveLoadedPages: true }); };
+    const presenceTimer = window.setInterval(refreshPresence, 15_000);
+    window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("visibilitychange", refreshPresence);
+    const cleanup = () => {
+      disposed = true;
+      activeLoadController?.abort();
+      window.clearInterval(presenceTimer);
+      if (loadingFallbackTimer !== null) window.clearTimeout(loadingFallbackTimer);
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", refreshPresence);
+    };
+    document.addEventListener("astro:before-swap", cleanup, { once: true });
   };
   document.addEventListener("astro:page-load", initializeArticleIndex);
   initializeArticleIndex();

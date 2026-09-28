@@ -391,6 +391,13 @@ const withSuccessfulGithubApi = async <T>(
         content: utf8Base64(publicArticleMarkdown),
         encoding: "base64",
       });
+    if (url.includes(`/contents/${publicArticlePath}?ref=main`))
+      return Response.json({
+        content: utf8Base64(publicArticleMarkdown),
+        encoding: "base64",
+        sha: "sha-ring",
+        type: "file",
+      });
     throw new Error(`Unexpected GitHub request in catalog test: ${url}`);
   }) as typeof fetch;
   try {
@@ -910,6 +917,14 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(articlesSource).toContain(
       'body: JSON.stringify({ locale: "ja", subject: source.subject, category: source.category, slug: source.slug })',
     );
+    expect(articlesSource).toContain(
+      "registeredPublicArticleIds.set(publicArticleKey(source), data.documentId)",
+    );
+    expect(articlesSource).toContain(
+      'publicArticle.managementState === "managed"',
+    );
+    expect(articlesSource).toContain("editorial_document_id");
+    expect(articlesSource).toContain("instead of reloading the editorial");
   });
 
   it("編集画面は公開元が学習サイトの記事を下書き原稿にも公開済みとして表示する", async () => {

@@ -6032,10 +6032,14 @@ async function listEditorialDocuments(
   const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
   if (!includeArchived) filters.push("d.archived_at IS NULL");
   const searchParams = new URL(request.url).searchParams;
-  const requestedLimit = Number(searchParams.get("limit") ?? "50");
+  // Keep the first page small enough for Cloudflare's Worker CPU budget. The
+  // article index can load additional pages explicitly, so a smaller default
+  // does not reduce coverage while avoiding 503s when the D1 result contains
+  // many enriched rows.
+  const requestedLimit = Number(searchParams.get("limit") ?? "20");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-    : 50;
+    : 20;
   const rawCursor = searchParams.get("cursor");
   if (rawCursor) {
     const separator = rawCursor.indexOf("|");
@@ -6069,13 +6073,20 @@ async function listEditorialDocuments(
   const nextCursor = hasMore && lastDocument
     ? `${lastDocument.updated_at}|${lastDocument.id}`
     : null;
+  // Presence is an optional enrichment.  The article list must remain cheap
+  // and reliable even when many documents were just registered, so the
+  // default list request does not fan out to Durable Objects.  The editor
+  // workspace can opt in when it actually needs live presence.
+  const includePresence = new URL(request.url).searchParams.get("presence") === "1";
   // 査読依頼テーブルは先行環境にも存在するが、古いローカルD1では
   // 未作成の場合があるため、一覧取得自体は依頼情報なしでも継続する。
   const [activeEditorsByDocument, assignmentRows] = await Promise.all([
-    listEditorialActiveEditors(
-      env,
-      documentRows.map((document) => document.id),
-    ),
+    includePresence
+      ? listEditorialActiveEditors(
+          env,
+          documentRows.map((document) => document.id),
+        )
+      : Promise.resolve(new Map<string, EditorialActiveEditor[]>()),
     documentRows.length
       ? env.REPORTS.prepare(
           `SELECT r.document_id,
@@ -6120,6 +6131,7 @@ async function listEditorialDocuments(
     scope: {
       email: scope.email,
       subjects: scope.subjects,
+      allSubjects: scope.allSubjects,
       isManager: scope.isManager,
       isProjectLeader: scope.isProjectLeader,
       coordinatorSubjects: scope.coordinatorSubjects,
@@ -6691,24 +6703,22 @@ async function getPublicArticleForIdentity(
       "GitHub公開連携がまだ設定されていません。公開記事を取得できません。",
     );
   const path = editorialArticlePath(identity);
-  const tree = await githubArticleTree(client.repository, client.headers);
-  const entry = tree.find((item) => item.path === path);
-  if (!entry) return null;
-  const markdown = await githubArticleMarkdown(
+  const content = await githubArticleContent(
     client.repository,
     client.headers,
-    entry,
+    path,
   );
-  const article = parsePublicArticle(path, markdown, entry.sha);
+  if (!content) return null;
+  const article = parsePublicArticle(path, content.markdown, content.gitSha);
   if (!article) return null;
   article.repository = client.repository;
   article.sourceKind = "github-published-markdown";
   article.sourceRef = githubArticleSourceRef(
     client.repository,
-    entry.path,
-    entry.sha,
+    path,
+    content.gitSha,
   );
-  article.sourceChecksum = await sha256Hex(markdown);
+  article.sourceChecksum = await sha256Hex(content.markdown);
   article.sourceBodyChecksum = await sha256Hex(article.body);
   article.sourceFetchedAt = new Date().toISOString();
   article.sourceAuthority = "reference-only";
@@ -9813,6 +9823,7 @@ type ActionCenterAction = {
   label: string;
   /** 表示時点の更新時刻。状態遷移APIで古い表示からの上書きを拒否する。 */
   expectedUpdatedAt?: string;
+  approvalRequestType?: "member-profile" | "project-profile";
 };
 
 type ActionCenterItem = {
@@ -10133,7 +10144,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: "運営事務局",
       subject: null,
       read: false,
-      actions: actionCenterTransition("approval", row.id, "pending"),
+      actions: actionCenterTransition("approval", row.id, "pending").map((action) => ({ ...action, approvalRequestType: "member-profile" as const })),
     });
   }
   for (const row of projectApprovalRows.results ?? []) {
@@ -10150,7 +10161,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: row.project_id,
       subject: null,
       read: false,
-      actions: actionCenterTransition("approval", row.id, "pending"),
+      actions: actionCenterTransition("approval", row.id, "pending").map((action) => ({ ...action, approvalRequestType: "project-profile" as const })),
     });
   }
   const history: ActionCenterItem[] = [];
@@ -17090,6 +17101,37 @@ const githubArticleMarkdown = async (
   if (!payload.content || payload.encoding !== "base64")
     throw new Error(`GitHubの記事本文を読み取れませんでした: ${entry.path}`);
   return githubText(payload.content);
+};
+
+const githubArticleContent = async (
+  repository: string,
+  headers: Record<string, string>,
+  path: string,
+) => {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=main`,
+    { headers },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok)
+    throw new Error(`GitHubの記事を取得できませんでした: ${path}`);
+  const payload = (await response.json()) as {
+    content?: string;
+    encoding?: string;
+    sha?: string;
+    type?: string;
+  };
+  if (
+    payload.type !== "file" ||
+    !payload.content ||
+    payload.encoding !== "base64"
+  )
+    throw new Error(`GitHubの記事本文を読み取れませんでした: ${path}`);
+  return {
+    markdown: githubText(payload.content),
+    gitSha: typeof payload.sha === "string" ? payload.sha : null,
+  };
 };
 
 const upsertEditorialArticleCatalog = async (
