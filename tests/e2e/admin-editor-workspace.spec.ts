@@ -3522,15 +3522,29 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
     selections: unknown[];
     tags: string[];
   } | null = null;
+  let submittedReply: { body: string; parentCommentId: string } | null = null;
   await page.route(
     "**/api/admin/editor/documents/doc-1/comments",
     async (route) => {
       if (route.request().method() === "POST") {
-        submittedComment = route.request().postDataJSON() as {
+        const payload = route.request().postDataJSON() as {
           body: string;
-          selections: unknown[];
-          tags: string[];
+          selections?: unknown[];
+          tags?: string[];
+          parentCommentId?: string;
         };
+        if (payload.parentCommentId) {
+          submittedReply = {
+            body: payload.body,
+            parentCommentId: payload.parentCommentId,
+          };
+        } else {
+          submittedComment = {
+            body: payload.body,
+            selections: payload.selections ?? [],
+            tags: payload.tags ?? [],
+          };
+        }
         await route.fulfill({ json: {} });
         return;
       }
@@ -3538,7 +3552,10 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
     },
   );
   await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
-    if (route.request().method() !== "GET" || !submittedComment) {
+    if (
+      route.request().method() !== "GET" ||
+      (!submittedComment && !submittedReply)
+    ) {
       await route.fallback();
       return;
     }
@@ -3547,19 +3564,33 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
         document: documentItem,
         comments: [
           ...comments,
-          {
-            ...comments[0],
-            id: "comment-from-popup",
-            body: submittedComment.body,
-            tags: submittedComment.tags,
-            created_by: "alice@example.com",
-            author_display_name: "Alice",
-            acknowledged_at: null,
-            acknowledged_by: null,
-            acknowledged_by_emails: [],
-            unacknowledged_by_emails: [],
-            action_actor_counts: { acknowledge: [], unacknowledge: [] },
-          },
+          ...(submittedComment
+            ? [
+                {
+                  ...comments[0],
+                  id: "comment-from-popup",
+                  body: submittedComment.body,
+                  tags: submittedComment.tags,
+                  created_by: "alice@example.com",
+                  author_display_name: "Alice",
+                  acknowledged_at: null,
+                  acknowledged_by: null,
+                  acknowledged_by_emails: [],
+                  unacknowledged_by_emails: [],
+                  action_actor_counts: { acknowledge: [], unacknowledge: [] },
+                },
+              ]
+            : []),
+          ...(submittedReply
+            ? [
+                {
+                  ...comments[1],
+                  id: "reply-from-popup",
+                  parent_comment_id: submittedReply.parentCommentId,
+                  body: submittedReply.body,
+                },
+              ]
+            : []),
         ],
       },
     });
@@ -3586,9 +3617,36 @@ test("コメント別窓から新規コメントを追加し、閉じた後も�
     selections: [],
     tags: ["定義不足"],
   });
+
+  await popup
+    .locator('[data-comment-context="comment-1"] [data-open-reply]')
+    .click();
+  const replyBody = popup.locator(
+    '[data-comment-context="comment-1"] [data-reply-body]',
+  );
+  await expect(replyBody).toBeVisible();
+  await replyBody.fill("別窓から送った返信");
+  await expect(
+    page.locator(
+      '[data-editor-pane="review"] [data-comment-context="comment-1"] [data-reply-body]',
+    ),
+  ).toHaveValue("別窓から送った返信");
+  await popup
+    .locator('[data-comment-context="comment-1"] [data-send-reply]')
+    .click();
+  await expect
+    .poll(() => submittedReply)
+    .toEqual({ body: "別窓から送った返信", parentCommentId: "comment-1" });
+  await expect(popup.locator("[data-comment-list]")).toContainText(
+    "別窓から送った返信",
+  );
+
   await popup.close();
   await expect(panel.locator("[data-comment-list]")).toContainText(
     "別窓から投稿したコメント",
+  );
+  await expect(panel.locator("[data-comment-list]")).toContainText(
+    "別窓から送った返信",
   );
 });
 
