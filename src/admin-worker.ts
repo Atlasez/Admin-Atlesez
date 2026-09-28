@@ -20903,7 +20903,8 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
   // 管理者でもプロフィール入力済みだと getMemberProfileScope は通常メンバーとして
   // 返るため、ここでは管理権限がある場合だけ管理スコープを優先する。
   const adminScope = await getAdminScope(request, env);
-  const scope = isResponse(adminScope) ? memberScope : adminScope;
+  const canAccessAdmin = !isResponse(adminScope);
+  const scope = canAccessAdmin ? adminScope : memberScope;
   const identity = scope.email;
   const managerProjects = scope.isManager
     ? await env.REPORTS.prepare(
@@ -20927,6 +20928,10 @@ async function adminAuthStatus(request: Request, env: Env): Promise<Response> {
     email: identity,
     isManager: scope.isManager,
     managerProjects: (managerProjects.results ?? []).map((row) => row.id),
+    canAccessAdmin,
+    canAccessScopedAdminPages:
+      canAccessAdmin &&
+      (adminScope.allSubjects || adminScope.subjects.length > 0),
     googlePreviewEnabled: googleOAuthEnabled(env) && googleOAuthConfigured(env),
     googleAuthenticated: Boolean(googleSession?.email),
     authMode: authMode(env),
