@@ -288,6 +288,27 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
 });
 
+test("アクションセンターをタブで開いた履歴を別画面の操作検索から再利用できる", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/action-center/");
+  await page.goto("admin/atlas/");
+  await page.keyboard.press("Meta+K");
+
+  const dialog = page.locator("[data-admin-command-dialog]");
+  const recentSection = dialog.locator(".admin-command-section").filter({
+    has: page.getByRole("heading", { name: "最近使った操作" }),
+  });
+  await expect(
+    recentSection.getByRole("option", { name: /アクションセンター/ }),
+  ).toContainText("対応が必要な項目・1回");
+  await recentSection
+    .getByRole("option", { name: /アクションセンター/ })
+    .click();
+  await expect(page).toHaveURL(/\/admin\/action-center\//);
+});
+
 test("選択したタスクを一括完了し、直後に元へ戻せる", async ({ page }) => {
   const transitionBodies: Array<Record<string, unknown>> = [];
   await mockShell(
