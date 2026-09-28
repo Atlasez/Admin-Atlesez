@@ -43,7 +43,7 @@ interface Fetcher {
 
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<unknown>;
+  run(): Promise<{ meta?: { changes?: number } }>;
   all<T>(): Promise<{ results: T[] }>;
   first<T>(): Promise<T | null>;
 }
@@ -2272,6 +2272,7 @@ type AdminAuditAction =
   | "permission_replaced"
   | "permission_revoked"
   | "member_removed"
+  | "member_updated"
   | "member_archived"
   | "member_restored"
   | "task_archived"
@@ -2308,6 +2309,7 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   permission_replaced: "権限を変更",
   permission_revoked: "権限を削除",
   member_removed: "運営メンバーを削除",
+  member_updated: "運営メンバー情報を更新",
   member_archived: "運営メンバーをアーカイブ",
   member_restored: "運営メンバーを復元",
   task_archived: "タスクをアーカイブ",
@@ -3110,12 +3112,15 @@ async function createEditorialWorkflowRole(
   const archivedError = await archivedMemberError(env, email);
   if (archivedError) return archivedError;
   const now = new Date().toISOString();
-  await env.REPORTS.batch(
+  const results = await env.REPORTS.batch(
     subjects.map(subject => env.REPORTS.prepare(
       "INSERT OR IGNORE INTO editorial_workflow_roles (email,role,subject,created_at,created_by) VALUES (?,?,?,?,?)",
     ).bind(email, role, subject, now, scope.email)),
   );
-  return json({ ok: true, added: subjects.length }, 201);
+  const added = results.reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
+  if (added > 0)
+    await recordAdminAudit(env, scope.email, "member_updated", "member", email, email, "分野統括の役割を変更", { role, subjects });
+  return json({ ok: true, added }, 201);
 }
 
 async function deleteEditorialWorkflowRole(
@@ -3136,11 +3141,13 @@ async function deleteEditorialWorkflowRole(
     !SUBJECT_SLUG.test(subject)
   )
     return json({ error: "削除対象を確認してください。" }, 400);
-  await env.REPORTS.prepare(
+  const removed = await env.REPORTS.prepare(
     "DELETE FROM editorial_workflow_roles WHERE lower(email)=lower(?) AND role=? AND subject=?",
   )
     .bind(email, role, subject)
     .run();
+  if (Number(removed.meta?.changes ?? 0) > 0)
+    await recordAdminAudit(env, scope.email, "member_updated", "member", email, email, "分野統括の役割を削除", { role, subject });
   return json({ ok: true });
 }
 
@@ -4094,6 +4101,110 @@ async function listArchivedAtlasMembers(
 ): Promise<Response> {
   const scope = await getGlobalAdminScope(request, env);
   if (isResponse(scope)) return scope;
+  const email = new URL(request.url).searchParams.get("email")?.trim().toLowerCase() ?? "";
+  if (email) {
+    if (!EMAIL_PATTERN.test(email))
+      return json({ error: "メールアドレスを確認してください。" }, 400);
+    const [profile, memberships, permissions, workflowRoles, genreRoles, lifecycle, operationHistory, permissionHistory, profileHistory, articleCount, applicationCount] = await Promise.all([
+      env.REPORTS.prepare(
+        `SELECT display_name,avatar_url,bio,university,year,interests,affiliation_type,country,timezone,updated_at
+         FROM editorial_member_profiles WHERE lower(email)=lower(?) LIMIT 1`,
+      ).bind(email).first<{
+        display_name: string; avatar_url: string; bio: string; university: string;
+        year: string; interests: string; affiliation_type: string; country: string;
+        timezone: string; updated_at: string;
+      }>(),
+      env.REPORTS.prepare(
+        `SELECT project_id,role,joined_at FROM atlasez_project_memberships
+         WHERE lower(email)=lower(?) ORDER BY project_id`,
+      ).bind(email).all<{ project_id: string; role: string; joined_at: string }>(),
+      env.REPORTS.prepare(
+        "SELECT subject FROM report_admin_permissions WHERE lower(email)=lower(?) ORDER BY subject",
+      ).bind(email).all<{ subject: string }>(),
+      env.REPORTS.prepare(
+        "SELECT role,subject,created_at,created_by FROM editorial_workflow_roles WHERE lower(email)=lower(?) ORDER BY role,subject",
+      ).bind(email).all<{ role: string; subject: string; created_at: string; created_by: string }>(),
+      env.REPORTS.prepare(
+        `SELECT c.kind,c.name,a.created_at,a.created_by FROM admin_genre_role_assignments a
+         JOIN admin_genre_role_catalog c ON c.id=a.catalog_id
+         WHERE lower(a.email)=lower(?) AND c.project_id='atlas' ORDER BY c.kind,c.name`,
+      ).bind(email).all<{ kind: string; name: string; created_at: string; created_by: string }>(),
+      env.REPORTS.prepare(
+        "SELECT status,created_by,created_at,archived_by,archived_at FROM admin_member_lifecycle WHERE lower(email)=lower(?) LIMIT 1",
+      ).bind(email).first<{
+        status: "active" | "archived"; created_by: string; created_at: string;
+        archived_by: string | null; archived_at: string | null;
+      }>(),
+      env.REPORTS.prepare(
+        `SELECT actor_email,action,summary,created_at FROM admin_audit_log
+         WHERE target_type='member' AND target_id=? ORDER BY created_at DESC,id DESC LIMIT 30`,
+      ).bind(email).all<{ actor_email: string; action: string; summary: string; created_at: string }>(),
+      env.REPORTS.prepare(
+        `SELECT actor_email,action,before_subjects,after_subjects,created_at
+         FROM admin_permission_audit_log WHERE lower(target_email)=lower(?)
+         ORDER BY created_at DESC,id DESC LIMIT 30`,
+      ).bind(email).all<{
+        actor_email: string; action: string; before_subjects: string;
+        after_subjects: string; created_at: string;
+      }>(),
+      env.REPORTS.prepare(
+        `SELECT status,reviewed_by,reviewed_at,submitted_at FROM editorial_member_profile_change_requests
+         WHERE lower(email)=lower(?) AND status IN ('approved','rejected')
+         ORDER BY COALESCE(reviewed_at,submitted_at) DESC LIMIT 30`,
+      ).bind(email).all<{
+        status: "approved" | "rejected"; reviewed_by: string | null;
+        reviewed_at: string | null; submitted_at: string;
+      }>(),
+      env.REPORTS.prepare(
+        "SELECT COUNT(*) AS count FROM editorial_documents WHERE lower(created_by)=lower(?)",
+      ).bind(email).first<{ count: number }>(),
+      env.REPORTS.prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?)",
+      ).bind(email).first<{ count: number }>(),
+    ]);
+    if (!profile && !memberships.results?.length && !permissions.results?.length && !workflowRoles.results?.length && !genreRoles.results?.length && !lifecycle)
+      return json({ error: "運営メンバーが見つかりません。" }, 404);
+    const history = [
+      ...(operationHistory.results ?? []).map((entry) => ({
+        actorEmail: entry.actor_email, action: entry.action, summary: entry.summary,
+        createdAt: entry.created_at, category: "operation",
+      })),
+      ...(permissionHistory.results ?? []).map((entry) => ({
+        actorEmail: entry.actor_email, action: entry.action,
+        summary: `担当分野を変更：${entry.before_subjects || "なし"} → ${entry.after_subjects || "なし"}`,
+        createdAt: entry.created_at, category: "permission",
+      })),
+      ...(profileHistory.results ?? []).map((entry) => ({
+        actorEmail: entry.reviewed_by ?? "操作者記録なし",
+        action: `profile_${entry.status}`,
+        summary: `プロフィール変更申請を${entry.status === "approved" ? "承認" : "却下"}`,
+        createdAt: entry.reviewed_at ?? entry.submitted_at, category: "profile",
+      })),
+    ].sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 40);
+    return json({
+      member: {
+        email,
+        status: lifecycle?.status ?? "active",
+        createdBy: lifecycle?.created_by?.trim() || null,
+        createdAt: lifecycle?.created_at ?? null,
+        archivedBy: lifecycle?.archived_by ?? null,
+        archivedAt: lifecycle?.archived_at ?? null,
+        profile: profile ? {
+          displayName: profile.display_name, avatarUrl: profile.avatar_url, bio: profile.bio,
+          university: profile.university, year: profile.year, interests: profile.interests,
+          affiliationType: profile.affiliation_type, country: profile.country,
+          timezone: profile.timezone, updatedAt: profile.updated_at,
+        } : null,
+        memberships: memberships.results ?? [],
+        permissions: permissions.results ?? [],
+        workflowRoles: workflowRoles.results ?? [],
+        genreRoles: genreRoles.results ?? [],
+        articleCount: Number(articleCount?.count ?? 0),
+        applicationCount: Number(applicationCount?.count ?? 0),
+        history,
+      },
+    });
+  }
   const result = await env.REPORTS.prepare(
     `SELECT lifecycle.email, lifecycle.created_by, lifecycle.created_at,
             lifecycle.archived_by, lifecycle.archived_at, lifecycle.updated_at,
@@ -4224,9 +4335,11 @@ async function genreRoleAssignment(
       "SELECT id FROM admin_genre_role_catalog WHERE id=? AND project_id='atlas'",
     ).bind(catalogId).first<{ id: string }>();
     if (!catalog) return json({ error: "ジャンルまたは役割が見つかりません。" }, 404);
-    await env.REPORTS.prepare(
+    const assignment = await env.REPORTS.prepare(
       "INSERT OR IGNORE INTO admin_genre_role_assignments (catalog_id,email,created_by,created_at) VALUES (?,?,?,?)",
     ).bind(catalogId, email, scope.email, new Date().toISOString()).run();
+    if (Number(assignment.meta?.changes ?? 0) > 0)
+      await recordAdminAudit(env, scope.email, "member_updated", "member", email, email, "分野・役割の担当者を追加", { catalogId });
     return json({ ok: true }, 201);
   }
   if (request.method === "DELETE") {
@@ -4235,9 +4348,11 @@ async function genreRoleAssignment(
     const email = text(url.searchParams.get("email"), 320).toLowerCase();
     if (!catalogId || !EMAIL_PATTERN.test(email))
       return json({ error: "対象とメールアドレスを確認してください。" }, 400);
-    await env.REPORTS.prepare(
+    const removed = await env.REPORTS.prepare(
       "DELETE FROM admin_genre_role_assignments WHERE catalog_id=? AND lower(email)=lower(?)",
     ).bind(catalogId, email).run();
+    if (Number(removed.meta?.changes ?? 0) > 0)
+      await recordAdminAudit(env, scope.email, "member_updated", "member", email, email, "分野・役割の担当者を削除", { catalogId });
     return json({ ok: true });
   }
   return json({ error: "POST、DELETEのみ利用できます。" }, 405);
@@ -5212,6 +5327,32 @@ async function saveMemberSettings(
     ),
   ];
   await env.REPORTS.batch(statements);
+  const beforeSubjects = [...new Set(state.subjects)].sort();
+  const afterSubjects = [...new Set(normalizedSubjects)].sort();
+  const permissionsChanged = JSON.stringify(beforeSubjects) !== JSON.stringify(afterSubjects);
+  const profileChanged = state.profile.university !== university ||
+    state.profile.year !== year || state.profile.interests !== interests.join(",");
+  const beforeRoleIds = state.manualAssignments
+    .filter((assignment) => assignment.is_active === 1)
+    .map((assignment) => assignment.discord_role_id)
+    .sort();
+  const afterRoleIds = [...selected].sort();
+  const rolesChanged = JSON.stringify(beforeRoleIds) !== JSON.stringify(afterRoleIds);
+  const updatedFields = [
+    ...(permissionsChanged ? ["permissions"] : []),
+    ...(profileChanged ? ["university", "year", "interests"] : []),
+    ...(rolesChanged ? ["discordRoles"] : []),
+  ];
+  if (permissionsChanged) {
+    const action: PermissionAuditAction = beforeSubjects.length === 0
+      ? "grant"
+      : afterSubjects.length === 0
+        ? "revoke"
+        : "replace";
+    await recordPermissionAudit(env, scope.email, email, action, beforeSubjects, afterSubjects);
+  }
+  if (updatedFields.length > 0)
+    await recordAdminAudit(env, scope.email, "member_updated", "member", email, email, "運営メンバー情報を更新", { updatedFields });
   return json({ ok: true, provisioning });
 }
 

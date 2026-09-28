@@ -2423,7 +2423,7 @@ describe("admin worker editor APIs", () => {
         prepare: (query: string) => new CapturedStatement(query),
         batch: async (statements: unknown[]) => {
           batched = statements as CapturedStatement[];
-          return [];
+          return batched.map(() => ({ meta: { changes: 1 }, results: [] }));
         },
       },
     };
