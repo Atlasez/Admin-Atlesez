@@ -9972,7 +9972,9 @@ async function memberTasksOverview(
 
     const rawAssignees = String(task.assignee_email ?? "").trim();
     const assigneeDisplayName =
-      rawAssignees === "*"
+      !rawAssignees
+        ? "担当未指定"
+        : rawAssignees === "*"
         ? "分野担当者全員"
         : normalizedTaskAssignees(rawAssignees)
             .map((email) =>
@@ -11892,6 +11894,16 @@ async function operationsOverview(
   const availabilityRuleVisibility = canSeeAllProjectOperations
     ? ""
     : " WHERE lower(r.email)=lower(?)";
+  const eventSubjectFilter = canSeeAllProjectOperations
+    ? ""
+    : scope.subjects.length
+      ? ` AND (subject IS NULL OR subject IN (${scope.subjects.map(() => "?").join(",")}))`
+      : " AND subject IS NULL";
+  const participantSubjectFilter = canSeeAllProjectOperations
+    ? ""
+    : scope.subjects.length
+      ? ` AND (e.subject IS NULL OR e.subject IN (${scope.subjects.map(() => "?").join(",")}))`
+      : " AND e.subject IS NULL";
   const [tasks, events, progress, members, availability, availabilityBlocks, availabilityRules] =
     await Promise.all([
       env.REPORTS.prepare(
@@ -11900,9 +11912,9 @@ async function operationsOverview(
         .bind(...values, pageLimit + 1)
         .all(),
       env.REPORTS.prepare(
-        `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ? ORDER BY starts_at ASC LIMIT 60`,
+        `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ?${eventSubjectFilter} ORDER BY starts_at ASC LIMIT 60`,
       )
-        .bind(project.id)
+        .bind(project.id, ...(canSeeAllProjectOperations ? [] : scope.subjects))
         .all<{
           id: string;
           project_id: string;
@@ -11930,9 +11942,12 @@ async function operationsOverview(
         .bind(...memberValues)
         .all<{ email: string; display_name: string }>(),
       env.REPORTS.prepare(
-        "SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email",
+        `SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email WHERE 1=1${participantSubjectFilter}`,
       )
-        .bind(project.id)
+        .bind(
+          project.id,
+          ...(canSeeAllProjectOperations ? [] : scope.subjects),
+        )
         .all<{
           event_id: string;
           email: string;
@@ -12009,6 +12024,82 @@ async function operationsOverview(
     rows.push(item);
     participantsByEvent.set(item.event_id, rows);
   }
+  const visibleMembers = (members.results ?? []).map((member) => {
+    const email = String(member.email ?? "").trim().toLowerCase();
+    const displayName = String(member.display_name ?? "").trim();
+    return {
+      ...member,
+      display_name:
+        !displayName || displayName.toLowerCase() === email
+          ? "表示名未設定"
+          : displayName,
+    };
+  });
+  const memberNames = new Map(
+    visibleMembers.map((member) => [
+      String(member.email ?? "").trim().toLowerCase(),
+      String(member.display_name ?? "").trim() || "他のメンバー",
+    ]),
+  );
+  const visibleTasks = taskRows.map((task) => {
+    const assignedToMe = taskAssignedTo(
+      task.assignee_email,
+      scope.email,
+      task.task_kind,
+    );
+    const createdBy = String(task.created_by ?? "").trim().toLowerCase();
+    const createdByMe = createdBy === scope.email.trim().toLowerCase();
+    const canUpdateTask =
+      canSeeAllProjectOperations || assignedToMe || createdByMe;
+    const reminderEmail = String(task.reminder_email ?? "").trim();
+    const reminderEmailHidden =
+      !scope.isManager &&
+      Boolean(reminderEmail) &&
+      reminderEmail.toLowerCase() !== scope.email.trim().toLowerCase();
+    const visibleTask: Record<string, unknown> = {
+      ...task,
+      reminder_email:
+        scope.isManager || createdByMe || assignedToMe
+          ? reminderEmailHidden
+            ? null
+            : task.reminder_email
+          : null,
+      reminder_email_hidden: reminderEmailHidden,
+      can_update: canUpdateTask,
+      reminders: remindersByTask.get(String(task.id)) ?? [],
+    };
+    if (canSeeAllProjectOperations) return visibleTask;
+
+    const rawAssignees = String(task.assignee_email ?? "").trim();
+    const assigneeDisplayName =
+      !rawAssignees
+        ? "担当未指定"
+        : rawAssignees === "*"
+        ? "分野担当者全員"
+        : normalizedTaskAssignees(rawAssignees)
+            .map((email) =>
+              email === scope.email.trim().toLowerCase()
+                ? "自分"
+                : (memberNames.get(email) ?? "他のメンバー"),
+            )
+            .join("、");
+    const safeTask = { ...visibleTask };
+    delete safeTask.assignee_email;
+    delete safeTask.created_by;
+    delete safeTask.archived_by;
+    return {
+      ...safeTask,
+      assigned_to_me: assignedToMe,
+      created_by_me: createdByMe,
+      archived_by_me:
+        String(task.archived_by ?? "").trim().toLowerCase() ===
+        scope.email.trim().toLowerCase(),
+      assignee_display_name: assigneeDisplayName,
+      created_by_display_name: createdByMe
+        ? "自分"
+        : (memberNames.get(createdBy) ?? "他のメンバー"),
+    };
+  });
   return json({
     scope: {
       email: scope.email,
@@ -12016,17 +12107,7 @@ async function operationsOverview(
       isManager: scope.isManager,
     },
     project,
-    tasks: taskRows.map((task) => ({
-      ...task,
-      reminder_email:
-        scope.isManager ||
-        String(task.created_by ?? "").toLowerCase() ===
-          scope.email.toLowerCase() ||
-        taskAssignedTo(task.assignee_email, scope.email, task.task_kind)
-          ? task.reminder_email
-          : null,
-      reminders: remindersByTask.get(String(task.id)) ?? [],
-    })),
+    tasks: visibleTasks,
     pagination: { limit: pageLimit, nextCursor: nextTaskCursor, hasMore: hasMoreTasks },
     availabilityBlocks: (availabilityBlocks.results ?? []).map((block) => ({
       ...block,
@@ -12040,8 +12121,10 @@ async function operationsOverview(
     })),
     events: (events.results ?? []).map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
+      const safeItem: Record<string, unknown> = { ...item };
+      if (!canSeeAllProjectOperations) delete safeItem.created_by;
       return {
-        ...item,
+        ...safeItem,
         availability:
           participants.find((participant) => participant.email === scope.email)
             ?.availability ?? null,
@@ -12070,7 +12153,7 @@ async function operationsOverview(
       };
     }),
     progress: progress.results,
-    members: members.results ?? [],
+    members: visibleMembers,
   });
 }
 
@@ -12551,7 +12634,7 @@ async function updateTask(
   if (requestedStatus === null && requestedArchived === null && !reminderAction)
     return json({ error: "更新内容を指定してください。" }, 400);
   const task = await env.REPORTS.prepare(
-    "SELECT project_id,subject,assignee_email,task_kind,title,created_by,due_at,due_timezone,status,archived_at FROM editorial_tasks WHERE id=?",
+    "SELECT project_id,subject,assignee_email,task_kind,title,created_by,due_at,due_timezone,status,archived_at,reminder_email FROM editorial_tasks WHERE id=?",
   )
     .bind(taskId)
     .first<{
@@ -12565,6 +12648,7 @@ async function updateTask(
       due_timezone: string;
       status: string;
       archived_at: string | null;
+      reminder_email: string | null;
     }>();
   if (!task) return json({ error: "タスクが見つかりません。" }, 404);
   const project = await resolveOperationProject(env, scope, task.project_id);
@@ -12616,10 +12700,19 @@ async function updateTask(
       )
     : null;
   if (reminderAction === "replace") {
-    const reminderEmail = text(payload.reminderEmail, 254).toLowerCase();
-    if (reminderEmail && !EMAIL_PATTERN.test(reminderEmail))
+    const reminderEmailProvided = payload.reminderEmail !== undefined;
+    const reminderEmail =
+      reminderEmailProvided
+        ? text(payload.reminderEmail, 254).toLowerCase()
+        : String(task.reminder_email ?? "");
+    if (
+      reminderEmailProvided &&
+      reminderEmail &&
+      !EMAIL_PATTERN.test(reminderEmail)
+    )
       return json({ error: "通知先メールアドレスを確認してください。" }, 400);
     if (
+      reminderEmailProvided &&
       reminderEmail &&
       reminderEmail !== scope.email &&
       !normalizedTaskAssignees(task.assignee_email).includes(reminderEmail)
