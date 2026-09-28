@@ -1026,6 +1026,23 @@ test("個別記事を開いたときは未選択用の開始パネルを表示�
   await expect(page.locator("[data-editor-empty]")).toBeHidden();
 });
 
+test("個別記事の読み込み失敗時も公開記事の登録パネルを表示しない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.route("**/api/admin/editor/documents", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "原稿一覧を読み込めませんでした。" }),
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(page.locator("[data-editor-empty]")).toBeHidden();
+  await expect(page.locator("[data-import-source]")).toBeHidden();
+  await expect(page.locator("[data-admin-load-error]")).toBeVisible();
+});
+
 test("記事読み込み中の表示は編集パネル中央に固定される", async ({ page }) => {
   await mockAdminApi(page);
   await page.route("**/api/admin/editor/documents", async (route) => {
