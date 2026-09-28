@@ -6069,13 +6069,20 @@ async function listEditorialDocuments(
   const nextCursor = hasMore && lastDocument
     ? `${lastDocument.updated_at}|${lastDocument.id}`
     : null;
+  // Presence is an optional enrichment.  The article list must remain cheap
+  // and reliable even when many documents were just registered, so the
+  // default list request does not fan out to Durable Objects.  The editor
+  // workspace can opt in when it actually needs live presence.
+  const includePresence = new URL(request.url).searchParams.get("presence") === "1";
   // 査読依頼テーブルは先行環境にも存在するが、古いローカルD1では
   // 未作成の場合があるため、一覧取得自体は依頼情報なしでも継続する。
   const [activeEditorsByDocument, assignmentRows] = await Promise.all([
-    listEditorialActiveEditors(
-      env,
-      documentRows.map((document) => document.id),
-    ),
+    includePresence
+      ? listEditorialActiveEditors(
+          env,
+          documentRows.map((document) => document.id),
+        )
+      : Promise.resolve(new Map<string, EditorialActiveEditor[]>()),
     documentRows.length
       ? env.REPORTS.prepare(
           `SELECT r.document_id,

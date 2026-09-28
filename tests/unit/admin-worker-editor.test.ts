@@ -2222,7 +2222,7 @@ describe("admin worker editor APIs", () => {
       },
     };
     const response = await worker.fetch(
-      new Request("http://localhost/api/admin/editor/documents"),
+      new Request("http://localhost/api/admin/editor/documents?presence=1"),
       env as never,
     );
 
