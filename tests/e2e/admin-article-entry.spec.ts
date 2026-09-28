@@ -428,6 +428,14 @@ test.describe("A/D 原稿一覧の作業導線", () => {
       "すべてのカテゴリ",
       "環論",
     ]);
+    await expect(page.locator("[data-subject-browser]")).toContainText("数学");
+    await expect(page.locator("[data-subject-browser]")).toContainText("物理");
+    await expect(
+      page.locator('[data-subject-quick="mathematics"]'),
+    ).toContainText("2件");
+    await page.locator('[data-subject-quick="mathematics"]').click();
+    await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
+    await expect(page.locator("[data-list] .article")).toHaveCount(2);
     await page.locator("[data-subject]").selectOption("mathematics");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);
     await expect(page.locator("[data-list]")).toContainText("環論の記事");
