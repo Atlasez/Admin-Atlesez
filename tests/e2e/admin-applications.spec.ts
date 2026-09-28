@@ -180,6 +180,9 @@ test("応募管理の導線は現在のプロジェクトに引き継がれる",
     page.locator('a[data-manager-only][href*="permissions"]'),
   ).toBeVisible();
   await expect(
+    page.locator('a[data-manager-only][href*="permissions"] strong'),
+  ).toHaveText("権限管理");
+  await expect(
     page.locator('a[data-manager-only][href*="permissions"]'),
   ).toHaveAttribute("href", "/admin/permissions/?project=seminar-platform");
   await expect(page.locator("a[data-project-manager-only]")).toHaveAttribute(

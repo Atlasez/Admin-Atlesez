@@ -73,7 +73,9 @@ CIにも同じ検査が入っています。
 3. メンバー用サイトに「タスク管理」「カレンダー」「マイページ」「管理」がある
 4. `https://admin.atlasez.org/admin/member-calendar/`でカレンダーが表示される
 5. `https://admin.atlasez.org/admin/manage/?project=atlas`で次が表示される
-   - 運営者・担当管理
+   - 権限管理
+   - 運営メンバー管理
+   - ジャンル・役割管理
    - 運営内自己紹介の承認
    - 問題報告
    - 閲覧統計
@@ -105,7 +107,9 @@ curl -fsS https://atlasez.org/sitemap-0.xml
 - `/admin/articles/`: 編集・フィードバックの記事一覧
 - `/admin/editor/?document=<ID>`: 記事編集スペース
 - `/admin/applications/?project=atlas`: 運営参加応募の確認
-- `/admin/permissions/?project=atlas`: 運営者・担当管理
+- `/admin/permissions/?project=atlas`: 権限管理
+- `/admin/member-management/?project=atlas`: 運営メンバー管理
+- `/admin/genre-roles/?project=atlas`: ジャンル・役割管理
 - `/admin/reports/?project=atlas`: 問題報告
 - `/admin/analytics/?project=atlas`: 閲覧統計
 - `/admin/calendar/?project=atlas`: 学習サイト運営のカレンダー

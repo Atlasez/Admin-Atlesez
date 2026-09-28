@@ -104,6 +104,9 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
 
   await page.goto("./admin/permissions/?project=atlas");
 
+  await expect(
+    page.getByRole("heading", { name: "権限管理", exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".member-admin")).toBeVisible();
   await expect(page.locator(".member-admin__header")).toBeVisible();
   await expect(page.locator(".member-admin__sidebar")).toHaveCount(0);
