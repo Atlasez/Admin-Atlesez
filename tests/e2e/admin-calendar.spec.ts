@@ -59,9 +59,12 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
   await expectProjectManageLink(page, "atlas");
 
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
+  await expect(page.locator(".admin-nav-brand-logo")).toHaveAttribute(
+    "aria-label",
+    "Atlasezメンバー用サイトのトップへ戻る",
+  );
   await page
-    .getByRole("link", { name: /学習サイト「アトラス」運営/ })
-    .last()
+    .locator('[data-project-group="managed"] a[href="/admin/atlas/"]')
     .click();
   await expectProjectManageLink(page, "atlas");
   await page.getByRole("link", { name: "メンバー用サイトへ戻る" }).click();
