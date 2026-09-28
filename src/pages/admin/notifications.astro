@@ -33,7 +33,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <div class="notification-list" data-notification-list aria-live="polite">
         <p class="notification-loading" role="status">通知を読み込んでいます…</p>
       </div>
-      <p class="notification-truncation" data-notification-truncation hidden>新しい通知を先に表示しています。</p>
+      <p class="notification-truncation" data-notification-truncation hidden aria-live="polite">新しい通知を先に表示しています。</p>
       <div class="notification-pagination" data-notification-pagination hidden>
         <span data-pagination-summary></span>
         <button type="button" data-load-more>さらに読み込む</button>
@@ -61,6 +61,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     unreadNotificationsCount?: number;
     totalNotifications?: number;
     nextOffset?: number | null;
+    hasMoreBeyondLimit?: boolean;
   };
 
   const initNotificationInbox = () => {
@@ -99,6 +100,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     let unreadTotal = 0;
     let total = 0;
     let nextOffset: number | null = 0;
+    let hasMoreBeyondLimit = false;
     let requestGeneration = 0;
     let filter: "all" | "unread" = "all";
     let retry: ReturnType<typeof createAdminLoadRetry>;
@@ -128,6 +130,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         retry.success();
       }
       truncation.hidden = total <= rows.length;
+      truncation.textContent = hasMoreBeyondLimit
+        ? "通知一覧の表示上限（10,000件）に達しました。これより古い通知は表示されていません。"
+        : "新しい通知を先に表示しています。";
       pagination.hidden = nextOffset === null;
       paginationSummary.textContent = `${rows.length} / ${total}件`;
     };
@@ -156,6 +161,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       unreadTotal = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? 0)));
       total = Math.max(rows.length, Math.trunc(Number(data.totalNotifications ?? rows.length)));
       nextOffset = typeof data.nextOffset === "number" ? data.nextOffset : null;
+      hasMoreBeyondLimit = data.hasMoreBeyondLimit === true;
       render();
     };
     retry = createAdminLoadRetry(root, () => load(), "通知を読み込めませんでした。", { scope: "notification-inbox" });

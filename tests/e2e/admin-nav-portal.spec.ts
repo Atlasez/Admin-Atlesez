@@ -446,6 +446,43 @@ test("通知一覧はページ送り・未読全体の絞り込み・すべて�
   await expect.poll(() => readPayloads).toEqual([{ all: true }]);
 });
 
+test("通知表示上限に達したら追加件数を知らせてページ送りを止める", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-limited12345678",
+            kind: "comment",
+            title: "上限ページの通知",
+            detail: "表示上限テスト",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        totalNotifications: 10_605,
+        nextOffset: null,
+        hasMoreBeyondLimit: true,
+      },
+    });
+  });
+
+  await page.goto("admin/notifications/");
+
+  await expect(
+    page.getByText(
+      "通知一覧の表示上限（10,000件）に達しました。これより古い通知は表示されていません。",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "さらに読み込む" }),
+  ).toBeHidden();
+});
+
 test("通知の絞り込み中に古い応答が新しい一覧を上書きしない", async ({
   page,
 }) => {

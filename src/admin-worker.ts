@@ -21058,10 +21058,12 @@ async function adminNotifications(
     : 0;
   const unreadOnly = notificationParams.get("unreadOnly") === "true";
   const includeUnreadIds = notificationParams.get("includeUnreadIds") === "true";
+  const maxNotificationResults = 10_000;
+  const pageLimit = Math.min(limit, Math.max(0, maxNotificationResults - offset));
   const unreadNotificationIds: string[] = [];
   const notificationReadIds = new Set<string>();
   const notificationSourceCounts: Array<{ total: number; unread: number }> = [];
-  const notificationFetchLimit = offset + limit;
+  const notificationFetchLimit = pageLimit > 0 ? offset + pageLimit : 0;
   const notificationSourceMetadata = (sql: string) => {
     if (sql.includes("FROM editorial_task_reminders"))
       return { id: "'task-reminder-rule-' || s.reminder_id || '-' || s.remind_at", time: "remind_at", dueReminder: true };
@@ -21405,8 +21407,10 @@ async function adminNotifications(
     0,
   );
   const filteredCount = unreadOnly ? unreadNotificationsCount : totalNotifications;
-  const notificationsTruncated = filteredCount > offset + limit;
-  const notifications = sortedNotifications.slice(offset, offset + limit);
+  const pageEnd = offset + pageLimit;
+  const notificationsTruncated = filteredCount > pageEnd;
+  const hasMoreBeyondLimit = notificationsTruncated && pageEnd >= maxNotificationResults;
+  const notifications = sortedNotifications.slice(offset, pageEnd);
   return json({
     notifications: notifications.map((item) => ({
       ...item,
@@ -21415,7 +21419,8 @@ async function adminNotifications(
     notificationsTruncated,
     unreadNotificationsCount,
     totalNotifications: filteredCount,
-    nextOffset: notificationsTruncated ? offset + limit : null,
+    nextOffset: notificationsTruncated && !hasMoreBeyondLimit ? pageEnd : null,
+    hasMoreBeyondLimit,
     ...(includeUnreadIds
       ? { unreadNotificationIds }
       : {}),

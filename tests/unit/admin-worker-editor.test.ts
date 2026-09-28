@@ -1352,14 +1352,6 @@ describe("admin worker editor APIs", () => {
 
   it("keeps a grouped action-center notification unread when any event is unread", async () => {
     class NotificationStatement extends EmptyStatement {
-      private boundValues: unknown[] = [];
-
-      override bind(...values: unknown[]) {
-        super.bind(...values);
-        this.boundValues = values;
-        return this;
-      }
-
       override async all<T>() {
         if (this.query.includes("WHERE d.created_by = ? AND c.created_by != ?"))
           return {

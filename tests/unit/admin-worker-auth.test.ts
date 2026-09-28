@@ -2625,11 +2625,27 @@ describe("applicant stage server-side access", () => {
       notifications: Array<{ id: string }>;
       totalNotifications: number;
       nextOffset: number | null;
+      hasMoreBeyondLimit: boolean;
     };
-    expect(deepPageData.notifications).toHaveLength(100);
+    expect(deepPageData.notifications).toHaveLength(99);
     expect(deepPageData.notifications[0]?.id).toBe("comment-unread9901");
     expect(deepPageData.totalNotifications).toBe(candidateCount);
-    expect(deepPageData.nextOffset).toBe(10_001);
+    expect(deepPageData.nextOffset).toBeNull();
+    expect(deepPageData.hasMoreBeyondLimit).toBe(true);
+
+    const beyondLimitResponse = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=100&offset=10001"),
+      memberEnvironment as never,
+    );
+    expect(beyondLimitResponse.status).toBe(200);
+    const beyondLimitData = (await beyondLimitResponse.json()) as {
+      notifications: Array<{ id: string }>;
+      nextOffset: number | null;
+      hasMoreBeyondLimit: boolean;
+    };
+    expect(beyondLimitData.notifications).toHaveLength(0);
+    expect(beyondLimitData.nextOffset).toBeNull();
+    expect(beyondLimitData.hasMoreBeyondLimit).toBe(true);
 
     const originalPrepare = memberEnvironment.REPORTS.prepare;
     const notificationBatchSizes: number[] = [];
@@ -2671,7 +2687,7 @@ describe("applicant stage server-side access", () => {
       ).filter((id) => !readNotificationIds.has(id)),
     );
     notificationDb.close();
-  });
+  }, 15_000);
 
   it("keeps the application directory open for an existing member", async () => {
     const applicationPage = await worker.fetch(
