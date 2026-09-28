@@ -27,7 +27,7 @@ Cloudflare Dashboardで次を設定・維持する。
 3. Build commandを次に固定する。
 
    ```bash
-   npm ci && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://atlasez.org BASE_PATH=/ npm run build
+   npm ci && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ npm run build
    ```
 
 4. Deploy commandを次に固定する。
@@ -40,11 +40,11 @@ Cloudflare Dashboardで次を設定・維持する。
 6. Custom Domainは `admin.atlasez.org` のProductionだけを本番入口にする。
 7. Production Worker URLとPreview URLは本番確認先として使わない。設定ファイルでも`workers_dev`と`preview_urls`を無効にする。
 
-Cloudflare Workers Buildsが正常に接続されている間は、GitHub ActionsにADMIN本番デプロイを追加しない。二重経路を作らないためである。ただし、Workers Buildsの接続が未成立の場合は、下記のGitHub Actions暫定経路を使用できる。
+通常の本番デプロイ経路はCloudflare Workers Buildsだけとし、GitHub Actionsに別の本番deploy経路を追加・併用しない。Workers Buildsの接続が未成立なら、本番デプロイは復旧するまで停止する。既存の手動GitHub Actions workflowは、この運用方針におけるデプロイ許可や承認の代替にはならず、実行しない。
 
 なお、Cloudflare DashboardのGit repository接続が内部エラーで未成立の間は、自動経路は「復旧待ち」であり、本番自動デプロイ済みとはみなさない。接続復旧前に手動Uploadやfeature branchからのdeployで代替しない。
 
-Workers Builds未接続時の暫定経路として、GitHub Actionsの`Deploy admin from GitHub`を使用できる。このWorkflowは`main`を対象にした手動実行だけを受け付け、確認チェック、ビルド、D1 migration、Workerデプロイ、公開build-infoのSHA確認を順番に行う。`main`へのpushでは起動しないため、PRのMergeだけでCloudflareを変更しない。migrationまたはデプロイが失敗した場合は後続処理を停止し、既存のWorker Versionを維持する。利用にはGitHub Secretsの`CLOUDFLARE_DEPLOY_API_TOKEN`と、`production` Environmentの承認設定が必要である。既存の読み取り用`CLOUDFLARE_API_TOKEN`とは分離する。
+緊急時に例外経路を使う必要がある場合は、セクション5のローカル手動手順について対象SHA・理由・承認者・影響・復旧方法をIssueに記録し、レビュー済みmain commitに対する明示承認を得る。GitHub Actions workflowの存在や成功したCIは、この承認を意味しない。
 
 ## 3. ビルド成果物の身元確認
 
@@ -54,7 +54,7 @@ PRとCloudflareのVersionを次のように突き合わせる。
 
 ```bash
 npm run verify:deploy-config
-ATLASEZ_BUILD_TARGET=admin SITE_URL=https://atlasez.org BASE_PATH=/ npm run build
+ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ npm run build
 npm run verify:build-info
 npx wrangler deploy --dry-run --config wrangler.admin.jsonc
 npx wrangler deployments list --config wrangler.admin.jsonc --name atlasez-admin
@@ -82,7 +82,7 @@ curl -fsS https://admin.atlasez.org/build-info.json
 - Build/Deployログのcommit SHA、Worker名、Version ID、時刻を記録する。
 - Versionが対象Workerへ100%配信されるまで本番完了とみなさない。
 
-Workers Builds未接続時にGitHub Actions経路を使う場合は、GitHub ActionsのProduction environment承認を経て、`main`を対象に`confirm_main=true`で手動実行する。D1 migrationの成功ログと`build-info.json.commit`の一致を確認できない場合は完了扱いにしない。
+Workers Builds未接続時は本番反映を停止し、既存のGitHub Actions手動workflowを実行しない。緊急対応が必要な場合だけ、セクション5のローカル例外手順とIssue記録・明示承認を適用する。
 
 ### デプロイ後
 
@@ -99,7 +99,7 @@ Workers Builds未接続時にGitHub Actions経路を使う場合は、GitHub Act
 
 ## 5. 手動デプロイが必要な緊急時
 
-Workers Buildsが利用できない緊急時だけ、次の条件を満たす場合に限定する。
+Workers Buildsが利用できず、本番対応を待てない緊急時だけ、レビュー済みmain commitを使う以下の手順を例外として許可する。対象SHA・理由・実施者と承認者・影響・復旧方法をIssueに記録し、デプロイ実行前に明示承認を得る。未レビューの成果物、Dashboard Editor、`wrangler versions upload`、feature branchの成果物は許可しない。
 
 1. `main`の固定SHAから新しい作業ディレクトリを作る。
 2. 未コミット変更を含めない。
@@ -108,13 +108,13 @@ Workers Buildsが利用できない緊急時だけ、次の条件を満たす場
 5. 実施者、理由、SHA、Version ID、時刻、Chrome確認結果を記録する。
 6. 終了後、Workers Buildsを復旧し、手動経路を常用しない。
 
-ローカルの手動コマンドは、誤った作業ツリーからのDeployを防ぐため、mainの固定SHAを明示する。SHAを省略した場合、feature branchの場合、または未コミット変更がある場合は停止する。
+ローカルの手動コマンドは、誤った作業ツリーからのDeployを防ぐため、cleanな`main` checkoutで実行する。ガードは`main`のremote-tracking upstreamが設定され、そのremote mainにHEADが含まれること、未追跡ファイルを含めworktreeがcleanであること、承認SHAがHEADと完全一致することを検証する。SHA省略、feature branch、detached HEAD、remote mainに含まれないcommit、未コミット変更の場合は停止する。SHAはコマンド内でその場のHEADから生成せず、レビュー・承認済みの値をリテラルで指定する。
 
 ```bash
-DEPLOY_MAIN_SHA=$(git rev-parse HEAD) npm run deploy:admin
+DEPLOY_MAIN_SHA=REVIEWED_MAIN_SHA_40_HEX npm run deploy:admin
 ```
 
-このコマンドは、事前に`main`へマージ済みであること、`git status --porcelain`が空であること、対象SHAをレビューで承認済みであることを確認した後だけ実行する。Cloudflare Workers Buildsが復旧した後は、手動コマンドを使わず、GitHub `main`のマージを唯一のDeployトリガーとする。
+`REVIEWED_MAIN_SHA_40_HEX`を実際の40桁SHAに置き換え、この値がPRレビュー後に`main`へマージされたcommitであり、本番対象として明示承認されたことを別途確認してから実行する。Cloudflare Workers Buildsが復旧した後は、手動コマンドを使わず、GitHub `main`のマージを唯一の通常Deployトリガーとする。
 
 Dashboard Editorで直接コードを修正して本番Versionを作ること、過去Versionを根拠なくpromote/rollbackすることは禁止する。
 
@@ -133,4 +133,4 @@ Dashboard Editorで直接コードを修正して本番Versionを作ること、
 
 ## 7. この方針の変更管理
 
-この文書、`AGENTS.md`、`wrangler.admin.jsonc`、`scripts/verify-deployment-config.mjs`、`scripts/write-build-info.mjs`、`scripts/verify-build-info.mjs`は運用の一組で管理する。いずれかだけを変更してはならない。
+この文書、`AGENTS.md`、`docs/DEPLOYMENT.md`、`docs/ADMIN_CHANGE_WORKFLOW.md`、`package.json`、`scripts/verify-deploy-context.mjs`、`wrangler.admin.jsonc`、`scripts/verify-deployment-config.mjs`、`scripts/write-build-info.mjs`、`scripts/verify-build-info.mjs`は運用の一組で管理する。いずれかだけを変更してはならない。

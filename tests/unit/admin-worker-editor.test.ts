@@ -1224,7 +1224,84 @@ describe("admin worker editor APIs", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      counts: { approvals: 5 },
+      counts: { approvals: 5, assigned: 2, assignedItemsTruncated: true },
+    });
+  });
+
+  it("keeps a grouped action-center notification unread if any grouped event is unread", async () => {
+    class NotificationStatement extends EmptyStatement {
+      override async all<T>() {
+        if (
+          this.query.includes("SELECT c.id, c.body, c.parent_comment_id") &&
+          this.query.includes("d.created_by = ?")
+        )
+          return {
+            results: [
+              {
+                id: "comment-newest1",
+                body: "最新のコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-28T09:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+              {
+                id: "comment-older001",
+                body: "前のコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-27T09:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+            ] as T[],
+          };
+        if (
+          this.query.includes(
+            "SELECT notification_id FROM admin_notification_reads",
+          )
+        )
+          return {
+            results: [{ notification_id: "comment-comment-newest1" }] as T[],
+          };
+        return { results: [] as T[] };
+      }
+
+      override async first<T>() {
+        if (this.query.includes("SELECT COUNT(*) AS open_count"))
+          return { open_count: 0, due_today: 0, due_soon: 0 } as T;
+        if (this.query.includes("SELECT COUNT(*)")) return { count: 0 } as T;
+        return null as T | null;
+      }
+    }
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new NotificationStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      counts: { unread: 1 },
+      items: [
+        {
+          kind: "notification",
+          groupCount: 2,
+          notificationIds: [
+            "comment-comment-newest1",
+            "comment-comment-older001",
+          ],
+          read: false,
+          status: "unread",
+          priority: "new",
+        },
+      ],
     });
   });
 
