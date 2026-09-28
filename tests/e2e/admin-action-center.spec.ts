@@ -235,7 +235,10 @@ test("担当項目が表示上限を超えた場合は全件数と一覧への�
 
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {
   await mockShell(page);
-  await page.goto("admin/action-center/");
+  await page.goto("admin/articles/");
+  await expect(
+    page.getByRole("link", { name: "アクションセンター" }),
+  ).toHaveAttribute("href", "/admin/action-center/");
   const commandButton = page.getByRole("button", {
     name: "操作を検索（⌘K）",
   });
@@ -276,6 +279,9 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
     dialog.getByRole("heading", { name: "クイック操作" }),
   ).toBeVisible();
   await expect(
+    dialog.getByRole("option", { name: /アクションセンター/ }),
+  ).toContainText("対応が必要な項目");
+  await expect(
     dialog.getByRole("option", { name: /編集・フィードバック/ }),
   ).toBeVisible();
   await expect(
@@ -286,6 +292,33 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(dialog).toContainText("群の定義");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/admin\/editor\/\?document=doc-1/);
+});
+
+test("ヘッダーのアクションセンターはページ遷移せずポップアップで対応項目を開く", async ({
+  page,
+}) => {
+  await mockShell(page);
+  await page.goto("admin/articles/");
+  const actionCenterTab = page.getByRole("link", {
+    name: "アクションセンター",
+  });
+  await expect(actionCenterTab).toHaveAttribute(
+    "href",
+    "/admin/action-center/",
+  );
+  await actionCenterTab.click();
+  const dialog = page.locator("[data-admin-command-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "アクションセンター" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "対応が必要な項目" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /定義を確認/ }),
+  ).toContainText("タスク");
+  await expect(page).toHaveURL(/\/admin\/articles\//);
 });
 
 test("アクションセンターをタブで開いた履歴を別画面の操作検索から再利用できる", async ({

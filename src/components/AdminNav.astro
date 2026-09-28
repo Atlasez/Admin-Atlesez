@@ -166,7 +166,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   </div>
   <button type="button" class="admin-menu-toggle" data-admin-menu-toggle aria-expanded="false" aria-controls="admin-primary-nav"><span aria-hidden="true">☰</span><span>メニュー</span></button>
   <nav id="admin-primary-nav" aria-label="運営用サイトメニュー">
-      <a class="admin-action-center-link" href="/admin/action-center/" data-admin-page="action-center" aria-current={current === "action-center" ? "page" : undefined} aria-label="アクションセンター" title="アクションセンター"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>対応</span></a>
+      <a class="admin-action-center-link" href="/admin/action-center/" data-admin-page="action-center" data-admin-action-center-tab aria-current={current === "action-center" ? "page" : undefined} aria-label="アクションセンター" title="アクションセンター"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>アクションセンター</span></a>
       <a href="/admin/member-tasks/" data-admin-site="portal" data-admin-page="member-tasks" hidden={site !== "portal"} aria-current={current === "member-tasks" ? "page" : undefined}>タスク管理</a>
       <a href="/admin/member-calendar/" data-admin-site="portal" data-admin-page="member-calendar" hidden={site !== "portal"} aria-current={current === "member-calendar" ? "page" : undefined}>カレンダー</a>
       <a href="/admin/member-profile/" data-admin-site="portal" data-admin-page="member-profile" hidden={site !== "portal"} aria-current={current === "member-profile" ? "page" : undefined}>マイページ</a>
@@ -185,6 +185,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     <a class="admin-management-link" href={`/admin/manage/?project=${projectSlug}`} hidden={site === "portal"} data-admin-project-link="manage" data-admin-site={site} data-admin-page="management" aria-current={current === "management" ? "page" : undefined}>管理</a>
   </nav>
   <div class="admin-account" data-admin-account hidden>
+    <a class="admin-action-center-utility-link" href="/admin/action-center/" data-admin-action-center-utility aria-label="アクションセンター" title="アクションセンター"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M3 8h7M3 11.5h5" /></svg><span>アクションセンター</span></a>
     <button type="button" class="admin-command-button" data-admin-command aria-haspopup="dialog" aria-controls="admin-command-dialog" aria-label="操作を検索（⌘K）" title="操作を検索（⌘K）"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.3 15.3 5.2 5.2"/></svg></button>
     <SettingsMenu locale="ja" />
     <button type="button" class="admin-notifications" data-admin-notifications aria-expanded="false" aria-controls="admin-notification-panel" aria-haspopup="dialog" aria-label="通知を開く"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span data-admin-notification-count hidden>0</span></button>
@@ -199,7 +200,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
   </div>
   <dialog class="admin-command-dialog" id="admin-command-dialog" data-admin-command-dialog aria-labelledby="admin-command-heading">
     <form method="dialog" class="admin-command-inner">
-      <div class="admin-command-head"><h2 id="admin-command-heading">操作を検索</h2><button type="submit" class="admin-command-close" aria-label="操作検索を閉じる">×</button></div>
+      <div class="admin-command-head"><h2 id="admin-command-heading" data-admin-command-heading>操作を検索</h2><button type="submit" class="admin-command-close" aria-label="操作検索を閉じる">×</button></div>
       <label class="admin-command-search"><span aria-hidden="true">⌕</span><input type="search" data-admin-command-input placeholder="記事・タスク・操作を検索" autocomplete="off" /><kbd>Esc</kbd></label>
       <div class="admin-command-list" data-admin-command-list role="listbox" aria-label="操作候補"></div>
       <p class="admin-command-hint"><kbd>↑</kbd><kbd>↓</kbd>で移動 <kbd>Enter</kbd>で開く</p>
@@ -541,7 +542,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
       const list = document.querySelector<HTMLElement>("[data-admin-command-list]");
       if (!button || !dialog || !input || !list || button.dataset.initialized === "true") return;
       button.dataset.initialized = "true";
-      type Command = { label: string; detail: string; group: 'recent' | 'quick' | 'result'; icon: string; href?: string; run?: () => void };
+      const actionCenterButtons = [...document.querySelectorAll<HTMLAnchorElement>('[data-admin-action-center-tab], [data-admin-action-center-utility]')];
+      const heading = document.querySelector<HTMLElement>('[data-admin-command-heading]');
+      type Command = { label: string; detail: string; group: 'recent' | 'quick' | 'result' | 'action'; icon: string; href?: string; run?: () => void };
+      type ActionCenterResponse = { items?: Array<{ title?: string; detail?: string; href?: string; kind?: string; status?: string; priority?: string }>; error?: string };
       const staticCommands: Command[] = [
         { label: "アクションセンター", detail: "対応が必要な項目", group: 'quick', icon: 'actions', href: "/admin/action-center/" },
         { label: "編集・フィードバック", detail: "記事とフィードバック", group: 'quick', icon: 'articles', href: "/admin/articles/" },
@@ -550,6 +554,9 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         { label: "管理トップ", detail: "設定・権限・状態", group: 'quick', icon: 'manage', href: "/admin/manage/?project=atlas" },
         { label: "表示設定を開く", detail: "テーマ・文字サイズ", group: 'quick', icon: 'settings', run: () => document.querySelector<HTMLElement>("[data-settings-menu] summary")?.click() },
       ];
+      const actionKindLabels: Record<string, string> = { task: 'タスク', document: '記事', application: '応募', approval: '承認', notification: '通知' };
+      const actionPriorityLabels: Record<string, string> = { urgent: '今日対応', 'due-soon': '期限間近', new: '新着' };
+      const actionStatusLabels: Record<string, string> = { open: '未着手', doing: '進行中', pending: '承認待ち', unread: '未読' };
       type CommandHistory = { label: string; detail: string; href?: string; count: number; lastUsed: number };
       const historyKey = "atlasez-command-history";
       const readHistory = (): CommandHistory[] => {
@@ -565,6 +572,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         return { label: item.label, detail: `${detail}・${item.count}回`, group: 'recent', icon: 'history', ...(item.href ? { href: item.href } : {}) };
       });
       const recordUsage = (command: Command) => {
+        if (command.group === 'action') return;
         try {
           const now = Date.now();
           const history = readHistory().filter((item) => item.href !== command.href || item.label !== command.label);
@@ -581,19 +589,27 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
         if (!alreadyRecorded) recordUsage(actionCenter);
       };
       let commands = [...staticCommands];
+      let actionCommands: Command[] = [];
+      let openMode: 'command' | 'action' = 'command';
       let activeIndex = 0;
       let searchTimer: number | undefined;
       const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character] ?? character));
       const close = () => { if (dialog.open) dialog.close(); };
       const run = (command: Command) => { recordUsage(command); close(); if (command.href) void navigate(command.href); else command.run?.(); };
       const render = () => {
-        const sectionTitles = { recent: '最近使った操作', quick: 'クイック操作', result: '検索結果' } as const;
-        const sections = (['recent', 'quick', 'result'] as const).map((group) => ({ group, items: commands.map((command, index) => ({ command, index })).filter(({ command }) => command.group === group) })).filter(({ items }) => items.length > 0);
+        const sectionTitles = { recent: '最近使った操作', quick: 'クイック操作', result: '検索結果', action: '対応が必要な項目' } as const;
+        const sections = (['recent', 'quick', 'result', 'action'] as const).map((group) => ({ group, items: commands.map((command, index) => ({ command, index })).filter(({ command }) => command.group === group) })).filter(({ items }) => items.length > 0);
         list.innerHTML = commands.length ? sections.map(({ group, items }) => `<section class="admin-command-section"><h3>${sectionTitles[group]}</h3><div class="admin-command-options" role="group" aria-label="${sectionTitles[group]}">${items.map(({ command, index }) => `<button type="button" class="admin-command-item${index === activeIndex ? " is-active" : ""}" role="option" aria-selected="${index === activeIndex}" data-command-index="${index}"><span class="admin-command-item-icon" data-command-icon="${escape(command.icon)}" aria-hidden="true"></span><span class="admin-command-item-copy"><strong>${escape(command.label)}</strong><small>${escape(command.detail)}</small></span><span class="admin-command-item-arrow" aria-hidden="true">↗</span></button>`).join("")}</div></section>`).join("") : `<p class="admin-command-empty">一致する項目はありません。</p>`;
         list.querySelectorAll<HTMLButtonElement>("[data-command-index]").forEach((item) => item.addEventListener("click", () => run(commands[Number(item.dataset.commandIndex ?? 0)])));
       };
       const search = async () => {
         const query = input.value.trim();
+        if (openMode === 'action') {
+          commands = actionCommands.filter((command) => !query || `${command.label} ${command.detail}`.includes(query));
+          activeIndex = 0;
+          render();
+          return;
+        }
         if (query.length < 2) { commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); return; }
         const local = staticCommands.filter((command) => `${command.label} ${command.detail}`.includes(query)).map((command) => ({ ...command, group: 'result' as const }));
         try {
@@ -603,8 +619,38 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           commands = [...local, ...remote]; activeIndex = 0; render();
         } catch { commands = local; activeIndex = 0; render(); }
       };
-      const open = () => { if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const open = () => { openMode = 'command'; if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; if (!dialog.open) dialog.showModal(); input.value = ""; commands = [...recentCommands(), ...staticCommands.filter((command) => !recentCommands().some((recent) => recent.href === command.href && recent.label === command.label))]; activeIndex = 0; render(); input.focus(); };
+      const openActionCenter = async () => {
+        openMode = 'action';
+        if (heading) heading.textContent = 'アクションセンター';
+        input.placeholder = '対応項目を検索';
+        if (!dialog.open) dialog.showModal();
+        input.value = '';
+        actionCommands = [];
+        commands = [];
+        list.innerHTML = '<p class="admin-command-empty">対応項目を読み込んでいます…</p>';
+        input.focus();
+        try {
+          const response = await fetch('/api/admin/action-center?view=action', { credentials: 'same-origin', cache: 'no-store' });
+          const data = await response.json().catch(() => ({})) as ActionCenterResponse;
+          if (!response.ok) throw new Error(data.error ?? 'アクションを読み込めませんでした。');
+          actionCommands = (data.items ?? []).filter((item) => item.title && item.href).map((item) => ({
+            label: item.title!,
+            detail: [actionKindLabels[item.kind ?? ''] ?? item.kind ?? '項目', actionPriorityLabels[item.priority ?? ''] ?? actionStatusLabels[item.status ?? ''] ?? '確認が必要'].join('・'),
+            group: 'action' as const,
+            icon: 'actions',
+            href: item.href!,
+          }));
+          commands = actionCommands;
+          activeIndex = 0;
+          render();
+        } catch (error) {
+          list.innerHTML = `<p class="admin-command-empty">${escape(error instanceof Error ? error.message : '対応項目を読み込めませんでした。')}</p>`;
+        }
+      };
       button.addEventListener("click", open);
+      actionCenterButtons.forEach((actionButton) => actionButton.addEventListener('click', (event) => { event.preventDefault(); void openActionCenter(); }));
+      dialog.addEventListener('close', () => { openMode = 'command'; if (heading) heading.textContent = '操作を検索'; input.placeholder = '記事・タスク・操作を検索'; });
       document.addEventListener('astro:page-load', recordCurrentRoute);
       recordCurrentRoute();
       input.addEventListener("input", () => { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(() => void search(), 120); });
@@ -773,6 +819,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     height: 2.1rem;
     margin-right: .2rem;
     padding: 0 .55rem;
+    white-space: nowrap;
   }
   .admin-nav nav > .admin-action-center-link svg { fill: none; height: .9rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: .9rem; }
   .admin-nav nav > .admin-action-center-link:hover,
@@ -782,6 +829,10 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     color: var(--text-primary);
   }
   .admin-nav nav > .admin-action-center-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+  .admin-action-center-utility-link { align-items: center; border: 1px solid var(--border-default); border-radius: var(--radius); color: var(--text-secondary); display: none; font-size: .72rem; gap: .3rem; height: 2.1rem; padding: 0 .55rem; text-decoration: none; white-space: nowrap; }
+  .admin-action-center-utility-link svg { fill: none; height: .9rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: .9rem; }
+  .admin-action-center-utility-link:hover { background: var(--background-secondary); border-color: var(--border-strong); color: var(--text-primary); }
+  .admin-action-center-utility-link:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
   @media (max-width: 980px) {
     .admin-nav nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
   }
@@ -799,5 +850,7 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
     .admin-nav[data-admin-nav][data-current-site] .admin-management-menu > div { box-shadow: none; position: static; }
     .admin-nav[data-admin-nav][data-current-site] .admin-management-menu > div a { display: block; }
     .admin-nav[data-admin-nav][data-current-site] nav > .admin-action-center-link { border-width: 1px !important; margin: .1rem 0; min-height: 2.4rem; }
+    .admin-action-center-utility-link { display: inline-flex; }
   }
+  @media (max-width: 620px) { .admin-action-center-utility-link { padding-inline: .45rem; } .admin-action-center-utility-link span { display: none; } }
 </style>
