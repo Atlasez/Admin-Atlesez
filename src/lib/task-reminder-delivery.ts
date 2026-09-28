@@ -12,7 +12,9 @@ type D1Statement = {
 
 type D1Database = {
   prepare(query: string): D1Statement;
-  batch<T = unknown>(statements: D1Statement[]): Promise<T[]>;
+  batch<T = unknown>(
+    statements: D1Statement[],
+  ): Promise<Array<{ results: T[]; meta?: { changes?: number } }>>;
 };
 
 export type TaskReminderDeliveryEnv = {
@@ -117,16 +119,42 @@ async function normalizeReminderInstants(
   logger: Pick<Console, "info" | "error">,
 ) {
   const result = await env.REPORTS.prepare(
-    "SELECT id,remind_at,timezone FROM editorial_task_reminders WHERE remind_at_utc IS NULL LIMIT 500",
+    `SELECT r.id,r.remind_at,r.timezone
+       FROM editorial_task_reminders r
+       LEFT JOIN editorial_task_reminder_normalization_issues i
+         ON i.reminder_id=r.id AND i.remind_at=r.remind_at AND i.timezone=r.timezone
+      WHERE r.remind_at_utc IS NULL AND i.reminder_id IS NULL
+      ORDER BY r.remind_at ASC,r.id ASC LIMIT 250`,
   ).all<{ id: string; remind_at: string; timezone: string }>();
-  const updates = [] as D1Statement[];
+  const updates: D1Statement[] = [];
+  const issues: D1Statement[] = [];
+  const resolutions: D1Statement[] = [];
   for (const row of result.results ?? []) {
-    const epoch = reminderEpoch(row.remind_at, row.timezone);
+    const category = !isValidTimeZone(row.timezone) ? "invalid_timezone" : null;
+    const epoch = category
+      ? Number.NaN
+      : reminderEpoch(row.remind_at, row.timezone);
     if (!Number.isFinite(epoch)) {
       safeLog(logger, "error", "task_reminder_invalid_time", {
         reminderId: row.id,
-        category: "invalid_time",
+        category: category ?? "invalid_time",
       });
+      issues.push(
+        env.REPORTS.prepare(
+          `INSERT INTO editorial_task_reminder_normalization_issues
+             (reminder_id,remind_at,timezone,category,updated_at)
+           VALUES (?,?,?,?,?)
+           ON CONFLICT(reminder_id) DO UPDATE SET
+             remind_at=excluded.remind_at,timezone=excluded.timezone,
+             category=excluded.category,updated_at=excluded.updated_at`,
+        ).bind(
+          row.id,
+          row.remind_at,
+          row.timezone,
+          category ?? "invalid_time",
+          now,
+        ),
+      );
       continue;
     }
     updates.push(
@@ -139,10 +167,17 @@ async function normalizeReminderInstants(
         row.timezone,
       ),
     );
+    resolutions.push(
+      env.REPORTS.prepare(
+        "DELETE FROM editorial_task_reminder_normalization_issues WHERE reminder_id=?",
+      ).bind(row.id),
+    );
   }
-  if (updates.length) await env.REPORTS.batch(updates);
+  const statements = [...updates, ...issues, ...resolutions];
+  if (statements.length) await env.REPORTS.batch(statements);
   safeLog(logger, "info", "task_reminder_normalized", {
     count: updates.length,
+    invalidCount: issues.length,
     at: now,
   });
 }
@@ -309,12 +344,12 @@ async function finalizeSuccess(
         attempt.delivery_key,
         claimToken,
       );
-  const results = (await env.REPORTS.batch([
+  const results = await env.REPORTS.batch([
     reminderUpdate,
     env.REPORTS.prepare(
       "UPDATE editorial_task_reminder_delivery_attempts SET status='sent',sent_at=?,claim_token=NULL,claimed_at=NULL,provider_message_id=NULL,error_category=NULL,updated_at=? WHERE delivery_key=? AND status='sending' AND claim_token=?",
     ).bind(now, now, attempt.delivery_key, claimToken),
-  ])) as Array<{ meta?: { changes?: number } }>;
+  ]);
   if (results[1]?.meta?.changes !== 1)
     throw new Error("Reminder delivery claim was lost before finalize");
 }
@@ -361,6 +396,10 @@ export async function dispatchDueTaskReminders(
   const now = nowDate.toISOString();
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.EMAIL_FROM?.trim();
+  safeLog(logger, "info", "task_reminder_cron_start", { at: now });
+  // The UTC value is derived from the already-saved wall time and timezone.
+  // Keep migrating legacy rows even if email delivery is misconfigured.
+  await normalizeReminderInstants(env, now, logger);
   if (!apiKey || !from) {
     safeLog(logger, "error", "task_reminder_config_missing", {
       missing: [
@@ -378,8 +417,6 @@ export async function dispatchDueTaskReminders(
   }
   const fetcher = options.fetcher ?? fetch;
   const limit = Math.min(100, Math.max(1, options.limit ?? 50));
-  safeLog(logger, "info", "task_reminder_cron_start", { at: now });
-  await normalizeReminderInstants(env, now, logger);
   const candidates = await env.REPORTS.prepare(
     `SELECT r.id AS reminder_id,t.title,t.details,t.due_at,t.due_timezone,
               r.remind_at,r.timezone,r.remind_at_utc,r.label,

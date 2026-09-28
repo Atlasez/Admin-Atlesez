@@ -55,7 +55,7 @@ PR本文に必ず次を記載する。
 
 ## 5. 本番デプロイ
 
-Cloudflare Workers Buildsが接続済みで、Production branchが`main`に固定されている場合だけ、マージ後の自動ビルドを本番経路とする。Build commandとDeploy commandは次の固定値から変更しない。
+Cloudflare Workers BuildsをADMIN本番の唯一の通常デプロイ経路とし、Production branchを`main`に固定する。別のGitHub Actions本番デプロイ経路を追加・併用しない。Build commandとDeploy commandは次の固定値から変更しない。
 
 ```bash
 # Build command
@@ -64,6 +64,8 @@ npm ci && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PAT
 # Deploy command
 npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
 ```
+
+Cloudflare Workers Buildsの接続不良中は本番反映を停止し、既存のGitHub Actions手動workflowを代替経路として実行しない。緊急時に限り、[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認を得て、`npm run deploy:admin`をcleanな`main` checkoutから実行できる。このローカルガードは明示承認SHA、remote main由来、clean worktree、ADMIN向けbuild-infoを検証する。SHAはその場でHEADから生成せず、レビュー済みmain commitに対して明示承認された40桁値を指定する。
 
 デプロイ後、次を確認してから完了とする。
 
@@ -81,8 +83,9 @@ Cloudflare DashboardのGit repository接続が「内部エラー」で失敗し�
 
 - PRをマージしただけでは本番反映済みと報告しない。
 - `main`でないbranchから`wrangler deploy`しない。
+- GitHub Actionsの手動deploy workflowを暫定経路として実行しない。
 - Dashboard Editor、Versionsのpromote、rollback、cache purgeで穴埋めしない。
-- 緊急手動デプロイが必要な場合は、対象SHA、理由、承認者、影響、復旧方法をIssueに記録してから、別途明示承認を得る。
+- 緊急手動デプロイが必要な場合は、対象SHA、理由、承認者、影響、復旧方法をIssueに記録してから別途明示承認を得て、cleanでremote main由来の`main` checkoutから`npm run deploy:admin`を実行する。
 - Workers Builds復旧後は、最初の1回を監視デプロイとし、SHA、Version ID、時刻、Chrome結果を記録する。
 
 ## 7. 本番相当のライブスモーク

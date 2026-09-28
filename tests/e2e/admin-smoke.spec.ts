@@ -116,6 +116,33 @@ for (const [label, path, heading] of pages) {
   });
 }
 
+test("管理トップは権限・メンバー・分野の管理を分けて案内する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.goto("admin/manage/?project=atlas");
+
+  const permissionCard = page.locator(
+    'a[data-manager-only][href="/admin/permissions/?project=atlas"]',
+  );
+  await expect(permissionCard).toBeVisible();
+  await expect(permissionCard.locator("strong")).toHaveText("権限管理");
+  await expect(permissionCard.locator("span")).toHaveAttribute(
+    "aria-label",
+    "権限管理を開く",
+  );
+
+  await expect(
+    page.locator('a[href="/admin/member-management/?project=atlas"] strong'),
+  ).toHaveText("運営メンバー管理");
+  await expect(
+    page.locator('a[href="/admin/genre-roles/?project=atlas"] strong'),
+  ).toHaveText("ジャンル・役割管理");
+  await expect(page.getByText("運営者・担当管理", { exact: true })).toHaveCount(
+    0,
+  );
+});
+
 test("記事編集の未選択案内が横方向に崩れない", async ({ page }) => {
   await mockAdminApis(page);
   await page.goto("admin/editor/");
@@ -202,6 +229,251 @@ test("運営メンバー管理は検証用アカウントを専用アーカイ�
   );
 });
 
+test("運営メンバーをアーカイブ・復元すると担当範囲と一覧が同期する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  let archived = false;
+  const actions: string[] = [];
+  await page.route("**/api/admin/genre-overviews*", async (route) => {
+    await route.fulfill({
+      json: {
+        members: archived
+          ? []
+          : [
+              {
+                email: "member@example.org",
+                display_name: "運営メンバー",
+                role: "member",
+                assignments: ["数学"],
+              },
+            ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  await page.route("**/api/admin/report-admin-permissions*", async (route) => {
+    await route.fulfill({
+      json: {
+        permissions: archived
+          ? []
+          : [
+              {
+                email: "member@example.org",
+                display_name: "運営メンバー",
+                subjects: "mathematics",
+              },
+            ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  await page.route("**/api/admin/member-management*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        json: {
+          members: archived
+            ? [
+                {
+                  email: "member@example.org",
+                  display_name: "運営メンバー",
+                  avatar_url: "",
+                  created_by: "",
+                  archived_by: "manager@example.org",
+                  archived_at: "2026-09-28T00:00:00.000Z",
+                },
+              ]
+            : [],
+        },
+      });
+      return;
+    }
+    const body = route.request().postDataJSON() as {
+      action: "archive" | "restore";
+      email: string;
+    };
+    actions.push(`${body.action}:${body.email}`);
+    archived = body.action === "archive";
+    await route.fulfill({
+      json: { ok: true, status: archived ? "archived" : "active" },
+    });
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.goto("admin/member-management/");
+  await expect(page.locator("[data-table-body]")).toContainText(
+    "member@example.org",
+  );
+  await page.locator("[data-table-body] [data-archive-member]").click();
+  await expect(page.locator("[data-table-body]")).toContainText(
+    "条件に一致するメンバーはいません",
+  );
+  const archive = page.locator("[data-member-archive]");
+  await expect(archive).toBeVisible();
+  await expect(archive).toContainText("member@example.org");
+  await archive.locator("summary").click();
+  await archive.locator("[data-restore-member]").click();
+  await expect(page.locator("[data-table-body]")).toContainText(
+    "member@example.org",
+  );
+  await expect(archive).toBeHidden();
+  expect(actions).toEqual([
+    "archive:member@example.org",
+    "restore:member@example.org",
+  ]);
+});
+
+test("運営メンバー一覧からプロフィールと変更履歴を確認できる", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.route("**/api/admin/genre-overviews*", async (route) => {
+    await route.fulfill({
+      json: {
+        members: [
+          {
+            email: "member@example.org",
+            display_name: "運営メンバー",
+            role: "member",
+            assignments: ["数学"],
+          },
+        ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  await page.route("**/api/admin/member-management*", async (route) => {
+    if (!new URL(route.request().url()).searchParams.has("email")) {
+      await route.fulfill({ json: { members: [] } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        member: {
+          email: "member@example.org",
+          status: "active",
+          createdBy: null,
+          createdAt: null,
+          archivedBy: null,
+          archivedAt: null,
+          profile: {
+            displayName: "運営メンバー",
+            avatarUrl: "",
+            bio: "プロフィール本文",
+            university: "東京大学",
+            year: "2年",
+            interests: "数学",
+            affiliationType: "student",
+            country: "日本",
+            timezone: "Asia/Tokyo",
+            updatedAt: "2026-09-28T00:00:00.000Z",
+          },
+          memberships: [
+            {
+              project_id: "atlas",
+              role: "member",
+              joined_at: "2026-09-01T00:00:00.000Z",
+            },
+          ],
+          permissions: [{ subject: "mathematics" }],
+          workflowRoles: [],
+          genreRoles: [
+            {
+              kind: "genre",
+              name: "数学",
+              created_at: "2026-09-01T00:00:00.000Z",
+              created_by: "manager@example.org",
+            },
+          ],
+          articleCount: 2,
+          applicationCount: 1,
+          history: [
+            {
+              actorEmail: "manager@example.org",
+              action: "permission_replaced",
+              summary: "担当分野を変更",
+              createdAt: "2026-09-28T00:00:00.000Z",
+              category: "permission",
+            },
+          ],
+        },
+      },
+    });
+  });
+  await page.goto("admin/member-management/");
+  await page.locator("[data-table-body] [data-open-member]").click();
+  const dialog = page.locator("[data-member-detail-dialog]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("プロフィール本文");
+  await expect(dialog).toContainText("atlas — member");
+  await expect(dialog).toContainText("作成記事：2件");
+  await expect(dialog).toContainText("記録なし");
+  await expect(dialog).toContainText("担当分野を変更");
+  await dialog.locator("[data-close-member-detail]").click();
+  await expect(dialog).toBeHidden();
+});
+
+test("メンバー詳細の読み込み失敗から再試行で復帰できる", async ({ page }) => {
+  await mockAdminApis(page);
+  await page.route("**/api/admin/genre-overviews*", async (route) => {
+    await route.fulfill({
+      json: {
+        members: [
+          {
+            email: "member@example.org",
+            display_name: "運営メンバー",
+            role: "member",
+            assignments: [],
+          },
+        ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  let detailRequests = 0;
+  await page.route("**/api/admin/member-management*", async (route) => {
+    if (!new URL(route.request().url()).searchParams.has("email")) {
+      await route.fulfill({ json: { members: [] } });
+      return;
+    }
+    detailRequests += 1;
+    if (detailRequests === 1) {
+      await route.fulfill({
+        status: 503,
+        json: { error: "一時的に詳細を読み込めません。" },
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        member: {
+          email: "member@example.org",
+          status: "active",
+          createdBy: null,
+          createdAt: null,
+          archivedBy: null,
+          archivedAt: null,
+          profile: null,
+          memberships: [],
+          permissions: [],
+          workflowRoles: [],
+          genreRoles: [],
+          articleCount: 0,
+          applicationCount: 0,
+          history: [],
+        },
+      },
+    });
+  });
+
+  await page.goto("admin/member-management/");
+  await page.locator("[data-table-body] [data-open-member]").click();
+  const dialog = page.locator("[data-member-detail-dialog]");
+  await expect(dialog).toContainText("一時的に詳細を読み込めません。");
+  await dialog.getByRole("button", { name: "再試行" }).click();
+  await expect(dialog).toContainText("初回作成者：記録なし");
+  expect(detailRequests).toBe(2);
+});
+
 test("作業の進め方に運営画面のスクリーンショットが表示される", async ({
   page,
 }) => {
@@ -223,6 +495,7 @@ test("作業の進め方に運営画面のスクリーンショットが表示�
 });
 
 const responsiveSmokePages = [
+  ["管理トップ", "admin/manage/"],
   ["ポータル", "admin/portal/"],
   ["通知", "admin/notifications/"],
   ["アクションセンター", "admin/action-center/"],

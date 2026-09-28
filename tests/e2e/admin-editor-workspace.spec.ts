@@ -527,12 +527,25 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
     });
   });
 
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("./admin/genre-roles/?project=atlas");
   await expect(
     page.getByRole("link", { name: "運営者・担当分野管理" }),
   ).toHaveCount(0);
   await expect(page.locator("[data-content]")).not.toContainText("運営統括");
   const taxonomyForm = page.locator("[data-taxonomy-form]");
+  const managementFormWidths = await page
+    .locator(".management-tools")
+    .evaluate((tools) => {
+      const forms = [...tools.querySelectorAll("form")];
+      return {
+        catalog: forms[0]?.getBoundingClientRect().width ?? 0,
+        taxonomy: forms[2]?.getBoundingClientRect().width ?? 0,
+      };
+    });
+  expect(managementFormWidths.taxonomy).toBeGreaterThan(
+    managementFormWidths.catalog * 1.8,
+  );
   await taxonomyForm.locator('select[name="kind"]').selectOption("subject");
   await taxonomyForm.locator('input[name="name"]').fill("情報");
   await taxonomyForm.getByRole("button", { name: "追加" }).click();
@@ -622,6 +635,25 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
     page.getByText("機械学習（基礎）", { exact: true }),
   ).toBeVisible();
   // ドラッグ中のポインター位置（カード下半分）どおりに、後ろへ挿入される。
+  const waitForReorderSave = () =>
+    page.waitForResponse((response) => {
+      const request = response.request();
+      if (
+        request.method() !== "PATCH" ||
+        !response.url().includes("/api/admin/editor/taxonomy")
+      ) {
+        return false;
+      }
+      try {
+        return request.postDataJSON()?.action === "reorder";
+      } catch {
+        return false;
+      }
+    });
+  const reorderSaves = Promise.all([
+    waitForReorderSave(),
+    waitForReorderSave(),
+  ]);
   const dragPosition = await page.evaluate(() => {
     const source = document.querySelector<HTMLElement>(
       '[data-taxonomy-id="category-2"]',
@@ -656,9 +688,7 @@ test("分野・カテゴリ・目次を順に追加して、目次から記事�
   });
   expect(dragPosition.position).toBe("after");
   expect(dragPosition.order).toEqual(["category-3", "category-2"]);
-  await expect(
-    page.locator("[data-taxonomy-content] .taxonomy-card").nth(0),
-  ).toContainText("統計学");
+  await reorderSaves;
   // 並び順は画面内のDOMだけでなく、再読み込み後もAPIから復元される。
   await page.reload();
   await expect(
@@ -3511,6 +3541,223 @@ test("E-6〜E-11: コメント操作、返信表示、メンション候補を�
   );
   await page.keyboard.press("Enter");
   await expect(reply).toHaveValue("@Alice ");
+});
+
+test("コメント別窓から新規コメントを追加し、閉じた後も元画面へ反映する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  let submittedComment: {
+    body: string;
+    selections: unknown[];
+    tags: string[];
+  } | null = null;
+  let submittedReply: { body: string; parentCommentId: string } | null = null;
+  const submittedCommentActions: { commentId: string; action: string }[] = [];
+  let aliceUnacknowledged = false;
+  let aliceLiked = false;
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments",
+    async (route) => {
+      if (route.request().method() === "POST") {
+        const payload = route.request().postDataJSON() as {
+          body: string;
+          selections?: unknown[];
+          tags?: string[];
+          parentCommentId?: string;
+        };
+        if (payload.parentCommentId) {
+          submittedReply = {
+            body: payload.body,
+            parentCommentId: payload.parentCommentId,
+          };
+        } else {
+          submittedComment = {
+            body: payload.body,
+            selections: payload.selections ?? [],
+            tags: payload.tags ?? [],
+          };
+        }
+        await route.fulfill({ json: {} });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+  await page.route(
+    "**/api/admin/editor/documents/doc-1/comments/comment-1",
+    async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.fallback();
+        return;
+      }
+      const { action } = route.request().postDataJSON() as { action: string };
+      submittedCommentActions.push({ commentId: "comment-1", action });
+      if (action === "unacknowledge")
+        aliceUnacknowledged = !aliceUnacknowledged;
+      if (action === "like") aliceLiked = !aliceLiked;
+      await route.fulfill({ json: {} });
+    },
+  );
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (
+      route.request().method() !== "GET" ||
+      (!submittedComment && !submittedReply)
+    ) {
+      await route.fallback();
+      return;
+    }
+    const original = comments[0];
+    const unacknowledgeActors =
+      original.action_actor_counts.unacknowledge.filter(
+        (actor) => actor.actor_email !== "alice@example.com",
+      );
+    if (aliceUnacknowledged) {
+      unacknowledgeActors.push({
+        actor_email: "alice@example.com",
+        actor_display_name: "Alice",
+        count: 1,
+      });
+    }
+    await route.fulfill({
+      json: {
+        document: documentItem,
+        comments: [
+          {
+            ...original,
+            unacknowledged_by_emails: unacknowledgeActors.map(
+              (actor) => actor.actor_email,
+            ),
+            action_actor_counts: {
+              ...original.action_actor_counts,
+              unacknowledge: unacknowledgeActors,
+            },
+            like_actor_counts: aliceLiked
+              ? [
+                  {
+                    actor_email: "alice@example.com",
+                    actor_display_name: "Alice",
+                    count: 1,
+                  },
+                ]
+              : [],
+          },
+          ...comments.slice(1),
+          ...(submittedComment
+            ? [
+                {
+                  ...comments[0],
+                  id: "comment-from-popup",
+                  body: submittedComment.body,
+                  tags: submittedComment.tags,
+                  created_by: "alice@example.com",
+                  author_display_name: "Alice",
+                  acknowledged_at: null,
+                  acknowledged_by: null,
+                  acknowledged_by_emails: [],
+                  unacknowledged_by_emails: [],
+                  action_actor_counts: { acknowledge: [], unacknowledge: [] },
+                },
+              ]
+            : []),
+          ...(submittedReply
+            ? [
+                {
+                  ...comments[1],
+                  id: "reply-from-popup",
+                  parent_comment_id: submittedReply.parentCommentId,
+                  body: submittedReply.body,
+                },
+              ]
+            : []),
+        ],
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+
+  const panel = page.locator('[data-editor-pane="review"]');
+  const popupPromise = page.waitForEvent("popup");
+  await panel.locator('[data-pane-popout="review"]').click();
+  const popup = await popupPromise;
+  const commentTag = popup.locator(
+    '.review-pane-content > .comment-tags [data-comment-tag="定義不足"]',
+  );
+  await commentTag.click();
+  await expect(commentTag).toHaveAttribute("aria-pressed", "true");
+  await popup.locator("[data-comment-body]").fill("別窓から投稿したコメント");
+  await popup.locator("[data-send-comment]").click();
+
+  await expect(popup.locator("[data-comment-list]")).toContainText(
+    "別窓から投稿したコメント",
+  );
+  expect(submittedComment).toEqual({
+    body: "別窓から投稿したコメント",
+    selections: [],
+    tags: ["定義不足"],
+  });
+
+  await popup
+    .locator('[data-comment-context="comment-1"] [data-open-reply]')
+    .click();
+  const replyBody = popup.locator(
+    '[data-comment-context="comment-1"] [data-reply-body]',
+  );
+  await expect(replyBody).toBeVisible();
+  await replyBody.fill("別窓から送った返信");
+  await expect(
+    page.locator(
+      '[data-editor-pane="review"] [data-comment-context="comment-1"] [data-reply-body]',
+    ),
+  ).toHaveValue("別窓から送った返信");
+  await popup
+    .locator('[data-comment-context="comment-1"] [data-send-reply]')
+    .click();
+  await expect
+    .poll(() => submittedReply)
+    .toEqual({ body: "別窓から送った返信", parentCommentId: "comment-1" });
+  await expect(popup.locator("[data-comment-list]")).toContainText(
+    "別窓から送った返信",
+  );
+
+  const popupUnacknowledge = popup.locator(
+    '[data-comment-history="comment-1"] [data-comment-action="unacknowledge"]',
+  );
+  await popupUnacknowledge.click();
+  await expect(popupUnacknowledge).toHaveClass(/is-acted-by-me/);
+  const popupLike = popup.locator(
+    '[data-comment-history="comment-1"] [data-comment-reaction="smile"]',
+  );
+  await popupLike.click();
+  await expect(popupLike).toHaveAttribute("aria-pressed", "true");
+  await expect(popupLike.locator(".comment-action-count")).toHaveText("1");
+  await expect
+    .poll(() => submittedCommentActions)
+    .toEqual([
+      { commentId: "comment-1", action: "unacknowledge" },
+      { commentId: "comment-1", action: "like" },
+    ]);
+
+  await popup.close();
+  await expect(panel.locator("[data-comment-list]")).toContainText(
+    "別窓から投稿したコメント",
+  );
+  await expect(panel.locator("[data-comment-list]")).toContainText(
+    "別窓から送った返信",
+  );
+  const sourceLike = panel.locator(
+    '[data-comment-history="comment-1"] [data-comment-reaction="smile"]',
+  );
+  await sourceLike.click();
+  await expect(sourceLike).toHaveAttribute("aria-pressed", "false");
+  await expect(sourceLike.locator(".comment-action-count")).toHaveText("0");
+  await expect
+    .poll(() => submittedCommentActions)
+    .toEqual([
+      { commentId: "comment-1", action: "unacknowledge" },
+      { commentId: "comment-1", action: "like" },
+      { commentId: "comment-1", action: "like" },
+    ]);
 });
 
 test("CM-RT: コメント変更通知を受けると一覧をリアルタイム更新する", async ({

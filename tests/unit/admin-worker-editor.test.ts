@@ -1224,7 +1224,92 @@ describe("admin worker editor APIs", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      counts: { approvals: 5 },
+      counts: { approvals: 5, assigned: 2, assignedItemsTruncated: true },
+    });
+  });
+
+  it("keeps a grouped action-center notification unread if any grouped event is unread", async () => {
+    class NotificationStatement extends EmptyStatement {
+      override async all<T>() {
+        if (
+          this.query.includes("SELECT c.id, c.body, c.parent_comment_id") &&
+          this.query.includes("d.created_by = ?")
+        )
+          return {
+            results: [
+              {
+                id: "comment-newest1",
+                __notification_id: "comment-comment-newest1",
+                __notification_read: 1,
+                body: "最新のコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-28T09:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+              {
+                id: "comment-older001",
+                __notification_id: "comment-comment-older001",
+                __notification_read: 0,
+                body: "前のコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-27T09:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+            ] as T[],
+          };
+        if (
+          this.query.includes(
+            "SELECT notification_id FROM admin_notification_reads",
+          )
+        )
+          return {
+            results: [{ notification_id: "comment-comment-newest1" }] as T[],
+          };
+        return { results: [] as T[] };
+      }
+
+      override async first<T>() {
+        if (
+          this.query.includes("COUNT(*) AS total") &&
+          this.query.includes("FROM (SELECT c.id")
+        )
+          return { total: 2, unread: 1 } as T;
+        if (this.query.includes("COUNT(*) AS total"))
+          return { total: 0, unread: 0 } as T;
+        return null as T | null;
+      }
+    }
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new NotificationStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      counts: { unread: 1 },
+      items: [
+        {
+          kind: "notification",
+          groupCount: 2,
+          notificationIds: [
+            "comment-comment-newest1",
+            "comment-comment-older001",
+          ],
+          read: false,
+          status: "unread",
+          priority: "new",
+        },
+      ],
     });
   });
 
@@ -1263,6 +1348,86 @@ describe("admin worker editor APIs", () => {
     await expect(response.json()).resolves.toMatchObject({
       counts: { today: 4, dueSoon: 7 },
     });
+  });
+
+  it("keeps a grouped action-center notification unread when any event is unread", async () => {
+    class NotificationStatement extends EmptyStatement {
+      override async all<T>() {
+        if (this.query.includes("WHERE d.created_by = ? AND c.created_by != ?"))
+          return {
+            results: [
+              {
+                id: "newest123",
+                __notification_id: "comment-newest123",
+                __notification_read: 1,
+                body: "既読の新しいコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-20T12:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+              {
+                id: "older1234",
+                __notification_id: "comment-older1234",
+                __notification_read: 0,
+                body: "未読の古いコメント",
+                parent_comment_id: null,
+                created_at: "2026-09-19T12:00:00.000Z",
+                document_id: "document-1",
+                title: "同じ記事",
+              },
+            ] as T[],
+          };
+        return { results: [] as T[] };
+      }
+
+      override async first<T>() {
+        if (
+          this.query.includes("COUNT(*) AS total") &&
+          this.query.includes("FROM (SELECT c.id")
+        )
+          return { total: 2, unread: 1 } as T;
+        if (this.query.includes("COUNT(*) AS total"))
+          return { total: 0, unread: 0 } as T;
+        return null as T | null;
+      }
+    }
+    const actionCenterEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => new NotificationStatement(query),
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center"),
+      actionCenterEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      items: Array<{
+        kind: string;
+        read: boolean;
+        status: string;
+        priority: string;
+        groupCount?: number;
+        notificationIds?: string[];
+      }>;
+      counts: { unread: number };
+    };
+    const groupedNotification = data.items.find(
+      (item) => item.kind === "notification",
+    );
+    expect(groupedNotification).toMatchObject({
+      read: false,
+      status: "unread",
+      priority: "new",
+      groupCount: 2,
+      notificationIds: ["comment-newest123", "comment-older1234"],
+    });
+    expect(data.counts.unread).toBe(1);
   });
 
   it("keeps action-center application data inside manager project scope", async () => {
@@ -1342,7 +1507,15 @@ describe("admin worker editor APIs", () => {
     expect(applicationQueries.length).toBeGreaterThanOrEqual(2);
     for (const query of applicationQueries) {
       expect(query.sql).toContain("project_slug IN (?)");
-      expect(query.bindings).toEqual(["secretariat"]);
+      if (query.sql.includes("SELECT s.*")) {
+        expect(query.bindings).toEqual([
+          "member@example.com",
+          "secretariat",
+          100,
+        ]);
+      } else {
+        expect(query.bindings).toEqual(["secretariat"]);
+      }
     }
   });
 
@@ -1410,6 +1583,62 @@ describe("admin worker editor APIs", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("keeps active assigned counts accurate while loading action-center history", async () => {
+    const historyEnv = {
+      ...emptyEnv,
+      REPORTS: {
+        ...emptyEnv.REPORTS,
+        prepare: (query: string) => {
+          const statement = new EmptyStatement(query);
+          statement.all = async <T>() => {
+            if (query.includes("SELECT id,slug,name FROM atlasez_projects"))
+              return {
+                results: [{ id: "atlas", slug: "atlas", name: "アトラス" }],
+              } as { results: T[] };
+            return { results: [] as T[] };
+          };
+          statement.first = async <T>() => {
+            if (query.includes("SELECT COUNT(*) AS open_count"))
+              return { open_count: 60, due_today: 0, due_soon: 0 } as T;
+            if (
+              query.includes("SELECT COUNT(*) AS count FROM editorial_tasks t")
+            )
+              return { count: 60 } as T;
+            if (
+              query.includes(
+                "SELECT COUNT(*) AS count FROM editorial_documents d",
+              )
+            )
+              return { count: 4 } as T;
+            if (
+              query.includes(
+                "SELECT COUNT(*) AS count FROM atlasez_member_applications",
+              )
+            )
+              return { count: 1 } as T;
+            if (query.includes("editorial_member_profile_change_requests"))
+              return { count: 2 } as T;
+            if (query.includes("editorial_project_profile_change_requests"))
+              return { count: 3 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+      },
+    };
+
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/action-center?view=history"),
+      historyEnv as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      view: "history",
+      counts: { assigned: 70, assignedItemsTruncated: false },
+    });
   });
 
   it("limits active action-center articles to states that require work", async () => {
@@ -2194,7 +2423,7 @@ describe("admin worker editor APIs", () => {
         prepare: (query: string) => new CapturedStatement(query),
         batch: async (statements: unknown[]) => {
           batched = statements as CapturedStatement[];
-          return [];
+          return batched.map(() => ({ meta: { changes: 1 }, results: [] }));
         },
       },
     };

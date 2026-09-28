@@ -348,13 +348,111 @@ test("通知panelは全体の未読件数を示し、通知一覧へ移動でき
   await expect(page).toHaveURL(/\/admin\/notifications\/$/);
 });
 
-test("通知一覧はページ送り・未読全体の絞り込み・すべて既読を扱う", async ({
+test("通知panelは旧リマインダー準備中を示し、一括既読を止める", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-current12345678",
+            title: "現在の通知",
+            detail: "確認が必要です。",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        legacyReminderNormalizationPending: true,
+        legacyReminderNormalizationFailed: false,
+      },
+    });
+  });
+  await page.goto("admin/portal/");
+  const panel = page.locator("[data-admin-notification-panel]");
+  await page.locator("[data-admin-notifications]").click();
+  await expect(panel.locator("[data-legacy-reminder-status]")).toBeVisible();
+  await expect(
+    panel.locator("[data-mark-all-notifications-read]"),
+  ).toBeDisabled();
+  await expect(panel.locator("[data-legacy-reminder-failed]")).toBeHidden();
+});
+
+test("不正リマインダーの警告中も他の通知を一括既読できる", async ({ page }) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-current12345678",
+            title: "現在の通知",
+            detail: "確認が必要です。",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        legacyReminderNormalizationPending: false,
+        legacyReminderNormalizationFailed: true,
+      },
+    });
+  });
+  await page.goto("admin/portal/");
+  const panel = page.locator("[data-admin-notification-panel]");
+  await page.locator("[data-admin-notifications]").click();
+  await expect(panel.locator("[data-legacy-reminder-failed]")).toBeVisible();
+  await expect(
+    panel.locator("[data-mark-all-notifications-read]"),
+  ).toBeEnabled();
+});
+
+test("旧リマインダー準備中は不完全な一括既読を防ぎ状態を表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.route("**/api/admin/notifications**", async (route) => {
+    await route.fulfill({
+      json: {
+        notifications: [
+          {
+            id: "comment-current12345678",
+            title: "現在の通知",
+            detail: "確認が必要です。",
+            href: "/admin/editor/",
+            read: false,
+          },
+        ],
+        unreadNotificationsCount: 1,
+        totalNotifications: 1,
+        legacyReminderNormalizationPending: true,
+      },
+    });
+  });
+
+  await page.goto("admin/notifications/");
+
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "古いタスクリマインダーを準備中です。",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "一覧をすべて既読" }),
+  ).toBeDisabled();
+});
+
+test("通知一覧はカーソルページ送り・未読絞り込み・すべて既読を扱う", async ({
   page,
 }) => {
   await mockAdminShell(page);
   const readPayloads: unknown[] = [];
+  const requests: URL[] = [];
   await page.route("**/api/admin/notifications**", async (route) => {
     const url = new URL(route.request().url());
+    requests.push(url);
     if (url.searchParams.get("unreadOnly") === "true") {
       await route.fulfill({
         json: {
@@ -371,41 +469,40 @@ test("通知一覧はページ送り・未読全体の絞り込み・すべて�
           ],
           unreadNotificationsCount: 1,
           totalNotifications: 1,
-          nextOffset: null,
+          nextCursor: null,
         },
       });
       return;
     }
-    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const cursor = url.searchParams.get("cursor");
     await route.fulfill({
       json: {
-        notifications:
-          offset === 0
-            ? [
-                {
-                  id: "comment-newest12345678",
-                  kind: "comment",
-                  title: "新しい通知",
-                  detail: "新しい通知です。",
-                  href: "/admin/editor/",
-                  updatedAt: "2026-08-22T00:00:00.000Z",
-                  read: false,
-                },
-              ]
-            : [
-                {
-                  id: "comment-older12345678",
-                  kind: "comment",
-                  title: "古い通知",
-                  detail: "2件目の通知です。",
-                  href: "/admin/editor/",
-                  updatedAt: "2026-08-01T00:00:00.000Z",
-                  read: true,
-                },
-              ],
+        notifications: !cursor
+          ? [
+              {
+                id: "comment-newest12345678",
+                kind: "comment",
+                title: "新しい通知",
+                detail: "新しい通知です。",
+                href: "/admin/editor/",
+                updatedAt: "2026-08-22T00:00:00.000Z",
+                read: false,
+              },
+            ]
+          : [
+              {
+                id: "comment-older12345678",
+                kind: "comment",
+                title: "古い通知",
+                detail: "2件目の通知です。",
+                href: "/admin/editor/",
+                updatedAt: "2026-08-01T00:00:00.000Z",
+                read: true,
+              },
+            ],
         unreadNotificationsCount: 1,
         totalNotifications: 2,
-        nextOffset: offset === 0 ? 1 : null,
+        nextCursor: cursor ? null : "cursor-older-page",
       },
     });
   });
@@ -437,6 +534,14 @@ test("通知一覧はページ送り・未読全体の絞り込み・すべて�
   expect(modifiedClickPrevented).toBe(false);
   await page.getByRole("button", { name: "さらに読み込む" }).click();
   await expect(page.getByRole("link", { name: "古い通知" })).toBeVisible();
+  expect(
+    requests.some(
+      (request) => request.searchParams.get("cursor") === "cursor-older-page",
+    ),
+  ).toBe(true);
+  expect(requests.every((request) => !request.searchParams.has("offset"))).toBe(
+    true,
+  );
 
   await page.getByRole("button", { name: "未読", exact: true }).click();
   await expect(page.getByRole("link", { name: "古い未読通知" })).toBeVisible();

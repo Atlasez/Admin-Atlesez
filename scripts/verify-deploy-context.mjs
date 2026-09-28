@@ -20,7 +20,7 @@ function git(args) {
 
 const head = git(["rev-parse", "HEAD"]);
 const branch = git(["symbolic-ref", "--quiet", "--short", "HEAD"]);
-const dirty = git(["status", "--porcelain"]);
+const dirty = git(["status", "--porcelain", "--untracked-files=all"]);
 const approvedSha = process.env.DEPLOY_MAIN_SHA?.trim() ?? "";
 
 if (!/^[0-9a-f]{40}$/.test(head)) {
@@ -36,10 +36,56 @@ if (!/^[0-9a-f]{40}$/.test(approvedSha)) {
 if (dirty) {
   failures.push("作業ツリーに未コミット変更があります。");
 }
-if (branch && branch !== "main") {
+if (target === "admin" && branch !== "main") {
   failures.push(
-    `現在のbranchは ${branch} です。mainまたはdetached HEADから実行してください。`,
+    `現在のbranchは ${branch || "detached HEAD"} です。admin deployはmain branchからのみ実行できます。`,
   );
+}
+
+if (target === "admin" && branch === "main") {
+  const upstream = git([
+    "rev-parse",
+    "--abbrev-ref",
+    "--symbolic-full-name",
+    "main@{upstream}",
+  ]);
+  const upstreamRef = upstream
+    ? git(["rev-parse", "--symbolic-full-name", upstream])
+    : "";
+  const upstreamRemote = upstream.endsWith("/main")
+    ? upstream.slice(0, -"/main".length)
+    : "";
+  const remoteUrl = upstreamRemote
+    ? git(["remote", "get-url", upstreamRemote])
+    : "";
+  const normalizedRemoteUrl = remoteUrl
+    .trim()
+    .replace(/^git@github\.com:/i, "github.com/")
+    .replace(/^ssh:\/\/git@github\.com\//i, "github.com/")
+    .replace(/^https?:\/\/github\.com\//i, "github.com/")
+    .replace(/\.git$/i, "")
+    .toLowerCase();
+
+  if (
+    !upstream ||
+    !upstreamRef.startsWith("refs/remotes/") ||
+    !upstream.endsWith("/main") ||
+    normalizedRemoteUrl !== "github.com/atlasez/admin-atlesez"
+  ) {
+    failures.push(
+      "正本リポジトリAtlasez/Admin-Atlesezのmain remote-tracking upstreamを確認できません。remote設定とfetchを確認してください。",
+    );
+  } else {
+    try {
+      execFileSync("git", ["merge-base", "--is-ancestor", head, upstream], {
+        stdio: "ignore",
+      });
+    } catch {
+      failures.push(
+        `HEAD (${head}) はremote main (${upstream})由来ではありません。`,
+      );
+    }
+  }
 }
 
 if (failures.length > 0) {

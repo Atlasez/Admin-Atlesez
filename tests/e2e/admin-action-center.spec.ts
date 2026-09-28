@@ -4,6 +4,8 @@ async function mockShell(
   page: Page,
   onTransition?: (body: unknown) => void,
   includeBulkTasks = false,
+  assignedTotal = 1,
+  assignedItemsTruncated = false,
 ) {
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
@@ -105,7 +107,8 @@ async function mockShell(
             dueSoon: 1,
             unread: 1,
             approvals: 0,
-            assigned: 1,
+            assigned: assignedTotal,
+            assignedItemsTruncated,
           },
           items,
           history: [
@@ -209,6 +212,25 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await page.getByRole("button", { name: "完了・履歴" }).click();
   await expect(page.locator("[data-action-items]")).toContainText("完了タスク");
+});
+
+test("担当項目が表示上限を超えた場合は全件数と一覧への導線を示す", async ({
+  page,
+}) => {
+  await mockShell(page, undefined, false, 51, true);
+  await page.goto("admin/action-center/");
+  const notice = page.locator("[data-action-truncation]");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText(
+    "全51件のうち、この画面には1件を表示しています。",
+  );
+  await expect(
+    notice.getByRole("link", { name: "タスク管理" }),
+  ).toHaveAttribute("href", "/admin/member-tasks/");
+  await expect(notice.getByRole("link", { name: "記事一覧" })).toHaveAttribute(
+    "href",
+    "/admin/editor/",
+  );
 });
 
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {

@@ -157,6 +157,99 @@ test("タスク一覧はカーソルで追加読み込みできる", async ({ pa
   expect(requests).toBe(2);
 });
 
+test("権限限定タスクは安全な担当者表示を使い、別人の通知先を送信しない", async ({
+  page,
+}) => {
+  let reminderUpdate: Record<string, unknown> | null = null;
+  await page.route("**/api/admin/operations**", async (route) => {
+    if (route.request().method() === "PATCH") {
+      reminderUpdate = route.request().postDataJSON() as Record<
+        string,
+        unknown
+      >;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        scope: { email: "reviewer@example.com", isManager: false },
+        project: { id: "atlas", slug: "atlas", name: "Atlasez" },
+        tasks: [
+          {
+            id: "scoped-task",
+            title: "担当分野のタスク",
+            status: "open",
+            subject: "mathematics",
+            assigned_to_me: true,
+            created_by_me: false,
+            assignee_display_name: "他のメンバー",
+            created_by_display_name: "他のメンバー",
+            reminder_email: null,
+            reminder_email_hidden: true,
+            reminders: [],
+            created_at: "2026-09-01T00:00:00.000Z",
+          },
+          {
+            id: "read-only-task",
+            title: "閲覧のみのタスク",
+            status: "open",
+            subject: "mathematics",
+            assigned_to_me: false,
+            created_by_me: false,
+            can_update: false,
+            assignee_display_name: "他のメンバー",
+            created_by_display_name: "他のメンバー",
+            reminders: [],
+            created_at: "2026-09-01T00:00:00.000Z",
+          },
+        ],
+        events: [],
+        progress: [],
+        members: [],
+        availabilityBlocks: [],
+      }),
+    });
+  });
+
+  await page.goto("admin/operations/?project=atlas");
+  const list = page.locator("[data-task-list]");
+  await page.locator('[data-task-filter="all"]').click();
+  await expect(list).toContainText("担当分野のタスク");
+  await expect(list).toContainText("担当：他のメンバー");
+  await expect(list).toContainText("依頼者：他のメンバー");
+  await expect(list).not.toContainText("@example.com");
+
+  const assignedTask = list.locator(".task-item", {
+    hasText: "担当分野のタスク",
+  });
+  await assignedTask.getByText("リマインダーを確認・編集").click();
+  await expect(
+    assignedTask.getByLabel("自分の通知先メールアドレス（任意）"),
+  ).toBeDisabled();
+  await assignedTask
+    .getByRole("button", { name: "このタスクの設定を保存" })
+    .click();
+  await expect.poll(() => reminderUpdate).not.toBeNull();
+  expect(reminderUpdate).not.toHaveProperty("reminderEmail");
+
+  const readOnlyTask = list.locator(".task-item", {
+    hasText: "閲覧のみのタスク",
+  });
+  await expect(
+    readOnlyTask.getByRole("combobox", { name: "閲覧のみのタスクの状態" }),
+  ).toBeDisabled();
+  await readOnlyTask.getByText("リマインダーを確認・編集").click();
+  await expect(
+    readOnlyTask.getByRole("button", { name: "このタスクの設定を保存" }),
+  ).toBeDisabled();
+});
+
 test("進捗報告一覧はカーソルで追加読み込みできる", async ({ page }) => {
   let requests = 0;
   await page.route("**/api/admin/progress**", async (route) => {
