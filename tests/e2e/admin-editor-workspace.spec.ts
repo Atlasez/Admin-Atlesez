@@ -996,9 +996,17 @@ test("既存記事では設定を要約表示し、本文までの占有高を�
       ?.getBoundingClientRect().height,
     settings: document.querySelector(".metadata")?.getBoundingClientRect()
       .height,
+    toolbarJustifyContent: getComputedStyle(
+      document.querySelector(".toolbar-actions")!,
+    ).justifyContent,
+    documentActionsJustifyContent: getComputedStyle(
+      document.querySelector(".document-actions")!,
+    ).justifyContent,
   }));
   expect(collapsed.toolbar).toBeLessThan(115);
   expect(collapsed.settings).toBeLessThan(55);
+  expect(collapsed.toolbarJustifyContent).toBe("flex-start");
+  expect(collapsed.documentActionsJustifyContent).toBe("flex-start");
 
   await settings.locator(":scope > summary").click();
   await expect(settings).toHaveAttribute("open", "");

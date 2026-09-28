@@ -371,6 +371,10 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     });
 
     await page.goto("admin/articles/?verify=update-progress");
+    await expect(page.locator("[data-subject]")).toHaveValue("all");
+    await expect(page.locator('[data-subject] option[value="all"]')).toHaveText(
+      "すべての分野（全権限）",
+    );
     const card = page.locator('[data-document-id="update-progress-doc"]');
     await expect(
       card.locator('[data-update-proposal-state="in-progress"]'),
