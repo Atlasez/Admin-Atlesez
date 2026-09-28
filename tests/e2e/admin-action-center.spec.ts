@@ -235,7 +235,10 @@ test("担当項目が表示上限を超えた場合は全件数と一覧への�
 
 test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ page }) => {
   await mockShell(page);
-  await page.goto("admin/action-center/");
+  await page.goto("admin/articles/");
+  await expect(
+    page.getByRole("link", { name: "アクションセンター" }),
+  ).toHaveAttribute("href", "/admin/action-center/");
   const commandButton = page.getByRole("button", {
     name: "操作を検索（⌘K）",
   });
@@ -275,6 +278,9 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(
     dialog.getByRole("heading", { name: "クイック操作" }),
   ).toBeVisible();
+  await expect(
+    dialog.getByRole("option", { name: /アクションセンター/ }),
+  ).toContainText("対応が必要な項目");
   await expect(
     dialog.getByRole("option", { name: /編集・フィードバック/ }),
   ).toBeVisible();
