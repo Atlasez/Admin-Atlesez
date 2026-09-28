@@ -10,7 +10,7 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
   <main class="management-home" data-management-home data-admin-load-surface data-project={project} aria-busy="true">
     <header><p>{projectLabel}</p><h1>管理トップ</h1></header>
     <section aria-label="管理機能">
-      <a href={`/admin/permissions/?project=${project}`} data-manager-only data-admin-site={projectSite} hidden><strong>運営者・担当管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営者・担当管理を開く">→</span></a>
+      <a href={`/admin/permissions/?project=${project}`} data-manager-only data-admin-site={projectSite} hidden><strong>権限管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="権限管理を開く">→</span></a>
       {project === "atlas" && <a href="/admin/member-management/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>運営メンバー管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営メンバー管理を開く">→</span></a>}
       {project === "atlas" && <a href="/admin/genre-roles/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>ジャンル・役割管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="ジャンル・役割管理を開く">→</span></a>}
       {project !== "atlas" && <a href={`/admin/project-profile-requests/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>運営内自己紹介の承認</strong><ul class="role-tags"><li>プロジェクト責任者</li></ul><span aria-label="運営内自己紹介の承認を開く">→</span></a>}

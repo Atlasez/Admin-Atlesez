@@ -116,6 +116,33 @@ for (const [label, path, heading] of pages) {
   });
 }
 
+test("管理トップは権限・メンバー・分野の管理を分けて案内する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.goto("admin/manage/?project=atlas");
+
+  const permissionCard = page.locator(
+    'a[data-manager-only][href="/admin/permissions/?project=atlas"]',
+  );
+  await expect(permissionCard).toBeVisible();
+  await expect(permissionCard.locator("strong")).toHaveText("権限管理");
+  await expect(permissionCard.locator("span")).toHaveAttribute(
+    "aria-label",
+    "権限管理を開く",
+  );
+
+  await expect(
+    page.locator('a[href="/admin/member-management/?project=atlas"] strong'),
+  ).toHaveText("運営メンバー管理");
+  await expect(
+    page.locator('a[href="/admin/genre-roles/?project=atlas"] strong'),
+  ).toHaveText("ジャンル・役割管理");
+  await expect(page.getByText("運営者・担当管理", { exact: true })).toHaveCount(
+    0,
+  );
+});
+
 test("記事編集の未選択案内が横方向に崩れない", async ({ page }) => {
   await mockAdminApis(page);
   await page.goto("admin/editor/");
@@ -223,6 +250,7 @@ test("作業の進め方に運営画面のスクリーンショットが表示�
 });
 
 const responsiveSmokePages = [
+  ["管理トップ", "admin/manage/"],
   ["ポータル", "admin/portal/"],
   ["通知", "admin/notifications/"],
   ["アクションセンター", "admin/action-center/"],
