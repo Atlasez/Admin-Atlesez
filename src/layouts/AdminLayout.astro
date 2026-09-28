@@ -11,6 +11,37 @@ interface Props {
   darkReaderLock?: boolean;
 }
 const { title, description, darkReaderLock = false } = Astro.props;
+const adminPath = Astro.url.pathname.replace(/\/$/, "") || "/";
+const requestedProject = Astro.url.searchParams.get("project");
+const portalRoutes = new Set([
+  "/admin/portal",
+  "/admin/action-center",
+  "/admin/notifications",
+  "/admin/member-profile",
+  "/admin/member-profile/edit",
+  "/admin/member-tasks",
+  "/admin/member-calendar",
+]);
+const nonAtlasRoutes = new Set([
+  "/admin/secretariat",
+  "/admin/semi-platform",
+  "/admin/student-council",
+  "/admin/thinking-cafe",
+  "/admin/profile-requests",
+]);
+const isAtlasAdmin =
+  !portalRoutes.has(adminPath) &&
+  !nonAtlasRoutes.has(adminPath) &&
+  ![
+    "portal",
+    "secretariat",
+    "seminar-platform",
+    "student-council-exchange",
+    "thinking-cafe",
+  ].includes(requestedProject ?? "");
+const adminIconPath = isAtlasAdmin
+  ? "/images/atlas-logo.svg"
+  : "/images/atlasez-logo.png";
 ---
 
 <!doctype html>
@@ -19,6 +50,7 @@ const { title, description, darkReaderLock = false } = Astro.props;
       <BaseHead
         title={title}
         description={description}
+        iconPath={adminIconPath}
         noindex={true}
         enableArticleEnhancements={false}
       />
