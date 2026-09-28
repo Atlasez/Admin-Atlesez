@@ -223,9 +223,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     justify-items: center;
     font: inherit;
     min-height: 4.25rem;
-    outline: 3px solid #fff;
-    outline-offset: 1px;
     padding: 0.85rem;
+    box-shadow: 0 0 0 3px #fff;
     text-align: center;
     text-decoration: none;
   }
@@ -233,7 +232,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .workflow-actions button:hover,
   .workflow-actions button[aria-pressed="true"] {
     border-color: var(--accent-primary);
-    box-shadow: 0 0.25rem 0.8rem #153c6618;
+    box-shadow: 0 0 0 3px #fff, 0 0.25rem 0.8rem #153c6618;
   }
   .workflow-actions strong { font-size: 1.18rem; }
   .admin-page > header:not(.admin-nav) .quiet-header-action {
