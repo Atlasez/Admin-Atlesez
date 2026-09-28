@@ -2511,6 +2511,63 @@ describe("applicant stage server-side access", () => {
     ]);
   });
 
+  it("surfaces legacy reminder normalization and blocks incomplete mark-all", async () => {
+    const memberEnvironment = stageEnv("accepted", false, true);
+    const prepare = memberEnvironment.REPORTS.prepare;
+    const reminderQueries: string[] = [];
+    let writes = 0;
+    memberEnvironment.REPORTS.batch = async () => {
+      writes++;
+      return [];
+    };
+    memberEnvironment.REPORTS.prepare = (query: string) => {
+      const statement = prepare(query);
+      if (
+        query.includes("FROM editorial_task_reminders r JOIN editorial_tasks t")
+      ) {
+        reminderQueries.push(query);
+        statement.first = async <T>() =>
+          query.includes("SELECT 1 AS pending") ? ({ pending: 1 } as T) : null;
+      }
+      return statement;
+    };
+
+    const response = await worker.fetch(
+      loggedInRequest("/api/admin/notifications?limit=20"),
+      memberEnvironment as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      notifications: [],
+      totalNotifications: 0,
+      unreadNotificationsCount: 0,
+      legacyReminderNormalizationPending: true,
+    });
+    expect(reminderQueries.some((query) => query.includes("LIMIT 1"))).toBe(
+      true,
+    );
+    expect(
+      reminderQueries.some(
+        (query) =>
+          query.includes("SELECT s.*") &&
+          query.includes("remind_at_utc IS NULL"),
+      ),
+    ).toBe(false);
+
+    const markAllResponse = await worker.fetch(
+      loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
+      memberEnvironment as never,
+    );
+
+    expect(markAllResponse.status).toBe(409);
+    expect(await markAllResponse.json()).toMatchObject({
+      error:
+        "古いタスクリマインダーを準備中です。時間をおいてから一括既読を再試行してください。",
+    });
+    expect(writes).toBe(0);
+  });
+
   it("counts every SQL notification candidate and marks all unread rows beyond 500", async () => {
     const memberEnvironment = stageEnv("accepted", false, true);
     const notificationDb = new DatabaseSync(":memory:");
