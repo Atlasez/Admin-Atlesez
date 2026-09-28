@@ -2464,8 +2464,10 @@ describe("applicant stage server-side access", () => {
       }
       if (query.startsWith("INSERT INTO admin_notification_reads")) {
         statement.bind = (...values: unknown[]) => {
-          for (let index = 0; index < values.length; index += 3)
-            insertedReadValues.push(values.slice(index, index + 3));
+          const notificationIds = JSON.parse(String(values[2])) as string[];
+          for (const id of notificationIds) {
+            insertedReadValues.push([values[0], id, values[1]]);
+          }
           return statement;
         };
       }
@@ -2520,7 +2522,12 @@ describe("applicant stage server-side access", () => {
         document_id TEXT,
         created_by TEXT
       );
-      CREATE TABLE admin_notification_reads (email TEXT, notification_id TEXT);
+      CREATE TABLE admin_notification_reads (
+        email TEXT,
+        notification_id TEXT,
+        read_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (email, notification_id)
+      );
     `);
     const insertDocument = notificationDb.prepare(
       "INSERT INTO editorial_documents (id, title, created_by) VALUES (?, ?, ?)",
@@ -2556,6 +2563,13 @@ describe("applicant stage server-side access", () => {
       readNotificationIds.add(id);
     }
     const insertedNotificationIds: string[] = [];
+    const insertStatementQueries: string[] = [];
+    const notificationReadBatchSizes: number[] = [];
+    memberEnvironment.REPORTS.batch = async (statements: Statement[] = []) => {
+      notificationReadBatchSizes.push(statements.length);
+      for (const statement of statements) await statement.run();
+      return [];
+    };
     const notificationCandidateQueries: string[] = [];
     const prepare = memberEnvironment.REPORTS.prepare;
     memberEnvironment.REPORTS.prepare = (query: string) => {
@@ -2616,58 +2630,65 @@ describe("applicant stage server-side access", () => {
     expect(notificationCandidateQueries).not.toHaveLength(0);
     expect(readNotificationIds.size).toBe(216);
 
+    const deepCursor = btoa(
+      JSON.stringify({
+        updatedAt: new Date(
+          Date.UTC(2026, 0, 1) - 10_000 * 1_000,
+        ).toISOString(),
+        id: "comment-unread10000",
+      }),
+    )
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
     const deepPageResponse = await worker.fetch(
-      loggedInRequest("/api/admin/notifications?limit=100&offset=9901"),
+      loggedInRequest(
+        `/api/admin/notifications?limit=100&cursor=${deepCursor}`,
+      ),
       memberEnvironment as never,
     );
     expect(deepPageResponse.status).toBe(200);
     const deepPageData = (await deepPageResponse.json()) as {
       notifications: Array<{ id: string }>;
       totalNotifications: number;
-      nextOffset: number | null;
-      hasMoreBeyondLimit: boolean;
+      nextCursor: string | null;
     };
-    expect(deepPageData.notifications).toHaveLength(99);
-    expect(deepPageData.notifications[0]?.id).toBe("comment-unread9901");
+    expect(deepPageData.notifications).toHaveLength(100);
+    expect(deepPageData.notifications[0]?.id).toBe("comment-unread10001");
     expect(deepPageData.totalNotifications).toBe(candidateCount);
-    expect(deepPageData.nextOffset).toBeNull();
-    expect(deepPageData.hasMoreBeyondLimit).toBe(true);
+    expect(deepPageData.nextCursor).toEqual(expect.any(String));
 
-    const beyondLimitResponse = await worker.fetch(
+    const unsupportedOffset = await worker.fetch(
       loggedInRequest("/api/admin/notifications?limit=100&offset=10001"),
       memberEnvironment as never,
     );
-    expect(beyondLimitResponse.status).toBe(200);
-    const beyondLimitData = (await beyondLimitResponse.json()) as {
-      notifications: Array<{ id: string }>;
-      nextOffset: number | null;
-      hasMoreBeyondLimit: boolean;
-    };
-    expect(beyondLimitData.notifications).toHaveLength(0);
-    expect(beyondLimitData.nextOffset).toBeNull();
-    expect(beyondLimitData.hasMoreBeyondLimit).toBe(true);
+    expect(unsupportedOffset.status).toBe(400);
 
     const originalPrepare = memberEnvironment.REPORTS.prepare;
-    const notificationBatchSizes: number[] = [];
-    const originalBatch = memberEnvironment.REPORTS.batch;
     memberEnvironment.REPORTS.prepare = (query: string) => {
       const statement = originalPrepare(query);
       if (query.startsWith("INSERT INTO admin_notification_reads")) {
+        insertStatementQueries.push(query);
         statement.bind = (...values: unknown[]) => {
-          for (let index = 1; index < values.length; index += 3)
-            insertedNotificationIds.push(String(values[index]));
+          statement.boundValues = values;
+          insertedNotificationIds.push(
+            ...(JSON.parse(String(values[2])) as string[]),
+          );
           return statement;
+        };
+        statement.run = async () => {
+          const result = notificationDb
+            .prepare(query)
+            .run(
+              ...(statement.boundValues as (
+                string | number | bigint | null | Uint8Array
+              )[]),
+            );
+          return { meta: { changes: Number(result.changes) } };
         };
       }
       return statement;
     };
-    const batchRecorder = async (statements: unknown[]) => {
-      notificationBatchSizes.push(statements.length);
-      return originalBatch();
-    };
-    memberEnvironment.REPORTS.batch =
-      batchRecorder as typeof memberEnvironment.REPORTS.batch;
-
     const markAllResponse = await worker.fetch(
       loggedInJsonRequest("/api/admin/notifications/read", { all: true }),
       memberEnvironment as never,
@@ -2677,14 +2698,37 @@ describe("applicant stage server-side access", () => {
       ok: true,
       markedCount: 10_389,
     });
+    expect(insertStatementQueries).toHaveLength(21);
+    expect(
+      insertStatementQueries.every(
+        (query) =>
+          query.includes("json_each(?)") &&
+          (query.match(/\?/g) ?? []).length === 3,
+      ),
+    ).toBe(true);
+    expect(notificationReadBatchSizes).toEqual([
+      ...Array<number>(10).fill(2),
+      1,
+    ]);
     expect(insertedNotificationIds).toHaveLength(10_389);
-    expect(notificationBatchSizes).toHaveLength(1);
-    expect(notificationBatchSizes[0]).toBe(315);
     expect(insertedNotificationIds).toEqual(
       Array.from(
         { length: candidateCount },
         (_, index) => `comment-unread${String(index).padStart(4, "0")}`,
       ).filter((id) => !readNotificationIds.has(id)),
+    );
+    expect(
+      notificationDb
+        .prepare(
+          "SELECT notification_id FROM admin_notification_reads WHERE email = ? ORDER BY notification_id",
+        )
+        .all("applicant@example.com")
+        .map((row) => (row as { notification_id: string }).notification_id),
+    ).toEqual(
+      Array.from(
+        { length: candidateCount },
+        (_, index) => `comment-unread${String(index).padStart(4, "0")}`,
+      ).sort(),
     );
     notificationDb.close();
   }, 15_000);

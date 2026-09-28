@@ -348,13 +348,15 @@ test("通知panelは全体の未読件数を示し、通知一覧へ移動でき
   await expect(page).toHaveURL(/\/admin\/notifications\/$/);
 });
 
-test("通知一覧はページ送り・未読全体の絞り込み・すべて既読を扱う", async ({
+test("通知一覧はカーソルページ送り・未読絞り込み・すべて既読を扱う", async ({
   page,
 }) => {
   await mockAdminShell(page);
   const readPayloads: unknown[] = [];
+  const requests: URL[] = [];
   await page.route("**/api/admin/notifications**", async (route) => {
     const url = new URL(route.request().url());
+    requests.push(url);
     if (url.searchParams.get("unreadOnly") === "true") {
       await route.fulfill({
         json: {
@@ -371,41 +373,40 @@ test("通知一覧はページ送り・未読全体の絞り込み・すべて�
           ],
           unreadNotificationsCount: 1,
           totalNotifications: 1,
-          nextOffset: null,
+          nextCursor: null,
         },
       });
       return;
     }
-    const offset = Number(url.searchParams.get("offset") ?? 0);
+    const cursor = url.searchParams.get("cursor");
     await route.fulfill({
       json: {
-        notifications:
-          offset === 0
-            ? [
-                {
-                  id: "comment-newest12345678",
-                  kind: "comment",
-                  title: "新しい通知",
-                  detail: "新しい通知です。",
-                  href: "/admin/editor/",
-                  updatedAt: "2026-08-22T00:00:00.000Z",
-                  read: false,
-                },
-              ]
-            : [
-                {
-                  id: "comment-older12345678",
-                  kind: "comment",
-                  title: "古い通知",
-                  detail: "2件目の通知です。",
-                  href: "/admin/editor/",
-                  updatedAt: "2026-08-01T00:00:00.000Z",
-                  read: true,
-                },
-              ],
+        notifications: !cursor
+          ? [
+              {
+                id: "comment-newest12345678",
+                kind: "comment",
+                title: "新しい通知",
+                detail: "新しい通知です。",
+                href: "/admin/editor/",
+                updatedAt: "2026-08-22T00:00:00.000Z",
+                read: false,
+              },
+            ]
+          : [
+              {
+                id: "comment-older12345678",
+                kind: "comment",
+                title: "古い通知",
+                detail: "2件目の通知です。",
+                href: "/admin/editor/",
+                updatedAt: "2026-08-01T00:00:00.000Z",
+                read: true,
+              },
+            ],
         unreadNotificationsCount: 1,
         totalNotifications: 2,
-        nextOffset: offset === 0 ? 1 : null,
+        nextCursor: cursor ? null : "cursor-older-page",
       },
     });
   });
@@ -437,6 +438,14 @@ test("通知一覧はページ送り・未読全体の絞り込み・すべて�
   expect(modifiedClickPrevented).toBe(false);
   await page.getByRole("button", { name: "さらに読み込む" }).click();
   await expect(page.getByRole("link", { name: "古い通知" })).toBeVisible();
+  expect(
+    requests.some(
+      (request) => request.searchParams.get("cursor") === "cursor-older-page",
+    ),
+  ).toBe(true);
+  expect(requests.every((request) => !request.searchParams.has("offset"))).toBe(
+    true,
+  );
 
   await page.getByRole("button", { name: "未読", exact: true }).click();
   await expect(page.getByRole("link", { name: "古い未読通知" })).toBeVisible();
@@ -444,43 +453,6 @@ test("通知一覧はページ送り・未読全体の絞り込み・すべて�
 
   await page.getByRole("button", { name: "一覧をすべて既読" }).click();
   await expect.poll(() => readPayloads).toEqual([{ all: true }]);
-});
-
-test("通知表示上限に達したら追加件数を知らせてページ送りを止める", async ({
-  page,
-}) => {
-  await mockAdminShell(page);
-  await page.route("**/api/admin/notifications**", async (route) => {
-    await route.fulfill({
-      json: {
-        notifications: [
-          {
-            id: "comment-limited12345678",
-            kind: "comment",
-            title: "上限ページの通知",
-            detail: "表示上限テスト",
-            href: "/admin/editor/",
-            read: false,
-          },
-        ],
-        unreadNotificationsCount: 1,
-        totalNotifications: 10_605,
-        nextOffset: null,
-        hasMoreBeyondLimit: true,
-      },
-    });
-  });
-
-  await page.goto("admin/notifications/");
-
-  await expect(
-    page.getByText(
-      "通知一覧の表示上限（10,000件）に達しました。これより古い通知は表示されていません。",
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "さらに読み込む" }),
-  ).toBeHidden();
 });
 
 test("通知の絞り込み中に古い応答が新しい一覧を上書きしない", async ({

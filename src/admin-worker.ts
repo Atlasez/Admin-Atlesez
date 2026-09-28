@@ -21049,21 +21049,49 @@ async function adminNotifications(
     : " AND 0=1";
   const notificationParams = new URL(request.url).searchParams;
   const requestedLimit = Number(notificationParams.get("limit") ?? "20");
+  const includeUnreadIds = notificationParams.get("includeUnreadIds") === "true";
   const limit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
+    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), includeUnreadIds ? 1_000 : 100)
     : 20;
   const requestedOffset = Number(notificationParams.get("offset") ?? "0");
-  const offset = Number.isFinite(requestedOffset)
-    ? Math.min(Math.max(Math.trunc(requestedOffset), 0), 10_000)
-    : 0;
+  if (!Number.isSafeInteger(requestedOffset) || requestedOffset < 0)
+    return json({ error: "通知ページの位置が不正です。" }, 400);
+  // Offset pagination is retained for older clients, but no longer permits
+  // deep scans. The inbox uses a keyset cursor for pages beyond the first.
+  if (requestedOffset > 10_000)
+    return json({ error: "深いページにはカーソルを使用してください。" }, 400);
+  const offset = requestedOffset;
   const unreadOnly = notificationParams.get("unreadOnly") === "true";
-  const includeUnreadIds = notificationParams.get("includeUnreadIds") === "true";
-  const maxNotificationResults = 10_000;
-  const pageLimit = Math.min(limit, Math.max(0, maxNotificationResults - offset));
-  const unreadNotificationIds: string[] = [];
+  const encodedCursor = notificationParams.get("cursor");
+  let cursor: { updatedAt: string; id: string } | null = null;
+  if (encodedCursor) {
+    try {
+      if (encodedCursor.length > 2_048) throw new Error("cursor too long");
+      const base64 = encodedCursor.replace(/-/g, "+").replace(/_/g, "/");
+      const binary = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const value = JSON.parse(new TextDecoder().decode(bytes)) as {
+        updatedAt?: unknown;
+        id?: unknown;
+      };
+      if (
+        typeof value.updatedAt !== "string" ||
+        !Number.isFinite(Date.parse(value.updatedAt)) ||
+        typeof value.id !== "string" ||
+        value.id.length < 1 ||
+        value.id.length > 512 ||
+        /[\u0000-\u001f\u007f]/.test(value.id)
+      ) throw new Error("invalid cursor");
+      cursor = { updatedAt: value.updatedAt, id: value.id };
+    } catch {
+      return json({ error: "通知ページのカーソルが不正です。" }, 400);
+    }
+  }
+  if (cursor && offset !== 0)
+    return json({ error: "カーソルとoffsetは同時に指定できません。" }, 400);
   const notificationReadIds = new Set<string>();
   const notificationSourceCounts: Array<{ total: number; unread: number }> = [];
-  const notificationFetchLimit = pageLimit > 0 ? offset + pageLimit : 0;
+  const notificationFetchLimit = cursor || includeUnreadIds ? limit + 1 : offset + limit;
   const notificationSourceMetadata = (sql: string) => {
     if (sql.includes("FROM editorial_task_reminders"))
       return { id: "'task-reminder-rule-' || s.reminder_id || '-' || s.remind_at", time: "remind_at", dueReminder: true };
@@ -21093,31 +21121,17 @@ async function adminNotifications(
       : "";
     const dueBindings = "dueReminder" in metadata ? [new Date().toISOString()] : [];
     const readExpr = `EXISTS (SELECT 1 FROM admin_notification_reads nr WHERE nr.email = ? AND nr.notification_id = ${metadata.id})`;
-    if (includeUnreadIds) {
-      const [rows, counts] = await Promise.all([
-        env.REPORTS.prepare(
-          `SELECT ${metadata.id} AS notification_id FROM ${source} WHERE ${dueClause}NOT ${readExpr}`,
-        )
-          .bind(...bindings, ...dueBindings, scope.email)
-          .all<{ notification_id: string }>(),
-        env.REPORTS.prepare(
-          `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${dueClause}1=1`,
-        )
-          .bind(scope.email, ...bindings, ...dueBindings)
-          .first<{ total: number; unread: number }>(),
-      ]);
-      unreadNotificationIds.push(...(rows.results ?? []).map((row) => row.notification_id));
-      notificationSourceCounts.push({
-        total: Number(counts?.total ?? 0),
-        unread: Number(counts?.unread ?? 0),
-      });
-      return { results: [] as (T & { __notification_id: string; __notification_read: number })[] };
-    }
-    const unreadClause = unreadOnly ? `NOT ${readExpr} AND ` : "";
+    const unreadClause = unreadOnly || includeUnreadIds ? `NOT ${readExpr} AND ` : "";
+    const cursorClause = cursor
+      ? `AND (s.${metadata.time} < ? OR (s.${metadata.time} = ? AND ${metadata.id} < ?)) `
+      : "";
+    const cursorBindings = cursor
+      ? [cursor.updatedAt, cursor.updatedAt, cursor.id]
+      : [];
     const [page, counts] = await Promise.all([
       env.REPORTS.prepare(
-        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${dueClause}${unreadClause}1=1 ORDER BY s.${metadata.time} DESC LIMIT ?`,
-      ).bind(scope.email, ...bindings, ...dueBindings, ...(unreadOnly ? [scope.email] : []), notificationFetchLimit)
+        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
+      ).bind(scope.email, ...bindings, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
         .all<T & { __notification_id: string; __notification_read: number }>(),
       env.REPORTS.prepare(
         `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${dueClause}1=1`,
@@ -21397,7 +21411,9 @@ async function adminNotifications(
         href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
         updatedAt: item.remind_at,
       })),
-  ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  ].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
+  );
   const totalNotifications = notificationSourceCounts.reduce(
     (sum, source) => sum + source.total,
     0,
@@ -21406,11 +21422,32 @@ async function adminNotifications(
     (sum, source) => sum + source.unread,
     0,
   );
-  const filteredCount = unreadOnly ? unreadNotificationsCount : totalNotifications;
-  const pageEnd = offset + pageLimit;
-  const notificationsTruncated = filteredCount > pageEnd;
-  const hasMoreBeyondLimit = notificationsTruncated && pageEnd >= maxNotificationResults;
-  const notifications = sortedNotifications.slice(offset, pageEnd);
+  const filteredCount = unreadOnly || includeUnreadIds
+    ? unreadNotificationsCount
+    : totalNotifications;
+  const cursorMode = Boolean(cursor) || includeUnreadIds;
+  const notificationsTruncated = cursorMode
+    ? sortedNotifications.length > limit
+    : filteredCount > offset + limit;
+  const notifications = sortedNotifications.slice(
+    cursorMode ? 0 : offset,
+    (cursorMode ? 0 : offset) + limit,
+  );
+  const lastNotification = notifications.at(-1);
+  const nextCursor = notificationsTruncated && lastNotification
+    ? (() => {
+        const bytes = new TextEncoder().encode(JSON.stringify({
+          updatedAt: lastNotification.updatedAt,
+          id: lastNotification.id,
+        }));
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        return btoa(binary)
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/g, "");
+      })()
+    : null;
   return json({
     notifications: notifications.map((item) => ({
       ...item,
@@ -21419,10 +21456,10 @@ async function adminNotifications(
     notificationsTruncated,
     unreadNotificationsCount,
     totalNotifications: filteredCount,
-    nextOffset: notificationsTruncated && !hasMoreBeyondLimit ? pageEnd : null,
-    hasMoreBeyondLimit,
+    nextOffset: cursorMode ? null : notificationsTruncated ? offset + limit : null,
+    nextCursor,
     ...(includeUnreadIds
-      ? { unreadNotificationIds }
+      ? { unreadNotificationIds: notifications.map((item) => item.id) }
       : {}),
   });
 }
@@ -21439,6 +21476,25 @@ async function markAdminNotificationsRead(
     ids?: unknown;
     all?: unknown;
   } | null;
+  const writeReadIds = async (notificationIds: string[]) => {
+    const idsPerInsert = 500;
+    const insertsPerBatch = 10;
+    const idsPerBatch = idsPerInsert * insertsPerBatch;
+    const readAt = new Date().toISOString();
+    for (let offset = 0; offset < notificationIds.length; offset += idsPerBatch) {
+      const batchIds = notificationIds.slice(offset, offset + idsPerBatch);
+      const statements = [];
+      for (let index = 0; index < batchIds.length; index += idsPerInsert) {
+        const insertIds = batchIds.slice(index, index + idsPerInsert);
+        statements.push(
+          env.REPORTS.prepare(
+            "INSERT INTO admin_notification_reads (email, notification_id, read_at) SELECT ?, value, ? FROM json_each(?) WHERE 1 ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at",
+          ).bind(scope.email, readAt, JSON.stringify(insertIds)),
+        );
+      }
+      await env.REPORTS.batch(statements);
+    }
+  };
   let ids = Array.isArray(payload?.ids)
     ? [
         ...new Set(
@@ -21454,52 +21510,50 @@ async function markAdminNotificationsRead(
       ]
     : [];
   if (payload?.all === true) {
-    const notificationResponse = await adminNotifications(
-      new Request(
-        new URL("/api/admin/notifications?limit=100&includeUnreadIds=true", request.url),
-        { headers: request.headers },
-      ),
-      env,
-      scope,
-    );
-    if (!notificationResponse.ok) return notificationResponse;
-    const notificationData = (await notificationResponse.json()) as {
-      unreadNotificationIds?: unknown;
-    };
-    ids = Array.isArray(notificationData.unreadNotificationIds)
-      ? notificationData.unreadNotificationIds.filter(
-          (id): id is string =>
-            typeof id === "string" &&
-            /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
-        )
-      : [];
+    let cursor: string | null = null;
+    let markedCount = 0;
+    do {
+      const params = new URLSearchParams({
+        limit: "1000",
+        includeUnreadIds: "true",
+      });
+      if (cursor) params.set("cursor", cursor);
+      const notificationResponse = await adminNotifications(
+        new Request(
+          new URL(`/api/admin/notifications?${params}`, request.url),
+          { headers: request.headers },
+        ),
+        env,
+        scope,
+      );
+      if (!notificationResponse.ok) return notificationResponse;
+      const notificationData = (await notificationResponse.json()) as {
+        unreadNotificationIds?: unknown;
+        nextCursor?: unknown;
+      };
+      ids = Array.isArray(notificationData.unreadNotificationIds)
+        ? notificationData.unreadNotificationIds.filter(
+            (id): id is string =>
+              typeof id === "string" &&
+              /^(comment|mention|approved|published|publication-ready|review|publication-review|publication-review-returned|application|feedback-request|task-request|task-reminder|task-reminder-rule)-[a-zA-Z0-9:._+\-]{8,}$/.test(id),
+          )
+        : [];
+      await writeReadIds(ids);
+      markedCount += ids.length;
+      const nextCursor = typeof notificationData.nextCursor === "string"
+        ? notificationData.nextCursor
+        : null;
+      if (nextCursor && nextCursor === cursor)
+        return json({ error: "通知の一括既読処理を続行できませんでした。" }, 500);
+      cursor = ids.length ? nextCursor : null;
+    } while (cursor);
+    return json({ ok: true, markedCount });
   }
   if (payload?.all !== true && ids.length > 500)
     return json({ error: "一度に既読にできる通知は500件までです。" }, 400);
   if (!ids.length && payload?.all !== true)
     return json({ error: "既読にする通知を選択してください。" }, 400);
-  const now = new Date().toISOString();
-  // D1 allows at most 100 bound values per statement. Insert 33 markers per
-  // statement (99 values), then keep each transactional batch below 1,000
-  // statements so mark-all does not make one D1 round trip per 32 markers.
-  const READ_MARKERS_PER_STATEMENT = 33;
-  const MAX_STATEMENTS_PER_BATCH = 1_000;
-  const statements: D1PreparedStatement[] = [];
-  for (let index = 0; index < ids.length; index += READ_MARKERS_PER_STATEMENT) {
-    const markerIds = ids.slice(index, index + READ_MARKERS_PER_STATEMENT);
-    const values = markerIds.map(() => "(?, ?, ?)").join(", ");
-    const bindings = markerIds.flatMap((id) => [scope.email, id, now]);
-    statements.push(
-      env.REPORTS.prepare(
-        `INSERT INTO admin_notification_reads (email, notification_id, read_at) VALUES ${values} ON CONFLICT(email, notification_id) DO UPDATE SET read_at = excluded.read_at`,
-      ).bind(...bindings),
-    );
-  }
-  for (let index = 0; index < statements.length; index += MAX_STATEMENTS_PER_BATCH) {
-    await env.REPORTS.batch(
-      statements.slice(index, index + MAX_STATEMENTS_PER_BATCH),
-    );
-  }
+  await writeReadIds(ids);
   return json({ ok: true, markedCount: ids.length });
 }
 
