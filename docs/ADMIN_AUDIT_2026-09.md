@@ -115,3 +115,25 @@
 ## スクリーンショット検証
 
 Chromeのモック認証セッションで、ポータル・横断タスク・アクションセンター・監査ログを、1440/1024/768/390pxの各幅とライト/ダーク/ブラックの各表示で撮影した。代表画像は作業環境の`/private/tmp/atlasez-goal-screens/`に保存している。全48枚で横スクロール、白い大面積サーフェス、カードの重なりは確認されなかった。1024pxの12条件は`document.documentElement.scrollWidth === innerWidth`も確認した。
+
+## 再監査（2026-09-28）
+
+### 今回マージした高優先度修正
+
+- PR #412：運営情報APIのプロジェクト・担当範囲境界と個人情報表示を修正。
+- PR #413：通知一覧でD1のbind parameter上限を超える問題を修正。
+- PR #417：管理トップの入口表示を実際の権限範囲に合わせ、権限取得失敗時の再試行を追加。
+- PR #417 merge SHA：`3f823b33e21022e0f1cbd71783cb94b14ad183a5`。PR CIおよびmain CIは成功。
+- ローカル検証：`npm run check`（0 errors / 0 warnings / 9 hints）、`npm run lint`、`npm run format:check`、単体テスト288件、全E2E 279件成功・7件skip、290ページbuild、build-info SHA照合、deploy-config検証が成功。
+
+### 本番成果物とデプロイ経路の再照合
+
+- 2026-09-28の公開`https://admin.atlasez.org/build-info.json`はcommit `8404ea00819ec6b846bdc456d0314eb29a26673b`、builtAt `2026-09-27T20:51:28.156Z`を返した。現在のGitHub `main`（`3f823b33e21022e0f1cbd71783cb94b14ad183a5`）と一致しない。
+- Wranglerの読み取り専用`versions list` / `deployments list`では、最新Version `40393aff-8ba2-4052-8e46-8cb25564412f`（Version 667、2026-09-27 20:51:52Z）が`source=wrangler`で存在し、対応Deployment `f24bc266-5c5c-4984-a865-8bcb9fa4d4ab`は当該Versionを100%へ配信している。
+- GitHub Actions履歴には、2026-09-27 20:51Zにmain SHA `8404ea00819ec6b846bdc456d0314eb29a26673b`を対象とした`workflow_dispatch`の「Deploy admin from GitHub」がsuccessで残る。直近のCloudflare Version時刻と整合するため、観測できた最新のデプロイはWorkers BuildsではなくGitHub ActionsからのWrangler upload/deployと判断できる。
+- GitHub `production` Environmentの`protection_rules`は空で、required reviewerは設定されていない。`main` branch protectionはCI check `verify`を必須にし、force-push/deletionを禁止するが、required pull request reviewsは設定されていない。active rulesetもdeletion/non-fast-forward禁止のみ。
+- Cloudflare Workers Buildsの接続先、production branch、build/deploy command、cache設定はDashboardで再確認できていない。ChromeはGoogle OAuth account chooserまで遷移し、認証済み運営画面のライブ確認は未実施。
+- 今回は本番デプロイ、D1操作、rollback、promote、cache purge、route変更を実行していない。SHA不一致の間はこれらを推測で実行しない。追跡Issueは[#407](https://github.com/Atlasez/Admin-Atlesez/issues/407)。
+- PR #414はGoogle OAuth callbackのCSRF、メール検証、subject必須条件に関するテスト追加でopen/behind。専用worktree `/Users/user/Downloads/atlasez-admin-member-portal-auth-loop` が存在するため、この監査ではそのブランチを変更していない。
+
+この節の本番状態は上記の再監査日時点の観測値であり、前段に記録した過去の「本番デプロイ成功」「build-info一致」を現在状態の根拠として扱わない。
