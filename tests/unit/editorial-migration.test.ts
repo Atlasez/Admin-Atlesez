@@ -917,6 +917,8 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(articlesSource).toContain(
       'body: JSON.stringify({ locale: "ja", subject: source.subject, category: source.category, slug: source.slug })',
     );
+    expect(articlesSource).toContain("registeredPublicArticleIds.set(publicArticleKey(source), data.documentId)");
+    expect(articlesSource).toContain("instead of reloading the editorial");
   });
 
   it("編集画面は公開元が学習サイトの記事を下書き原稿にも公開済みとして表示する", async () => {
