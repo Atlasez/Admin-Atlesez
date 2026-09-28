@@ -229,6 +229,99 @@ test("運営メンバー管理は検証用アカウントを専用アーカイ�
   );
 });
 
+test("運営メンバーをアーカイブ・復元すると担当範囲と一覧が同期する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  let archived = false;
+  const actions: string[] = [];
+  await page.route("**/api/admin/genre-overviews*", async (route) => {
+    await route.fulfill({
+      json: {
+        members: archived
+          ? []
+          : [
+              {
+                email: "member@example.org",
+                display_name: "運営メンバー",
+                role: "member",
+                assignments: ["数学"],
+              },
+            ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  await page.route("**/api/admin/report-admin-permissions*", async (route) => {
+    await route.fulfill({
+      json: {
+        permissions: archived
+          ? []
+          : [
+              {
+                email: "member@example.org",
+                display_name: "運営メンバー",
+                subjects: "mathematics",
+              },
+            ],
+        pagination: { hasMore: false, nextCursor: null },
+      },
+    });
+  });
+  await page.route("**/api/admin/member-management", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        json: {
+          members: archived
+            ? [
+                {
+                  email: "member@example.org",
+                  display_name: "運営メンバー",
+                  avatar_url: "",
+                  created_by: "",
+                  archived_by: "manager@example.org",
+                  archived_at: "2026-09-28T00:00:00.000Z",
+                },
+              ]
+            : [],
+        },
+      });
+      return;
+    }
+    const body = route.request().postDataJSON() as {
+      action: "archive" | "restore";
+      email: string;
+    };
+    actions.push(`${body.action}:${body.email}`);
+    archived = body.action === "archive";
+    await route.fulfill({
+      json: { ok: true, status: archived ? "archived" : "active" },
+    });
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.goto("admin/member-management/");
+  await expect(page.locator("[data-table-body]")).toContainText(
+    "member@example.org",
+  );
+  await page.locator("[data-table-body] [data-archive-member]").click();
+  await expect(page.locator("[data-table-body]")).toContainText(
+    "条件に一致するメンバーはいません",
+  );
+  const archive = page.locator("[data-member-archive]");
+  await expect(archive).toBeVisible();
+  await expect(archive).toContainText("member@example.org");
+  await archive.locator("summary").click();
+  await archive.locator("[data-restore-member]").click();
+  await expect(page.locator("[data-table-body]")).toContainText(
+    "member@example.org",
+  );
+  await expect(archive).toBeHidden();
+  expect(actions).toEqual([
+    "archive:member@example.org",
+    "restore:member@example.org",
+  ]);
+});
+
 test("作業の進め方に運営画面のスクリーンショットが表示される", async ({
   page,
 }) => {

@@ -12,7 +12,9 @@ type D1Statement = {
 
 type D1Database = {
   prepare(query: string): D1Statement;
-  batch<T = unknown>(statements: D1Statement[]): Promise<T[]>;
+  batch<T = unknown>(
+    statements: D1Statement[],
+  ): Promise<Array<{ results: T[]; meta?: { changes?: number } }>>;
 };
 
 export type TaskReminderDeliveryEnv = {
@@ -342,12 +344,12 @@ async function finalizeSuccess(
         attempt.delivery_key,
         claimToken,
       );
-  const results = (await env.REPORTS.batch([
+  const results = await env.REPORTS.batch([
     reminderUpdate,
     env.REPORTS.prepare(
       "UPDATE editorial_task_reminder_delivery_attempts SET status='sent',sent_at=?,claim_token=NULL,claimed_at=NULL,provider_message_id=NULL,error_category=NULL,updated_at=? WHERE delivery_key=? AND status='sending' AND claim_token=?",
     ).bind(now, now, attempt.delivery_key, claimToken),
-  ])) as Array<{ meta?: { changes?: number } }>;
+  ]);
   if (results[1]?.meta?.changes !== 1)
     throw new Error("Reminder delivery claim was lost before finalize");
 }
