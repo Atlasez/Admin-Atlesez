@@ -1052,7 +1052,13 @@ describe("standalone macOS app authentication", () => {
             : (null as T);
         statement.run = async () => {
           writes.push({ query, values: statement.boundValues });
-          return { meta: { changes: 1 } };
+          return {
+            meta: {
+              changes: query.includes("DELETE FROM admin_native_app_grants")
+                ? 0
+                : 1,
+            },
+          };
         };
         return statement;
       },

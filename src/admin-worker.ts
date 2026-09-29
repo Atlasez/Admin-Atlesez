@@ -21366,12 +21366,12 @@ async function completeNativeAppLogin(
   const code = `${crypto.randomUUID()}${crypto.randomUUID()}`;
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 2 * 60 * 1_000);
-  const grantResult = await env.REPORTS.prepare(
+  await env.REPORTS.prepare(
     "DELETE FROM admin_native_app_grants WHERE expires_at<=?",
   )
     .bind(now.toISOString())
     .run();
-  await env.REPORTS.prepare(
+  const grantResult = await env.REPORTS.prepare(
     `INSERT INTO admin_native_app_grants
        (code_hash,session_hash,code_challenge,expires_at,created_at)
      SELECT ?,?,?,?,?
