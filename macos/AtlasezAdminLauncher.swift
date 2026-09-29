@@ -18,11 +18,12 @@ struct AtlasezAdminApp: App {
     @StateObject private var model = AdminAppModel()
 
     var body: some Scene {
-        WindowGroup("Atlasez運営") {
+        WindowGroup {
             AdminWindow(model: model)
                 .frame(minWidth: 980, minHeight: 680)
                 .task { model.startIfNeeded() }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("ページ") {
@@ -51,6 +52,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     @Published var needsSignIn = false
     @Published var isAuthenticating = false
     @Published var authError: String?
+    @Published var activeSection = "portal"
 
     private var pendingState: String?
     private var pendingVerifier: String?
@@ -83,6 +85,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     func navigate(to path: String) {
         guard path.hasPrefix("/"), !path.hasPrefix("//") else { return }
         pendingDestination = path
+        activeSection = section(for: path)
         guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { return }
         webView?.load(URLRequest(url: url))
     }
@@ -129,10 +132,12 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         isLoading = true
+        activeSection = section(for: webView.url?.path ?? "")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isLoading = false
+        activeSection = section(for: webView.url?.path ?? "")
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -275,6 +280,14 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     private func safeDestination(_ value: String) -> String {
         guard value.hasPrefix("/"), !value.hasPrefix("//"), !value.contains("\\") else { return initialDestination }
         return value
+    }
+
+    private func section(for path: String) -> String {
+        if path.hasPrefix("/admin/action-center") { return "actions" }
+        if path.hasPrefix("/admin/articles") || path.hasPrefix("/admin/editor") { return "editorial" }
+        if path.hasPrefix("/admin/portal") { return "portal" }
+        if path.hasPrefix("/admin/manage") { return "management" }
+        return activeSection
     }
 
     private func randomBase64URL(bytes count: Int) throws -> String {
@@ -445,81 +458,14 @@ private extension Data {
 
 private struct AdminWindow: View {
     @ObservedObject var model: AdminAppModel
+    @AppStorage("atlasezAdminSidebarCollapsed") private var isSidebarCollapsed = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                Text("Atlasez 運営")
-                    .font(.system(size: 15, weight: .semibold))
-                Spacer()
-                Button { model.goBack() } label: { Image(systemName: "chevron.left") }.help("戻る")
-                Button { model.goForward() } label: { Image(systemName: "chevron.right") }.help("進む")
-                Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }.help("再読み込み")
-            }
-            .buttonStyle(.borderless)
-            .padding(.horizontal, 18)
-            .frame(height: 52)
-            .background(.bar)
-            Divider()
+        Group {
             if model.needsSignIn {
-                VStack(spacing: 18) {
-                    Image(systemName: "square.grid.2x2.fill")
-                        .font(.system(size: 42, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
-                    Text("Atlasez 運営")
-                        .font(.system(size: 26, weight: .semibold))
-                    Text(model.isAuthenticating ? "安全なGoogleログインを開いています…" : "運営用アカウントでログインしてください。")
-                        .foregroundStyle(.secondary)
-                    Button { model.signIn() } label: {
-                        Label(model.isAuthenticating ? "ログイン画面を確認" : "Googleでログイン", systemImage: "person.crop.circle.badge.checkmark")
-                            .frame(minWidth: 190)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isAuthenticating)
-                    if model.isAuthenticating {
-                        Button("キャンセル") { model.cancelSignIn() }.buttonStyle(.link)
-                    }
-                    Text("ログイン情報はこのMacのKeychainに保護して保存されます。")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                signInPanel
             } else {
-              HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("運営")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-                    sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/")
-                    sidebarItem("編集・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/")
-                    sidebarItem("記事", icon: "doc.text", path: "/admin/articles/")
-                    sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas")
-                    Spacer()
-                    Button { model.logout() } label: {
-                        Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .padding(.bottom, 10)
-                }
-                .frame(width: 218)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.45))
-                Divider()
-                ZStack(alignment: .top) {
-                    AdminWebView(model: model)
-                    if model.isLoading {
-                        ProgressView().controlSize(.small).padding(8).frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                }
-              }
+                workspace
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
@@ -529,16 +475,154 @@ private struct AdminWindow: View {
         } message: { Text(model.authError ?? "") }
     }
 
-    private func sidebarItem(_ title: String, icon: String, path: String) -> some View {
-        Button { model.navigate(to: path) } label: {
-            Label(title, systemImage: icon)
-                .font(.system(size: 13, weight: .medium))
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private var signInPanel: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "square.grid.2x2.fill")
+                .font(.system(size: 42, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+            Text("Atlasez 運営")
+                .font(.system(size: 26, weight: .semibold))
+            Text(model.isAuthenticating ? "安全なGoogleログインを開いています…" : "運営用アカウントでログインしてください。")
+                .foregroundStyle(.secondary)
+            Button { model.signIn() } label: {
+                Label(model.isAuthenticating ? "ログイン画面を確認" : "Googleでログイン", systemImage: "person.crop.circle.badge.checkmark")
+                    .frame(minWidth: 190)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isAuthenticating)
+            if model.isAuthenticating {
+                Button("キャンセル") { model.cancelSignIn() }.buttonStyle(.link)
+            }
+            Text("ログイン情報はこのMacのKeychainに保護して保存されます。")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var workspace: some View {
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                HStack {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isSidebarCollapsed.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isSidebarCollapsed ? "sidebar.right" : "sidebar.left")
+                            .font(.system(size: 15, weight: .medium))
+                            .frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
+                    .accessibilityLabel(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 46)
+
+                Divider()
+                    .padding(.bottom, 10)
+
+                if !isSidebarCollapsed {
+                    Text("ワークスペース")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 6)
+                }
+
+                VStack(spacing: 3) {
+                    sidebarItem("運営ポータル", icon: "square.grid.2x2", path: "/admin/portal/", section: "portal")
+                    sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/", section: "actions")
+                    sidebarItem("記事・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/", section: "editorial")
+                    sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
+                }
+                .padding(.horizontal, 8)
+
+                Spacer(minLength: 12)
+
+                Button { model.logout() } label: {
+                    sidebarLabel("ログアウト", icon: "rectangle.portrait.and.arrow.right")
+                }
+                .buttonStyle(.plain)
+                .help("ログアウト")
+                .padding(.horizontal, 8)
+                .padding(.bottom, 10)
+            }
+            .frame(width: isSidebarCollapsed ? 58 : 224)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+            .animation(.easeInOut(duration: 0.18), value: isSidebarCollapsed)
+
+            Divider()
+
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Button { model.goBack() } label: { Image(systemName: "chevron.left") }
+                        .help("戻る")
+                    Button { model.goForward() } label: { Image(systemName: "chevron.right") }
+                        .help("進む")
+                    Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                        .help("再読み込み")
+                    Spacer()
+                }
+                .buttonStyle(.borderless)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .contentShape(Rectangle())
+                .frame(height: 42)
+                .background(.bar)
+
+                Divider()
+
+                ZStack(alignment: .top) {
+                    AdminWebView(model: model)
+                    if model.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sidebarItem(_ title: String, icon: String, path: String, section: String) -> some View {
+        Button { model.navigate(to: path) } label: {
+            sidebarLabel(title, icon: icon)
+                .foregroundStyle(model.activeSection == section ? Color.primary : Color.secondary)
+                .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+                .frame(height: 36)
+                .padding(.horizontal, isSidebarCollapsed ? 0 : 10)
+                .background {
+                    if model.activeSection == section {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.accentColor.opacity(0.16))
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+
+    @ViewBuilder
+    private func sidebarLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .frame(width: 20)
+            if !isSidebarCollapsed {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+        .padding(.horizontal, isSidebarCollapsed ? 0 : 2)
     }
 }
 

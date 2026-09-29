@@ -26,6 +26,7 @@ npm run build:admin:dmg
 
 - macOS 13以降、Apple Silicon / Intelに対応。
 - 画面、API、アップロード、ダウンロード、共同編集、権限は既存の運営サイトを利用する。インターネット接続が必要で、オフライン機能はない。
+- 左サイドバーから運営ポータル、アクションセンター、記事・フィードバック、管理トップへ移動できる。サイドバーはアイコンだけの幅に折りたため、設定はこのMacに保存される。各ページ固有の機能はアプリ内WebViewでそのまま利用できる。
 - Google OAuthの後、Workerはアプリが提示した `http://127.0.0.1:<ephemeral-port>/callback` に短命の認可コードを返す。アプリ独自URLスキームを使わず、PKCE verifierの一致を確認して一度だけ交換する。
 - アプリのログアウトはWorker上のセッションを失効させ、KeychainとWebKit Cookieを消去する。
 
