@@ -17,6 +17,7 @@
     "new:article": "node scripts/new-article.mjs",
     "update:institutions": "node scripts/build-institution-directory.mjs",
     "build": "node scripts/write-build-info.mjs && astro build && npm run search:index",
+    "build:admin:dmg": "bash scripts/build-admin-dmg.sh",
     "build:ci": "node scripts/write-build-info.mjs && astro build",
     "verify:build-info": "node scripts/verify-build-info.mjs",
     "verify:live-admin-production": "node scripts/verify-live-admin-production.mjs",
