@@ -87,6 +87,30 @@ async function mockShell(
         notificationIds: ["n-1"],
         actions: [],
       };
+      const draftDocument = {
+        id: "document:draft-1",
+        kind: "document",
+        title: "下書き査読依頼は記事から行う",
+        detail: "個別記事でフィードバックを依頼してください。",
+        href: "/admin/editor/?document=draft-1",
+        status: "draft",
+        priority: "new",
+        updatedAt: "2026-09-10T00:01:00.000Z",
+        dueAt: null,
+        project: "アトラス",
+        subject: "数学",
+        read: false,
+        actions: [
+          {
+            entityType: "document",
+            entityId: "draft-1",
+            fromState: "draft",
+            toState: "in-review",
+            label: "査読を依頼",
+            expectedUpdatedAt: "2026-09-10T00:01:00.000Z",
+          },
+        ],
+      };
       const items = includeBulkTasks
         ? [
             {
@@ -97,8 +121,9 @@ async function mockShell(
             },
             bulkTask,
             notification,
+            draftDocument,
           ]
-        : [firstTask, notification];
+        : [firstTask, notification, draftDocument];
       await route.fulfill({
         json: {
           generatedAt: "2026-09-10T00:00:00.000Z",
@@ -186,6 +211,9 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   ).toHaveText("未対応の確認");
   await expect(page.locator("[data-action-items] .action-item")).toHaveCount(1);
   await expect(page.locator("[data-action-items]")).not.toContainText(
+    "下書き査読依頼は記事から行う",
+  );
+  await expect(page.locator("[data-action-items]")).not.toContainText(
     "新しいコメント",
   );
   await expect(
@@ -223,7 +251,7 @@ test("担当項目が表示上限を超えた場合は全件数と一覧への�
   const notice = page.locator("[data-action-truncation]");
   await expect(notice).toBeVisible();
   await expect(notice).toContainText(
-    "全51件のうち、この画面には2件を表示しています。",
+    "全51件のうち、この画面には1件を表示しています。",
   );
   await expect(
     notice.getByRole("link", { name: "タスク管理" }),

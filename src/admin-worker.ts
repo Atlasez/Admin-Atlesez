@@ -9950,9 +9950,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
         env.REPORTS.prepare(
           `SELECT COUNT(*) AS count FROM editorial_documents d
             WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
-              AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
-                OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))`,
-        ).bind(...documentVisibility.bindings, scope.email).first<{ count: number }>(),
+              -- 下書きから査読依頼を送る操作は個別記事に限定する。
+              AND d.status = 'in-review' AND d.publication_review_stage IS NOT NULL`,
+        ).bind(...documentVisibility.bindings).first<{ count: number }>(),
         canReviewApplications
           ? env.REPORTS.prepare(
               `SELECT COUNT(*) AS count FROM atlasez_member_applications
@@ -9985,12 +9985,12 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string; scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string }> }) : env.REPORTS.prepare(
       `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
-         FROM editorial_documents d
+        FROM editorial_documents d
         WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
-          AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
-            OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))
+          -- 下書きから査読依頼を送る操作は個別記事に限定する。
+          AND d.status = 'in-review' AND d.publication_review_stage IS NOT NULL
         ORDER BY CASE WHEN d.scheduled_publish_at IS NULL THEN 1 ELSE 0 END,d.scheduled_publish_at,d.updated_at DESC LIMIT 100`,
-    ).bind(...documentVisibility.bindings, scope.email).all<{
+    ).bind(...documentVisibility.bindings).all<{
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
     }>().catch(() => ({ results: [] as Array<{
@@ -10089,7 +10089,6 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   }
   for (const row of documentRows.results ?? []) {
     const dueAt = row.scheduled_publish_at;
-    const canStartReview = row.status === "draft" && row.created_by.toLowerCase() === scope.email.toLowerCase();
     const canDecide = row.status === "in-review" && Boolean(row.publication_review_stage);
     items.push({
       id: `document:${row.id}`,
@@ -10104,7 +10103,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: "アトラス",
       subject: row.subject,
       read: false,
-      actions: canStartReview ? actionCenterTransition("document", row.id, "draft", row.updated_at) : canDecide ? actionCenterTransition("document", row.id, "in-review", row.updated_at) : [],
+      actions: canDecide ? actionCenterTransition("document", row.id, "in-review", row.updated_at) : [],
     });
   }
   for (const row of applicationRows.results ?? []) {

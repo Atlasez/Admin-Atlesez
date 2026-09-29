@@ -683,7 +683,8 @@ const projectHome = new Set<NonNullable<Props["current"]>>(["atlas", "semi-platf
           const data = await response.json().catch(() => ({})) as ActionCenterResponse;
           if (!response.ok) throw new Error(data.error ?? 'アクションを読み込めませんでした。');
           actionCounts = data.counts ?? {};
-          actionCommands = (data.items ?? []).filter((item) => item.title && item.href && (item.actions?.length ?? 0) > 0).map((item) => ({
+          // 下書きからの査読依頼は個別記事の操作に限定し、ポップアップへ混ぜない。
+          actionCommands = (data.items ?? []).filter((item) => item.title && item.href && (item.actions?.length ?? 0) > 0 && !(item.kind === 'document' && item.status === 'draft')).map((item) => ({
             label: item.title!,
             detail: [actionKindLabels[item.kind ?? ''] ?? item.kind ?? '項目', actionPriorityLabels[item.priority ?? ''] ?? actionStatusLabels[item.status ?? ''] ?? '確認が必要'].join('・'),
             group: 'action' as const,
