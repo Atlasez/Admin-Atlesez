@@ -3435,8 +3435,13 @@ async function provisionDiscordAttributeRoles(
       ),
     ),
   ]);
-  const definitions: Array<{ type: string; value: string }> = [
+  const definitions: Array<{ type: string; value: string; subject?: string }> = [
     { type: "manager", value: "運営内運営" },
+    ...Object.entries(APPLICATION_SUBJECT_LABELS).map(([subject, value]) => ({
+      type: "subject",
+      value,
+      subject,
+    })),
     ...MEMBER_AFFILIATION_TYPES.map((value) => ({
       type: "affiliation",
       value,
@@ -3474,6 +3479,12 @@ async function provisionDiscordAttributeRoles(
         "INSERT INTO atlasez_discord_role_mappings (project_id,subject,discord_role_id) VALUES ('atlas','__manager__',?) ON CONFLICT(project_id,subject) DO UPDATE SET discord_role_id=excluded.discord_role_id",
       )
         .bind(roleId)
+        .run();
+    else if (definition.type === "subject")
+      await env.REPORTS.prepare(
+        "INSERT INTO atlasez_discord_role_mappings (project_id,subject,discord_role_id) VALUES ('atlas',?,?) ON CONFLICT(project_id,subject) DO UPDATE SET discord_role_id=excluded.discord_role_id",
+      )
+        .bind(definition.subject ?? "", roleId)
         .run();
     else if (definition.type === "affiliation")
       await env.REPORTS.prepare(
@@ -8756,10 +8767,9 @@ async function provisionApplicationDiscordRoles(
       !roleId ||
       !assignableGuildRoles.some((role) => role.id === roleId)
     ) {
-      const compatibleLabels =
-        kind === "subject" && key === "__manager__"
-          ? [label, "運営メンバー"]
-          : [label];
+      // 「運営メンバー」は基本メンバー用のDiscordロールであり、
+      // 全分野管理者（運営内運営）の代替として扱ってはならない。
+      const compatibleLabels = [label];
       const sameNameRoles = assignableGuildRoles.filter((role) =>
         compatibleLabels.some(
           (compatibleLabel) => role.name.trim() === compatibleLabel.trim(),

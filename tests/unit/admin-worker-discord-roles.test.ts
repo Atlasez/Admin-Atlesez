@@ -55,6 +55,111 @@ afterEach(() => {
 });
 
 describe("Discord managed role synchronization", () => {
+  it("maps only exact manager and subject roles without writing to Discord", async () => {
+    const writes: Array<{ query: string; args: unknown[] }> = [];
+    class ProvisionStatement {
+      private args: unknown[] = [];
+      constructor(private readonly query: string) {}
+      bind(...args: unknown[]) {
+        this.args = args;
+        return this;
+      }
+      async run() {
+        writes.push({ query: this.query, args: this.args });
+        return { meta: { changes: 1 } };
+      }
+      async first<T>() {
+        return null as T | null;
+      }
+      async all<T>() {
+        return { results: [] as T[] };
+      }
+    }
+    const requests: Array<{ url: string; method: string }> = [];
+    fetchSpy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method });
+      if (url.endsWith("/guilds/guild-1"))
+        return Response.json({ id: "guild-1", name: "Atlasez学習サイト運営" });
+      if (url.endsWith("/guilds/guild-1/roles"))
+        return Response.json([
+          { id: "role-manager", name: "運営内運営", position: 50 },
+          { id: "role-member", name: "運営メンバー", position: 40 },
+          { id: "role-math", name: "数学", position: 20 },
+          { id: "role-physics", name: "物理", position: 19 },
+          { id: "role-newton", name: "Newton力学", position: 18 },
+          { id: "role-electromagnetism", name: "電磁気学", position: 17 },
+        ]);
+      throw new Error(`Unexpected Discord request: ${method} ${url}`);
+    });
+    const env = {
+      ADMIN_AUTH_MODE: "local",
+      ADMIN_LOCAL_EMAIL: "manager@example.com",
+      DISCORD_BOT_TOKEN: "test-token",
+      DISCORD_GUILD_ID: "guild-1",
+      DISCORD_GUILD_NAME: "Atlasez学習サイト運営",
+      REPORTS: {
+        prepare: (query: string) => new ProvisionStatement(query),
+        batch: async (statements: ProvisionStatement[]) => {
+          for (const statement of statements) await statement.run();
+          return [];
+        },
+      },
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) },
+    };
+    const response = await worker.fetch(
+      new Request("http://localhost/api/admin/discord-provision-roles", {
+        method: "POST",
+        headers: { origin: "http://localhost" },
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      matched: number;
+      unknownDiscordRoles: Array<{ name: string }>;
+    };
+    expect(body.matched).toBeGreaterThanOrEqual(3);
+    expect(body.unknownDiscordRoles.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(["運営メンバー", "Newton力学", "電磁気学"]),
+    );
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        query: expect.stringContaining("atlasez_discord_role_mappings"),
+        args: ["role-manager"],
+      }),
+    );
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        query: expect.stringContaining("atlasez_discord_role_mappings"),
+        args: ["mathematics", "role-math"],
+      }),
+    );
+    expect(writes).toContainEqual(
+      expect.objectContaining({
+        query: expect.stringContaining("atlasez_discord_role_mappings"),
+        args: ["physics", "role-physics"],
+      }),
+    );
+    const permissionMappings = writes.filter(({ query }) =>
+      query.includes("INSERT INTO atlasez_discord_role_mappings"),
+    );
+    expect(
+      permissionMappings.some(({ args }) => args.includes("role-member")),
+    ).toBe(false);
+    expect(
+      permissionMappings.some(({ args }) => args.includes("role-newton")),
+    ).toBe(false);
+    expect(
+      permissionMappings.some(({ args }) =>
+        args.includes("role-electromagnetism"),
+      ),
+    ).toBe(false);
+    expect(requests.every(({ method }) => method === "GET")).toBe(true);
+  });
+
   it("removes a mapped role that is no longer selected", async () => {
     const requests: Array<{ url: string; method: string }> = [];
     fetchSpy.mockImplementation(async (input, init) => {
@@ -397,7 +502,7 @@ describe("Discord managed role synchronization", () => {
     expect(requests.some(({ url }) => url.includes("student"))).toBe(false);
   });
 
-  it("reuses the existing 運営メンバー role for the global manager mapping", async () => {
+  it("does not use 運営メンバー as a substitute for 運営内運営", async () => {
     class ManagerStatement extends Statement {
       async all<T>() {
         if (this.query.includes("report_admin_permissions"))
@@ -454,17 +559,18 @@ describe("Discord managed role synchronization", () => {
       env as never,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      ok: true,
-      provisioning: { status: "synced", applied: 1, warnings: [] },
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as {
+      provisioning: { status: string; warnings: string[] };
+    };
+    expect(body.provisioning).toMatchObject({
+      status: "failed",
+      warnings: [expect.stringContaining("運営内運営")],
     });
+    expect(requests.every(({ method }) => method === "GET")).toBe(true);
     expect(
-      requests.some(
-        ({ url, method }) =>
-          url.endsWith("/roles/123456789012345678") && method === "PUT",
-      ),
-    ).toBe(true);
+      requests.some(({ url }) => url.includes("/roles/123456789012345678")),
+    ).toBe(false);
   });
 
   it("returns a visible failure when a manually selected role cannot be assigned", async () => {
