@@ -459,6 +459,7 @@ private extension Data {
 private struct AdminWindow: View {
     @ObservedObject var model: AdminAppModel
     @AppStorage("atlasezAdminSidebarCollapsed") private var isSidebarCollapsed = false
+    @AppStorage("atlasezAdminSidebarWidth") private var expandedSidebarWidth = 224.0
 
     var body: some View {
         Group {
@@ -502,88 +503,80 @@ private struct AdminWindow: View {
     }
 
     private var workspace: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                HStack {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isSidebarCollapsed.toggle()
-                        }
-                    } label: {
-                        Image(systemName: isSidebarCollapsed ? "sidebar.right" : "sidebar.left")
-                            .font(.system(size: 15, weight: .medium))
-                            .frame(width: 34, height: 34)
-                            .contentShape(Rectangle())
+        AdminResizableSplitView(
+            sidebarWidth: $expandedSidebarWidth,
+            isSidebarCollapsed: isSidebarCollapsed,
+            sidebar: sidebar,
+            content: mainContent
+        )
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isSidebarCollapsed.toggle()
                     }
-                    .buttonStyle(.plain)
-                    .help(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
-                    .accessibilityLabel(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 10)
-                .frame(height: 46)
-
-                Divider()
-                    .padding(.bottom, 10)
-
-                if !isSidebarCollapsed {
-                    Text("ワークスペース")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 6)
-                }
-
-                VStack(spacing: 3) {
-                    sidebarItem("運営ポータル", icon: "square.grid.2x2", path: "/admin/portal/", section: "portal")
-                    sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/", section: "actions")
-                    sidebarItem("記事・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/", section: "editorial")
-                    sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
-                }
-                .padding(.horizontal, 8)
-
-                Spacer(minLength: 12)
-
-                Button { model.logout() } label: {
-                    sidebarLabel("ログアウト", icon: "rectangle.portrait.and.arrow.right")
+                } label: {
+                    Image(systemName: isSidebarCollapsed ? "sidebar.right" : "sidebar.left")
+                        .font(.system(size: 15, weight: .medium))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("ログアウト")
-                .padding(.horizontal, 8)
-                .padding(.bottom, 10)
+                .help(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
+                .accessibilityLabel(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
+                Spacer(minLength: 0)
             }
-            .frame(width: isSidebarCollapsed ? 58 : 224)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-            .animation(.easeInOut(duration: 0.18), value: isSidebarCollapsed)
+            .padding(.horizontal, 10)
+            .frame(height: 46)
 
-            Divider()
+            VStack(spacing: 3) {
+                sidebarItem("運営ポータル", icon: "square.grid.2x2", path: "/admin/portal/", section: "portal")
+                sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/", section: "actions")
+                sidebarItem("記事・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/", section: "editorial")
+                sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
+            }
+            .padding(.horizontal, 8)
 
-            VStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    Button { model.goBack() } label: { Image(systemName: "chevron.left") }
-                        .help("戻る")
-                    Button { model.goForward() } label: { Image(systemName: "chevron.right") }
-                        .help("進む")
-                    Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
-                        .help("再読み込み")
-                    Spacer()
-                }
-                .buttonStyle(.borderless)
-                .padding(.horizontal, 12)
-                .frame(height: 42)
-                .background(.bar)
+            Spacer(minLength: 12)
 
-                Divider()
+            Button { model.logout() } label: {
+                sidebarLabel("ログアウト", icon: "rectangle.portrait.and.arrow.right")
+            }
+            .buttonStyle(.plain)
+            .help("ログアウト")
+            .padding(.horizontal, 8)
+            .padding(.bottom, 10)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .animation(.easeInOut(duration: 0.18), value: isSidebarCollapsed)
+    }
 
-                ZStack(alignment: .top) {
-                    AdminWebView(model: model)
-                    if model.isLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Button { model.goBack() } label: { Image(systemName: "chevron.left") }
+                    .help("戻る")
+                Button { model.goForward() } label: { Image(systemName: "chevron.right") }
+                    .help("進む")
+                Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                    .help("再読み込み")
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .background(Color(nsColor: .windowBackgroundColor))
+
+            ZStack(alignment: .top) {
+                AdminWebView(model: model)
+                if model.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
         }
@@ -623,6 +616,97 @@ private struct AdminWindow: View {
         }
         .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
         .padding(.horizontal, isSidebarCollapsed ? 0 : 2)
+    }
+}
+
+private struct AdminResizableSplitView<Sidebar: View, Content: View>: NSViewRepresentable {
+    @Binding var sidebarWidth: Double
+    let isSidebarCollapsed: Bool
+    let sidebar: Sidebar
+    let content: Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(sidebarWidth: $sidebarWidth, isSidebarCollapsed: isSidebarCollapsed)
+    }
+
+    func makeNSView(context: Context) -> NSSplitView {
+        let splitView = NSSplitView(frame: .zero)
+        splitView.isVertical = true
+        splitView.dividerStyle = .thin
+
+        let sidebarHost = NSHostingView(rootView: sidebar)
+        let contentHost = NSHostingView(rootView: content)
+        sidebarHost.autoresizingMask = [.height]
+        contentHost.autoresizingMask = [.height]
+        splitView.addSubview(sidebarHost)
+        splitView.addSubview(contentHost)
+
+        context.coordinator.sidebarHost = sidebarHost
+        context.coordinator.contentHost = contentHost
+        splitView.delegate = context.coordinator
+
+        DispatchQueue.main.async {
+            guard splitView.subviews.count == 2 else { return }
+            splitView.setPosition(context.coordinator.position, ofDividerAt: 0)
+            context.coordinator.hasSetInitialPosition = true
+        }
+        return splitView
+    }
+
+    func updateNSView(_ splitView: NSSplitView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.sidebarWidth = $sidebarWidth
+        coordinator.isSidebarCollapsed = isSidebarCollapsed
+        coordinator.sidebarHost?.rootView = sidebar
+        coordinator.contentHost?.rootView = content
+        splitView.delegate = coordinator
+
+        guard splitView.subviews.count == 2 else { return }
+        let desiredPosition = coordinator.position
+        if abs(splitView.subviews[0].frame.width - desiredPosition) > 1 {
+            DispatchQueue.main.async {
+                splitView.setPosition(desiredPosition, ofDividerAt: 0)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSSplitViewDelegate {
+        var sidebarWidth: Binding<Double>
+        var isSidebarCollapsed: Bool
+        var hasSetInitialPosition = false
+        weak var sidebarHost: NSHostingView<Sidebar>?
+        weak var contentHost: NSHostingView<Content>?
+
+        init(sidebarWidth: Binding<Double>, isSidebarCollapsed: Bool) {
+            self.sidebarWidth = sidebarWidth
+            self.isSidebarCollapsed = isSidebarCollapsed
+        }
+
+        var position: CGFloat {
+            isSidebarCollapsed ? 58 : min(max(sidebarWidth.wrappedValue, 180), 360)
+        }
+
+        func splitView(
+            _ splitView: NSSplitView,
+            constrainSplitPosition proposedPosition: CGFloat,
+            ofSubviewAt dividerIndex: Int
+        ) -> CGFloat {
+            guard dividerIndex == 0 else { return proposedPosition }
+            let minimum = isSidebarCollapsed ? 58.0 : 180.0
+            let maximum = isSidebarCollapsed ? 58.0 : min(360.0, Double(splitView.bounds.width - 420))
+            return min(max(proposedPosition, minimum), max(minimum, maximum))
+        }
+
+        func splitViewDidResizeSubviews(_ notification: Notification) {
+            guard hasSetInitialPosition, !isSidebarCollapsed,
+                  let splitView = notification.object as? NSSplitView,
+                  let sidebarHost,
+                  splitView.subviews.first === sidebarHost else { return }
+            let actualWidth = Double(sidebarHost.frame.width)
+            if abs(actualWidth - sidebarWidth.wrappedValue) > 0.5 {
+                sidebarWidth.wrappedValue = actualWidth
+            }
+        }
     }
 }
 
