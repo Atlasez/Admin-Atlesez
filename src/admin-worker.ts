@@ -23156,6 +23156,8 @@ async function handleAdminRequest(
     url.pathname.startsWith("/images/") ||
     url.pathname.startsWith("/data/") ||
     url.pathname === "/build-info.json" ||
+    url.pathname === "/admin-manifest.webmanifest" ||
+    url.pathname === "/admin-sw.js" ||
     url.pathname === "/favicon.svg" ||
     url.pathname === "/admin-codemirror.js"
   ) {

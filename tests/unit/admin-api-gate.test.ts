@@ -37,4 +37,9 @@ describe("admin API baseline scope gate", () => {
     );
     expect(firstDispatch).toBeGreaterThan(gateOffset);
   });
+
+  it("publishes the admin PWA manifest and service worker through the asset allowlist", () => {
+    expect(source).toContain('url.pathname === "/admin-manifest.webmanifest"');
+    expect(source).toContain('url.pathname === "/admin-sw.js"');
+  });
 });
