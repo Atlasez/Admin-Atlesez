@@ -42,9 +42,11 @@ iconset_path="$temp_dir/AppIcon.iconset"
 mkdir -p "$macos_path" "$resources_path" "$iconset_path"
 cp "$info_plist" "$contents_path/Info.plist"
 
-swiftc -O -target arm64-apple-macosx13.0 -framework AppKit \
+swiftc -O -parse-as-library -target arm64-apple-macosx13.0 -framework AppKit -framework SwiftUI \
+  -framework WebKit -framework Security -framework CryptoKit \
   "$launcher_source" -o "$temp_dir/AtlasezAdmin-arm64"
-swiftc -O -target x86_64-apple-macosx13.0 -framework AppKit \
+swiftc -O -parse-as-library -target x86_64-apple-macosx13.0 -framework AppKit -framework SwiftUI \
+  -framework WebKit -framework Security -framework CryptoKit \
   "$launcher_source" -o "$temp_dir/AtlasezAdmin-x86_64"
 lipo -create "$temp_dir/AtlasezAdmin-arm64" "$temp_dir/AtlasezAdmin-x86_64" \
   -output "$macos_path/AtlasezAdmin"
@@ -65,10 +67,9 @@ cat > "$temp_dir/staging/インストール方法.txt" <<'EOF'
 Atlasez運営 for Mac
 
 1. Atlasez運営.app を「Applications」へドラッグしてください。
-2. アプリを開くと、運営サイトがGoogle Chromeの専用ウィンドウで開きます。
-3. 既存のChromeプロファイルを使用するため、ログイン状態・Google認証・サイト機能はChrome版と共有されます。
+2. アプリを開くと、Chromeとは独立した専用ウィンドウで運営サイトが開きます。
+3. Googleログイン時だけ既定ブラウザを使います。認証後はアプリに戻り、セッション情報はこのMacのKeychainに保存されます。
 
-Google Chromeがない場合は、Chromeをインストールするか、表示される案内から既定のブラウザで開いてください。
 このアプリはインターネット接続が必要です。オフライン機能はありません。
 
 初回起動時にmacOSが開発元を確認できないと表示する場合は、アプリをControlキーを押しながらクリックし、「開く」を選んでください。

@@ -1,28 +1,32 @@
-# Atlasez運営のmacOSアプリ
+# Atlasez運営 macOSアプリ
 
-## 配布物の作成
+## 方針
 
-Apple SiliconとIntel Macに対応するUniversalアプリとDMGを、macOS上で作成します。
+ブラウザのタブやChromeアプリモードを起動するランチャーではなく、独自ウィンドウ、サイドバー、アプリメニュー、キーボード操作を持つmacOSアプリとして提供する。業務画面・API・データは既存の `admin.atlasez.org` を利用し、サイト側の機能追加をそのままアプリでも使える構成にする。独立したオフライン製品やネイティブ画面への全面書き換えではない。
+
+## 認証
+
+- Google OAuthはアプリ内WebViewで実行せず、既定ブラウザで行う。アプリは先に127.0.0.1だけにbindした一時ポートのcallback listenerを起動する。
+- WorkerはGoogleログイン後に2分で期限切れになる一回限りのPKCE認可コードを発行する。
+- アプリはコードをWorkerへ交換し、短期セッションをKeychainへ保存する。WorkerのD1には既存と同じくセッショントークンのハッシュだけを保存する。
+- アプリ内WebViewにはSecure/HttpOnly Cookieとしてセッションを渡す。通常のWeb/API権限チェックとログアウト処理は既存Workerを利用する。
+- 新しいOAuthクライアントシークレットはアプリへ埋め込まない。
+
+## ビルド
+
+macOS上でUniversal（Apple Silicon / Intel）アプリとDMGを生成する。
 
 ```bash
 npm run build:admin:dmg
 ```
 
-既定の出力先は`dist-macos/Atlasez-Admin.dmg`です。別の出力先を指定する場合:
+出力先は `dist-macos/Atlasez-Admin.dmg`。配布時にGatekeeper警告をなくすには、Developer ID署名とApple公証が別途必要。
 
-```bash
-bash scripts/build-admin-dmg.sh /path/to/Atlasez-Admin.dmg
-```
+## 要件と制約
 
-## 動作と互換性
+- macOS 13以降、Apple Silicon / Intelに対応。
+- 画面、API、アップロード、ダウンロード、共同編集、権限は既存の運営サイトを利用する。インターネット接続が必要で、オフライン機能はない。
+- Google OAuthの後、Workerはアプリが提示した `http://127.0.0.1:<ephemeral-port>/callback` に短命の認可コードを返す。アプリ独自URLスキームを使わず、PKCE verifierの一致を確認して一度だけ交換する。
+- アプリのログアウトはWorker上のセッションを失効させ、KeychainとWebKit Cookieを消去する。
 
-- アプリは運営サイト本体を、既に起動している場合も含めてGoogle Chromeで開きます。Chromeに起動引数を渡す方式ではなくURLを直接開くため、Chromeが起動済みでも新しいタブへ移動します。
-- 画面、API、ログイン、権限、リアルタイム共同編集、アップロード／ダウンロードなどを複製せず、通常のChrome版と同じサイト機能を使います。Chromeの既存プロファイルを共有するため、既存のGoogleログインとセッションを利用できます。
-- Chromeがない場合は、macOSの既定ブラウザで開く選択肢を表示します。
-- ネット接続が必須です。サイトのオフライン機能は追加しません。
-- macOS 13以降に対応するApple Silicon／Intel Universalバイナリです。
-- 現在の配布物はDeveloper ID署名・Apple公証なしです。外部配布時にGatekeeper警告をなくすには、Developer ID証明書による署名とApple公証が別途必要です。
-
-## 変更・配布
-
-アプリは`https://admin.atlasez.org/admin/atlas/?source=dmg`を開きます。サイトのURLや機能を変える場合は、`macos/AtlasezAdminLauncher.swift`を更新してDMGを再作成してください。Cloudflare Worker、D1、サイトのデプロイ設定には変更を加えません。
+Worker変更の本番利用には、migration `0119_admin_native_app_auth.sql` の適用と、GitHub `main`からの正規Workers Buildsデプロイが必要。手動・ローカルから本番deployしない。

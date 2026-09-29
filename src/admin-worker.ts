@@ -20601,6 +20601,18 @@ const userReturnPath = (value: string | null) => {
     return "/apply/";
   }
   if (parsed.origin !== "https://admin.local") return "/apply/";
+  if (parsed.pathname === "/auth/native-app/complete") {
+    const state = parsed.searchParams.get("state") ?? "";
+    const challenge = parsed.searchParams.get("challenge") ?? "";
+    const redirectURI = parsed.searchParams.get("redirect_uri") ?? "";
+    if (
+      !/^[A-Za-z0-9_-]{43,128}$/.test(state) ||
+      !/^[A-Za-z0-9_-]{43}$/.test(challenge) ||
+      !isNativeAppLoopbackRedirect(redirectURI)
+    )
+      return "/apply/";
+    return `/auth/native-app/complete?state=${encodeURIComponent(state)}&challenge=${encodeURIComponent(challenge)}&redirect_uri=${encodeURIComponent(redirectURI)}`;
+  }
   if (parsed.pathname === "/") return "/";
   if (isAdminPagePath(parsed.pathname)) return adminReturnPath(candidate);
   if (isApplicantPath(parsed.pathname)) return "/applicant/";
@@ -21282,6 +21294,184 @@ async function startGoogleLogin(request: Request, env: Env): Promise<Response> {
     ),
   );
   return new Response(null, { status: 302, headers });
+}
+
+const isNativeAppLoopbackRedirect = (value: string) => {
+  try {
+    const callback = new URL(value);
+    return callback.protocol === "http:" &&
+      callback.hostname === "127.0.0.1" &&
+      Number(callback.port) >= 1 &&
+      Number(callback.port) <= 65535 &&
+      callback.pathname === "/callback" &&
+      !callback.username &&
+      !callback.password &&
+      !callback.search &&
+      !callback.hash;
+  } catch {
+    return false;
+  }
+};
+
+const nativeAppCallbackURL = (redirectURI: string, code: string, state: string) => {
+  const callback = new URL(redirectURI);
+  callback.searchParams.set("code", code);
+  callback.searchParams.set("state", state);
+  return callback.toString();
+};
+
+async function startNativeAppLogin(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (!googleOAuthEnabled(env) || !googleOAuthConfigured(env))
+    return json({ error: "Googleログインはまだ有効ではありません。" }, 404);
+  const url = new URL(request.url);
+  const state = url.searchParams.get("state") ?? "";
+  const challenge = url.searchParams.get("challenge") ?? "";
+  const redirectURI = url.searchParams.get("redirect_uri") ?? "";
+  if (
+    !/^[A-Za-z0-9_-]{43,128}$/.test(state) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(challenge) ||
+    !isNativeAppLoopbackRedirect(redirectURI)
+  )
+    return json({ error: "アプリログインの確認情報が不正です。" }, 400);
+  const returnTo = `/auth/native-app/complete?state=${encodeURIComponent(state)}&challenge=${encodeURIComponent(challenge)}&redirect_uri=${encodeURIComponent(redirectURI)}`;
+  return Response.redirect(
+    `${url.origin}/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
+    302,
+  );
+}
+
+async function completeNativeAppLogin(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const state = url.searchParams.get("state") ?? "";
+  const challenge = url.searchParams.get("challenge") ?? "";
+  const redirectURI = url.searchParams.get("redirect_uri") ?? "";
+  if (
+    !/^[A-Za-z0-9_-]{43,128}$/.test(state) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(challenge) ||
+    !isNativeAppLoopbackRedirect(redirectURI)
+  )
+    return json({ error: "アプリログインの確認情報が不正です。" }, 400);
+  const identity = await getAuthenticatedEmail(request, env);
+  if (identity instanceof Response) return identity;
+  const browserToken = cookieValue(request, ADMIN_SESSION_COOKIE);
+  if (!browserToken)
+    return json({ error: "ログインセッションを確認できませんでした。" }, 401);
+  const sessionHash = await hash(browserToken);
+  const code = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 2 * 60 * 1_000);
+  const grantResult = await env.REPORTS.prepare(
+    "DELETE FROM admin_native_app_grants WHERE expires_at<=?",
+  )
+    .bind(now.toISOString())
+    .run();
+  await env.REPORTS.prepare(
+    `INSERT INTO admin_native_app_grants
+       (code_hash,session_hash,code_challenge,expires_at,created_at)
+     SELECT ?,?,?,?,?
+     WHERE EXISTS (
+       SELECT 1 FROM admin_auth_sessions
+       WHERE session_hash=? AND expires_at>?
+     )`,
+  )
+    .bind(
+      await hash(code),
+      sessionHash,
+      challenge,
+      expiresAt.toISOString(),
+      now.toISOString(),
+      sessionHash,
+      now.toISOString(),
+    )
+    .run();
+  if (!(grantResult as { meta?: { changes?: number } }).meta?.changes)
+    return json({ error: "アプリ用ログインコードを作成できませんでした。" }, 401);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location: nativeAppCallbackURL(redirectURI, code, state),
+      "cache-control": "no-store",
+    },
+  });
+}
+
+async function redeemNativeAppLogin(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  let body: { code?: unknown; verifier?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: "アプリログインの確認情報が不正です。" }, 400);
+  }
+  const code = typeof body.code === "string" ? body.code : "";
+  const verifier = typeof body.verifier === "string" ? body.verifier : "";
+  if (
+    !/^[0-9a-f-]{72}$/.test(code) ||
+    !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier)
+  )
+    return json({ error: "アプリログインの確認情報が不正です。" }, 400);
+  const challengeBytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
+  );
+  const challenge = base64Encode(challengeBytes)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+  const now = new Date().toISOString();
+  const codeHash = await hash(code);
+  const grant = await env.REPORTS.prepare(
+    `SELECT g.session_hash,g.code_challenge,s.email,s.account_id,s.google_subject,s.expires_at
+     FROM admin_native_app_grants g
+     JOIN admin_auth_sessions s ON s.session_hash=g.session_hash
+     WHERE g.code_hash=? AND g.expires_at>? AND s.expires_at>?`,
+  )
+    .bind(codeHash, now, now)
+    .first<{
+      session_hash: string;
+      code_challenge: string;
+      email: string;
+      account_id: string | null;
+      google_subject: string | null;
+      expires_at: string;
+    }>();
+  if (!grant || grant.code_challenge !== challenge)
+    return json({ error: "アプリログインの期限が切れたか、確認に失敗しました。" }, 401);
+  const consumed = await env.REPORTS.prepare(
+    "DELETE FROM admin_native_app_grants WHERE code_hash=? AND expires_at>?",
+  )
+    .bind(codeHash, now)
+    .run();
+  if (!(consumed as { meta?: { changes?: number } }).meta?.changes)
+    return json({ error: "アプリログインはすでに使用されています。" }, 409);
+
+  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const expiresAt = new Date(Math.min(
+    Date.parse(grant.expires_at),
+    Date.now() + ADMIN_SESSION_DURATION_MS,
+  )).toISOString();
+  await env.REPORTS.prepare(
+    `INSERT INTO admin_auth_sessions
+       (session_hash,email,account_id,google_subject,expires_at,created_at)
+     VALUES (?,?,?,?,?,?)`,
+  )
+    .bind(
+      await hash(token),
+      grant.email,
+      grant.account_id,
+      grant.google_subject,
+      expiresAt,
+      now,
+    )
+    .run();
+  return json({ sessionToken: token, expiresAt });
 }
 
 async function completeGoogleLogin(
@@ -22439,6 +22629,18 @@ async function handleAdminRequest(
   }
   if (url.pathname === "/auth/google/login" && request.method === "GET")
     return startGoogleLogin(request, env);
+  if (url.pathname === "/auth/native-app/start" && request.method === "GET")
+    return startNativeAppLogin(request, env);
+  if (
+    url.pathname === "/auth/native-app/complete" &&
+    request.method === "GET"
+  )
+    return completeNativeAppLogin(request, env);
+  if (
+    url.pathname === "/auth/native-app/redeem" &&
+    request.method === "POST"
+  )
+    return redeemNativeAppLogin(request, env);
   if (url.pathname === "/auth/google/link" && request.method === "GET")
     return startGoogleAccountLink(request, env);
   if (url.pathname === "/auth/google/callback" && request.method === "GET")
