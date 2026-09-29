@@ -330,45 +330,45 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .catalog-diagnostics li strong { color: var(--accent-primary); }
   .catalog-diagnostics.is-error { border-left-color: #b24b38; }
   .subject-browser {
-    background: var(--background-secondary);
-    border: 1px solid var(--border-default);
-    border-radius: 1rem;
-    margin: 0 auto 1rem;
+    border-bottom: 1px solid var(--border-default);
+    margin: 0 auto .85rem;
     max-width: 60rem;
-    padding: .85rem 1rem 1rem;
+    padding: 0 0 .65rem;
   }
-  .subject-browser__heading { align-items: center; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .7rem; }
-  .subject-browser__heading h2 { font-size: .98rem; margin: 0; }
-  .subject-browser__heading p { color: var(--text-secondary); font-size: .74rem; margin: .2rem 0 0; }
-  .subject-browser__heading .article-action { flex: 0 0 auto; min-height: 2.15rem; }
-  .subject-browser__items { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .subject-browser__heading { align-items: center; display: flex; gap: .65rem; justify-content: space-between; margin-bottom: .45rem; }
+  .subject-browser__heading h2 { font-size: .84rem; margin: 0; }
+  .subject-browser__heading p { color: var(--text-secondary); font-size: .68rem; margin: 0; }
+  .subject-browser__heading .article-action { flex: 0 0 auto; min-height: 1.9rem; padding: .25rem .5rem; }
+  .subject-browser__items { align-items: center; display: flex; flex-wrap: wrap; gap: .3rem; }
   .subject-browser__item {
     align-items: center;
     background: var(--background-primary);
     border: 1px solid var(--border-default);
-    border-radius: .55rem;
+    border-radius: 999px;
     color: var(--text-primary);
     cursor: pointer;
     display: inline-flex;
-    gap: .45rem;
+    gap: .3rem;
     justify-content: space-between;
-    min-height: 2.55rem;
-    padding: .35rem .6rem;
-    text-align: left;
+    min-height: 2rem;
+    padding: .2rem .5rem;
+    text-align: center;
   }
   .subject-browser__item:hover,
   .subject-browser__item[aria-pressed="true"] { background: color-mix(in srgb, var(--accent-primary) 10%, var(--background-primary)); border-color: var(--accent-primary); }
   .subject-browser__item[aria-pressed="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 24%, transparent); }
-  .subject-browser__item strong { font-size: .78rem; }
-  .subject-browser__item small { color: var(--text-secondary); font-size: .68rem; white-space: nowrap; }
-  .subject-browser__item small::before { content: "表示 "; }
-  .subject-browser__item em { color: var(--text-secondary); display: block; font-size: .64rem; font-style: normal; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subject-browser__item strong { font-size: .74rem; }
+  .subject-browser__item small { color: var(--text-secondary); font-size: .62rem; white-space: nowrap; }
+  .subject-browser__item small::before { content: "("; }
+  .subject-browser__item small::after { content: ")"; }
   .subject-browser__item--all { border-style: dashed; }
+  .subject-browser__empty { margin-top: .35rem; }
+  .subject-browser__empty summary { color: var(--text-secondary); cursor: pointer; font-size: .66rem; }
+  .subject-browser__empty-items { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
   @media (max-width: 600px) {
-    .subject-browser { border-radius: .75rem; padding: .75rem; }
     .subject-browser__heading { align-items: start; }
     .subject-browser__heading p { line-height: 1.45; }
-    .subject-browser__item { flex: 1 1 calc(50% - .45rem); min-width: 8.5rem; }
+    .subject-browser__heading p { max-width: 12rem; text-align: right; }
   }
   .catalog-feedback {
     color: var(--accent-primary);
@@ -914,7 +914,6 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     };
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
-    const categoryLabels = new Map([...category.options].map((option) => [option.value, option.textContent ?? option.value]));
     const catalogRows = (): CatalogRow[] => {
       const rows: CatalogRow[] = items.map((article) => ({ kind: "editorial", article, publicArticle: publicArticles.find((source) => article.source_article_id === source.articleId || publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`), management: "managed" }));
       // The document list is useful before the remote catalog responds. Do not
@@ -945,18 +944,22 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       for (const row of shown) counts.set(rowSubject(row), [...(counts.get(rowSubject(row)) ?? []), row]);
       const options = [...subject.options].filter((option) => option.value !== "all" && !option.hidden && !option.disabled);
       const renderButton = (value: string, label: string, rows: CatalogRow[], all = false) => {
-        const categories = [...new Set(rows.map(rowCategory))].map((slug) => categoryLabels.get(slug) ?? slug).slice(0, 3);
-        const categorySummary = categories.length ? `<em>${esc(categories.join("・"))}${new Set(rows.map(rowCategory)).size > categories.length ? "・ほか" : ""}</em>` : "<em>該当記事なし</em>";
-        return `<button type="button" class="subject-browser__item${all ? " subject-browser__item--all" : ""}" data-subject-quick="${esc(value)}" aria-pressed="${String(subject.value === value)}" aria-label="${esc(label)}（${rows.length}件）"><strong>${esc(label)}</strong>${categorySummary}<small>${rows.length}件</small></button>`;
+        return `<button type="button" class="subject-browser__item${all ? " subject-browser__item--all" : ""}" data-subject-quick="${esc(value)}" aria-pressed="${String(subject.value === value)}" aria-label="${esc(label)}（${rows.length}件）"><strong>${esc(label)}</strong><small>${rows.length}件</small></button>`;
       };
+      const activeOptions = options.filter((option) => (counts.get(option.value) ?? []).length > 0);
+      const emptyOptions = options.filter((option) => (counts.get(option.value) ?? []).length === 0);
+      const emptySubjects = emptyOptions.length
+        ? `<details class="subject-browser__empty"><summary>記事のない分野を表示（${emptyOptions.length}）</summary><div class="subject-browser__empty-items">${emptyOptions.map((option) => renderButton(option.value, option.textContent ?? option.value, [])).join("")}</div></details>`
+        : "";
       subjectBrowser.innerHTML = [
         renderButton("all", "すべての分野", shown, true),
-        ...options.map((option) => renderButton(option.value, option.textContent ?? option.value, counts.get(option.value) ?? [])),
+        ...activeOptions.map((option) => renderButton(option.value, option.textContent ?? option.value, counts.get(option.value) ?? [])),
+        emptySubjects,
       ].join("");
       if (subjectBrowserSummary) {
         subjectBrowserSummary.textContent = subject.value === "all"
-          ? `${shown.length}件を分野ごとに表示中。分野を選ぶと、その分野だけに絞り込めます。`
-          : `${subject.selectedOptions[0]?.textContent ?? subject.value}を表示中。別の分野へすぐ切り替えられます。`;
+          ? `全分野・${shown.length}件`
+          : `${subject.selectedOptions[0]?.textContent ?? subject.value}・${shown.length}件`;
       }
     };
     const hasUnpublishedPublicationChanges = (article: Pick<Article, "published_at" | "updated_at">) => {
