@@ -18,11 +18,12 @@ struct AtlasezAdminApp: App {
     @StateObject private var model = AdminAppModel()
 
     var body: some Scene {
-        WindowGroup("Atlasez運営") {
+        WindowGroup {
             AdminWindow(model: model)
                 .frame(minWidth: 980, minHeight: 680)
                 .task { model.startIfNeeded() }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("ページ") {
@@ -51,6 +52,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     @Published var needsSignIn = false
     @Published var isAuthenticating = false
     @Published var authError: String?
+    @Published var activeSection = "portal"
 
     private var pendingState: String?
     private var pendingVerifier: String?
@@ -83,6 +85,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     func navigate(to path: String) {
         guard path.hasPrefix("/"), !path.hasPrefix("//") else { return }
         pendingDestination = path
+        activeSection = section(for: path)
         guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { return }
         webView?.load(URLRequest(url: url))
     }
@@ -129,10 +132,12 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         isLoading = true
+        activeSection = section(for: webView.url?.path ?? "")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isLoading = false
+        activeSection = section(for: webView.url?.path ?? "")
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -275,6 +280,14 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     private func safeDestination(_ value: String) -> String {
         guard value.hasPrefix("/"), !value.hasPrefix("//"), !value.contains("\\") else { return initialDestination }
         return value
+    }
+
+    private func section(for path: String) -> String {
+        if path.hasPrefix("/admin/action-center") { return "actions" }
+        if path.hasPrefix("/admin/articles") || path.hasPrefix("/admin/editor") { return "editorial" }
+        if path.hasPrefix("/admin/portal") { return "portal" }
+        if path.hasPrefix("/admin/manage") { return "management" }
+        return activeSection
     }
 
     private func randomBase64URL(bytes count: Int) throws -> String {
@@ -445,81 +458,15 @@ private extension Data {
 
 private struct AdminWindow: View {
     @ObservedObject var model: AdminAppModel
+    @AppStorage("atlasezAdminSidebarCollapsed") private var isSidebarCollapsed = false
+    @AppStorage("atlasezAdminSidebarWidth") private var expandedSidebarWidth = 224.0
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                Text("Atlasez 運営")
-                    .font(.system(size: 15, weight: .semibold))
-                Spacer()
-                Button { model.goBack() } label: { Image(systemName: "chevron.left") }.help("戻る")
-                Button { model.goForward() } label: { Image(systemName: "chevron.right") }.help("進む")
-                Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }.help("再読み込み")
-            }
-            .buttonStyle(.borderless)
-            .padding(.horizontal, 18)
-            .frame(height: 52)
-            .background(.bar)
-            Divider()
+        Group {
             if model.needsSignIn {
-                VStack(spacing: 18) {
-                    Image(systemName: "square.grid.2x2.fill")
-                        .font(.system(size: 42, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
-                    Text("Atlasez 運営")
-                        .font(.system(size: 26, weight: .semibold))
-                    Text(model.isAuthenticating ? "安全なGoogleログインを開いています…" : "運営用アカウントでログインしてください。")
-                        .foregroundStyle(.secondary)
-                    Button { model.signIn() } label: {
-                        Label(model.isAuthenticating ? "ログイン画面を確認" : "Googleでログイン", systemImage: "person.crop.circle.badge.checkmark")
-                            .frame(minWidth: 190)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isAuthenticating)
-                    if model.isAuthenticating {
-                        Button("キャンセル") { model.cancelSignIn() }.buttonStyle(.link)
-                    }
-                    Text("ログイン情報はこのMacのKeychainに保護して保存されます。")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                signInPanel
             } else {
-              HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("運営")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-                    sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/")
-                    sidebarItem("編集・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/")
-                    sidebarItem("記事", icon: "doc.text", path: "/admin/articles/")
-                    sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas")
-                    Spacer()
-                    Button { model.logout() } label: {
-                        Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .padding(.bottom, 10)
-                }
-                .frame(width: 218)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.45))
-                Divider()
-                ZStack(alignment: .top) {
-                    AdminWebView(model: model)
-                    if model.isLoading {
-                        ProgressView().controlSize(.small).padding(8).frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                }
-              }
+                workspace
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
@@ -529,16 +476,237 @@ private struct AdminWindow: View {
         } message: { Text(model.authError ?? "") }
     }
 
-    private func sidebarItem(_ title: String, icon: String, path: String) -> some View {
+    private var signInPanel: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "square.grid.2x2.fill")
+                .font(.system(size: 42, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+            Text("Atlasez 運営")
+                .font(.system(size: 26, weight: .semibold))
+            Text(model.isAuthenticating ? "安全なGoogleログインを開いています…" : "運営用アカウントでログインしてください。")
+                .foregroundStyle(.secondary)
+            Button { model.signIn() } label: {
+                Label(model.isAuthenticating ? "ログイン画面を確認" : "Googleでログイン", systemImage: "person.crop.circle.badge.checkmark")
+                    .frame(minWidth: 190)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isAuthenticating)
+            if model.isAuthenticating {
+                Button("キャンセル") { model.cancelSignIn() }.buttonStyle(.link)
+            }
+            Text("ログイン情報はこのMacのKeychainに保護して保存されます。")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var workspace: some View {
+        AdminResizableSplitView(
+            sidebarWidth: $expandedSidebarWidth,
+            isSidebarCollapsed: isSidebarCollapsed,
+            sidebar: sidebar,
+            content: mainContent
+        )
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isSidebarCollapsed.toggle()
+                    }
+                } label: {
+                    Image(systemName: isSidebarCollapsed ? "sidebar.right" : "sidebar.left")
+                        .font(.system(size: 15, weight: .medium))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
+                .accessibilityLabel(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 46)
+
+            VStack(spacing: 3) {
+                sidebarItem("運営ポータル", icon: "square.grid.2x2", path: "/admin/portal/", section: "portal")
+                sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/", section: "actions")
+                sidebarItem("記事・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/", section: "editorial")
+                sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
+            }
+            .padding(.horizontal, 8)
+
+            Spacer(minLength: 12)
+
+            Button { model.logout() } label: {
+                sidebarLabel("ログアウト", icon: "rectangle.portrait.and.arrow.right")
+            }
+            .buttonStyle(.plain)
+            .help("ログアウト")
+            .padding(.horizontal, 8)
+            .padding(.bottom, 10)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .animation(.easeInOut(duration: 0.18), value: isSidebarCollapsed)
+    }
+
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Button { model.goBack() } label: { Image(systemName: "chevron.left") }
+                    .help("戻る")
+                Button { model.goForward() } label: { Image(systemName: "chevron.right") }
+                    .help("進む")
+                Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                    .help("再読み込み")
+                Spacer()
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .background(Color(nsColor: .windowBackgroundColor))
+
+            ZStack(alignment: .top) {
+                AdminWebView(model: model)
+                if model.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    private func sidebarItem(_ title: String, icon: String, path: String, section: String) -> some View {
         Button { model.navigate(to: path) } label: {
-            Label(title, systemImage: icon)
-                .font(.system(size: 13, weight: .medium))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .contentShape(Rectangle())
+            sidebarLabel(title, icon: icon)
+                .foregroundStyle(model.activeSection == section ? Color.primary : Color.secondary)
+                .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+                .frame(height: 36)
+                .padding(.horizontal, isSidebarCollapsed ? 0 : 10)
+                .background {
+                    if model.activeSection == section {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.accentColor.opacity(0.16))
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+
+    @ViewBuilder
+    private func sidebarLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .frame(width: 20)
+            if !isSidebarCollapsed {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
+        .padding(.horizontal, isSidebarCollapsed ? 0 : 2)
+    }
+}
+
+private struct AdminResizableSplitView<Sidebar: View, Content: View>: NSViewRepresentable {
+    @Binding var sidebarWidth: Double
+    let isSidebarCollapsed: Bool
+    let sidebar: Sidebar
+    let content: Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(sidebarWidth: $sidebarWidth, isSidebarCollapsed: isSidebarCollapsed)
+    }
+
+    func makeNSView(context: Context) -> NSSplitView {
+        let splitView = NSSplitView(frame: .zero)
+        splitView.isVertical = true
+        splitView.dividerStyle = .thin
+
+        let sidebarHost = NSHostingView(rootView: sidebar)
+        let contentHost = NSHostingView(rootView: content)
+        sidebarHost.autoresizingMask = [.height]
+        contentHost.autoresizingMask = [.height]
+        splitView.addSubview(sidebarHost)
+        splitView.addSubview(contentHost)
+
+        context.coordinator.sidebarHost = sidebarHost
+        context.coordinator.contentHost = contentHost
+        splitView.delegate = context.coordinator
+
+        DispatchQueue.main.async {
+            guard splitView.subviews.count == 2 else { return }
+            splitView.setPosition(context.coordinator.position, ofDividerAt: 0)
+            context.coordinator.hasSetInitialPosition = true
+        }
+        return splitView
+    }
+
+    func updateNSView(_ splitView: NSSplitView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.sidebarWidth = $sidebarWidth
+        coordinator.isSidebarCollapsed = isSidebarCollapsed
+        coordinator.sidebarHost?.rootView = sidebar
+        coordinator.contentHost?.rootView = content
+        splitView.delegate = coordinator
+
+        guard splitView.subviews.count == 2 else { return }
+        let desiredPosition = coordinator.position
+        if abs(splitView.subviews[0].frame.width - desiredPosition) > 1 {
+            DispatchQueue.main.async {
+                splitView.setPosition(desiredPosition, ofDividerAt: 0)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSSplitViewDelegate {
+        var sidebarWidth: Binding<Double>
+        var isSidebarCollapsed: Bool
+        var hasSetInitialPosition = false
+        weak var sidebarHost: NSHostingView<Sidebar>?
+        weak var contentHost: NSHostingView<Content>?
+
+        init(sidebarWidth: Binding<Double>, isSidebarCollapsed: Bool) {
+            self.sidebarWidth = sidebarWidth
+            self.isSidebarCollapsed = isSidebarCollapsed
+        }
+
+        var position: CGFloat {
+            isSidebarCollapsed ? 58 : min(max(sidebarWidth.wrappedValue, 180), 360)
+        }
+
+        func splitView(
+            _ splitView: NSSplitView,
+            constrainSplitPosition proposedPosition: CGFloat,
+            ofSubviewAt dividerIndex: Int
+        ) -> CGFloat {
+            guard dividerIndex == 0 else { return proposedPosition }
+            let minimum = isSidebarCollapsed ? 58.0 : 180.0
+            let maximum = isSidebarCollapsed ? 58.0 : min(360.0, Double(splitView.bounds.width - 420))
+            return min(max(proposedPosition, minimum), max(minimum, maximum))
+        }
+
+        func splitViewDidResizeSubviews(_ notification: Notification) {
+            guard hasSetInitialPosition, !isSidebarCollapsed,
+                  let splitView = notification.object as? NSSplitView,
+                  let sidebarHost,
+                  splitView.subviews.first === sidebarHost else { return }
+            let actualWidth = Double(sidebarHost.frame.width)
+            if abs(actualWidth - sidebarWidth.wrappedValue) > 0.5 {
+                sidebarWidth.wrappedValue = actualWidth
+            }
+        }
     }
 }
 
