@@ -84,6 +84,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     @Published var isLoading = true
     @Published var needsSignIn = false
     @Published var isAuthenticating = false
+    @Published var sessionExpired = false
     @Published var authError: String?
     private var pendingState: String?
     private var pendingVerifier: String?
@@ -205,10 +206,29 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         if url.path == "/auth/google/login" {
             let destination = url.queryItems["returnTo"] ?? pendingDestination
             decisionHandler(.cancel)
-            startLogin(returningTo: safeDestination(destination))
+            pendingDestination = safeDestination(destination)
+            requireSignIn()
             return
         }
         decisionHandler(.allow)
+    }
+
+    private func requireSignIn() {
+        // A saved native session can expire or be revoked while the app is closed.
+        // Do not launch the user's default browser as a side effect of opening the app;
+        // let them explicitly start OAuth from the in-app sign-in screen instead.
+        isLoading = false
+        sessionExpired = true
+        needsSignIn = true
+        deleteSessionToken()
+        let cookieStore = WKWebsiteDataStore.default().httpCookieStore
+        cookieStore.getAllCookies { cookies in
+            let adminHost = adminOrigin.host ?? ""
+            for cookie in cookies where cookie.name == sessionCookieName
+                && (cookie.domain == adminHost || cookie.domain == ".\(adminHost)") {
+                cookieStore.delete(cookie)
+            }
+        }
     }
 
     private func startLogin(returningTo destination: String) {
@@ -294,6 +314,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         }
         WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie) { [weak self] in
             guard let self, let url = URL(string: self.safeDestination(path), relativeTo: adminOrigin)?.absoluteURL else { return }
+            self.sessionExpired = false
             self.needsSignIn = false
             self.webView?.load(URLRequest(url: url))
         }
@@ -495,7 +516,7 @@ private struct AdminWindow: View {
                 .foregroundStyle(Color.accentColor)
             Text("Atlasez 運営")
                 .font(.system(size: 26, weight: .semibold))
-            Text(model.isAuthenticating ? "安全なGoogleログインを開いています…" : "運営用アカウントでログインしてください。")
+            Text(signInMessage)
                 .foregroundStyle(.secondary)
             Button { model.signIn() } label: {
                 Label(model.isAuthenticating ? "ログイン画面を確認" : "Googleでログイン", systemImage: "person.crop.circle.badge.checkmark")
@@ -512,6 +533,16 @@ private struct AdminWindow: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var signInMessage: String {
+        if model.isAuthenticating {
+            return "安全なGoogleログインを開いています…"
+        }
+        if model.sessionExpired {
+            return "ログイン状態を確認できませんでした。下のボタンから再ログインできます。"
+        }
+        return "運営用アカウントでログインしてください。ログイン時のみブラウザが開き、認証後はアプリに戻ります。"
     }
 
     private var workspace: some View {
