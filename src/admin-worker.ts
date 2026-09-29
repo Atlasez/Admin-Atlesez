@@ -9828,7 +9828,7 @@ type ActionCenterAction = {
 
 type ActionCenterItem = {
   id: string;
-  kind: "task" | "document" | "application" | "approval" | "notification";
+  kind: "task" | "document" | "application" | "approval";
   title: string;
   detail: string;
   href: string;
@@ -9839,8 +9839,6 @@ type ActionCenterItem = {
   project: string | null;
   subject: string | null;
   read: boolean;
-  groupCount?: number;
-  notificationIds?: string[];
   archived?: boolean;
   actions: ActionCenterAction[];
 };
@@ -9868,7 +9866,7 @@ const actionCenterTransition = (entityType: WorkflowEntityType, entityId: string
   }));
 
 /**
- * 記事・タスク・応募・承認・通知を同じ契約で返す作業受信箱。
+ * 記事・タスク・応募・承認を同じ契約で返す作業受信箱。
  * 画面ごとに件数や権限を再計算せず、ここをアクションセンターの正本にする。
  */
 async function actionCenterOverview(request: Request, env: Env): Promise<Response> {
@@ -9952,9 +9950,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
         env.REPORTS.prepare(
           `SELECT COUNT(*) AS count FROM editorial_documents d
             WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
-              AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
-                OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))`,
-        ).bind(...documentVisibility.bindings, scope.email).first<{ count: number }>(),
+              -- 下書きから査読依頼を送る操作は個別記事に限定する。
+              AND d.status = 'in-review' AND d.publication_review_stage IS NOT NULL`,
+        ).bind(...documentVisibility.bindings).first<{ count: number }>(),
         canReviewApplications
           ? env.REPORTS.prepare(
               `SELECT COUNT(*) AS count FROM atlasez_member_applications
@@ -9973,7 +9971,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
             ).bind(...approvalProjectIds).first<{ count: number }>()
           : Promise.resolve({ count: 0 }),
       ]).then((rows) => rows.reduce((total, row) => total + Number(row?.count ?? 0), 0));
-  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, notificationResponse, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary, assignedCount] = await Promise.all([
+  const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary, assignedCount] = await Promise.all([
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
               COALESCE(p.name,t.project_id) AS project_name
@@ -9987,12 +9985,12 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string; scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string }> }) : env.REPORTS.prepare(
       `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
-         FROM editorial_documents d
+        FROM editorial_documents d
         WHERE d.archived_at IS NULL AND ${documentVisibility.sql}
-          AND ((d.status = 'draft' AND lower(COALESCE(d.created_by, '')) = lower(?))
-            OR (d.status = 'in-review' AND d.publication_review_stage IS NOT NULL))
+          -- 下書きから査読依頼を送る操作は個別記事に限定する。
+          AND d.status = 'in-review' AND d.publication_review_stage IS NOT NULL
         ORDER BY CASE WHEN d.scheduled_publish_at IS NULL THEN 1 ELSE 0 END,d.scheduled_publish_at,d.updated_at DESC LIMIT 100`,
-    ).bind(...documentVisibility.bindings, scope.email).all<{
+    ).bind(...documentVisibility.bindings).all<{
       id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string;
       scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string;
     }>().catch(() => ({ results: [] as Array<{
@@ -10019,7 +10017,6 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
         WHERE r.status='pending' AND r.project_id IN (${approvalProjectIds.map(() => "?").join(",")})
         ORDER BY r.submitted_at DESC LIMIT 50`,
     ).bind(...approvalProjectIds).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>(),
-    historyOnly ? Promise.resolve(json({ notifications: [], unreadNotificationsCount: 0 })) : adminNotifications(new Request(new URL("/api/admin/notifications?limit=100", request.url), { headers: request.headers }), env, scope),
     historyOnly ? env.REPORTS.prepare(
       `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,t.archived_at,
               COALESCE(p.name,t.project_id) AS project_name
@@ -10070,9 +10067,6 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     workflowSummaryPromise,
     assignedCountPromise,
   ]);
-  const notificationData = notificationResponse.ok
-    ? await notificationResponse.json().catch(() => ({})) as { notifications?: Array<Record<string, unknown>>; unreadNotificationsCount?: number }
-    : {};
   const items: ActionCenterItem[] = [];
   for (const row of taskRows.results ?? []) {
     items.push({
@@ -10095,7 +10089,6 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   }
   for (const row of documentRows.results ?? []) {
     const dueAt = row.scheduled_publish_at;
-    const canStartReview = row.status === "draft" && row.created_by.toLowerCase() === scope.email.toLowerCase();
     const canDecide = row.status === "in-review" && Boolean(row.publication_review_stage);
     items.push({
       id: `document:${row.id}`,
@@ -10110,7 +10103,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       project: "アトラス",
       subject: row.subject,
       read: false,
-      actions: canStartReview ? actionCenterTransition("document", row.id, "draft", row.updated_at) : canDecide ? actionCenterTransition("document", row.id, "in-review", row.updated_at) : [],
+      actions: canDecide ? actionCenterTransition("document", row.id, "in-review", row.updated_at) : [],
     });
   }
   for (const row of applicationRows.results ?? []) {
@@ -10182,57 +10175,19 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   for (const row of projectApprovalHistoryRows.results ?? []) {
     history.push({ id: `approval:${row.id}`, kind: "approval", title: `運営内自己紹介の承認：${row.email}`, detail: `${row.project_id}のプロフィール変更は${row.status === "approved" ? "承認済み" : "却下済み"}です。`, href: `/admin/project-profile-requests/?project=${encodeURIComponent(row.project_id)}`, status: row.status, priority: "read", updatedAt: row.submitted_at, dueAt: null, project: row.project_id, subject: null, read: true, actions: [] });
   }
-  const groupedNotifications = new Map<string, ActionCenterItem>();
-  for (const raw of notificationData.notifications ?? []) {
-    const id = String(raw.id ?? "");
-    const kind = String(raw.kind ?? "notification");
-    const title = String(raw.title ?? "通知");
-    const href = String(raw.href ?? "/admin/portal/");
-    const key = `${kind}|${title}|${href}`;
-    const existing = groupedNotifications.get(key);
-    if (existing) {
-      existing.groupCount = (existing.groupCount ?? 1) + 1;
-      existing.notificationIds = [...(existing.notificationIds ?? []), id];
-      // グループ内に未読が1件でもあれば、まとめた項目も未読として残す。
-      // 最初に既読通知が来た場合でも、後続の未読通知をフィルターで隠さない。
-      if (raw.read !== true) {
-        existing.read = false;
-        existing.status = "unread";
-        existing.priority = "new";
-      }
-      continue;
-    }
-    const updatedAt = String(raw.updatedAt ?? new Date().toISOString());
-    const read = raw.read === true;
-    groupedNotifications.set(key, {
-      id: `notification:${id}`,
-      kind: "notification",
-      title,
-      detail: String(raw.detail ?? "通知を確認してください。"),
-      href,
-      status: read ? "read" : "unread",
-      priority: read ? "read" : "new",
-      updatedAt,
-      dueAt: null,
-      project: null,
-      subject: null,
-      read,
-      groupCount: 1,
-      notificationIds: id ? [id] : [],
-      actions: [],
-    });
-  }
-  items.push(...groupedNotifications.values());
+  // 通知は通知ベル／通知一覧の正本に分ける。ここでは、人が状態を
+  // 変更する実行操作を持つ項目だけをアクションとして扱う。
+  const actionableItems = items.filter((item) => item.actions.length > 0);
   const sortItems = (rows: ActionCenterItem[]) => rows.sort((a, b) => {
     const priorityRank = { urgent: 0, "due-soon": 1, new: 2, normal: 3, read: 4 };
     return priorityRank[a.priority] - priorityRank[b.priority] || b.updatedAt.localeCompare(a.updatedAt);
   });
-  sortItems(items);
+  sortItems(actionableItems);
   sortItems(history);
   return json({
     view: historyOnly ? "history" : "action",
     generatedAt: new Date().toISOString(),
-    items,
+    items: actionableItems,
     history: history.slice(0, 100),
     counts: {
       // ポータルと同じ getWorkflowSummary を正本にする。アクション項目は
@@ -10240,10 +10195,9 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       // 再集計すると件数がポータルとずれる。
       today: workflowSummary.taskSummary.dueToday,
       dueSoon: workflowSummary.taskSummary.dueSoon,
-      unread: Number(notificationData.unreadNotificationsCount ?? items.filter((item) => item.kind === "notification" && !item.read).length),
       approvals: workflowSummary.pendingApprovals,
       assigned: assignedCount,
-      assignedItemsTruncated: !historyOnly && assignedCount > items.filter((item) => item.kind !== "notification").length,
+      assignedItemsTruncated: !historyOnly && assignedCount > actionableItems.length,
     },
     scope: { email: scope.email, isManager: scope.isManager, subjects: scope.subjects, projects: projectIds },
   });

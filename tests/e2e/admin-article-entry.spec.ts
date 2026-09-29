@@ -438,6 +438,8 @@ test.describe("A/D 原稿一覧の作業導線", () => {
     await expect(
       page.locator('[data-subject-quick="mathematics"]'),
     ).toContainText("2件");
+    await expect(page.locator(".subject-browser__item em")).toHaveCount(0);
+    await expect(page.locator(".subject-browser__empty")).toBeVisible();
     await page.locator('[data-subject-quick="mathematics"]').click();
     await expect(page.locator("[data-subject]")).toHaveValue("mathematics");
     await expect(page.locator("[data-list] .article")).toHaveCount(2);

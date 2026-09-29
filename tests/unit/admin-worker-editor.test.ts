@@ -1228,7 +1228,7 @@ describe("admin worker editor APIs", () => {
     });
   });
 
-  it("keeps a grouped action-center notification unread if any grouped event is unread", async () => {
+  it("keeps notifications out of the action-center action queue", async () => {
     class NotificationStatement extends EmptyStatement {
       override async all<T>() {
         if (
@@ -1295,22 +1295,12 @@ describe("admin worker editor APIs", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      counts: { unread: 1 },
-      items: [
-        {
-          kind: "notification",
-          groupCount: 2,
-          notificationIds: [
-            "comment-comment-newest1",
-            "comment-comment-older001",
-          ],
-          read: false,
-          status: "unread",
-          priority: "new",
-        },
-      ],
-    });
+    const data = (await response.json()) as {
+      items: Array<{ kind: string; actions: unknown[] }>;
+      counts: Record<string, unknown>;
+    };
+    expect(data.items).toEqual([]);
+    expect(data.counts).not.toHaveProperty("unread");
   });
 
   it("uses the shared task summary for action-center due counts", async () => {
@@ -1350,7 +1340,7 @@ describe("admin worker editor APIs", () => {
     });
   });
 
-  it("keeps a grouped action-center notification unread when any event is unread", async () => {
+  it("does not expose unread comments as executable action-center items", async () => {
     class NotificationStatement extends EmptyStatement {
       override async all<T>() {
         if (this.query.includes("WHERE d.created_by = ? AND c.created_by != ?"))
@@ -1407,27 +1397,11 @@ describe("admin worker editor APIs", () => {
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as {
-      items: Array<{
-        kind: string;
-        read: boolean;
-        status: string;
-        priority: string;
-        groupCount?: number;
-        notificationIds?: string[];
-      }>;
-      counts: { unread: number };
+      items: Array<{ kind: string; actions: unknown[] }>;
+      counts: Record<string, unknown>;
     };
-    const groupedNotification = data.items.find(
-      (item) => item.kind === "notification",
-    );
-    expect(groupedNotification).toMatchObject({
-      read: false,
-      status: "unread",
-      priority: "new",
-      groupCount: 2,
-      notificationIds: ["comment-newest123", "comment-older1234"],
-    });
-    expect(data.counts.unread).toBe(1);
+    expect(data.items).toEqual([]);
+    expect(data.counts).not.toHaveProperty("unread");
   });
 
   it("keeps action-center application data inside manager project scope", async () => {
@@ -1504,7 +1478,7 @@ describe("admin worker editor APIs", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(applicationQueries.length).toBeGreaterThanOrEqual(2);
+    expect(applicationQueries.length).toBeGreaterThanOrEqual(1);
     for (const query of applicationQueries) {
       expect(query.sql).toContain("project_slug IN (?)");
       if (query.sql.includes("SELECT s.*")) {
@@ -1672,10 +1646,10 @@ describe("admin worker editor APIs", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(documentQuery).toContain("d.status = 'draft'");
+    expect(documentQuery).not.toContain("d.status = 'draft'");
     expect(documentQuery).toContain("d.status = 'in-review'");
     expect(documentQuery).toContain("d.publication_review_stage IS NOT NULL");
-    expect(documentBindings).toContain("local-editor@atlasez.test");
+    expect(documentBindings).not.toContain("local-editor@atlasez.test");
   });
 
   it("uses bounded cursor pages for profile change requests", async () => {
