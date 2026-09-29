@@ -5437,6 +5437,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     if (!reviewDocumentId && !sourceArticleId && !isNewDocument) root.removeAttribute("data-editor-starting");
     initializeSelects();
     const loadEditorEntry = async () => {
+      // 編集対象を指定した入口では、原稿一覧の取得に失敗しても未選択時の
+      // 開始パネルを表示しない。表示すると、対象記事の読み込み失敗を
+      // 「公開記事を運営管理へ登録する」画面と誤認させてしまう。
+      if (reviewDocumentId || sourceArticleId || isNewDocument) empty.hidden = true;
       await loadDocuments();
       if (reviewDocumentId) {
         await openDocument(reviewDocumentId);
