@@ -936,7 +936,10 @@ describe("standalone macOS app authentication", () => {
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get("location")!);
     expect(location.pathname).toBe("/auth/google/login");
-    const returnTo = new URL(location.searchParams.get("returnTo")!, "https://admin.example");
+    const returnTo = new URL(
+      location.searchParams.get("returnTo")!,
+      "https://admin.example",
+    );
     expect(returnTo.pathname).toBe("/auth/native-app/complete");
     expect(returnTo.searchParams.get("state")).toBe(state);
     expect(returnTo.searchParams.get("challenge")).toBe(challenge);
@@ -946,27 +949,46 @@ describe("standalone macOS app authentication", () => {
   it("exchanges a valid one-time PKCE grant for a server-side admin session", async () => {
     const code = "11111111-1111-4111-8111-111111111111".repeat(2);
     const verifier = "verifier_value_0123456789abcdefghijklmnopqrstuvwxyz";
-    const challenge = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)))]
+    const challenge = [
+      ...new Uint8Array(
+        await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(verifier),
+        ),
+      ),
+    ]
       .map((byte) => String.fromCharCode(byte))
       .join("");
-    const challengeEncoded = btoa(challenge).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+    const challengeEncoded = btoa(challenge)
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replace(/=+$/, "");
     let grantConsumed = false;
     const writes: { query: string; values: unknown[] }[] = [];
     const database = {
       prepare(query: string) {
         const statement = new Statement(query);
         const baseBind = statement.bind.bind(statement);
-        statement.bind = (...values: unknown[]) => { baseBind(...values); return statement; };
+        statement.bind = (...values: unknown[]) => {
+          baseBind(...values);
+          return statement;
+        };
         statement.first = async <T>() => {
           if (query.includes("FROM admin_native_app_grants g"))
-            return (grantConsumed ? null : {
-              session_hash: "browser-session-hash",
-              code_challenge: challengeEncoded,
-              email: "admin@example.com",
-              account_id: "account-1",
-              google_subject: "google-subject",
-              expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            }) as T;
+            return (
+              grantConsumed
+                ? null
+                : {
+                    session_hash: "browser-session-hash",
+                    code_challenge: challengeEncoded,
+                    email: "admin@example.com",
+                    account_id: "account-1",
+                    google_subject: "google-subject",
+                    expires_at: new Date(
+                      Date.now() + 60 * 60 * 1000,
+                    ).toISOString(),
+                  }
+            ) as T;
           return null as T;
         };
         statement.run = async () => {
@@ -990,10 +1012,17 @@ describe("standalone macOS app authentication", () => {
       { ...env("google-oauth"), REPORTS: database } as never,
     );
     expect(response.status).toBe(200);
-    const payload = await response.json() as { sessionToken: string; expiresAt: string };
+    const payload = (await response.json()) as {
+      sessionToken: string;
+      expiresAt: string;
+    };
     expect(payload.sessionToken).toMatch(/^[0-9a-f-]{72}$/);
     expect(Date.parse(payload.expiresAt)).toBeGreaterThan(Date.now());
-    expect(writes.some(({ query }) => query.includes("INSERT INTO admin_auth_sessions"))).toBe(true);
+    expect(
+      writes.some(({ query }) =>
+        query.includes("INSERT INTO admin_auth_sessions"),
+      ),
+    ).toBe(true);
 
     const replay = await worker.fetch(
       new Request("https://admin.example/auth/native-app/redeem", {
@@ -1014,9 +1043,13 @@ describe("standalone macOS app authentication", () => {
     const database = {
       prepare(query: string) {
         const statement = new Statement(query);
-        statement.first = async <T>() => query.includes("FROM admin_auth_sessions s")
-          ? ({ email: "admin@example.com", canonical_email: "admin@example.com" } as T)
-          : null as T;
+        statement.first = async <T>() =>
+          query.includes("FROM admin_auth_sessions s")
+            ? ({
+                email: "admin@example.com",
+                canonical_email: "admin@example.com",
+              } as T)
+            : (null as T);
         statement.run = async () => {
           writes.push({ query, values: statement.boundValues });
           return { meta: { changes: 1 } };
@@ -1026,9 +1059,12 @@ describe("standalone macOS app authentication", () => {
       batch: async () => [],
     };
     const response = await worker.fetch(
-      new Request(`https://admin.example/auth/native-app/complete?state=${state}&challenge=${challenge}&redirect_uri=${encodeURIComponent(redirectURI)}`, {
-        headers: { cookie: "atlasez_admin_session=existing-session-token" },
-      }),
+      new Request(
+        `https://admin.example/auth/native-app/complete?state=${state}&challenge=${challenge}&redirect_uri=${encodeURIComponent(redirectURI)}`,
+        {
+          headers: { cookie: "atlasez_admin_session=existing-session-token" },
+        },
+      ),
       { ...env("google-oauth"), REPORTS: database } as never,
     );
     expect(response.status).toBe(302);
@@ -1039,7 +1075,9 @@ describe("standalone macOS app authentication", () => {
     expect(callback.pathname).toBe("/callback");
     expect(callback.searchParams.get("state")).toBe(state);
     expect(callback.searchParams.get("code")).toMatch(/^[0-9a-f-]{72}$/);
-    const grantInsert = writes.find(({ query }) => query.includes("INSERT INTO admin_native_app_grants"));
+    const grantInsert = writes.find(({ query }) =>
+      query.includes("INSERT INTO admin_native_app_grants"),
+    );
     expect(grantInsert?.values[1]).toMatch(/^[a-f0-9]{64}$/);
     expect(grantInsert?.values[2]).toBe(challenge);
     expect(grantInsert?.query).toContain("WHERE EXISTS");
@@ -1050,14 +1088,15 @@ describe("standalone macOS app authentication", () => {
       prepare(query: string) {
         const statement = new Statement(query);
         if (query.includes("FROM admin_native_app_grants g"))
-          statement.first = async <T>() => ({
-            session_hash: "browser-session-hash",
-            code_challenge: "not-the-challenge",
-            email: "admin@example.com",
-            account_id: "account-1",
-            google_subject: "google-subject",
-            expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          }) as T;
+          statement.first = async <T>() =>
+            ({
+              session_hash: "browser-session-hash",
+              code_challenge: "not-the-challenge",
+              email: "admin@example.com",
+              account_id: "account-1",
+              google_subject: "google-subject",
+              expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            }) as T;
         return statement;
       },
       batch: async () => [],
@@ -1066,7 +1105,10 @@ describe("standalone macOS app authentication", () => {
       new Request("https://admin.example/auth/native-app/redeem", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: "11111111-1111-4111-8111-111111111111".repeat(2), verifier: "v".repeat(43) }),
+        body: JSON.stringify({
+          code: "11111111-1111-4111-8111-111111111111".repeat(2),
+          verifier: "v".repeat(43),
+        }),
       }),
       { ...env("google-oauth"), REPORTS: database } as never,
     );
