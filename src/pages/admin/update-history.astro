@@ -1,35 +1,32 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
-import { ADMIN_UPDATES } from "../../data/admin-updates";
-
-const kinds = [...new Set(ADMIN_UPDATES.map((update) => update.kind))];
-const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
 ---
 
 <AdminLayout title="アップデート履歴" description="運営サイトの更新履歴">
   <main class="update-history" data-update-history data-admin-load-surface aria-busy="true">
     <header class="page-heading"><div><h1>アップデート履歴</h1></div><a href="/admin/atlas/">← 管理トップ</a></header>
     <section class="history-summary" aria-label="更新履歴の概要">
-      <div><span>掲載件数</span><strong data-summary-total>{ADMIN_UPDATES.length}</strong></div>
-      <div><span>機能追加</span><strong data-summary-features>{ADMIN_UPDATES.filter((update) => update.kind === "機能追加").length}</strong></div>
-      <div><span>改善・運用</span><strong data-summary-improvements>{ADMIN_UPDATES.filter((update) => update.kind === "改善" || update.kind === "運用").length}</strong></div>
-      <div><span>最終更新</span><strong data-summary-latest>{ADMIN_UPDATES[0]?.date.replaceAll("-", "/") ?? "—"}</strong></div>
+      <div><span>掲載件数</span><strong data-summary-total>—</strong></div>
+      <div><span>機能追加</span><strong data-summary-features>—</strong></div>
+      <div><span>改善・運用</span><strong data-summary-improvements>—</strong></div>
+      <div><span>最終更新</span><strong data-summary-latest>—</strong></div>
     </section>
     <section class="history-panel" aria-labelledby="history-list-heading">
-      <div class="panel-heading"><h2 id="history-list-heading">変更内容</h2><output data-result-count aria-live="polite">{ADMIN_UPDATES.length}件</output></div>
+      <div class="panel-heading"><h2 id="history-list-heading">変更内容</h2><output data-result-count aria-live="polite">読み込み中</output></div>
       <form class="history-filters" data-history-filters role="search">
         <label class="search-field">キーワード<input type="search" name="q" placeholder="変更内容・バージョンを検索" autocomplete="off" /></label>
-        <label>種別<select name="kind"><option value="all">すべての種別</option>{kinds.map((kind) => <option value={kind}>{kind}</option>)}</select></label>
-        <label>対象<select name="project"><option value="all">全プロジェクト</option>{projects.map((project) => <option value={project}>{project}</option>)}</select></label>
+        <label>種別<select name="kind"><option value="all">すべての種別</option></select></label>
+        <label>対象<select name="project"><option value="all">全プロジェクト</option></select></label>
         <button type="reset" class="reset-button">条件をリセット</button>
       </form>
       <div class="history-list" data-history-list aria-live="polite">
-        {ADMIN_UPDATES.map((update) => <button class="history-row" type="button" data-history-row data-kind={update.kind} data-project={update.project} data-search={`${update.version} ${update.title} ${update.summary} ${update.project} ${update.author}`} data-version={update.version} data-date={update.date} data-title={update.title} data-summary={update.summary} data-author={update.author} data-href={update.href ?? ""}><time datetime={update.date}>{update.date.replaceAll("-", "/")}<small>{update.version}</small></time><span class:list={["history-icon", update.tone]} aria-hidden="true">↗</span><span class="history-copy"><strong>{update.title}</strong><small>{update.summary}</small></span><span class:list={["history-kind", update.tone]}>{update.kind}</span><span class="history-project">{update.project}</span><span class="row-chevron" aria-hidden="true">›</span></button>)}
-        <p class="empty-state" data-empty-state data-admin-empty-state hidden>条件に一致する更新履歴はありません。</p>
+        <div class="history-skeleton" data-admin-load-skeleton aria-hidden="true">
+          {Array.from({ length: 6 }, () => <div class="history-skeleton-row"><i class="skeleton-date"></i><i class="skeleton-icon"></i><span class="skeleton-copy"><i></i><i></i></span><i class="skeleton-kind"></i><i class="skeleton-project"></i><i class="skeleton-chevron"></i></div>)}
+        </div>
       </div>
       <AdminRetryNotice message="アップデート履歴を読み込めませんでした。" />
-      <div class="history-pagination" data-history-pagination hidden style="display:none">
+      <div class="history-pagination" data-history-pagination hidden>
         <span data-history-pagination-summary>30件を表示中</span>
         <button type="button" data-history-load-more>さらに読み込む</button>
       </div>
@@ -78,7 +75,9 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
       const project = String(data.get("project") ?? "all");
       let visible = 0;
       rows.forEach((row) => { const matches = (!query || String(row.dataset.search).toLocaleLowerCase("ja-JP").includes(query)) && (kind === "all" || row.dataset.kind === kind) && (project === "all" || row.dataset.project === project); row.hidden = !matches; if (matches) visible += 1; });
-      count.value = `${visible}件`;
+      if (root.getAttribute("aria-busy") !== "true") {
+        count.value = `${visible}件`;
+      }
       const empty = root.querySelector<HTMLElement>("[data-empty-state]");
       if (empty) empty.hidden = visible !== 0;
     };
@@ -119,8 +118,10 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
         paginationSummary.textContent = `${loadedCount}件を表示中`;
         loadMore.textContent = "さらに読み込む";
         retryController.success();
+        filter();
       } catch (error) {
         retryController.fail(error);
+        count.value = "取得できません";
       } finally {
         loading = false;
         loadMore.disabled = !hasMore;
@@ -161,5 +162,460 @@ const projects = [...new Set(ADMIN_UPDATES.map((update) => update.project))];
 </style>
 
 <style>
-  .history-pagination[hidden] { display: none !important; }
+  .update-history {
+    max-width: 1280px;
+    padding: 0 clamp(1rem, 2.5vw, 2rem) 3.5rem;
+  }
+
+  .page-heading {
+    padding: clamp(1.4rem, 3vw, 2.25rem) 0 1rem;
+  }
+
+  .page-heading h1 {
+    letter-spacing: -0.035em;
+  }
+
+  .page-heading > a {
+    align-items: center;
+    border: 1px solid var(--border-default);
+    border-radius: 0.45rem;
+    display: inline-flex;
+    min-height: 2.4rem;
+    padding: 0.45rem 0.7rem;
+    transition:
+      border-color 140ms ease,
+      color 140ms ease,
+      background-color 140ms ease;
+  }
+
+  .page-heading > a:hover,
+  .page-heading > a:focus-visible {
+    background: var(--background-secondary);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+  }
+
+  .history-summary {
+    gap: 0.75rem;
+    margin: 1rem 0 1.25rem;
+  }
+
+  .history-summary > div {
+    border-radius: 0.65rem;
+    min-height: 5.2rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .history-summary strong {
+    font-size: clamp(1.15rem, 2vw, 1.45rem);
+  }
+
+  .history-panel {
+    background: color-mix(in srgb, var(--background-secondary) 28%, transparent);
+    border-radius: 0.8rem;
+    padding: clamp(0.8rem, 2vw, 1.25rem);
+  }
+
+  .panel-heading {
+    gap: 1rem;
+  }
+
+  .panel-heading output {
+    background: var(--background-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+  }
+
+  .history-filters {
+    gap: 0.75rem;
+    grid-template-columns: minmax(12rem, 1fr) minmax(9rem, 0.35fr) minmax(9rem, 0.4fr) auto;
+    padding: 1rem 0.1rem;
+  }
+
+  .history-filters input,
+  .history-filters select {
+    border-radius: 0.45rem;
+    min-height: 2.65rem;
+    transition: border-color 140ms ease;
+  }
+
+  .history-filters input:focus-visible,
+  .history-filters select:focus-visible {
+    border-color: var(--accent-primary);
+    outline: 2px solid color-mix(in srgb, var(--accent-primary) 22%, transparent);
+    outline-offset: 1px;
+  }
+
+  .reset-button,
+  .history-pagination button,
+  .dialog-secondary {
+    border-radius: 0.45rem;
+    transition:
+      border-color 140ms ease,
+      color 140ms ease,
+      background-color 140ms ease;
+  }
+
+  .history-list {
+    border: 1px solid var(--border-default);
+    border-radius: 0.65rem;
+    overflow: hidden;
+  }
+
+  :global(.history-list .history-row) {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border-default);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: 7.4rem 2rem minmax(0, 1fr) 5.5rem 8.5rem 1rem;
+    min-height: 4.8rem;
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    width: 100%;
+  }
+
+  :global(.history-list .history-row:last-of-type) {
+    border-bottom: 0;
+  }
+
+  :global(.history-list .history-row:hover) {
+    background: color-mix(in srgb, var(--accent-primary) 7%, var(--background-secondary));
+  }
+
+  :global(.history-list .history-row:focus-visible) {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+  }
+
+  :global(.history-list .history-row[hidden]) {
+    display: none;
+  }
+
+  :global(.history-list .history-row time) {
+    color: var(--text-secondary);
+    display: grid;
+    font-size: 0.72rem;
+    gap: 0.2rem;
+    white-space: nowrap;
+  }
+
+  :global(.history-list .history-row time small) {
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.68rem;
+  }
+
+  :global(.history-list .history-icon) {
+    align-items: center;
+    border: 1px solid currentColor;
+    border-radius: 0.4rem;
+    display: flex;
+    font-size: 0.9rem;
+    height: 1.8rem;
+    justify-content: center;
+    width: 1.8rem;
+  }
+
+  :global(.history-list .history-copy) {
+    min-width: 0;
+  }
+
+  :global(.history-list .history-copy strong) {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 800;
+    line-height: 1.4;
+  }
+
+  :global(.history-list .history-copy small) {
+    color: var(--text-secondary);
+    display: block;
+    font-size: 0.73rem;
+    line-height: 1.45;
+    margin-top: 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.history-list .history-kind),
+  :global(.history-list .history-project) {
+    font-size: 0.72rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.history-list .history-kind) {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    border-radius: 999px;
+    font-weight: 750;
+    justify-self: start;
+    padding: 0.25rem 0.55rem;
+  }
+
+  :global(.history-list .history-icon.blue),
+  :global(.history-list .history-kind.blue) {
+    color: #6ba6ff;
+  }
+
+  :global(.history-list .history-icon.green),
+  :global(.history-list .history-kind.green) {
+    color: #72c98b;
+  }
+
+  :global(.history-list .history-icon.violet),
+  :global(.history-list .history-kind.violet) {
+    color: #ac8cf4;
+  }
+
+  :global(.history-list .history-icon.amber),
+  :global(.history-list .history-kind.amber) {
+    color: #e8b84a;
+  }
+
+  :global(.history-list .history-icon.cyan),
+  :global(.history-list .history-kind.cyan) {
+    color: #67c3ce;
+  }
+
+  :global(.history-list .row-chevron) {
+    color: var(--accent-primary);
+    font-size: 1.2rem;
+  }
+
+  .history-skeleton-row {
+    gap: 0.85rem;
+    grid-template-columns: 7.4rem 2rem minmax(0, 1fr) 5.5rem 8.5rem 1rem;
+    min-height: 4.8rem;
+    padding: 0.7rem 0.85rem;
+  }
+
+  .history-pagination {
+    padding-top: 1rem;
+  }
+
+  .history-pagination[hidden] {
+    display: none !important;
+  }
+
+  .history-skeleton {
+    display: grid;
+  }
+
+  .history-skeleton-row {
+    align-items: center;
+    border-bottom: 1px solid var(--border-default);
+    display: grid;
+  }
+
+  .history-skeleton-row:last-child {
+    border-bottom: 0;
+  }
+
+  .history-skeleton-row > i,
+  .skeleton-copy > i {
+    animation: history-skeleton-pulse 1.35s ease-in-out infinite;
+    background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+    border-radius: 0.35rem;
+    display: block;
+    height: 0.72rem;
+  }
+
+  .history-skeleton-row .skeleton-date {
+    height: 1.85rem;
+    width: 5.5rem;
+  }
+
+  .history-skeleton-row .skeleton-icon {
+    border-radius: 0.4rem;
+    height: 1.8rem;
+    width: 1.8rem;
+  }
+
+  .skeleton-copy {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+  }
+
+  .skeleton-copy > i:first-child {
+    height: 0.85rem;
+    width: min(75%, 24rem);
+  }
+
+  .skeleton-copy > i:last-child {
+    height: 0.65rem;
+    width: min(92%, 34rem);
+  }
+
+  .history-skeleton-row .skeleton-kind {
+    width: 3.7rem;
+  }
+
+  .history-skeleton-row .skeleton-project {
+    width: 6rem;
+  }
+
+  .history-skeleton-row .skeleton-chevron {
+    height: 0.6rem;
+    width: 0.6rem;
+  }
+
+  @keyframes history-skeleton-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .history-dialog {
+    border-radius: 0.85rem;
+    box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 0.32);
+  }
+
+  .history-dialog :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  .dialog-link {
+    align-items: center;
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    display: inline-flex;
+    min-height: 2.4rem;
+  }
+
+  @media (max-width: 900px) {
+    .history-filters {
+      grid-template-columns: minmax(12rem, 1fr) minmax(9rem, 0.5fr) minmax(9rem, 0.5fr);
+    }
+
+    .history-filters .search-field {
+      grid-column: 1 / -1;
+    }
+
+    .history-filters .reset-button {
+      grid-column: 1 / -1;
+      justify-self: end;
+    }
+
+    :global(.history-list .history-row),
+    .history-skeleton-row {
+      grid-template-columns: 6.6rem 2rem minmax(0, 1fr) 1rem;
+    }
+
+    :global(.history-list .history-kind),
+    :global(.history-list .history-project),
+    .skeleton-kind,
+    .skeleton-project {
+      display: none;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .update-history {
+      padding: 0 0.8rem 2.5rem;
+    }
+
+    .page-heading {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      padding-top: 1.25rem;
+    }
+
+    .page-heading h1 {
+      font-size: clamp(1.55rem, 7vw, 2rem);
+    }
+
+    .page-heading > a {
+      font-size: 0.72rem;
+    }
+
+    .history-summary {
+      gap: 0.55rem;
+    }
+
+    .history-summary > div {
+      min-height: 4.5rem;
+      padding: 0.65rem 0.75rem;
+    }
+
+    .history-panel {
+      padding: 0.75rem;
+    }
+
+    .history-filters {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .history-filters .search-field,
+    .history-filters .reset-button {
+      grid-column: 1 / -1;
+      justify-self: stretch;
+    }
+
+    :global(.history-list .history-row),
+    .history-skeleton-row {
+      gap: 0.55rem;
+      grid-template-columns: 5.2rem 1.8rem minmax(0, 1fr) 0.7rem;
+      min-height: 4.5rem;
+      padding: 0.65rem 0.5rem;
+    }
+
+    :global(.history-list .history-row time) {
+      font-size: 0.67rem;
+    }
+
+    :global(.history-list .history-copy strong) {
+      font-size: 0.8rem;
+    }
+
+    :global(.history-list .history-copy small) {
+      font-size: 0.68rem;
+    }
+
+    .history-skeleton-row .skeleton-date {
+      width: 4.4rem;
+    }
+
+    .history-skeleton-row .skeleton-icon {
+      height: 1.6rem;
+      width: 1.6rem;
+    }
+
+    .history-skeleton-row .skeleton-chevron {
+      display: none;
+    }
+
+    .history-pagination {
+      align-items: stretch;
+      display: grid;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-heading > a,
+    .history-filters input,
+    .history-filters select,
+    .reset-button,
+    .history-pagination button,
+    .dialog-secondary,
+    .history-skeleton-row > i,
+    .skeleton-copy > i {
+      animation: none;
+      transition: none;
+    }
+  }
 </style>
