@@ -22,9 +22,11 @@ struct AtlasezAdminApp: App {
     var body: some Scene {
         WindowGroup {
             AdminWindow(model: model)
-                .frame(minWidth: 980, minHeight: 680)
+                .frame(minWidth: 820, minHeight: 600)
                 .task { model.startIfNeeded() }
         }
+        .defaultSize(width: 1440, height: 900)
+        .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
     }
 }
@@ -39,6 +41,40 @@ final class AdminAppDelegate: NSObject, NSApplicationDelegate {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidChangeScreen(_:)),
+            name: NSWindow.didChangeScreenNotification,
+            object: nil
+        )
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let window = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) }) else { return }
+            self.fitWindowToScreen(window)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
+    }
+
+    @objc private func windowDidChangeScreen(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        fitWindowToScreen(window)
+    }
+
+    private func fitWindowToScreen(_ window: NSWindow) {
+        guard let screen = window.screen ?? NSScreen.main else { return }
+        let available = screen.visibleFrame.insetBy(dx: 18, dy: 18)
+        let width = min(available.width, max(820, available.width * 0.94))
+        let height = min(available.height, max(600, available.height * 0.94))
+        let frame = NSRect(
+            x: available.midX - width / 2,
+            y: available.midY - height / 2,
+            width: width,
+            height: height
+        )
+        window.setFrame(frame, display: true, animate: false)
     }
 }
 
@@ -70,7 +106,8 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     func attach(_ view: WKWebView) {
         webView = view
         view.navigationDelegate = self
-        view.allowsBackForwardNavigationGestures = true
+        // Trackpad swipes should not unexpectedly navigate away from the current work.
+        view.allowsBackForwardNavigationGestures = false
         if didStart, let token = readSessionToken() {
             installSession(token: token, expiresAt: nil, then: pendingDestination)
         }
@@ -142,6 +179,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         let popup = WKWebView(frame: .zero, configuration: configuration)
         popup.navigationDelegate = self
         popup.uiDelegate = self
+        popup.allowsBackForwardNavigationGestures = false
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1050, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
