@@ -178,15 +178,16 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   await expect(
     page.getByRole("button", { name: "未対応", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    page.getByRole("link", { name: /タスク管理を開く/ }),
-  ).toHaveAttribute("href", "/admin/member-tasks/");
+  await expect(page.locator(".page-note")).toContainText("要対応");
   page.once("dialog", (dialog) => dialog.accept("未対応の確認"));
   await page.getByRole("button", { name: "表示を保存", exact: true }).click();
   await expect(
     page.locator('[data-action-saved-view] option[value]:not([value=""])'),
   ).toHaveText("未対応の確認");
-  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
+  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(1);
+  await expect(page.locator("[data-action-items]")).not.toContainText(
+    "新しいコメント",
+  );
   await expect(
     page
       .locator("[data-action-items] .action-item")
@@ -209,7 +210,7 @@ test("アクションセンターで絞り込みと状態変更を操作でき�
   expect(transitionBody).toMatchObject({
     expectedUpdatedAt: "2026-09-10T00:00:00.000Z",
   });
-  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
+  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(1);
   await page.getByRole("button", { name: "完了・履歴" }).click();
   await expect(page.locator("[data-action-items]")).toContainText("完了タスク");
 });
@@ -222,7 +223,7 @@ test("担当項目が表示上限を超えた場合は全件数と一覧への�
   const notice = page.locator("[data-action-truncation]");
   await expect(notice).toBeVisible();
   await expect(notice).toContainText(
-    "全51件のうち、この画面には1件を表示しています。",
+    "全51件のうち、この画面には2件を表示しています。",
   );
   await expect(
     notice.getByRole("link", { name: "タスク管理" }),
@@ -278,9 +279,9 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(
     dialog.getByRole("heading", { name: "クイック操作" }),
   ).toBeVisible();
-  await expect(
-    dialog.getByRole("option", { name: /アクションセンター/ }),
-  ).toContainText("対応が必要な項目");
+  await expect(dialog.getByRole("option", { name: /要対応/ })).toContainText(
+    "確認・実行が必要な項目",
+  );
   await expect(
     dialog.getByRole("option", { name: /編集・フィードバック/ }),
   ).toBeVisible();
@@ -309,9 +310,7 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   await actionCenterTab.click();
   const dialog = page.locator("[data-admin-command-dialog]");
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("heading", { name: "アクションセンター" }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "要対応" })).toBeVisible();
   await expect(
     dialog.getByRole("heading", { name: "対応が必要な項目" }),
   ).toBeVisible();
@@ -321,7 +320,7 @@ test("ヘッダーのアクションセンターはページ遷移せずポッ�
   await expect(page).toHaveURL(/\/admin\/articles\//);
 });
 
-test("アクションセンターのモーダルから対応操作と通知の既読化を実行できる", async ({
+test("要対応ポップアップから状態変更を実行し、通知を混在させない", async ({
   page,
 }) => {
   let transitionBody: Record<string, unknown> | null = null;
@@ -339,16 +338,10 @@ test("アクションセンターのモーダルから対応操作と通知の�
     fromState: "open",
     toState: "doing",
   });
-  await expect(
-    dialog.getByRole("button", { name: "既読にする" }),
-  ).toBeVisible();
-  const readRequest = page.waitForRequest(
-    (request) =>
-      request.url().includes("/api/admin/notifications/read") &&
-      request.method() === "POST",
+  await expect(dialog).not.toContainText("新しいコメント");
+  await expect(dialog.getByRole("button", { name: "既読にする" })).toHaveCount(
+    0,
   );
-  await dialog.getByRole("button", { name: "既読にする" }).click();
-  expect((await readRequest).postDataJSON()).toEqual({ ids: ["n-1"] });
 });
 
 test("アクションセンターをタブで開いた履歴を別画面の操作検索から再利用できる", async ({
@@ -364,12 +357,16 @@ test("アクションセンターをタブで開いた履歴を別画面の操�
     has: page.getByRole("heading", { name: "最近使った操作" }),
   });
   await expect(
-    recentSection.getByRole("option", { name: /アクションセンター/ }),
-  ).toContainText("対応が必要な項目・1回");
-  await recentSection
-    .getByRole("option", { name: /アクションセンター/ })
-    .click();
-  await expect(page).toHaveURL(/\/admin\/action-center\//);
+    recentSection.getByRole("option", { name: /要対応/ }),
+  ).toContainText("確認・実行が必要な項目・1回");
+  await recentSection.getByRole("option", { name: /要対応/ }).click();
+  await expect(page).toHaveURL(/\/admin\/atlas\//);
+  await expect(page.locator("[data-admin-command-dialog]")).toBeVisible();
+  await expect(
+    page
+      .locator("[data-admin-command-dialog]")
+      .getByRole("heading", { name: "要対応" }),
+  ).toBeVisible();
 });
 
 test("選択したタスクを一括完了し、直後に元へ戻せる", async ({ page }) => {
@@ -380,7 +377,7 @@ test("選択したタスクを一括完了し、直後に元へ戻せる", async
     true,
   );
   await page.goto("admin/action-center/");
-  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(3);
+  await expect(page.locator("[data-action-items] .action-item")).toHaveCount(2);
   await page.locator('[data-action-select="task:task-1"]').check();
   await page.locator('[data-action-select="task:task-2"]').check();
   await expect(page.locator("[data-action-bulkbar]")).toBeVisible();
