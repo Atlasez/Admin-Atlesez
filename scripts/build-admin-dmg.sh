@@ -18,9 +18,10 @@ done
 
 source_icon="$repo_root/public/images/atlasez-logo.png"
 launcher_source="$repo_root/macos/AtlasezAdminLauncher.swift"
+workspace_source="$repo_root/macos/AdminNativeWorkspace.swift"
 info_plist="$repo_root/macos/Info.plist"
 
-for file in "$source_icon" "$launcher_source" "$info_plist"; do
+for file in "$source_icon" "$launcher_source" "$workspace_source" "$info_plist"; do
   if [[ ! -f "$file" ]]; then
     echo "Required source file not found: $file" >&2
     exit 1
@@ -44,10 +45,10 @@ cp "$info_plist" "$contents_path/Info.plist"
 
 swiftc -O -parse-as-library -target arm64-apple-macosx13.0 -framework AppKit -framework SwiftUI \
   -framework WebKit -framework Security -framework CryptoKit \
-  "$launcher_source" -o "$temp_dir/AtlasezAdmin-arm64"
+  "$launcher_source" "$workspace_source" -o "$temp_dir/AtlasezAdmin-arm64"
 swiftc -O -parse-as-library -target x86_64-apple-macosx13.0 -framework AppKit -framework SwiftUI \
   -framework WebKit -framework Security -framework CryptoKit \
-  "$launcher_source" -o "$temp_dir/AtlasezAdmin-x86_64"
+  "$launcher_source" "$workspace_source" -o "$temp_dir/AtlasezAdmin-x86_64"
 lipo -create "$temp_dir/AtlasezAdmin-arm64" "$temp_dir/AtlasezAdmin-x86_64" \
   -output "$macos_path/AtlasezAdmin"
 
