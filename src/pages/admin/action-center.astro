@@ -97,7 +97,9 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     let controller: AbortController | null = null;
     let retryController: ReturnType<typeof createAdminLoadRetry> | null = null;
 
-    const filteredItems = () => (filter === "history" ? (payload.history ?? []) : (payload.items ?? []).filter((item) => item.actions.length > 0)).filter((item) => {
+    // 下書きからの査読依頼は個別記事の操作に限定し、ここには表示しない。
+    const isActionableItem = (item: Item) => item.actions.length > 0 && !(item.kind === "document" && item.status === "draft");
+    const filteredItems = () => (filter === "history" ? (payload.history ?? []) : (payload.items ?? []).filter(isActionableItem)).filter((item) => {
       if (filter === "urgent") return item.priority === "urgent" || item.priority === "due-soon";
       if (filter === "approvals") return item.kind === "approval";
       if (filter === "history") return true;
@@ -148,7 +150,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       const rows = filteredItems();
       count.textContent = `${rows.length}件`;
       const assignedTotal = Number(payload.counts?.assigned ?? 0);
-      const assignedVisible = (payload.items ?? []).length;
+      const assignedVisible = (payload.items ?? []).filter(isActionableItem).length;
       truncationNode.hidden = filter === "history" || !payload.counts?.assignedItemsTruncated || assignedTotal <= assignedVisible;
       truncationNode.innerHTML = truncationNode.hidden
         ? ""

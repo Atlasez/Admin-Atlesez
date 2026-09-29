@@ -1646,10 +1646,10 @@ describe("admin worker editor APIs", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(documentQuery).toContain("d.status = 'draft'");
+    expect(documentQuery).not.toContain("d.status = 'draft'");
     expect(documentQuery).toContain("d.status = 'in-review'");
     expect(documentQuery).toContain("d.publication_review_stage IS NOT NULL");
-    expect(documentBindings).toContain("local-editor@atlasez.test");
+    expect(documentBindings).not.toContain("local-editor@atlasez.test");
   });
 
   it("uses bounded cursor pages for profile change requests", async () => {
