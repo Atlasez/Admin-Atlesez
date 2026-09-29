@@ -618,6 +618,124 @@ describe("admin logout contract", () => {
 });
 
 describe("Google OAuth login callback", () => {
+  it("returns an administrator to the native app callback after Google OAuth", async () => {
+    const state = "s".repeat(43);
+    const challenge = "c".repeat(43);
+    const redirectURI = "http://127.0.0.1:43127/callback";
+    const returnTo = `/auth/native-app/complete?state=${state}&challenge=${challenge}&redirect_uri=${encodeURIComponent(redirectURI)}`;
+    const oauthEnv = {
+      ADMIN_AUTH_MODE: "google-oauth",
+      ADMIN_PRIMARY_EMAIL: "admin@atlasez.org",
+      ADMIN_PUBLIC_ORIGIN: "https://admin.example",
+      GOOGLE_OAUTH_CLIENT_ID: "oauth-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "oauth-client-secret",
+      REPORTS: {
+        prepare: (query: string) => {
+          const statement = new Statement(query);
+          statement.first = async <T>() => {
+            if (query.includes("FROM admin_auth_sessions s"))
+              return {
+                email: "admin@atlasez.org",
+                canonical_email: "admin@atlasez.org",
+              } as T;
+            if (query.includes("FROM atlasez_google_identities"))
+              return null as T | null;
+            if (query.includes("FROM atlasez_accounts a"))
+              return {
+                id: "account-1",
+                canonical_email: "admin@atlasez.org",
+              } as T;
+            if (
+              query.includes("SELECT 1 AS found FROM report_admin_permissions")
+            )
+              return { found: 1 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+        batch: async () => [],
+      },
+      ASSETS: { fetch: async () => new Response("protected page") },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "https://oauth2.googleapis.com/token")
+          return new Response(
+            JSON.stringify({ access_token: "access-token" }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        if (
+          String(input) === "https://openidconnect.googleapis.com/v1/userinfo"
+        )
+          return new Response(
+            JSON.stringify({
+              email: "admin@atlasez.org",
+              email_verified: true,
+              sub: "google-subject-1",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        return new Response("unexpected OAuth request", { status: 500 });
+      }),
+    );
+
+    try {
+      const login = await worker.fetch(
+        new Request(
+          `https://admin.example/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
+        ),
+        oauthEnv as never,
+      );
+      const authorizationURL = new URL(login.headers.get("location")!);
+      const callback = await worker.fetch(
+        new Request(
+          `https://admin.example/auth/google/callback?code=authorization-code&state=${authorizationURL.searchParams.get("state")}`,
+          {
+            headers: {
+              cookie: login.headers.get("set-cookie")!.split(";", 1)[0],
+            },
+          },
+        ),
+        oauthEnv as never,
+      );
+
+      expect(callback.status).toBe(302);
+      const nativeCompletion = new URL(
+        callback.headers.get("location")!,
+        "https://admin.example",
+      );
+      expect(nativeCompletion.pathname).toBe("/auth/native-app/complete");
+      expect(nativeCompletion.searchParams.get("state")).toBe(state);
+      expect(nativeCompletion.searchParams.get("challenge")).toBe(challenge);
+      expect(nativeCompletion.searchParams.get("redirect_uri")).toBe(
+        redirectURI,
+      );
+      const sessionCookie = callback.headers
+        .getSetCookie()
+        .find((cookie) => cookie.startsWith("atlasez_admin_session="));
+      expect(sessionCookie).toBeTruthy();
+
+      const nativeCallback = await worker.fetch(
+        new Request(nativeCompletion, {
+          headers: { cookie: sessionCookie!.split(";", 1)[0] },
+        }),
+        oauthEnv as never,
+      );
+      expect(nativeCallback.status).toBe(302);
+      const destination = new URL(nativeCallback.headers.get("location")!);
+      expect(destination.origin).toBe("http://127.0.0.1:43127");
+      expect(destination.pathname).toBe("/callback");
+      expect(destination.searchParams.get("state")).toBe(state);
+      expect(destination.searchParams.get("code")).toMatch(/^[0-9a-f-]{72}$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("returns to the requested admin page with a valid hashed session", async () => {
     const writes: Array<{ query: string; values: unknown[] }> = [];
     let accountLookupCount = 0;
