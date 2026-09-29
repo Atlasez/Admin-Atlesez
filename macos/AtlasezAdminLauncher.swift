@@ -14,6 +14,7 @@ private func showBrowserFallback(message: String) {
     if alert.runModal() == .alertFirstButtonReturn {
         NSWorkspace.shared.open(adminURL)
     }
+    application.terminate(nil)
 }
 
 let application = NSApplication.shared
@@ -21,22 +22,24 @@ application.setActivationPolicy(.accessory)
 application.activate(ignoringOtherApps: true)
 
 guard let chromeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
-    showBrowserFallback(
-        message: "専用ウィンドウで開くにはGoogle Chromeが必要です。Chromeをインストールするか、既定のブラウザで続けてください。"
-    )
+    if !NSWorkspace.shared.open(adminURL) {
+        showBrowserFallback(message: "既定のブラウザを開けませんでした。ブラウザを確認して、もう一度お試しください。")
+    }
     exit(EXIT_SUCCESS)
 }
 
-let launchChrome = Process()
-launchChrome.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-launchChrome.arguments = ["-a", chromeURL.path, "--args", "--app=\(adminURL.absoluteString)"]
+let configuration = NSWorkspace.OpenConfiguration()
+NSWorkspace.shared.open([adminURL], withApplicationAt: chromeURL, configuration: configuration) { _, error in
+    DispatchQueue.main.async {
+        if let error {
+            showBrowserFallback(
+                message: "Google Chromeで管理サイトを開けませんでした。既定のブラウザで続けますか？\n\n\(error.localizedDescription)"
+            )
+            return
+        }
 
-do {
-    try launchChrome.run()
-} catch {
-    showBrowserFallback(
-        message: "Google Chromeの起動に失敗しました。Chromeを確認するか、既定のブラウザで続けてください。\n\n\(error.localizedDescription)"
-    )
+        application.terminate(nil)
+    }
 }
 
-exit(EXIT_SUCCESS)
+application.run()
