@@ -21589,9 +21589,14 @@ async function completeGoogleLogin(
     )
     .run();
   const requestedReturnTo = userReturnPath(savedState.returnTo ?? null);
-  const requestedArea = userAreaForPath(
-    new URL(requestedReturnTo, "https://admin.local").pathname,
-  );
+  const requestedPathname = new URL(
+    requestedReturnTo,
+    "https://admin.local",
+  ).pathname;
+  // The native callback is an admin-only destination, not a public user page.
+  const requestedArea = requestedPathname === "/auth/native-app/complete"
+    ? "admin"
+    : userAreaForPath(requestedPathname);
   const stage = await getUserStageForEmail(account.canonical_email, env);
   const location =
     requestedArea && canAccess(stage.stage, requestedArea)
