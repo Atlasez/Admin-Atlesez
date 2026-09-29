@@ -297,10 +297,12 @@ test("⌘Kで横断検索を開き、記事候補へ移動できる", async ({ p
   await expect(dialog).toBeVisible();
   const dialogSize = await dialog.evaluate((element) => ({
     width: Number.parseFloat(getComputedStyle(element).width),
+    maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
     rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
   }));
-  expect(dialogSize.width).toBeGreaterThan(40 * dialogSize.rem);
-  expect(dialogSize.width).toBeLessThan(45 * dialogSize.rem);
+  expect(dialogSize.width).toBeGreaterThan(30 * dialogSize.rem);
+  expect(dialogSize.width).toBeLessThan(39 * dialogSize.rem);
+  expect(dialogSize.maxHeight).toBeLessThanOrEqual(34 * dialogSize.rem);
   await expect(
     dialog.getByRole("heading", { name: "最近使った操作" }),
   ).toBeVisible();
