@@ -8,7 +8,7 @@ import SwiftUI
 import WebKit
 
 private let adminOrigin = URL(string: "https://admin.atlasez.org")!
-private let initialDestination = "/admin/atlas/"
+private let initialDestination = "/admin/portal/"
 private let sessionCookieName = "atlasez_admin_session"
 private let keychainService = "org.atlasez.admin"
 private let keychainAccount = "admin-session"
@@ -31,8 +31,8 @@ struct AtlasezAdminApp: App {
                 Button("進む") { model.goForward() }.keyboardShortcut("]", modifiers: .command)
                 Button("再読み込み") { model.reload() }.keyboardShortcut("r", modifiers: .command)
                 Divider()
-                Button("運営トップ") { model.navigate(to: initialDestination) }
-                Button("アクションセンター") { model.navigate(to: "/admin/action-center/") }
+                Button("運営ホーム") { model.navigate(to: initialDestination) }
+                Button("要対応") { model.navigate(to: "/admin/action-center/") }
                 Button("記事・フィードバック") { model.navigate(to: "/admin/articles/") }
             }
             CommandGroup(replacing: .appTermination) {
@@ -53,6 +53,15 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     @Published var isAuthenticating = false
     @Published var authError: String?
     @Published var activeSection = "portal"
+    @Published var portal: NativePortalPayload?
+    @Published var portalLoading = false
+    @Published var portalError: String?
+    @Published var actions: NativeActionPayload?
+    @Published var actionsLoading = false
+    @Published var actionsError: String?
+    @Published var actionNotice: String?
+    @Published var actionFilter: NativeActionFilter = .open
+    @Published var pendingActionIds = Set<String>()
 
     private var pendingState: String?
     private var pendingVerifier: String?
@@ -60,12 +69,14 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     private var didStart = false
     private var popoutWindows: [NSWindow] = []
     private var callbackServer: LoopbackCallbackServer?
+    private var portalRequestID = UUID()
+    private var actionsRequestID = UUID()
 
     func startIfNeeded() {
         guard !didStart else { return }
         didStart = true
         if let token = readSessionToken() {
-            installSession(token: token, expiresAt: nil, then: pendingDestination)
+            installSession(token: token, expiresAt: nil, then: initialDestination)
         } else {
             needsSignIn = true
         }
@@ -86,26 +97,169 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         guard path.hasPrefix("/"), !path.hasPrefix("//") else { return }
         pendingDestination = path
         activeSection = section(for: path)
+        if activeSection == "portal" { loadPortal(); return }
+        if activeSection == "actions" { loadActions(); return }
         guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { return }
         webView?.load(URLRequest(url: url))
     }
 
-    func goBack() { if webView?.canGoBack == true { webView?.goBack() } }
-    func goForward() { if webView?.canGoForward == true { webView?.goForward() } }
+    func goBack() { if !isNativeSection, webView?.canGoBack == true { webView?.goBack() } }
+    func goForward() { if !isNativeSection, webView?.canGoForward == true { webView?.goForward() } }
     func reload() { webView?.reload() }
 
+    func reloadCurrentSection() {
+        switch activeSection {
+        case "portal": loadPortal()
+        case "actions": loadActions()
+        default: reload()
+        }
+    }
+
+    func loadPortal() {
+        let requestID = UUID()
+        portalRequestID = requestID
+        portalLoading = true
+        portalError = nil
+        Task {
+            do {
+                let result = try await requestJSON("/api/admin/portal", as: NativePortalPayload.self)
+                guard portalRequestID == requestID else { return }
+                portal = result
+                portalLoading = false
+            } catch {
+                guard portalRequestID == requestID else { return }
+                portalError = error.localizedDescription
+                portalLoading = false
+            }
+        }
+    }
+
+    func loadActions() {
+        let requestID = UUID()
+        actionsRequestID = requestID
+        actionsLoading = true
+        actionsError = nil
+        let view = actionFilter == .history ? "history" : "action"
+        Task {
+            do {
+                let result = try await requestJSON("/api/admin/action-center?view=\(view)", as: NativeActionPayload.self)
+                guard actionsRequestID == requestID else { return }
+                actions = result
+                actionNotice = nil
+                actionsLoading = false
+            } catch {
+                guard actionsRequestID == requestID else { return }
+                actionsError = error.localizedDescription
+                actionNotice = error.localizedDescription
+                actionsLoading = false
+            }
+        }
+    }
+
+    func setActionFilter(_ filter: NativeActionFilter) {
+        guard actionFilter != filter else { return }
+        actionFilter = filter
+        loadActions()
+    }
+
+    func perform(_ action: NativeWorkflowAction, for item: NativeActionItem) {
+        guard !pendingActionIds.contains(item.id) else { return }
+        pendingActionIds.insert(item.id)
+        Task {
+            defer { pendingActionIds.remove(item.id) }
+            do {
+                var payload: [String: Any] = [
+                    "entityType": action.entityType,
+                    "entityId": action.entityId,
+                    "fromState": action.fromState,
+                    "toState": action.toState,
+                    "idempotencyKey": UUID().uuidString,
+                ]
+                if let expectedUpdatedAt = action.expectedUpdatedAt { payload["expectedUpdatedAt"] = expectedUpdatedAt }
+                if let approvalRequestType = action.approvalRequestType { payload["approvalRequestType"] = approvalRequestType }
+                _ = try await requestJSON("/api/admin/workflow/transition", method: "POST", body: payload, as: NativeTransitionResponse.self)
+                actionNotice = nil
+                loadActions()
+                if activeSection == "portal" { loadPortal() }
+            } catch {
+                actionNotice = error.localizedDescription
+                loadActions()
+            }
+        }
+    }
+
+    func openAction(_ item: NativeActionItem) { navigate(to: item.href) }
+
+    var isNativeSection: Bool { activeSection == "portal" || activeSection == "actions" }
+
+    private func requestJSON<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as type: T.Type) async throws -> T {
+        guard let token = readSessionToken(), !token.isEmpty else {
+            needsSignIn = true
+            throw NativeAPIError.sessionExpired
+        }
+        guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { throw NativeAPIError.invalidURL }
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+        request.httpMethod = method
+        request.httpShouldHandleCookies = false
+        request.setValue("\(sessionCookieName)=\(token)", forHTTPHeaderField: "Cookie")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        if method != "GET" {
+            request.setValue(adminOrigin.absoluteString, forHTTPHeaderField: "Origin")
+            request.setValue(adminOrigin.appendingPathComponent("admin/portal/").absoluteString, forHTTPHeaderField: "Referer")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let response = response as? HTTPURLResponse else { throw NativeAPIError.unexpectedResponse }
+        guard response.url?.host == adminOrigin.host else { throw NativeAPIError.unexpectedResponse }
+        guard (200..<300).contains(response.statusCode) else {
+            if response.statusCode == 401 || response.statusCode == 403 {
+                if response.statusCode == 401 { deleteSessionToken(); needsSignIn = true }
+                throw NativeAPIError.permissionDenied
+            }
+            let message = try? JSONDecoder().decode(NativeAPIMessage.self, from: data).error
+            throw NativeAPIError.server(message ?? "運営データを読み込めませんでした（HTTP \(response.statusCode)）。")
+        }
+        guard response.mimeType?.lowercased().contains("json") == true else {
+            if response.url?.path.hasPrefix("/auth/") == true {
+                deleteSessionToken()
+                needsSignIn = true
+                throw NativeAPIError.sessionExpired
+            }
+            throw NativeAPIError.invalidPayload
+        }
+        do { return try JSONDecoder().decode(type, from: data) }
+        catch { throw NativeAPIError.invalidPayload }
+    }
+
     func logout() {
-        guard let webView else { return }
-        webView.evaluateJavaScript("fetch('/auth/logout',{method:'POST',credentials:'include'})") { [weak self] _, _ in
+        let clearLocalSession = { [weak self] in
             guard let self else { return }
             self.deleteSessionToken()
-            self.webView?.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
+            WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
                 guard let self else { return }
                 let host = adminOrigin.host ?? "admin.atlasez.org"
                 cookies.filter { $0.name == sessionCookieName && $0.domain.trimmingCharacters(in: CharacterSet(charactersIn: ".")) == host }
-                    .forEach { self.webView?.configuration.websiteDataStore.httpCookieStore.delete($0) }
+                    .forEach { WKWebsiteDataStore.default().httpCookieStore.delete($0) }
                 self.needsSignIn = true
             }
+        }
+        if let webView {
+            webView.evaluateJavaScript("fetch('/auth/logout',{method:'POST',credentials:'include'})") { _, _ in clearLocalSession() }
+        } else if let token = readSessionToken() {
+            var request = URLRequest(url: adminOrigin.appendingPathComponent("auth/logout"))
+            request.httpMethod = "POST"
+            request.httpShouldHandleCookies = false
+            request.setValue("\(sessionCookieName)=\(token)", forHTTPHeaderField: "Cookie")
+            request.setValue(adminOrigin.absoluteString, forHTTPHeaderField: "Origin")
+            request.setValue(adminOrigin.appendingPathComponent("admin/portal/").absoluteString, forHTTPHeaderField: "Referer")
+            URLSession.shared.dataTask(with: request) { _, _, _ in
+                Task { @MainActor in clearLocalSession() }
+            }.resume()
+        } else {
+            clearLocalSession()
         }
     }
 
@@ -273,7 +427,10 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie) { [weak self] in
             guard let self, let url = URL(string: self.safeDestination(path), relativeTo: adminOrigin)?.absoluteURL else { return }
             self.needsSignIn = false
-            self.webView?.load(URLRequest(url: url))
+            self.activeSection = self.section(for: path)
+            if self.activeSection == "portal" { self.loadPortal() }
+            else if self.activeSection == "actions" { self.loadActions() }
+            else { self.webView?.load(URLRequest(url: url)) }
         }
     }
 
@@ -287,6 +444,8 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         if path.hasPrefix("/admin/articles") || path.hasPrefix("/admin/editor") { return "editorial" }
         if path.hasPrefix("/admin/portal") { return "portal" }
         if path.hasPrefix("/admin/manage") { return "management" }
+        if path.hasPrefix("/admin/member-tasks") { return "tasks" }
+        if path.hasPrefix("/admin/member-calendar") || path.hasPrefix("/admin/calendar") { return "calendar" }
         return activeSection
     }
 
@@ -533,10 +692,12 @@ private struct AdminWindow: View {
             .frame(height: 46)
 
             VStack(spacing: 3) {
-                sidebarItem("運営ポータル", icon: "square.grid.2x2", path: "/admin/portal/", section: "portal")
-                sidebarItem("アクションセンター", icon: "checklist", path: "/admin/action-center/", section: "actions")
+                sidebarItem("ホーム", icon: "house", path: "/admin/portal/", section: "portal")
+                sidebarItem("要対応", icon: "checklist", path: "/admin/action-center/", section: "actions")
                 sidebarItem("記事・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/", section: "editorial")
-                sidebarItem("管理トップ", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
+                sidebarItem("タスク", icon: "checkmark.circle", path: "/admin/member-tasks/", section: "tasks")
+                sidebarItem("カレンダー", icon: "calendar", path: "/admin/member-calendar/", section: "calendar")
+                sidebarItem("管理", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
             }
             .padding(.horizontal, 8)
 
@@ -557,28 +718,61 @@ private struct AdminWindow: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Button { model.goBack() } label: { Image(systemName: "chevron.left") }
-                    .help("戻る")
-                Button { model.goForward() } label: { Image(systemName: "chevron.right") }
-                    .help("進む")
-                Button { model.reload() } label: { Image(systemName: "arrow.clockwise") }
+                if !model.isNativeSection {
+                    Button { model.goBack() } label: { Image(systemName: "chevron.left") }
+                        .help("戻る")
+                    Button { model.goForward() } label: { Image(systemName: "chevron.right") }
+                        .help("進む")
+                }
+                Button { model.reloadCurrentSection() } label: { Image(systemName: "arrow.clockwise") }
                     .help("再読み込み")
+                if !model.isNativeSection { Divider().frame(height: 16).padding(.horizontal, 5) }
+                Text(sectionTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                 Spacer()
+                if !["portal", "actions"].contains(model.activeSection) {
+                    Text("Web機能")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.quaternary, in: Capsule())
+                }
             }
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)
             .frame(height: 40)
             .background(Color(nsColor: .windowBackgroundColor))
 
-            ZStack(alignment: .top) {
-                AdminWebView(model: model)
-                if model.isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+            Group {
+                switch model.activeSection {
+                case "portal": NativePortalView(model: model)
+                case "actions": NativeActionCenterView(model: model)
+                default:
+                    ZStack(alignment: .top) {
+                        AdminWebView(model: model)
+                        if model.isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    private var sectionTitle: String {
+        switch model.activeSection {
+        case "portal": "ホーム"
+        case "actions": "要対応"
+        case "editorial": "記事・フィードバック"
+        case "tasks": "タスク"
+        case "calendar": "カレンダー"
+        case "management": "管理"
+        default: "運営ワークスペース"
         }
     }
 
