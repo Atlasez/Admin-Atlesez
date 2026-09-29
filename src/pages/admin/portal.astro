@@ -86,10 +86,26 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       </div>
       <div class="project-entry-cards" data-project-group="available"></div>
     </section>
+
+    <footer class="portal-app-download" aria-label="macOSアプリ">
+      <div>
+        <strong data-admin-i18n data-admin-ja="Atlasez運営アプリ" data-admin-en="Atlasez Admin app">Atlasez運営アプリ</strong>
+        <p data-admin-i18n data-admin-ja="Mac用アプリをダウンロードできます。アプリ内から最新版へ更新できます。" data-admin-en="Download the Mac app. You can update it from inside the app.">Mac用アプリをダウンロードできます。アプリ内から最新版へ更新できます。</p>
+      </div>
+      <a href="https://github.com/Atlasez/Admin-Atlesez/releases/latest/download/Atlasez-Admin.dmg" rel="noreferrer">
+        <span data-admin-i18n data-admin-ja="macOS版をダウンロード" data-admin-en="Download for macOS">macOS版をダウンロード</span>
+        <span aria-hidden="true">↓</span>
+      </a>
+    </footer>
   </main>
 </AdminLayout>
 <style>
   .portal { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
+  .portal-app-download { align-items: center; border-top: 1px solid var(--border-default); color: var(--text-primary); display: flex; gap: 1rem; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; }
+  .portal-app-download strong { font-size: .82rem; }
+  .portal-app-download p { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .2rem 0 0; }
+  .portal-app-download a { align-items: center; border: 1px solid var(--border-default); color: var(--text-primary); display: inline-flex; flex: 0 0 auto; font-size: .75rem; font-weight: 700; gap: .65rem; padding: .55rem .7rem; text-decoration: none; }
+  .portal-app-download a:hover, .portal-app-download a:focus-visible { border-color: var(--accent-primary); color: var(--accent-primary); }
   .portal > header { border-bottom: 1px solid var(--border-default); display: flex; gap: 1rem; justify-content: space-between; padding: 2.1rem 0 1.3rem; }
   .portal h1 { font-size: clamp(2rem, 4vw, 2.7rem); letter-spacing: -.04em; margin: .25rem 0; }
   .portal > header span, .portal small { color: var(--text-secondary); line-height: 1.6; }
@@ -179,6 +195,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     .available-projects { padding: .9rem; }
   }
   @media (max-width: 520px) {
+    .portal-app-download { align-items: flex-start; flex-direction: column; }
     .portal > header { align-items: start; flex-direction: column; }
     .application-link { align-self: stretch; text-align: center; }
   }

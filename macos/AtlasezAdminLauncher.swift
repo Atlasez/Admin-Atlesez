@@ -6,6 +6,7 @@ import Foundation
 import Security
 import SwiftUI
 import WebKit
+import Sparkle
 
 private let adminOrigin = URL(string: "https://admin.atlasez.org")!
 private let initialDestination = "/admin/portal/"
@@ -16,6 +17,7 @@ private let keychainAccount = "admin-session"
 @main
 struct AtlasezAdminApp: App {
     @StateObject private var model = AdminAppModel()
+    @NSApplicationDelegateAdaptor(AdminAppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup {
@@ -24,24 +26,19 @@ struct AtlasezAdminApp: App {
                 .task { model.startIfNeeded() }
         }
         .windowStyle(.hiddenTitleBar)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
-            CommandMenu("ページ") {
-                Button("戻る") { model.goBack() }.keyboardShortcut("[", modifiers: .command)
-                Button("進む") { model.goForward() }.keyboardShortcut("]", modifiers: .command)
-                Button("再読み込み") { model.reload() }.keyboardShortcut("r", modifiers: .command)
-                Divider()
-                Button("運営ホーム") { model.navigate(to: initialDestination) }
-                Button("要対応") { model.navigate(to: "/admin/action-center/") }
-                Button("記事・フィードバック") { model.navigate(to: "/admin/articles/") }
-            }
-            CommandGroup(replacing: .appTermination) {
-                Button("ログアウト") { model.logout() }
-                Divider()
-                Button("Atlasez運営を終了") { NSApplication.shared.terminate(nil) }
-                    .keyboardShortcut("q")
-            }
-        }
+    }
+}
+
+@MainActor
+final class AdminAppDelegate: NSObject, NSApplicationDelegate {
+    private var updaterController: SPUStandardUpdaterController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
     }
 }
 
@@ -52,26 +49,12 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     @Published var needsSignIn = false
     @Published var isAuthenticating = false
     @Published var authError: String?
-    @Published var activeSection = "portal"
-    @Published var portal: NativePortalPayload?
-    @Published var portalLoading = false
-    @Published var portalError: String?
-    @Published var actions: NativeActionPayload?
-    @Published var actionsLoading = false
-    @Published var actionsError: String?
-    @Published var actionNotice: String?
-    @Published var actionFilter: NativeActionFilter = .open
-    @Published var pendingActionIds = Set<String>()
-
     private var pendingState: String?
     private var pendingVerifier: String?
     private var pendingDestination = initialDestination
     private var didStart = false
     private var popoutWindows: [NSWindow] = []
     private var callbackServer: LoopbackCallbackServer?
-    private var portalRequestID = UUID()
-    private var actionsRequestID = UUID()
-
     func startIfNeeded() {
         guard !didStart else { return }
         didStart = true
@@ -96,171 +79,8 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     func navigate(to path: String) {
         guard path.hasPrefix("/"), !path.hasPrefix("//") else { return }
         pendingDestination = path
-        activeSection = section(for: path)
-        if activeSection == "portal" { loadPortal(); return }
-        if activeSection == "actions" { loadActions(); return }
         guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { return }
         webView?.load(URLRequest(url: url))
-    }
-
-    func goBack() { if !isNativeSection, webView?.canGoBack == true { webView?.goBack() } }
-    func goForward() { if !isNativeSection, webView?.canGoForward == true { webView?.goForward() } }
-    func reload() { webView?.reload() }
-
-    func reloadCurrentSection() {
-        switch activeSection {
-        case "portal": loadPortal()
-        case "actions": loadActions()
-        default: reload()
-        }
-    }
-
-    func loadPortal() {
-        let requestID = UUID()
-        portalRequestID = requestID
-        portalLoading = true
-        portalError = nil
-        Task {
-            do {
-                let result = try await requestJSON("/api/admin/portal", as: NativePortalPayload.self)
-                guard portalRequestID == requestID else { return }
-                portal = result
-                portalLoading = false
-            } catch {
-                guard portalRequestID == requestID else { return }
-                portalError = error.localizedDescription
-                portalLoading = false
-            }
-        }
-    }
-
-    func loadActions() {
-        let requestID = UUID()
-        actionsRequestID = requestID
-        actionsLoading = true
-        actionsError = nil
-        let view = actionFilter == .history ? "history" : "action"
-        Task {
-            do {
-                let result = try await requestJSON("/api/admin/action-center?view=\(view)", as: NativeActionPayload.self)
-                guard actionsRequestID == requestID else { return }
-                actions = result
-                actionNotice = nil
-                actionsLoading = false
-            } catch {
-                guard actionsRequestID == requestID else { return }
-                actionsError = error.localizedDescription
-                actionNotice = error.localizedDescription
-                actionsLoading = false
-            }
-        }
-    }
-
-    func setActionFilter(_ filter: NativeActionFilter) {
-        guard actionFilter != filter else { return }
-        actionFilter = filter
-        loadActions()
-    }
-
-    func perform(_ action: NativeWorkflowAction, for item: NativeActionItem) {
-        guard !pendingActionIds.contains(item.id) else { return }
-        pendingActionIds.insert(item.id)
-        Task {
-            defer { pendingActionIds.remove(item.id) }
-            do {
-                var payload: [String: Any] = [
-                    "entityType": action.entityType,
-                    "entityId": action.entityId,
-                    "fromState": action.fromState,
-                    "toState": action.toState,
-                    "idempotencyKey": UUID().uuidString,
-                ]
-                if let expectedUpdatedAt = action.expectedUpdatedAt { payload["expectedUpdatedAt"] = expectedUpdatedAt }
-                if let approvalRequestType = action.approvalRequestType { payload["approvalRequestType"] = approvalRequestType }
-                _ = try await requestJSON("/api/admin/workflow/transition", method: "POST", body: payload, as: NativeTransitionResponse.self)
-                actionNotice = nil
-                loadActions()
-                if activeSection == "portal" { loadPortal() }
-            } catch {
-                actionNotice = error.localizedDescription
-                loadActions()
-            }
-        }
-    }
-
-    func openAction(_ item: NativeActionItem) { navigate(to: item.href) }
-
-    var isNativeSection: Bool { activeSection == "portal" || activeSection == "actions" }
-
-    private func requestJSON<T: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil, as type: T.Type) async throws -> T {
-        guard let token = readSessionToken(), !token.isEmpty else {
-            needsSignIn = true
-            throw NativeAPIError.sessionExpired
-        }
-        guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { throw NativeAPIError.invalidURL }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
-        request.httpMethod = method
-        request.httpShouldHandleCookies = false
-        request.setValue("\(sessionCookieName)=\(token)", forHTTPHeaderField: "Cookie")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        }
-        if method != "GET" {
-            request.setValue(adminOrigin.absoluteString, forHTTPHeaderField: "Origin")
-            request.setValue(adminOrigin.appendingPathComponent("admin/portal/").absoluteString, forHTTPHeaderField: "Referer")
-        }
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let response = response as? HTTPURLResponse else { throw NativeAPIError.unexpectedResponse }
-        guard response.url?.host == adminOrigin.host else { throw NativeAPIError.unexpectedResponse }
-        guard (200..<300).contains(response.statusCode) else {
-            if response.statusCode == 401 || response.statusCode == 403 {
-                if response.statusCode == 401 { deleteSessionToken(); needsSignIn = true }
-                throw NativeAPIError.permissionDenied
-            }
-            let message = try? JSONDecoder().decode(NativeAPIMessage.self, from: data).error
-            throw NativeAPIError.server(message ?? "運営データを読み込めませんでした（HTTP \(response.statusCode)）。")
-        }
-        guard response.mimeType?.lowercased().contains("json") == true else {
-            if response.url?.path.hasPrefix("/auth/") == true {
-                deleteSessionToken()
-                needsSignIn = true
-                throw NativeAPIError.sessionExpired
-            }
-            throw NativeAPIError.invalidPayload
-        }
-        do { return try JSONDecoder().decode(type, from: data) }
-        catch { throw NativeAPIError.invalidPayload }
-    }
-
-    func logout() {
-        let clearLocalSession = { [weak self] in
-            guard let self else { return }
-            self.deleteSessionToken()
-            WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
-                guard let self else { return }
-                let host = adminOrigin.host ?? "admin.atlasez.org"
-                cookies.filter { $0.name == sessionCookieName && $0.domain.trimmingCharacters(in: CharacterSet(charactersIn: ".")) == host }
-                    .forEach { WKWebsiteDataStore.default().httpCookieStore.delete($0) }
-                self.needsSignIn = true
-            }
-        }
-        if let webView {
-            webView.evaluateJavaScript("fetch('/auth/logout',{method:'POST',credentials:'include'})") { _, _ in clearLocalSession() }
-        } else if let token = readSessionToken() {
-            var request = URLRequest(url: adminOrigin.appendingPathComponent("auth/logout"))
-            request.httpMethod = "POST"
-            request.httpShouldHandleCookies = false
-            request.setValue("\(sessionCookieName)=\(token)", forHTTPHeaderField: "Cookie")
-            request.setValue(adminOrigin.absoluteString, forHTTPHeaderField: "Origin")
-            request.setValue(adminOrigin.appendingPathComponent("admin/portal/").absoluteString, forHTTPHeaderField: "Referer")
-            URLSession.shared.dataTask(with: request) { _, _, _ in
-                Task { @MainActor in clearLocalSession() }
-            }.resume()
-        } else {
-            clearLocalSession()
-        }
     }
 
     private func handleLoopbackCallback(code: String, state: String) {
@@ -286,12 +106,22 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         isLoading = true
-        activeSection = section(for: webView.url?.path ?? "")
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isLoading = false
-        activeSection = section(for: webView.url?.path ?? "")
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if let response = navigationResponse.response as? HTTPURLResponse,
+           response.url?.host == adminOrigin.host,
+           response.url?.path == "/auth/logout",
+           response.statusCode == 303 {
+            // The website owns the logout action; clear its matching Keychain copy only
+            // after the Worker confirms that the session was successfully revoked.
+            deleteSessionToken()
+        }
+        decisionHandler(.allow)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -427,26 +257,13 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie) { [weak self] in
             guard let self, let url = URL(string: self.safeDestination(path), relativeTo: adminOrigin)?.absoluteURL else { return }
             self.needsSignIn = false
-            self.activeSection = self.section(for: path)
-            if self.activeSection == "portal" { self.loadPortal() }
-            else if self.activeSection == "actions" { self.loadActions() }
-            else { self.webView?.load(URLRequest(url: url)) }
+            self.webView?.load(URLRequest(url: url))
         }
     }
 
     private func safeDestination(_ value: String) -> String {
         guard value.hasPrefix("/"), !value.hasPrefix("//"), !value.contains("\\") else { return initialDestination }
         return value
-    }
-
-    private func section(for path: String) -> String {
-        if path.hasPrefix("/admin/action-center") { return "actions" }
-        if path.hasPrefix("/admin/articles") || path.hasPrefix("/admin/editor") { return "editorial" }
-        if path.hasPrefix("/admin/portal") { return "portal" }
-        if path.hasPrefix("/admin/manage") { return "management" }
-        if path.hasPrefix("/admin/member-tasks") { return "tasks" }
-        if path.hasPrefix("/admin/member-calendar") || path.hasPrefix("/admin/calendar") { return "calendar" }
-        return activeSection
     }
 
     private func randomBase64URL(bytes count: Int) throws -> String {
@@ -617,8 +434,6 @@ private extension Data {
 
 private struct AdminWindow: View {
     @ObservedObject var model: AdminAppModel
-    @AppStorage("atlasezAdminSidebarCollapsed") private var isSidebarCollapsed = false
-    @AppStorage("atlasezAdminSidebarWidth") private var expandedSidebarWidth = 224.0
 
     var body: some View {
         Group {
@@ -662,243 +477,13 @@ private struct AdminWindow: View {
     }
 
     private var workspace: some View {
-        AdminResizableSplitView(
-            sidebarWidth: $expandedSidebarWidth,
-            isSidebarCollapsed: isSidebarCollapsed,
-            sidebar: sidebar,
-            content: mainContent
-        )
-    }
-
-    private var sidebar: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        isSidebarCollapsed.toggle()
-                    }
-                } label: {
-                    Image(systemName: isSidebarCollapsed ? "sidebar.right" : "sidebar.left")
-                        .font(.system(size: 15, weight: .medium))
-                        .frame(width: 34, height: 34)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
-                .accessibilityLabel(isSidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ")
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 46)
-
-            VStack(spacing: 3) {
-                sidebarItem("ホーム", icon: "house", path: "/admin/portal/", section: "portal")
-                sidebarItem("要対応", icon: "checklist", path: "/admin/action-center/", section: "actions")
-                sidebarItem("記事・フィードバック", icon: "text.badge.checkmark", path: "/admin/articles/", section: "editorial")
-                sidebarItem("タスク", icon: "checkmark.circle", path: "/admin/member-tasks/", section: "tasks")
-                sidebarItem("カレンダー", icon: "calendar", path: "/admin/member-calendar/", section: "calendar")
-                sidebarItem("管理", icon: "gearshape", path: "/admin/manage/?project=atlas", section: "management")
-            }
-            .padding(.horizontal, 8)
-
-            Spacer(minLength: 12)
-
-            Button { model.logout() } label: {
-                sidebarLabel("ログアウト", icon: "rectangle.portrait.and.arrow.right")
-            }
-            .buttonStyle(.plain)
-            .help("ログアウト")
-            .padding(.horizontal, 8)
-            .padding(.bottom, 10)
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .animation(.easeInOut(duration: 0.18), value: isSidebarCollapsed)
-    }
-
-    private var mainContent: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                if !model.isNativeSection {
-                    Button { model.goBack() } label: { Image(systemName: "chevron.left") }
-                        .help("戻る")
-                    Button { model.goForward() } label: { Image(systemName: "chevron.right") }
-                        .help("進む")
-                }
-                Button { model.reloadCurrentSection() } label: { Image(systemName: "arrow.clockwise") }
-                    .help("再読み込み")
-                if !model.isNativeSection { Divider().frame(height: 16).padding(.horizontal, 5) }
-                Text(sectionTitle)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                Spacer()
-                if !["portal", "actions"].contains(model.activeSection) {
-                    Text("Web機能")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.quaternary, in: Capsule())
-                }
-            }
-            .buttonStyle(.borderless)
-            .padding(.horizontal, 12)
-            .frame(height: 40)
-            .background(Color(nsColor: .windowBackgroundColor))
-
-            Group {
-                switch model.activeSection {
-                case "portal": NativePortalView(model: model)
-                case "actions": NativeActionCenterView(model: model)
-                default:
-                    ZStack(alignment: .top) {
-                        AdminWebView(model: model)
-                        if model.isLoading {
-                            ProgressView()
-                                .controlSize(.small)
-                                .padding(8)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var sectionTitle: String {
-        switch model.activeSection {
-        case "portal": "ホーム"
-        case "actions": "要対応"
-        case "editorial": "記事・フィードバック"
-        case "tasks": "タスク"
-        case "calendar": "カレンダー"
-        case "management": "管理"
-        default: "運営ワークスペース"
-        }
-    }
-
-    private func sidebarItem(_ title: String, icon: String, path: String, section: String) -> some View {
-        Button { model.navigate(to: path) } label: {
-            sidebarLabel(title, icon: icon)
-                .foregroundStyle(model.activeSection == section ? Color.primary : Color.secondary)
-                .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
-                .frame(height: 36)
-                .padding(.horizontal, isSidebarCollapsed ? 0 : 10)
-                .background {
-                    if model.activeSection == section {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.accentColor.opacity(0.16))
-                    }
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
-        .help(title)
-        .accessibilityLabel(title)
-    }
-
-    @ViewBuilder
-    private func sidebarLabel(_ title: String, icon: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 20)
-            if !isSidebarCollapsed {
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: isSidebarCollapsed ? .center : .leading)
-        .padding(.horizontal, isSidebarCollapsed ? 0 : 2)
-    }
-}
-
-private struct AdminResizableSplitView<Sidebar: View, Content: View>: NSViewRepresentable {
-    @Binding var sidebarWidth: Double
-    let isSidebarCollapsed: Bool
-    let sidebar: Sidebar
-    let content: Content
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(sidebarWidth: $sidebarWidth, isSidebarCollapsed: isSidebarCollapsed)
-    }
-
-    func makeNSView(context: Context) -> NSSplitView {
-        let splitView = NSSplitView(frame: .zero)
-        splitView.isVertical = true
-        splitView.dividerStyle = .thin
-
-        let sidebarHost = NSHostingView(rootView: sidebar)
-        let contentHost = NSHostingView(rootView: content)
-        sidebarHost.autoresizingMask = [.height]
-        contentHost.autoresizingMask = [.height]
-        splitView.addSubview(sidebarHost)
-        splitView.addSubview(contentHost)
-
-        context.coordinator.sidebarHost = sidebarHost
-        context.coordinator.contentHost = contentHost
-        splitView.delegate = context.coordinator
-
-        DispatchQueue.main.async {
-            guard splitView.subviews.count == 2 else { return }
-            splitView.setPosition(context.coordinator.position, ofDividerAt: 0)
-            context.coordinator.hasSetInitialPosition = true
-        }
-        return splitView
-    }
-
-    func updateNSView(_ splitView: NSSplitView, context: Context) {
-        let coordinator = context.coordinator
-        coordinator.sidebarWidth = $sidebarWidth
-        coordinator.isSidebarCollapsed = isSidebarCollapsed
-        coordinator.sidebarHost?.rootView = sidebar
-        coordinator.contentHost?.rootView = content
-        splitView.delegate = coordinator
-
-        guard splitView.subviews.count == 2 else { return }
-        let desiredPosition = coordinator.position
-        if abs(splitView.subviews[0].frame.width - desiredPosition) > 1 {
-            DispatchQueue.main.async {
-                splitView.setPosition(desiredPosition, ofDividerAt: 0)
-            }
-        }
-    }
-
-    final class Coordinator: NSObject, NSSplitViewDelegate {
-        var sidebarWidth: Binding<Double>
-        var isSidebarCollapsed: Bool
-        var hasSetInitialPosition = false
-        weak var sidebarHost: NSHostingView<Sidebar>?
-        weak var contentHost: NSHostingView<Content>?
-
-        init(sidebarWidth: Binding<Double>, isSidebarCollapsed: Bool) {
-            self.sidebarWidth = sidebarWidth
-            self.isSidebarCollapsed = isSidebarCollapsed
-        }
-
-        var position: CGFloat {
-            isSidebarCollapsed ? 58 : min(max(sidebarWidth.wrappedValue, 180), 360)
-        }
-
-        func splitView(
-            _ splitView: NSSplitView,
-            constrainSplitPosition proposedPosition: CGFloat,
-            ofSubviewAt dividerIndex: Int
-        ) -> CGFloat {
-            guard dividerIndex == 0 else { return proposedPosition }
-            let minimum = isSidebarCollapsed ? 58.0 : 180.0
-            let maximum = isSidebarCollapsed ? 58.0 : min(360.0, Double(splitView.bounds.width - 420))
-            return min(max(proposedPosition, minimum), max(minimum, maximum))
-        }
-
-        func splitViewDidResizeSubviews(_ notification: Notification) {
-            guard hasSetInitialPosition, !isSidebarCollapsed,
-                  let splitView = notification.object as? NSSplitView,
-                  let sidebarHost,
-                  splitView.subviews.first === sidebarHost else { return }
-            let actualWidth = Double(sidebarHost.frame.width)
-            if abs(actualWidth - sidebarWidth.wrappedValue) > 0.5 {
-                sidebarWidth.wrappedValue = actualWidth
+        ZStack(alignment: .topTrailing) {
+            AdminWebView(model: model)
+            if model.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         }
     }
