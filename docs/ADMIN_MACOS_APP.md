@@ -13,6 +13,7 @@
 
 - Google OAuthは既定ブラウザで行い、127.0.0.1だけにbindする一時callback listenerとPKCEを使います。
 - Workerが発行した短期セッションはmacOS Keychainに保存し、サイトにはSecure/HttpOnly Cookieとして渡します。
+- 保存済みセッションが失効・無効化されていた場合はアプリ内に再ログイン画面を表示します。起動だけで既定ブラウザを開かず、「Googleでログイン」を押したときにのみ認証を開始します。
 - OAuth client secretをアプリへ含めません。ログアウトはWorkerセッションを失効させ、KeychainとWebKit Cookieを消去します。
 
 ## 配布とアプリ内更新
