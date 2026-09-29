@@ -303,18 +303,19 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     text-align: center;
   }
   .catalog-toolbar {
-    display: grid;
-    gap: 0.75rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin: 0.75rem auto;
+    align-items: center;
+    display: flex;
+    gap: 0.45rem;
+    margin: 0.45rem auto 0.6rem;
     max-width: 60rem;
   }
   .catalog-toolbar .catalog-note {
-    grid-column: 1 / -1;
+    flex: 1 1 auto;
     margin: 0;
-    width: 100%;
+    max-width: none;
+    text-align: left;
   }
-  .catalog-toolbar > button { justify-self: center; max-width: 100%; }
+  .catalog-toolbar > button { flex: 0 0 auto; max-width: 100%; }
   .catalog-diagnostics {
     background: var(--background-secondary);
     border: 1px solid var(--border-default);
@@ -331,11 +332,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .catalog-diagnostics.is-error { border-left-color: #b24b38; }
   .subject-browser {
     border-bottom: 1px solid var(--border-default);
-    margin: 0 auto .85rem;
+    margin: 0 auto .55rem;
     max-width: 60rem;
-    padding: 0 0 .65rem;
+    padding: 0 0 .45rem;
   }
-  .subject-browser__heading { align-items: center; display: flex; gap: .65rem; justify-content: space-between; margin-bottom: .45rem; }
+  .subject-browser__heading { align-items: center; display: flex; gap: .65rem; justify-content: space-between; margin-bottom: .25rem; }
   .subject-browser__heading h2 { font-size: .84rem; margin: 0; }
   .subject-browser__heading p { color: var(--text-secondary); font-size: .68rem; margin: 0; }
   .subject-browser__heading .article-action { flex: 0 0 auto; min-height: 1.9rem; padding: .25rem .5rem; }
@@ -366,6 +367,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   .subject-browser__empty summary { color: var(--text-secondary); cursor: pointer; font-size: .66rem; }
   .subject-browser__empty-items { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
   @media (max-width: 600px) {
+    .catalog-toolbar { align-items: stretch; flex-wrap: wrap; }
+    .catalog-toolbar .catalog-note { flex-basis: 100%; }
+    .catalog-toolbar > button { flex: 1 1 auto; }
     .subject-browser__heading { align-items: start; }
     .subject-browser__heading p { line-height: 1.45; }
     .subject-browser__heading p { max-width: 12rem; text-align: right; }
