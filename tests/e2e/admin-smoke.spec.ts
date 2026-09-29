@@ -116,6 +116,20 @@ for (const [label, path, heading] of pages) {
   });
 }
 
+test("運営ポータル最下部に最新macOSアプリのDMGダウンロードを案内する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.goto("admin/portal/");
+  const download = page.getByRole("link", { name: "macOS版をダウンロード" });
+  await expect(download).toHaveAttribute(
+    "href",
+    "https://github.com/Atlasez/Admin-Atlesez/releases/latest/download/Atlasez-Admin.dmg",
+  );
+  await download.scrollIntoViewIfNeeded();
+  await expect(download).toBeInViewport({ ratio: 0.5 });
+});
+
 test("管理トップは権限・メンバー・分野の管理を分けて案内する", async ({
   page,
 }) => {

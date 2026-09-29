@@ -618,6 +618,124 @@ describe("admin logout contract", () => {
 });
 
 describe("Google OAuth login callback", () => {
+  it("returns an administrator to the native app callback after Google OAuth", async () => {
+    const state = "s".repeat(43);
+    const challenge = "c".repeat(43);
+    const redirectURI = "http://127.0.0.1:43127/callback";
+    const returnTo = `/auth/native-app/complete?state=${state}&challenge=${challenge}&redirect_uri=${encodeURIComponent(redirectURI)}`;
+    const oauthEnv = {
+      ADMIN_AUTH_MODE: "google-oauth",
+      ADMIN_PRIMARY_EMAIL: "admin@atlasez.org",
+      ADMIN_PUBLIC_ORIGIN: "https://admin.example",
+      GOOGLE_OAUTH_CLIENT_ID: "oauth-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "oauth-client-secret",
+      REPORTS: {
+        prepare: (query: string) => {
+          const statement = new Statement(query);
+          statement.first = async <T>() => {
+            if (query.includes("FROM admin_auth_sessions s"))
+              return {
+                email: "admin@atlasez.org",
+                canonical_email: "admin@atlasez.org",
+              } as T;
+            if (query.includes("FROM atlasez_google_identities"))
+              return null as T | null;
+            if (query.includes("FROM atlasez_accounts a"))
+              return {
+                id: "account-1",
+                canonical_email: "admin@atlasez.org",
+              } as T;
+            if (
+              query.includes("SELECT 1 AS found FROM report_admin_permissions")
+            )
+              return { found: 1 } as T;
+            return null as T | null;
+          };
+          return statement;
+        },
+        batch: async () => [],
+      },
+      ASSETS: { fetch: async () => new Response("protected page") },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input) === "https://oauth2.googleapis.com/token")
+          return new Response(
+            JSON.stringify({ access_token: "access-token" }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        if (
+          String(input) === "https://openidconnect.googleapis.com/v1/userinfo"
+        )
+          return new Response(
+            JSON.stringify({
+              email: "admin@atlasez.org",
+              email_verified: true,
+              sub: "google-subject-1",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        return new Response("unexpected OAuth request", { status: 500 });
+      }),
+    );
+
+    try {
+      const login = await worker.fetch(
+        new Request(
+          `https://admin.example/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`,
+        ),
+        oauthEnv as never,
+      );
+      const authorizationURL = new URL(login.headers.get("location")!);
+      const callback = await worker.fetch(
+        new Request(
+          `https://admin.example/auth/google/callback?code=authorization-code&state=${authorizationURL.searchParams.get("state")}`,
+          {
+            headers: {
+              cookie: login.headers.get("set-cookie")!.split(";", 1)[0],
+            },
+          },
+        ),
+        oauthEnv as never,
+      );
+
+      expect(callback.status).toBe(302);
+      const nativeCompletion = new URL(
+        callback.headers.get("location")!,
+        "https://admin.example",
+      );
+      expect(nativeCompletion.pathname).toBe("/auth/native-app/complete");
+      expect(nativeCompletion.searchParams.get("state")).toBe(state);
+      expect(nativeCompletion.searchParams.get("challenge")).toBe(challenge);
+      expect(nativeCompletion.searchParams.get("redirect_uri")).toBe(
+        redirectURI,
+      );
+      const sessionCookie = callback.headers
+        .getSetCookie()
+        .find((cookie) => cookie.startsWith("atlasez_admin_session="));
+      expect(sessionCookie).toBeTruthy();
+
+      const nativeCallback = await worker.fetch(
+        new Request(nativeCompletion, {
+          headers: { cookie: sessionCookie!.split(";", 1)[0] },
+        }),
+        oauthEnv as never,
+      );
+      expect(nativeCallback.status).toBe(302);
+      const destination = new URL(nativeCallback.headers.get("location")!);
+      expect(destination.origin).toBe("http://127.0.0.1:43127");
+      expect(destination.pathname).toBe("/callback");
+      expect(destination.searchParams.get("state")).toBe(state);
+      expect(destination.searchParams.get("code")).toMatch(/^[0-9a-f-]{72}$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("returns to the requested admin page with a valid hashed session", async () => {
     const writes: Array<{ query: string; values: unknown[] }> = [];
     let accountLookupCount = 0;
@@ -916,6 +1034,209 @@ describe("Google OAuth login callback", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("standalone macOS app authentication", () => {
+  it("routes app login through the existing Google OAuth callback", async () => {
+    const state = "s".repeat(43);
+    const challenge = "c".repeat(43);
+    const redirectURI = "http://127.0.0.1:43127/callback";
+    const response = await worker.fetch(
+      new Request(
+        `https://admin.example/auth/native-app/start?state=${state}&challenge=${challenge}&redirect_uri=${encodeURIComponent(redirectURI)}`,
+      ),
+      env("google-oauth", {
+        GOOGLE_OAUTH_CLIENT_ID: "client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET: "client-secret",
+      }) as never,
+    );
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.pathname).toBe("/auth/google/login");
+    const returnTo = new URL(
+      location.searchParams.get("returnTo")!,
+      "https://admin.example",
+    );
+    expect(returnTo.pathname).toBe("/auth/native-app/complete");
+    expect(returnTo.searchParams.get("state")).toBe(state);
+    expect(returnTo.searchParams.get("challenge")).toBe(challenge);
+    expect(returnTo.searchParams.get("redirect_uri")).toBe(redirectURI);
+  });
+
+  it("exchanges a valid one-time PKCE grant for a server-side admin session", async () => {
+    const code = "11111111-1111-4111-8111-111111111111".repeat(2);
+    const verifier = "verifier_value_0123456789abcdefghijklmnopqrstuvwxyz";
+    const challenge = [
+      ...new Uint8Array(
+        await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(verifier),
+        ),
+      ),
+    ]
+      .map((byte) => String.fromCharCode(byte))
+      .join("");
+    const challengeEncoded = btoa(challenge)
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replace(/=+$/, "");
+    let grantConsumed = false;
+    const writes: { query: string; values: unknown[] }[] = [];
+    const database = {
+      prepare(query: string) {
+        const statement = new Statement(query);
+        const baseBind = statement.bind.bind(statement);
+        statement.bind = (...values: unknown[]) => {
+          baseBind(...values);
+          return statement;
+        };
+        statement.first = async <T>() => {
+          if (query.includes("FROM admin_native_app_grants g"))
+            return (
+              grantConsumed
+                ? null
+                : {
+                    session_hash: "browser-session-hash",
+                    code_challenge: challengeEncoded,
+                    email: "admin@example.com",
+                    account_id: "account-1",
+                    google_subject: "google-subject",
+                    expires_at: new Date(
+                      Date.now() + 60 * 60 * 1000,
+                    ).toISOString(),
+                  }
+            ) as T;
+          return null as T;
+        };
+        statement.run = async () => {
+          writes.push({ query, values: statement.boundValues });
+          if (query.includes("DELETE FROM admin_native_app_grants")) {
+            if (grantConsumed) return { meta: { changes: 0 } };
+            grantConsumed = true;
+          }
+          return { meta: { changes: 1 } };
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/auth/native-app/redeem", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code, verifier }),
+      }),
+      { ...env("google-oauth"), REPORTS: database } as never,
+    );
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      sessionToken: string;
+      expiresAt: string;
+    };
+    expect(payload.sessionToken).toMatch(/^[0-9a-f-]{72}$/);
+    expect(Date.parse(payload.expiresAt)).toBeGreaterThan(Date.now());
+    expect(
+      writes.some(({ query }) =>
+        query.includes("INSERT INTO admin_auth_sessions"),
+      ),
+    ).toBe(true);
+
+    const replay = await worker.fetch(
+      new Request("https://admin.example/auth/native-app/redeem", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code, verifier }),
+      }),
+      { ...env("google-oauth"), REPORTS: database } as never,
+    );
+    expect(replay.status).toBe(401);
+  });
+
+  it("creates an expiring app grant only from an authenticated web session", async () => {
+    const state = "s".repeat(43);
+    const challenge = "c".repeat(43);
+    const redirectURI = "http://127.0.0.1:43127/callback";
+    const writes: { query: string; values: unknown[] }[] = [];
+    const database = {
+      prepare(query: string) {
+        const statement = new Statement(query);
+        statement.first = async <T>() =>
+          query.includes("FROM admin_auth_sessions s")
+            ? ({
+                email: "admin@example.com",
+                canonical_email: "admin@example.com",
+              } as T)
+            : (null as T);
+        statement.run = async () => {
+          writes.push({ query, values: statement.boundValues });
+          return {
+            meta: {
+              changes: query.includes("DELETE FROM admin_native_app_grants")
+                ? 0
+                : 1,
+            },
+          };
+        };
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request(
+        `https://admin.example/auth/native-app/complete?state=${state}&challenge=${challenge}&redirect_uri=${encodeURIComponent(redirectURI)}`,
+        {
+          headers: { cookie: "atlasez_admin_session=existing-session-token" },
+        },
+      ),
+      { ...env("google-oauth"), REPORTS: database } as never,
+    );
+    expect(response.status).toBe(302);
+    const callback = new URL(response.headers.get("location")!);
+    expect(callback.protocol).toBe("http:");
+    expect(callback.hostname).toBe("127.0.0.1");
+    expect(callback.port).toBe("43127");
+    expect(callback.pathname).toBe("/callback");
+    expect(callback.searchParams.get("state")).toBe(state);
+    expect(callback.searchParams.get("code")).toMatch(/^[0-9a-f-]{72}$/);
+    const grantInsert = writes.find(({ query }) =>
+      query.includes("INSERT INTO admin_native_app_grants"),
+    );
+    expect(grantInsert?.values[1]).toMatch(/^[a-f0-9]{64}$/);
+    expect(grantInsert?.values[2]).toBe(challenge);
+    expect(grantInsert?.query).toContain("WHERE EXISTS");
+  });
+
+  it("rejects a grant when the PKCE verifier does not match", async () => {
+    const database = {
+      prepare(query: string) {
+        const statement = new Statement(query);
+        if (query.includes("FROM admin_native_app_grants g"))
+          statement.first = async <T>() =>
+            ({
+              session_hash: "browser-session-hash",
+              code_challenge: "not-the-challenge",
+              email: "admin@example.com",
+              account_id: "account-1",
+              google_subject: "google-subject",
+              expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            }) as T;
+        return statement;
+      },
+      batch: async () => [],
+    };
+    const response = await worker.fetch(
+      new Request("https://admin.example/auth/native-app/redeem", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: "11111111-1111-4111-8111-111111111111".repeat(2),
+          verifier: "v".repeat(43),
+        }),
+      }),
+      { ...env("google-oauth"), REPORTS: database } as never,
+    );
+    expect(response.status).toBe(401);
   });
 });
 

@@ -1,0 +1,111 @@
+name: Release Atlasez Admin for macOS
+
+on:
+  push:
+    tags:
+      - "admin-v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing admin-v* tag to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-admin-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Ensure release source is on main
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^admin-v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          git fetch origin main --tags
+          release_sha="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          if [[ "$(git rev-parse HEAD)" != "$release_sha" ]]; then
+            echo "Checked out commit does not match $RELEASE_TAG." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$release_sha" origin/main
+
+      - name: Build universal app and DMG
+        env:
+          ADMIN_APP_VERSION: ${{ env.RELEASE_TAG }}
+          ADMIN_APP_BUILD_VERSION: ${{ github.run_number }}
+          ATLASEZ_APP_OUTPUT: dist-macos/release/Atlasez運営.app
+        run: |
+          set -euo pipefail
+          version="${ADMIN_APP_VERSION#admin-v}"
+          ADMIN_APP_VERSION="$version" npm run build:admin:dmg -- dist-macos/release/Atlasez-Admin.dmg
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist-macos/release/Atlasez運営.app" \
+            "dist-macos/release/Atlasez-Admin-Mac.zip"
+          cat > dist-macos/release/Atlasez-Admin-Mac.md <<EOF
+          Atlasez運営 $version
+
+          - 運営サイトの既存画面をそのまま使う独立macOSアプリです。
+          - Googleログインは既定ブラウザで行い、認証情報はKeychainに保存します。
+          - 更新署名の検証とアプリ内アップデートに対応しました。
+          EOF
+
+      - name: Generate signed Sparkle appcast
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_EDDSA_PRIVATE_KEY" ]]; then
+            echo "SPARKLE_EDDSA_PRIVATE_KEY repository secret is required." >&2
+            exit 1
+          fi
+          sparkle_version="2.10.0"
+          sparkle_sha256="17e28312b8e18ab7cdbbe09a6fb28cc55a5479ec6c371dbc07cdecd2a14fd959"
+          sparkle_archive="$RUNNER_TEMP/Sparkle.zip"
+          curl --fail --location --silent --show-error \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$sparkle_version/Sparkle-for-Swift-Package-Manager.zip" \
+            --output "$sparkle_archive"
+          printf '%s  %s\n' "$sparkle_sha256" "$sparkle_archive" | shasum --check --status
+          unzip -q "$sparkle_archive" -d "$RUNNER_TEMP/sparkle"
+          archive_dir="$GITHUB_WORKSPACE/dist-macos/release"
+          appcast_dir="$RUNNER_TEMP/appcast"
+          mkdir -p "$appcast_dir"
+          cp "$archive_dir/Atlasez-Admin-Mac.zip" "$appcast_dir/"
+          cp "$archive_dir/Atlasez-Admin-Mac.md" "$appcast_dir/"
+          printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" | \
+            "$RUNNER_TEMP/sparkle/bin/generate_appcast" \
+              --ed-key-file - \
+              --download-url-prefix "https://github.com/Atlasez/Admin-Atlesez/releases/download/${RELEASE_TAG}/" \
+              --embed-release-notes \
+              "$appcast_dir"
+          cp "$appcast_dir/appcast.xml" "$archive_dir/appcast.xml"
+
+      - name: Publish versioned download and update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#admin-v}"
+          gh release create "$RELEASE_TAG" \
+            --repo Atlasez/Admin-Atlesez \
+            --title "Atlasez運営 $version" \
+            --notes-file dist-macos/release/Atlasez-Admin-Mac.md \
+            --latest \
+            dist-macos/release/Atlasez-Admin.dmg \
+            dist-macos/release/Atlasez-Admin-Mac.zip \
+            dist-macos/release/appcast.xml

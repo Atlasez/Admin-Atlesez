@@ -1,0 +1,20 @@
+{
+  "name": "Atlasez 運営サイト",
+  "short_name": "Atlasez運営",
+  "description": "学習サイト「アトラス」の運営ワークスペース",
+  "id": "/admin/",
+  "start_url": "/admin/atlas/?source=pwa",
+  "scope": "/admin/",
+  "display": "standalone",
+  "background_color": "#101214",
+  "theme_color": "#101214",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/images/atlasez-logo.png",
+      "sizes": "1280x1280",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

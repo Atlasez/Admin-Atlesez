@@ -22,6 +22,12 @@ const { title, description, darkReaderLock = false } = Astro.props;
         noindex={true}
         enableArticleEnhancements={false}
       />
+      <link rel="manifest" href="/admin-manifest.webmanifest" />
+      <link rel="apple-touch-icon" href="/images/atlasez-logo.png" />
+      <meta name="theme-color" content="#101214" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-title" content="Atlasez運営" />
       {darkReaderLock && <meta name="darkreader-lock" />}
     </head>
   <body data-admin-shell>
@@ -29,6 +35,12 @@ const { title, description, darkReaderLock = false } = Astro.props;
     <AdminNav />
     <div class="admin-layout-main"><slot /></div>
     <script>
+      // 仮のPWA版。オフラインキャッシュはまだ行わず、常に本番APIの
+      // 最新状態と認証セッションを利用する。
+      if ("serviceWorker" in navigator) {
+        void navigator.serviceWorker.register("/admin-sw.js", { scope: "/admin/" });
+      }
+
       // Native multi-selects remain the submission source of truth, while a
       // checkbox presentation makes assignment forms discoverable on touch.
       void import("../scripts/admin-multi-select");
