@@ -4205,3 +4205,43 @@ test("公開Runの状態・CI失敗詳細を再読込なしでリアルタイム
   ).toBeVisible();
   expect(documentReads).toBe(readsAfterInitialLoad);
 });
+
+test("遅い自動保存の間に追加した本文を未保存として保持し、続けて保存する", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  const savedBodies: string[] = [];
+  let releaseFirst = () => {};
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  await page.route("**/api/admin/editor/documents/doc-1", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    savedBodies.push(route.request().postDataJSON().body as string);
+    if (savedBodies.length === 1) await firstGate;
+    await route.fulfill({
+      json: {
+        ok: true,
+        updatedAt: `2026-09-30T00:00:0${savedBodies.length}.000Z`,
+      },
+    });
+  });
+  await page.goto("./admin/editor/?document=doc-1");
+  const editor = page.locator(".body-codemirror .cm-content").first();
+  const input = (await editor.count()) ? editor : page.locator("[data-body]");
+  await input.fill("最初の本文");
+  await expect.poll(() => savedBodies.length).toBe(1);
+  await input.fill("保存中に追加した本文");
+  await page.waitForTimeout(2_200);
+  releaseFirst();
+  await expect(page.locator("[data-editor-workspace]")).toHaveAttribute(
+    "data-unsaved-changes",
+    "true",
+  );
+  await expect.poll(() => savedBodies.length).toBe(2);
+  await expect(page.locator("[data-editor-workspace]")).toHaveAttribute(
+    "data-unsaved-changes",
+    "false",
+  );
+  expect(savedBodies).toEqual(["最初の本文", "保存中に追加した本文"]);
+});

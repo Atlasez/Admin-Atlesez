@@ -623,3 +623,113 @@ test("統合された学習サイトの運営内自己紹介を承認できる",
   expect(action).toBe("approve");
   expect(reviewUrl).toContain("/api/admin/project-profile-change-requests/");
 });
+
+test("タスク保存の通信・HTML応答失敗後も再試行でき、作成の連打を防ぐ", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  await page.route("**/api/admin/member-tasks**", (route) =>
+    route.fulfill({
+      json: {
+        scope: { email: "manager@example.com" },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        tasks: [
+          {
+            id: "task-safe",
+            project_id: "atlas",
+            title: "障害試験",
+            status: "open",
+            assignee_email: "manager@example.com",
+          },
+        ],
+      },
+    }),
+  );
+  let writes = 0;
+  await page.route("**/api/admin/operations/tasks/task-safe", async (route) => {
+    writes += 1;
+    if (writes === 1) return route.abort("failed");
+    if (writes === 2)
+      return route.fulfill({
+        status: 502,
+        contentType: "text/html",
+        body: "<html>upstream error</html>",
+      });
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.goto("admin/member-tasks/");
+  const save = page.getByRole("button", { name: "状態を保存" });
+  await save.click();
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(save).toBeEnabled();
+  await expect(page.locator("[data-message]")).toContainText("HTTP 502");
+  await expect(page.locator("[data-message]")).not.toContainText(
+    "Unexpected token",
+  );
+  await save.click();
+  await expect(page.locator("[data-message]")).toContainText(
+    "状態を更新しました",
+  );
+  let creates = 0;
+  await page.route("**/api/admin/operations/tasks", async (route) => {
+    creates += 1;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.locator("[data-title]").fill("新規タスク");
+  await page.locator("[data-create]").dblclick();
+  await expect(page.locator("[data-create]")).toBeEnabled();
+  expect(creates).toBe(1);
+});
+
+test("タスク検索はAPIに条件を渡し、全件数と表示件数を区別する", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  const queries: URLSearchParams[] = [];
+  await page.route("**/api/admin/member-tasks**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    queries.push(params);
+    const searching = params.get("q") === "後半";
+    return route.fulfill({
+      json: {
+        scope: { email: "manager@example.com" },
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        tasks: searching
+          ? [
+              {
+                id: "later-task",
+                project_id: "atlas",
+                title: "後半のタスク",
+                status: "open",
+                assignee_email: "manager@example.com",
+                due_at: "2026-09-30T10:00",
+                due_timezone: "America/New_York",
+              },
+            ]
+          : [],
+        summary: {
+          total: searching ? 61 : 0,
+          open: searching ? 61 : 0,
+          doing: 0,
+          done: 0,
+        },
+      },
+    });
+  });
+  await page.goto("admin/member-tasks/");
+  await page.locator("[data-task-search]").fill("後半");
+  await expect(
+    page.getByRole("heading", { name: "後半のタスク" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-result-count]")).toHaveText(
+    "61件中 1件を表示",
+  );
+  await expect(page.locator("[data-list]")).toContainText(
+    "2026-09-30 10:00 (America/New_York)",
+  );
+  expect(queries.at(-1)?.get("q")).toBe("後半");
+  await page.locator("[data-status-filter]").selectOption("doing");
+  await expect.poll(() => queries.at(-1)?.get("status")).toBe("doing");
+});
