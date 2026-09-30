@@ -1,3 +1,5 @@
+import type { D1Database, D1PreparedStatement } from "./lib/admin-database";
+import { readOperationsInsights } from "./lib/admin-operations-insights";
 import {
   EDITORIAL_ASSET_ID_PATTERN,
   EDITORIAL_IMAGE_TYPES,
@@ -41,19 +43,6 @@ interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
 
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<{ meta?: { changes?: number } }>;
-  all<T>(): Promise<{ results: T[] }>;
-  first<T>(): Promise<T | null>;
-}
-
-interface D1Database {
-  prepare(query: string): D1PreparedStatement;
-  batch<T = unknown>(
-    statements: D1PreparedStatement[],
-  ): Promise<Array<{ results: T[]; meta?: { changes?: number } }>>;
-}
 
 type DurableObjectId = object;
 interface DurableObjectStub {
@@ -12386,6 +12375,17 @@ async function completeApplicationInterview(
   return json({ ok: true, decision, assignedSubjects, finalizedAt: now, application: await applicationResult.json() });
 }
 
+async function operationsInsights(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const project = await resolveOperationProject(env, scope, new URL(request.url).searchParams.get("project") || "atlas");
+  if (isResponse(project)) return project;
+  const role = await operationProjectRole(env, scope, project.id);
+  if (!role) return json({ error: "このプロジェクトのメンバーではありません。" }, 403);
+  return json(await readOperationsInsights(env.REPORTS, { projectId: project.id, email: scope.email, subjects: scope.subjects, allSubjects: scope.allSubjects || role === "manager" }, new Date()));
+}
+
 async function operationsOverview(
   request: Request,
   env: Env,
@@ -20133,7 +20133,7 @@ async function startPublicationReview(
   if (managerCanBypassReview) {
     const now = new Date().toISOString();
     await env.REPORTS.prepare(
-      `UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+      `UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, publication_review_started_at=NULL, reviewed_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
     ).bind(now, now, scope.email, documentId).run();
     await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, expectedUpdatedAt: document.updated_at, metadata: { managerOverride: true }, createdAt: now });
     await recordAdminAudit(env, scope.email, "article_approved", "article", documentId, document.title, `全分野管理者が記事を承認：${document.title}`, { managerOverride: true });
@@ -20163,9 +20163,9 @@ async function startPublicationReview(
   const now = new Date().toISOString();
   const round = (document.publication_review_round ?? 0) + 1;
   await env.REPORTS.prepare(
-    `UPDATE editorial_documents SET status='in-review', publication_review_stage=?, publication_review_round=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+    `UPDATE editorial_documents SET status='in-review', publication_review_stage=?, publication_review_round=?, publication_review_started_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
   )
-    .bind(stage, round, now, scope.email, documentId)
+    .bind(stage, round, now, now, scope.email, documentId)
     .run();
   if (document.status !== "in-review")
     await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "in-review", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: document.updated_at, metadata: { stage }, createdAt: now });
@@ -20235,7 +20235,7 @@ async function decidePublicationReview(
   ).bind(crypto.randomUUID(), documentId, document.publication_review_round, stage, decision, scope.email, reviewNote, now).run();
   if (decision === "rejected") {
     await env.REPORTS.prepare(
-      "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+      "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, publication_review_started_at=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
@@ -20243,14 +20243,14 @@ async function decidePublicationReview(
   }
   if (stage === "subject-coordinator" && leaders.length && !scope.isManager) {
     await env.REPORTS.prepare(
-      "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
-    ).bind(now, scope.email, documentId).run();
+      "UPDATE editorial_documents SET publication_review_stage='project-leader', publication_review_started_at=?, updated_at=?, updated_by=? WHERE id=?",
+    ).bind(now, now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査依頼（プロジェクトリーダー）：${document.title}`);
     return json({ ok: true, status: "in-review", stage: "project-leader" });
   }
   await env.REPORTS.prepare(
-    "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
+    "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, publication_review_started_at=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
   ).bind(now, now, scope.email, documentId).run();
   await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: document.updated_at, metadata: { reviewStage: stage }, createdAt: now });
   await notifyEditorialDocumentChange(env, documentId);
@@ -23025,6 +23025,8 @@ async function handleAdminRequest(
       env,
       applicationDiscordRetryMatch[1],
     );
+  if (url.pathname === "/api/admin/operations-statistics" && request.method === "GET")
+    return operationsInsights(request, env);
   if (url.pathname === "/api/admin/operations" && request.method === "GET")
     return operationsOverview(request, env);
   if (url.pathname === "/api/admin/progress" && request.method === "GET")

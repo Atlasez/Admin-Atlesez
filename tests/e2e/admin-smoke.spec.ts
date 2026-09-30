@@ -35,6 +35,16 @@ const mockAdminApis = async (page: Page) => {
             members: [],
             tasks: [],
           };
+        case "/api/admin/operations-statistics":
+          return {
+            generatedAt: "2026-10-01T03:00:00Z",
+            tasks: { total: 0, unfinished: 0, overdue: 0, lastUpdatedAt: null },
+            workload: [],
+            events: 0,
+            reports: 0,
+            approval: { total: 0, unknownStart: 0, oldestDays: null },
+            waiting: [],
+          };
         case "/api/admin/operations":
           return { events: [] };
         case "/api/admin/progress":
@@ -534,3 +544,55 @@ for (const [label, path] of responsiveSmokePages) {
     });
   }
 }
+
+test("運営統計は全件集計と未記録の待ち時間を区別して表示する", async ({
+  page,
+}) => {
+  await mockAdminApis(page);
+  await page.route("**/api/admin/operations-statistics*", async (route) =>
+    route.fulfill({
+      json: {
+        generatedAt: "2026-10-01T03:00:00Z",
+        tasks: {
+          total: 245,
+          unfinished: 205,
+          overdue: 4,
+          lastUpdatedAt: "2026-10-01T00:00:00Z",
+        },
+        workload: [{ name: "担当A", unfinished: 205, doing: 3, overdue: 4 }],
+        events: 120,
+        reports: 400,
+        approval: { total: 2, unknownStart: 1, oldestDays: 2 },
+        waiting: [
+          {
+            id: "doc-1",
+            title: "古い待ち",
+            stage: "subject-coordinator",
+            startedAt: "2026-09-29T03:00:00Z",
+          },
+          {
+            id: "doc-2",
+            title: "未記録",
+            stage: "project-leader",
+            startedAt: null,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("admin/operations-statistics/");
+  const root = page.locator("[data-operations-statistics]");
+  await expect(root).toHaveAttribute("data-admin-load-state", "ready");
+  await expect(root.locator('[data-metric="tasks"]')).toHaveText("205");
+  await expect(root.locator('[data-metric="reports"]')).toHaveText("400");
+  await expect(root.locator('[data-metric="overdue"]')).toHaveText("4");
+  await expect(root.locator('[data-metric="waiting-days"]')).toHaveText("2日");
+  await expect(root.locator("[data-waiting-unknown]")).toHaveText(
+    "開始日時未記録: 1件",
+  );
+  await expect(root.locator("[data-waiting]")).toContainText("分野統括 / 2日");
+  await expect(root.locator("[data-waiting]")).toContainText(
+    "プロジェクトリーダー / 開始日時未記録",
+  );
+  await expect(root.locator("[data-workload]")).toContainText("担当A");
+});
