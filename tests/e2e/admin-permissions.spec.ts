@@ -245,7 +245,7 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   }));
   expect(darkThemeMetrics).toEqual({
     bodyBackground: "rgb(25, 26, 28)",
-    cardBackground: "rgb(35, 36, 39)",
+    cardBackground: "rgb(25, 26, 28)",
     cardText: "rgb(232, 230, 225)",
     inputBackground: "rgb(25, 26, 28)",
   });
@@ -439,4 +439,99 @@ test("分野統括は同じ分野の共同担当と一人の兼任を表示・�
   await expect(
     page.locator('[data-workflow-subject-group="mathematics"]'),
   ).toContainText("1人（共同担当）");
+});
+
+test("権限管理の列配置と展開フォーム・操作メニューは狭い幅と全テーマで収まる", async ({
+  page,
+}) => {
+  await page.route("**/api/admin/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    await route.fulfill({
+      json: path.endsWith("report-admin-permissions")
+        ? {
+            permissions: [
+              {
+                email: "long-address-for-responsive-permissions@example.com",
+                display_name: "長い名前の運営メンバー",
+                subjects: "mathematics,physics",
+                discord_user_id: "123456789012345678",
+                discord_role_ids: "math",
+              },
+            ],
+            workflowRoles: [],
+            discordRoles: [
+              {
+                discord_role_id: "math",
+                name: "長い名前のDiscord役職表示確認",
+                position: 1,
+                is_managed: 0,
+              },
+            ],
+          }
+        : {},
+    });
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("./admin/permissions/?project=atlas");
+  const row = page.locator(".member-card");
+  await expect(row).toBeVisible();
+  const addControl = page.locator(".action-card--primary > summary");
+  await expect(addControl).toBeVisible();
+  await addControl.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-add-form]")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-add-form]")).toBeHidden();
+  const columns = await row.evaluate((element) =>
+    [...element.children].map((child) => ({
+      x: child.getBoundingClientRect().left,
+      y: child.getBoundingClientRect().top,
+    })),
+  );
+  const tops = columns.map((column) => column.y);
+  expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(4);
+  expect(columns.map((column) => column.x)).toEqual(
+    [...columns.map((column) => column.x)].sort((a, b) => a - b),
+  );
+  await expect(row.locator(".member-card__status")).toHaveText("連携済み");
+
+  for (const width of [980, 640, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ["light", "dark", "black"]) {
+      await page.locator("html").evaluate((html, value) => {
+        html.dataset.prefBg = value === "light" ? "white" : "dark";
+        html.dataset.prefMode = value === "black" ? "black" : "";
+      }, theme);
+      await page
+        .locator(".action-card")
+        .evaluateAll((elements) =>
+          elements.forEach(
+            (element) => ((element as HTMLDetailsElement).open = true),
+          ),
+        );
+      const widths = await page.locator("body").evaluate((body) => ({
+        body: body.scrollWidth,
+        viewport: body.clientWidth,
+      }));
+      expect(widths.body, `${width} / ${theme}`).toBeLessThanOrEqual(
+        widths.viewport + 1,
+      );
+      await row.locator(".member-action-menu > summary").click();
+      const menu = await row.locator(".member-action-menu > div").boundingBox();
+      expect(menu?.x).toBeGreaterThanOrEqual(0);
+      expect((menu?.x ?? 0) + (menu?.width ?? 0)).toBeLessThanOrEqual(width);
+      await row.locator(".member-action-menu > summary").click();
+      await row.locator(".member-card__name").click();
+      const modal = page.locator("[data-member-modal]");
+      await expect(modal).toBeVisible();
+      const bounds = await modal.boundingBox();
+      expect(bounds?.x).toBeGreaterThanOrEqual(0);
+      expect(bounds?.y).toBeGreaterThanOrEqual(0);
+      expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(
+        width,
+      );
+      expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual(900);
+      await modal.locator(".member-modal__cancel").click();
+    }
+  }
 });
