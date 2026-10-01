@@ -13,6 +13,7 @@ import {
   type EditorialImageType,
 } from "./lib/editorial-media";
 
+import { memberTaskFilters } from "./lib/member-task-filters";
 import { isAdminPagePath } from "./lib/admin-routes";
 import {
   canAccess,
@@ -10411,14 +10412,23 @@ async function memberTasksOverview(
   );
   visibleValues.push(scope.email, scope.email, scope.email, ...scope.subjects);
   const visibilityFilter = ` AND (${visiblePredicates.join(" OR ")})`;
-  const [tasks, members] = await Promise.all([
+  const baseWhere = `project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${visibilityFilter}`;
+  const baseValues = [...projectIds, ...visibleValues];
+  const needsDueBounds = ["overdue", "today", "week"].includes(searchParams.get("due") ?? "");
+  const zones = needsDueBounds
+    ? await env.REPORTS.prepare(`SELECT DISTINCT due_timezone FROM editorial_tasks WHERE ${baseWhere}`).bind(...baseValues).all<{ due_timezone: string }>()
+    : { results: [] };
+  const filters = memberTaskFilters(searchParams, scope.email, projects, zones.results.map((row) => row.due_timezone || "Asia/Tokyo"));
+  const filteredWhere = `${baseWhere}${filters.sql}`;
+  const filteredValues = [...baseValues, ...filters.values];
+  const [tasks, members, counts] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
         created_by,created_at,updated_at,archived_at,archived_by,archive_expires_at FROM editorial_tasks
-       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${visibilityFilter}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
+       WHERE ${filteredWhere}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
        ORDER BY ${statusRank},${archivedRank},${dueRank},COALESCE(due_at, '') ASC,updated_at DESC,id DESC LIMIT ?`,
     )
-      .bind(...projectIds, ...visibleValues, ...taskCursorValues, pageLimit + 1)
+      .bind(...filteredValues, ...taskCursorValues, pageLimit + 1)
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT m.project_id,m.email,
@@ -10430,6 +10440,9 @@ async function memberTasksOverview(
     )
       .bind(...projectIds)
       .all<Record<string, unknown>>(),
+    env.REPORTS.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) AS open, SUM(CASE WHEN status='doing' THEN 1 ELSE 0 END) AS doing, SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) AS done FROM editorial_tasks WHERE ${filteredWhere}`)
+      .bind(...filteredValues)
+      .first<{ total: number; open: number; doing: number; done: number }>(),
   ]);
   const fetchedTasks = tasks.results ?? [];
   const hasMoreTasks = fetchedTasks.length > pageLimit;
@@ -10501,6 +10514,7 @@ async function memberTasksOverview(
     },
     projects,
     tasks: visibleTasks,
+    summary: counts ?? { total: visibleTasks.length, open: pageTasks.filter((task) => task.status === "open").length, doing: pageTasks.filter((task) => task.status === "doing").length, done: pageTasks.filter((task) => task.status === "done").length },
     members: visibleMembers,
     pagination: { limit: pageLimit, nextCursor: nextTaskCursor, hasMore: hasMoreTasks },
   });
