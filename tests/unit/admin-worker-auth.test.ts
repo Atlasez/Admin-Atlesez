@@ -2324,6 +2324,11 @@ describe("applicant stage server-side access", () => {
       memberEnvironment as never,
     );
     expect(adminApi.status).toBe(403);
+    const statisticsApi = await worker.fetch(
+      loggedInRequest("/api/admin/operations-statistics"),
+      memberEnvironment as never,
+    );
+    expect(statisticsApi.status).toBe(403);
 
     const applicantApi = await worker.fetch(
       loggedInRequest("/api/admin/portal"),
