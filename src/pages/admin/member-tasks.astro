@@ -7,7 +7,7 @@ const timezones = getTimeZoneOptions(new Date());
 <AdminLayout title="タスク管理" description="参加中のプロジェクトのタスクを横断管理します">
   <main class="member-tasks" data-member-tasks data-admin-load-surface data-admin-load-state="loading" aria-busy="true">
     <header class="task-page-header">
-      <div><h1>タスク管理</h1></div>
+      <div><h1>タスク管理</h1><a href="/admin/task-templates/">テンプレート・定期作成 →</a></div>
       <div class="task-header-actions">
         <a class="task-page-link" href="/admin/action-center/">未対応を確認 <span aria-hidden="true">→</span></a>
         <button class="primary-cta" type="button" data-scroll-create><span aria-hidden="true">＋</span>タスクを追加</button>
