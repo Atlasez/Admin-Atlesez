@@ -167,6 +167,19 @@ test("参加者カードは概要表示に絞り、個人設定モーダルを�
   await card.getByRole("button", { name: "編集担当の個人設定を開く" }).click();
   const memberModal = page.locator("[data-member-modal]");
   await expect(memberModal).toBeVisible();
+  const changePreview = memberModal.getByRole("region", {
+    name: "担当権限の変更案",
+  });
+  await expect(changePreview).toContainText("追加: なし");
+  await memberModal
+    .locator("[data-modal-permission-subjects]")
+    .selectOption(["physics"]);
+  await expect(changePreview).toContainText("追加: 物理（担当）");
+  await expect(changePreview).toContainText("解除: 数学（担当）");
+  await memberModal
+    .locator("[data-modal-permission-subjects]")
+    .selectOption(["mathematics"]);
+  await expect(changePreview).toContainText("追加: なし");
   const shellGeometry = await memberModal
     .locator(".member-modal__shell")
     .evaluate((element) => {

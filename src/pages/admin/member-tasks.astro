@@ -25,7 +25,7 @@ const timezones = getTimeZoneOptions(new Date());
       <div class="finder-heading"><div><h2 id="task-finder-title">条件からタスクを探す</h2><p>おわかりになる項目だけ指定して、必要なタスクをすばやく表示します。</p></div><span class="finder-hint">複数指定できます</span></div>
       <div class="finder-grid">
         <label class="finder-keyword"><span>キーワード</span><input data-task-search type="search" placeholder="タスク名・内容・プロジェクト名" /></label>
-        <label><span>進捗</span><select data-status-filter><option value="all">すべて</option><option value="open">未着手</option><option value="doing">進行中</option><option value="done">完了</option></select></label>
+        <label><span>進捗</span><select data-status-filter><option value="all">すべて</option><option value="unfinished">未完了</option><option value="open">未着手</option><option value="doing">進行中</option><option value="done">完了</option></select></label>
         <label><span>期限</span><select data-due-filter><option value="all">すべて</option><option value="overdue">期限超過</option><option value="today">今日</option><option value="week">7日以内</option><option value="none">期限なし</option></select></label>
         <button class="finder-submit" type="button" data-apply-filters><span aria-hidden="true">⌕</span>検索</button>
         <button class="finder-reset" type="button" data-clear-filters>条件をリセット</button>

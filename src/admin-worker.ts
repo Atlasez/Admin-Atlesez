@@ -1,3 +1,4 @@
+import { handleTaskWorkspace, type TaskWorkspaceAccess, type WorkspaceTask } from "./lib/admin-task-workspace";
 import type { D1Database, D1PreparedStatement } from "./lib/admin-database";
 import { readOperationsInsights } from "./lib/admin-operations-insights";
 import { handleNotificationFeatures, loadNotificationPreferences, notificationSourceMetadata, notificationFeatureFilter, importantKinds } from "./lib/admin-notification-features";
@@ -2306,6 +2307,7 @@ const adminAuditActionLabel = (action: AdminAuditAction | string) => ({
   member_restored: "運営メンバーを復元",
   task_archived: "タスクをアーカイブ",
   task_restored: "タスクを復元",
+  task_workspace_updated: "タスク詳細・引き継ぎを更新",
   taxonomy_created: "分野・カテゴリを追加",
   taxonomy_updated: "分野・カテゴリを更新",
   taxonomy_archived: "分野・カテゴリをアーカイブ",
@@ -10343,6 +10345,56 @@ async function memberProcedureRequests(
     )
     .run();
   return json({ ok: true, request: { id, procedure_type: procedureType, effective_from: effectiveFrom, effective_until: effectiveUntil, reason, note, status: "pending", created_at: now } });
+}
+
+async function myAccessOverview(request: Request, env: Env): Promise<Response> {
+  const scope = await getMemberOperationScope(request, env);
+  if (isResponse(scope)) return scope;
+  const projects = await accessibleOperationProjects(env, scope);
+  return json({
+    allSubjects: scope.allSubjects,
+    isManager: scope.isManager,
+    subjects: scope.subjects.map(subject => ({ id: subject, label: APPLICATION_SUBJECT_LABELS[subject] ?? subject })),
+    coordinatorSubjects: scope.coordinatorSubjects ?? [],
+    isProjectLeader: Boolean(scope.isProjectLeader),
+    canEditArticles: !scope.memberAccess && (scope.allSubjects || scope.subjects.length > 0),
+    projects: projects.map(project => ({ id: project.id, name: project.name, role: projectRoleLabel(project.role), canManage: project.role === "manager" })),
+  });
+}
+
+async function taskWorkspace(request: Request, env: Env, taskId: string): Promise<Response> {
+  const scope = await getMemberOperationScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (request.method !== "GET" && !isSameOrigin(request)) return json({ error: "この送信元からは受け付けられません。" }, 403);
+  const projects = await accessibleOperationProjects(env, scope);
+  const projectMap = new Map(projects.map(project => [project.id, project]));
+  const access = async (id: string): Promise<TaskWorkspaceAccess | null> => {
+    const task = await env.REPORTS.prepare("SELECT id,project_id,subject,title,status,assignee_email,task_kind,created_by,updated_at,archived_at FROM editorial_tasks WHERE id=?").bind(id).first<WorkspaceTask & { task_kind: string; created_by: string }>();
+    if (!task || !projectMap.has(task.project_id)) return null;
+    const manager = scope.isManager || projectMap.get(task.project_id)?.role === "manager";
+    const owned = taskAssignedTo(task.assignee_email, scope.email, task.task_kind) || task.created_by.toLowerCase() === scope.email.toLowerCase();
+    const visible = manager || owned || !task.subject || scope.subjects.includes(task.subject) || (task.task_kind === "feedback" && task.assignee_email === "*");
+    return visible ? { task, canEdit: manager || owned, canAssign: Boolean(manager) } : null;
+  };
+  return handleTaskWorkspace(request, taskId, {
+    db: env.REPORTS, email: scope.email, access,
+    documentAllowed: async id => {
+      // Article routes require an admin scope independently of membership in a project.
+      if (scope.memberAccess) return false;
+      const document = await env.REPORTS.prepare("SELECT subject,created_by FROM editorial_documents WHERE id=? AND archived_at IS NULL").bind(id).first<{ subject: string; created_by: string }>();
+      return Boolean(document && (canEditSubject(scope, document.subject) || document.created_by === scope.email));
+    },
+    candidates: async (projectId, query) => {
+      const project = projectMap.get(projectId);
+      if (!project) return [];
+      const manager = scope.isManager || project.role === "manager";
+      const subjectWhere = scope.subjects.length ? `subject IN (${scope.subjects.map(() => "?").join(",")})` : "0=1";
+      const visibility = manager ? "1=1" : `(lower(created_by)=lower(?) OR instr(','||lower(COALESCE(assignee_email,''))||',',','||lower(?)||',')>0 OR subject IS NULL OR (task_kind='feedback' AND assignee_email='*') OR ${subjectWhere})`;
+      const values = manager ? [] : [scope.email, scope.email, ...scope.subjects];
+      const rows = await env.REPORTS.prepare(`SELECT id,title,status FROM editorial_tasks WHERE project_id=? AND id!=? AND archived_at IS NULL AND ${visibility} AND instr(lower(title),lower(?))>0 ORDER BY updated_at DESC,id DESC LIMIT 30`).bind(projectId, taskId, ...values, query).all<{ id: string; title: string; status: string }>();
+      return rows.results;
+    },
+  });
 }
 
 async function taskTemplates(request:Request,env:Env):Promise<Response> {
@@ -20566,6 +20618,8 @@ const memberPagePaths = new Set([
   "/admin/task-templates/",
   "/admin/member-tasks",
   "/admin/member-tasks/",
+  "/admin/task-detail",
+  "/admin/task-detail/",
   "/admin/member-calendar",
   "/admin/member-calendar/",
 ]);
@@ -20575,6 +20629,7 @@ const memberScopedApiMethods = new Map<string, ReadonlySet<string>>([
   ["/api/admin/portal", new Set(["GET"])],
   ["/api/admin/task-templates", new Set(["GET","POST"])],
   ["/api/admin/member-tasks", new Set(["GET"])],
+  ["/api/admin/my-access", new Set(["GET"])],
   ["/api/admin/member-calendar", new Set(["GET"])],
   ["/api/admin/notifications/preferences", new Set(["GET","PUT"])],
   ["/api/admin/notifications/snooze", new Set(["POST"])],
@@ -20588,6 +20643,7 @@ const memberScopedApiDynamicMethods: Array<{
   path: RegExp;
   methods: ReadonlySet<string>;
 }> = [
+  { path: /^\/api\/admin\/task-workspaces\/[0-9a-f-]{36}$/i, methods: new Set(["GET", "PUT"]) },
   { path: /^\/api\/admin\/task-templates\/[0-9a-f-]{36}$/i, methods: new Set(["PATCH"]) },
   { path: /^\/api\/admin\/task-templates\/[0-9a-f-]{36}\/create$/i, methods: new Set(["POST"]) },
   {
@@ -22978,6 +23034,9 @@ async function handleAdminRequest(
     return adminCommandSearch(request, env);
   if (url.pathname === "/api/admin/member-procedures")
     return memberProcedureRequests(request, env);
+  if (url.pathname === "/api/admin/my-access" && request.method === "GET") return myAccessOverview(request, env);
+  const workspaceMatch = url.pathname.match(/^\/api\/admin\/task-workspaces\/([0-9a-f-]{36})$/i);
+  if (workspaceMatch) return taskWorkspace(request, env, workspaceMatch[1]);
   if (/^\/api\/admin\/task-templates(?:\/[0-9a-f-]{36}(?:\/create)?)?$/i.test(url.pathname)) return taskTemplates(request, env);
   if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
     return memberTasksOverview(request, env);

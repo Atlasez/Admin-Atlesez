@@ -43,6 +43,7 @@ export function memberTaskFilters(
   const status = params.get("status");
   if (status && ["open", "doing", "done"].includes(status))
     add("status=?", status);
+  if (status === "unfinished") add("status<>'done'");
   if (params.get("view") === "created")
     add("lower(created_by)=lower(?)", email);
   if (params.get("view") === "assigned")

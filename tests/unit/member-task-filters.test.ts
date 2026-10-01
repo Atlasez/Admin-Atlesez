@@ -53,6 +53,34 @@ function insert(
 }
 
 describe("横断タスクの全件検索と期限", () => {
+  it("opens unfinished work from statistics while preserving project filters", () => {
+    const db = database();
+    insert(db, "open", "未着手");
+    insert(db, "doing", "進行中", null, "Asia/Tokyo", "doing");
+    insert(db, "done", "完了", null, "Asia/Tokyo", "done");
+    insert(
+      db,
+      "other",
+      "別プロジェクト",
+      null,
+      "Asia/Tokyo",
+      "open",
+      "secretariat",
+    );
+    expect(
+      select(
+        db,
+        new URLSearchParams({
+          status: "unfinished",
+          project: "atlas",
+          view: "all",
+        }),
+      ),
+    ).toEqual([
+      expect.objectContaining({ id: "doing" }),
+      expect.objectContaining({ id: "open" }),
+    ]);
+  });
   it("finds a matching task beyond the first 50 rows and treats SQL metacharacters literally", () => {
     const db = database();
     for (let index = 0; index < 65; index += 1)

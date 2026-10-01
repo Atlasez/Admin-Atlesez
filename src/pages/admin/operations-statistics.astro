@@ -11,6 +11,7 @@ const publishedSubjectCount = subjects.filter((subject) => subject.data.status =
     <header class="page-heading"><div><h1>運営メンバー統計</h1></div><a href="/admin/manage/?project=atlas">← 管理トップ</a></header>
     <section class="metrics" aria-label="運営メンバー統計の概要"><div><span>運営メンバー</span><strong data-metric="members">—</strong><small>登録人数</small></div><div><span>担当分野</span><strong data-metric="assigned">—</strong><small>担当者がいる分野</small></div><div><span>未完了タスク</span><strong data-metric="tasks">—</strong><small>現在のタスク</small></div><div><span>進捗報告</span><strong data-metric="reports">—</strong><small>全件集計</small></div></section>
     <section class="metrics" aria-label="対応待ち"><div><span>期限超過</span><strong data-metric="overdue">—</strong><small>未完了タスク</small></div><div><span>公開審査待ち</span><strong data-metric="approval">—</strong><small>現在の審査段階</small></div><div><span>最長待ち時間</span><strong data-metric="waiting-days">—</strong><small data-waiting-unknown>開始日時未記録: —件</small></div></section>
+    <nav class="statistics-actions" aria-label="対応するタスク"><a href="/admin/member-tasks/?view=all&amp;status=unfinished&amp;project=atlas">未完了タスクを確認</a><a href="/admin/member-tasks/?view=all&amp;due=overdue&amp;project=atlas">期限超過タスクを確認</a></nav>
     <section class="stats-panel"><h2>担当者別の負荷</h2><p>複数担当のタスクは各担当者に1件ずつ集計します。未担当と分野担当者全員は別枠です。未完了件数の多い順に最大100枠を表示します。</p><div class="subject-table" data-workload></div></section>
     <section class="stats-panel"><h2>公開審査の待ち状況</h2><p>開始日時が分かるものを古い順に最大10件表示します。</p><ul class="breakdown-list" data-waiting></ul></section>
     <section class="stats-panel" aria-labelledby="subject-stats-heading"><div class="panel-heading"><div><h2 id="subject-stats-heading">分野別の状況</h2></div><span data-updated>読み込み中…</span></div><div class="subject-table" data-subject-table><div data-admin-load-skeleton aria-hidden="true"></div><p class="loading-state">統計を読み込んでいます…</p></div></section>
@@ -31,6 +32,8 @@ const publishedSubjectCount = subjects.filter((subject) => subject.data.status =
   .metrics > div { background: var(--background-secondary); border: 1px solid var(--border-default); display: grid; gap: .25rem; padding: .85rem; }
   .metrics span, .metrics small { color: var(--text-secondary); font-size: .72rem; }
   .metrics strong { font-size: 1.7rem; line-height: 1.1; }
+  .statistics-actions { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .statistics-actions a { color: var(--accent-primary); }
   .stats-panel { border: 1px solid var(--border-default); margin-top: 1rem; padding: 1rem; }
   .panel-heading { align-items: end; border-bottom: 1px solid var(--border-default); display: flex; justify-content: space-between; margin-bottom: .75rem; padding-bottom: .65rem; }
   .panel-heading h2 { font-size: 1.15rem; margin: .18rem 0 0; }
