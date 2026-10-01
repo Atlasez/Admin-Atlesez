@@ -2239,6 +2239,7 @@ describe("applicant stage server-side access", () => {
     for (const pathname of [
       "/admin/portal/",
       "/admin/member-tasks/",
+      "/admin/task-detail/",
       "/admin/member-calendar/",
     ]) {
       const response = await worker.fetch(
@@ -2284,6 +2285,7 @@ describe("applicant stage server-side access", () => {
     for (const pathname of [
       "/api/admin/portal",
       "/api/admin/member-tasks",
+      "/api/admin/my-access",
       "/api/admin/member-calendar",
       "/api/admin/notifications",
     ]) {

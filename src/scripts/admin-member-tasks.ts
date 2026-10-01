@@ -55,8 +55,22 @@ function initialize() {
   const showArchived = get<HTMLInputElement>("[data-show-archived]");
   const loadMore = get<HTMLButtonElement>("[data-task-load-more]");
   let data: Data = {};
-  let filter = "assigned";
-  let selectedProjects: Set<string> | null = null;
+  const initialParams = new URLSearchParams(location.search);
+  const initialView = initialParams.get("view");
+  let filter = ["all", "created", "assigned"].includes(initialView ?? "")
+    ? initialView!
+    : "assigned";
+  let selectedProjects: Set<string> | null = initialParams.has("project")
+    ? new Set(initialParams.getAll("project"))
+    : null;
+  for (const [select, name] of [
+    [statusFilter, "status"],
+    [dueFilter, "due"],
+  ] as const) {
+    const value = initialParams.get(name);
+    if (value && [...select.options].some((option) => option.value === value))
+      select.value = value;
+  }
   let nextCursor: string | null = null;
   let requestVersion = 0;
   let controller: AbortController | undefined;

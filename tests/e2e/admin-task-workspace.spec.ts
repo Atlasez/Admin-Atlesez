@@ -227,3 +227,45 @@ test("本人の担当権限と相談先をマイページに表示する", async
     panel.getByRole("link", { name: "編集・フィードバックを開く" }),
   ).toBeVisible();
 });
+test("運営統計の対応リンクから条件付きの全件タスク一覧を開く", async ({
+  page,
+}) => {
+  await mock(page);
+  let params = new URLSearchParams();
+  await page.route("**/api/admin/member-tasks?*", async (route) => {
+    params = new URL(route.request().url()).searchParams;
+    await route.fulfill({
+      json: {
+        projects: [{ id: "atlas", name: "アトラス", role: "manager" }],
+        tasks: [
+          {
+            id,
+            title: "記事の公開前確認",
+            status: "doing",
+            project_id: "atlas",
+          },
+        ],
+        members: [],
+        counts: { total: 1, open: 0, doing: 1, done: 0 },
+      },
+    });
+  });
+  for (const [name, key, value] of [
+    ["未完了タスクを確認", "status", "unfinished"],
+    ["期限超過タスクを確認", "due", "overdue"],
+  ]) {
+    await page.goto("/admin/operations-statistics/");
+    await page.getByRole("link", { name, exact: true }).click();
+    await expect(
+      page.getByRole("link", { name: "詳細・引き継ぎ →", exact: true }),
+    ).toHaveAttribute("href", `/admin/task-detail/?task=${id}`);
+    expect(params.get("view")).toBe("all");
+    expect(params.get("project")).toBe("atlas");
+    expect(params.get(key)).toBe(value);
+    await expect(
+      page.locator(
+        key === "status" ? "[data-status-filter]" : "[data-due-filter]",
+      ),
+    ).toHaveValue(value);
+  }
+});
