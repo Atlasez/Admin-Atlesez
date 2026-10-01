@@ -64,7 +64,12 @@ async function mock(
         const revision = Number(payload.revision) + 1;
         data = {
           ...data,
-          task: { ...data.task, updatedAt: "2026-10-02T00:00:00Z" },
+          task: {
+            ...data.task,
+            updatedAt: "2026-10-02T00:00:00Z",
+            assigneeEmails:
+              (payload.assigneeEmails as string[]) ?? data.task.assigneeEmails,
+          },
           workspace: {
             ...data.workspace,
             summary: String(payload.summary),
@@ -194,6 +199,29 @@ test("保存待ちの追加入力を保持し、二重送信を防ぐ", async ({
   );
   expect(state.payload()?.summary).toBe("送信内容");
   expect(state.puts()).toBe(1);
+});
+test("担当変更と次にすることを引き継ぎとしてまとめて送信する", async ({
+  page,
+}) => {
+  const state = await mock(page);
+  await page.goto(`/admin/task-detail/?task=${id}`);
+  await page
+    .getByLabel("次にすること", { exact: true })
+    .fill("参考文献を確認して公開審査へ進める");
+  await page.locator('[name="assignees"]').selectOption(["b@example.com"]);
+  await page.getByRole("checkbox", { name: "引き継ぎとして記録する" }).check();
+  await page.getByRole("button", { name: "保存する", exact: true }).click();
+  await expect(page.locator("[data-workspace-message]")).toHaveText(
+    "保存しました。",
+  );
+  expect(state.payload()).toMatchObject({
+    handoff: true,
+    assigneeEmails: ["b@example.com"],
+    nextAction: "参考文献を確認して公開審査へ進める",
+  });
+  await expect(page.locator('[name="assignees"]')).toHaveValues([
+    "b@example.com",
+  ]);
 });
 for (const width of [1440, 390])
   test(`閲覧専用とレイアウト ${width}px`, async ({ page }) => {

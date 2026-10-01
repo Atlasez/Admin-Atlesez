@@ -362,7 +362,7 @@ const initialize = () => {
     (event) => {
       if (
         !root.isConnected ||
-        !dirty ||
+        (!dirty && !saving) ||
         !(event.target as Element).closest("a[href]")
       )
         return;
