@@ -1,4 +1,5 @@
 ---
+import MyAccess from "../../components/admin/MyAccess.astro";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 ---
@@ -12,6 +13,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <aside class="approval-state" data-approval-state hidden aria-live="polite"></aside>
       <dl class="profile-facts"><div><dt>氏名</dt><dd data-fact="display_name">読み込み中…</dd></div><div><dt>学校・所属</dt><dd data-fact="university">—</dd></div><div><dt>学年等</dt><dd data-fact="year">—</dd></div><div><dt>所属区分</dt><dd data-fact="affiliation_type">—</dd></div><div><dt>国・地域</dt><dd data-fact="country">—</dd></div><div><dt>タイムゾーン</dt><dd data-fact="timezone">—</dd></div></dl>
       <section class="bio-card" aria-labelledby="bio-heading"><h2 id="bio-heading">運営外自己紹介</h2><p data-bio>—</p></section>
+      <MyAccess />
       <output class="message" data-message aria-live="polite"></output>
     </section>
   </main>

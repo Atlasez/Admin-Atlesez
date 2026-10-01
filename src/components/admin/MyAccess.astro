@@ -1,0 +1,12 @@
+<section class="my-access" data-my-access aria-labelledby="my-access-heading" aria-busy="true">
+  <h2 id="my-access-heading">自分の権限・担当範囲</h2>
+  <div data-my-access-content><p>権限を確認しています…</p></div>
+  <output data-my-access-message aria-live="polite"></output>
+  <button type="button" data-my-access-retry hidden>再確認</button>
+</section>
+<style>
+  .my-access{border-top:1px solid var(--border-default);padding-top:1rem}.my-access h2{font-size:1.05rem}.my-access :global(ul){padding-left:1.2rem}.my-access :global(li){margin:.5rem 0;overflow-wrap:anywhere}.my-access :global(p){color:var(--text-secondary);line-height:1.6}.my-access :global(a){color:var(--accent-primary)}.my-access button{background:var(--background-primary);color:var(--text-primary);border:1px solid var(--border-default);font:inherit;padding:.5rem;cursor:pointer}
+</style>
+<script>
+  import "../../scripts/admin-my-access";
+</script>

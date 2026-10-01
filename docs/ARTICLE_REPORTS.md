@@ -4,15 +4,13 @@
 
 ## Discord通知（任意）
 
-`DISCORD_REPORT_WEBHOOK_URL` をCloudflare Worker `atlasez-web-1` のシークレットに設定すると、保存成功後にDiscordへ通知します。通知するのは記事名・分野・カテゴリ・報告種別だけで、報告本文と返信先はDiscordへ送りません。通知に失敗しても報告の保存は失敗しません。
+`DISCORD_REPORT_WEBHOOK_URL` をCloudflare Worker `atlasez01` のシークレットに設定すると、保存成功後にDiscordへ通知します。通知するのは記事名・分野・カテゴリ・報告種別だけで、報告本文と返信先はDiscordへ送りません。通知に失敗しても報告の保存は失敗しません。
 
-Cloudflare Dashboardで Worker & Pages → `atlasez-web-1` → Settings → Variables and Secrets を開き、**Secret** として `DISCORD_REPORT_WEBHOOK_URL` を追加してください。値にはDiscordで新規発行したIncoming Webhook URLを入力します。Webhook URLは外部に共有した場合は無効化し、再発行してください。
+Cloudflare Dashboardで Workers & Pages → `atlasez01` → Settings → Variables and Secrets を開き、**Secret** として `DISCORD_REPORT_WEBHOOK_URL` を追加してください。値にはDiscordで新規発行したIncoming Webhook URLを入力します。Webhook URLは外部に共有した場合は無効化し、再発行してください。
 
 ## 運営用の確認画面
 
-`/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。読者向けWorkerとは別の `atlasez-admin` Workerで公開し、Worker全体を **Cloudflare Access** で運営者だけに制限します。
-
-- `atlasez-admin.<account>.workers.dev/*`
+`https://admin.atlasez.org/admin/reports/` で、届いた報告の一覧、対応状況（未確認・確認中・対応済み）、運営メモを管理できます。読者向けWorkerとは別の `atlasez-admin` Workerから配信し、Google OAuthで認証します。D1の担当分野・管理権限に基づいて閲覧・対応を制限します。Workers.devや別Workerを本番確認先として使いません。
 
 初期の許可設定はD1の `report_admin_permissions`（`subject='*'`）で管理します。記事を投稿する読者向けの `/api/article-reports` は通常サイト側にだけ残し、保護対象に含めません。
 
@@ -46,6 +44,8 @@ npx --yes wrangler d1 execute atlasez-reports-local --local --config wrangler.lo
 
 ## 本番接続時にすること
 
-本番公開前に、Cloudflare上でD1データベースを一つ作成し、`wrangler.local.jsonc` を元に本番用の `wrangler.jsonc` を作ります。その際は `database_id` を作成結果のUUIDに置き換え、`npx wrangler d1 migrations apply <database-name> --remote` で `migrations/0001_article_reports.sql` を適用します。
+本番の公開Workerは `atlasez01`、ADMIN Workerは `atlasez-admin`、Accountは `812021e62fa20465950b61be55dfe064` に固定しています。D1は既存の `atlasez-reports`（`d5112a62-7ed6-49c8-b6a2-18ee2dbab678`）を利用します。別のD1や推測したAccountを作成して接続しないでください。
+
+設定やmigrationの変更はPRで対象・影響・復旧方法をレビューし、[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)と[変更手順](ADMIN_CHANGE_WORKFLOW.md)に従います。ADMINの通常の本番反映はGitHub mainをソースとするWorkers Buildsだけです。
 
 本番ではTurnstileも追加してbot対策を強化します。サイトキー・シークレットはリポジトリに書かず、Cloudflareの環境変数・シークレットで管理してください。

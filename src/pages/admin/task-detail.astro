@@ -1,0 +1,31 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+<AdminLayout title="タスク詳細・引き継ぎ" description="完了条件と前後の作業を確認し、担当者へ引き継ぎます">
+  <main class="task-detail" data-task-workspace data-admin-load-surface aria-busy="true">
+    <header><h1 data-task-title>タスク詳細・引き継ぎ</h1><a href="/admin/member-tasks/">タスク管理へ戻る</a></header>
+    <AdminRetryNotice message="タスク詳細を読み込めませんでした。" />
+    <p data-access-note role="status"></p>
+    <form data-workspace-form hidden>
+      <section aria-labelledby="handoff-heading"><h2 id="handoff-heading">現在の状況と引き継ぎ</h2>
+        <label>現在の状況<textarea name="summary" maxlength="4000" placeholder="完了したこと、進めていること"></textarea></label>
+        <label>次にすること<textarea name="nextAction" maxlength="4000" placeholder="次の担当者が最初にすること、完了条件"></textarea></label>
+        <label>判断・対応待ち<textarea name="waitingFor" maxlength="2000" placeholder="誰の何を待っているか"></textarea></label>
+        <label>関連原稿のURL<input name="documentUrl" type="text" placeholder="記事編集画面のURLを貼り付け" /></label><a data-document-link hidden>関連原稿を開く</a>
+        <div data-assignment-panel hidden><label>引き継ぎ先<select name="assignees" multiple size="5"></select></label><small>担当者を変更する場合は、引き継ぎ記録を残してください。</small></div>
+        <label class="check-label"><input name="handoff" type="checkbox" />引き継ぎとして記録する</label><small>現在の状況と次にすることを履歴へ残します。</small>
+      </section>
+      <section aria-labelledby="checklist-heading"><h2 id="checklist-heading">完了条件・チェックリスト</h2><p data-checklist-count></p><ul data-checklist></ul><div class="inline-controls"><input data-new-item aria-label="確認項目" maxlength="200" placeholder="例：参考文献を確認する" /><button type="button" data-add-item>項目を追加</button></div></section>
+      <section aria-labelledby="dependency-heading"><h2 id="dependency-heading">前提タスク</h2><p>先に完了してほしい作業です。タスクの状態変更はタスク管理で行えます。</p><ul data-dependencies></ul><div class="inline-controls"><input data-dependency-search type="search" aria-label="前提タスクを検索" placeholder="同じプロジェクトのタスク名" /><button type="button" data-search-dependencies>検索</button></div><div class="inline-controls"><select data-dependency-choice aria-label="前提タスクの候補"></select><button type="button" data-add-dependency>前提タスクを追加</button></div><small>検索に一致する直近30件を表示します。</small></section>
+      <div class="save-controls"><button type="submit" data-save-workspace>保存する</button><button type="button" data-reload-workspace>再読み込み</button><output data-workspace-message aria-live="polite"></output></div>
+    </form>
+    <section aria-labelledby="history-heading"><h2 id="history-heading">引き継ぎ履歴</h2><p>直近20件を表示します。</p><div data-handoff-history></div></section>
+  </main>
+</AdminLayout>
+<style>
+  .task-detail{max-width:960px;margin:0 auto;padding:2rem 1rem 4rem}.task-detail header{display:flex;align-items:start;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border-default);padding-bottom:1rem}.task-detail h1{font-size:1.5rem;margin:0;overflow-wrap:anywhere}.task-detail h2{font-size:1.1rem;margin:0 0 .8rem}.task-detail section{border:1px solid var(--border-default);margin:1rem 0;padding:1rem}.task-detail label{display:grid;gap:.4rem;margin:.8rem 0}.task-detail input,.task-detail select,.task-detail textarea,.task-detail button{font:inherit;color:var(--text-primary);background:var(--background-primary);border:1px solid var(--border-default);padding:.6rem;min-width:0;max-width:100%}.task-detail textarea{min-height:5rem;resize:vertical}.task-detail button{cursor:pointer}.task-detail button:disabled{opacity:.55;cursor:default}.task-detail input:disabled,.task-detail textarea:disabled{opacity:.8}.task-detail a{color:var(--accent-primary);overflow-wrap:anywhere}.task-detail small,.task-detail p{color:var(--text-secondary);line-height:1.6}.task-detail input[type=checkbox]{width:1rem;height:1rem;min-height:0;accent-color:var(--accent-primary)}.task-detail .check-label{display:flex;align-items:center}.inline-controls,.save-controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.8rem 0}.inline-controls>input,.inline-controls>select{flex:1}.task-detail ul{list-style:none;padding:0}.task-detail :global(li){display:flex;gap:.6rem;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border-default);overflow-wrap:anywhere}.task-detail :global(li label){flex:1;display:flex;align-items:center;margin:0}.task-detail :global(.history-entry){border-top:1px solid var(--border-default);padding:.8rem 0;white-space:pre-wrap;overflow-wrap:anywhere}.task-detail :global(.history-entry h3){font-size:.9rem}.task-detail :global(.dependency-label){flex:1}.task-detail [data-save-workspace]{background:var(--accent-primary);color:var(--on-accent)}@media(max-width:540px){.task-detail header{display:grid}.inline-controls{align-items:stretch;flex-direction:column}.inline-controls>input,.inline-controls>select{width:100%}}
+</style>
+<script>
+  import "../../scripts/admin-task-workspace";
+</script>
