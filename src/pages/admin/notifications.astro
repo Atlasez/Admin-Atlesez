@@ -19,6 +19,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <span data-visible-count>読み込み中…</span>
     </section>
 
+    <details class="notification-list-panel"><summary>通知の表示設定</summary><form data-notification-settings><fieldset><legend>表示する種類</legend><div data-notification-kinds></div><label><input type="checkbox" name="summaryEnabled" checked /> 表示中の通知の要約を表示する</label><p>非表示にした種類と再表示予約中の通知は一覧・未読件数から外れます。既読状態は変わりません。メールの送信設定には影響しません。</p><button type="submit">通知設定を保存</button></fieldset><output data-notification-settings-message aria-live="polite"></output></form></details>
+    <section class="notification-list-panel" data-notification-digest hidden></section>
     <section class="notification-list-panel" aria-labelledby="notification-list-heading">
       <div class="notification-list-toolbar">
         <div>
@@ -26,6 +28,8 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
           <div class="notification-filters" role="group" aria-label="通知の絞り込み">
             <button type="button" data-notification-filter="all" aria-pressed="true">すべて</button>
             <button type="button" data-notification-filter="unread" aria-pressed="false">未読</button>
+            <button type="button" data-notification-filter="important" aria-pressed="false">要対応</button>
+            <button type="button" data-notification-filter="snoozed" aria-pressed="false">再表示予約</button>
           </div>
         </div>
         <button type="button" class="mark-all-read" data-mark-all-notifications-read aria-describedby="legacy-reminder-status">一覧をすべて既読</button>
@@ -46,187 +50,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   </main>
 </AdminLayout>
 
-<script>
-  import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
-
-  type Notification = {
-    id: string;
-    kind?: string;
-    title: string;
-    detail: string;
-    href: string;
-    updatedAt?: string;
-    read: boolean;
-  };
-  type ResponseData = {
-    notifications?: Notification[];
-    unreadNotificationsCount?: number;
-    totalNotifications?: number;
-    nextCursor?: string | null;
-    legacyReminderNormalizationPending?: boolean;
-    legacyReminderNormalizationFailed?: boolean;
-  };
-
-  const initNotificationInbox = () => {
-    const root = document.querySelector<HTMLElement>("[data-notification-inbox]");
-    if (!root || root.dataset.initialized === "true") return;
-    root.dataset.initialized = "true";
-    const list = root.querySelector<HTMLElement>("[data-notification-list]")!;
-    const unreadCount = root.querySelector<HTMLElement>("[data-unread-count]")!;
-    const visibleCount = root.querySelector<HTMLElement>("[data-visible-count]")!;
-    const pagination = root.querySelector<HTMLElement>("[data-notification-pagination]")!;
-    const paginationSummary = root.querySelector<HTMLElement>("[data-pagination-summary]")!;
-    const loadMore = root.querySelector<HTMLButtonElement>("[data-load-more]")!;
-    const truncation = root.querySelector<HTMLElement>("[data-notification-truncation]")!;
-    const legacyReminderStatus = root.querySelector<HTMLElement>("[data-legacy-reminder-status]")!;
-    const legacyReminderFailed = root.querySelector<HTMLElement>("[data-legacy-reminder-failed]")!;
-    const markAll = root.querySelector<HTMLButtonElement>("[data-mark-all-notifications-read]")!;
-    const escape = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
-    const labels: Record<string, string> = {
-      comment: "コメント", mention: "メンション", review: "フィードバック依頼",
-      "feedback-request": "フィードバック依頼", "task-request": "タスク依頼",
-      application: "応募", approved: "フィードバック完了", published: "公開",
-      "publication-ready": "公開準備完了", "publication-review": "公開審査",
-      "publication-review-returned": "公開審査から差し戻し", "task-reminder": "リマインダー",
-    };
-    const formatTime = (value?: string) => {
-      if (!value || Number.isNaN(new Date(value).getTime())) return "";
-      return new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-    };
-    const safeHref = (value: string) => {
-      try {
-        const url = new URL(value, location.origin);
-        return url.origin === location.origin && url.pathname.startsWith("/admin/")
-          ? `${url.pathname}${url.search}${url.hash}`
-          : "/admin/notifications/";
-      } catch { return "/admin/notifications/"; }
-    };
-    let rows: Notification[] = [];
-    let unreadTotal = 0;
-    let total = 0;
-    let legacyReminderNormalizationPending = false;
-    let legacyReminderNormalizationFailed = false;
-    let nextCursor: string | null = null;
-    let requestGeneration = 0;
-    let filter: "all" | "unread" = "all";
-    let retry: ReturnType<typeof createAdminLoadRetry>;
-
-    const render = () => {
-      const visible = rows;
-      unreadCount.textContent = String(unreadTotal);
-      visibleCount.textContent = `${rows.length}件を表示`;
-      markAll.hidden = unreadTotal === 0;
-      markAll.disabled = legacyReminderNormalizationPending;
-      legacyReminderStatus.hidden = !legacyReminderNormalizationPending;
-      legacyReminderFailed.hidden = !legacyReminderNormalizationFailed;
-      root.querySelectorAll<HTMLButtonElement>("[data-notification-filter]").forEach((button) => {
-        const active = button.dataset.notificationFilter === filter;
-        button.setAttribute("aria-pressed", String(active));
-      });
-      if (!visible.length) {
-        list.innerHTML = "";
-        retry.empty(filter === "unread" ? "未読の通知はありません。" : "通知はまだありません。");
-      } else {
-        list.innerHTML = visible.map((item) => `
-          <article class="notification-row${item.read ? " is-read" : " is-unread"}">
-            <div class="notification-row-main">
-              <div class="notification-row-meta"><span>${escape(labels[item.kind ?? ""] ?? "通知")}</span>${item.updatedAt ? `<time datetime="${escape(item.updatedAt)}">${escape(formatTime(item.updatedAt))}</time>` : ""}</div>
-              <a class="notification-title" href="${escape(safeHref(item.href))}" data-notification-open="${escape(item.id)}">${escape(item.title)}</a>
-              <p>${escape(item.detail)}</p>
-            </div>
-            <div class="notification-row-state">${item.read ? "既読" : `<button type="button" data-notification-read="${escape(item.id)}">既読にする</button>`}</div>
-          </article>`).join("");
-        retry.success();
-      }
-      truncation.hidden = total <= rows.length;
-      truncation.textContent = "新しい通知を先に表示しています。";
-      pagination.hidden = nextCursor === null;
-      paginationSummary.textContent = `${rows.length} / ${total}件`;
-    };
-
-    const load = async (append = false) => {
-      if (!append) retry.begin();
-      const generation = append ? requestGeneration : ++requestGeneration;
-      const requestFilter = filter;
-      const cursor = append ? nextCursor : null;
-      if (append && cursor === null) return;
-      let response: Response;
-      try {
-        const parameters = new URLSearchParams({ limit: "100" });
-        if (cursor) parameters.set("cursor", cursor);
-        if (requestFilter === "unread") parameters.set("unreadOnly", "true");
-        response = await fetch(`/api/admin/notifications?${parameters}`, { credentials: "same-origin", cache: "no-store" });
-      } catch (error) {
-        if (generation !== requestGeneration || requestFilter !== filter) return;
-        throw error;
-      }
-      if (generation !== requestGeneration || requestFilter !== filter) return;
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!response.ok || !contentType.includes("application/json")) throw new Error(response.status === 401 ? "ログイン状態を確認してください。" : "通知を読み込めませんでした。");
-      const data = await response.json() as ResponseData;
-      if (generation !== requestGeneration || requestFilter !== filter) return;
-      if (!Array.isArray(data.notifications)) throw new Error("通知の形式を確認できませんでした。");
-      const incoming = data.notifications;
-      rows = append ? [...rows, ...incoming] : incoming;
-      unreadTotal = Math.max(0, Math.trunc(Number(data.unreadNotificationsCount ?? 0)));
-      total = Math.max(rows.length, Math.trunc(Number(data.totalNotifications ?? rows.length)));
-      nextCursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
-      legacyReminderNormalizationPending = data.legacyReminderNormalizationPending === true;
-      legacyReminderNormalizationFailed = data.legacyReminderNormalizationFailed === true;
-      render();
-    };
-    retry = createAdminLoadRetry(root, () => load(), "通知を読み込めませんでした。", { scope: "notification-inbox" });
-
-    const setRead = async (ids: string[] = [], all = false) => {
-      const response = await fetch("/api/admin/notifications/read", {
-        method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
-        body: JSON.stringify(all ? { all: true } : { ids }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => null) as { error?: unknown } | null;
-        throw new Error(typeof data?.error === "string" ? data.error : "通知を既読にできませんでした。");
-      }
-      await load();
-    };
-
-    root.querySelectorAll<HTMLButtonElement>("[data-notification-filter]").forEach((button) => button.addEventListener("click", () => {
-      const nextFilter = button.dataset.notificationFilter === "unread" ? "unread" : "all";
-      if (nextFilter === filter) return;
-      filter = nextFilter;
-      requestGeneration += 1;
-      rows = [];
-      nextCursor = null;
-      void load().catch((error) => retry.fail(error));
-    }));
-    markAll.addEventListener("click", () => { void setRead([], true).catch((error) => retry.fail(error)); });
-    loadMore.addEventListener("click", () => {
-      loadMore.disabled = true;
-      void load(true).catch((error) => retry.fail(error)).finally(() => { loadMore.disabled = false; });
-    });
-    list.addEventListener("click", (event) => {
-      const target = event.target as HTMLElement;
-      const button = target.closest<HTMLButtonElement>("[data-notification-read]");
-      if (button) {
-        void setRead([button.dataset.notificationRead ?? ""]).catch((error) => retry.fail(error));
-        return;
-      }
-      const link = target.closest<HTMLAnchorElement>("[data-notification-open]");
-      if (
-        !link ||
-        link.dataset.opened ||
-        event instanceof MouseEvent &&
-          (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-      ) return;
-      event.preventDefault();
-      link.dataset.opened = "true";
-      void setRead([link.dataset.notificationOpen ?? ""]).catch(() => undefined).finally(() => { window.location.assign(link.href); });
-    });
-    void load().catch((error) => retry.fail(error));
-  };
-
-  document.addEventListener("astro:page-load", initNotificationInbox);
-  initNotificationInbox();
-</script>
+<script>import "../../scripts/admin-notification-inbox";</script>
 
 <style>
   .notification-page { color: var(--text-primary); margin: 0 auto; max-width: 1050px; min-height: 60vh; padding: 1.25rem 1.25rem 4rem; }
@@ -241,7 +65,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   .notification-list-panel { border: 1px solid var(--border-default); padding: 1rem; }
   .notification-list-toolbar { align-items: center; border-bottom: 1px solid var(--border-default); display: flex; gap: .8rem; justify-content: space-between; padding-bottom: .8rem; }
   .notification-list-toolbar h2 { font-size: 1.05rem; margin: 0 0 .65rem; }
-  .notification-filters { display: flex; gap: .3rem; }
+  .notification-filters { display: flex; flex-wrap:wrap; gap: .3rem; }
+  [data-notification-settings] fieldset {border:0;display:grid;gap:.7rem;}
+  [data-notification-kinds] {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem;}
+  [data-notification-settings] p {color:var(--text-secondary);font-size:.8rem;line-height:1.6;}
   .notification-filters button, .mark-all-read, .notification-row-state button, .notification-pagination button { background: var(--background-primary); border: 1px solid var(--border-default); color: var(--text-primary); cursor: pointer; font: inherit; font-size: .75rem; min-height: 2.1rem; padding: .35rem .65rem; }
   .notification-filters button[aria-pressed="true"] { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--on-accent, #fff); }
   .mark-all-read { flex: 0 0 auto; font-weight: 750; }
