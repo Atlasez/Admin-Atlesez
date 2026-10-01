@@ -2240,6 +2240,7 @@ describe("applicant stage server-side access", () => {
       "/admin/portal/",
       "/admin/member-tasks/",
       "/admin/task-detail/",
+      "/admin/task-templates/",
       "/admin/member-calendar/",
     ]) {
       const response = await worker.fetch(
