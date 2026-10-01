@@ -1,4 +1,8 @@
 import { handleTaskWorkspace, type TaskWorkspaceAccess, type WorkspaceTask } from "./lib/admin-task-workspace";
+import type { D1Database, D1PreparedStatement } from "./lib/admin-database";
+import { readOperationsInsights } from "./lib/admin-operations-insights";
+import { handleNotificationFeatures, loadNotificationPreferences, notificationSourceMetadata, notificationFeatureFilter, importantKinds } from "./lib/admin-notification-features";
+import { handleTaskTemplates, dispatchTaskTemplates } from "./lib/admin-task-templates";
 import {
   EDITORIAL_ASSET_ID_PATTERN,
   EDITORIAL_IMAGE_TYPES,
@@ -14,6 +18,7 @@ import {
   type EditorialImageType,
 } from "./lib/editorial-media";
 
+import { memberTaskFilters } from "./lib/member-task-filters";
 import { isAdminPagePath } from "./lib/admin-routes";
 import {
   canAccess,
@@ -42,19 +47,6 @@ interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
 
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<{ meta?: { changes?: number } }>;
-  all<T>(): Promise<{ results: T[] }>;
-  first<T>(): Promise<T | null>;
-}
-
-interface D1Database {
-  prepare(query: string): D1PreparedStatement;
-  batch<T = unknown>(
-    statements: D1PreparedStatement[],
-  ): Promise<Array<{ results: T[]; meta?: { changes?: number } }>>;
-}
 
 type DurableObjectId = object;
 interface DurableObjectStub {
@@ -10405,6 +10397,13 @@ async function taskWorkspace(request: Request, env: Env, taskId: string): Promis
   });
 }
 
+async function taskTemplates(request:Request,env:Env):Promise<Response> {
+  const scope = await getMemberOperationScope(request, env);
+  if(isResponse(scope))return scope;
+  if (!scope.memberAccess) await ensureAtlasMembership(env, scope);
+  return handleTaskTemplates(request,{db:env.REPORTS,email:scope.email,primaryEmail:primaryAdminEmail(env),projects:await accessibleOperationProjects(env,scope)});
+}
+
 async function memberTasksOverview(
   request: Request,
   env: Env,
@@ -10463,14 +10462,23 @@ async function memberTasksOverview(
   );
   visibleValues.push(scope.email, scope.email, scope.email, ...scope.subjects);
   const visibilityFilter = ` AND (${visiblePredicates.join(" OR ")})`;
-  const [tasks, members] = await Promise.all([
+  const baseWhere = `project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${visibilityFilter}`;
+  const baseValues = [...projectIds, ...visibleValues];
+  const needsDueBounds = ["overdue", "today", "week"].includes(searchParams.get("due") ?? "");
+  const zones = needsDueBounds
+    ? await env.REPORTS.prepare(`SELECT DISTINCT due_timezone FROM editorial_tasks WHERE ${baseWhere}`).bind(...baseValues).all<{ due_timezone: string }>()
+    : { results: [] };
+  const filters = memberTaskFilters(searchParams, scope.email, projects, zones.results.map((row) => row.due_timezone || "Asia/Tokyo"));
+  const filteredWhere = `${baseWhere}${filters.sql}`;
+  const filteredValues = [...baseValues, ...filters.values];
+  const [tasks, members, counts] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,assignee_email,task_kind,title,details,status,due_at,due_timezone,
         created_by,created_at,updated_at,archived_at,archived_by,archive_expires_at FROM editorial_tasks
-       WHERE project_id IN (${placeholders})${includeArchived ? "" : " AND archived_at IS NULL"}${visibilityFilter}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
+       WHERE ${filteredWhere}${taskCursorCondition ? ` AND ${taskCursorCondition}` : ""}
        ORDER BY ${statusRank},${archivedRank},${dueRank},COALESCE(due_at, '') ASC,updated_at DESC,id DESC LIMIT ?`,
     )
-      .bind(...projectIds, ...visibleValues, ...taskCursorValues, pageLimit + 1)
+      .bind(...filteredValues, ...taskCursorValues, pageLimit + 1)
       .all<Record<string, unknown>>(),
     env.REPORTS.prepare(
       `SELECT m.project_id,m.email,
@@ -10482,6 +10490,9 @@ async function memberTasksOverview(
     )
       .bind(...projectIds)
       .all<Record<string, unknown>>(),
+    env.REPORTS.prepare(`SELECT COUNT(*) AS total, SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) AS open, SUM(CASE WHEN status='doing' THEN 1 ELSE 0 END) AS doing, SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) AS done FROM editorial_tasks WHERE ${filteredWhere}`)
+      .bind(...filteredValues)
+      .first<{ total: number; open: number; doing: number; done: number }>(),
   ]);
   const fetchedTasks = tasks.results ?? [];
   const hasMoreTasks = fetchedTasks.length > pageLimit;
@@ -10553,6 +10564,7 @@ async function memberTasksOverview(
     },
     projects,
     tasks: visibleTasks,
+    summary: counts ?? { total: visibleTasks.length, open: pageTasks.filter((task) => task.status === "open").length, doing: pageTasks.filter((task) => task.status === "doing").length, done: pageTasks.filter((task) => task.status === "done").length },
     members: visibleMembers,
     pagination: { limit: pageLimit, nextCursor: nextTaskCursor, hasMore: hasMoreTasks },
   });
@@ -12436,6 +12448,17 @@ async function completeApplicationInterview(
     interviewHistory(env, id, interview.id, reviewId, "interview_completed", current, { note, assigned_subjects: assignedSubjects, decision }, access.access.scope.email, now),
   ]);
   return json({ ok: true, decision, assignedSubjects, finalizedAt: now, application: await applicationResult.json() });
+}
+
+async function operationsInsights(request: Request, env: Env): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  await ensureAtlasMembership(env, scope);
+  const project = await resolveOperationProject(env, scope, new URL(request.url).searchParams.get("project") || "atlas");
+  if (isResponse(project)) return project;
+  const role = await operationProjectRole(env, scope, project.id);
+  if (!role) return json({ error: "このプロジェクトのメンバーではありません。" }, 403);
+  return json(await readOperationsInsights(env.REPORTS, { projectId: project.id, email: scope.email, subjects: scope.subjects, allSubjects: scope.allSubjects || role === "manager" }, new Date()));
 }
 
 async function operationsOverview(
@@ -20185,7 +20208,7 @@ async function startPublicationReview(
   if (managerCanBypassReview) {
     const now = new Date().toISOString();
     await env.REPORTS.prepare(
-      `UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+      `UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, publication_review_started_at=NULL, reviewed_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
     ).bind(now, now, scope.email, documentId).run();
     await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, expectedUpdatedAt: document.updated_at, metadata: { managerOverride: true }, createdAt: now });
     await recordAdminAudit(env, scope.email, "article_approved", "article", documentId, document.title, `全分野管理者が記事を承認：${document.title}`, { managerOverride: true });
@@ -20215,9 +20238,9 @@ async function startPublicationReview(
   const now = new Date().toISOString();
   const round = (document.publication_review_round ?? 0) + 1;
   await env.REPORTS.prepare(
-    `UPDATE editorial_documents SET status='in-review', publication_review_stage=?, publication_review_round=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
+    `UPDATE editorial_documents SET status='in-review', publication_review_stage=?, publication_review_round=?, publication_review_started_at=?, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?`,
   )
-    .bind(stage, round, now, scope.email, documentId)
+    .bind(stage, round, now, now, scope.email, documentId)
     .run();
   if (document.status !== "in-review")
     await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "in-review", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: document.updated_at, metadata: { stage }, createdAt: now });
@@ -20287,7 +20310,7 @@ async function decidePublicationReview(
   ).bind(crypto.randomUUID(), documentId, document.publication_review_round, stage, decision, scope.email, reviewNote, now).run();
   if (decision === "rejected") {
     await env.REPORTS.prepare(
-      "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
+      "UPDATE editorial_documents SET status='in-review', publication_review_stage=NULL, publication_review_started_at=NULL, scheduled_publish_at=NULL, scheduled_publish_claimed_at=NULL, updated_at=?, updated_by=? WHERE id=?",
     ).bind(now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査差し戻し：${document.title}\nフィードバック中へ戻しました。`);
@@ -20295,14 +20318,14 @@ async function decidePublicationReview(
   }
   if (stage === "subject-coordinator" && leaders.length && !scope.isManager) {
     await env.REPORTS.prepare(
-      "UPDATE editorial_documents SET publication_review_stage='project-leader', updated_at=?, updated_by=? WHERE id=?",
-    ).bind(now, scope.email, documentId).run();
+      "UPDATE editorial_documents SET publication_review_stage='project-leader', publication_review_started_at=?, updated_at=?, updated_by=? WHERE id=?",
+    ).bind(now, now, scope.email, documentId).run();
     await notifyEditorialDocumentChange(env, documentId);
     await postDiscordWebhook(env.DISCORD_ATLAS_WEBHOOK_URL, `公開審査依頼（プロジェクトリーダー）：${document.title}`);
     return json({ ok: true, status: "in-review", stage: "project-leader" });
   }
   await env.REPORTS.prepare(
-    "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
+    "UPDATE editorial_documents SET status='approved', publication_review_stage=NULL, publication_review_started_at=NULL, reviewed_at=?, updated_at=?, updated_by=? WHERE id=?",
   ).bind(now, now, scope.email, documentId).run();
   await recordWorkflowEvent(env, { entityType: "document", entityId: documentId, fromState: document.status, toState: "approved", actorEmail: scope.email, idempotencyKey, expectedUpdatedAt: document.updated_at, metadata: { reviewStage: stage }, createdAt: now });
   await notifyEditorialDocumentChange(env, documentId);
@@ -20591,6 +20614,8 @@ const memberPagePaths = new Set([
   "/admin/member-profile/",
   "/admin/member-profile/edit",
   "/admin/member-profile/edit/",
+  "/admin/task-templates",
+  "/admin/task-templates/",
   "/admin/member-tasks",
   "/admin/member-tasks/",
   "/admin/task-detail",
@@ -20602,9 +20627,12 @@ const memberPagePaths = new Set([
 // the generic admin-only API gate; no other /api/admin endpoint is exempt.
 const memberScopedApiMethods = new Map<string, ReadonlySet<string>>([
   ["/api/admin/portal", new Set(["GET"])],
+  ["/api/admin/task-templates", new Set(["GET","POST"])],
   ["/api/admin/member-tasks", new Set(["GET"])],
   ["/api/admin/my-access", new Set(["GET"])],
   ["/api/admin/member-calendar", new Set(["GET"])],
+  ["/api/admin/notifications/preferences", new Set(["GET","PUT"])],
+  ["/api/admin/notifications/snooze", new Set(["POST"])],
   ["/api/admin/notifications", new Set(["GET"])],
   ["/api/admin/notifications/read", new Set(["POST"])],
   ["/api/admin/operations/tasks", new Set(["POST"])],
@@ -20616,6 +20644,8 @@ const memberScopedApiDynamicMethods: Array<{
   methods: ReadonlySet<string>;
 }> = [
   { path: /^\/api\/admin\/task-workspaces\/[0-9a-f-]{36}$/i, methods: new Set(["GET", "PUT"]) },
+  { path: /^\/api\/admin\/task-templates\/[0-9a-f-]{36}$/i, methods: new Set(["PATCH"]) },
+  { path: /^\/api\/admin\/task-templates\/[0-9a-f-]{36}\/create$/i, methods: new Set(["POST"]) },
   {
     path: /^\/api\/admin\/operations\/tasks\/[0-9a-f-]{36}$/i,
     methods: new Set(["PATCH"]),
@@ -21915,21 +21945,7 @@ async function adminNotifications(
   let legacyReminderNormalizationPending = false;
   let legacyReminderNormalizationFailed = false;
   const notificationFetchLimit = cursor || includeUnreadIds ? limit + 1 : offset + limit;
-  const notificationSourceMetadata = (sql: string) => {
-    if (sql.includes("FROM editorial_task_reminders"))
-      return { id: "'task-reminder-rule-' || s.reminder_id || '-' || s.remind_at", time: "remind_at", dueReminder: true };
-    if (sql.includes("instr(c.body, ?) > 0")) return { id: "'mention-' || s.id", time: "created_at" };
-    if (sql.includes("d.created_by = ? AND c.created_by != ?")) return { id: "'comment-' || s.id", time: "created_at" };
-    if (sql.includes("FROM atlasez_member_applications")) return { id: "'application-' || s.id", time: "created_at" };
-    if (sql.includes("FROM editorial_publication_reviews")) return { id: "'publication-review-returned-' || s.id || '-' || s.created_at", time: "created_at" };
-    if (sql.includes("publication_review_stage")) return { id: "'publication-review-' || s.id || '-' || s.publication_review_stage", time: "updated_at" };
-    if (sql.includes("publication_pr_number IS NULL")) return { id: "'publication-ready-' || s.id", time: "updated_at" };
-    if (sql.includes("FROM editorial_review_assignments") || sql.includes("JOIN editorial_review_assignments")) return { id: "'review-' || s.id", time: "updated_at" };
-    if (sql.includes("FROM editorial_tasks t")) return { id: "CASE WHEN s.task_kind='feedback' THEN 'feedback-request-' ELSE 'task-request-' END || s.id", time: "updated_at" };
-    if (sql.includes("status = 'approved'") && sql.includes("published_at IS NULL")) return { id: "'approved-' || s.id", time: "updated_at" };
-    if (sql.includes("published_at IS NOT NULL")) return { id: "'published-' || s.id", time: "published_at" };
-    return null;
-  };
+  const preferences=await loadNotificationPreferences(env.REPORTS,scope.email);
   const queryNotificationSource = async <T>(
     sql: string,
     bindings: unknown[],
@@ -21938,6 +21954,7 @@ async function adminNotifications(
   }> => {
     const metadata = notificationSourceMetadata(sql);
     if (!metadata) throw new Error("Unknown notification source query");
+    const featureFilter=notificationFeatureFilter(metadata,preferences,notificationParams,scope.email,new Date().toISOString());
     const source = `(${sql}) AS s`;
     const sourceWithoutOrder = `(${sql.replace(/\s+ORDER BY\s+[\s\S]*$/i, "")}) AS s`;
     const dueClause = "dueReminder" in metadata
@@ -21954,12 +21971,12 @@ async function adminNotifications(
       : [];
     const [page, counts, legacyReminderPending, legacyReminderFailed] = await Promise.all([
       env.REPORTS.prepare(
-        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
-      ).bind(scope.email, ...bindings, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
+        `SELECT s.*, ${metadata.id} AS __notification_id, ${readExpr} AS __notification_read FROM ${source} WHERE ${featureFilter.sql}${dueClause}${unreadClause}1=1 ${cursorClause}ORDER BY s.${metadata.time} DESC, ${metadata.id} DESC LIMIT ?`,
+      ).bind(scope.email, ...bindings, ...featureFilter.values, ...dueBindings, ...(unreadOnly || includeUnreadIds ? [scope.email] : []), ...cursorBindings, notificationFetchLimit)
         .all<T & { __notification_id: string; __notification_read: number }>(),
       env.REPORTS.prepare(
-        `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${dueClause}1=1`,
-      ).bind(scope.email, ...bindings, ...dueBindings)
+        `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ${readExpr} THEN 0 ELSE 1 END), 0) AS unread FROM ${source} WHERE ${featureFilter.sql}${dueClause}1=1`,
+      ).bind(scope.email, ...bindings, ...featureFilter.values, ...dueBindings)
         .first<{ total: number; unread: number }>(),
       "dueReminder" in metadata
         ? env.REPORTS.prepare(
@@ -22304,7 +22321,9 @@ async function adminNotifications(
     notifications: notifications.map((item) => ({
       ...item,
       read: notificationReadIds.has(item.id),
+      importance: importantKinds.has(item.kind) ? "important" : "normal",
     })),
+    preferences,
     notificationsTruncated,
     unreadNotificationsCount,
     totalNotifications: filteredCount,
@@ -22803,6 +22822,11 @@ async function handleAdminRequest(
     const baselineScope = await getAdminScope(request, env);
     if (isResponse(baselineScope)) return baselineScope;
   }
+  if (url.pathname === "/api/admin/notifications/preferences" || url.pathname === "/api/admin/notifications/snooze") {
+    const scope=await getMemberOperationScope(request,env);
+    if(isResponse(scope))return scope;
+    return handleNotificationFeatures(request,env.REPORTS,scope.email);
+  }
   if (url.pathname === "/api/admin/notifications" && request.method === "GET")
     return adminNotifications(request, env);
   if (
@@ -23013,6 +23037,7 @@ async function handleAdminRequest(
   if (url.pathname === "/api/admin/my-access" && request.method === "GET") return myAccessOverview(request, env);
   const workspaceMatch = url.pathname.match(/^\/api\/admin\/task-workspaces\/([0-9a-f-]{36})$/i);
   if (workspaceMatch) return taskWorkspace(request, env, workspaceMatch[1]);
+  if (/^\/api\/admin\/task-templates(?:\/[0-9a-f-]{36}(?:\/create)?)?$/i.test(url.pathname)) return taskTemplates(request, env);
   if (url.pathname === "/api/admin/member-tasks" && request.method === "GET")
     return memberTasksOverview(request, env);
   if (url.pathname === "/api/admin/member-calendar" && request.method === "GET")
@@ -23084,6 +23109,8 @@ async function handleAdminRequest(
       env,
       applicationDiscordRetryMatch[1],
     );
+  if (url.pathname === "/api/admin/operations-statistics" && request.method === "GET")
+    return operationsInsights(request, env);
   if (url.pathname === "/api/admin/operations" && request.method === "GET")
     return operationsOverview(request, env);
   if (url.pathname === "/api/admin/progress" && request.method === "GET")
@@ -23542,6 +23569,7 @@ export default {
         Promise.all([
           progressEditorialPublicationRuns(env),
           dispatchDueTaskReminders(env),
+          dispatchTaskTemplates(env.REPORTS,primaryAdminEmail(env)),
           archiveStaleCompletedTasks(env),
           dispatchApplicationEmails(env),
           dispatchPendingDiscordProvisioning(env),
@@ -23560,6 +23588,7 @@ export default {
         syncEditorialPublicationStatus(env),
         purgeExpiredPersonalData(env),
         dispatchDueTaskReminders(env),
+        dispatchTaskTemplates(env.REPORTS,primaryAdminEmail(env)),
         archiveStaleCompletedTasks(env),
         dispatchApplicationEmails(env),
         dispatchPendingDiscordProvisioning(env),
