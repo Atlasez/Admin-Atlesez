@@ -24,20 +24,20 @@
 
 [公式仕様](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)は独自のユーザーAPI tokenを許可する。新規自動作成の既定権限にはAccount Settings Readが含まれる。アカウント所有tokenはBuildsで未対応。
 
-Cloudflareの現行Developer Platform権限モデルはAPI tokenにWorker単位の`Editor` scopeを付け、既存Workerをdeployできると説明している。一方、現地で確認したProfile > API Tokensのユーザーtoken作成UIはAccount / Zone / User resourceだけで、個別Worker scopeを提示しなかった。CloudflareのWorkers Builds設定資料はBuilds tokenについて現在user tokenのみ対応し、account-owned tokenには未対応と明記している。Developer Platform資料の個別Worker scope例はaccount-owned tokenの作成手順であり、これをWorkers Buildsに登録できる証拠はない。Deploy時にD1 bindingの別権限が不要な点は同資料で確認できる。
+Cloudflareの現行Developer Platform権限資料はAPI tokenにWorker単位の`Editor` scopeを付け、既存Workerをdeployできると説明している。ただし、その説明がWorkers Buildsで利用可能なuser-scoped tokenにも適用できるかは資料上明確でない。現地で確認したProfile > API Tokensのユーザーtoken作成UIはAccount / Zone / User resourceだけで、個別Worker scopeを提示しなかった。Workers Builds設定資料はBuilds tokenについて現在user tokenのみ対応し、account-owned tokenには未対応と明記している。よって現在の公式記述とUIからは、個別Worker scopeを持ちBuildsが受け付けるtokenを確定できていない。Deploy時にD1 bindingの別権限が不要な点はWorkers権限資料で確認できる。
 
-現時点でWorker単位のleast-privilege tokenをWorkers Buildsが受け付ける方法は確認できていない。Account-wide `Workers Scripts Edit` とzone-wide `Workers Routes Edit` のclassic user token案は権限がADMIN以外にも及ぶため、推奨せず、作成もしない。次にCloudflare account ownerまたはSupportへ、(a) 個別Worker Editor scope付きAPI tokenをBuildsが受け付けるか、(b) user-scoped tokenで個別Worker scopeを設定するサポート手段があるか、を確認する。回答が得られるまでtoken・接続は作成しない。このPRは問い合わせ・credential作成・設定変更を許可しない。
+現時点でWorker単位のleast-privilege tokenをWorkers Buildsが受け付ける方法は確認できていない。Account-wide `Workers Scripts Edit` とzone-wide `Workers Routes Edit` のclassic user token案は権限がADMIN以外にも及ぶため、推奨せず、作成もしない。次にCloudflare account ownerまたはSupportへ、(a) 個別Worker Editor scopeをuser-scoped API tokenに設定できるか、(b) そのtokenをWorkers Buildsが受け付けるか、を確認する。回答が得られるまでtoken・接続は作成しない。このPRは問い合わせ・credential作成・設定変更を許可しない。
 
-| 項目           | 候補値                                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 候補           | 個別Worker `Editor` scopeのAPI token。ただしWorkers Buildsがaccount-owned tokenを現在受け付けるとは確認できず、user tokenでのscope設定UIも未確認 |
-| 対象           | 固定Account内の`atlasez-admin`だけに限定できる方式をCloudflareへ照会する。                                                                       |
-| 必要権限       | 既存WorkerのDeployに必要な`Editor`。Route/Custom Domainを変更する権限は追加しない。                                                              |
-| 有効期間       | Cloudflare側の制限と更新担当を確認してから決定。                                                                                                 |
-| 追加しない権限 | account-wide Workers Scripts Edit、Account Settings Read、D1 Edit、KV/R2、他Account、他Zone、Worker Admin                                        |
-| 状態           | 候補検討のみ。token名・権限・期間を確定せず、作成・登録していない。                                                                              |
+| 項目           | 候補値                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| 候補           | 個別Worker `Editor` scopeをuser-scoped API tokenに設定し、Workers Buildsへ登録できる方法。どちらも未確認  |
+| 対象           | 固定Account内の`atlasez-admin`だけに限定できる方式をCloudflareへ照会する。                                |
+| 必要権限       | 既存WorkerのDeployに必要な`Editor`。Route/Custom Domainを変更する権限は追加しない。                       |
+| 有効期間       | Cloudflare側の制限と更新担当を確認してから決定。                                                          |
+| 追加しない権限 | account-wide Workers Scripts Edit、Account Settings Read、D1 Edit、KV/R2、他Account、他Zone、Worker Admin |
+| 状態           | 候補検討のみ。token名・権限・期間を確定せず、作成・登録していない。                                       |
 
-公式資料: [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[Developer Platform authorization](https://developers.cloudflare.com/workers/authorization/)。個別Worker API token scopeの説明は[2026-09-15更新のpermissions guide](https://developers.cloudflare.com/workers/authorization/)を参照。
+公式資料: [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[Developer Platform authorization](https://developers.cloudflare.com/workers/authorization/)。Worker scopeをAPI tokenに付ける説明は[2026-09-15更新のpermissions guide](https://developers.cloudflare.com/workers/authorization/)を参照するが、Buildsで用いるuser-scoped tokenへの適用方法は未確定。
 
 Account-wide classic user tokenへ広げるfallbackは採用しない。Account owner / SupportからWorker-scoped tokenを提案された場合でも、まずそのtoken種別がWorkers Buildsで使えることを公式資料または検証で確認する。Builds pickerに有効な最小scope tokenが現れない場合は接続しない。token文字列をチャット、Issue、PR、ログへ貼らない。
 
