@@ -7,16 +7,16 @@
 
 コード実装、ローカル検証、PR/CI、main反映、本番受入は別々に記録する。本番受入の証拠がない項目に完了チェックを付けない。秘密値・Cookie・非公開会員情報・SQL exportをコミットしない。
 
-| 項目                           | 状態            | 残作業/依存条件                                                                                                                                     | 完了証拠 |
-| ------------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 1 Workers Builds復旧・本番反映 | 停止: SHA不一致 | PR #486はmainへ統合・CI成功。本番build-infoは74084dc…のまま。merge後の照合workflowは12回の照合後に不一致で失敗。Builds設定・token作成は未実施       | 未完了   |
-| 2 応募フォーム修正             | main反映済み    | PR #486の応募欄/payload修正がmainに反映済み。main CI成功。本番Workerは旧SHAのため、配信後の実画面確認が必要                                         | 未完了   |
-| 3 公開個人情報説明             | PRレビュー待ち  | 公開側正本Atlasez/Atlasez01にprivacy説明・応募導線を実装。公開手順書のWorkers/main/SHA記載もPR #140で修正。CIは最新commit再実行中、人間レビュー必要 | 未完了   |
-| 4 権限別受入                   | 検証準備        | 全migrationの隔離D1で実APIの全体/担当/分野統括/別プロジェクト/退会後を確認。本番のUI/API受入は未完了                                                | 未完了   |
-| 5 新規参加者受入               | 検証準備        | 仮セッションで基本情報保存・応募・二重応募防止・他人の情報非公開を確認。実Googleログインと審査・受入は未完了                                        | 未完了   |
-| 6 メール/Discord実連携         | 検証準備        | 隔離D1のメールqueueと模擬providerで503後retry・同一idempotency key・送信済再送防止を確認。実到達/Discord実アカウントは未完了                        | 未完了   |
-| 7 記事公開実証                 | 検証準備        | 公開先Atlasez/Atlasez01と受入・訂正・非公開化の試験手順を記録。実公開は未実施                                                                       | 未完了   |
-| 8 バックアップ/復旧運用        | 作業中          | 既存export75テーブルの隔離復元・FK0を独立確認。保管・担当・30世代・RPO24h/RTO4hを案として記録。代理担当/暗号化保管/定期実行は未確定                 | 未完了   |
+| 項目                           | 状態             | 残作業/依存条件                                                                                                                                                          | 完了証拠 |
+| ------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| 1 Workers Builds復旧・本番反映 | 停止: SHA不一致  | PR #486はmainへ統合・CI成功。本番build-infoは74084dc…のまま。merge後の照合workflowは12回の照合後に不一致で失敗。Builds設定・token作成は未実施                            | 未完了   |
+| 2 応募フォーム修正             | main反映済み     | PR #486の応募欄/payload修正がmainに反映済み。main CI成功。本番Workerは旧SHAのため、配信後の実画面確認が必要                                                              | 未完了   |
+| 3 公開個人情報説明             | PRレビュー待ち   | 公開側正本Atlasez/Atlasez01にprivacy説明・応募導線を実装。公開手順書のWorkers/main/SHA記載もPR #140で修正。CIは最新commit再実行中、人間レビュー必要                      | 未完了   |
+| 4 権限別受入                   | 検証準備         | 全migrationの隔離D1で実APIの全体/担当/分野統括/別プロジェクト/退会後を確認。本番のUI/API受入は未完了                                                                     | 未完了   |
+| 5 新規参加者受入               | 検証準備         | 仮セッションで基本情報保存・応募・二重応募防止・他人の情報非公開を確認。実Googleログインと審査・受入は未完了                                                             | 未完了   |
+| 6 メール/Discord実連携         | 検証準備         | 隔離D1のメールqueueと模擬providerで503後retry・同一idempotency key・送信済再送防止を確認。実到達/Discord実アカウントは未完了                                             | 未完了   |
+| 7 記事公開実証                 | 検証準備         | 公開先Atlasez/Atlasez01と受入・訂正・非公開化の試験手順を記録。実公開は未実施                                                                                            | 未完了   |
+| 8 バックアップ/復旧運用        | 提案レビュー待ち | 既存exportの隔離SQLite検証は75 tables / integrity ok / FK 0。migration 0120〜0123適用前。定期化前にExport APIの停止影響を測定し、保管先/保持/通知/担当/RPO/RTOを承認する | 未完了   |
 
 ## 作業開始時
 
@@ -49,6 +49,14 @@
 - Recovery PR [#487](https://github.com/Atlasez/Admin-Atlesez/pull/487)では、現在のtoken作成UI上はWorker単体scope不可である事実を反映。古典的な最小candidateもAccount内の全Worker Scripts Edit + zone `atlasez.org` Routes Editに及び、ADMIN以外へ影響できるため、Worker単体scopeが必須ならAccount owner対応へ回す。D1 EditやAccount Settings Readを足さない。手動tokenのBuilds picker表示・Build成功は未検証。
 - 公開PR [#140](https://github.com/Atlasez/Atlasez01/pull/140) は人間レビュー待ち。公開手順書の古いPages記載をWorkers/main/SHA/100%/Chrome確認へ修正し、Workers Builds接続時の条件付き表現を追加。PR head `045bef77` にpush後のCI実行状態を確認する。
 - バックアップ復元の現証拠は旧exportの隔離検証（75 tables / integrity ok / FK 0）に限られる。最新DB復元、保管先、担当、保持、通知、RPO/RTOは未確定。項目4〜7の隔離試験はdocs記載、実サービス受入は未完了。
+
+## 2026-10-02 バックアップ運用の独立監査
+
+- `docs/ADMIN_D1_RECOVERY.md`記録の手動exportを確認。10,872,416 bytes、SHA256 `71d00dd248479d2088d253486e704e536b9b48d755fbca1d44cd400b797f1ed8`、75 tables、隔離SQLiteの`integrity=ok`、FK違反0件。これはmigration 0120〜0123適用前で、最新本番状態ではない。
+- RepositoryにD1 bindingはあるがR2 bucket / Workflowによる定期backup設定はない。オフサイト保存先、暗号化、保持/削除、監視、失敗通知、owner/代理、復旧演習は未構成。
+- 公式の[D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)は現在の契約により7日または30日の復元範囲がある。restoreはDBを上書きするため、通常backupと同一視しない。
+- 公式[D1 Export API](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/export/)は、大規模export中にD1 queryを処理できなくなる場合があり、export中は継続pollが必要。現在の約10.9 MBでの影響時間は未測定。daily scheduleを設定する前に非本番で測定し、本番を使う検証は低トラフィック時間帯・承認済み手順・中断条件を決めてから行う。
+- 具体案と未解決の承認事項は[`ADMIN_BACKUP_OPERATIONS_PROPOSAL_2026-10-02.md`](ADMIN_BACKUP_OPERATIONS_PROPOSAL_2026-10-02.md)。PR #487は文書提案のみで、Cloudflare設定や保存先に変更を加えていない。
 
 - ユーザーのリミットによる停止依頼で作業を中断。再開情報を `ADMIN_READINESS_RESUME.md` と監査出力ディレクトリの `RESUME.md` に保存。その時点では全E2Eの終了結果が未確認。PR作成前、Cloudflare変更なし。
 
