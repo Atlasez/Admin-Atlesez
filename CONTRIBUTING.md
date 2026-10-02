@@ -32,3 +32,15 @@ PR前チェック: `npm run check && npm run lint && npm run format:check && npm
 ## 行動規範
 
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) に従ってください。
+
+## GitHubラベル
+
+すべてのIssueとPRに、対象サイトのラベルを付けます。
+
+- 運営サイト（`https://admin.atlasez.org`）は `site:admin`
+- 学習サイト（`https://atlasez.org`、`https://www.atlasez.org`）は `site:learning`
+- 両方に影響する変更は両方のラベルを付けます。
+
+ドキュメント、インフラ、共通コードの変更も、影響するサイトに応じてラベルを選びます。`bug`や`enhancement`などの分類ラベルも必要に応じて追加できますが、サイトラベルの代わりにはなりません。
+
+Issueは対象サイトのフォームを使い、サイトラベルを自動付与します。PRは作成時にGitHub上で該当するサイトラベルを付けます。変更の対象範囲が変わった場合はラベルも更新します。

@@ -1,0 +1,13 @@
+name: 運営サイト
+description: 運営サイト（admin.atlasez.org）のIssue
+title: ""
+labels:
+  - site:admin
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 内容
+      description: 発生している問題や提案を具体的に記載してください。
+    validations:
+      required: true
