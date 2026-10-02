@@ -142,6 +142,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
         entries.map((entry) => String(entry[key] ?? "")).filter(Boolean).forEach((optionValue) => {
           if (known.has(optionValue)) return;
           select.add(new Option(optionValue, optionValue));
+          known.add(optionValue);
         });
       };
       ensureOptions(kindSelect, "kind");
@@ -408,6 +409,11 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
   .history-skeleton {
     display: grid;
+  }
+
+  .history-skeleton[hidden],
+  .dialog-link[hidden] {
+    display: none;
   }
 
   .history-skeleton-row {
