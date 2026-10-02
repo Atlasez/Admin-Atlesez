@@ -7,6 +7,7 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
     <header><h1>タスクテンプレート</h1><a href="/admin/member-tasks/">← タスク管理</a></header>
     <p>自分用のテンプレートを保存し、同じ作業を手動または定期的に作成できます。定期作成は有効にしたものだけが動きます。</p>
     <details open><summary>テンプレートを追加・編集</summary>
+      <div class="starter"><label>初回タスクの作業例<select data-starter-task><option value="">参加先の読み込み後に選べます</option></select></label><button type="button" data-starter-apply>作業例を入力</button><p>空の新規テンプレートに入力します。相談先・確認担当者・期限を調整して保存し、「タスクを作成」を押してください。<a href="/admin/getting-started/#first-task">作業例の説明</a></p></div>
       <form data-template-form>
         <label>テンプレート名 <span>必須</span><input name="name" required maxlength="120" /></label>
         <label>タスク名 <span>必須</span><input name="title" required maxlength="200" /></label>
@@ -34,6 +35,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
   header,.buttons { display:flex;gap:1rem;align-items:center;justify-content:space-between; }
   details,section {border:1px solid var(--border-default);padding:1rem;margin-top:1rem;}
   form {display:grid;gap:.8rem;margin-top:1rem;}
+  .starter { border-bottom: 1px solid var(--border-default); padding: 1rem 0; min-width: 0; }
+  .starter label { min-width: 0; }
+  .starter select { box-sizing: border-box; min-width: 0; width: 100%; }
+  .starter button { margin-top: .6rem; }
   label {display:grid;gap:.3rem;font-weight:600;} label span {font-size:.75rem;color:var(--text-secondary);}
   input,textarea,select {background:var(--background-secondary);color:var(--text-primary);border:1px solid var(--border-default);border-radius:.3rem;padding:.55rem;max-width:100%;}
   .check {display:flex;align-items:center;gap:.5rem;} .buttons {justify-content:start;}

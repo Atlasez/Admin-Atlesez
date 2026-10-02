@@ -1,0 +1,42 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { memberStarterTasks } from "../../data/member-starter-tasks";
+---
+
+<AdminLayout title="参加後の案内" description="プロフィール、最初のタスク、予定、相談方法を確認します">
+  <main class="welcome" id="main">
+    <header><a href="/admin/portal/">← メンバー用サイト</a><h1>参加後の案内</h1><p>最初は小さな作業から始めましょう。受入担当者と、担当すること・確認してくれる人・相談先を決めてから進めてください。</p></header>
+    <nav aria-label="参加後の案内の目次"><a href="#first-day">初日にすること</a><a href="#first-task">最初の作業</a><a href="#first-week">最初の1週間</a><a href="#help">困ったとき</a></nav>
+    <section id="first-day" aria-labelledby="first-day-heading"><h2 id="first-day-heading">初日にすること</h2>
+      <ol>
+        <li><strong>参加先を確認する</strong><p><a href="/admin/portal/">ポータル</a>で参加プロジェクトを確認します。応募の結果がまだ出ていない場合は<a href="/applicant/">応募状況</a>を確認してください。参加先が表示されないときは、応募時のGoogleアカウントか確認し、受入担当者へ相談します。</p></li>
+        <li><strong>プロフィールと連絡方法を確認する</strong><p><a href="/admin/member-profile/">マイページ</a>で表示名・自己紹介・タイムゾーンを確認します。Discord連携もここからできます。連携とサーバー参加はそれぞれ確認してください。Discordを使えない場合の連絡方法は受入担当者と決めます。</p></li>
+        <li><strong>相談先を決める</strong><p>受入担当者、作業を確認する担当者、不在時の代理者を確認します。連絡先がまだ分からない場合は<a href="https://atlasez.org/contact/" target="_blank" rel="noreferrer">Atlasezのお問い合わせ</a>から相談できます。</p></li>
+        <li><strong>予定と最初のタスクを確認する</strong><p><a href="/admin/member-calendar/">カレンダー</a>で日時とタイムゾーンを確認し、<a href="/admin/member-tasks/">タスク管理</a>で自分の担当・期限・完了条件を確認します。何も割り当てられていない場合は、下の作業例を受入担当者と選んでください。</p></li>
+      </ol>
+    </section>
+    <section id="first-task" aria-labelledby="first-task-heading"><h2 id="first-task-heading">最初の作業を選ぶ</h2><p>以下は作業例です。対象・確認担当者・期限は相談して決めます。<a href="/admin/task-templates/">タスクテンプレート</a>では、参加先の作業例を入力してから内容を調整できます。保存後に「タスクを作成」を押すと実際のタスクになります。</p>
+      <div class="examples">{memberStarterTasks.map((task) => <article><h3>{task.projectName}</h3><strong>{task.title}</strong><p class="task-details">{task.details}</p></article>)}</div>
+      <p>アトラスの執筆・フィードバック担当は、プロジェクトの権限が付いた後に<a href="/admin/guide/">作業の進め方</a>と<a href="/admin/rules/">規則</a>も確認してください。担当外の記事が必要なときは、受入担当者へ依頼します。</p>
+    </section>
+    <section id="first-week" aria-labelledby="first-week-heading"><h2 id="first-week-heading">最初の1週間</h2><ol><li><strong>作業を始めたら</strong><p>タスクを「進行中」にし、作業メモに対象と進め方を残します。分からないことは、該当箇所と確認したいことを添えて相談します。</p></li><li><strong>確認をお願いするとき</strong><p>成果物のURL、取り組んだこと、確認してほしい点を作業メモや決めた連絡先で共有します。記事のフィードバック依頼は記事編集画面から行います。</p></li><li><strong>1つ目が終わったら</strong><p>完了条件を確認し、タスクを「完了」にします。受入担当者と、困った点・無理のない作業量・次の小タスクを相談してください。期限に間に合わない場合も、途中で相談できます。</p></li></ol></section>
+    <section id="help" aria-labelledby="help-heading"><h2 id="help-heading">困ったとき</h2><details><summary>ログイン・参加先・権限が合わない</summary><p>応募に使ったGoogleアカウントと参加プロジェクトを確認します。権限がない画面は受入担当者へ依頼してください。何度も応募し直す前に、応募状況を確認しましょう。</p></details><details><summary>保存が終わらない・エラーが出る</summary><p>入力内容を手元に控え、エラー表示と通信状態を確認して再試行します。保存が確認できるまで画面を閉じないでください。解決しない場合は、発生日時とタイムゾーン、画面URL、行った操作、エラー文を担当者へ伝えます。</p></details><details><summary>通知やDiscordの案内が届かない</summary><p>サイト内の通知、メールの迷惑メールフォルダ、マイページのDiscord連携状態を確認します。受入担当者に届いていない通知の種類と時刻を伝えてください。</p></details><details><summary>活動を休みたい・担当を引き継ぎたい</summary><p>受入担当者に相談し、未完了タスク・原稿・予定の引継ぎ先を決めます。手続きの窓口と必要な申請も確認してください。</p></details><p class="notice">相談には、パスワード・認証コード・Cookie・応募者の個人情報を添付しないでください。画像に他の人の情報や非公開原稿が写る場合は、必要な箇所だけに絞ります。</p><p>担当者と連絡が取れない場合や、その担当者に直接相談しにくい場合は、<a href="https://atlasez.org/contact/" target="_blank" rel="noreferrer">Atlasezのお問い合わせ</a>へ相談してください。</p></section>
+  </main>
+</AdminLayout>
+
+<style>
+  .welcome { margin: 0 auto; max-width: 960px; padding: 2rem 1rem 4rem; }
+  h1 { font-size: clamp(1.8rem, 4vw, 2.5rem); margin: 1rem 0 .5rem; }
+  h2 { font-size: 1.3rem; } h3 { font-size: .9rem; color: var(--text-secondary); }
+  p { line-height: 1.8; } a { color: var(--accent-primary); overflow-wrap: anywhere; }
+  header p, section > p { color: var(--text-secondary); }
+  nav { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; border-block: 1px solid var(--border-default); padding: 1rem 0; margin-top: 1.5rem; }
+  section { border-bottom: 1px solid var(--border-default); padding: 1rem 0; scroll-margin-top: 6rem; }
+  ol { padding-left: 1.5rem; } li { padding: .45rem 0; } li p { margin: .4rem 0; }
+  .examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  article { border: 1px solid var(--border-default); background: var(--background-secondary); padding: 1rem; min-width: 0; }
+  .task-details { white-space: pre-line; font-size: .85rem; }
+  details { border-top: 1px solid var(--border-default); padding: .9rem 0; } summary { cursor: pointer; font-weight: 700; line-height: 1.6; }
+  .notice { border-left: 3px solid var(--accent-primary); padding-left: 1rem; }
+  @media (max-width: 620px) { .examples { grid-template-columns: 1fr; } }
+</style>
