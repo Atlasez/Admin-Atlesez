@@ -31,25 +31,7 @@ jobs:
 
       - name: Fetch sync branch when it exists
         id: sync
-        shell: bash
-        run: |
-          set -euo pipefail
-          branch="ops/cloudflare-deployment-sync"
-          if git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"; then
-            previous_head="$(git rev-parse "origin/${branch}")"
-            git switch --create "${branch}" --track "origin/${branch}"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git merge --no-edit origin/main
-            if [[ "$(git rev-parse HEAD)" != "${previous_head}" ]]; then
-              echo "base_updated=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "base_updated=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            git switch --create "${branch}"
-            echo "base_updated=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash scripts/cloudflare-deployment-sync-branch.sh prepare
 
       - name: Record Cloudflare production status (read-only)
         env:
@@ -61,20 +43,7 @@ jobs:
         shell: bash
         env:
           BASE_UPDATED: ${{ steps.sync.outputs.base_updated }}
-        run: |
-          set -euo pipefail
-          branch="ops/cloudflare-deployment-sync"
-          if ! git diff --quiet -- docs/deployments/cloudflare-latest.json; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add docs/deployments/cloudflare-latest.json
-            git commit -m "ops: record Cloudflare deployment status"
-          elif [[ "${BASE_UPDATED}" != "true" ]]; then
-            echo "updated=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git push origin "HEAD:${branch}"
-          echo "updated=true" >> "$GITHUB_OUTPUT"
+        run: bash scripts/cloudflare-deployment-sync-branch.sh persist
 
       - name: Create or update synchronization PR
         if: steps.update.outputs.updated == 'true'
