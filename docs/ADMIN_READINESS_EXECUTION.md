@@ -13,7 +13,7 @@
 | 2 応募フォーム修正             | main反映済み     | PR #486の応募欄/payload修正がmainに反映済み。main CI成功。本番Workerは旧SHAのため、配信後の実画面確認が必要                                                              | 未完了   |
 | 3 公開個人情報説明             | PRレビュー待ち   | 公開側正本Atlasez/Atlasez01にprivacy説明・応募導線を実装。公開手順書のWorkers/main/SHA記載もPR #140で修正。CIは最新commit再実行中、人間レビュー必要                      | 未完了   |
 | 4 権限別受入                   | 検証準備         | 全migrationの隔離D1で実APIの全体/担当/分野統括/別プロジェクト/退会後を確認。本番のUI/API受入は未完了                                                                     | 未完了   |
-| 5 新規参加者受入               | 検証準備         | 仮セッションで基本情報保存・応募・二重応募防止・他人の情報非公開を確認。実Googleログインと審査・受入は未完了                                                             | 未完了   |
+| 5 新規参加者受入               | 検証準備         | 隔離D1の実Worker APIで受入から初回利用まで、不承認後の応募者画面/API拒否まで確認。実Googleログイン・人間の審査と受入/見送り連絡は未完了                                  | 未完了   |
 | 6 メール/Discord実連携         | 検証準備         | 隔離D1のメールqueueと模擬providerで503後retry・同一idempotency key・送信済再送防止を確認。実到達/Discord実アカウントは未完了                                             | 未完了   |
 | 7 記事公開実証                 | 検証準備         | 公開先Atlasez/Atlasez01と受入・訂正・非公開化の試験手順を記録。実公開は未実施                                                                                            | 未完了   |
 | 8 バックアップ/復旧運用        | 提案レビュー待ち | 既存exportの隔離SQLite検証は75 tables / integrity ok / FK 0。migration 0120〜0123適用前。定期化前にExport APIの停止影響を測定し、保管先/保持/通知/担当/RPO/RTOを承認する | 未完了   |
@@ -61,3 +61,9 @@
 - ユーザーのリミットによる停止依頼で作業を中断。再開情報を `ADMIN_READINESS_RESUME.md` と監査出力ディレクトリの `RESUME.md` に保存。その時点では全E2Eの終了結果が未確認。PR作成前、Cloudflare変更なし。
 
 - 再開時、前回全E2Eの最終集計を確認: 323 passed / 14 skipped。新規応募10件を含む。途中停止扱いを訂正。最終check/lint/unit/format成功、unit47ファイル364件成功。公開privacyの最終check/build成功。ChromeでPC/390px表示を確認し、横はみ出しなし。
+
+## 2026-10-03 不承認受入経路の補強
+
+- `tests/unit/admin-readiness-integration.test.ts` に、仮応募者の応募→確認中→見送りの実Worker Workflow API試験を追加。応募者本人の状態/応募状況APIに不承認結果が残ること、オンボーディングAPIが403、会員カレンダーが認証後の非会員導線へ302、project membershipが作成されないこと、監査イベント2件と外部キー整合性を確認。
+- 受入経路の試験と合わせ、承認・初回オンボーディングと不承認の両分岐を隔離SQLiteで検証可能にした。Google OAuth、実通知到達、人間による審査・見送り連絡は未実証なのでP0.5は未完了。
+- 検証: `npm run verify:deploy-config`、`npm run check`（292 files、error/warningなし）、`npm run lint`、`npm test`（48 files / 369 tests pass）、`npm run format:check`、ADMIN向け`npm run build`、`npm run verify:build-info`（SHA `5dc065ebaf5e0cffff84c9ecf6e457299db24cea`）、`git diff --check` がすべて成功。ビルド時の既存Pagefind警告（3ページに`<html>`要素なし）は今回の変更範囲外。

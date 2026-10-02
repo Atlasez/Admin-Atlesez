@@ -474,3 +474,108 @@ it("仮応募者の応募から審査受入・初回オンボーディング・�
   ).toEqual({ internal_bio: "プロジェクト内プロフィールの隔離テスト" });
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
+
+it("仮応募者の見送り後は応募状況を確認でき、オンボーディングと会員利用を拒否する", async () => {
+  const { db, request } = environment();
+  const email = "rejected-journey@atlasez.test";
+  const profile = {
+    familyName: "見送り",
+    givenName: "検証",
+    familyNameKana: "みおくり",
+    givenNameKana: "けんしょう",
+    formLanguage: "ja",
+    affiliationEmail: "school@atlasez.test",
+    affiliationType: "大学",
+    institution: "検証大学",
+    grade: "B1",
+    country: "日本",
+    timezone: "Asia/Tokyo",
+    birthDate: "2000-01-01",
+    residenceCity: "検証市",
+  };
+
+  expect(
+    (await request("/api/application-profile", email, profile)).status,
+  ).toBe(200);
+  expect(
+    (
+      await request("/api/apply", email, {
+        projectSlug: "thinking-cafe",
+        interests: "対話の場づくり",
+        message: "不承認経路の隔離検証",
+        referralSource: "公式サイト",
+        interviewAvailability: "平日18時 Asia/Tokyo",
+        projectAnswers: { theme: "学び" },
+      })
+    ).status,
+  ).toBe(201);
+
+  const applicationId = db
+    .prepare("SELECT id FROM atlasez_member_applications WHERE email=?")
+    .get(email) as { id: string };
+  for (const [fromState, toState, idempotencyKey] of [
+    ["new", "reviewing", "journey-reject-review-1"],
+    ["reviewing", "rejected", "journey-reject-final-1"],
+  ]) {
+    const response = await request(
+      "/api/admin/workflow/transition",
+      "global@atlasez.test",
+      {
+        entityType: "application",
+        entityId: applicationId.id,
+        fromState,
+        toState,
+        idempotencyKey,
+      },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+  }
+
+  expect(await (await request("/api/user/status", email)).json()).toMatchObject(
+    {
+      stage: "APPLICANT",
+      applicationStatus: "rejected",
+      applicationProjects: [],
+      access: {
+        applicant: true,
+        onboarding: false,
+        admin: false,
+      },
+    },
+  );
+  expect(
+    await (await request("/api/applicant/me", email)).json(),
+  ).toMatchObject({
+    stage: "APPLICANT",
+    applications: [{ project: "考えるカフェ", status: "rejected" }],
+  });
+  expect((await request("/api/onboarding/me", email)).status).toBe(403);
+  expect((await request("/admin/member-calendar/", email)).status).toBe(302);
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM atlasez_project_memberships WHERE lower(email)=lower(?)",
+      )
+      .get(email),
+  ).toEqual({ count: 0 });
+  expect(
+    db
+      .prepare(
+        "SELECT from_state,to_state FROM workflow_transition_events WHERE entity_id=?",
+      )
+      .all(applicationId.id),
+  ).toEqual(
+    expect.arrayContaining([
+      { from_state: "new", to_state: "reviewing" },
+      { from_state: "reviewing", to_state: "rejected" },
+    ]),
+  );
+  expect(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM workflow_transition_events WHERE entity_id=?",
+      )
+      .get(applicationId.id),
+  ).toEqual({ count: 2 });
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+});
