@@ -2,6 +2,7 @@ import { readAdminApiJson } from "../lib/admin-api";
 import { adminMutation, withAdminButtonLock } from "./admin-mutation";
 import { createAdminLoadRetry } from "./admin-load-retry";
 import type { TaskTemplate } from "../lib/admin-task-templates";
+import { memberStarterTasks } from "../data/member-starter-tasks";
 type Template = Omit<TaskTemplate, "owner_email" | "assignees_json"> & {
   assignees: string[];
 };
@@ -37,6 +38,21 @@ function initialize() {
     editing: Template | undefined;
   const keys = new Map<string, string>();
   const controller = new AbortController();
+  const starterSelect = root.querySelector<HTMLSelectElement>(
+    "[data-starter-task]",
+  )!;
+  const updateStarters = () => {
+    const project = field<HTMLSelectElement>("projectId").value;
+    starterSelect.innerHTML =
+      '<option value="">作業例を選択</option>' +
+      memberStarterTasks
+        .filter((task) => task.projectId === project)
+        .map(
+          (task) =>
+            `<option value="${esc(task.projectId)}">${esc(task.title)}</option>`,
+        )
+        .join("");
+  };
   const setMessage = (error: unknown) => {
     message.value =
       error instanceof Error ? error.message : "操作できませんでした。";
@@ -70,6 +86,7 @@ function initialize() {
     field<HTMLInputElement>("anchorAt").required = false;
     field<HTMLInputElement>("enabled").disabled = true;
     members();
+    updateStarters();
   };
   const render = () => {
     list.innerHTML = data.templates
@@ -101,6 +118,7 @@ function initialize() {
     if (data.projects.some((p) => p.id === selected))
       field<HTMLSelectElement>("projectId").value = selected;
     members();
+    updateStarters();
     render();
     if (data.templates.length) retry.success();
     else retry.empty("保存したテンプレートはありません。");
@@ -113,7 +131,39 @@ function initialize() {
   field<HTMLSelectElement>("projectId").addEventListener("change", () => {
     editing = editing ? { ...editing, assignees: [] } : undefined;
     members();
+    updateStarters();
   });
+  root
+    .querySelector<HTMLButtonElement>("[data-starter-apply]")!
+    .addEventListener("click", () => {
+      const task = memberStarterTasks.find(
+        (task) =>
+          task.projectId === starterSelect.value &&
+          task.projectId === field<HTMLSelectElement>("projectId").value,
+      );
+      if (!task) {
+        message.value = "参加先の作業例を選択してください。";
+        return;
+      }
+      if (
+        editing ||
+        ["name", "title", "details", "dueAfterDays", "anchorAt"].some((name) =>
+          field<HTMLInputElement>(name).value.trim(),
+        ) ||
+        field<HTMLSelectElement>("schedule").value !== "none" ||
+        field<HTMLInputElement>("enabled").checked
+      ) {
+        message.value =
+          "入力中の内容を保持しています。作業例は空の新規テンプレートで利用してください。";
+        return;
+      }
+      field<HTMLInputElement>("name").value = "初回タスク：" + task.projectName;
+      field<HTMLInputElement>("title").value = task.title;
+      field<HTMLTextAreaElement>("details").value = task.details;
+      message.value =
+        "作業例を入力しました。相談先・確認担当者・期限を調整してから保存してください。";
+      field<HTMLTextAreaElement>("details").focus();
+    });
   field<HTMLSelectElement>("schedule").addEventListener("change", () => {
     const scheduled = field<HTMLSelectElement>("schedule").value !== "none";
     field<HTMLInputElement>("anchorAt").required = scheduled;

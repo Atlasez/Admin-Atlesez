@@ -52,6 +52,80 @@ async function mock(page: Page) {
     });
   });
 }
+test("初回タスク例は参加先だけを選べ、手動作成用に保存し、入力中や編集内容を上書きしない", async ({
+  page,
+}) => {
+  await mock(page);
+  const projects = [
+    "atlas",
+    "seminar-platform",
+    "thinking-cafe",
+    "student-council-exchange",
+    "secretariat",
+  ];
+  const submissions: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/task-templates", async (route) => {
+    if (route.request().method() === "POST") {
+      submissions.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        email: "me@example.com",
+        templates: [row],
+        projects: projects.map((id) => ({ id, name: id, role: "member" })),
+        members: projects.map((id) => ({
+          project_id: id,
+          email: "me@example.com",
+          name: "自分",
+        })),
+      },
+    });
+  });
+  await page.goto("admin/task-templates/");
+  const starter = page.locator("[data-starter-task]");
+  for (const project of projects) {
+    await page.locator('[name="projectId"]').selectOption(project);
+    await expect(starter.locator("option")).toHaveCount(2);
+    await starter.selectOption(project);
+    await page.getByRole("button", { name: "作業例を入力" }).click();
+    await expect(page.locator('[name="details"]')).toHaveValue(/完了条件：/);
+    await expect(page.locator('[name="schedule"]')).toHaveValue("none");
+    await expect(page.locator('[name="dueAfterDays"]')).toHaveValue("");
+    expect(submissions).toHaveLength(0);
+    await page.locator("[data-template-cancel]").click();
+  }
+  await page.locator('[name="projectId"]').selectOption("atlas");
+  await starter.selectOption("atlas");
+  await page.locator('[name="details"]').fill("本人と相談した内容");
+  await page.getByRole("button", { name: "作業例を入力" }).click();
+  await expect(page.locator('[name="details"]')).toHaveValue(
+    "本人と相談した内容",
+  );
+  await expect(page.locator("[data-template-message]")).toContainText(
+    "入力中の内容を保持",
+  );
+  await page.locator("[data-template-cancel]").click();
+  await starter.selectOption("atlas");
+  await page.getByRole("button", { name: "作業例を入力" }).click();
+  await page.locator("[data-template-save]").click();
+  await expect(page.locator("[data-template-message]")).toHaveText(
+    "テンプレートを保存しました。",
+  );
+  expect(submissions).toHaveLength(1);
+  expect(submissions[0]).toMatchObject({
+    projectId: "atlas",
+    schedule: "none",
+    enabled: false,
+    dueAfterDays: null,
+    assignees: ["me@example.com"],
+  });
+  await page.locator("[data-template-edit]").click();
+  await starter.selectOption("atlas");
+  await page.getByRole("button", { name: "作業例を入力" }).click();
+  await expect(page.locator('[name="title"]')).toHaveValue(row.title);
+});
 test("テンプレート保存のHTMLエラー後に入力を保持して再試行できる", async ({
   page,
 }) => {

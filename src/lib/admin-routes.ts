@@ -6,6 +6,7 @@ const adminPageNames = [
   "task-templates",
   "member-calendar",
   "portal",
+  "getting-started",
   "action-center",
   "notifications",
   "atlas",

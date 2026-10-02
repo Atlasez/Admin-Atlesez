@@ -122,7 +122,12 @@ function environment() {
 }
 
 it("全migrationを適用した隔離D1で認証・全体管理・別プロジェクト・退会後の境界を確認する", async () => {
-  const { db, request } = environment();
+  const { db, request, env } = environment();
+  const anonymous = await worker.fetch(
+    new Request("https://admin.atlasez.test/admin/getting-started/"),
+    env as never,
+  );
+  expect(anonymous.status).toBe(302);
   const now = new Date().toISOString();
   db.prepare(
     "INSERT INTO atlasez_member_applications(id,name,email,interests,message,status,created_at,updated_at,project_slug) VALUES (?,?,?,?,?,'accepted',?,?,?)",
@@ -150,6 +155,14 @@ it("全migrationを適用した隔離D1で認証・全体管理・別プロジ�
   expect(
     await (await request("/api/user/status", "member@atlasez.test")).json(),
   ).toMatchObject({ stage: "MEMBER" });
+  for (const path of ["/admin/getting-started", "/admin/getting-started/"]) {
+    expect((await request(path, "member@atlasez.test")).status).toBe(200);
+    const applicantResponse = await request(path, "applicant@atlasez.test");
+    expect(applicantResponse.status).toBe(302);
+    expect(applicantResponse.headers.get("location")).not.toContain(
+      "/admin/getting-started",
+    );
+  }
   db.prepare(
     "INSERT INTO report_admin_permissions(email,subject) VALUES (?,?)",
   ).run("editor@atlasez.test", "mathematics");
@@ -234,6 +247,9 @@ it("全migrationを適用した隔離D1で認証・全体管理・別プロジ�
     { action: "archive", email: "editor@atlasez.test" },
   );
   expect(archived.status).toBe(200);
+  expect(
+    (await request("/admin/getting-started/", "editor@atlasez.test")).status,
+  ).toBe(302);
   expect(
     (await request("/api/admin/editor/documents", "editor@atlasez.test"))
       .status,
