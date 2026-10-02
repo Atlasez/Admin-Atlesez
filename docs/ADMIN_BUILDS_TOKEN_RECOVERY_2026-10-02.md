@@ -24,28 +24,26 @@
 
 [公式仕様](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)は独自のユーザーAPI tokenを許可する。新規自動作成の既定権限にはAccount Settings Readが含まれる。アカウント所有tokenはBuildsで未対応。
 
-CloudflareのWorkers Editor権限には個別Worker scopeがあるが、2026-10-02にこのユーザーのAPI-token作成UIで読み取り確認できたリソース種別はAccount、Zone、Userのみで、Worker単体scopeは表示されなかった。古典的なuser API tokenで作る場合、Workers Scripts Editは固定Account内の全Workerに及ぶ。Zone Routes権限は`atlasez.org`だけに絞れる。WorkerにD1 bindingがある場合でもDeployにD1データへの別権限は不要と公式資料にある。Buildsはuser tokenのみ対応し、自動作成tokenはさらにKV/R2、Account Settings Read、全zoneなどの広いscopeを含む。
+Cloudflareの現行Developer Platform権限モデルはAPI tokenにWorker単位の`Editor` scopeを付け、既存Workerをdeployできると説明している。一方、現地で確認したProfile > API Tokensのユーザーtoken作成UIはAccount / Zone / User resourceだけで、個別Worker scopeを提示しなかった。CloudflareのWorkers Builds設定資料はBuilds tokenについて現在user tokenのみ対応し、account-owned tokenには未対応と明記している。Developer Platform資料の個別Worker scope例はaccount-owned tokenの作成手順であり、これをWorkers Buildsに登録できる証拠はない。Deploy時にD1 bindingの別権限が不要な点は同資料で確認できる。
 
-次の専用user token案は、新規credential作成前にPRレビューする。プロフィールからのtoken作成とBuildsへの登録はsecurity-sensitiveな外部設定変更で、**このPRだけでは許可も適用もしない**。
+現時点でWorker単位のleast-privilege tokenをWorkers Buildsが受け付ける方法は確認できていない。Account-wide `Workers Scripts Edit` とzone-wide `Workers Routes Edit` のclassic user token案は権限がADMIN以外にも及ぶため、推奨せず、作成もしない。次にCloudflare account ownerまたはSupportへ、(a) 個別Worker Editor scope付きAPI tokenをBuildsが受け付けるか、(b) user-scoped tokenで個別Worker scopeを設定するサポート手段があるか、を確認する。回答が得られるまでtoken・接続は作成しない。このPRは問い合わせ・credential作成・設定変更を許可しない。
 
-| 項目            | 候補値                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------- |
-| 名前            | `Atlasez Admin Workers Builds 2026-10-02`                                              |
-| Accountリソース | 固定Accountのみ                                                                        |
-| Account権限     | Workers Scripts Edit（Account内の全Workerに適用）                                      |
-| Zoneリソース    | `atlasez.org`のみ                                                                      |
-| Zone権限        | Workers Routes Edit（Zone内のWorker routesに適用）                                     |
-| User権限        | 既定では追加しない。検証ログが要求した場合だけUser Details Read/Memberships Readを検討 |
-| 有効期間        | 最大30日間の初回pilot。期限前の担当者と更新方法が決まらない場合は作成・接続しない      |
-| 追加しない権限  | Account Settings Read、D1 Edit、KV/R2、他Account、他Zone、所有者/管理者権限            |
+| 項目           | 候補値                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 候補           | 個別Worker `Editor` scopeのAPI token。ただしWorkers Buildsがaccount-owned tokenを現在受け付けるとは確認できず、user tokenでのscope設定UIも未確認 |
+| 対象           | 固定Account内の`atlasez-admin`だけに限定できる方式をCloudflareへ照会する。                                                                       |
+| 必要権限       | 既存WorkerのDeployに必要な`Editor`。Route/Custom Domainを変更する権限は追加しない。                                                              |
+| 有効期間       | Cloudflare側の制限と更新担当を確認してから決定。                                                                                                 |
+| 追加しない権限 | account-wide Workers Scripts Edit、Account Settings Read、D1 Edit、KV/R2、他Account、他Zone、Worker Admin                                        |
+| 状態           | 候補検討のみ。token名・権限・期間を確定せず、作成・登録していない。                                                                              |
 
-公式資料: [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[Developer Platform authorization](https://developers.cloudflare.com/workers/authorization/)。
+公式資料: [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[Developer Platform authorization](https://developers.cloudflare.com/workers/authorization/)。個別Worker API token scopeの説明は[2026-09-15更新のpermissions guide](https://developers.cloudflare.com/workers/authorization/)を参照。
 
-このpilot tokenはAccount全体のWorker codeを編集・deployでき、`atlasez.org`の全Worker routeを編集できるため、ADMIN Workerだけに限定されない。既存の専用Worker-scoped member/token roleの方が許容範囲に合う場合は、Account ownerにその担当者を作成してもらい、より広い古典的tokenは作らない。権限作成で`Account Settings Read`を要求された場合、token作成を中止し、Account ownerまたはCloudflare Supportへ回す。Builds pickerに手動tokenが現れない場合も接続しない。30日期限前の更新担当が決まらない場合は作成しない。API token文字列をチャット、Issue、PR、ログへ貼らない。
+Account-wide classic user tokenへ広げるfallbackは採用しない。Account owner / SupportからWorker-scoped tokenを提案された場合でも、まずそのtoken種別がWorkers Buildsで使えることを公式資料または検証で確認する。Builds pickerに有効な最小scope tokenが現れない場合は接続しない。token文字列をチャット、Issue、PR、ログへ貼らない。
 
 ## 候補が使えない場合
 
-固定Accountの所有者または権限を委任できる担当者による既存接続案の実行、もしくはCloudflareへの障害問い合わせが必要。問い合わせには日時、Worker、固定Account、permission group、秘密値を除いたerrorを使う。管理者のパスワードを借りたり、別Account・別Workerへ本番を移したり、通常経路を手動deployに置き換えたりしない。
+Cloudflare ownerまたはSupportへの機能確認が必要。問い合わせには日時、Worker、固定Account、permission group、秘密値を除いたerrorを使う。管理者のパスワードを借りたり、広いclassic tokenを作ったり、別Account・別Workerへ本番を移したり、通常経路を手動deployに置き換えたりしない。
 
 ## 適用と復旧
 
@@ -61,4 +59,4 @@ Preview builds: disabled
 Build cache: disabled
 ```
 
-接続操作は初回本番deployを開始し得る。設定PRレビュー後、Cloudflareへの送信直前に明示承認を確認し、SHA `cabd861396c4c6af6208cf4357462876289d32df` のmain Buildを監視する。公開`build-info.json`、Build/Deployログ、Worker名 `atlasez-admin`、Version、100%配信、Chrome主要6画面のすべてが一致しない場合は停止する。失敗時は現在の配信を保持し、設定の取消・token失効も影響を記録してから行う。既存tokenの編集・削除はこの案に含めない。
+接続操作は初回本番deployを開始し得る。Worker単体scopeのBuild token手段が確認され、設定PRレビューが終わった後、Cloudflareへの送信直前にGitHub `main`の最新HEAD SHAとCI状態を取得して記録する。保存直後にBuildが別SHAを選んだ、CIが未成功のcommitを対象にした、または対象SHAが確認時点の最新レビュー済みmainでない場合は停止する。公開`build-info.json`、Build/Deployログ、Worker名 `atlasez-admin`、Version、100%配信、Chrome主要6画面のすべてが一致しない場合も停止する。失敗時は現在の配信を保持し、設定の取消・token失効も影響を記録してから行う。既存tokenの編集・削除はこの案に含めない。

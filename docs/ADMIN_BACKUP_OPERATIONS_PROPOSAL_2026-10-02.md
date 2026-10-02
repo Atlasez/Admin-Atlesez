@@ -25,12 +25,12 @@ Cloudflare D1 Time Travelは短時間の誤操作復旧に使う。利用可能�
 | 保存先    | Cloudflare R2専用bucket/prefix。別Accountまたは独立した保管先も災害モデルと個人情報条件で比較               | 未決定         |
 | 検証      | export状態/error、signed URL取得、R2 object size、SHA-256、bookmark、対象D1 ID、UTC時刻を成功manifestへ記録 | 未設定         |
 | 通知      | job失敗または最終成功から26時間超で運営ownerと代理へ通知                                                    | 未設定         |
-| retention | 35日分の復元候補を初期案とし、R2 Lifecycle/Lockの動作を検証後に設定                                         | 未決定         |
+| retention | 35日保持を初期案とする。Lockを使う場合も35日にそろえ、削除境界を個人情報方針と合わせる                      | 未決定         |
 | owner     | 運営代表とDB/Cloudflare担当を実名で指定                                                                     | 未指定         |
 | 復元演習  | 月1回、isolated non-production D1へrestoreし、integrity/FK/API smokeを確認                                  | 未設定         |
 | RPO / RTO | RPO 24h、RTO 4hを検討目標とする                                                                             | 合意・実績なし |
 
-Cloudflare公式[R2 lifecycle](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)と[Bucket Locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/)は保存期限・最低保持の実装候補。35日Lockと90日Lifecycleは候補設計に過ぎず、期間、削除境界、費用、個人情報保持方針を確認するまで設定しない。同一Cloudflare Account上のR2をAccount喪失・侵害から独立したbackupとみなせるかはこの資料から確認できないため、災害対策の要件を決めて保存先を選ぶ。
+Cloudflare公式[R2 lifecycle](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)と[Bucket Locks](https://developers.cloudflare.com/r2/buckets/bucket-locks/)は保存期限・最低保持の実装候補。LockはLifecycleより優先されるため、35日Lockと90日Lifecycleを同時に設定すると実際には90日まで削除されない。35日保持を候補とする場合は両方の期間を35日にそろえる。90日を選ぶ場合は、個人情報保持方針・費用・削除境界の合意後に別案として記録する。同一Cloudflare Account上のR2をAccount喪失・侵害から独立したbackupとみなせるかはこの資料から確認できないため、災害対策の要件を決めて保存先を選ぶ。
 
 ## 実装前に決める事項
 

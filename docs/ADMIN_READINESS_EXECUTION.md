@@ -46,7 +46,7 @@
 - Issue [#407](https://github.com/Atlasez/Admin-Atlesez/issues/407) に同期失敗とDashboard再確認を記録。Worker設定、token、route、D1、Versionは変更していない。
 - 固定Account `812021e62fa20465950b61be55dfe064` と `atlasez-admin` をDashboardで再確認。Gitは未接続。Connectフォームの自動token作成は既存の`Account Settings Read`拒否が解消しないと失敗する。フォーム上の既存API token候補も無く、「新しいトークンを作成する」のみ。
 - Connectフォームの現在のデフォルトはbuild `npm run build` / deploy `npx wrangler deploy` / preview有効で、運用文書と不一致。root `/` とcache無効は正しい。フォーム送信や変更保存は未実施。
-- Recovery PR [#487](https://github.com/Atlasez/Admin-Atlesez/pull/487)では、現在のtoken作成UI上はWorker単体scope不可である事実を反映。古典的な最小candidateもAccount内の全Worker Scripts Edit + zone `atlasez.org` Routes Editに及び、ADMIN以外へ影響できるため、Worker単体scopeが必須ならAccount owner対応へ回す。D1 EditやAccount Settings Readを足さない。手動tokenのBuilds picker表示・Build成功は未検証。
+- Recovery PR [#487](https://github.com/Atlasez/Admin-Atlesez/pull/487)ではProfile user-token UIにWorker単体scopeが出ず、Workers Buildsはaccount-owned token未対応という公式資料の組合せを記録。Account-wide classic tokenはADMIN以外へ影響できるため不採用。Cloudflare owner/Supportに個別Worker-scoped tokenをBuildsが受け付けるか照会が必要。D1 EditやAccount Settings Readを足さない。
 - 公開PR [#140](https://github.com/Atlasez/Atlasez01/pull/140) は人間レビュー待ち。公開手順書の古いPages記載をWorkers/main/SHA/100%/Chrome確認へ修正し、Workers Builds接続時の条件付き表現を追加。PR head `045bef77` にpush後のCI実行状態を確認する。
 - バックアップ復元の現証拠は旧exportの隔離検証（75 tables / integrity ok / FK 0）に限られる。最新DB復元、保管先、担当、保持、通知、RPO/RTOは未確定。項目4〜7の隔離試験はdocs記載、実サービス受入は未完了。
 
