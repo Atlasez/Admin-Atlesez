@@ -103,6 +103,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     private var keychainTimeout: Timer?
     private var redemption: URLSessionDataTask?
     private let authenticationSession: URLSession
+    private let openExternalURL: (URL) -> Bool
     private var loadingTimeout: Timer?
     private var failedURL: URL?
     private var downloadDestinations: [ObjectIdentifier: (temporary: URL, destination: URL)] = [:]
@@ -117,8 +118,9 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     private let networkMonitor = NWPathMonitor()
     private var previousNetworkStatus: NWPath.Status?
     private var hasInstalledSession = false
-    init(dataStore: WKWebsiteDataStore? = nil, authenticationSession: URLSession = .shared) {
+    init(dataStore: WKWebsiteDataStore? = nil, authenticationSession: URLSession = .shared, openExternalURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
         self.authenticationSession = authenticationSession
+        self.openExternalURL = openExternalURL
         websiteDataStore = dataStore ?? .default()
         super.init()
         websiteDataStore.httpCookieStore.add(self)
@@ -184,6 +186,17 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
     }
 
     func signIn() { startLogin(returningTo: pendingDestination) }
+
+    func configurePresentation(_ configuration: WKWebViewConfiguration) {
+        // This is app-only presentation. Browser users still see the download link,
+        // and hiding it does not require a Worker deployment.
+        let script = """
+        if (new URL(document.baseURI).origin === 'https://admin.atlasez.org') {
+            document.querySelectorAll('.portal-app-download').forEach(element => element.remove());
+        }
+        """
+        configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
+    }
 
     func attach(_ view: WKWebView) {
         webView = view
@@ -291,7 +304,7 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         // pane. Its about:blank window inherits the authenticated opener's origin.
         let inheritedBlank = (url == nil || url?.absoluteString.isEmpty == true || url?.absoluteString == "about:blank") && isAdminFrame(navigationAction.sourceFrame)
         guard inheritedBlank || url.map(AdminAppPolicy.isAdmin) == true else {
-            if let url, ["http", "https"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
+            if let url, ["http", "https"].contains(url.scheme ?? "") { _ = openExternalURL(url) }
             return nil
         }
         let popup = WKWebView(frame: .zero, configuration: configuration)
@@ -325,8 +338,13 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         if action.shouldPerformDownload, AdminAppPolicy.isAdmin(url) || (["blob", "data"].contains(url.scheme ?? "") && (isAdminFrame(action.sourceFrame) || trustedPopups.contains(ObjectIdentifier(webView)))) {
             decisionHandler(.download); return
         }
+        if url.scheme?.lowercased() == "mailto", action.navigationType == .linkActivated,
+           isAdminFrame(action.sourceFrame) || trustedPopups.contains(ObjectIdentifier(webView)) {
+            _ = openExternalURL(url)
+            decisionHandler(.cancel); return
+        }
         guard AdminAppPolicy.isAdmin(url) else {
-            if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
+            if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { _ = openExternalURL(url) }
             decisionHandler(.cancel)
             return
         }
@@ -369,6 +387,21 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         let alert = NSAlert(); alert.messageText = message
         alert.addButton(withTitle: "続ける"); alert.addButton(withTitle: "キャンセル")
         alert.beginSheetModal(for: window) { result in completionHandler(result == .alertFirstButtonReturn) }
+    }
+    func webView(_ view: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        guard isAdminFrame(frame) || (frame.isMainFrame && trustedPopups.contains(ObjectIdentifier(view))), let window = view.window else { completionHandler(nil); return }
+        let alert = NSAlert()
+        alert.messageText = prompt
+        alert.addButton(withTitle: "決定")
+        alert.addButton(withTitle: "キャンセル")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        input.stringValue = defaultText ?? ""
+        input.identifier = NSUserInterfaceItemIdentifier("AtlasezJavaScriptPromptInput")
+        alert.accessoryView = input
+        alert.window.initialFirstResponder = input
+        alert.beginSheetModal(for: window) { result in
+            completionHandler(result == .alertFirstButtonReturn ? input.stringValue : nil)
+        }
     }
     func webView(_ view: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { beginDownload(download, from: view) }
     func webView(_ view: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { beginDownload(download, from: view) }
@@ -425,6 +458,13 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         sessionExpired = true
         needsSignIn = true
         deleteSessionToken()
+        webView?.stopLoading()
+        // A popout contains the same private work as the main window. Close it
+        // when signing out instead of leaving the previous account's pane visible.
+        for window in Array(popoutWindows) {
+            (window.contentView as? WKWebView)?.stopLoading()
+            window.close()
+        }
         let cookieStore = websiteDataStore.httpCookieStore
         let attempt = epoch.value
         cookieStore.getAllCookies { [weak self] cookies in
@@ -700,6 +740,7 @@ private struct AdminWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = model.websiteDataStore
+        model.configurePresentation(configuration)
         let view = WKWebView(frame: .zero, configuration: configuration)
         model.attach(view)
         view.uiDelegate = model
