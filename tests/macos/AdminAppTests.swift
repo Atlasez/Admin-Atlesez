@@ -8,6 +8,24 @@ private func expect(_ condition: @autoclosure () throws -> Bool, _ message: Stri
     if try !condition() { throw NSError(domain: "AdminAppTests: " + message, code: 1) }
 }
 
+@MainActor
+private func promptInput(in view: NSView) -> NSTextField? {
+    if let input = view as? NSTextField, input.identifier?.rawValue == "AtlasezJavaScriptPromptInput" { return input }
+    return view.subviews.compactMap { promptInput(in: $0) }.first
+}
+
+@MainActor
+private func answerPrompt(in window: NSWindow, text: String?, defaultText: String) async throws {
+    let deadline = Date().addingTimeInterval(3)
+    while window.attachedSheet == nil && Date() < deadline { try await Task.sleep(nanoseconds: 20_000_000) }
+    try expect(window.attachedSheet != nil, "saved view name opens a native text prompt")
+    let sheet = window.attachedSheet!
+    let input = sheet.contentView.flatMap { promptInput(in: $0) }
+    try expect(input?.stringValue == defaultText, "prompt preserves the site's default name")
+    if let text { input?.stringValue = text }
+    window.endSheet(sheet, returnCode: text == nil ? .alertSecondButtonReturn : .alertFirstButtonReturn)
+}
+
 private func sendRequest(_ server: LoopbackCallbackServer, target: String, fragmented: Bool = false) throws -> String {
     let url = URL(string: server.redirectURI)!
     let fd = socket(AF_INET, SOCK_STREAM, 0)
@@ -193,10 +211,12 @@ struct AdminAppTests {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
         let store = WKWebsiteDataStore.nonPersistent()
-        let model = AdminAppModel(dataStore: store)
+        var externalLinks: [URL] = []
+        let model = AdminAppModel(dataStore: store, openExternalURL: { externalLinks.append($0); return true })
         defer { model.testClearSession() }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = store
+        model.configurePresentation(configuration)
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
         let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 650), configuration: configuration)
         model.attach(view)
@@ -207,7 +227,7 @@ struct AdminAppTests {
         try expect(model.testSaveSession("replacement-session"), "Keychain update in place")
         try expect(model.testReadSession() == "replacement-session", "preserve existing session on app update")
         model.testClearSession()
-        view.loadHTMLString("<html><title>Native fixture</title><h1>ファイル操作の検証</h1><label>添付ファイル<input type=file multiple onchange=\"document.getElementById('selected').textContent=Array.from(this.files).map(f=>f.name).join(', ')\"></label><p id='selected'>未選択</p><a download='fixture.csv' href='data:text/csv,name%0Atest'>CSVを保存</a><br><a download='fixture.pdf' href='data:application/pdf,%25PDF-1.4%20fixture'>PDFを保存</a><br><button onclick=\"const w=window.open('','fixture-pane','popup'); if(w){w.document.write('&lt;h1&gt;編集枠の別ウィンドウ&lt;/h1&gt;');w.document.close()}\">別ウィンドウを開く</button></html>", baseURL: AdminAppPolicy.origin)
+        view.loadHTMLString("<html><title>Native fixture</title><h1>ファイル操作の検証</h1><label>添付ファイル<input type=file multiple onchange=\"document.getElementById('selected').textContent=Array.from(this.files).map(f=>f.name).join(', ')\"></label><p id='selected'>未選択</p><a download='fixture.csv' href='data:text/csv,name%0Atest'>CSVを保存</a><br><a download='fixture.pdf' href='data:application/pdf,%25PDF-1.4%20fixture'>PDFを保存</a><br><a id='email' href='mailto:fixture@example.test'>メール</a><a id='unsupported' href='file:///tmp/private'>未対応リンク</a><br><button onclick=\"const w=window.open('','fixture-pane','popup'); if(w){w.document.write('&lt;h1&gt;編集枠の別ウィンドウ&lt;/h1&gt;');w.document.close()}\">別ウィンドウを開く</button><footer class='portal-app-download'>Mac用アプリをダウンロードできます。</footer></html>", baseURL: AdminAppPolicy.origin)
         let pageDeadline = Date().addingTimeInterval(5)
         var fixtureReady = false
         while Date() < pageDeadline {
@@ -216,6 +236,14 @@ struct AdminAppTests {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
         try expect(fixtureReady, "native fixture loads before interaction")
+        let downloadBannerCount = try await view.evaluateJavaScript("document.querySelectorAll('.portal-app-download').length") as? Int
+        try expect(downloadBannerCount == 0, "native app does not show its own Mac download advertisement")
+        _ = try await view.evaluateJavaScript("document.getElementById('email').click()")
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try expect(externalLinks.map(\.absoluteString) == ["mailto:fixture@example.test"], "applicant mail link opens the default mail application")
+        _ = try await view.evaluateJavaScript("document.getElementById('unsupported').click()")
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try expect(externalLinks.count == 1, "unsupported URL schemes do not open external applications")
         let countBeforePopup = NSApp.windows.count
         _ = try await view.evaluateJavaScript("const pane=window.open('', 'regression-pane', 'popup'); if(pane){pane.document.write('<h1>Native popout</h1>');pane.document.close();} pane !== null")
         try await Task.sleep(nanoseconds: 300_000_000)
@@ -224,8 +252,22 @@ struct AdminAppTests {
         let popupView = popupWindow!.contentView as! WKWebView
         let popupText = try await popupView.evaluateJavaScript("document.body.textContent") as? String
         try expect(popupText?.contains("Native popout") == true, "editor can copy a pane into the popout")
-        popupWindow?.close()
         print("PASS: native editor popout opens and receives copied content")
+        let dialogWindow = NSWindow(contentRect: view.frame, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        dialogWindow.isReleasedWhenClosed = false
+        dialogWindow.contentView = view
+        dialogWindow.makeKeyAndOrderFront(nil)
+        defer { dialogWindow.close() }
+        for answer in ["確認待ち", "", nil] as [String?] {
+            let promptResult = Task { @MainActor in
+                try await view.evaluateJavaScript("JSON.stringify(window.prompt('表示の名前', '未対応'))") as? String
+            }
+            try await answerPrompt(in: dialogWindow, text: answer, defaultText: "未対応")
+            let result = try await promptResult.value
+            let expected = answer.map { "\"\($0)\"" } ?? "null"
+            try expect(result == expected, "prompt returns the chosen text, empty text, or null on cancellation")
+        }
+        print("PASS: native prompt input / empty input / cancel, mail links and app-only download banner")
         model.needsSignIn = false
         model.webView(view, didFailProvisionalNavigation: nil, withError: URLError(.notConnectedToInternet))
         try expect(model.pageError != nil && !model.isLoading, "offline error has recovery state")
@@ -237,6 +279,7 @@ struct AdminAppTests {
         try expect(model.pageError == nil && !model.isLoading, "successful load clears error")
         model.testRequireSignIn()
         try expect(model.needsSignIn && model.testReadSession() == nil, "expired session clears credential and shows explicit login")
+        try expect(popupWindow?.isVisible == false, "signing out closes the previous account's editor popout")
         let recoveryStore = WKWebsiteDataStore.nonPersistent()
         let recoveryModel = AdminAppModel(dataStore: recoveryStore)
         let recoveryConfiguration = WKWebViewConfiguration()
