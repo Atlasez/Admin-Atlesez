@@ -57,15 +57,18 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             "dist-macos/release/Atlasez運営.app" \
             "dist-macos/release/Atlasez-Admin-Mac.zip"
-          cat > dist-macos/release/Atlasez-Admin-Mac.md <<EOF
+          release_notes="macos/release-notes/$version.md"
+          if [[ -f "$release_notes" ]]; then
+            cp "$release_notes" dist-macos/release/Atlasez-Admin-Mac.md
+          else
+            cat > dist-macos/release/Atlasez-Admin-Mac.md <<EOF
           Atlasez運営 $version
 
           - 運営サイトの既存画面をそのまま使う独立macOSアプリです。
           - Googleログインは既定ブラウザで行い、認証情報はKeychainに保存します。
-          - 認証のタイムアウト・キャンセル・再試行を修正しました。
-          - 通信・画面表示の失敗から復帰でき、ファイル選択・保存とウィンドウ復元に対応します。
           - アプリメニューからアップデートを確認できます。
           EOF
+          fi
 
       - name: Verify native app before distribution
         run: bash scripts/test-admin-macos.sh "dist-macos/release/Atlasez運営.app"
