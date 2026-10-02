@@ -51,7 +51,7 @@ ATLASEZ_APP_OUTPUT=dist-macos/test/Atlasez運営.app npm run build:admin:dmg -- 
 bash scripts/test-admin-macos.sh
 ```
 
-macOS CIとRelease workflowでUniversalビルド・署名構造・ネイティブ回帰テストを実行します。テストは専用Keychainサービスと永続化しないWebKit Cookieを使い、本番アカウントや保存済みのログイン情報を変更しません。実ソケットで不正・分割callback、認証の時間切れ・キャンセル、認証交換中のキャンセルと再試行を検証します。WebKitモデルの通信失敗・表示停止・セッション失効、画面の取り外し、ダウンロードの完了・上書き・失敗も対象です。
+macOS CIとRelease workflowでUniversalビルド・署名構造・ネイティブ回帰テストを実行します。テストは専用Keychainサービスと永続化しないWebKit Cookieを使い、本番アカウントや保存済みのログイン情報を変更しません。実ソケットで不正・分割callback、認証の時間切れ・キャンセル、認証交換中のキャンセルと再試行を検証します。WebKitモデルの通信失敗・表示停止・セッション失効、画面の取り外し、ダウンロードの完了・上書き・失敗も対象です。実際のWebKitで編集用の空ウィンドウへコピーした内容の表示と、ローカルWebSocketのpresence応答・切断後の再接続も検証します。
 
 Release公開前には `scripts/verify-admin-update.swift` で、生成したフィードとZIPをアプリに含めた公開鍵で検証します。フィード／ZIPの改ざん、途中で切れたZIP、別の署名鍵を拒否できることと、フィード／バンドルのバージョン一致を確認します。
 
