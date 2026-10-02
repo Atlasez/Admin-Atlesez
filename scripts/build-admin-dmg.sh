@@ -62,8 +62,8 @@ cp "$info_plist" "$contents_path/Info.plist"
 ditto "$sparkle_framework" "$frameworks_path/Sparkle.framework"
 cp "$temp_dir/sparkle/LICENSE" "$resources_path/Sparkle-LICENSE.txt"
 
-app_version="${ADMIN_APP_VERSION:-1.0.4}"
-build_version="${ADMIN_APP_BUILD_VERSION:-5}"
+app_version="${ADMIN_APP_VERSION:-1.0.5}"
+build_version="${ADMIN_APP_BUILD_VERSION:-6}"
 if [[ ! "$app_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ || ! "$build_version" =~ ^[0-9]+$ ]]; then
   echo "ADMIN_APP_VERSION and ADMIN_APP_BUILD_VERSION must be numeric version strings." >&2
   exit 1
