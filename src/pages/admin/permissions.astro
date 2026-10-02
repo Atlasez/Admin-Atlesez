@@ -546,3 +546,6 @@ const subjects = (await getCollection("subjects")).sort((a,b)=>a.data.order-b.da
   document.addEventListener("astro:page-load", initializeDiscordTools);
   initializeDiscordTools();
 </script>
+<script>
+  import "../../scripts/admin-permission-change-preview";
+</script>

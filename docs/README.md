@@ -22,6 +22,9 @@
 
 ## サイトを運用する
 
+- [ADMIN_MEMBER_INTAKE.md](ADMIN_MEMBER_INTAKE.md)：アトラスの初回受け入れ、担当・代理者、最初のタスクと初週の確認。
+- [ADMIN_READINESS_ACCEPTANCE.md](ADMIN_READINESS_ACCEPTANCE.md)：招待開始前に必要な本番受入試験と証拠。
+
 | ドキュメント                         | 内容                                                      |
 | ------------------------------------ | --------------------------------------------------------- |
 | [PUBLISH.md](PUBLISH.md)             | 公開チェックリスト（Cloudflare Workers の設定・確認項目） |

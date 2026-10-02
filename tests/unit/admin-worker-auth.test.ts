@@ -2239,6 +2239,8 @@ describe("applicant stage server-side access", () => {
     for (const pathname of [
       "/admin/portal/",
       "/admin/member-tasks/",
+      "/admin/task-detail/",
+      "/admin/task-templates/",
       "/admin/member-calendar/",
     ]) {
       const response = await worker.fetch(
@@ -2284,6 +2286,7 @@ describe("applicant stage server-side access", () => {
     for (const pathname of [
       "/api/admin/portal",
       "/api/admin/member-tasks",
+      "/api/admin/my-access",
       "/api/admin/member-calendar",
       "/api/admin/notifications",
     ]) {
@@ -2324,6 +2327,11 @@ describe("applicant stage server-side access", () => {
       memberEnvironment as never,
     );
     expect(adminApi.status).toBe(403);
+    const statisticsApi = await worker.fetch(
+      loggedInRequest("/api/admin/operations-statistics"),
+      memberEnvironment as never,
+    );
+    expect(statisticsApi.status).toBe(403);
 
     const applicantApi = await worker.fetch(
       loggedInRequest("/api/admin/portal"),

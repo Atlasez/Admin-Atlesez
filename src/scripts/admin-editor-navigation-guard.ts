@@ -49,6 +49,10 @@ function initializeNavigationGuard(): void {
   form.addEventListener("change", markDirty);
 
   const syncSavedState = () => {
+    if (root.dataset.unsavedChanges !== undefined) {
+      dirty = root.dataset.unsavedChanges === "true";
+      return;
+    }
     const message = saveMessage.value;
     if (message === lastSaveMessage) return;
     lastSaveMessage = message;
@@ -175,6 +179,7 @@ function initializeNavigationGuard(): void {
   const onPopState = (event: PopStateEvent) => {
     if (leaving) return;
     event.stopImmediatePropagation();
+    syncSavedState();
     if (!dirty) {
       leave();
       return;

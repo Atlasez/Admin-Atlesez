@@ -18,9 +18,10 @@ done
 
 source_icon="$repo_root/public/images/atlasez-logo.png"
 launcher_source="$repo_root/macos/AtlasezAdminLauncher.swift"
+core_source="$repo_root/macos/AdminAppCore.swift"
 info_plist="$repo_root/macos/Info.plist"
 
-for file in "$source_icon" "$launcher_source" "$info_plist"; do
+for file in "$source_icon" "$launcher_source" "$core_source" "$info_plist"; do
   if [[ ! -f "$file" ]]; then
     echo "Required source file not found: $file" >&2
     exit 1
@@ -61,8 +62,8 @@ cp "$info_plist" "$contents_path/Info.plist"
 ditto "$sparkle_framework" "$frameworks_path/Sparkle.framework"
 cp "$temp_dir/sparkle/LICENSE" "$resources_path/Sparkle-LICENSE.txt"
 
-app_version="${ADMIN_APP_VERSION:-1.0.1}"
-build_version="${ADMIN_APP_BUILD_VERSION:-2}"
+app_version="${ADMIN_APP_VERSION:-1.0.5}"
+build_version="${ADMIN_APP_BUILD_VERSION:-6}"
 if [[ ! "$app_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ || ! "$build_version" =~ ^[0-9]+$ ]]; then
   echo "ADMIN_APP_VERSION and ADMIN_APP_BUILD_VERSION must be numeric version strings." >&2
   exit 1
@@ -72,10 +73,10 @@ fi
 
 swiftc -O -parse-as-library -target arm64-apple-macosx13.0 -framework AppKit -framework SwiftUI \
   -framework WebKit -framework Security -framework CryptoKit -F "$(dirname "$sparkle_framework")" -framework Sparkle \
-  "$launcher_source" -o "$temp_dir/AtlasezAdmin-arm64"
+  "$launcher_source" "$core_source" -o "$temp_dir/AtlasezAdmin-arm64"
 swiftc -O -parse-as-library -target x86_64-apple-macosx13.0 -framework AppKit -framework SwiftUI \
   -framework WebKit -framework Security -framework CryptoKit -F "$(dirname "$sparkle_framework")" -framework Sparkle \
-  "$launcher_source" -o "$temp_dir/AtlasezAdmin-x86_64"
+  "$launcher_source" "$core_source" -o "$temp_dir/AtlasezAdmin-x86_64"
 lipo -create "$temp_dir/AtlasezAdmin-arm64" "$temp_dir/AtlasezAdmin-x86_64" \
   -output "$macos_path/AtlasezAdmin"
 install_name_tool -add_rpath @executable_path/../Frameworks "$macos_path/AtlasezAdmin"

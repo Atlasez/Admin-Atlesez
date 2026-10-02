@@ -1,0 +1,50 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
+---
+<AdminLayout title="タスクテンプレート" description="繰り返す作業をテンプレートから作成します">
+  <main class="template-page" data-task-templates data-admin-load-surface aria-busy="true">
+    <header><h1>タスクテンプレート</h1><a href="/admin/member-tasks/">← タスク管理</a></header>
+    <p>自分用のテンプレートを保存し、同じ作業を手動または定期的に作成できます。定期作成は有効にしたものだけが動きます。</p>
+    <details open><summary>テンプレートを追加・編集</summary>
+      <div class="starter"><label>初回タスクの作業例<select data-starter-task><option value="">参加先の読み込み後に選べます</option></select></label><button type="button" data-starter-apply>作業例を入力</button><p>空の新規テンプレートに入力します。相談先・確認担当者・期限を調整して保存し、「タスクを作成」を押してください。<a href="/admin/getting-started/#first-task">作業例の説明</a></p></div>
+      <form data-template-form>
+        <label>テンプレート名 <span>必須</span><input name="name" required maxlength="120" /></label>
+        <label>タスク名 <span>必須</span><input name="title" required maxlength="200" /></label>
+        <label>内容<textarea name="details" maxlength="8000" rows="3"></textarea></label>
+        <label>プロジェクト<select name="projectId" required></select></label>
+        <label>担当者<select name="assignees" multiple aria-describedby="template-assignees-help"></select></label>
+        <p id="template-assignees-help">運営メンバーは自分のタスクを作成します。運営内運営は所属する担当者を複数選べます。</p>
+        <label>期限までの日数<input name="dueAfterDays" type="number" min="0" max="90" placeholder="空欄なら期限なし" /></label>
+        <label>タイムゾーン<input name="timezone" required value="Asia/Tokyo" /></label>
+        <label>定期作成<select name="schedule"><option value="none">手動のみ</option><option value="daily">毎日</option><option value="weekly">毎週</option><option value="monthly">毎月</option></select></label>
+        <label>最初の作成日時<input name="anchorAt" type="datetime-local" /></label>
+        <label class="check"><input name="enabled" type="checkbox" /> 定期作成を有効にする</label>
+        <p>毎月の作成日は最初の日時を基準とし、日がない月は月末になります。夏時間で存在しない・曖昧な時刻の回はスキップします。停止中に複数回分が過ぎた場合は1件にまとめて作成し、次回を未来へ進めます。</p>
+        <div class="buttons"><button type="submit" data-template-save>保存</button><button type="button" data-template-cancel>編集を解除</button></div>
+      </form>
+    </details>
+    <section><h2>保存したテンプレート</h2><div data-template-list></div></section>
+    <div data-admin-empty-state hidden></div><AdminRetryNotice />
+    <output data-template-message aria-live="polite"></output>
+  </main>
+</AdminLayout>
+<script>import "../../scripts/admin-task-templates";</script>
+<style>
+  .template-page { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  header,.buttons { display:flex;gap:1rem;align-items:center;justify-content:space-between; }
+  details,section {border:1px solid var(--border-default);padding:1rem;margin-top:1rem;}
+  form {display:grid;gap:.8rem;margin-top:1rem;}
+  .starter { border-bottom: 1px solid var(--border-default); padding: 1rem 0; min-width: 0; }
+  .starter label { min-width: 0; }
+  .starter select { box-sizing: border-box; min-width: 0; width: 100%; }
+  .starter button { margin-top: .6rem; }
+  label {display:grid;gap:.3rem;font-weight:600;} label span {font-size:.75rem;color:var(--text-secondary);}
+  input,textarea,select {background:var(--background-secondary);color:var(--text-primary);border:1px solid var(--border-default);border-radius:.3rem;padding:.55rem;max-width:100%;}
+  .check {display:flex;align-items:center;gap:.5rem;} .buttons {justify-content:start;}
+  p {color:var(--text-secondary);font-size:.85rem;line-height:1.7;} output {display:block;margin-top:1rem;}
+  button {padding:.5rem .8rem;border:1px solid var(--border-default);color:var(--text-primary);background:var(--background-secondary);border-radius:.3rem;cursor:pointer;} button:disabled{opacity:.5;}
+  :global(.template-entry) {border-top:1px solid var(--border-default);padding:1rem 0;}
+  :global(.template-entry h3){margin:0 0 .5rem;} :global(.template-entry .template-actions){display:flex;flex-wrap:wrap;gap:.5rem;}
+  @media(max-width:600px){header{align-items:start;flex-direction:column;}}
+</style>
