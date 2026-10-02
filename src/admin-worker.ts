@@ -20606,6 +20606,8 @@ const isOnboardingPath = (pathname: string) =>
   pathname === "/onboarding" || pathname.startsWith("/onboarding/");
 
 const memberPagePaths = new Set([
+  "/admin/getting-started",
+  "/admin/getting-started/",
   "/admin/portal",
   "/admin/portal/",
   "/admin/notifications",

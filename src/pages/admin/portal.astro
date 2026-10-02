@@ -11,6 +11,11 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
       <a class="application-link" href="/apply/" data-admin-i18n data-admin-ja="応募フォームへ →" data-admin-en="Open application form →">応募フォームへ →</a>
     </header>
 
+    <aside class="welcome-entry" aria-label="初参加の方へ">
+      <div><strong>初参加の方へ</strong><p>プロフィール、相談先、最初の小タスクを確認しましょう。</p></div>
+      <a href="/admin/getting-started/">参加後の案内 →</a>
+    </aside>
+
     <section class="portal-summary" aria-label="ポータルの概要" data-portal-summary>
       <a class="portal-summary-item portal-summary-item--action" href="/admin/action-center/">
         <span class="portal-summary-label">今日の要対応</span>
@@ -101,6 +106,10 @@ import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 </AdminLayout>
 <style>
   .portal { margin: 0 auto; max-width: 1200px; padding: 0 1.25rem 4rem; }
+  .welcome-entry { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem; border-bottom: 1px solid var(--border-default); padding: 1rem 0; }
+  .welcome-entry strong { font-size: .85rem; }
+  .welcome-entry p { color: var(--text-secondary); font-size: .8rem; line-height: 1.6; margin: .25rem 0 0; }
+  .welcome-entry a { color: var(--accent-primary); font-size: .85rem; font-weight: 700; }
   .portal-app-download { align-items: center; border-top: 1px solid var(--border-default); color: var(--text-primary); display: flex; gap: 1rem; justify-content: space-between; margin-top: 2rem; padding-top: 1rem; }
   .portal-app-download strong { font-size: .82rem; }
   .portal-app-download p { color: var(--text-secondary); font-size: .72rem; line-height: 1.5; margin: .2rem 0 0; }
