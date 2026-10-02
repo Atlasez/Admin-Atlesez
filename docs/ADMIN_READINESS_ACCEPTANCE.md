@@ -5,7 +5,8 @@
 ## 自動検証
 
 - `tests/unit/admin-readiness-integration.test.ts`: 実Workerのルーターと実SQLで新規利用者、基本情報保存、応募、二重応募防止、他人の基本情報非公開、全体管理と担当者の境界、別プロジェクトの応募非公開、退会後の管理権限剥奪を確認する。外部通信は拒否する。
-- 同試験は、仮応募者の基本情報保存から応募・審査中・受入・応募状況・初回プロフィール保存までを一連で確認する。審査状態は実WorkerのWorkflow APIで遷移し、監査イベントとproject membershipが保存されること、受入前は会員画面に入れず、公開プロフィールとプロジェクト内プロフィールの保存後に会員画面へ進めることも検証する。全migration適用済みの隔離SQLiteを使い、実OAuth・メール・Discord連携は証明しない。
+- 同試験は、仮応募者の基本情報保存から応募・審査中・受入・応募状況・初回プロフィール保存までを一連で確認する。審査状態は実WorkerのWorkflow APIで遷移し、監査イベントとproject membershipが保存されること、受入前は会員画面に入れず、公開プロフィールとプロジェクト内プロフィールの保存後に会員画面へ進めることも検証する。見送り経路でも応募状況を本人が確認でき、応募者ステージを保ち、オンボーディング/API・会員画面を拒否し、project membershipを作らないことを確認する。全migration適用済みの隔離SQLiteを使い、実OAuth・メール・Discord連携は証明しない。
+- `tests/e2e/applicant-discord.spec.ts`: 見送り後に応募状況画面が「今回は見送り」と結果を表示し、連絡待ち文言とDiscord連携案内を出さないことを仮API応答で確認する。
 - 同試験のメール送信は、仮受信先限定のプロバイダーを使う。503後の再試行、同じidempotency key、送信済みの再送防止を確認する。メールボックスへの実到達は証明しない。
 - `tests/e2e/application-project-fields.spec.ts`: 5プロジェクト×1280px/390pxで設問の表示・必須・無効化・送信内容・画面幅を確認する。UIのAPI応答は仮データ。
 - 既存の `admin-workflow-atomicity.test.ts`、`admin-worker-discord-roles.test.ts`、`onboarding.spec.ts`、`applicant-discord.spec.ts`、応募管理のE2Eを継続実行する。これらは外部サービスの実証を代替しない。

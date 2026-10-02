@@ -128,8 +128,19 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
               return entry;
             }));
           }
-          setText("[data-application-status]", applications.some((item) => item.status === "reviewing") ? "確認中" : "応募済み");
-          setText("[data-application-message]", "応募を受け付けています。運営からの連絡をお待ちください。");
+          const hasReviewing = applications.some((item) => item.status === "reviewing");
+          const allRejected = applications.every((item) => item.status === "rejected");
+          const hasAccepted = applications.some((item) => item.status === "accepted");
+          setText(
+            "[data-application-status]",
+            hasReviewing ? "確認中" : allRejected ? "今回は見送り" : hasAccepted ? "受入済み" : "応募済み",
+          );
+          setText(
+            "[data-application-message]",
+            allRejected
+              ? "今回の応募は見送りとなりました。プロジェクトごとの結果をご確認ください。"
+              : "応募を受け付けています。運営からの連絡をお待ちください。",
+          );
           discordCard.hidden = false;
           const connected = data.discord?.connected === true;
           const accepted = applications.some((item) => item.status === "accepted");
