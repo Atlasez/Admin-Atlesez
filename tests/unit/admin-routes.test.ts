@@ -3,7 +3,9 @@ import { ADMIN_PAGE_PATHS, isAdminPagePath } from "../../src/lib/admin-routes";
 
 describe("admin page routes", () => {
   it("exposes every generated admin page through the Worker", () => {
-    expect(ADMIN_PAGE_PATHS).toHaveLength(44);
+    expect(ADMIN_PAGE_PATHS).toHaveLength(45);
+    expect(isAdminPagePath("/admin/getting-started/")).toBe(true);
+    expect(isAdminPagePath("/admin/getting-started")).toBe(true);
     expect(isAdminPagePath("/admin/task-detail/")).toBe(true);
     expect(isAdminPagePath("/admin/task-templates/")).toBe(true);
 
