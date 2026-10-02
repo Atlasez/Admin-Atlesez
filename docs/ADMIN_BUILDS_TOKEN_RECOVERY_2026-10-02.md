@@ -10,24 +10,39 @@
 - Issueの自動作成失敗はAccount Settings Readのpermission check。現在の担当者はDNS/Workers Platform Adminであり、不足権限を自己付与できない。
 - CLIは既存OAuthで固定Accountを参照できるが、Workers Builds用のユーザーAPI tokenを選択できることとは別である。
 
-## 現在の権限で試せる候補
+## 2026-10-02 Dashboard再確認
+
+正しい固定AccountとWorker `atlasez-admin` のSettings > Buildsを読み取り確認した。
+
+- Gitは未接続。接続フォームは `Atlasez / Admin-Atlesez / main` を表示した。
+- 接続前の初期値はbuild `npm run build`、deploy `npx wrangler deploy`、preview有効。固定運用値と一致しないため、これらのまま接続しない。
+- API token pickerには「新しいトークンを作成する」のみが表示され、プロフィールに存在する既存user tokenを選べなかった。
+- フォームは送信せずキャンセルした。token作成、GitHub認可、Builds設定保存、Build起動は行っていない。
+- 自動token作成が`Account Settings Read`のpermission checkで失敗した既存記録はIssue #407を参照。
+
+## 最小権限の専用ユーザーtoken候補
 
 [公式仕様](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)は独自のユーザーAPI tokenを許可する。新規自動作成の既定権限にはAccount Settings Readが含まれる。アカウント所有tokenはBuildsで未対応。
 
-別途レビュー・作成直前の承認後、既存権限の範囲で専用ユーザーtokenを手動作成し、Buildsの選択候補に現れるか確認する案を検討する。
+Cloudflare公式Workers権限は、既存WorkerのDeployにWorker単体のEditor、Route/Custom Domainを変更する場合に該当zoneのWorkers Routes Writeを案内する。また、WorkerにD1 bindingがある場合でもDeployにD1データへの別権限は不要としている。Buildsはuser tokenのみ対応し、自動作成tokenは全Worker・KV/R2・全zone向けの広いscopeを含む。
 
-| 項目            | 候補値                                                        |
-| --------------- | ------------------------------------------------------------- |
-| 名前            | `Atlasez Admin Workers Builds 2026-10-02`                     |
-| Accountリソース | 固定Accountのみ                                               |
-| Account権限     | Workers Scripts Edit、D1 Edit                                 |
-| Zoneリソース    | `atlasez.org`のみ                                             |
-| Zone権限        | Workers Routes Edit、Zone Read                                |
-| User権限        | User Details Read、Memberships Read（本人のみ）               |
-| 有効期間        | 作成から30日。更新担当と更新方法を記録する                    |
-| 追加しない権限  | Account Settings、他Account、全Zone、R2/KV、所有者/管理者権限 |
+次の専用user token案は、新規credential作成前にPRレビューする。プロフィールからのtoken作成とBuildsへの登録はsecurity-sensitiveな外部設定変更で、**このPRだけでは許可も適用もしない**。
 
-この従来形式のWorkers Scripts Editは固定Account内の他Workerにも適用される。用途をADMIN接続に限定し、秘密値を他の実行系へ渡さない。これは既存のユーザー権限を超える案ではないが、新しい認証情報を作るため実行直前の承認が必要。選択候補になること、Buildsの初回deployが成功することは未実証。tokenが候補に現れない、permission checkが失敗する場合は停止し、権限を推測で増やさない。API tokenの文字列をチャット、Issue、PR、ログへ貼らない。
+| 項目            | 候補値                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 名前            | `Atlasez Admin Workers Builds 2026-10-02`                                                                        |
+| Accountリソース | 固定Accountのみ                                                                                                  |
+| Accountリソース | 固定Accountのみ                                                                                                  |
+| Worker権限      | Worker `atlasez-admin` 単体のEditor                                                                              |
+| Zoneリソース    | `atlasez.org`のみ                                                                                                |
+| Zone権限        | Route/Custom Domain更新に必要なWorkers Routes Write                                                              |
+| User権限        | 既定では追加しない。Cloudflareの検証ログが要求する場合のみ、User Details ReadとMemberships Readを本人scopeで検討 |
+| 有効期間        | 初回Builds検証に使える範囲で最短。作成時に表示される期限を記録し、更新担当が決まらなければ適用しない             |
+| 追加しない権限  | Account Settings Read、D1 Edit、全Worker/全Account/全Zone、KV/R2、所有者/管理者権限                              |
+
+公式資料: [Workers Builds configuration](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)、[Workers roles and permissions](https://developers.cloudflare.com/workers/authorization/workers/)、[Developer Platform authorization](https://developers.cloudflare.com/workers/authorization/)。
+
+Worker/zone単位scopeのAPI tokenをBuilds pickerが受け入れるかは未検証。権限作成で`Account Settings Read`を要求された場合、token作成を中止し、Account ownerまたはCloudflare Supportへ回す。UIが単一Worker/zoneへscopeできなければ作成しない。期限の前に更新する担当が決まらない場合も作成しない。API token文字列をチャット、Issue、PR、ログへ貼らない。
 
 ## 候補が使えない場合
 
@@ -35,4 +50,16 @@
 
 ## 適用と復旧
 
-CI成功・レビュー済みmainを対象に、既存資料のproduction branch `main`、root `/`、固定build/deployコマンド、preview/cache無効を使用する。接続操作は初回本番deployを開始し得るため、設定レビューを完了してから行う。SHA、Worker、Version、100%配信、Chrome主要画面が一致しない場合は停止する。失敗時は現在の配信を保持し、設定の取消・token失効も影響を確定してレビューする。既存tokenの編集・削除はこの案に含めない。
+CI成功・レビュー済みmainを対象に、次の固定値を設定する。
+
+```text
+Git repository: Atlasez/Admin-Atlesez
+Production branch: main
+Root directory: /
+Build: npm ci && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/ npm run build
+Deploy: npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
+Preview builds: disabled
+Build cache: disabled
+```
+
+接続操作は初回本番deployを開始し得る。設定PRレビュー後、Cloudflareへの送信直前に明示承認を確認し、SHA `cabd861396c4c6af6208cf4357462876289d32df` のmain Buildを監視する。公開`build-info.json`、Build/Deployログ、Worker名 `atlasez-admin`、Version、100%配信、Chrome主要6画面のすべてが一致しない場合は停止する。失敗時は現在の配信を保持し、設定の取消・token失効も影響を記録してから行う。既存tokenの編集・削除はこの案に含めない。
