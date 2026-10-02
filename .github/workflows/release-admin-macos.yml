@@ -62,8 +62,13 @@ jobs:
 
           - 運営サイトの既存画面をそのまま使う独立macOSアプリです。
           - Googleログインは既定ブラウザで行い、認証情報はKeychainに保存します。
-          - 更新署名の検証とアプリ内アップデートに対応しました。
+          - 認証のタイムアウト・キャンセル・再試行を修正しました。
+          - 通信・画面表示の失敗から復帰でき、ファイル選択・保存とウィンドウ復元に対応します。
+          - アプリメニューからアップデートを確認できます。
           EOF
+
+      - name: Verify native app before distribution
+        run: bash scripts/test-admin-macos.sh "dist-macos/release/Atlasez運営.app"
 
       - name: Generate signed Sparkle appcast
         env:
@@ -94,6 +99,13 @@ jobs:
               --embed-release-notes \
               "$appcast_dir"
           cp "$appcast_dir/appcast.xml" "$archive_dir/appcast.xml"
+
+      - name: Verify signed release assets and reject damaged updates
+        run: |
+          swift scripts/verify-admin-update.swift \
+            dist-macos/release/appcast.xml \
+            dist-macos/release/Atlasez-Admin-Mac.zip \
+            "dist-macos/release/Atlasez運営.app/Contents/Info.plist"
 
       - name: Publish versioned download and update feed
         env:
