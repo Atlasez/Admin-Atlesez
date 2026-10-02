@@ -62,6 +62,22 @@ test("アップデート履歴を絞り込み、詳細を開ける", async ({ pa
   await expect(page.locator("[data-summary-total]")).toHaveText("2");
   await expect(page.locator("[data-result-count]")).toHaveText("2件");
   await expect(page.locator("[data-admin-load-skeleton]")).toBeHidden();
+  await expect(page.locator("[data-history-row]").first()).toHaveCSS(
+    "display",
+    "grid",
+  );
+  const rowWidth = await page
+    .locator("[data-history-row]")
+    .first()
+    .evaluate((row) => ({
+      row: row.getBoundingClientRect().width,
+      list: row.parentElement!.getBoundingClientRect().width,
+    }));
+  expect(Math.abs(rowWidth.row - rowWidth.list)).toBeLessThanOrEqual(2);
+  await expect(page.locator(".history-copy strong").first()).toHaveCSS(
+    "display",
+    "block",
+  );
 
   await page.locator('input[name="q"]').fill("記事執筆フロー");
   await expect(page.locator("[data-history-row]:not([hidden])")).toHaveCount(1);
@@ -72,11 +88,38 @@ test("アップデート履歴を絞り込み、詳細を開ける", async ({ pa
   await expect(page.locator("[data-dialog-title]")).toHaveText(
     "記事執筆フローを更新",
   );
+  await expect(page.locator("[data-dialog-link]")).toBeHidden();
   await page.getByRole("button", { name: "詳細を閉じる" }).click();
   await expect(page.locator("[data-history-dialog]")).not.toBeVisible();
 
   await page.getByRole("button", { name: "条件をリセット" }).click();
   await expect(page.locator("[data-history-row]:not([hidden])")).toHaveCount(2);
+
+  for (const width of [1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.locator("[data-history-row]").first()).toHaveCSS(
+      "display",
+      "grid",
+    );
+    if (width <= 900) {
+      await expect(page.locator(".history-project").first()).toBeHidden();
+      await expect(page.locator(".history-kind").first()).toBeHidden();
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await page.screenshot({
+    path: test.info().outputPath("update-history-mobile.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({
+    path: test.info().outputPath("update-history-desktop.png"),
+    fullPage: true,
+  });
 });
 
 test("アップデート履歴を追加取得できる", async ({ page }) => {
@@ -137,9 +180,60 @@ test("アップデート履歴を追加取得できる", async ({ page }) => {
   });
   await page.goto("/admin/update-history/");
   await expect(page.locator("[data-history-row]")).toHaveCount(2);
+  await expect(page.locator('select[name="project"] option')).toHaveCount(2);
+  await expect(page.locator('select[name="kind"] option')).toHaveCount(3);
   await expect(page.locator("[data-history-pagination]")).toBeVisible();
   await page.getByRole("button", { name: "さらに読み込む" }).click();
   await expect(page.locator("[data-history-row]")).toHaveCount(3);
+  await expect(page.locator('select[name="project"] option')).toHaveCount(2);
+  await expect(page.locator('select[name="kind"] option')).toHaveCount(3);
   await expect(page.locator("[data-history-pagination]")).toBeHidden();
   expect(requestCount).toBe(2);
+});
+
+test("取得失敗後は読み込み表示を隠し、再試行で最新の履歴を表示する", async ({
+  page,
+}) => {
+  let requests = 0;
+  let releaseRetry!: () => void;
+  const retryGate = new Promise<void>((resolve) => {
+    releaseRetry = resolve;
+  });
+  await page.route("**/api/admin/update-history**", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.fulfill({ status: 502, json: { error: "取得失敗" } });
+      return;
+    }
+    await retryGate;
+    await route.fulfill({
+      json: {
+        entries: [
+          {
+            version: "commit ddddddd",
+            date: "2026-10-03",
+            title: "再試行後の更新",
+            kind: "改善",
+            project: "運営サイト",
+            tone: "green",
+          },
+        ],
+        pagination: { hasMore: false, nextPage: null },
+      },
+    });
+  });
+  await page.goto("/admin/update-history/");
+  await expect(page.locator("[data-admin-load-error]")).toBeVisible();
+  await expect(page.locator("[data-admin-load-skeleton]")).toBeHidden();
+  await expect(page.locator("[data-history-row]")).toHaveCount(0);
+  await expect(page.locator("[data-summary-total]")).toHaveText("—");
+
+  await page.getByRole("button", { name: "再試行", exact: true }).click();
+  await expect(page.locator("[data-admin-load-skeleton]")).toBeVisible();
+  releaseRetry();
+  await expect(page.getByText("再試行後の更新", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-admin-load-error]")).toBeHidden();
+  await expect(page.locator("[data-admin-load-skeleton]")).toBeHidden();
+  await expect(page.locator("[data-summary-total]")).toHaveText("1");
+  expect(requests).toBe(2);
 });
