@@ -3,24 +3,29 @@ import Combine
 import CryptoKit
 import Darwin
 import Foundation
+import Network
 import Security
 import SwiftUI
 import WebKit
 import Sparkle
 
-private let adminOrigin = URL(string: "https://admin.atlasez.org")!
-private let initialDestination = "/admin/portal/"
+private let adminOrigin = AdminAppPolicy.origin
+private let initialDestination = AdminAppPolicy.home
 private let sessionCookieName = "atlasez_admin_session"
+#if ADMIN_APP_TESTING
+private let keychainService = "org.atlasez.admin.tests.\(ProcessInfo.processInfo.processIdentifier)"
+#else
 private let keychainService = "org.atlasez.admin"
-private let keychainAccount = "admin-session"
+#endif
 
+#if !ADMIN_APP_TESTING
 @main
 struct AtlasezAdminApp: App {
     @StateObject private var model = AdminAppModel()
     @NSApplicationDelegateAdaptor(AdminAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
+        Window("Atlasez運営", id: "main") {
             AdminWindow(model: model)
                 .frame(minWidth: 820, minHeight: 600)
                 .task { model.startIfNeeded() }
@@ -28,77 +33,153 @@ struct AtlasezAdminApp: App {
         .defaultSize(width: 1440, height: 900)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("アップデートを確認…") { appDelegate.checkForUpdates() }
+            }
+            CommandGroup(after: .toolbar) {
+                Button("現在のページを再読み込み") { model.retry() }.keyboardShortcut("r")
+                Button("ポータルを開く") { model.navigate(to: initialDestination) }
+            }
+        }
     }
 }
+#endif
 
 @MainActor
 final class AdminAppDelegate: NSObject, NSApplicationDelegate {
     private var updaterController: SPUStandardUpdaterController?
+    private weak var mainWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
-            userDriverDelegate: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(windowDidChangeScreen(_:)),
-            name: NSWindow.didChangeScreenNotification,
-            object: nil
-        )
+        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(windowDidChangeScreen(_:)), name: NSWindow.didChangeScreenNotification, object: nil)
         DispatchQueue.main.async { [weak self] in
-            guard let self,
-                  let window = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) }) else { return }
-            self.fitWindowToScreen(window)
+            guard let self, let window = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) }) else { return }
+            self.mainWindow = window
+            window.isReleasedWhenClosed = false
+            window.setFrameAutosaveName("AtlasezAdminMainWindow")
+            _ = window.setFrameUsingName("AtlasezAdminMainWindow")
+            self.keepVisible(window)
         }
     }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard let window = mainWindow else { return true }
+        if !window.isVisible || window.isMiniaturized {
+            window.deminiaturize(nil)
+            keepVisible(window)
+            window.makeKeyAndOrderFront(nil)
+        }
+        return true
     }
-
+    func checkForUpdates() { updaterController?.checkForUpdates(nil) }
+    func applicationWillTerminate(_ notification: Notification) { NotificationCenter.default.removeObserver(self) }
     @objc private func windowDidChangeScreen(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
-        fitWindowToScreen(window)
+        keepVisible(window)
     }
-
-    private func fitWindowToScreen(_ window: NSWindow) {
-        guard let screen = window.screen ?? NSScreen.main else { return }
-        let available = screen.visibleFrame.insetBy(dx: 18, dy: 18)
-        let width = min(available.width, max(820, available.width * 0.94))
-        let height = min(available.height, max(600, available.height * 0.94))
-        let frame = NSRect(
-            x: available.midX - width / 2,
-            y: available.midY - height / 2,
-            width: width,
-            height: height
-        )
-        window.setFrame(frame, display: true, animate: false)
+    private func keepVisible(_ window: NSWindow) {
+        guard !window.styleMask.contains(.fullScreen), let screen = window.screen ?? NSScreen.main else { return }
+        let available = screen.visibleFrame
+        let frame = AdminAppPolicy.visibleFrame(window.frame, in: available)
+        if frame != window.frame { window.setFrame(frame, display: true) }
     }
 }
 
 @MainActor
-final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
+final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, NSWindowDelegate, WKHTTPCookieStoreObserver {
     @Published var webView: WKWebView?
     @Published var isLoading = true
     @Published var needsSignIn = false
     @Published var isAuthenticating = false
     @Published var sessionExpired = false
+    @Published var isRestoringSession = false
     @Published var authError: String?
+    @Published var pageError: String?
+    private var epoch = AuthenticationEpoch()
+    private let sessionStore = AdminSessionStore(service: keychainService)
+    private var restorationTimeout: Timer?
+    private var keychainTimeout: Timer?
+    private var redemption: URLSessionDataTask?
+    private let authenticationSession: URLSession
+    private var loadingTimeout: Timer?
+    private var failedURL: URL?
+    private var downloadDestinations: [ObjectIdentifier: (temporary: URL, destination: URL)] = [:]
     private var pendingState: String?
     private var pendingVerifier: String?
     private var pendingDestination = initialDestination
     private var didStart = false
     private var popoutWindows: [NSWindow] = []
+    private var trustedPopups: Set<ObjectIdentifier> = []
     private var callbackServer: LoopbackCallbackServer?
+    let websiteDataStore: WKWebsiteDataStore
+    private let networkMonitor = NWPathMonitor()
+    private var previousNetworkStatus: NWPath.Status?
+    private var hasInstalledSession = false
+    init(dataStore: WKWebsiteDataStore? = nil, authenticationSession: URLSession = .shared) {
+        self.authenticationSession = authenticationSession
+        websiteDataStore = dataStore ?? .default()
+        super.init()
+        websiteDataStore.httpCookieStore.add(self)
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self else { return }
+                let previous = self.previousNetworkStatus
+                self.previousNetworkStatus = path.status
+                if previous == .unsatisfied && path.status == .satisfied && self.pageError != nil { self.retry() }
+            }
+        }
+        networkMonitor.start(queue: DispatchQueue(label: "org.atlasez.admin.network"))
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
+    }
+    @objc private func didWake() { if pageError != nil { retry() } }
+    deinit { networkMonitor.cancel(); NSWorkspace.shared.notificationCenter.removeObserver(self) }
+
+    func retry() {
+        pageError = nil
+        if needsSignIn { signIn(); return }
+        if let url = failedURL, AdminAppPolicy.isAdmin(url) {
+            webView?.load(URLRequest(url: url, timeoutInterval: 45))
+        } else if webView?.url != nil { webView?.reload() }
+        else { navigate(to: pendingDestination) }
+    }
     func startIfNeeded() {
         guard !didStart else { return }
         didStart = true
-        if let token = readSessionToken() {
-            installSession(token: token, expiresAt: nil, then: initialDestination)
-        } else {
-            needsSignIn = true
+        needsSignIn = true
+        isLoading = false
+        isRestoringSession = true
+        let attempt = epoch.value
+        restorationTimeout = Timer.scheduledTimer(withTimeInterval: 5, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.epoch.accepts(attempt), self.isRestoringSession else { return }
+                self.isRestoringSession = false
+            }
+        }
+        websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
+            guard let self, self.epoch.accepts(attempt), self.isRestoringSession else { return }
+            let cached = cookies.contains { cookie in
+                cookie.name == sessionCookieName && cookie.isSecure
+                    && (cookie.domain == adminOrigin.host || cookie.domain == "." + (adminOrigin.host ?? ""))
+                    && (cookie.expiresDate.map { $0 > Date() } ?? true)
+            }
+            if cached {
+                self.restorationTimeout?.invalidate()
+                self.isRestoringSession = false
+                self.hasInstalledSession = true
+                self.needsSignIn = false
+                self.navigate(to: self.pendingDestination)
+                return
+            }
+            let store = self.sessionStore
+            Task { @MainActor [weak self] in
+                let token = await Task.detached { store.read() }.value
+                guard let self, self.epoch.accepts(attempt), self.isRestoringSession else { return }
+                self.restorationTimeout?.invalidate()
+                self.isRestoringSession = false
+                if let token { self.installSession(token: token, expiresAt: nil, then: self.pendingDestination) }
+            }
         }
     }
 
@@ -109,16 +190,16 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         view.navigationDelegate = self
         // Trackpad swipes should not unexpectedly navigate away from the current work.
         view.allowsBackForwardNavigationGestures = false
-        if didStart, let token = readSessionToken() {
-            installSession(token: token, expiresAt: nil, then: pendingDestination)
-        }
+        if didStart, hasInstalledSession, !needsSignIn { navigate(to: pendingDestination) }
     }
 
     func navigate(to path: String) {
-        guard path.hasPrefix("/"), !path.hasPrefix("//") else { return }
+        let path = safeDestination(path)
         pendingDestination = path
+        pageError = nil
         guard let url = URL(string: path, relativeTo: adminOrigin)?.absoluteURL else { return }
-        webView?.load(URLRequest(url: url))
+        failedURL = url
+        webView?.load(URLRequest(url: url, timeoutInterval: 45))
     }
 
     private func handleLoopbackCallback(code: String, state: String) {
@@ -129,12 +210,16 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         }
         callbackServer?.close()
         callbackServer = nil
-        pendingState = nil
-        pendingVerifier = nil
-        redeem(code: code, verifier: verifier)
+        redeem(code: code, verifier: verifier, attempt: epoch.value)
     }
 
     func cancelSignIn() {
+        keychainTimeout?.invalidate()
+        restorationTimeout?.invalidate()
+        isRestoringSession = false
+        epoch.invalidate()
+        redemption?.cancel()
+        redemption = nil
         callbackServer?.close()
         callbackServer = nil
         pendingState = nil
@@ -142,44 +227,77 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         isAuthenticating = false
     }
 
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    func webView(_ view: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        guard view === webView else { return }
+        pageError = nil
         isLoading = true
+        loadingTimeout?.invalidate()
+        loadingTimeout = Timer.scheduledTimer(withTimeInterval: 45, repeats: false) { [weak self, weak view] _ in
+            Task { @MainActor in
+                guard let self, let view, self.isLoading else { return }
+                view.stopLoading()
+                self.showPageError(view, message: "ページの読み込みが時間内に完了しませんでした。接続を確認して再試行してください。")
+            }
+        }
     }
-
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    func webView(_ view: WKWebView, didFinish navigation: WKNavigation!) {
+        guard view === webView else { return }
+        loadingTimeout?.invalidate()
         isLoading = false
+        pageError = nil
+        failedURL = nil
     }
-
-    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        if let response = navigationResponse.response as? HTTPURLResponse,
-           response.url?.host == adminOrigin.host,
-           response.url?.path == "/auth/logout",
-           response.statusCode == 303 {
-            // The website owns the logout action; clear its matching Keychain copy only
-            // after the Worker confirms that the session was successfully revoked.
+    func webView(_ view: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if let http = response.response as? HTTPURLResponse,
+           let url = http.url, AdminAppPolicy.isAdmin(url), url.path == "/auth/logout", http.statusCode == 303 {
+            cancelSignIn()
             deleteSessionToken()
         }
-        decisionHandler(.allow)
+        if let http = response.response as? HTTPURLResponse, http.statusCode >= 500 {
+            showPageError(view, message: "サーバーから正常な応答を受け取れませんでした。少し待って再試行してください。")
+            decisionHandler(.cancel); return
+        }
+        decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        isLoading = false
+    func webView(_ view: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { navigationFailed(view, error: error) }
+    func webView(_ view: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { navigationFailed(view, error: error) }
+    func webViewWebContentProcessDidTerminate(_ view: WKWebView) {
+        showPageError(view, message: "画面の表示が停止しました。「再試行」で現在のページを開き直せます。")
     }
-
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        isLoading = false
+    private func navigationFailed(_ view: WKWebView, error: Error) {
+        let nsError = error as NSError
+        guard !(nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled) else { return }
+        if view === webView, let url = nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL, AdminAppPolicy.isAdmin(url) { failedURL = url }
+        showPageError(view, message: "ページを開けませんでした。インターネット接続を確認して再試行してください。")
+    }
+    private func showPageError(_ view: WKWebView, message: String) {
+        if view === webView {
+            loadingTimeout?.invalidate()
+            isLoading = false
+            pageError = message
+        } else if let window = view.window {
+            let alert = NSAlert()
+            alert.messageText = message
+            alert.addButton(withTitle: "再試行")
+            alert.addButton(withTitle: "閉じる")
+            alert.beginSheetModal(for: window) { result in if result == .alertFirstButtonReturn { view.reload() } }
+        }
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        guard navigationAction.targetFrame == nil,
-              let url = navigationAction.request.url else { return nil }
-        guard url.host == adminOrigin.host else {
-            NSWorkspace.shared.open(url)
+        guard navigationAction.targetFrame == nil else { return nil }
+        let url = navigationAction.request.url
+        // The existing editor uses window.open("") then document.write() to clone a
+        // pane. Its about:blank window inherits the authenticated opener's origin.
+        let inheritedBlank = (url == nil || url?.absoluteString.isEmpty == true || url?.absoluteString == "about:blank") && isAdminFrame(navigationAction.sourceFrame)
+        guard inheritedBlank || url.map(AdminAppPolicy.isAdmin) == true else {
+            if let url, ["http", "https"].contains(url.scheme ?? "") { NSWorkspace.shared.open(url) }
             return nil
         }
         let popup = WKWebView(frame: .zero, configuration: configuration)
         popup.navigationDelegate = self
         popup.uiDelegate = self
+        trustedPopups.insert(ObjectIdentifier(popup))
         popup.allowsBackForwardNavigationGestures = false
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1050, height: 760),
@@ -187,10 +305,13 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.setFrameAutosaveName("AtlasezAdminPopoutWindow")
         window.title = "Atlasez運営"
         window.contentView = popup
         window.minSize = NSSize(width: 720, height: 520)
-        window.center()
+        if !window.setFrameUsingName("AtlasezAdminPopoutWindow") { window.center() }
         window.makeKeyAndOrderFront(nil)
         popoutWindows.append(window)
         return popup
@@ -198,31 +319,116 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { decisionHandler(.cancel); return }
-        guard url.host == adminOrigin.host else {
+        if ["", "about:blank"].contains(url.absoluteString), isAdminFrame(action.sourceFrame) || trustedPopups.contains(ObjectIdentifier(webView)) {
+            decisionHandler(.allow); return
+        }
+        if action.shouldPerformDownload, AdminAppPolicy.isAdmin(url) || (["blob", "data"].contains(url.scheme ?? "") && (isAdminFrame(action.sourceFrame) || trustedPopups.contains(ObjectIdentifier(webView)))) {
+            decisionHandler(.download); return
+        }
+        guard AdminAppPolicy.isAdmin(url) else {
             if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
             decisionHandler(.cancel)
             return
         }
         if url.path == "/auth/google/login" {
-            let destination = url.queryItems["returnTo"] ?? pendingDestination
+            let destination = AdminAppPolicy.query(url)?["returnTo"] ?? pendingDestination
             decisionHandler(.cancel)
             pendingDestination = safeDestination(destination)
             requireSignIn()
             return
         }
+        if webView === self.webView, action.targetFrame?.isMainFrame == true { failedURL = url }
         decisionHandler(.allow)
     }
 
+    private func isAdminFrame(_ frame: WKFrameInfo) -> Bool {
+        let origin = frame.securityOrigin
+        return origin.protocol == "https" && origin.host == adminOrigin.host && (origin.port == 0 || origin.port == 443)
+    }
+    func webViewDidClose(_ view: WKWebView) { view.window?.close() }
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        if let view = window.contentView as? WKWebView { trustedPopups.remove(ObjectIdentifier(view)) }
+        popoutWindows.removeAll { $0 === window }
+    }
+    func webView(_ view: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        guard isAdminFrame(frame) || (frame.isMainFrame && trustedPopups.contains(ObjectIdentifier(view))), let window = view.window else { completionHandler(nil); return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.urls : nil) }
+    }
+    func webView(_ view: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        guard let window = view.window else { completionHandler(); return }
+        let alert = NSAlert(); alert.messageText = message
+        alert.beginSheetModal(for: window) { _ in completionHandler() }
+    }
+    func webView(_ view: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        guard let window = view.window else { completionHandler(false); return }
+        let alert = NSAlert(); alert.messageText = message
+        alert.addButton(withTitle: "続ける"); alert.addButton(withTitle: "キャンセル")
+        alert.beginSheetModal(for: window) { result in completionHandler(result == .alertFirstButtonReturn) }
+    }
+    func webView(_ view: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { beginDownload(download, from: view) }
+    func webView(_ view: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { beginDownload(download, from: view) }
+    private func beginDownload(_ download: WKDownload, from view: WKWebView) {
+        download.delegate = self
+        guard view === webView else { return }
+        isLoading = false
+        loadingTimeout?.invalidate()
+    }
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = URL(fileURLWithPath: suggestedFilename).lastPathComponent
+        panel.canCreateDirectories = true
+        panel.begin { [weak self] result in
+            guard let self, result == .OK, let destination = panel.url else { completionHandler(nil); return }
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("atlasez-download-" + UUID().uuidString, isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let temporary = folder.appendingPathComponent("download")
+                self.downloadDestinations[ObjectIdentifier(download)] = (temporary, destination)
+                completionHandler(temporary)
+            } catch { self.authError = "保存先を準備できませんでした。"; completionHandler(nil) }
+        }
+    }
+    func downloadDidFinish(_ download: WKDownload) {
+        guard let paths = downloadDestinations.removeValue(forKey: ObjectIdentifier(download)) else { return }
+        defer { try? FileManager.default.removeItem(at: paths.temporary.deletingLastPathComponent()) }
+        do {
+            try AdminAppPolicy.finishDownload(from: paths.temporary, to: paths.destination)
+        } catch { authError = "ファイルを保存できませんでした。保存先を確認してダウンロードし直してください。" }
+    }
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        if let paths = downloadDestinations.removeValue(forKey: ObjectIdentifier(download)) { try? FileManager.default.removeItem(at: paths.temporary.deletingLastPathComponent()) }
+        if (error as NSError).code != NSURLErrorCancelled { authError = "ダウンロードに失敗しました。接続を確認してやり直してください。" }
+    }
+
+    func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
+        guard hasInstalledSession, !isAuthenticating, !needsSignIn else { return }
+        let attempt = epoch.value
+        cookieStore.getAllCookies { [weak self] cookies in
+            guard let self, self.epoch.accepts(attempt), !self.isAuthenticating, !self.needsSignIn else { return }
+            let hasSession = cookies.contains { $0.name == sessionCookieName && ($0.domain == adminOrigin.host || $0.domain == "." + (adminOrigin.host ?? "")) }
+            if !hasSession { self.requireSignIn() }
+        }
+    }
     private func requireSignIn() {
         // A saved native session can expire or be revoked while the app is closed.
         // Do not launch the user's default browser as a side effect of opening the app;
         // let them explicitly start OAuth from the in-app sign-in screen instead.
+        cancelSignIn()
+        loadingTimeout?.invalidate()
+        pageError = nil
         isLoading = false
         sessionExpired = true
         needsSignIn = true
         deleteSessionToken()
-        let cookieStore = WKWebsiteDataStore.default().httpCookieStore
-        cookieStore.getAllCookies { cookies in
+        let cookieStore = websiteDataStore.httpCookieStore
+        let attempt = epoch.value
+        cookieStore.getAllCookies { [weak self] cookies in
+            guard let self, self.epoch.accepts(attempt) else { return }
             let adminHost = adminOrigin.host ?? ""
             for cookie in cookies where cookie.name == sessionCookieName
                 && (cookie.domain == adminHost || cookie.domain == ".\(adminHost)") {
@@ -233,13 +439,18 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
 
     private func startLogin(returningTo destination: String) {
         guard !isAuthenticating else { return }
+        restorationTimeout?.invalidate()
+        isRestoringSession = false
+        epoch.invalidate()
+        let attempt = epoch.value
         isAuthenticating = true
+        authError = nil
         pendingDestination = safeDestination(destination)
         do {
             let verifier = try randomBase64URL(bytes: 32)
             let state = try randomBase64URL(bytes: 32)
             let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncodedString()
-            let callbackServer = try LoopbackCallbackServer()
+            let callbackServer = try LoopbackCallbackServer(expectedState: state)
             self.callbackServer = callbackServer
             pendingVerifier = verifier
             pendingState = state
@@ -254,10 +465,10 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let result = callbackServer.waitForCallback()
                 Task { @MainActor in
-                    guard let self else { return }
-                    self.isAuthenticating = false
+                    guard let self, self.epoch.accepts(attempt) else { return }
                     guard let result else {
-                        if self.pendingState == state { self.authError = "ブラウザから認証結果を受け取れませんでした。もう一度お試しください。" }
+                        self.cancelSignIn()
+                        self.authError = "認証の待ち時間を超えました。もう一度ログインしてください。"
                         return
                     }
                     self.handleLoopbackCallback(code: result.code, state: result.state)
@@ -271,32 +482,51 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         }
     }
 
-    private func redeem(code: String, verifier: String) {
+    private func redeem(code: String, verifier: String, attempt: UUID) {
         var request = URLRequest(url: adminOrigin.appendingPathComponent("auth/native-app/redeem"))
+        request.timeoutInterval = 30
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["code": code, "verifier": verifier])
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        redemption = authenticationSession.dataTask(with: request) { [weak self] data, response, error in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.epoch.accepts(attempt) else { return }
+                self.redemption = nil
                 guard error == nil,
                       let response = response as? HTTPURLResponse,
                       (200..<300).contains(response.statusCode),
                       let data,
                       let payload = try? JSONDecoder().decode(NativeSession.self, from: data) else {
+                    self.isAuthenticating = false
                     self.authError = "アプリのログインを確立できませんでした。再度ログインしてください。"
                     return
                 }
-                guard self.saveSessionToken(payload.sessionToken) else {
+                self.keychainTimeout = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+                    Task { @MainActor in
+                        guard let self, self.epoch.accepts(attempt), self.isAuthenticating else { return }
+                        self.cancelSignIn()
+                        self.authError = "Keychainの応答が時間内に完了しませんでした。再試行してください。"
+                    }
+                }
+                let store = self.sessionStore
+                let account = await Task.detached { store.stage(payload.sessionToken) }.value
+                guard self.epoch.accepts(attempt) else {
+                    if let account { Task.detached { store.discard(account) } }
+                    return
+                }
+                self.keychainTimeout?.invalidate()
+                guard let account else {
+                    self.isAuthenticating = false
                     self.authError = "ログイン情報を安全に保存できませんでした。Keychainの状態を確認してください。"
                     return
                 }
-                self.installSession(token: payload.sessionToken, expiresAt: payload.expiresAt, then: self.pendingDestination)
+                self.installSession(token: payload.sessionToken, expiresAt: payload.expiresAt, then: self.pendingDestination, stagedAccount: account)
             }
-        }.resume()
+        }
+        redemption?.resume()
     }
 
-    private func installSession(token: String, expiresAt: String?, then path: String) {
+    private func installSession(token: String, expiresAt: String?, then path: String, stagedAccount: String? = nil) {
         let expiration = expiresAt.flatMap(ISO8601DateFormatter().date(from:)) ?? Date().addingTimeInterval(60 * 60 * 24 * 7)
         var properties: [HTTPCookiePropertyKey: Any] = [
             .domain: adminOrigin.host ?? "admin.atlasez.org",
@@ -309,21 +539,38 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         ]
         properties[HTTPCookiePropertyKey("HttpOnly")] = "TRUE"
         guard let cookie = HTTPCookie(properties: properties) else {
+            if let stagedAccount { let store = sessionStore; Task.detached { store.discard(stagedAccount) } }
+            isAuthenticating = false
             authError = "アプリのセッションを設定できませんでした。"
             return
         }
-        WKWebsiteDataStore.default().httpCookieStore.setCookie(cookie) { [weak self] in
-            guard let self, let url = URL(string: self.safeDestination(path), relativeTo: adminOrigin)?.absoluteURL else { return }
+        let attempt = epoch.value
+        websiteDataStore.httpCookieStore.setCookie(cookie) { [weak self] in
+            guard let self else { return }
+            guard self.epoch.accepts(attempt), let url = URL(string: self.safeDestination(path), relativeTo: adminOrigin)?.absoluteURL else {
+                if let stagedAccount { let store = self.sessionStore; Task.detached { store.discard(stagedAccount) } }
+                let cookieStore = self.websiteDataStore.httpCookieStore
+                cookieStore.getAllCookies { cookies in
+                    for existing in cookies where existing.name == cookie.name && existing.domain == cookie.domain && existing.value == token { cookieStore.delete(existing) }
+                }
+                return
+            }
+            if let stagedAccount {
+                let store = self.sessionStore
+                let previous = store.activate(stagedAccount)
+                Task.detached { store.discard(previous) }
+            }
+            self.isAuthenticating = false
+            self.pendingState = nil
+            self.pendingVerifier = nil
+            self.hasInstalledSession = true
             self.sessionExpired = false
             self.needsSignIn = false
-            self.webView?.load(URLRequest(url: url))
+            self.webView?.load(URLRequest(url: url, timeoutInterval: 45))
         }
     }
 
-    private func safeDestination(_ value: String) -> String {
-        guard value.hasPrefix("/"), !value.hasPrefix("//"), !value.contains("\\") else { return initialDestination }
-        return value
-    }
+    private func safeDestination(_ value: String) -> String { AdminAppPolicy.destination(value) }
 
     private func randomBase64URL(bytes count: Int) throws -> String {
         var bytes = [UInt8](repeating: 0, count: count)
@@ -331,30 +578,22 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         return Data(bytes).base64URLEncodedString()
     }
 
-    private func readSessionToken() -> String? {
-        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keychainService, kSecAttrAccount as String: keychainAccount, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        query.removeAll()
-        return String(data: data, encoding: .utf8)
-    }
-
-    @discardableResult
-    private func saveSessionToken(_ token: String) -> Bool {
-        let data = Data(token.utf8)
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keychainService, kSecAttrAccount as String: keychainAccount]
-        SecItemDelete(query as CFDictionary)
-        var attributes = query
-        attributes[kSecValueData as String] = data
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
-    }
-
     private func deleteSessionToken() {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: keychainService, kSecAttrAccount as String: keychainAccount]
-        SecItemDelete(query as CFDictionary)
+        let store = sessionStore
+        let account = store.detach()
+        Task.detached { store.discard(account) }
     }
+
+    #if ADMIN_APP_TESTING
+    func testRedeem() { epoch.invalidate(); isAuthenticating = true; redeem(code: "fixture-code", verifier: "fixture-verifier", attempt: epoch.value) }
+    func testSaveSession(_ token: String) -> Bool {
+        guard let account = sessionStore.stage(token) else { return false }
+        let old = sessionStore.activate(account); sessionStore.discard(old); return true
+    }
+    func testReadSession() -> String? { sessionStore.read() }
+    func testClearSession() { sessionStore.discard(sessionStore.detach()) }
+    func testRequireSignIn() { requireSignIn() }
+    #endif
 
     private enum AuthError: LocalizedError {
         case invalidURL, authenticationUnavailable, randomFailure
@@ -373,118 +612,6 @@ private struct NativeSession: Decodable {
     let expiresAt: String
 }
 
-private final class LoopbackCallbackServer: @unchecked Sendable {
-    struct Callback { let code: String; let state: String }
-    let redirectURI: String
-    private let socketFD: Int32
-    private let port: UInt16
-    private let lock = NSLock()
-    private var closed = false
-
-    init() throws {
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
-        var address = sockaddr_in()
-        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-        address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = 0
-        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
-        let bound = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-            }
-        }
-        guard bound == 0, listen(fd, 4) == 0 else {
-            let code = errno
-            Darwin.close(fd)
-            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
-        }
-        var actual = sockaddr_in()
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let named = withUnsafeMutablePointer(to: &actual) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                getsockname(fd, $0, &length)
-            }
-        }
-        guard named == 0 else {
-            let code = errno
-            Darwin.close(fd)
-            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
-        }
-        socketFD = fd
-        port = UInt16(bigEndian: actual.sin_port)
-        redirectURI = "http://127.0.0.1:\(port)/callback"
-    }
-
-    func waitForCallback() -> Callback? {
-        while !isClosed {
-            var peer = sockaddr_in()
-            var peerLength = socklen_t(MemoryLayout<sockaddr_in>.size)
-            let client = withUnsafeMutablePointer(to: &peer) { pointer in
-                pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                    accept(socketFD, $0, &peerLength)
-                }
-            }
-            guard client >= 0 else { return nil }
-            defer { Darwin.close(client) }
-            guard peer.sin_addr.s_addr == inet_addr("127.0.0.1") else {
-                respond(client, status: "403 Forbidden", text: "この接続は許可されていません。")
-                continue
-            }
-            var bytes = [UInt8](repeating: 0, count: 8192)
-            let count = bytes.withUnsafeMutableBytes { recv(client, $0.baseAddress, $0.count, 0) }
-            guard count > 0,
-                  let request = String(bytes: bytes.prefix(count), encoding: .utf8),
-                  let firstLine = request.components(separatedBy: "\r\n").first else { continue }
-            let parts = firstLine.split(separator: " ")
-            guard parts.count >= 2, parts[0] == "GET",
-                  let callbackURL = URL(string: "http://127.0.0.1:\(port)\(parts[1])"),
-                  callbackURL.path == "/callback" else {
-                respond(client, status: "404 Not Found", text: "Atlasez運営アプリに戻ってください。")
-                continue
-            }
-            let items = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            let query = Dictionary(uniqueKeysWithValues: items.compactMap { item in item.value.map { (item.name, $0) } })
-            guard let code = query["code"], let state = query["state"] else {
-                respond(client, status: "400 Bad Request", text: "認証情報を確認できませんでした。アプリに戻って再試行してください。")
-                continue
-            }
-            respond(client, status: "200 OK", text: "ログインが完了しました。このタブを閉じてAtlasez運営アプリに戻ってください。")
-            close()
-            return Callback(code: code, state: state)
-        }
-        return nil
-    }
-
-    func close() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !closed else { return }
-        closed = true
-        shutdown(socketFD, SHUT_RDWR)
-        Darwin.close(socketFD)
-    }
-
-    private var isClosed: Bool { lock.lock(); defer { lock.unlock() }; return closed }
-
-    private func respond(_ client: Int32, status: String, text: String) {
-        let body = "<!doctype html><html lang=\"ja\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Atlasez運営</title><body style=\"font:16px system-ui;max-width:38rem;margin:15vh auto;padding:1rem;line-height:1.7\"><h1>Atlasez運営</h1><p>\(text)</p></body></html>"
-        let data = Data(body.utf8)
-        let header = "HTTP/1.1 \(status)\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(data.count)\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'\r\n\r\n"
-        var response = Data(header.utf8)
-        response.append(data)
-        response.withUnsafeBytes { _ = send(client, $0.baseAddress, $0.count, 0) }
-    }
-
-    deinit { close() }
-}
-
-private extension URL {
-    var queryItems: [String: String] {
-        Dictionary(uniqueKeysWithValues: (URLComponents(url: self, resolvingAgainstBaseURL: false)?.queryItems ?? []).compactMap { item in item.value.map { (item.name, $0) } })
-    }
-}
-
 private extension Data {
     func base64URLEncodedString() -> String {
         base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
@@ -495,16 +622,15 @@ private struct AdminWindow: View {
     @ObservedObject var model: AdminAppModel
 
     var body: some View {
-        Group {
-            if model.needsSignIn {
-                signInPanel
-            } else {
-                workspace
-            }
+        ZStack {
+            workspace.opacity(model.needsSignIn ? 0 : 1)
+                .allowsHitTesting(!model.needsSignIn)
+                .accessibilityHidden(model.needsSignIn)
+            if model.needsSignIn { signInPanel }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .alert("ログインできません", isPresented: Binding(get: { model.authError != nil }, set: { if !$0 { model.authError = nil } })) {
-            Button("再試行") { model.authError = nil; model.navigate(to: initialDestination) }
+        .alert("操作を完了できません", isPresented: Binding(get: { model.authError != nil }, set: { if !$0 { model.authError = nil } })) {
+            if model.needsSignIn { Button("ログインを再試行") { model.authError = nil; model.signIn() } }
             Button("閉じる", role: .cancel) { model.authError = nil }
         } message: { Text(model.authError ?? "") }
     }
@@ -524,7 +650,7 @@ private struct AdminWindow: View {
                     .padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.isAuthenticating)
+            .disabled(model.isAuthenticating || model.isRestoringSession)
             if model.isAuthenticating {
                 Button("キャンセル") { model.cancelSignIn() }.buttonStyle(.link)
             }
@@ -536,6 +662,7 @@ private struct AdminWindow: View {
     }
 
     private var signInMessage: String {
+        if model.isRestoringSession { return "保存済みのログイン状態を確認しています…" }
         if model.isAuthenticating {
             return "安全なGoogleログインを開いています…"
         }
@@ -548,6 +675,16 @@ private struct AdminWindow: View {
     private var workspace: some View {
         ZStack(alignment: .topTrailing) {
             AdminWebView(model: model)
+            if let error = model.pageError {
+                VStack(spacing: 16) {
+                    Image(systemName: "wifi.exclamationmark").font(.largeTitle)
+                    Text(error).multilineTextAlignment(.center)
+                    Button("再試行") { model.retry() }.buttonStyle(.borderedProminent)
+                }
+                .padding(28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+            }
             if model.isLoading {
                 ProgressView()
                     .controlSize(.small)
@@ -561,7 +698,9 @@ private struct AdminWindow: View {
 private struct AdminWebView: NSViewRepresentable {
     @ObservedObject var model: AdminAppModel
     func makeNSView(context: Context) -> WKWebView {
-        let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = model.websiteDataStore
+        let view = WKWebView(frame: .zero, configuration: configuration)
         model.attach(view)
         view.uiDelegate = model
         return view

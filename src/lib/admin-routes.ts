@@ -2,6 +2,8 @@ const adminPageNames = [
   "workspace",
   "member-profile",
   "member-tasks",
+  "task-detail",
+  "task-templates",
   "member-calendar",
   "portal",
   "action-center",
