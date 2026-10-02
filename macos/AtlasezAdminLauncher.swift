@@ -370,10 +370,11 @@ final class AdminAppModel: NSObject, ObservableObject, WKNavigationDelegate, WKU
         alert.addButton(withTitle: "続ける"); alert.addButton(withTitle: "キャンセル")
         alert.beginSheetModal(for: window) { result in completionHandler(result == .alertFirstButtonReturn) }
     }
-    func webView(_ view: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { beginDownload(download) }
-    func webView(_ view: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { beginDownload(download) }
-    private func beginDownload(_ download: WKDownload) {
+    func webView(_ view: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { beginDownload(download, from: view) }
+    func webView(_ view: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { beginDownload(download, from: view) }
+    private func beginDownload(_ download: WKDownload, from view: WKWebView) {
         download.delegate = self
+        guard view === webView else { return }
         isLoading = false
         loadingTimeout?.invalidate()
     }
