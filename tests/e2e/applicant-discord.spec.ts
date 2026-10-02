@@ -63,3 +63,45 @@ test("承認前の応募者にはDiscord連携ボタンを表示しない", asyn
   );
   await expect(page.locator("[data-discord-link]")).toBeHidden();
 });
+
+test("見送り後は応募結果を明示し、連絡待ちやDiscord連携を案内しない", async ({
+  page,
+}) => {
+  await page.route("**/api/applicant/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        email: "applicant@example.com",
+        stage: "APPLICANT",
+        basicProfileComplete: true,
+        applications: [
+          {
+            project: "学習サイト「アトラス」",
+            submittedAt: "2026-08-29T10:00:00.000Z",
+            status: "rejected",
+            provisioningStatus: "skipped",
+            discordConnected: false,
+          },
+        ],
+        discord: { connected: false, oauthConnected: false },
+      }),
+    });
+  });
+
+  await page.goto("./applicant/");
+  await expect(page.locator("[data-application-card]")).toBeVisible();
+  await expect(page.locator("[data-application-status]")).toHaveText(
+    "今回は見送り",
+  );
+  await expect(page.locator("[data-application-list]")).toContainText(
+    "今回は見送り",
+  );
+  await expect(page.locator("[data-application-message]")).toContainText(
+    "今回の応募は見送りとなりました",
+  );
+  await expect(page.locator("[data-application-message]")).not.toContainText(
+    "連絡をお待ちください",
+  );
+  await expect(page.locator("[data-discord-link]")).toBeHidden();
+});

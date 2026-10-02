@@ -67,3 +67,4 @@
 - `tests/unit/admin-readiness-integration.test.ts` に、仮応募者の応募→確認中→見送りの実Worker Workflow API試験を追加。応募者本人の状態/応募状況APIに不承認結果が残ること、オンボーディングAPIが403、会員カレンダーが認証後の非会員導線へ302、project membershipが作成されないこと、監査イベント2件と外部キー整合性を確認。
 - 受入経路の試験と合わせ、承認・初回オンボーディングと不承認の両分岐を隔離SQLiteで検証可能にした。Google OAuth、実通知到達、人間による審査・見送り連絡は未実証なのでP0.5は未完了。
 - 検証: `npm run verify:deploy-config`、`npm run check`（292 files、error/warningなし）、`npm run lint`、`npm test`（48 files / 369 tests pass）、`npm run format:check`、ADMIN向け`npm run build`、`npm run verify:build-info`（SHA `5dc065ebaf5e0cffff84c9ecf6e457299db24cea`）、`git diff --check` がすべて成功。ビルド時の既存Pagefind警告（3ページに`<html>`要素なし）は今回の変更範囲外。
+- 追加確認で応募状況画面の見送り時に全体ラベルが「応募済み」のまま、連絡待ちを促す文言が残ることを発見して修正。応募者画面のE2E（Discord関連を含む3件）が成功し、`check`（292 files、0 errors / 0 warnings / 9 hints）、lint、unit（48 files / 369 tests）、ADMIN build、deploy-config、build-info、format、diff-checkも再確認した。実Google OAuthと通知到達の未検証は継続。
