@@ -1,0 +1,44 @@
+name: Verify Atlasez Admin macOS app
+
+on:
+  pull_request:
+    paths:
+      - "macos/**"
+      - "scripts/*admin*macos*"
+      - "scripts/build-admin-dmg.sh"
+      - "scripts/verify-admin-update.swift"
+      - "tests/macos/**"
+      - ".github/workflows/*admin*macos*"
+  push:
+    branches: [main]
+    paths:
+      - "macos/**"
+      - "scripts/*admin*macos*"
+      - "scripts/build-admin-dmg.sh"
+      - "scripts/verify-admin-update.swift"
+      - "tests/macos/**"
+      - ".github/workflows/*admin*macos*"
+
+permissions:
+  contents: read
+
+jobs:
+  native-regressions:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build universal app and verify its signature
+        env:
+          ATLASEZ_APP_OUTPUT: dist-macos/test/Atlasez運営.app
+        run: bash scripts/build-admin-dmg.sh dist-macos/test/Atlasez-Admin.dmg
+      - name: Exercise native authentication and recovery regressions
+        run: bash scripts/test-admin-macos.sh
+      - name: Check universal architectures and packaged resources
+        run: |
+          set -euo pipefail
+          app="dist-macos/test/Atlasez運営.app"
+          lipo "$app/Contents/MacOS/AtlasezAdmin" -verify_arch arm64 x86_64
+          codesign --verify --deep --strict "$app"
+          test -f "$app/Contents/Resources/AppIcon.icns"
+          test -f "$app/Contents/Frameworks/Sparkle.framework/Sparkle"
