@@ -3,6 +3,10 @@ export const ADMIN_DEPLOYMENT_AUDIT_RECORD =
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 
+export function parseGitDiffNameOnly(output) {
+  return output.split("\0").filter(Boolean);
+}
+
 export function classifyAdminDeployment({
   liveCommit,
   liveRef,

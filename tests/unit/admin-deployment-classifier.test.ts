@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { classifyAdminDeployment } from "../../scripts/lib/admin-deployment-classifier.mjs";
+import {
+  classifyAdminDeployment,
+  parseGitDiffNameOnly,
+} from "../../scripts/lib/admin-deployment-classifier.mjs";
 
 const previous = "a".repeat(40);
 const target = "b".repeat(40);
@@ -54,6 +57,22 @@ describe("classifyAdminDeployment", () => {
           "docs/deployments/cloudflare-latest.json",
           "src/pages/admin/portal.astro",
         ],
+        liveIsAncestor: true,
+      }),
+    ).toEqual({ deployRequired: true, reason: "site-change" });
+  });
+
+  it("preserves newlines inside filenames from NUL-delimited git output", () => {
+    const unusualAuditPath = "\ndocs/deployments/cloudflare-latest.json";
+    const changedFiles = parseGitDiffNameOnly(`${unusualAuditPath}\0`);
+
+    expect(changedFiles).toEqual([unusualAuditPath]);
+    expect(
+      classifyAdminDeployment({
+        liveCommit: previous,
+        liveRef: "main",
+        targetCommit: target,
+        changedFiles,
         liveIsAncestor: true,
       }),
     ).toEqual({ deployRequired: true, reason: "site-change" });

@@ -1,5 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { classifyAdminDeployment } from "./lib/admin-deployment-classifier.mjs";
+import {
+  classifyAdminDeployment,
+  parseGitDiffNameOnly,
+} from "./lib/admin-deployment-classifier.mjs";
 
 const expectedCommit = process.env.EXPECTED_COMMIT?.trim();
 const buildInfoUrl =
@@ -33,6 +36,7 @@ try {
 const expected = {
   repository: "Atlasez/Admin-Atlesez",
   target: "admin",
+  ref: "main",
   commit: expectedCommit,
 };
 
@@ -56,15 +60,22 @@ if (mismatches.length > 0) {
       liveCommit === expectedCommit || isAncestor(liveCommit, expectedCommit);
     const changedFiles =
       liveIsAncestor && liveCommit !== expectedCommit
-        ? execFileSync(
-            "git",
-            ["diff", "--no-renames", "--name-only", liveCommit, expectedCommit],
-            {
-              encoding: "utf8",
-            },
+        ? parseGitDiffNameOnly(
+            execFileSync(
+              "git",
+              [
+                "diff",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                liveCommit,
+                expectedCommit,
+              ],
+              {
+                encoding: "utf8",
+              },
+            ),
           )
-            .split("\n")
-            .filter(Boolean)
         : [];
     const classification = classifyAdminDeployment({
       liveCommit,

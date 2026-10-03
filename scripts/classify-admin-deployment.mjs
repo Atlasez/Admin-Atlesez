@@ -1,6 +1,9 @@
 import { appendFile } from "node:fs/promises";
 import { execFileSync, spawnSync } from "node:child_process";
-import { classifyAdminDeployment } from "./lib/admin-deployment-classifier.mjs";
+import {
+  classifyAdminDeployment,
+  parseGitDiffNameOnly,
+} from "./lib/admin-deployment-classifier.mjs";
 
 const targetCommit = process.env.TARGET_COMMIT?.trim();
 if (!/^[0-9a-f]{40}$/.test(targetCommit ?? "")) {
@@ -44,13 +47,20 @@ try {
     liveCommit === targetCommit || ancestryCheck?.status === 0;
   const changedFiles =
     liveIsAncestor && liveCommit !== targetCommit
-      ? execFileSync(
-          "git",
-          ["diff", "--no-renames", "--name-only", liveCommit, targetCommit],
-          { encoding: "utf8" },
+      ? parseGitDiffNameOnly(
+          execFileSync(
+            "git",
+            [
+              "diff",
+              "--no-renames",
+              "--name-only",
+              "-z",
+              liveCommit,
+              targetCommit,
+            ],
+            { encoding: "utf8" },
+          ),
         )
-          .split("\n")
-          .filter(Boolean)
       : [];
 
   ({ deployRequired, reason } = classifyAdminDeployment({
