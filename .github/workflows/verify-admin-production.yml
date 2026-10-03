@@ -1,7 +1,11 @@
 name: Verify admin production sync
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Deploy ADMIN from GitHub
+    types:
+      - completed
     branches:
       - main
   schedule:
@@ -9,6 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -27,40 +32,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            sha="${GITHUB_SHA}"
-          else
-            sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          pending="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-admin-from-github.yml/runs?branch=main&per_page=20" --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          if [ "$pending" -gt 0 ]; then
+            echo "ADMIN deployが承認待ちまたは実行中です。配信後に再照合します。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
           if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
             echo "main SHAを解決できませんでした: $sha" >&2
             exit 1
           fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "expected main SHA: $sha"
 
       - name: Checkout expected main
+        if: steps.main.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.main.outputs.sha }}
           fetch-depth: 1
 
       - name: Verify live build identity after merge
+        if: steps.main.outputs.skip != 'true'
         env:
           EXPECTED_COMMIT: ${{ steps.main.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
+            pending="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-admin-from-github.yml/runs?branch=main&per_page=20" --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+            if [ "$pending" -gt 0 ]; then
+              echo "新しいADMIN deployが承認待ちまたは実行中のため、照合を後続の確認へ渡します。"
+              exit 0
+            fi
             if node scripts/verify-live-admin-production.mjs; then
               echo "ADMIN本番がmain SHAに一致しました（試行 ${attempt}/12）。"
               exit 0
             fi
             if [ "$attempt" -lt 12 ]; then
               delay=$((attempt * 10))
-              echo "Workers Buildsの反映を待機します（${delay}秒後、試行 ${attempt}/12）。"
+              echo "GitHub Actions deployの反映を待機します（${delay}秒後、試行 ${attempt}/12）。"
               sleep "$delay"
             fi
           done
-          echo "ADMIN本番のbuild-infoがmain SHAに一致しません。Workers Builds接続・Build/Deployログ・Version 100%配信を確認してください。" >&2
+          echo "ADMIN本番のbuild-infoがmain SHAに一致しません。GitHub Actions deploy run・Cloudflare Versionの100%配信を確認してください。" >&2
           exit 1

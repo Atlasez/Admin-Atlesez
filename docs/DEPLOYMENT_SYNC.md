@@ -13,7 +13,7 @@ Cloudflare本番がGitHub `main`と一致しているかを、定期的にGitHub
 - `https://admin.atlasez.org/build-info.json`
 - `https://atlasez.org/build-info.json`
 
-`.github/workflows/verify-admin-production.yml`は`main`へのMerge後と15分ごとに、現在の`main` SHAと公開ADMINの`build-info.json`を照合する。反映待ちのため段階的に再確認するが、Cloudflareへの書き込みや手動Deployは行わない。不一致のまま終了したWorkflowは、本番反映済みと扱わず、Workers Buildsの接続・Build/Deployログ・Versionの100%配信を調査する。
+`.github/workflows/verify-admin-production.yml`はADMIN deploy workflowの完了後と15分ごとに、現在の`main` SHAと公開ADMINの`build-info.json`を照合する。production Environment承認待ちや別deploy実行中は照合を保留し、配信後に再確認する。Cloudflareへの書き込みや手動Deployは行わない。不一致のまま終了したWorkflowは、本番反映済みと扱わず、GitHub Actions deploy run・Cloudflare Versionの100%配信を調査する。
 
 差分がある場合だけ、`ops/cloudflare-deployment-sync`ブランチへ記録をCommitし、`main`向けの同期PRを作成または更新する。差分がない場合はPRを作成しない。
 

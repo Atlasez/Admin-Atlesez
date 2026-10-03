@@ -26,15 +26,15 @@
 
 `0123_task_workspaces.sql` は2つの新規テーブルと索引だけを追加する。既存の行を更新・削除しない。
 #481/#482を先に導入する場合は0120→0121→0122→0123の順でレビューし、バックアップ後に適用する。0123自体は他の新機能テーブルに依存しない。
-本番migrationはPRレビュー後に正本D1へ適用し、その後レビュー済みmainをWorkers Buildsで反映する。
+本番migrationはPRレビュー後に正本D1へ適用し、その後PRレビュー済み・main CI成功済みのアプリ変更をGitHub Actionsのproduction Environment承認経由で反映する。
 migrationがない場合、新APIは503となる。タスクの既存一覧・作成・状態変更は利用できる。
 
-初回のWorkers Builds接続は即時の本番ビルドを開始し得る。新APIが参照する0120〜0123が未適用のまま接続しない。未接続の現状では本番操作を停止し、通常順序を使えない初回復旧について「バックアップ検証→追加migration→Builds接続」の段取りとトークン権限をまとめて確認する。通常のmain変更は復旧後のWorkers Buildsだけで配信する。
+deploy workflowはD1 migrationを自動適用しない。新APIが参照する0120〜0123をバックアップ後にレビュー済み手順で適用してから、production Environment承認を経てアプリ変更を反映する。通常のmain変更はmain CI成功とproduction Environment承認を経たGitHub Actions deployだけで配信する。
 
 ## 検証と復旧
 
 SQLiteで実SQLの担当変更、循環、他プロジェクト拒否、競合、監査失敗時のロールバックを検証する。
 画面では保存失敗・追加入力保護・閲覧専用・390px幅・ダーク表示を確認する。
 反映後はタスク詳細とマイページ、およびポータル・タスク・カレンダー・管理トップ・記事一覧を認証済みChromeで確認する。
-問題時はレビュー済みrevert commitをmainのWorkers Buildsで反映し、新規テーブルと引き継ぎ履歴は残す。DB restoreや破壊的な逆migrationは行わない。
-CI失敗、migration不足、Worker/Version/SHA不一致、Workers Builds未接続の場合は本番反映を停止する。
+問題時はレビュー済みrevert commitをmainへマージし、CI成功とproduction Environment承認を経て反映する。新規テーブルと引き継ぎ履歴は残す。DB restoreや破壊的な逆migrationは行わない。
+CI失敗、migration不足、Worker/Version/SHA不一致、GitHub Actions deployの失敗の場合は本番反映を停止する。

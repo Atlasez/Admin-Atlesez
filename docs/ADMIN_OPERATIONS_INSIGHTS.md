@@ -12,7 +12,7 @@
 
 公開審査の開始と分野統括からプロジェクトリーダーへの移行で、現在の段階の開始時刻を保存する。完了・差し戻し時はNULLに戻す。本文保存ではこの時刻を変更しない。待ち時間未記録の件数は画面に明示する。
 
-本番適用はPRのレビュー・CI・Workers Builds接続が正常であることを確認し、D1バックアップ後に0120を適用してから対応Workerをmainからビルドする。Agentは本番migrationをこの変更の検証中に実行しない。
+本番適用はPRレビュー・CI成功後にD1バックアップを取り、0120を別手順で適用してから、GitHub Actionsのproduction Environment承認を経てmainから対応Workerを配信する。Deploy workflowはmigrationを実行しない。Agentは本番migrationをこの変更の検証中に実行しない。
 
 ## 復旧
 

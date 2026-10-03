@@ -46,6 +46,6 @@ npx --yes wrangler d1 execute atlasez-reports-local --local --config wrangler.lo
 
 本番の公開Workerは `atlasez01`、ADMIN Workerは `atlasez-admin`、Accountは `812021e62fa20465950b61be55dfe064` に固定しています。D1は既存の `atlasez-reports`（`d5112a62-7ed6-49c8-b6a2-18ee2dbab678`）を利用します。別のD1や推測したAccountを作成して接続しないでください。
 
-設定やmigrationの変更はPRで対象・影響・復旧方法をレビューし、[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)と[変更手順](ADMIN_CHANGE_WORKFLOW.md)に従います。ADMINの通常の本番反映はGitHub mainをソースとするWorkers Buildsだけです。
+設定やmigrationの変更はPRで対象・影響・復旧方法をレビューし、[ADMINデプロイ運用方針](ADMIN_DEPLOYMENT_POLICY.md)と[変更手順](ADMIN_CHANGE_WORKFLOW.md)に従います。ADMINの通常の本番反映は、GitHub mainと成功したCIをソースとするActions deploy workflowです。
 
 本番ではTurnstileも追加してbot対策を強化します。サイトキー・シークレットはリポジトリに書かず、Cloudflareの環境変数・シークレットで管理してください。

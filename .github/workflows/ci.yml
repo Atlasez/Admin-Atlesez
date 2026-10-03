@@ -1,6 +1,6 @@
 # CI: PR・mainへのpushで内容を検証する。
-# 本番配信は GitHub Pages 用の deploy-pages.yml と Cloudflare の自動ビルドで行うため、
-# このワークフローは検証だけを担当する。
+# ADMIN本番の配信は deploy-admin-from-github.yml が担当する。
+# このワークフローはPRとmainの検証を担当する。
 name: CI
 
 on:

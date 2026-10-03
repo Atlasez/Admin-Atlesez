@@ -21,6 +21,8 @@
 CI成功後に正しいCloudflare Workerへデプロイします。
 本番のWorkerと復旧手順は[ADMIN_KNOWLEDGE_BASE.md](ADMIN_KNOWLEDGE_BASE.md)を正本とします。
 
+ADMINはmain push後のCIが全成功した後、GitHub `production` Environment承認を経て`.github/workflows/deploy-admin-from-github.yml`から配信します。公開サイトは[公開サイトの配信手順](PUBLISH.md)に従います。
+
 ```text
 編集者がファイルを変更
   → GitHubへPull Request
