@@ -1,0 +1,38 @@
+[
+  {
+    "id": "d6ff9e83-7f01-4734-bffe-6b94b52b0d06",
+    "sourceArticleId": "ja-mathematics-ring-definition",
+    "subject": "mathematics",
+    "category": "ring-theory",
+    "locale": "ja",
+    "slug": "ring-definition",
+    "createdAt": "2026-08-31T14:11:37.499Z",
+    "sourceCommit": "fae16b9828c8f9942c41b77d9230c6f0722229f7",
+    "sourcePath": "src/content/articles/ja/mathematics/ring-theory/ring-definition.md",
+    "sourceBodySha256": "6864576b88d03dbaa4de9a8dcaa53ddde7c1c67e425a44724fb0c4bda2953349"
+  },
+  {
+    "id": "403ffac6-4b84-410d-957f-038b416d6f59",
+    "sourceArticleId": "ja-physics-conservation-of-momentum",
+    "subject": "physics",
+    "category": "newtonian-mechanics",
+    "locale": "ja",
+    "slug": "conservation-of-momentum",
+    "createdAt": "2026-08-31T14:25:55.830Z",
+    "sourceCommit": "fae16b9828c8f9942c41b77d9230c6f0722229f7",
+    "sourcePath": "src/content/articles/ja/physics/newtonian-mechanics/conservation-of-momentum.md",
+    "sourceBodySha256": "0cd45b44eed049c1311f7ebc4ec6eef33a13bff8f9eea920642f664775f34844"
+  },
+  {
+    "id": "d00e20a1-1dd8-4bcb-99a7-13ee9bf780e8",
+    "sourceArticleId": "ja-mathematics-homomorphism-theorem",
+    "subject": "mathematics",
+    "category": "group-theory",
+    "locale": "ja",
+    "slug": "homomorphism-theorem",
+    "createdAt": "2026-08-31T14:28:55.513Z",
+    "sourceCommit": "fae16b9828c8f9942c41b77d9230c6f0722229f7",
+    "sourcePath": "src/content/articles/ja/mathematics/group-theory/homomorphism-theorem.md",
+    "sourceBodySha256": "3e7bb88cfbf9975e8be94a5f41bb6931b4b29872183c9a3d54b8c54e30f35eb6"
+  }
+]
