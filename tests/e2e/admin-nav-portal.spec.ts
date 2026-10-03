@@ -177,6 +177,16 @@ test("ブランド・通知・プロフィールの各アイコンを表示す�
   ).toBeGreaterThan(0);
 });
 
+test("ポータルのAtlasez運営アプリにテスト機能であることを表示する", async ({
+  page,
+}) => {
+  await mockAdminShell(page);
+  await page.goto("admin/portal/");
+  await expect(page.locator(".portal-app-download")).toContainText(
+    "テスト機能です。",
+  );
+});
+
 test("通知panelをtoggle・外側・Escape・閉じるボタンで操作できる", async ({
   page,
 }) => {

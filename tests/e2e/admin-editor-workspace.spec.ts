@@ -1017,6 +1017,38 @@ test("既存記事では設定を要約表示し、本文までの占有高を�
   ).toBeLessThan(390);
 });
 
+test("公開前テスト機能は入力を確認し、保存・公開APIを呼ばない", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  await page.goto("./admin/editor/?document=doc-1");
+  await expect(page.locator("[data-run-editorial-preflight]")).toBeVisible();
+  await expect(page.locator("[data-preview]")).toHaveAttribute(
+    "data-preview-status",
+    "ready",
+  );
+
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (
+      ["POST", "PUT", "PATCH", "DELETE"].includes(request.method()) &&
+      request.url().includes("/api/admin/")
+    ) {
+      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    }
+  });
+  await page.locator("[data-run-editorial-preflight]").click();
+
+  const dialog = page.locator("[data-editorial-preflight]");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("公開前チェック（テスト機能）");
+  await expect(dialog).toContainText("保存・公開・通信を行いません");
+  await expect(
+    dialog.locator("[data-editorial-preflight-summary]"),
+  ).toContainText("確認事項なし");
+  expect(writes).toEqual([]);
+});
+
 test("個別記事を開いたときは未選択用の開始パネルを表示しない", async ({
   page,
 }) => {
