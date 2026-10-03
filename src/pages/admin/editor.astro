@@ -261,6 +261,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
                 <button type="button" class="primary-action" data-publish-document hidden>公開する</button>
                 <button type="button" class="quiet-action" data-schedule-document hidden>公開予約</button>
                 <button type="button" class="withdraw-action" data-unpublish-document hidden>公開を取り消す</button>
+                <button type="button" class="quiet-action" data-run-editorial-preflight>公開前チェック（テスト機能）</button>
                 <button type="submit" class="primary-action" data-save-document>保存する</button>
               </div>
               <output class="save-status" data-save-message aria-live="polite">保存状態：記事を選択してください</output>
@@ -310,6 +311,8 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
               <dialog class="reference-library-dialog" data-reference-library-dialog aria-labelledby="reference-library-title"><div class="reference-library-inner"><div class="reference-library-header"><div><h2 id="reference-library-title">自分用参考文献リスト</h2><p><code>[[cite:識別子]]</code> を本文へ挿入すると、記事内では番号リンクとして表示されます。記事で使った文献は原稿にもコピー保存されます。</p></div><button type="button" class="help-close" data-close-reference-library aria-label="参考文献を閉じる">×</button></div><div class="reference-entry-form" data-reference-entry-form><input type="hidden" data-reference-edit-id /><label>識別子<input data-reference-id maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,79}" required disabled placeholder="例：atiyah-macdonald" /></label><label>書名・論文名<input data-reference-title maxlength="240" required disabled placeholder="例：Introduction to Commutative Algebra" /></label><label>著者・編者<input data-reference-authors maxlength="240" placeholder="例：M. F. Atiyah and I. G. Macdonald" /></label><label>出版年<input data-reference-year maxlength="32" placeholder="例：1969" /></label><label>出版社・掲載誌<input data-reference-publisher maxlength="240" placeholder="例：Addison-Wesley" /></label><label>URL<input data-reference-url type="url" maxlength="2000" placeholder="https://..." /></label><label>メモ<input data-reference-note maxlength="500" placeholder="必要なら版・ページなど" /></label><div class="reference-entry-actions"><button type="button" class="primary-action" data-save-reference>リストに保存</button><button type="button" class="quiet-action" data-cancel-reference-edit hidden>編集をキャンセル</button><output data-reference-entry-message aria-live="polite"></output></div></div><section class="reference-library-section" aria-labelledby="reference-list-heading"><div class="reference-library-section-heading"><h3 id="reference-list-heading">登録済みの文献</h3><span data-reference-count></span></div><div data-reference-library-list></div></section></div></dialog>
               <details class="editor-lock-bar" data-editor-lock-bar data-tool-disclosure="lock"><summary><span data-lock-status>確定部分はありません</span><small>選択範囲を確定</small></summary><div class="editor-lock-actions"><button type="button" class="quiet-action" data-lock-selection disabled>選択範囲をロック</button><button type="button" class="quiet-action" data-unlock-selection disabled>選択範囲のロック解除</button></div></details>
               <dialog class="editor-diagnostics-dialog" data-editor-diagnostics aria-labelledby="editor-diagnostics-title"><div class="editor-diagnostics-inner"><div class="editor-diagnostics-header"><div><h2 id="editor-diagnostics-title">確認事項</h2><p>保存前に確認してください。本文・プレビューとは別に表示しています。</p></div><button type="button" class="help-close" data-close-editor-diagnostics aria-label="確認事項を閉じる">×</button></div><div class="editor-diagnostics-summary"><strong data-diagnostics-summary></strong><span>記事の表示や参照に関する確認です。</span></div><ul data-diagnostics-list></ul></div></dialog>
+              <dialog class="editor-diagnostics-dialog editorial-preflight-dialog" data-editorial-preflight aria-labelledby="editorial-preflight-title"><div class="editor-diagnostics-inner"><div class="editor-diagnostics-header"><div><h2 id="editorial-preflight-title">公開前チェック（テスト機能）</h2><p>ブラウザ内の入力項目・本文診断・表示中プレビューを確認します。このチェック自体は保存・公開・通信を行いません。自動保存が有効な場合は通常の自動保存が別途動作します。</p></div><button type="button" class="help-close" data-close-editorial-preflight aria-label="公開前チェックを閉じる">×</button></div><div class="editor-diagnostics-summary"><strong data-editorial-preflight-summary></strong><span>結果は公開可否を保証するものではありません。</span></div><ul data-editorial-preflight-list></ul></div></dialog>
+              <style>.editorial-preflight-dialog{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));border-left-color:var(--accent)}.editorial-preflight-dialog .editor-diagnostics-summary strong{color:var(--accent)}.editorial-preflight-dialog li.is-success{background:color-mix(in srgb,#16804a 8%,var(--surface-alt));border-color:color-mix(in srgb,#16804a 30%,var(--border));border-left-color:#16804a}.editorial-preflight-dialog li.is-warning{border-left-color:var(--warning,#a66a00)}[data-pref-bg="dark"] .editorial-preflight-dialog li.is-success{background:#123a2a;border-color:#357a59;color:#e3ffef}</style>
               <dialog class="authoring-help-dialog" data-authoring-help-dialog aria-labelledby="authoring-help-title"><div class="authoring-help-inner"><div class="authoring-help-head"><div><h2 id="authoring-help-title">本文で使える機能</h2><p>カテゴリを選ぶと、右側の表示が切り替わります。</p></div><button type="button" class="help-close" data-close-authoring-help aria-label="ヘルプを閉じる">×</button></div><div class="authoring-help-layout"><nav class="authoring-help-nav" aria-label="ヘルプカテゴリ" role="tablist"><button type="button" class="help-topic-button" data-help-topic="markdown" role="tab" aria-selected="false" aria-controls="help-topic-markdown">Markdown</button><button type="button" class="help-topic-button is-active" data-help-topic="latex" role="tab" aria-selected="true" aria-controls="help-topic-latex">LaTeX・数式</button><button type="button" class="help-topic-button" data-help-topic="preset" role="tab" aria-selected="false" aria-controls="help-topic-preset">プリセット・マクロ</button><button type="button" class="help-topic-button" data-help-topic="proposition" role="tab" aria-selected="false" aria-controls="help-topic-proposition">命題・証明</button><button type="button" class="help-topic-button" data-help-topic="reference" role="tab" aria-selected="false" aria-controls="help-topic-reference">参照・番号</button><button type="button" class="help-topic-button" data-help-topic="media" role="tab" aria-selected="false" aria-controls="help-topic-media">画像・TikZ</button><button type="button" class="help-topic-button" data-help-topic="review" role="tab" aria-selected="false" aria-controls="help-topic-review">レビュー</button><button type="button" class="help-topic-button" data-help-topic="screen" role="tab" aria-selected="false" aria-controls="help-topic-screen">画面操作</button><button type="button" class="help-topic-button" data-help-topic="workflow" role="tab" aria-selected="false" aria-controls="help-topic-workflow">保存・公開</button></nav><div class="authoring-help-topics"><section class="help-topic-panel" id="help-topic-markdown" data-help-panel="markdown" role="tabpanel" hidden><h3>Markdownの基本</h3><p><code># 見出し</code>、空行で段落、<code>**太字**</code>、<code>*斜体*</code>、<code>&#96;コード&#96;</code>、<code>- 箇条書き</code>、<code>1. 番号付き</code> が使えます。</p><p>リンクは <code>[表示名](https://...)</code> と書けます。見出しは「見出し一覧」から移動できます。</p></section><section class="help-topic-panel" id="help-topic-latex" data-help-panel="latex" role="tabpanel"><h3>LaTeX数式・入力補完</h3><p><code>$...$</code> は本文中、<code>$$...$$</code> は表示数式です。<code>\</code> を入力するか、本文内で <kbd>Ctrl</kbd> + <kbd>Space</kbd> を押すと候補が出ます。</p><div class="help-command-groups">{LATEX_COMMAND_GROUPS.map((group) => <div class="help-command-group"><h4>{group.label}</h4><ul>{group.commands.map(([command, description]) => <li><code>{command}</code><span>{description}</span></li>)}</ul></div>)}</div><p class="help-tip">候補は入力中に絞り込まれます。候補を選択して <kbd>Enter</kbd>、移動して <kbd>↑</kbd> <kbd>↓</kbd> で確定できます。</p></section><section class="help-topic-panel" id="help-topic-preset" data-help-panel="preset" role="tabpanel" hidden><h3>LaTeXマクロ・共通プリセット</h3><p>「共通数式」から記事ごとにプリセットを選ぶと、よく使う記号を共通設定として使えます。</p><ul class="preset-help-list">{Object.entries(MATH_PRESETS).map(([value, preset]) => <li><code>{value}</code><span>{preset.label}</span><span class="preset-command-list">{Object.keys(preset.macros).join(" ")}</span></li>)}</ul><p>記事固有の定義は数式ブロック内で <code>\newcommand&#123;\foo&#125;[1]&#123;...&#125;</code>、<code>\DeclareMathOperator&#123;\rank&#125;&#123;rank&#125;</code> が使えます。定義は記事内の数式で再利用できます。</p></section><section class="help-topic-panel" id="help-topic-proposition" data-help-panel="proposition" role="tabpanel" hidden><h3>命題・定義・証明</h3><p><code>:::prop タイトル &#123;#識別子&#125;</code> のように書きます。<code>defi</code>（定義）、<code>prop</code>（命題）、<code>thm</code>（定理）、<code>lemma</code>（補題）、<code>cor</code>（系）、<code>example</code>（例）、<code>proof</code>（証明）などに対応しています。</p><button type="button" class="help-insert-button" data-help-insert="proposition">命題のひな形を挿入</button></section><section class="help-topic-panel" id="help-topic-reference" data-help-panel="reference" role="tabpanel" hidden><h3>参照・自動番号・参考文献</h3><p>命題などの参照は <code>[[ref:識別子]]</code>、参考文献の引用は <code>[[cite:識別子]]</code> です。番号は記事で使われた参考文献の登録順に付き、本文の <code>[1]</code> から記事末尾の参考文献へ移動できます。</p><p>「参考文献」ボタンから自分用リストを登録し、「本文へ引用」を押すと識別子の挿入と記事へのコピー保存を同時に行います。URL、著者、出版年、出版社・掲載誌、ページなどのメモも登録できます。</p></section><section class="help-topic-panel" id="help-topic-media" data-help-panel="media" role="tabpanel" hidden><h3>画像・図・TikZ</h3><p>「図・画像」から画像をアップロードして本文へ挿入できます。画像ごとに幅を選び、「既存参照に適用」で挿入済み画像も変更できます。</p><p>TikZは専用ボタンから <code>&#96;&#96;&#96;tikz</code> ブロックとして挿入できます。</p></section><section class="help-topic-panel" id="help-topic-review" data-help-panel="review" role="tabpanel" hidden><h3>コメントとレビュー</h3><p>本文またはプレビューの文章を選択するとコメントを付けられます。タグ、返信、引用添付、<code>@表示名</code> のメンションが使えます。</p><p>コメントを確認したら「確認済み」、修正が必要なら「未反映」を使います。</p></section><section class="help-topic-panel" id="help-topic-screen" data-help-panel="screen" role="tabpanel" hidden><h3>画面操作・共同編集</h3><p>「本文」「プレビュー」「コメント」「図・画像」は表示枠ボタンで切り替えられます。「別窓」で各枠を別ウィンドウにできます。</p><p>共同編集、自分用メモ、改訂比較、見出し一覧も利用できます。</p></section><section class="help-topic-panel" id="help-topic-workflow" data-help-panel="workflow" role="tabpanel" hidden><h3>保存・レビュー依頼・公開</h3><p>「保存する」で下書きを保存し、「フィードバックを依頼する」→確認・修正→承認→「公開する」の順に進めます。「下書きを自動保存」を有効にすると入力中の変更も保存されます。</p></section></div></div><p class="authoring-help-foot"><code>/help</code> は本文の末尾だけでなく、本文内のどこに入力してもこのヘルプを開きます。入力された <code>/help</code> は本文から自動的に取り除かれます。</p></div></dialog>
               <p class="directive-completion-hint">本文の行頭で <code>:::</code> を入力すると、定義・命題・定理などの枠を候補から補完できます。<kbd>↑</kbd><kbd>↓</kbd>で移動し、<kbd>Enter</kbd>またはクリックで選択します。</p>
               <p class="latex-completion-hint">LaTeXは <code>\</code> でコマンド候補、<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Space</kbd>で一覧を表示できます。<kbd>Tab</kbd>でインデント、括弧は自動補完されます。</p>
@@ -1366,6 +1369,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
   import * as Y from "yjs";
   import { editorialCreatorName } from "../../lib/editorial-creator";
   import { diagnoseArticleSource } from "../../lib/article-diagnostics.mjs";
+  import { buildEditorialPreflight } from "../../lib/editorial-preflight.mjs";
   import { hydrateTikzDiagrams, renderArticleMarkdown } from "../../lib/article-browser-markdown.mjs";
   import { applySubjectPreviewProfile } from "../../scripts/admin-editor-subject-preview";
   import {
@@ -1486,6 +1490,9 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     const diagnosticsTriggerCount = root.querySelector<HTMLElement>("[data-diagnostics-trigger-count]")!;
     const diagnosticsSummary = root.querySelector<HTMLElement>("[data-diagnostics-summary]")!;
     const diagnosticsList = root.querySelector<HTMLElement>("[data-diagnostics-list]")!;
+    const editorialPreflightDialog = root.querySelector<HTMLDialogElement>("[data-editorial-preflight]")!;
+    const editorialPreflightSummary = root.querySelector<HTMLElement>("[data-editorial-preflight-summary]")!;
+    const editorialPreflightList = root.querySelector<HTMLUListElement>("[data-editorial-preflight-list]")!;
     const lockedRangeMarkup = root.querySelector<HTMLElement>("[data-locked-range-markup]")!;
     const lockStatus = root.querySelector<HTMLElement>("[data-lock-status]")!;
     const lockSelectionButton = root.querySelector<HTMLButtonElement>("[data-lock-selection]")!;
@@ -1591,6 +1598,31 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     diagnosticsTrigger.addEventListener("click", () => { if (!diagnosticsPanel.open) diagnosticsPanel.showModal(); });
     root.querySelector<HTMLButtonElement>("[data-close-editor-diagnostics]")!.addEventListener("click", () => diagnosticsPanel.close());
     diagnosticsPanel.addEventListener("click", (event) => { if (event.target === diagnosticsPanel) diagnosticsPanel.close(); });
+    root.querySelector<HTMLButtonElement>("[data-close-editorial-preflight]")!.addEventListener("click", () => editorialPreflightDialog.close());
+    editorialPreflightDialog.addEventListener("click", (event) => { if (event.target === editorialPreflightDialog) editorialPreflightDialog.close(); });
+    root.querySelector<HTMLButtonElement>("[data-run-editorial-preflight]")!.addEventListener("click", () => {
+      const labels: Record<string, string> = { title: "タイトル", summary: "要約", subject: "分野", category: "カテゴリ", slug: "URL用の名前", conceptId: "概念ID" };
+      const metadataFields = [...metadata.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[required]")]
+        .filter((field) => !field.disabled)
+        .map((field) => ({
+          name: field.name || field.dataset.conceptPicker || "required-field",
+          label: labels[field.name] ?? field.closest("label")?.querySelector(".field-heading")?.textContent?.replace("*", "").trim() ?? "必須項目",
+          valid: field.checkValidity(),
+          message: field.validationMessage,
+        }));
+      const sourceDiagnostics = diagnoseArticleSource(body.value, { references: documentReferences, externalReferenceIds: externalStatementIds });
+      const result = buildEditorialPreflight({ metadata: metadataFields, diagnostics: sourceDiagnostics, previewStatus: (preview.dataset.previewStatus as "pending" | "ready" | "error") ?? "pending" });
+      const errors = result.filter((item) => item.severity === "error").length;
+      const warnings = result.filter((item) => item.severity === "warning").length;
+      editorialPreflightSummary.textContent = errors ? `${errors}件のエラー${warnings ? `・注意 ${warnings}件` : ""}` : warnings ? `エラーなし・注意 ${warnings}件` : "確認事項なし（テスト結果）";
+      editorialPreflightList.replaceChildren(...result.map((item) => {
+        const entry = document.createElement("li");
+        entry.className = `is-${item.severity}`;
+        entry.textContent = item.message;
+        return entry;
+      }));
+      if (!editorialPreflightDialog.open) editorialPreflightDialog.showModal();
+    });
     const previewEngine = root.querySelector<HTMLSelectElement>("[data-preview-engine]")!;
     // The public Atlas article renderer is KaTeX; keep the editorial preview
     // on the same engine so macros and layout do not drift before publication.
@@ -3309,6 +3341,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
     };
     let previewRenderId = 0;
     let previewAbortController: AbortController | null = null;
+    preview.dataset.previewStatus = "pending";
     const renderPreview = async () => {
       const renderId = ++previewRenderId;
       previewAbortController?.abort();
@@ -3316,6 +3349,7 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
       previewAbortController = abortController;
       const value = body.value;
       const isCurrent = () => renderId === previewRenderId;
+      preview.dataset.previewStatus = "pending";
       if (value.length > 50_000) {
         preview.dataset.previewLoading = "true";
         preview.innerHTML = '<p class="preview-deferred" role="status">長文記事を読み込んでいます…</p>';
@@ -3324,7 +3358,10 @@ const editorData = JSON.stringify({ subjects, articles, plannedArticles, concept
         if (!isCurrent()) return;
       }
       await renderPreviewInto(preview, value, documentReferences, isCurrent, abortController.signal);
-      if (isCurrent()) delete preview.dataset.previewLoading;
+      if (isCurrent()) {
+        preview.dataset.previewStatus = preview.querySelector(".katex-error, .editorial-image-error, .tikz-diagram-failed, [data-editorial-asset].is-unavailable") ? "error" : "ready";
+        delete preview.dataset.previewLoading;
+      }
       if (isCurrent() && !abortController.signal.aborted) wordCount.textContent = `${value.length.toLocaleString()}文字`;
     };
     const renderDiagnostics = () => {
