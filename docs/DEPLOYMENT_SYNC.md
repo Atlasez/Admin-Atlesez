@@ -13,7 +13,7 @@ Cloudflare本番がGitHub `main`と一致しているかを、定期的にGitHub
 - `https://admin.atlasez.org/build-info.json`
 - `https://atlasez.org/build-info.json`
 
-`.github/workflows/verify-admin-production.yml`はADMIN deploy workflowの完了後と15分ごとに、現在の`main` SHAと公開ADMINの`build-info.json`を照合する。production Environment承認待ちや別deploy実行中は照合を保留し、配信後に再確認する。Cloudflareへの書き込みや手動Deployは行わない。不一致のまま終了したWorkflowは、本番反映済みと扱わず、GitHub Actions deploy run・Cloudflare Versionの100%配信を調査する。
+`.github/workflows/verify-admin-production.yml`はADMIN deploy workflowの完了後と15分ごとに、現在の`main` SHAと公開ADMINの`build-info.json`を照合する。production Environment承認待ちや別deploy実行中は照合を保留し、配信後に再確認する。Cloudflareへの書き込みや手動Deployは行わない。
 
 差分がある場合だけ、`ops/cloudflare-deployment-sync`ブランチへ記録をCommitし、`main`向けの同期PRを作成または更新する。差分がない場合はPRを作成しない。
 
@@ -30,9 +30,10 @@ Secretが未設定、API取得失敗、Source不明、`build-info.json`欠落の
 ## PRの扱い
 
 - 同期PRは必ずレビューする。
-- `build-info.json.commit`とGitHub `main`のSHAが一致しない場合はインシデントとして扱う。
+- 同期PRが`docs/deployments/cloudflare-latest.json`だけを変更する場合、Merge後のWorker deployを省略する。`build-info.json.commit`は直前のコードdeploy SHAのままとし、次のコード・コンテンツ・設定変更が入ったmain pushで新しいSHAへ進める。
+- 公開`build-info.json.commit`とGitHub `main`のSHAが違う場合は、両SHA間の差分を確認する。差分が監査JSON一つだけなら正常な監査PR後の状態、それ以外の差分・不正なSHA・比較不能はインシデントとして扱う。
 - Cloudflare VersionのSourceが`Unknown`または手動Uploadの場合は、コード同期済みとみなさない。
-- 同期PRのMergeは記録をGitHubに残すためのものであり、CloudflareへのDeployを意味しない。
+- 同期PRのMergeは記録をGitHubに残すためのものであり、CloudflareへのDeployを意味しない。ADMIN deploy workflowは監査JSONだけの差分を検出してEnvironment承認・Worker配信を省略する。
 - 本番Deployはレビュー済みのGitHub `main`を唯一の入口とする。
 
 ## 初回導入時

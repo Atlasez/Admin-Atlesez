@@ -32,7 +32,7 @@ ADMINのproduction buildは次を固定します。
 ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/
 ```
 
-GitHub ActionsはこのADMIN設定でビルドし、成果物のcommit SHA、`main`の先行、Cloudflare Versionの100%配信、公開`build-info.json`を照合します。D1 migrationは通常deployに含めません。`npm run deploy:admin`はcleanな`main`・remote main由来・明示承認SHA一致を検証し、ローカルからの実デプロイは緊急例外として別途明示承認された場合だけ行います。
+GitHub ActionsはこのADMIN設定でビルドし、成果物のcommit SHA、`main`の先行、Cloudflare Versionの100%配信、公開`build-info.json`を照合します。監査PRが`docs/deployments/cloudflare-latest.json`だけを変更する場合はWorker配信を省略し、次のサイト変更でSHAをmainへ進めます。D1 migrationは通常deployに含めません。`npm run deploy:admin`はcleanな`main`・remote main由来・明示承認SHA一致を検証し、ローカルからの実デプロイは緊急例外として別途明示承認された場合だけ行います。
 
 `main`以外のプレビューは検索インデックスに入らないよう`noindex`になります。公開前に本番URLへ向けてビルドし直してください。
 

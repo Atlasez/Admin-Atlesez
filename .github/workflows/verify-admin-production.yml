@@ -52,12 +52,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.main.outputs.sha }}
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Verify live build identity after merge
         if: steps.main.outputs.skip != 'true'
         env:
           EXPECTED_COMMIT: ${{ steps.main.outputs.sha }}
+          ALLOW_AUDIT_ONLY_ADVANCE: "true"
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |

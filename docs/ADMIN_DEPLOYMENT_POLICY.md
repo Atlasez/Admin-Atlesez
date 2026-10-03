@@ -65,7 +65,7 @@ npx wrangler versions list --config wrangler.admin.jsonc --name atlasez-admin
 curl -fsS https://admin.atlasez.org/build-info.json
 ```
 
-`build-info.json.commit`、GitHub `main`のSHA、Cloudflare Versionの作成時刻が説明できない場合はデプロイを止める。Chromeの画面が新しく見えるという理由だけでSHA一致と判断しない。
+`build-info.json.commit`、GitHub `main`のSHA、Cloudflare Versionの作成時刻が説明できない場合はデプロイを止める。例外は`docs/deployments/cloudflare-latest.json`だけを変更した監査PRで、この場合だけ直前のコードdeploy SHAを維持し、次のコード・コンテンツ・設定変更を含むmain pushで最新SHAへ進める。Chromeの画面が新しく見えるという理由だけでSHA一致と判断しない。
 
 ## 4. PRから本番までのチェックリスト
 
@@ -84,7 +84,7 @@ curl -fsS https://admin.atlasez.org/build-info.json
 - GitHub `production` Environmentの承認履歴を確認する。
 - GitHub Deploy runのcommit SHA、Worker名、Version ID、時刻を記録する。
 - Versionが対象Workerへ100%配信されるまで本番完了とみなさない。
-- `.github/workflows/verify-admin-production.yml`がdeploy完了後に公開`build-info.json`と対象`main` SHAの一致を確認するまで、本番完了とみなさない。
+- `.github/workflows/verify-admin-production.yml`がdeploy完了後に公開`build-info.json`と対象`main` SHAの一致を確認するまで、本番完了とみなさない。監査JSONだけのmain advanceはworkflowがcommit差分を検証して例外扱いする。
 
 GitHub Actions deploy workflowが未接続・CI失敗・Environment拒否・SHA不一致なら本番反映を停止し、Issueへ理由を記録する。緊急対応が必要な場合だけ、セクション5のローカル例外手順とIssue記録・明示承認を適用する。
 
@@ -126,7 +126,7 @@ Dashboard Editorで直接コードを修正して本番Versionを作ること、
 
 次のどれかが発生した場合は、まず配信を止めて記録する。
 
-- `build-info.json`のSHAが`main`と違う
+- `build-info.json`のSHAが`main`と違い、差分が監査JSONだけではない
 - Cloudflare VersionをGitHub Actions runと照合できない
 - 本番画面が直前のPRより古い
 - `admin.atlasez.org`が別Worker、Workers.dev、別Accountへ向く
