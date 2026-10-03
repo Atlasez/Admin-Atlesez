@@ -1,3 +1,5 @@
+import { readCalendarQuery, calendarEventWhere, calendarEventPage } from "./lib/admin-calendar-query";
+import { deadlineSummarySql, deadlineRangeSql, taskDeadlineEpoch } from "./lib/admin-deadline-summary";
 import { handleTaskWorkspace, type TaskWorkspaceAccess, type WorkspaceTask } from "./lib/admin-task-workspace";
 import type { D1Database, D1PreparedStatement } from "./lib/admin-database";
 import { readOperationsInsights } from "./lib/admin-operations-insights";
@@ -9581,6 +9583,7 @@ const getWorkflowSummary = async (
   projectIds: string[],
   approvalProjectIds: string[] = [],
   includeMemberApprovals = false,
+  timezone = "Asia/Tokyo",
 ): Promise<WorkflowSummary> => {
   const taskScopeSql = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")})
@@ -9588,15 +9591,20 @@ const getWorkflowSummary = async (
        AND t.status != 'done' AND t.archived_at IS NULL`
     : "0=1";
   const taskBindings = projectIds.length ? [...projectIds, scope.email, scope.email] : [];
+  const zones = projectIds.length
+    ? await env.REPORTS.prepare(`SELECT DISTINCT t.due_timezone FROM editorial_tasks t WHERE ${taskScopeSql} AND t.due_at IS NOT NULL`)
+        .bind(...taskBindings).all<{ due_timezone: string }>()
+    : { results: [] };
+  const deadlineBounds = deadlineSummarySql(zones.results.map(row => row.due_timezone || "Asia/Tokyo"), timezone);
   const [taskSummary, pendingApprovals] = await Promise.all([
     projectIds.length
       ? env.REPORTS.prepare(
           `SELECT COUNT(*) AS open_count,
-             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) <= datetime('now','start of day','+1 day','-1 second') THEN 1 ELSE 0 END) AS due_today,
-             SUM(CASE WHEN t.due_at IS NOT NULL AND datetime(t.due_at) > datetime('now','start of day','+1 day') AND datetime(t.due_at) <= datetime('now','+7 days') THEN 1 ELSE 0 END) AS due_soon
+             SUM(CASE WHEN t.due_at IS NOT NULL AND ${deadlineBounds.today} THEN 1 ELSE 0 END) AS due_today,
+             SUM(CASE WHEN t.due_at IS NOT NULL AND ${deadlineBounds.soon} THEN 1 ELSE 0 END) AS due_soon
            FROM editorial_tasks t WHERE ${taskScopeSql}`,
         )
-          .bind(...taskBindings)
+          .bind(...deadlineBounds.values, ...taskBindings)
           .first<{ open_count: number; due_today: number; due_soon: number }>()
       : Promise.resolve({ open_count: 0, due_today: 0, due_soon: 0 }),
     countPendingProfileApprovals(
@@ -9670,6 +9678,7 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
       projectIds,
       approvalProjectIds,
       canReviewProfileRequests,
+      new URL(request.url).searchParams.get("timezone") || "Asia/Tokyo",
     ),
     adminNotifications(
       new Request(new URL("/api/admin/notifications?limit=100", request.url), {
@@ -9722,6 +9731,12 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
   };
   const rangeStartKey = calendarDateKey(rangeStart);
   const rangeEndKey = calendarDateKey(rangeEnd);
+  const deadlineZones = projectIds.length
+    ? await env.REPORTS.prepare(`SELECT DISTINCT t.due_timezone FROM editorial_tasks t WHERE ${taskScopeSql} AND t.due_at IS NOT NULL`)
+        .bind(...taskScopeBindings).all<{ due_timezone: string }>()
+    : { results: [] };
+  const personalDeadlineRange = deadlineRangeSql(deadlineZones.results.map(row => row.due_timezone || "Asia/Tokyo"), rangeStart, rangeEnd);
+
   const calendarRows = projectIds.length
     ? await Promise.all([
         env.REPORTS.prepare(
@@ -9752,15 +9767,14 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
            WHERE t.project_id IN (${projectIds.map(() => "?").join(",")})
              AND (lower(t.assignee_email)=lower(?) OR instr(',' || lower(COALESCE(t.assignee_email,'')) || ',', ',' || lower(?) || ',') > 0 OR (t.task_kind='feedback' AND t.assignee_email='*')) AND t.status != 'done' AND t.archived_at IS NULL
              AND t.due_at IS NOT NULL
-             AND substr(t.due_at, 1, 10) >= ? AND substr(t.due_at, 1, 10) <= ?
+             AND ${personalDeadlineRange.sql}
            ORDER BY t.due_at ASC LIMIT 120`,
         )
           .bind(
             ...projectIds,
             scope.email,
             scope.email,
-            rangeStartKey,
-            rangeEndKey,
+            ...personalDeadlineRange.values,
           )
           .all<{
             id: string;
@@ -9803,17 +9817,21 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
           projectId: event.project_id,
           projectName: event.project_name,
         })),
-        ...personalDeadlines.map((task) => ({
-          id: `task:${task.id}`,
-          kind: "personal" as const,
-          title: task.title,
-          details: task.details,
-          startsAt: task.starts_at,
-          endsAt: null,
-          timezone: task.timezone,
-          projectId: task.project_id,
-          projectName: task.project_name,
-        })),
+        ...personalDeadlines.flatMap((task) => {
+          const epoch = taskDeadlineEpoch(task.starts_at, task.timezone || "Asia/Tokyo");
+          if (!Number.isFinite(epoch)) return [];
+          return [{
+            id: `task:${task.id}`,
+            kind: "personal" as const,
+            title: task.title,
+            details: task.details,
+            startsAt: new Date(epoch).toISOString(),
+            endsAt: null,
+            timezone: task.timezone,
+            projectId: task.project_id,
+            projectName: task.project_name,
+          }];
+        }),
       ],
     },
   });
@@ -9840,6 +9858,7 @@ type ActionCenterItem = {
   priority: "urgent" | "due-soon" | "new" | "normal" | "read";
   updatedAt: string;
   dueAt: string | null;
+  dueTimezone?: string;
   project: string | null;
   subject: string | null;
   read: boolean;
@@ -9847,9 +9866,9 @@ type ActionCenterItem = {
   actions: ActionCenterAction[];
 };
 
-const actionCenterPriority = (dueAt: string | null, updatedAt: string, now = Date.now()): ActionCenterItem["priority"] => {
+const actionCenterPriority = (dueAt: string | null, updatedAt: string, now = Date.now(), timezone = "Asia/Tokyo"): ActionCenterItem["priority"] => {
   if (dueAt) {
-    const due = Date.parse(dueAt);
+    const due = taskDeadlineEpoch(dueAt, timezone);
     if (Number.isFinite(due)) {
       if (due <= now) return "urgent";
       if (due <= now + 7 * 24 * 60 * 60 * 1_000) return "due-soon";
@@ -9932,6 +9951,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
     projectIds,
     approvalProjectIds,
     canReviewProfileRequests,
+    new URL(request.url).searchParams.get("timezone") || "Asia/Tokyo",
   );
   const taskPredicate = projectIds.length
     ? `t.project_id IN (${projectIds.map(() => "?").join(",")}) AND ${scope.isManager
@@ -9976,15 +9996,15 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
           : Promise.resolve({ count: 0 }),
       ]).then((rows) => rows.reduce((total, row) => total + Number(row?.count ?? 0), 0));
   const [taskRows, documentRows, applicationRows, memberApprovalRows, projectApprovalRows, taskHistoryRows, documentHistoryRows, applicationHistoryRows, memberApprovalHistoryRows, projectApprovalHistoryRows, workflowSummary, assignedCount] = await Promise.all([
-    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
-      `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,
+    historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; due_timezone?: string; updated_at: string; project_name: string }> }) : env.REPORTS.prepare(
+      `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,
               COALESCE(p.name,t.project_id) AS project_name
          FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
         WHERE ${taskPredicate} AND t.archived_at IS NULL AND t.status!='done'
         ORDER BY CASE WHEN t.due_at IS NULL THEN 1 ELSE 0 END,t.due_at,t.updated_at DESC LIMIT 50`,
     ).bind(...taskBindings).all<{
       id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
-      status: string; due_at: string | null; updated_at: string; project_name: string;
+      status: string; due_at: string | null; due_timezone?: string; updated_at: string; project_name: string;
     }>(),
     historyOnly ? Promise.resolve({ results: [] as Array<{ id: string; title: string; summary: string; subject: string; status: string; created_by: string; updated_at: string; scheduled_publish_at: string | null; publication_review_stage: string | null; published_at: string | null; archived_at: string | null; category: string }> }) : env.REPORTS.prepare(
       `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
@@ -10022,15 +10042,15 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
         ORDER BY r.submitted_at DESC LIMIT 50`,
     ).bind(...approvalProjectIds).all<{ id: string; email: string; project_id: string; submitted_at: string; status: string }>(),
     historyOnly ? env.REPORTS.prepare(
-      `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.updated_at,t.archived_at,
+      `SELECT t.id,t.project_id,t.subject,t.task_kind,t.title,t.details,t.status,t.due_at,t.due_timezone,t.updated_at,t.archived_at,
               COALESCE(p.name,t.project_id) AS project_name
          FROM editorial_tasks t LEFT JOIN atlasez_projects p ON p.id=t.project_id
         WHERE ${taskPredicate} AND (t.status='done' OR t.archived_at IS NOT NULL)
         ORDER BY t.updated_at DESC LIMIT 50`,
     ).bind(...taskBindings).all<{
       id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string;
-      status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string;
-    }>() : Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; updated_at: string; archived_at: string | null; project_name: string }> }),
+      status: string; due_at: string | null; due_timezone?: string; updated_at: string; archived_at: string | null; project_name: string;
+    }>() : Promise.resolve({ results: [] as Array<{ id: string; project_id: string; subject: string | null; task_kind: string; title: string; details: string; status: string; due_at: string | null; due_timezone?: string; updated_at: string; archived_at: string | null; project_name: string }> }),
     historyOnly ? env.REPORTS.prepare(
         `SELECT d.id,d.title,d.summary,d.subject,d.status,d.created_by,d.updated_at,d.scheduled_publish_at,
               d.publication_review_stage,d.published_at,d.archived_at,COALESCE(d.category,'') AS category
@@ -10082,9 +10102,10 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
       // 開いたときは対象タスクへフォーカスする。
       href: `/admin/member-tasks/?focus=${encodeURIComponent(row.id)}`,
       status: row.status,
-      priority: actionCenterPriority(row.due_at, row.updated_at, now),
+      priority: actionCenterPriority(row.due_at, row.updated_at, now, row.due_timezone || "Asia/Tokyo"),
       updatedAt: row.updated_at,
       dueAt: row.due_at,
+      dueTimezone: row.due_timezone || "Asia/Tokyo",
       project: row.project_name || projectNames.get(row.project_id) || row.project_id,
       subject: row.subject,
       read: false,
@@ -10163,7 +10184,7 @@ async function actionCenterOverview(request: Request, env: Env): Promise<Respons
   }
   const history: ActionCenterItem[] = [];
   for (const row of taskHistoryRows.results ?? []) {
-    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/member-tasks/?focus=${encodeURIComponent(row.id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
+    history.push({ id: `task:${row.id}`, kind: "task", title: row.title, detail: row.details?.split("\n")[0] || "対応済みのタスクです。", href: `/admin/task-detail/?task=${encodeURIComponent(row.id)}`, status: row.archived_at ? "archived" : row.status, priority: "read", updatedAt: row.updated_at, dueAt: row.due_at, dueTimezone: row.due_timezone || "Asia/Tokyo", project: row.project_name || projectNames.get(row.project_id) || row.project_id, subject: row.subject, read: true, archived: Boolean(row.archived_at), actions: [] });
   }
   for (const row of documentHistoryRows.results ?? []) {
     const permitted = scope.isManager || row.created_by.toLowerCase() === scope.email.toLowerCase();
@@ -10519,6 +10540,7 @@ async function memberTasksOverview(
         ...task,
         assigned_to_me: isAssignedToMe,
         created_by_me: isCreatedByMe,
+        can_update: true,
       };
 
     const rawAssignees = String(task.assignee_email ?? "").trim();
@@ -10542,6 +10564,7 @@ async function memberTasksOverview(
       ...safeTask,
       assigned_to_me: isAssignedToMe,
       created_by_me: isCreatedByMe,
+      can_update: isAssignedToMe || isCreatedByMe,
       assignee_display_name: assigneeDisplayName,
       created_by_display_name: isCreatedByMe
         ? "自分"
@@ -10580,24 +10603,10 @@ async function memberCalendarOverview(
   const projects = await accessibleOperationProjects(env, scope);
   const projectIds = projects.map((project) => project.id);
   const searchParams = new URL(request.url).searchParams;
-  const requestedLimit = Number(searchParams.get("limit") ?? "50");
-  const pageLimit = Number.isFinite(requestedLimit)
-    ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100)
-    : 50;
-  let eventCursor: { startsAt: string; id: string } | null = null;
-  const rawEventCursor = searchParams.get("cursor");
-  if (rawEventCursor) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(rawEventCursor)) as {
-        startsAt?: unknown;
-        id?: unknown;
-      };
-      if (typeof parsed.startsAt === "string" && typeof parsed.id === "string" && parsed.startsAt && parsed.id)
-        eventCursor = { startsAt: parsed.startsAt, id: parsed.id };
-    } catch {
-      eventCursor = null;
-    }
-  }
+  const calendarQuery = readCalendarQuery(searchParams, true);
+  if ("error" in calendarQuery) return json({ error: calendarQuery.error }, 400);
+  const pageLimit = calendarQuery.limit;
+  const eventFilter = calendarEventWhere(calendarQuery.range, calendarQuery.cursor);
   if (!projectIds.length)
     return json({
       scope: { email: scope.email, isManager: false },
@@ -10607,9 +10616,6 @@ async function memberCalendarOverview(
       availabilityBlocks: [],
     });
   const placeholders = projectIds.map(() => "?").join(",");
-  const eventCursorCondition = eventCursor
-    ? " AND (starts_at > ? OR (starts_at = ? AND id > ?))"
-    : "";
   // メンバー向けカレンダーでは、自分以外の可用性ブロック／曜日ルールを
   // 返さない。表示名を空にするだけではメールアドレスや時刻の組み合わせ
   // から他メンバーの予定を推測できるため、SQLの段階で行を絞り込む。
@@ -10619,13 +10625,12 @@ async function memberCalendarOverview(
   const availabilityRuleVisibility = scope.isManager
     ? ""
     : " WHERE lower(r.email)=lower(?)";
-  const eventValues = eventCursor
-    ? [...projectIds, eventCursor.startsAt, eventCursor.startsAt, eventCursor.id]
-    : projectIds;
+  const eventValues = [...projectIds, ...eventFilter.values];
+  const eventSelection = `SELECT id FROM editorial_events WHERE project_id IN (${placeholders})${eventFilter.sql} ORDER BY starts_at ASC,id ASC LIMIT ?`;
   const [events, availability, availabilityBlocks, availabilityRules] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id,project_id,subject,title,details,starts_at,ends_at,timezone,created_by,created_at
-       FROM editorial_events WHERE project_id IN (${placeholders})${eventCursorCondition}
+       FROM editorial_events WHERE project_id IN (${placeholders})${eventFilter.sql}
        ORDER BY starts_at ASC,id ASC LIMIT ?`,
     )
       .bind(...eventValues, pageLimit + 1)
@@ -10636,9 +10641,9 @@ async function memberCalendarOverview(
        FROM editorial_event_availability a
        JOIN editorial_events e ON e.id=a.event_id
        LEFT JOIN editorial_member_profiles p ON p.email=a.email
-       WHERE e.project_id IN (${placeholders})`,
+       WHERE e.project_id IN (${placeholders}) AND e.id IN (${eventSelection})`,
     )
-      .bind(...projectIds)
+      .bind(...projectIds, ...eventValues, pageLimit + 1)
       .all<{
         event_id: string;
         email: string;
@@ -10668,13 +10673,8 @@ async function memberCalendarOverview(
       .bind(...(scope.isManager ? [scope.email] : [scope.email, scope.email]))
       .all<Record<string, unknown>>(),
   ]);
-  const fetchedEvents = events.results ?? [];
-  const hasMoreEvents = fetchedEvents.length > pageLimit;
-  const eventRows = fetchedEvents.slice(0, pageLimit);
-  const lastEvent = eventRows.at(-1);
-  const nextEventCursor = hasMoreEvents && lastEvent
-    ? encodeURIComponent(JSON.stringify({ startsAt: String(lastEvent.starts_at ?? ""), id: String(lastEvent.id ?? "") }))
-    : null;
+  const eventPage = calendarEventPage(events.results ?? [], pageLimit);
+  const eventRows = eventPage.events;
   const participantsByEvent = new Map<
     string,
     Array<{ email: string; availability: string; display_name: string }>
@@ -10721,7 +10721,7 @@ async function memberCalendarOverview(
         })),
       };
     }),
-    eventPagination: { limit: pageLimit, nextCursor: nextEventCursor, hasMore: hasMoreEvents },
+    eventPagination: eventPage.pagination,
   });
 }
 
@@ -12477,6 +12477,10 @@ async function operationsOverview(
     scope.allSubjects || projectRole === "manager";
   const searchParams = new URL(request.url).searchParams;
   const includeArchived = searchParams.get("includeArchived") === "1";
+  const calendarQuery = readCalendarQuery(searchParams);
+  if ("error" in calendarQuery) return json({ error: calendarQuery.error }, 400);
+  const eventFilter = calendarEventWhere(calendarQuery.range, calendarQuery.cursor);
+
   const requestedLimit = Number(searchParams.get("limit") ?? "200");
   const pageLimit = Number.isFinite(requestedLimit)
     ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 200)
@@ -12582,9 +12586,9 @@ async function operationsOverview(
         .bind(...values, pageLimit + 1)
         .all(),
       env.REPORTS.prepare(
-        `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ?${eventSubjectFilter} ORDER BY starts_at ASC LIMIT 60`,
+        `SELECT id, project_id, subject, title, details, starts_at, ends_at, timezone, created_by, created_at FROM editorial_events WHERE project_id = ?${eventSubjectFilter}${eventFilter.sql} ORDER BY starts_at ASC,id ASC LIMIT ?`,
       )
-        .bind(project.id, ...(canSeeAllProjectOperations ? [] : scope.subjects))
+        .bind(project.id, ...(canSeeAllProjectOperations ? [] : scope.subjects), ...eventFilter.values, calendarQuery.limit + 1)
         .all<{
           id: string;
           project_id: string;
@@ -12612,11 +12616,15 @@ async function operationsOverview(
         .bind(...memberValues)
         .all<{ email: string; display_name: string }>(),
       env.REPORTS.prepare(
-        `SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email WHERE 1=1${participantSubjectFilter}`,
+        `SELECT a.event_id, a.email, a.availability, CASE WHEN p.display_name IS NULL OR trim(p.display_name) = '' OR lower(trim(p.display_name)) = lower(a.email) THEN '表示名未設定' ELSE trim(p.display_name) END AS display_name FROM editorial_event_availability a JOIN editorial_events e ON e.id = a.event_id AND e.project_id = ? LEFT JOIN editorial_member_profiles p ON p.email = a.email WHERE 1=1${participantSubjectFilter} AND e.id IN (SELECT id FROM editorial_events WHERE project_id=?${eventSubjectFilter}${eventFilter.sql} ORDER BY starts_at ASC,id ASC LIMIT ?)`,
       )
         .bind(
           project.id,
           ...(canSeeAllProjectOperations ? [] : scope.subjects),
+          project.id,
+          ...(canSeeAllProjectOperations ? [] : scope.subjects),
+          ...eventFilter.values,
+          calendarQuery.limit + 1,
         )
         .all<{
           event_id: string;
@@ -12655,6 +12663,7 @@ async function operationsOverview(
         )
         .all<Record<string, unknown>>(),
     ]);
+  const eventPage = calendarEventPage(events.results ?? [], calendarQuery.limit);
   const fetchedTaskRows = (tasks.results ?? []) as Array<Record<string, unknown>>;
   const hasMoreTasks = fetchedTaskRows.length > pageLimit;
   const taskRows = fetchedTaskRows.slice(0, pageLimit);
@@ -12720,7 +12729,7 @@ async function operationsOverview(
     const createdBy = String(task.created_by ?? "").trim().toLowerCase();
     const createdByMe = createdBy === scope.email.trim().toLowerCase();
     const canUpdateTask =
-      canSeeAllProjectOperations || assignedToMe || createdByMe;
+      scope.isManager || projectRole === "manager" || assignedToMe || createdByMe;
     const reminderEmail = String(task.reminder_email ?? "").trim();
     const reminderEmailHidden =
       !scope.isManager &&
@@ -12789,7 +12798,8 @@ async function operationsOverview(
       weekday: Number(rule.weekday),
       isSelf: String(rule.email ?? "").toLowerCase() === scope.email.toLowerCase(),
     })),
-    events: (events.results ?? []).map((item) => {
+    eventPagination: eventPage.pagination,
+    events: eventPage.events.map((item) => {
       const participants = participantsByEvent.get(item.id) ?? [];
       const safeItem: Record<string, unknown> = { ...item };
       if (!canSeeAllProjectOperations) delete safeItem.created_by;
@@ -22257,9 +22267,9 @@ async function adminNotifications(
       kind: item.task_kind === "feedback" ? "feedback-request" : "task-request",
       title: `${taskKindLabel(item.task_kind)}：${item.title}`,
       detail: item.details?.split("\n")[0] || "依頼内容を確認してください。",
-      href: item.task_kind === "feedback" && item.feedback_document_id
+      href: !scope.memberAccess && item.task_kind === "feedback" && item.feedback_document_id
         ? `/admin/editor/?document=${encodeURIComponent(item.feedback_document_id)}`
-        : `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+        : `/admin/task-detail/?task=${encodeURIComponent(item.id)}`,
       updatedAt: item.updated_at,
     })),
     ...(applicationRows.results ?? []).map((item) => ({
@@ -22279,7 +22289,7 @@ async function adminNotifications(
         kind: "task-reminder",
         title: `ToDoリマインダー：${item.title}`,
         detail: item.label || "設定した日時",
-        href: `/admin/operations/?project=${encodeURIComponent(item.project_slug)}`,
+        href: `/admin/task-detail/?task=${encodeURIComponent(item.id)}`,
         updatedAt: item.remind_at,
       })),
   ].sort((a, b) =>

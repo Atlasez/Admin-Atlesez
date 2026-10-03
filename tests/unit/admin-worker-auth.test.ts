@@ -1467,7 +1467,7 @@ describe("admin API scope gate", () => {
       entry.query.includes("FROM editorial_events WHERE project_id = ?"),
     );
     expect(eventQuery?.query).toContain("subject IS NULL OR subject IN (?)");
-    expect(eventQuery?.boundValues).toEqual(["secretariat", "mathematics"]);
+    expect(eventQuery?.boundValues).toEqual(["secretariat", "mathematics", 51]);
     const participantQuery = queryLog.find((entry) =>
       entry.query.includes(
         "FROM editorial_event_availability a JOIN editorial_events e",
@@ -1479,6 +1479,9 @@ describe("admin API scope gate", () => {
     expect(participantQuery?.boundValues).toEqual([
       "secretariat",
       "mathematics",
+      "secretariat",
+      "mathematics",
+      51,
     ]);
   });
 

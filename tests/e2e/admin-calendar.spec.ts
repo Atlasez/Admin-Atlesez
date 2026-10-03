@@ -32,7 +32,7 @@ test("管理タブはプロジェクト遷移後も管理トップへ直接遷�
   await page.route("**/api/admin/notifications", (route) =>
     route.fulfill({ json: { notifications: [] } }),
   );
-  await page.route("**/api/admin/portal", (route) =>
+  await page.route("**/api/admin/portal?**", (route) =>
     route.fulfill({
       json: {
         projects: [
@@ -98,7 +98,9 @@ test("予定の取得に失敗してもカレンダーを表示する", async ({
   );
 });
 
-test("横断カレンダーは予定をカーソルで追加読み込みできる", async ({ page }) => {
+test("横断カレンダーは表示月の予定を最後のページまで読み込む", async ({
+  page,
+}) => {
   await page.route("**/api/admin/auth-status", (route) =>
     route.fulfill({ json: { email: "manager@example.com", isManager: true } }),
   );
@@ -111,7 +113,9 @@ test("横断カレンダーは予定をカーソルで追加読み込みでき�
   let requests = 0;
   await page.route("**/api/admin/member-calendar**", async (route) => {
     requests += 1;
-    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    const cursor = new URL(route.request().url()).searchParams.get(
+      "eventCursor",
+    );
     await route.fulfill({
       json: {
         scope: { email: "manager@example.com", isManager: false },
@@ -139,8 +143,6 @@ test("横断カレンダーは予定をカーソルで追加読み込みでき�
   await page.goto("admin/member-calendar/");
   await expect(page.locator("[data-event-list]")).toContainText("最初の予定");
   const loadMore = page.getByRole("button", { name: "さらに予定を読み込む" });
-  await expect(loadMore).toBeVisible();
-  await loadMore.click();
   await expect(page.locator("[data-event-list]")).toContainText("追加予定");
   await expect(loadMore).toBeHidden();
   expect(requests).toBe(2);
@@ -470,4 +472,241 @@ test("カレンダーで複数地域・タイムゾーン・可否期間を操�
     timezone: "Asia/Kathmandu",
   });
   await expect(page.locator("[data-block-list]")).toContainText("毎週火曜日");
+});
+
+for (const endpoint of ["operations", "member-calendar"]) {
+  test(`${endpoint}: 過去の多数の予定に関係なく表示月を取得し、タイムゾーンと月移動で更新する`, async ({
+    page,
+  }) => {
+    await page.clock.install({ time: new Date("2026-10-15T12:00:00Z") });
+    const requests: URL[] = [];
+    const allEvents = [
+      ...Array.from({ length: 100 }, (_, index) => ({
+        id: `past-${index}`,
+        title: `過去予定${index}`,
+        starts_at: "2026-01-01T12:00:00Z",
+      })),
+      {
+        id: "month-boundary",
+        title: "東京の月初予定",
+        starts_at: "2026-09-30T15:00:00Z",
+      },
+      ...Array.from({ length: 70 }, (_, index) => ({
+        id: `october-${index}`,
+        title: `今月予定${index}`,
+        starts_at: "2026-10-15T12:00:00Z",
+      })),
+      { id: "november", title: "翌月予定", starts_at: "2026-11-15T12:00:00Z" },
+    ];
+    await page.route("**/api/admin/**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname !== `/api/admin/${endpoint}`) {
+        await route.fulfill({
+          json: {
+            email: "manager@example.com",
+            isManager: true,
+            notifications: [],
+          },
+        });
+        return;
+      }
+      requests.push(url);
+      const start = Date.parse(url.searchParams.get("start") ?? "");
+      const end = Date.parse(url.searchParams.get("end") ?? "");
+      const rows = allEvents.filter(
+        (event) =>
+          Date.parse(event.starts_at) >= start &&
+          Date.parse(event.starts_at) < end,
+      );
+      const offset = Number(url.searchParams.get("eventCursor") ?? "0");
+      const next = offset + 50 < rows.length ? String(offset + 50) : null;
+      await route.fulfill({
+        json: {
+          scope: { isManager: true, email: "manager@example.com" },
+          project: { id: "secretariat", slug: "secretariat", name: "事務局" },
+          projects: [],
+          tasks: [],
+          members: [],
+          progress: [],
+          availabilityBlocks: [],
+          availabilityRules: [],
+          events: rows.slice(offset, offset + 50),
+          eventPagination: {
+            hasMore: Boolean(next),
+            nextCursor: next,
+            limit: 50,
+          },
+        },
+      });
+    });
+    await page.goto(
+      endpoint === "operations"
+        ? "admin/calendar/?project=secretariat"
+        : "admin/member-calendar/",
+    );
+    // Select Tokyo explicitly so this assertion does not depend on the test runner's timezone.
+    await page.locator("[data-open-calendar-settings]").click();
+    await page.locator("[data-calendar-timezone]").fill("Asia/Tokyo");
+    await page.locator("[data-close-calendar-settings]").click();
+    await expect(
+      page.locator('[data-calendar-date="2026-10-01"]'),
+    ).toContainText("東京の月初予定");
+    await expect(page.locator("[data-event-list] .item")).toHaveCount(71);
+    await expect(page.locator("[data-event-list]")).not.toContainText(
+      "過去予定",
+    );
+    expect(
+      requests.some(
+        (url) => url.searchParams.get("start") === "2026-09-30T15:00:00Z",
+      ),
+    ).toBe(true);
+    expect(
+      requests.some((url) => url.searchParams.get("eventCursor") === "50"),
+    ).toBe(true);
+    await page.locator("[data-open-calendar-settings]").click();
+    await page.locator("[data-calendar-timezone]").fill("America/New_York");
+    await page.locator("[data-close-calendar-settings]").click();
+    await expect(page.locator("[data-event-list] .item")).toHaveCount(70);
+    await expect(page.locator("[data-event-list]")).not.toContainText(
+      "東京の月初予定",
+    );
+    expect(requests.at(-1)?.searchParams.get("start")).toBe(
+      "2026-10-01T04:00:00Z",
+    );
+    await page.locator("[data-calendar-next]").click();
+    await expect(page.locator("[data-event-list]")).toContainText("翌月予定");
+    await expect(page.locator("[data-event-list] .item")).toHaveCount(1);
+    expect(requests.at(-1)?.searchParams.get("end")).toBe(
+      "2026-12-01T05:00:00Z",
+    );
+  });
+}
+
+test("月移動の古い応答を破棄し、次の月の読込失敗を再試行できる", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-10-15T12:00:00Z") });
+  let releaseNovember!: () => void;
+  const novemberGate = new Promise<void>((resolve) => {
+    releaseNovember = resolve;
+  });
+  let januaryFails = true;
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname !== "/api/admin/member-calendar") {
+      await route.fulfill({
+        json: {
+          email: "manager@example.com",
+          isManager: true,
+          notifications: [],
+        },
+      });
+      return;
+    }
+    const start = url.searchParams.get("start")!;
+    const month =
+      new Date(Date.parse(start) + 24 * 3600 * 1000).getUTCMonth() + 1;
+    if (month === 11) await novemberGate;
+    if (month === 1 && januaryFails) {
+      await route.fulfill({ status: 503, json: { error: "一時停止中" } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        scope: { isManager: true },
+        events: [
+          {
+            id: String(month),
+            title: `${month}月の予定`,
+            starts_at: new Date(
+              Date.parse(start) + 10 * 24 * 3600 * 1000,
+            ).toISOString(),
+          },
+        ],
+        eventPagination: { nextCursor: null },
+      },
+    });
+  });
+  await page.goto("admin/member-calendar/");
+  await expect(page.locator("[data-event-list]")).toContainText("10月の予定");
+  const novemberRequest = page.waitForRequest(
+    (request) =>
+      request.url().includes("/api/admin/member-calendar") &&
+      request.url().includes("start="),
+  );
+  await page.locator("[data-calendar-next]").click();
+  await novemberRequest;
+  await page.locator("[data-calendar-next]").click();
+  await expect(page.locator("[data-event-list]")).toContainText("12月の予定");
+  releaseNovember();
+  await expect(page.locator("[data-calendar-title]")).toContainText("12月");
+  await expect(page.locator("[data-event-list]")).not.toContainText(
+    "11月の予定",
+  );
+  await page.locator("[data-calendar-next]").click();
+  await expect(page.locator("[data-event-feedback]")).toContainText(
+    "一時停止中",
+  );
+  await expect(page.locator("[data-event-list]")).not.toContainText(
+    "12月の予定",
+  );
+  januaryFails = false;
+  await page.locator("[data-admin-retry]").click();
+  await expect(page.locator("[data-event-list]")).toContainText("1月の予定");
+  await expect(page.locator("[data-event-feedback]")).toBeEmpty();
+});
+
+test("表示月より前に始まる複数日予定は重なる日を表示し、終了日の午前0時を含めない", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-10-15T12:00:00Z") });
+  await page.route("**/api/admin/**", async (route) => {
+    const url = new URL(route.request().url());
+    await route.fulfill({
+      json:
+        url.pathname === "/api/admin/member-calendar"
+          ? {
+              scope: { isManager: false },
+              events: [
+                {
+                  id: "overlap",
+                  title: "月をまたぐ予定",
+                  starts_at: "2026-09-30T10:00:00Z",
+                  ends_at: "2026-10-03T00:00:00Z",
+                },
+                {
+                  id: "point",
+                  title: "単発予定",
+                  starts_at: "2026-10-02T10:00:00Z",
+                  ends_at: null,
+                },
+              ],
+              eventPagination: { nextCursor: null },
+            }
+          : {
+              isManager: true,
+              email: "manager@example.com",
+              notifications: [],
+            },
+    });
+  });
+  await page.goto("admin/member-calendar/");
+  await page.locator("[data-open-calendar-settings]").click();
+  await page.locator("[data-calendar-timezone]").fill("UTC");
+  await page.locator("[data-close-calendar-settings]").click();
+  await expect(page.locator('[data-calendar-date="2026-10-01"]')).toContainText(
+    "月をまたぐ予定",
+  );
+  await expect(page.locator('[data-calendar-date="2026-10-02"]')).toContainText(
+    "月をまたぐ予定",
+  );
+  await expect(
+    page.locator('[data-calendar-date="2026-10-03"]'),
+  ).not.toContainText("月をまたぐ予定");
+  await expect(page.locator('[data-calendar-date="2026-10-02"]')).toContainText(
+    "単発予定",
+  );
+  await expect(
+    page.locator('[data-calendar-date="2026-10-03"]'),
+  ).not.toContainText("単発予定");
 });

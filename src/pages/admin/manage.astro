@@ -1,9 +1,10 @@
 ---
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
-const project = Astro.url.searchParams.get("project") === "secretariat" ? "secretariat" : Astro.url.searchParams.get("project") === "seminar-platform" ? "seminar-platform" : "atlas";
-const projectSite = project === "seminar-platform" ? "semi-platform" : project;
-const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : project === "seminar-platform" ? "ゼミプラットフォーム" : "学習サイト「アトラス」";
+// All project cards are built once; the browser resolves the requested project.
+const project = "atlas";
+const projectSite = "atlas";
+const projectLabel = '学習サイト「アトラス」';
 ---
 
 <AdminLayout title="管理トップ" description="管理機能の入口">
@@ -11,17 +12,17 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
     <header><p>{projectLabel}</p><h1>管理トップ</h1></header>
     <section aria-label="管理機能">
       <a href={`/admin/permissions/?project=${project}`} data-manager-only data-admin-site={projectSite} hidden><strong>権限管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="権限管理を開く">→</span></a>
-      {project === "atlas" && <a href="/admin/member-management/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>運営メンバー管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営メンバー管理を開く">→</span></a>}
-      {project === "atlas" && <a href="/admin/genre-roles/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>ジャンル・役割管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="ジャンル・役割管理を開く">→</span></a>}
-      {project !== "atlas" && <a href={`/admin/project-profile-requests/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>運営内自己紹介の承認</strong><ul class="role-tags"><li>プロジェクト責任者</li></ul><span aria-label="運営内自己紹介の承認を開く">→</span></a>}
-      <a href={`/admin/reports/?project=${project}`} data-admin-scope hidden><strong>問題報告</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当分野のみ）</li></ul><span aria-label="問題報告を開く">→</span></a>
-      <a href={`/admin/analytics/?project=${project}`} data-admin-scope hidden><strong>学習サイト閲覧統計</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当記事のみ）</li></ul><span aria-label="学習サイト閲覧統計を開く">→</span></a>
-      {project === "atlas" && <a href="/admin/publication-runs/" data-admin-scope hidden><strong>公開処理の状況</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当記事のみ）</li></ul><span aria-label="公開処理の状況を開く">→</span></a>}
-      {project === "atlas" && <a href="/admin/operations-statistics/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>運営メンバー統計</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営メンバー統計を開く">→</span></a>}
+      <a data-management-project="atlas" href="/admin/member-management/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>運営メンバー管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営メンバー管理を開く">→</span></a>
+      <a data-management-project="atlas" href="/admin/genre-roles/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>ジャンル・役割管理</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="ジャンル・役割管理を開く">→</span></a>
+      <a data-management-project="other" href={`/admin/project-profile-requests/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>運営内自己紹介の承認</strong><ul class="role-tags"><li>プロジェクト責任者</li></ul><span aria-label="運営内自己紹介の承認を開く">→</span></a>
+      <a href={`/admin/reports/?project=${project}`} data-admin-scope data-management-project="atlas" hidden><strong>問題報告</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当分野のみ）</li></ul><span aria-label="問題報告を開く">→</span></a>
+      <a href={`/admin/analytics/?project=${project}`} data-admin-scope data-management-project="atlas" hidden><strong>学習サイト閲覧統計</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当記事のみ）</li></ul><span aria-label="学習サイト閲覧統計を開く">→</span></a>
+      <a data-management-project="atlas" href="/admin/publication-runs/" data-admin-scope hidden><strong>公開処理の状況</strong><ul class="role-tags"><li>全分野管理者</li><li>分野担当者（担当記事のみ）</li></ul><span aria-label="公開処理の状況を開く">→</span></a>
+      <a data-management-project="atlas" href="/admin/operations-statistics/?project=atlas" data-manager-only data-admin-site="atlas" hidden><strong>運営メンバー統計</strong><ul class="role-tags"><li>全分野管理者</li></ul><span aria-label="運営メンバー統計を開く">→</span></a>
       <a href={`/admin/applications/?project=${project}`} data-project-manager-only data-admin-site={projectSite} hidden><strong>応募管理</strong><ul class="role-tags"><li>プロジェクト責任者</li></ul><span aria-label="応募管理を開く">→</span></a>
     </section>
     <AdminRetryNotice scope="management-access" message="アクセス権限を確認できませんでした。接続を確認して再試行してください。" />
-    <details class="developer-entry" data-developer-only data-admin-site={project} hidden>
+    <details class="developer-entry" data-developer-only data-admin-site={projectSite} hidden>
       <summary>開発者モード</summary>
       <p>操作履歴、状態遷移、配信診断など、日常運用では使わない機能を開きます。</p>
       <a href="/admin/developer/?mode=developer">開発者モードを開く →</a>
@@ -35,47 +36,48 @@ const projectLabel = project === "secretariat" ? "Atlasez運営事務局" : proj
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
 
-  const managementHome = document.querySelector<HTMLElement>('[data-management-home]');
-  if (managementHome) {
-    const projectLabels: Record<string, string> = {
-      atlas: '学習サイト「アトラス」',
-      'seminar-platform': 'ゼミプラットフォーム',
-      secretariat: 'Atlasez運営事務局',
-    };
-    const requestedProject = new URLSearchParams(window.location.search).get('project')?.trim().toLowerCase() ?? '';
-    const project = projectLabels[requestedProject] ? requestedProject : 'atlas';
-    const projectSite = project === 'seminar-platform' ? 'semi-platform' : project;
+  import { adminManagementProjects, resolveAdminManagementProject } from "../../lib/admin-management-projects";
+
+  const initializeManagementHome = () => {
+    const managementHome = document.querySelector<HTMLElement>('[data-management-home]');
+    if (!managementHome || managementHome.dataset.initialized) return;
+    managementHome.dataset.initialized = 'true';
+    const project = resolveAdminManagementProject(new URLSearchParams(location.search).get('project'));
+    const {site: projectSite, label: projectLabel} = adminManagementProjects[project];
     managementHome.dataset.project = project;
     const label = managementHome.querySelector<HTMLElement>('header p');
-    if (label) label.textContent = projectLabels[project];
-    managementHome.querySelectorAll<HTMLAnchorElement>('a[href*="?project="]').forEach((link) => {
-      const url = new URL(link.href, window.location.origin);
+    if (label) label.textContent = projectLabel;
+    managementHome.querySelectorAll<HTMLElement>('[data-management-project]').forEach(item => {
+      const target = item.dataset.managementProject;
+      // Remove unsupported cards so the shared navigation permission refresh
+      // cannot reveal them after a route transition or auth-status response.
+      if (target === 'atlas' ? project !== 'atlas' : project === 'atlas') item.remove();
+    });
+    managementHome.querySelectorAll<HTMLElement>('[data-admin-site]').forEach(item => { item.dataset.adminSite = projectSite; });
+    managementHome.querySelectorAll<HTMLAnchorElement>('a[href*="?project="]').forEach(link => {
+      const url = new URL(link.href, location.origin);
       url.searchParams.set('project', project);
       link.href = `${url.pathname}?${url.searchParams.toString()}`;
-      if (link.hasAttribute('data-manager-only') || link.hasAttribute('data-project-manager-only')) link.dataset.adminSite = projectSite;
     });
     const loadScopedAdminPages = async () => {
-      managementHome.querySelectorAll<HTMLElement>('[data-admin-scope]').forEach((item) => {
-        item.hidden = true;
-      });
+      managementHome.querySelectorAll<HTMLElement>('[data-admin-scope]').forEach(item => { item.hidden = true; });
       const response = await fetch('/api/admin/auth-status', { credentials: 'same-origin', cache: 'no-store' });
       const contentType = response.headers.get('content-type') ?? '';
       if (!response.ok || !contentType.includes('application/json')) {
         throw new Error(response.status === 401 ? 'ログインが必要です。' : `権限情報の取得に失敗しました（HTTP ${response.status}）。`);
       }
-      const status = await response.json() as { canAccessScopedAdminPages?: boolean; isManager?: boolean };
-      const canAccessAdmin = status.canAccessScopedAdminPages === true || status.isManager === true;
-      managementHome.querySelectorAll<HTMLElement>('[data-admin-scope]').forEach((item) => {
-        item.hidden = !canAccessAdmin;
-      });
+      const status = await response.json() as { canAccessScopedAdminPages?: boolean; isManager?: boolean; managerProjects?: string[] };
+      const globalManager = status.isManager === true;
+      const projectManager = globalManager || status.managerProjects?.includes(project) === true || (project === 'seminar-platform' && status.managerProjects?.includes('semi-platform') === true);
+      managementHome.querySelectorAll<HTMLElement>('[data-manager-only]').forEach(item => { item.hidden = !globalManager; });
+      managementHome.querySelectorAll<HTMLElement>('[data-project-manager-only]').forEach(item => { item.hidden = !projectManager; });
+      managementHome.querySelectorAll<HTMLElement>('[data-admin-scope]').forEach(item => { item.hidden = !(status.canAccessScopedAdminPages === true || globalManager); });
+      managementHome.querySelectorAll<HTMLElement>('[data-developer-only]').forEach(item => { item.hidden = !(globalManager || (status.managerProjects?.length ?? 0) > 0); });
       retry.success();
     };
-    const retry = createAdminLoadRetry(
-      managementHome,
-      loadScopedAdminPages,
-      '管理ページへのアクセス権限を確認できませんでした。',
-      { scope: 'management-access' },
-    );
+    const retry = createAdminLoadRetry(managementHome, loadScopedAdminPages, '管理ページへのアクセス権限を確認できませんでした。', { scope: 'management-access' });
     void loadScopedAdminPages().catch(retry.fail);
-  }
+  };
+  document.addEventListener('astro:page-load', initializeManagementHome);
+  initializeManagementHome();
 </script>

@@ -1421,17 +1421,20 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     let supportedHolidayRegions: typeof import('../../lib/calendar-support').supportedHolidayRegions;
     let recurringCoWorkingEventsForMonth: typeof import('../../lib/co-working-schedule').recurringCoWorkingEventsForMonth;
     let getTimeZoneOptions: typeof import('../../lib/timezones').getTimeZoneOptions;
+    let adminCalendarMonthRange: typeof import('../../lib/admin-calendar-range').adminCalendarMonthRange;
     if (calendarPage || memberPage) {
-      const [calendarSupport, coWorkingSchedule, timezoneSupport] = await Promise.all([
+      const [calendarSupport, coWorkingSchedule, timezoneSupport, calendarRange] = await Promise.all([
         import('../../lib/calendar-support'),
         import('../../lib/co-working-schedule'),
         import('../../lib/timezones'),
+        import('../../lib/admin-calendar-range'),
       ]);
       holidaysForRegions = calendarSupport.holidaysForRegions;
       localDateTimeToInstant = calendarSupport.localDateTimeToInstant;
       supportedHolidayRegions = calendarSupport.supportedHolidayRegions;
       recurringCoWorkingEventsForMonth = coWorkingSchedule.recurringCoWorkingEventsForMonth;
       getTimeZoneOptions = timezoneSupport.getTimeZoneOptions;
+      adminCalendarMonthRange = calendarRange.adminCalendarMonthRange;
     }
     let taskFilter: 'assigned' | 'created' | 'all' = 'assigned';
     let taskNextCursor: string | null = null;
@@ -1478,7 +1481,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       };
       timezone.addEventListener('input', () => { renderTimezoneOptions(); timezoneOptions.hidden = false; timezone.setAttribute('aria-expanded', 'true'); });
       timezoneToggle.addEventListener('click', () => { timezoneOptions.hidden = !timezoneOptions.hidden; timezone.setAttribute('aria-expanded', String(!timezoneOptions.hidden)); renderTimezoneOptions(); });
-      timezoneOptions.addEventListener('click', (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-timezone-value]'); if (!button) return; timezone.value = button.dataset.timezoneValue ?? 'UTC'; timezoneOptions.hidden = true; timezone.setAttribute('aria-expanded', 'false'); render(); });
+      timezoneOptions.addEventListener('click', (event) => { const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-timezone-value]'); if (!button) return; timezone.value = button.dataset.timezoneValue ?? 'UTC'; timezoneOptions.hidden = true; timezone.setAttribute('aria-expanded', 'false'); reloadCalendar(); });
       renderTimezoneOptions();
       const selectedRegions = new Set([...holidayCountry.selectedOptions].map((option) => option.value));
       holidayCountry.innerHTML = supportedHolidayRegions().map((region) => `<option value="${escapeHtml(region.code)}" ${selectedRegions.has(region.code) ? 'selected' : ''}>${escapeHtml(region.name)}（${escapeHtml(region.code)}）</option>`).join('');
@@ -1560,8 +1563,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     // server-rendered HTML. Calendar-only enhancement can populate the
     // searchable timezone and holiday controls after its lazy chunk arrives.
     if (calendarPage || memberPage) populateTimezones();
-    const api = async <T,>(url: string, method = 'GET', body?: unknown): Promise<T> => {
-      const response = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', headers: body === undefined ? {} : { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const api = async <T,>(url: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> => {
+      const response = await fetch(url, { signal, method, credentials: 'same-origin', cache: 'no-store', headers: body === undefined ? {} : { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
       const contentType = response.headers.get('content-type') ?? '';
       const data = contentType.includes('application/json') ? await response.json() as T & { error?: string } : null;
       if (!response.ok || !data) throw new Error(data?.error ?? '認証情報を確認できませんでした。ページを再読み込みしてください。');
@@ -1569,6 +1572,7 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
     };
     let data: OperationData = { scope: { isManager: false } };
     let loadVersion = 0;
+    let loadController: AbortController | undefined;
     let month = new Date(); month = new Date(month.getFullYear(), month.getMonth(), 1);
     let calendarSelectionStart = '';
     let calendarSelectionEnd = '';
@@ -1668,11 +1672,15 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       const visibleEvents = calendarEvents();
       for (let day = 1; day <= last.getDate(); day += 1) {
         const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayEvents = visibleEvents.filter((event) => { const parts = dateParts(event.starts_at); return `${parts.year}-${parts.month}-${parts.day}` === key; });
         const dayHolidays = holidays.filter((holiday) => holiday.date === key);
         const nextDate = new Date(`${key}T00:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate() + 1);
         const dayStart = localDateTimeToInstant(`${key}T00:00`, selectedTimezone());
         const dayEnd = localDateTimeToInstant(`${nextDate.toISOString().slice(0, 10)}T00:00`, selectedTimezone());
+        const dayEvents = visibleEvents.filter((event) => {
+          const start = Date.parse(event.starts_at);
+          const end = event.ends_at ? Date.parse(event.ends_at) : start;
+          return start < Date.parse(dayEnd) && (end > start ? end > Date.parse(dayStart) : start >= Date.parse(dayStart));
+        });
         const dayBlocks = (data.availabilityBlocks ?? []).filter((block) => new Date(block.starts_at) < new Date(dayEnd) && new Date(block.ends_at) > new Date(dayStart));
         const weekday = new Date(month.getFullYear(), month.getMonth(), day).getDay();
         const recurringBlocks: AvailabilityBlock[] = (data.availabilityRules ?? [])
@@ -1785,17 +1793,65 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       get<HTMLElement>('[data-block-list]').innerHTML = ruleItems + blockItems || '<p>登録した可否期間はありません。</p>';
       renderCalendar();
     };
-    const load = async () => { retry?.begin(); const requestVersion = ++loadVersion; data = memberPage ? await api<OperationData>('/api/admin/member-calendar?limit=50') : progressOverview ? await api<OperationData>('/api/admin/progress?limit=50') : await api<OperationData>(`/api/admin/operations?project=${encodeURIComponent(projectId)}&includeArchived=${taskShowArchived.checked ? '1' : '0'}&limit=50`); if (requestVersion !== loadVersion) return; taskNextCursor = data.pagination?.nextCursor ?? null; eventNextCursor = data.eventPagination?.nextCursor ?? null; progressNextCursor = data.progressPagination?.nextCursor ?? null; render(); retry?.success(); };
-    eventLoadMore.addEventListener('click', async () => {
-      if (eventLoadingMore || !eventNextCursor || !memberPage) return;
-      eventLoadingMore = true; render();
+    const overviewUrl = () => {
+      const params = new URLSearchParams({ limit: '50' });
+      if (!memberPage && !progressOverview) {
+        params.set('project', projectId);
+        params.set('includeArchived', taskShowArchived.checked ? '1' : '0');
+      }
+      if (calendarPage || memberPage) {
+        const range = adminCalendarMonthRange(month.getFullYear(), month.getMonth(), selectedTimezone());
+        params.set('start', range.start);
+        params.set('end', range.end);
+        params.set('eventLimit', '50');
+      }
+      return `${memberPage ? '/api/admin/member-calendar' : progressOverview ? '/api/admin/progress' : '/api/admin/operations'}?${params}`;
+    };
+    const load = async () => {
+      loadController?.abort();
+      const controller = new AbortController();
+      loadController = controller;
+      const requestVersion = ++loadVersion;
+      retry?.begin();
       try {
-        const page = await api<OperationData>(`/api/admin/member-calendar?limit=50&cursor=${encodeURIComponent(eventNextCursor)}`);
-        data = { ...data, events: [...(data.events ?? []), ...(page.events ?? [])] };
-        eventNextCursor = page.eventPagination?.nextCursor ?? null;
-      } catch (error) { eventFeedback.value = error instanceof Error ? error.message : '追加の予定を読み込めませんでした。'; }
-      finally { eventLoadingMore = false; render(); }
-    });
+        const url = overviewUrl();
+        let loaded = await api<OperationData>(url, 'GET', undefined, controller.signal);
+        if (calendarPage || memberPage) {
+          const cursors = new Set<string>();
+          let cursor = loaded.eventPagination?.nextCursor;
+          while (cursor) {
+            if (cursors.has(cursor)) throw new Error('予定の続きが取得できませんでした。再試行してください。');
+            cursors.add(cursor);
+            const pageUrl = new URL(url, location.origin);
+            pageUrl.searchParams.set('eventCursor', cursor);
+            const page = await api<OperationData>(pageUrl.pathname + pageUrl.search, 'GET', undefined, controller.signal);
+            loaded = { ...loaded, events: [...(loaded.events ?? []), ...(page.events ?? [])], eventPagination: page.eventPagination };
+            cursor = page.eventPagination?.nextCursor;
+          }
+        }
+        if (controller.signal.aborted || requestVersion !== loadVersion) return;
+        data = loaded;
+        taskNextCursor = loaded.pagination?.nextCursor ?? null;
+        eventNextCursor = null;
+        progressNextCursor = loaded.progressPagination?.nextCursor ?? null;
+        eventFeedback.value = '';
+        render();
+        retry?.success();
+      } catch (error) {
+        if (controller.signal.aborted || requestVersion !== loadVersion) return;
+        const message = error instanceof Error ? error.message : '進行管理を読み込めませんでした。';
+        eventFeedback.value = `予定を読み込めませんでした。${message}`;
+        retry?.fail(error);
+      }
+    };
+    const reloadCalendar = () => {
+      clearCalendarSelection();
+      data = { ...data, events: [], availabilityBlocks: [], availabilityRules: [] };
+      eventNextCursor = null;
+      render();
+      void load();
+    };
+    document.addEventListener('astro:before-swap', () => { loadController?.abort(); loadVersion += 1; }, { once: true });
     taskLoadMore.addEventListener('click', async () => {
       if (taskLoadingMore || !taskNextCursor || memberPage || progressOnly) return;
       taskLoadingMore = true; render();
@@ -1957,8 +2013,8 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
         })
         .finally(() => { button.disabled = false; });
     });
-    get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() - 1, 1); renderCalendar(); });
-    get<HTMLButtonElement>('[data-calendar-next]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() + 1, 1); renderCalendar(); });
+    get<HTMLButtonElement>('[data-calendar-prev]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() - 1, 1); reloadCalendar(); });
+    get<HTMLButtonElement>('[data-calendar-next]').addEventListener('click', () => { clearCalendarSelection(); month = new Date(month.getFullYear(), month.getMonth() + 1, 1); reloadCalendar(); });
     const selectCalendarRange = (start: string, end: string) => {
       const ordered = [start, end].sort();
       const after = new Date(`${ordered[1]}T00:00:00Z`); after.setUTCDate(after.getUTCDate() + 1);
@@ -2014,7 +2070,9 @@ const initialPageTitle = memberMode ? "カレンダー" : `${projectLabel}：${p
       selectCalendarRange(calendarSelectionStart, calendarSelectionEnd);
     });
     blockAllDay.addEventListener('change', () => { if (!blockAllDay.checked) get<HTMLInputElement>('[data-block-start]').focus(); });
-    timezone.addEventListener('input', () => { render(); });
+    timezone.addEventListener('input', () => {
+      try { new Intl.DateTimeFormat('en', { timeZone: timezone.value.trim() }).format(); reloadCalendar(); } catch { /* Search text is not yet a selected timezone. */ }
+    });
     holidayCountry.addEventListener('change', () => { renderHolidayTags(); renderCalendar(); });
     holidaySearch.addEventListener('input', () => {
       const query = holidaySearch.value.trim().toLocaleLowerCase();
