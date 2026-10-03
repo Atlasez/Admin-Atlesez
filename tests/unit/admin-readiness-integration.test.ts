@@ -121,6 +121,32 @@ function environment() {
   return { db, request, env };
 }
 
+it("全migration適用済みの隔離D1でポータルと通知APIの全SQLを実行する", async () => {
+  const { request } = environment();
+  const portalResponse = await request(
+    "/api/admin/portal",
+    "global@atlasez.test",
+  );
+  expect(portalResponse.status, await portalResponse.clone().text()).toBe(200);
+  await expect(portalResponse.json()).resolves.toMatchObject({
+    projects: expect.any(Array),
+    todos: expect.any(Array),
+    calendar: { events: expect.any(Array) },
+  });
+
+  const notificationsResponse = await request(
+    "/api/admin/notifications",
+    "global@atlasez.test",
+  );
+  expect(
+    notificationsResponse.status,
+    await notificationsResponse.clone().text(),
+  ).toBe(200);
+  await expect(notificationsResponse.json()).resolves.toMatchObject({
+    notifications: expect.any(Array),
+  });
+});
+
 it("全migrationを適用した隔離D1で認証・全体管理・別プロジェクト・退会後の境界を確認する", async () => {
   const { db, request, env } = environment();
   const anonymous = await worker.fetch(
