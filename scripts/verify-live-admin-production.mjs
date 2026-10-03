@@ -48,6 +48,7 @@ if (mismatches.length > 0) {
     process.env.ALLOW_AUDIT_ONLY_ADVANCE === "true" &&
     buildInfo.repository === expected.repository &&
     buildInfo.target === expected.target &&
+    buildInfo.ref === "main" &&
     /^[0-9a-f]{40}$/.test(buildInfo.commit ?? "")
   ) {
     const liveCommit = buildInfo.commit;
@@ -57,7 +58,7 @@ if (mismatches.length > 0) {
       liveIsAncestor && liveCommit !== expectedCommit
         ? execFileSync(
             "git",
-            ["diff", "--name-only", liveCommit, expectedCommit],
+            ["diff", "--no-renames", "--name-only", liveCommit, expectedCommit],
             {
               encoding: "utf8",
             },
@@ -67,6 +68,7 @@ if (mismatches.length > 0) {
         : [];
     const classification = classifyAdminDeployment({
       liveCommit,
+      liveRef: buildInfo.ref,
       targetCommit: expectedCommit,
       changedFiles,
       liveIsAncestor,

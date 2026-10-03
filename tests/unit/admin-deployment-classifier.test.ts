@@ -9,6 +9,7 @@ describe("classifyAdminDeployment", () => {
     expect(
       classifyAdminDeployment({
         liveCommit: target,
+        liveRef: "main",
         targetCommit: target,
         changedFiles: [],
         liveIsAncestor: true,
@@ -20,6 +21,7 @@ describe("classifyAdminDeployment", () => {
     expect(
       classifyAdminDeployment({
         liveCommit: previous,
+        liveRef: "main",
         targetCommit: target,
         changedFiles: ["docs/deployments/cloudflare-latest.json"],
         liveIsAncestor: true,
@@ -31,6 +33,22 @@ describe("classifyAdminDeployment", () => {
     expect(
       classifyAdminDeployment({
         liveCommit: previous,
+        liveRef: "main",
+        targetCommit: target,
+        changedFiles: [
+          "docs/deployments/cloudflare-latest.json",
+          "src/pages/admin/portal.astro",
+        ],
+        liveIsAncestor: true,
+      }),
+    ).toEqual({ deployRequired: true, reason: "site-change" });
+  });
+
+  it("deploys when a rename includes a path besides the audit record", () => {
+    expect(
+      classifyAdminDeployment({
+        liveCommit: previous,
+        liveRef: "main",
         targetCommit: target,
         changedFiles: [
           "docs/deployments/cloudflare-latest.json",
@@ -45,6 +63,7 @@ describe("classifyAdminDeployment", () => {
     expect(
       classifyAdminDeployment({
         liveCommit: previous,
+        liveRef: "main",
         targetCommit: target,
         changedFiles: ["docs/deployments/cloudflare-latest.json"],
         liveIsAncestor: false,
@@ -52,10 +71,23 @@ describe("classifyAdminDeployment", () => {
     ).toEqual({ deployRequired: true, reason: "unrelated-or-unknown-history" });
   });
 
+  it("deploys when the live build is not from main", () => {
+    expect(
+      classifyAdminDeployment({
+        liveCommit: target,
+        liveRef: "codex/preview",
+        targetCommit: target,
+        changedFiles: [],
+        liveIsAncestor: true,
+      }),
+    ).toEqual({ deployRequired: true, reason: "invalid-live-build-ref" });
+  });
+
   it("deploys when either commit identity is malformed", () => {
     expect(
       classifyAdminDeployment({
         liveCommit: "unknown",
+        liveRef: "main",
         targetCommit: target,
         changedFiles: [],
         liveIsAncestor: false,

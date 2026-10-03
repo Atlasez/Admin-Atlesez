@@ -25,6 +25,7 @@ try {
   if (
     buildInfo.repository !== "Atlasez/Admin-Atlesez" ||
     buildInfo.target !== "admin" ||
+    buildInfo.ref !== "main" ||
     !/^[0-9a-f]{40}$/.test(buildInfo.commit ?? "")
   ) {
     throw new Error("live build-info identity is invalid");
@@ -43,15 +44,18 @@ try {
     liveCommit === targetCommit || ancestryCheck?.status === 0;
   const changedFiles =
     liveIsAncestor && liveCommit !== targetCommit
-      ? execFileSync("git", ["diff", "--name-only", liveCommit, targetCommit], {
-          encoding: "utf8",
-        })
+      ? execFileSync(
+          "git",
+          ["diff", "--no-renames", "--name-only", liveCommit, targetCommit],
+          { encoding: "utf8" },
+        )
           .split("\n")
           .filter(Boolean)
       : [];
 
   ({ deployRequired, reason } = classifyAdminDeployment({
     liveCommit,
+    liveRef: buildInfo.ref,
     targetCommit,
     changedFiles,
     liveIsAncestor,

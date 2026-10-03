@@ -5,10 +5,15 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 
 export function classifyAdminDeployment({
   liveCommit,
+  liveRef,
   targetCommit,
   changedFiles,
   liveIsAncestor,
 }) {
+  if (liveRef !== "main") {
+    return { deployRequired: true, reason: "invalid-live-build-ref" };
+  }
+
   if (
     !SHA_PATTERN.test(liveCommit ?? "") ||
     !SHA_PATTERN.test(targetCommit ?? "")

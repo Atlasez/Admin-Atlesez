@@ -30,6 +30,7 @@ Secretが未設定、API取得失敗、Source不明、`build-info.json`欠落の
 ## PRの扱い
 
 - 同期PRは必ずレビューする。
+- 公開build-infoが対象main SHAとすでに一致する場合は、同じ内容を再配信しないためdeployを省略する。
 - 同期PRが`docs/deployments/cloudflare-latest.json`だけを変更する場合、Merge後のWorker deployを省略する。`build-info.json.commit`は直前のコードdeploy SHAのままとし、次のコード・コンテンツ・設定変更が入ったmain pushで新しいSHAへ進める。
 - 公開`build-info.json.commit`とGitHub `main`のSHAが違う場合は、両SHA間の差分を確認する。差分が監査JSON一つだけなら正常な監査PR後の状態、それ以外の差分・不正なSHA・比較不能はインシデントとして扱う。
 - Cloudflare VersionのSourceが`Unknown`または手動Uploadの場合は、コード同期済みとみなさない。
