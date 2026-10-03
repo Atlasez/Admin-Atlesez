@@ -5,6 +5,15 @@ type MockOptions = {
   unreadNotificationsCount?: number;
   pendingApprovals?: number;
   taskSummary?: { openCount?: number; dueToday?: number; dueSoon?: number };
+  todos?: Array<{
+    id: string;
+    project_id: string;
+    title: string;
+    status: string;
+    due_at: string;
+    due_timezone: string;
+  }>;
+  onPortalRequest?: (url: URL) => void;
   portalFailureOnce?: boolean;
   avatarUrl?: string;
   calendarEvents?: Array<{
@@ -94,6 +103,7 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
       return;
     }
     if (url.pathname === "/api/admin/portal") {
+      options.onPortalRequest?.(url);
       portalCalls += 1;
       if (options.portalFailureOnce && portalCalls === 1) {
         await route.fulfill({
@@ -116,7 +126,7 @@ async function mockAdminShell(page: Page, options: MockOptions = {}) {
             },
           ],
           availableProjects: options.availableProjects ?? [],
-          todos: [],
+          todos: options.todos ?? [],
           taskSummary: options.taskSummary,
           pendingApprovals: options.pendingApprovals ?? 0,
           notifications: [
@@ -857,4 +867,42 @@ test("カレンダーの表示対象を切り替え、予定行を独立して�
   await expect(personal).toBeChecked();
   await expect(agenda).toContainText("記事の確認期限");
   await expect(agenda.locator(".calendar-agenda-item")).toHaveCount(2);
+});
+
+test.describe("ポータルの期限を閲覧者と締切のタイムゾーンで扱う", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("表示タイムゾーンを送信し、Tokyoの翌朝期限をNew Yorkの今日として扱う", async ({
+    page,
+  }) => {
+    await page.clock.install({ time: new Date("2026-10-03T10:00:00Z") });
+    const zones: string[] = [];
+    await mockAdminShell(page, {
+      onPortalRequest: (url) =>
+        zones.push(url.searchParams.get("timezone") ?? ""),
+      todos: [
+        {
+          id: "task-zone",
+          project_id: "atlas",
+          title: "時差のある期限",
+          status: "open",
+          due_at: "2026-10-04T08:00",
+          due_timezone: "Asia/Tokyo",
+        },
+      ],
+    });
+    await page.goto("admin/portal/");
+    await expect(page.locator('[data-summary-value="today"]')).toHaveText("1");
+    await expect(page.locator('[data-summary-value="due-soon"]')).toHaveText(
+      "0",
+    );
+    await expect(page.locator("[data-todos] .todo")).toContainText(
+      "2026-10-04 08:00 (Asia/Tokyo)",
+    );
+    await expect(page.locator("[data-todos] .todo")).toHaveAttribute(
+      "href",
+      "/admin/task-detail/?task=task-zone",
+    );
+    expect(zones).toEqual(["America/New_York"]);
+  });
 });

@@ -12,6 +12,7 @@ type Task = {
   assignee_display_name?: string;
   assigned_to_me?: boolean;
   created_by_me?: boolean;
+  can_update?: boolean;
   created_by?: string;
   task_kind?: string;
   title: string;
@@ -207,23 +208,30 @@ function initialize() {
           )
             approvalLink =
               '<a class="approval-link" href="/admin/profile-requests/">メンバー情報の承認 →</a>';
-          const archiveAction = task.archived_at
-            ? `<button type="button" class="status-button task-archive-button" data-archive-task="${escape(task.id)}" data-archive-next="false">復元</button>`
-            : task.status === "done"
-              ? `<button type="button" class="status-button task-archive-button" data-archive-task="${escape(task.id)}" data-archive-next="true">アーカイブ</button>`
-              : "";
-          return `<article class="task status-${escape(task.status)} ${task.archived_at ? "is-archived" : ""}${focusId === task.id ? " is-focused" : ""}" data-task-id="${escape(task.id)}" ${focusId === task.id ? 'tabindex="-1"' : ""}><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3>${task.archived_at ? '<span class="badge badge-status">アーカイブ済み</span>' : ""}</div><div class="task-meta"><span class="badge">${task.task_kind === "feedback" ? "フィードバック依頼" : "タスク依頼"}</span><span class="badge">${escape(project?.name ?? task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assignee ? `<span class="badge">担当: ${escape(assignee)}</span>` : ""}</div>${task.details ? `<p>${escape(task.details)}</p>` : ""}${task.due_at ? `<p>期限: ${escape(formatTaskDeadline(task.due_at, task.due_timezone || "Asia/Tokyo"))}</p>` : ""}${approvalLink}<a href="/admin/task-detail/?task=${encodeURIComponent(task.id)}">詳細・引き継ぎ →</a></div><div class="task-actions"><label class="status-control"><span>進捗</span><select aria-label="${escape(task.title)}の状態" data-task-status="${escape(task.id)}">${[
-            ["open", "未着手"],
-            ["doing", "進行中"],
-            ["done", "完了"],
-          ]
-            .map(
-              ([value, label]) =>
-                `<option value="${value}" ${task.status === value ? "selected" : ""}>${label}</option>`,
-            )
-            .join(
-              "",
-            )}</select></label><button type="button" class="status-button" data-save-status="${escape(task.id)}">状態を保存</button>${archiveAction}</div></article>`;
+          const editable = task.can_update === true;
+          const archiveAction = !editable
+            ? ""
+            : task.archived_at
+              ? `<button type="button" class="status-button task-archive-button" data-archive-task="${escape(task.id)}" data-archive-next="false">復元</button>`
+              : task.status === "done"
+                ? `<button type="button" class="status-button task-archive-button" data-archive-task="${escape(task.id)}" data-archive-next="true">アーカイブ</button>`
+                : "";
+          return `<article class="task status-${escape(task.status)} ${task.archived_at ? "is-archived" : ""}${focusId === task.id ? " is-focused" : ""}" data-task-id="${escape(task.id)}" ${focusId === task.id ? 'tabindex="-1"' : ""}><div class="task-body"><div class="task-title"><span class="status-dot" aria-hidden="true"></span><h3>${escape(task.title)}</h3>${task.archived_at ? '<span class="badge badge-status">アーカイブ済み</span>' : ""}</div><div class="task-meta"><span class="badge">${task.task_kind === "feedback" ? "フィードバック依頼" : "タスク依頼"}</span><span class="badge">${escape(project?.name ?? task.project_id)}</span><span class="badge badge-status">${statusLabel}</span>${assignee ? `<span class="badge">担当: ${escape(assignee)}</span>` : ""}</div>${task.details ? `<p>${escape(task.details)}</p>` : ""}${task.due_at ? `<p>期限: ${escape(formatTaskDeadline(task.due_at, task.due_timezone || "Asia/Tokyo"))}</p>` : ""}${approvalLink}<a href="/admin/task-detail/?task=${encodeURIComponent(task.id)}">詳細・引き継ぎ →</a></div>${
+            editable
+              ? `<div class="task-actions"><label class="status-control"><span>進捗</span><select aria-label="${escape(task.title)}の状態" data-task-status="${escape(task.id)}">${[
+                  ["open", "未着手"],
+                  ["doing", "進行中"],
+                  ["done", "完了"],
+                ]
+                  .map(
+                    ([value, label]) =>
+                      `<option value="${value}" ${task.status === value ? "selected" : ""}>${label}</option>`,
+                  )
+                  .join(
+                    "",
+                  )}</select></label><button type="button" class="status-button" data-save-status="${escape(task.id)}">状態を保存</button>${archiveAction}</div>`
+              : '<div class="task-actions"><span class="badge">閲覧のみ</span></div>'
+          }</article>`;
         })
         .join("") ||
       '<p class="empty">表示対象のタスクはありません。検索条件を確認してください。</p>';
@@ -467,6 +475,8 @@ function initialize() {
     )
       return;
     const id = archiveId ?? button.dataset.saveStatus!;
+    if (!data.tasks?.some((task) => task.id === id && task.can_update === true))
+      return;
     const payload = archiveId
       ? { archived: archive }
       : {

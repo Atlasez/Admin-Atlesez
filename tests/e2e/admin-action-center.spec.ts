@@ -430,3 +430,55 @@ test("選択したタスクを一括完了し、直後に元へ戻せる", async
     ),
   ).toHaveLength(2);
 });
+
+test.describe("要対応一覧の期限タイムゾーン", () => {
+  test.use({ timezoneId: "America/New_York" });
+
+  test("閲覧者のタイムゾーンを送信し締切の現地時刻を保って表示する", async ({
+    page,
+  }) => {
+    await mockShell(page);
+    const zones: string[] = [];
+    await page.route("**/api/admin/action-center*", async (route) => {
+      zones.push(
+        new URL(route.request().url()).searchParams.get("timezone") ?? "",
+      );
+      await route.fulfill({
+        json: {
+          counts: { today: 1, dueSoon: 0, approvals: 0 },
+          items: [
+            {
+              id: "task:zone",
+              kind: "task",
+              title: "Tokyo締切",
+              detail: "",
+              href: "/admin/task-detail/?task=zone",
+              status: "open",
+              priority: "urgent",
+              updatedAt: "2026-10-03T09:00:00Z",
+              dueAt: "2026-10-03T18:00",
+              dueTimezone: "Asia/Tokyo",
+              project: "アトラス",
+              subject: null,
+              read: false,
+              actions: [
+                {
+                  entityType: "task",
+                  entityId: "zone",
+                  fromState: "open",
+                  toState: "doing",
+                  label: "着手",
+                },
+              ],
+            },
+          ],
+        },
+      });
+    });
+    await page.goto("admin/action-center/");
+    await expect(page.locator(".item-due")).toHaveText(
+      "期限 2026-10-03 18:00 (Asia/Tokyo)",
+    );
+    expect(zones).toEqual(["America/New_York"]);
+  });
+});

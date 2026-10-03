@@ -179,6 +179,7 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
             title: "記事を査読する",
             status: "open",
             assignee_email: "manager@example.com",
+            can_update: true,
             created_by: "member@example.com",
           },
           {
@@ -187,6 +188,7 @@ test("横断タスク管理で複数プロジェクトを一覧・更新でき�
             title: "名簿を更新する",
             status: "doing",
             assignee_email: "manager@example.com",
+            can_update: true,
             created_by: "manager@example.com",
           },
         ],
@@ -260,6 +262,7 @@ test("完了タスクをアーカイブし、必要なときに復元できる",
                   project_id: "atlas",
                   title: "完了済みタスク",
                   status: "done",
+                  can_update: true,
                   created_by: "manager@example.com",
                   assignee_email: "manager@example.com",
                   ...(archived
@@ -297,6 +300,7 @@ test("横断タスク管理はカーソルで追加読み込みできる", async
           title: "追加ページのタスク",
           status: "open",
           assignee_email: "manager@example.com",
+          can_update: true,
           created_by: "manager@example.com",
         }
       : {
@@ -305,6 +309,7 @@ test("横断タスク管理はカーソルで追加読み込みできる", async
           title: "最初のタスク",
           status: "open",
           assignee_email: "manager@example.com",
+          can_update: true,
           created_by: "manager@example.com",
         };
     await route.fulfill({
@@ -357,6 +362,7 @@ test("タスク一覧の再読み込み要求をまとめ、最新の条件だ�
                 title: "アーカイブ済み",
                 status: "done",
                 archived_at: "2026-09-01T00:00:00.000Z",
+                can_update: true,
                 created_by: "manager@example.com",
                 assignee_email: "manager@example.com",
               },
@@ -639,6 +645,7 @@ test("タスク保存の通信・HTML応答失敗後も再試行でき、作成�
             project_id: "atlas",
             title: "障害試験",
             status: "open",
+            can_update: true,
             assignee_email: "manager@example.com",
           },
         ],
@@ -732,4 +739,59 @@ test("タスク検索はAPIに条件を渡し、全件数と表示件数を区�
   expect(queries.at(-1)?.get("q")).toBe("後半");
   await page.locator("[data-status-filter]").selectOption("doing");
   await expect.poll(() => queries.at(-1)?.get("status")).toBe("doing");
+});
+
+test("横断タスクで閲覧のみのタスクは状態保存とアーカイブを表示しない", async ({
+  page,
+}) => {
+  await baseAdminMocks(page);
+  let writes = 0;
+  await page.route("**/api/admin/operations/tasks/**", async (route) => {
+    writes += 1;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/api/admin/member-tasks**", (route) =>
+    route.fulfill({
+      json: {
+        scope: {
+          email: "member@example.com",
+          isManager: false,
+          memberAccess: true,
+        },
+        projects: [{ id: "atlas", name: "アトラス", role: "member" }],
+        members: [],
+        tasks: [
+          {
+            id: "readonly-task",
+            project_id: "atlas",
+            title: "他のメンバーの完了タスク",
+            status: "done",
+            can_update: false,
+            assigned_to_me: false,
+          },
+          {
+            id: "my-task",
+            project_id: "atlas",
+            title: "自分のタスク",
+            status: "open",
+            can_update: true,
+            assigned_to_me: true,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("admin/member-tasks/?view=all");
+  const readonly = page.locator('[data-task-id="readonly-task"]');
+  await expect(readonly).toContainText("閲覧のみ");
+  await expect(
+    readonly.locator("select, [data-save-status], [data-archive-task]"),
+  ).toHaveCount(0);
+  await expect(
+    readonly.getByRole("link", { name: "詳細・引き継ぎ →" }),
+  ).toHaveAttribute("href", "/admin/task-detail/?task=readonly-task");
+  const own = page.locator('[data-task-id="my-task"]');
+  await own.locator("select").selectOption("doing");
+  await own.getByRole("button", { name: "状態を保存" }).click();
+  await expect.poll(() => writes).toBe(1);
 });

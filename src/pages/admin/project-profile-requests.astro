@@ -2,9 +2,8 @@
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import AdminRetryNotice from "../../components/admin/AdminRetryNotice.astro";
 
-const requestedProject = Astro.url.searchParams.get("project") ?? "atlas";
-const project = requestedProject === "secretariat" ? "secretariat" : requestedProject === "seminar-platform" ? "seminar-platform" : "atlas";
-if (project === "atlas") return Astro.redirect("/admin/profile-requests/?section=atlas", 302);
+// Static output must retain the project-specific request form.
+const project = "atlas";
 ---
 
 <AdminLayout title="運営内自己紹介の承認" description="プロジェクト内プロフィールの変更申請を処理します">
@@ -23,11 +22,12 @@ if (project === "atlas") return Astro.redirect("/admin/profile-requests/?section
 </style>
 
 <script>
+  import { resolveAdminManagementProject } from "../../lib/admin-management-projects";
   import { readAdminApiJson } from "../../lib/admin-api";
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   type RequestRow={id:string;email:string;display_name?:string;current_internal_bio?:string;proposed_internal_bio?:string;status:string;submitted_at:string;review_note?:string};
   type Pagination={nextCursor?:string|null;hasMore?:boolean};
-  const initializeRequests=()=>{const root=document.querySelector<HTMLElement>("[data-request-page]");if(!root||root.dataset.initialized==="true")return;root.dataset.initialized="true";const project=root.dataset.project??"atlas";const status=root.querySelector<HTMLSelectElement>("[data-status]")!;const list=root.querySelector<HTMLElement>("[data-list]")!;const message=root.querySelector<HTMLOutputElement>("[data-message]")!;const loadMore=root.querySelector<HTMLButtonElement>("[data-load-more]")!;const escape=(value:unknown)=>String(value??"").replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]??character));const statusLabel=(value:string)=>value==="pending"?"承認待ち":value==="approved"?"承認済み":"却下済み";const format=(value:string)=>{const date=new Date(value);return Number.isNaN(date.getTime())?"日時不明":new Intl.DateTimeFormat("ja-JP",{dateStyle:"medium",timeStyle:"short"}).format(date)};let rows:RequestRow[]=[];let cursor:string|null=null;let hasMore=false;let loading=false;
+  const initializeRequests=()=>{const root=document.querySelector<HTMLElement>("[data-request-page]");if(!root||root.dataset.initialized==="true")return;root.dataset.initialized="true";const project=resolveAdminManagementProject(new URLSearchParams(location.search).get("project"));if(project==="atlas"){location.replace("/admin/profile-requests/?section=atlas");return}root.dataset.project=project;const status=root.querySelector<HTMLSelectElement>("[data-status]")!;const list=root.querySelector<HTMLElement>("[data-list]")!;const message=root.querySelector<HTMLOutputElement>("[data-message]")!;const loadMore=root.querySelector<HTMLButtonElement>("[data-load-more]")!;const escape=(value:unknown)=>String(value??"").replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]??character));const statusLabel=(value:string)=>value==="pending"?"承認待ち":value==="approved"?"承認済み":"却下済み";const format=(value:string)=>{const date=new Date(value);return Number.isNaN(date.getTime())?"日時不明":new Intl.DateTimeFormat("ja-JP",{dateStyle:"medium",timeStyle:"short"}).format(date)};let rows:RequestRow[]=[];let cursor:string|null=null;let hasMore=false;let loading=false;
     const render=()=>{list.innerHTML=rows.length?rows.map(row=>`<article class="request"><div class="request-heading"><div><h2>${escape(row.display_name||row.email)}</h2><small>${escape(row.email)} ・ ${escape(format(row.submitted_at))}</small></div><span>${statusLabel(row.status)}</span></div><div class="comparison"><div><h3>現在の自己紹介</h3><p>${escape(row.current_internal_bio)||"未登録"}</p></div><div><h3>申請内容</h3><p>${escape(row.proposed_internal_bio)||"未登録"}</p></div></div>${row.status==="pending"?`<div class="review"><label>承認・却下メモ<input class="review-note" data-note="${escape(row.id)}" maxlength="2000" /></label><div class="review-actions"><button type="button" class="approve" data-review="approve" data-id="${escape(row.id)}">承認</button><button type="button" class="reject" data-review="reject" data-id="${escape(row.id)}">却下</button></div></div>`:row.review_note?`<small>処理メモ：${escape(row.review_note)}</small>`:""}</article>`).join(""):"<p class=\"empty\">この状態の申請はありません。</p>";loadMore.hidden=!hasMore;loadMore.disabled=loading;loadMore.textContent=loading?"読み込み中…":"さらに読み込む"};
     let load:(reset?:boolean)=>Promise<void>;
     const retry=createAdminLoadRetry(root,()=>load(true),"申請を読み込めませんでした。");
