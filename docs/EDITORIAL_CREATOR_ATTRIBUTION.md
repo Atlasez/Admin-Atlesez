@@ -1,0 +1,32 @@
+# 取り込み記事の作成主体
+
+## データの意味
+
+`editorial_documents.creator_kind`を記事の作成主体として保存する。`organization`は「Atlasez運営」、`person`は従来の個人作成者として表示する。組織の記事には個人の作成者アバターを表示しない。
+
+`created_by`は従来から権限判定にも使う登録担当者の記録として保持する。`updated_by`、編集履歴、カタログの`registered_by`、本文、状態、権限は変更しない。個人の執筆数・個人作業一覧には組織の記事を含めない。
+
+公開記事を新規に運営へ取り込む際は`organization`を保存する。個人の新規原稿・更新案は既定値`person`とし、既存原稿へのリンクはその作成主体を維持する。カタログ観測・同じ原稿への再登録は取り込み方式の証跡を保持する。
+
+## 既存記事の識別
+
+migration `0124_editorial_document_creator_kind.sql`は、カタログ取り込み専用の決定的IDを持つ正規原稿を対象とする。UUIDのversion形状だけを証拠にしない。適用前に、全候補のIDが元のカタログ`identity_key`のSHA-256から生成したIDに完全一致することを検証する。
+
+現在の記事分類が変更されていても、取り込み時のカタログidentityで検証する。`registration_method`は過去の観測で上書きされているため、それだけでは判定しない。出典IDがある個人原稿、更新案、由来を確定できない旧UUIDv4原稿は組織へ変更しない。
+
+## 本番適用の順序
+
+1. PRでコード・migration・対象条件・検証結果をレビューし、CI成功後にmainへマージする。
+2. main CIと通常のADMIN deploy検証jobが成功したことを確認する。production Environment承認はmigration完了後に行う。
+3. 固定Account `812021e62fa20465950b61be55dfe064`、D1 `atlasez-reports`、`wrangler.admin.jsonc`を指定し、所有者限定のリポジトリ外ディレクトリへ直前のD1 SQL exportを取得する。exportはchmod600とし、内容をログ・Issue・GitHubへ載せない。
+4. `node scripts/verify-d1-export.mjs /absolute/private/export.sql`で復元・整合性を検証し、`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/export.sql`で全候補の完全hash一致、全既存列・カタログ不変性を検証する。
+5. cleanなレビュー済みmain checkoutで、固定Accountとconfigを指定して`wrangler d1 migrations list`を確認する。未適用が0124だけであること、直前の読み取りで候補ID集合が検証exportと一致することを確認し、0124を適用する。想定外の候補・migration・不整合があれば停止してIssueへ記録する。
+6. 適用後も非公開exportを取り、既存原稿の全列（追加したcreator_kind以外）・カタログ・件数が変わらないこととDB整合性を照合する。旧Workerは追加列と共存する。
+7. production Environmentを承認し、通常のGitHub Actions経路で新Workerを配信する。main SHA・Worker Version・100%配信・本番build-info・認証済みChromeの表示を確認する。
+8. 配信後にも新しい非公開exportを取得し、`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/after-deploy.sql --verify-applied`で全候補の完全hashと組織主体を検証する。移行後から旧Workerの配信終了までに新規取り込みがあれば個人の既定値で作られる可能性がある。組織でない確定候補が残る場合は完了扱いにせず、そのsnapshotで確定したIDだけを補正する追補migrationを別PRでレビューし、適用後に再監査する。取り込みや編集を行う利用者がいないという推測では省略しない。
+
+適用するのはレビュー済みmigrationであり、記事ごとの未レビューの直接更新は行わない。通常deploy workflowへ自動migrationを追加しない。
+
+## 復旧
+
+問題があれば本番反映を停止する。コードは修正・revert PRを同じ通常経路で反映し、互換性のある追加列は残す。作成主体のデータを戻す必要がある場合は、適用直前exportで完全hashを検証したIDだけを対象に`creator_kind`を戻す別のレビュー済みmigrationを用意する。以後に取り込んだ記事や編集を消さない。データベース全体の復元や列の削除を通常の復旧に使わない。

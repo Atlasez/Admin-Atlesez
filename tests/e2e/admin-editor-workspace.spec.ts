@@ -1149,6 +1149,75 @@ test("記事の初回作成者と編集者アイコンを表示し、プレビ�
   );
 });
 
+for (const [creatorKind, expectedCreator] of [
+  ["organization", "Atlasez運営"],
+  ["person", "取り込み実行者の個人名"],
+] as const) {
+  test(`${creatorKind}の作成主体と個人の編集履歴を分けて表示する`, async ({
+    page,
+  }) => {
+    const creator = "取り込み実行者の個人名";
+    const latestEditor = "編集担当者";
+    const revisionEditor = "以前の編集担当者";
+    const document = {
+      ...documentItem,
+      source_article_id: "mathematics/group-theory/group-definition",
+      creator_kind: creatorKind,
+      created_by_display_name: creator,
+      updated_by: "bob@example.com",
+      updated_by_display_name: latestEditor,
+      updated_by_avatar_url: "/images/editor-provenance-bob.svg",
+    };
+    await mockAdminApi(page, undefined, document);
+    await page.route("**/api/admin/editor/documents/doc-1/revisions", (route) =>
+      route.fulfill({
+        json: {
+          revisions: [
+            {
+              id: "revision-previous",
+              title: document.title,
+              summary: document.summary,
+              body: document.body,
+              status: document.status,
+              saved_by: "carol@example.com",
+              saved_by_display_name: revisionEditor,
+              saved_by_avatar_url: "/images/editor-provenance-carol.svg",
+              saved_at: "2026-08-19T00:00:00Z",
+            },
+          ],
+          feedbackRequests: [],
+        },
+      }),
+    );
+    await page.route("**/images/editor-provenance-*.svg", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>',
+      }),
+    );
+    await page.goto("./admin/editor/?document=doc-1");
+    await expect(page.locator("[data-document-creator]")).toHaveText(
+      `初回作成者：${expectedCreator}`,
+    );
+    if (creatorKind === "organization")
+      await expect(page.locator("[data-document-creator]")).not.toContainText(
+        creator,
+      );
+    const editors = page.locator("[data-document-editors]");
+    await expect(editors.locator(".document-editor-avatar")).toHaveCount(2);
+    await expect(editors).toHaveAttribute(
+      "aria-label",
+      `編集履歴：${latestEditor}、${revisionEditor}`,
+    );
+    await expect(
+      editors.locator(`[aria-label="${latestEditor}が編集"] img`),
+    ).toHaveAttribute("src", document.updated_by_avatar_url);
+    await expect(
+      editors.locator(`[aria-label="${revisionEditor}が編集"] img`),
+    ).toHaveAttribute("src", "/images/editor-provenance-carol.svg");
+  });
+}
+
 test("本文の数式設定とロック操作は必要なときだけ開く", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("./admin/editor/?new=1");

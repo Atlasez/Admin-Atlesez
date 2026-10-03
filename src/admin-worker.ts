@@ -159,6 +159,7 @@ type LatexEngine =
   "uplatex" | "pdflatex" | "xelatex" | "lualatex" | "mathjax" | "katex";
 type EditorialDocument = {
   id: string;
+  creator_kind: "person" | "organization";
   document_kind: "canonical" | "update-proposal";
   base_document_id: string | null;
   base_document_updated_at: string | null;
@@ -4163,7 +4164,7 @@ async function listArchivedAtlasMembers(
         reviewed_at: string | null; submitted_at: string;
       }>(),
       env.REPORTS.prepare(
-        "SELECT COUNT(*) AS count FROM editorial_documents WHERE lower(created_by)=lower(?)",
+        "SELECT COUNT(*) AS count FROM editorial_documents WHERE lower(created_by)=lower(?) AND creator_kind='person'",
       ).bind(email).first<{ count: number }>(),
       env.REPORTS.prepare(
         "SELECT COUNT(*) AS count FROM atlasez_member_applications WHERE lower(email)=lower(?)",
@@ -5446,11 +5447,11 @@ async function updateMemberDiscordRoles(
   return json({ ok: true, provisioning });
 }
 
-const editorialDocumentSelect = `SELECT id, document_kind, base_document_id, base_document_updated_at, source_article_id, subject, category, locale, slug,
+const editorialDocumentSelect = `SELECT id, creator_kind, document_kind, base_document_id, base_document_updated_at, source_article_id, subject, category, locale, slug,
   title, summary, concept_id, concept_name, concept_name_en, concept_is_new, body, writing_memo, latex_engine, status, created_by, updated_by, created_at, updated_at, reviewed_at, published_at, archived_at, archived_by, archive_expires_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at, locked_ranges, article_references,
-  COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1)), ''), created_by) AS created_by_display_name,
+  CASE WHEN creator_kind='organization' THEN 'Atlasez運営' ELSE COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1)), ''), created_by) END AS created_by_display_name,
   COALESCE(NULLIF(TRIM((SELECT p.display_name FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1)), ''), updated_by) AS updated_by_display_name,
-  COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1), '') AS created_by_avatar_url,
+  CASE WHEN creator_kind='organization' THEN '' ELSE COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.created_by) LIMIT 1), '') END AS created_by_avatar_url,
   COALESCE((SELECT p.avatar_url FROM editorial_member_profiles p WHERE lower(p.email)=lower(editorial_documents.updated_by) LIMIT 1), '') AS updated_by_avatar_url
   FROM editorial_documents`;
 
@@ -6059,11 +6060,11 @@ async function listEditorialDocuments(
   }
   const where = filters.length ? ` WHERE ${filters.join(" AND ")}` : "";
   const result = await env.REPORTS.prepare(
-    `SELECT d.id, d.document_kind, d.base_document_id, d.base_document_updated_at, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.latex_engine,
+    `SELECT d.id, d.creator_kind, d.document_kind, d.base_document_id, d.base_document_updated_at, d.source_article_id, d.subject, d.category, d.locale, d.slug, d.title, d.summary, d.concept_id, d.latex_engine,
       d.status, d.created_by, d.updated_by, d.created_at, d.updated_at, d.reviewed_at, d.published_at, d.archived_at, d.archived_by, d.archive_expires_at, d.scheduled_publish_at, d.publication_review_stage,
-      COALESCE(NULLIF(TRIM(cp.display_name), ''), d.created_by) AS created_by_display_name,
+      CASE WHEN d.creator_kind='organization' THEN 'Atlasez運営' ELSE COALESCE(NULLIF(TRIM(cp.display_name), ''), d.created_by) END AS created_by_display_name,
       COALESCE(NULLIF(TRIM(up.display_name), ''), d.updated_by) AS updated_by_display_name,
-      COALESCE(cp.avatar_url, '') AS created_by_avatar_url,
+      CASE WHEN d.creator_kind='organization' THEN '' ELSE COALESCE(cp.avatar_url, '') END AS created_by_avatar_url,
       COALESCE(up.avatar_url, '') AS updated_by_avatar_url,
       publication_pr_number, publication_pr_url, publication_branch, publication_action, publication_requested_at
      FROM editorial_documents d
@@ -6979,9 +6980,9 @@ async function registerPublicArticleInEditorialCatalog(
     const now = new Date().toISOString();
     await env.REPORTS.prepare(
       `INSERT OR IGNORE INTO editorial_documents
-       (id, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
+       (id, creator_kind, source_article_id, subject, category, locale, slug, title, summary, concept_id, body, writing_memo, latex_engine,
         status, created_by, updated_by, created_at, updated_at, reviewed_at, scheduled_publish_at, scheduled_publish_claimed_at, publication_review_stage, publication_review_round, locked_ranges, article_references)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'katex', 'draft', ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, '[]', ?)`,
+       VALUES (?, 'organization', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'katex', 'draft', ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, '[]', ?)`,
     )
       .bind(
         documentId,
@@ -7132,7 +7133,7 @@ async function getPersonalWorkspace(
   const [documents, workspace] = await Promise.all([
     env.REPORTS.prepare(
       `SELECT id, subject, category, title, status, updated_at, published_at, scheduled_publish_at
-       FROM editorial_documents WHERE created_by = ? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 100`,
+       FROM editorial_documents WHERE created_by = ? AND creator_kind='person' AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 100`,
     )
       .bind(scope.email)
       .all<
@@ -17218,7 +17219,7 @@ const upsertEditorialArticleCatalog = async (
        source_body_checksum=excluded.source_body_checksum,
        source_fetched_at=excluded.source_fetched_at,
        source_authority=excluded.source_authority,
-       registration_method=excluded.registration_method,
+       registration_method=CASE WHEN editorial_article_catalog.registration_method='public-article-adoption' AND (excluded.registration_method='catalog-observation' OR (excluded.registration_method='public-article-link' AND excluded.document_id=editorial_article_catalog.document_id)) THEN editorial_article_catalog.registration_method ELSE excluded.registration_method END,
        identity_status=excluded.identity_status`,
   )
     .bind(

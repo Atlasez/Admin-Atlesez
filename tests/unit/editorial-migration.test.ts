@@ -77,6 +77,9 @@ const sameOriginJsonRequest = (
 
 type CatalogDocument = {
   id: string;
+  creator_kind?: "person" | "organization";
+  created_by?: string;
+  updated_by?: string;
   source_article_id: string | null;
   subject: string;
   category: string;
@@ -110,6 +113,7 @@ type CatalogRow = {
   last_seen_at: string;
   registered_at: string | null;
   registered_by: string | null;
+  registration_method?: string;
 };
 
 type CatalogStore = {
@@ -252,6 +256,11 @@ class CatalogStatement {
       if (!this.store.documents.some((document) => document.id === id))
         this.store.documents.push({
           id: String(id),
+          creator_kind: this.query.includes("'organization'")
+            ? "organization"
+            : "person",
+          created_by: String(createdBy),
+          updated_by: String(updatedBy),
           source_article_id: String(sourceArticleId),
           subject: String(subject),
           category: String(category),
@@ -303,7 +312,21 @@ class CatalogStatement {
         lastSeenAt,
         registeredAt,
         registeredBy,
+        ,
+        ,
+        ,
+        ,
+        ,
+        ,
+        ,
+        registrationMethod,
       ] = this.values;
+      const previous = this.store.rows.get(String(path));
+      const preserveMethod =
+        previous?.registration_method === "public-article-adoption" &&
+        (registrationMethod === "catalog-observation" ||
+          (registrationMethod === "public-article-link" &&
+            documentId === previous.document_id));
       this.store.rows.set(String(path), {
         path: String(path),
         identity_key: String(identityKey),
@@ -318,10 +341,19 @@ class CatalogStatement {
         summary: String(summary),
         concept_id: String(conceptId),
         public_status: "published",
-        document_id: documentId ? String(documentId) : null,
+        document_id: documentId
+          ? String(documentId)
+          : (previous?.document_id ?? null),
         last_seen_at: String(lastSeenAt),
-        registered_at: registeredAt ? String(registeredAt) : null,
-        registered_by: registeredBy ? String(registeredBy) : null,
+        registered_at: registeredAt
+          ? String(registeredAt)
+          : (previous?.registered_at ?? null),
+        registered_by: registeredBy
+          ? String(registeredBy)
+          : (previous?.registered_by ?? null),
+        registration_method: preserveMethod
+          ? previous.registration_method
+          : String(registrationMethod),
       });
     }
 
@@ -433,6 +465,8 @@ describe("既存公開記事の運営原稿移行契約", () => {
     expect(insert?.values).toContain(importedArticle.sourceArticleId);
     expect(insert?.values).toContain(importedArticle.slug);
     expect(insert?.values).toContain("draft");
+    expect(insert?.query).not.toContain("'organization'");
+    expect(insert?.values).toContain(baseEnv.ADMIN_LOCAL_EMAIL);
     // Import/save must not call the publication endpoint or set published_at.
     expect(calls.some((call) => call.query.includes("published_at"))).toBe(
       false,
@@ -626,6 +660,7 @@ describe("既存公開記事の運営原稿移行契約", () => {
       call.query.includes("document_kind, base_document_id"),
     );
     expect(insert?.query).toContain("'update-proposal'");
+    expect(insert?.query).not.toContain("'organization'");
     expect(insert?.values).toContain(canonical.id);
   });
 
@@ -777,6 +812,19 @@ describe("既存公開記事の運営原稿移行契約", () => {
         public_status: "published",
       });
       expect(store.documents).toHaveLength(1);
+      expect(store.documents[0]).toMatchObject({
+        creator_kind: "organization",
+        created_by: baseEnv.ADMIN_LOCAL_EMAIL,
+        updated_by: baseEnv.ADMIN_LOCAL_EMAIL,
+      });
+      expect([...store.rows.values()][0].registration_method).toBe(
+        "public-article-adoption",
+      );
+      expect(
+        calls
+          .filter((call) => call.query.startsWith("UPDATE editorial_documents"))
+          .every((call) => !call.query.includes("creator_kind")),
+      ).toBe(true);
       expect(store.rows.size).toBe(1);
       expect(
         calls.filter((call) =>
@@ -788,8 +836,68 @@ describe("既存公開記事の運営原稿移行契約", () => {
           call.query.includes("INSERT OR IGNORE INTO editorial_documents"),
         )?.query,
       ).toContain("NULL, NULL, NULL, NULL, 0, '[]', ?");
+      expect(
+        calls.find((call) =>
+          call.query.includes("INSERT OR IGNORE INTO editorial_documents"),
+        )?.query,
+      ).toContain("VALUES (?, 'organization'");
       expect(githubRequests.some((request) => request.method === "PUT")).toBe(
         false,
+      );
+    });
+  });
+
+  it("既存の個人原稿を公開記事へ紐付けても初回作成主体を変更しない", async () => {
+    const document: CatalogDocument = {
+      id: "12345678-1234-4234-8234-123456789abc",
+      creator_kind: "person",
+      created_by: "original-author@example.com",
+      updated_by: "original-author@example.com",
+      source_article_id: null,
+      subject: importedArticle.subject,
+      category: importedArticle.category,
+      locale: importedArticle.locale,
+      slug: importedArticle.slug,
+      title: importedArticle.title,
+      summary: "個人原稿",
+      concept_id: importedArticle.conceptId,
+      body: "個人が執筆した本文",
+      status: "draft",
+      published_at: null,
+      created_at: "2026-08-30T00:00:00Z",
+      updated_at: "2026-08-30T00:00:00Z",
+    };
+    const store: CatalogStore = { documents: [document], rows: new Map() };
+    const calls: SqlCall[] = [];
+    await withSuccessfulGithubApi(async () => {
+      const response = await worker.fetch(
+        sameOriginJsonRequest("/api/admin/editor/catalog/register", {
+          locale: document.locale,
+          subject: document.subject,
+          category: document.category,
+          slug: document.slug,
+        }),
+        catalogEnvironment(store, calls) as never,
+      );
+      expect(response.status).toBe(200);
+      expect(document).toMatchObject({
+        creator_kind: "person",
+        created_by: "original-author@example.com",
+        body: "個人が執筆した本文",
+        source_article_id: importedArticle.sourceArticleId,
+      });
+      expect(
+        calls.some((call) =>
+          call.query.includes("INSERT OR IGNORE INTO editorial_documents"),
+        ),
+      ).toBe(false);
+      expect(
+        calls.find((call) =>
+          call.query.startsWith("UPDATE editorial_documents"),
+        )?.query,
+      ).not.toContain("creator_kind");
+      expect([...store.rows.values()][0].registration_method).toBe(
+        "public-article-link",
       );
     });
   });
