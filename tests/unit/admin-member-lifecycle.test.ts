@@ -49,7 +49,7 @@ const createEnvironment = () => {
     CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_email TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, target_label TEXT NOT NULL, summary TEXT NOT NULL, details_json TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE admin_permission_audit_log (id TEXT PRIMARY KEY, actor_email TEXT NOT NULL, target_email TEXT NOT NULL, action TEXT NOT NULL, before_subjects TEXT NOT NULL, after_subjects TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE editorial_member_profile_change_requests (id TEXT PRIMARY KEY, email TEXT NOT NULL, status TEXT NOT NULL, reviewed_by TEXT, reviewed_at TEXT, submitted_at TEXT NOT NULL);
-    CREATE TABLE editorial_documents (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_by TEXT NOT NULL);
+    CREATE TABLE editorial_documents (id TEXT PRIMARY KEY, title TEXT NOT NULL, created_by TEXT NOT NULL, creator_kind TEXT NOT NULL DEFAULT 'person' CHECK (creator_kind IN ('person','organization')));
     CREATE TABLE atlasez_member_applications (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL);
     INSERT INTO report_admin_permissions VALUES ('ukyoukay0@gmail.com','*'),('member@example.org','mathematics');
     INSERT INTO editorial_workflow_roles VALUES ('member@example.org','subject-coordinator','mathematics','2026-09-01T00:00:00.000Z','manager@example.org');
@@ -58,7 +58,7 @@ const createEnvironment = () => {
     INSERT INTO atlasez_project_memberships VALUES ('atlas','member@example.org','member','2026-09-01T00:00:00.000Z');
     INSERT INTO atlasez_member_discord_role_assignments VALUES ('member@example.org','123456789012345678',1,'2026-09-01T00:00:00.000Z','manager@example.org');
     INSERT INTO editorial_member_profiles VALUES ('member@example.org','保存されるプロフィール','本文','https://images.example.org/avatar.png','大学','1年','数学','student','日本','Asia/Tokyo','2026-09-01T00:00:00.000Z');
-    INSERT INTO editorial_documents VALUES ('document-1','保存される記事','member@example.org');
+    INSERT INTO editorial_documents (id,title,created_by) VALUES ('document-1','保存される記事','member@example.org');
     INSERT INTO atlasez_member_applications VALUES ('application-1','member@example.org','保存される応募');
   `);
 
