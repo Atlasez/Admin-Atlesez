@@ -4,7 +4,15 @@ import { describe, expect, it } from "vitest";
 
 type VerificationWorkflow = {
   on?: Record<string, unknown>;
-  jobs?: { verify?: { steps?: Array<{ run?: string }> } };
+  jobs?: {
+    verify?: {
+      steps?: Array<{
+        run?: string;
+        with?: { "fetch-depth"?: number };
+        env?: Record<string, string>;
+      }>;
+    };
+  };
 };
 
 type DeploymentWorkflow = {
@@ -12,7 +20,11 @@ type DeploymentWorkflow = {
     workflow_run?: { workflows?: string[]; types?: string[] };
   };
   jobs?: {
-    verify?: { steps?: Array<{ run?: string }>; if?: string };
+    verify?: {
+      outputs?: Record<string, string>;
+      steps?: Array<{ run?: string; id?: string }>;
+      if?: string;
+    };
     deploy?: {
       environment?: string;
       env?: Record<string, string>;
@@ -67,6 +79,11 @@ describe("ADMIN production verification workflow", () => {
         step.run?.includes("scripts/verify-live-admin-production.mjs"),
       ),
     ).toBe(true);
+    const liveVerification = workflow.jobs?.verify?.steps?.find((step) =>
+      step.run?.includes("scripts/verify-live-admin-production.mjs"),
+    );
+    expect(liveVerification?.env?.ALLOW_AUDIT_ONLY_ADVANCE).toBe("true");
+    expect(workflow.jobs?.verify?.steps?.[1]?.with?.["fetch-depth"]).toBe(0);
   });
 
   it("deploys only verified main builds behind the production environment gate", () => {
@@ -93,6 +110,19 @@ describe("ADMIN production verification workflow", () => {
     }
 
     expect(deploymentWorkflow.jobs?.deploy?.needs).toBe("verify");
+    expect(deploymentWorkflow.jobs?.verify?.outputs?.deploy_required).toBe(
+      "${{ steps.classify.outputs.deploy_required }}",
+    );
+    expect(deploymentWorkflow.jobs?.deploy?.if).toContain(
+      "needs.verify.outputs.deploy_required == 'true'",
+    );
+    expect(
+      deploymentWorkflow.jobs?.verify?.steps?.some(
+        (step) =>
+          step.id === "classify" &&
+          step.run === "node scripts/classify-admin-deployment.mjs",
+      ),
+    ).toBe(true);
     expect(deploymentWorkflow.jobs?.deploy?.environment).toBe("production");
     expect(deploymentWorkflow.jobs?.deploy?.env).not.toHaveProperty(
       "CLOUDFLARE_API_TOKEN",

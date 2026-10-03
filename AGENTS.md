@@ -24,8 +24,8 @@
 - `npm run verify:deploy-config`、対象に合ったbuild設定での `npm run build`、`npm run verify:build-info` を通してからデプロイする。ADMINは `ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/`、公開サイトは `SITE_URL=https://atlasez.org BASE_PATH=/` を使う。
 - 手動の緊急デプロイはGitHub Actionsが使えず、レビュー済みmain commitを本番へ出す明示承認がある場合だけ許可する。cleanな`main` checkoutから、承認済みSHAをリテラルで`DEPLOY_MAIN_SHA`に指定する。スクリプトはbranch、remote main由来、未コミット変更、SHA一致を検証し、feature branch・detached HEAD・SHA省略を停止する。
 - GitHub Actionsのdeploy workflowではD1 migrationを自動適用しない。DB変更はバックアップ・PRレビュー・明示したmigration手順で別に扱う。
-- デプロイ後はGitHub Actions run、Cloudflare Version/DeploymentのWorker名・100%配信・時刻を照合し、公開`build-info.json`のSHA一致と認証済みChromeで主要ADMIN画面を確認する。
-- SHA不一致、Worker名不一致、想定外のVersion、古い画面、CI失敗を見つけたら停止する。rollback、promote、cache purge、Route変更を推測で実行しない。
+- デプロイ後はGitHub Actions run、Cloudflare Version/DeploymentのWorker名・100%配信・時刻を照合し、公開`build-info.json`のSHA一致と認証済みChromeで主要ADMIN画面を確認する。同期PRが`docs/deployments/cloudflare-latest.json`だけを変更した場合はWorker deployを省略し、build-infoが直前のデプロイSHAを指すことを許容する。
+- 同期記録以外のSHA不一致、Worker名不一致、想定外のVersion、古い画面、CI失敗を見つけたら停止する。rollback、promote、cache purge、Route変更を推測で実行しない。
 - 既存の未コミット変更を破棄、reset、上書きしない。
 
 ## 通常の変更フロー
@@ -42,6 +42,7 @@
 
 - `.github/workflows/cloudflare-deployment-sync.yml`が15分ごとにCloudflareのDeployment/Versionと公開`build-info.json`を読み取り、差分がある場合だけGitHubへ同期PRを作る。
 - 同期PRは本番コードの正本ではなく監査証跡である。`Source: Unknown`、SHA不一致、`build-info.json`欠落は自動Mergeせず、インシデントとして調査する。
+- 同期PRのMergeで変更されるのが`docs/deployments/cloudflare-latest.json`だけならWorker deployは省略する。直前のbuild-info SHAからmainまでの差分に他のファイルが含まれれば、通常どおりdeploy・SHA検証を行う。
 - 同期WorkflowはCloudflareへ書き込まない。Cloudflare API TokenはWorkers Scripts Readだけを持つ読み取り専用Tokenにする。
 
 GitHub Actionsのdeploy workflow、production Environment、Secret、CI、SHA照合のいずれかが使えない・失敗する場合は変更を本番へ出さず、PRまたはIssueに停止理由を記録する。Cloudflare Workers Buildsを再び使う場合は、先にPRで運用方針を変更し、GitHub Actions経路を無効化してから接続する。
