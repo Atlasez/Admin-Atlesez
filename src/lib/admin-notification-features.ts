@@ -96,7 +96,7 @@ export function notificationSourceMetadata(sql: string) {
         : kind === "publication-review"
           ? "'publication-review-' || s.id || '-' || s.publication_review_stage"
           : `'${kind}-' || s.id`;
-    return { id, time, kind };
+    return { id, time, kind: `'${kind}'` };
   }
   return null;
 }

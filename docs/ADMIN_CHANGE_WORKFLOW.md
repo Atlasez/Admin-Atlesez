@@ -55,7 +55,7 @@ PR本文に必ず次を記載する。
 
 ## 5. 本番デプロイ
 
-Cloudflare Workers BuildsをADMIN本番の唯一の通常デプロイ経路とし、Production branchを`main`に固定する。別のGitHub Actions本番デプロイ経路を追加・併用しない。Build commandとDeploy commandは次の固定値から変更しない。
+`.github/workflows/deploy-admin-from-github.yml`をADMIN本番の唯一の通常デプロイ経路とする。mainのCI成功後に`production` Environmentの承認が必要で、workflowはmainのHEADが対象SHAから進んでいないことを確認してから配信する。Cloudflare Workers Buildsを併用しない。Build設定は次に固定する。
 
 ```bash
 # Build command
@@ -65,7 +65,7 @@ npm ci && ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PAT
 npx wrangler deploy --config wrangler.admin.jsonc --keep-vars
 ```
 
-Cloudflare Workers Buildsの接続不良中は本番反映を停止し、既存のGitHub Actions手動workflowを代替経路として実行しない。緊急時に限り、[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認を得て、`npm run deploy:admin`をcleanな`main` checkoutから実行できる。このローカルガードは明示承認SHA、remote main由来、clean worktree、ADMIN向けbuild-infoを検証する。SHAはその場でHEADから生成せず、レビュー済みmain commitに対して明示承認された40桁値を指定する。
+PRのCI成功後にmainへマージし、main pushに対するCI全成功後にGitHub Actionsのdeploy workflowを起動する。production Environment承認後に配信する。WorkflowはD1 migrationを実行せず、build artifactのSHA・Worker名・100%配信・公開build-infoを検証する。Cloudflare Workers Buildsを再接続する場合は、GitHub Actions deployを先に止め、運用方針をPRで切り替える。GitHub Actionsも利用できない緊急時に限り、[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)の承認を得て、`npm run deploy:admin`をcleanな`main` checkoutから実行できる。このローカルガードは明示承認SHA、remote main由来、clean worktree、ADMIN向けbuild-infoを検証する。SHAはその場でHEADから生成せず、レビュー済みmain commitに対して明示承認された40桁値を指定する。
 
 デプロイ後、次を確認してから完了とする。
 
@@ -79,14 +79,14 @@ npx wrangler versions list --config wrangler.admin.jsonc
 
 ## 6. 現在のCloudflare連携障害時
 
-Cloudflare DashboardのGit repository接続が「内部エラー」で失敗している期間は、通常の本番デプロイを行わない。Cloudflareの現在のVersionが手動Uploadで、GitHub SHAと自動的に結び付かないためである。
+Cloudflare DashboardのGit repository接続が「内部エラー」で失敗している間は、承認済みGitHub Actions経路を使う。Cloudflare BuildsとActionsの二重配信は避け、Workers Builds接続を再試行する前にGitHub Actions deployを無効化する。
 
-- PRをマージしただけでは本番反映済みと報告しない。
+- main merge後はdeploy workflowとproduction Environmentの承認を確認し、検証完了までは本番反映済みと報告しない。
 - `main`でないbranchから`wrangler deploy`しない。
-- GitHub Actionsの手動deploy workflowを暫定経路として実行しない。
+- GitHub Actionsのdeploy workflowが失敗したらrun logとIssueを記録する。D1 migration、別worker、Cloudflare Editorを使って穴埋めしない。
 - Dashboard Editor、Versionsのpromote、rollback、cache purgeで穴埋めしない。
 - 緊急手動デプロイが必要な場合は、対象SHA、理由、承認者、影響、復旧方法をIssueに記録してから別途明示承認を得て、cleanでremote main由来の`main` checkoutから`npm run deploy:admin`を実行する。
-- Workers Builds復旧後は、最初の1回を監視デプロイとし、SHA、Version ID、時刻、Chrome結果を記録する。
+- GitHub Actionsが復旧した後は、最初の1回を監視デプロイとし、SHA、Version ID、時刻、Chrome結果を記録する。
 
 ## 7. 本番相当のライブスモーク
 

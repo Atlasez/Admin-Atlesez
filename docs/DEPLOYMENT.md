@@ -12,7 +12,7 @@
 1. `main`へマージする前にCIを通す
 2. ローカルで `npm run verify:deploy-config` を実行する
 3. 公開サイトは既存の公開サイト向け手順に従う。
-4. 運営用サイトはGitHub `main`をソースにしたCloudflare Workers Buildsを通常経路とする。`npm run deploy:admin`は通常手順ではなく、ADMIN緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
+4. 運営用サイトはmainのCI成功後にproduction Environment承認を通る`.github/workflows/deploy-admin-from-github.yml`で反映する。`npm run deploy:admin`はGitHub Actionsが使えない緊急時のローカル例外手順（[`ADMIN_DEPLOYMENT_POLICY.md`](ADMIN_DEPLOYMENT_POLICY.md)）に限る。
 5. Chromeで公開サイト、`/admin/portal/`、`/admin/member-calendar/`、`/admin/manage/?project=atlas`を確認する
 
 本番Worker名・アカウント・ルート・D1は設定ファイルに固定し、`npm run verify:deploy-config`で確認します。ADMINのローカル緊急deployは、これに加えてmain由来の承認SHAとbuild-infoを検証します。
@@ -26,13 +26,13 @@ SITE_URL=https://atlasez.org
 BASE_PATH=/
 ```
 
-ADMINのCloudflare Workers Buildsは次を固定します。
+ADMINのproduction buildは次を固定します。
 
 ```bash
 ATLASEZ_BUILD_TARGET=admin SITE_URL=https://admin.atlasez.org BASE_PATH=/
 ```
 
-`npm run deploy:admin`はこのADMIN設定を使い、デプロイ前にcleanな`main`・remote main由来・明示承認SHA一致・build-info SHA一致を検証します。ローカルからの実デプロイは緊急例外として別途明示承認された場合以外は行いません。
+GitHub ActionsはこのADMIN設定でビルドし、成果物のcommit SHA、`main`の先行、Cloudflare Versionの100%配信、公開`build-info.json`を照合します。D1 migrationは通常deployに含めません。`npm run deploy:admin`はcleanな`main`・remote main由来・明示承認SHA一致を検証し、ローカルからの実デプロイは緊急例外として別途明示承認された場合だけ行います。
 
 `main`以外のプレビューは検索インデックスに入らないよう`noindex`になります。公開前に本番URLへ向けてビルドし直してください。
 

@@ -17,7 +17,7 @@
 1. `0120_publication_review_started_at.sql`（統計改善PR #481を先に導入する場合）
 2. `0121_editorial_task_templates.sql`
 3. `0122_admin_notification_preferences.sql`
-4. CIとレビューが完了したmainをWorkers Buildsから反映。
+4. mainのCIとレビュー完了後、GitHub Actionsのproduction Environment承認を通して反映。deploy workflowはmigrationを実行しない。
 
 0121はテンプレート、0122は本人の通知設定・再表示予約の新規テーブルだけを作成し、既存行を更新しない。0121未適用時は定期作成をスキップしてAPIは503を返す。0122未適用時は従来の通知一覧を表示して設定操作を無効にする。0122内の2テーブルを両方適用してから新しい通知設定を利用する。
 
