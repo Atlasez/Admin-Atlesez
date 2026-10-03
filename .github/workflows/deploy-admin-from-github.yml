@@ -24,6 +24,9 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      deploy_required: ${{ steps.classify.outputs.deploy_required }}
+      deploy_reason: ${{ steps.classify.outputs.reason }}
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
@@ -44,6 +47,12 @@ jobs:
 
       - name: Verify deployment target
         run: npm run verify:deploy-config
+
+      - name: Classify changes since the live ADMIN build
+        id: classify
+        env:
+          TARGET_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: node scripts/classify-admin-deployment.mjs
 
       - name: Type and content checks
         run: |
@@ -106,7 +115,8 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' &&
+      needs.verify.outputs.deploy_required == 'true'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30

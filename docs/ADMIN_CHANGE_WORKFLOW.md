@@ -55,7 +55,7 @@ PR本文に必ず次を記載する。
 
 ## 5. 本番デプロイ
 
-`.github/workflows/deploy-admin-from-github.yml`をADMIN本番の唯一の通常デプロイ経路とする。mainのCI成功後に`production` Environmentの承認が必要で、workflowはmainのHEADが対象SHAから進んでいないことを確認してから配信する。Cloudflare Workers Buildsを併用しない。Build設定は次に固定する。
+`.github/workflows/deploy-admin-from-github.yml`をADMIN本番の唯一の通常デプロイ経路とする。mainのCI成功後に`production` Environmentの承認が必要で、workflowはmainのHEADが対象SHAから進んでいないことを確認してから配信する。変更が`docs/deployments/cloudflare-latest.json`だけなら本番配信を省略する。Cloudflare Workers Buildsを併用しない。Build設定は次に固定する。
 
 ```bash
 # Build command
@@ -75,7 +75,7 @@ npx wrangler deployments list --config wrangler.admin.jsonc
 npx wrangler versions list --config wrangler.admin.jsonc
 ```
 
-`build-info.json.commit`がマージした`main`のSHAと一致し、Versionが`atlasez-admin`のProductionへ100%配信されていなければ停止する。
+`build-info.json.commit`がマージした`main`のSHAと一致し、Versionが`atlasez-admin`のProductionへ100%配信されていなければ停止する。例外は監査JSONだけを変更したMergeで、この場合はbuild-infoが直前のコードdeploy SHAを指し続けることを確認する。
 
 ## 6. 現在のCloudflare連携障害時
 
