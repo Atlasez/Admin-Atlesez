@@ -10,6 +10,12 @@ if (!path?.startsWith("/"))
   throw new Error("所有者限定のD1 export絶対パスを指定してください。");
 if (statSync(path).mode & 0o077)
   throw new Error("D1 exportにはchmod 600が必要です。");
+const legacyImports = JSON.parse(
+  readFileSync(
+    new URL("./editorial-legacy-imports.json", import.meta.url),
+    "utf8",
+  ),
+);
 const db = new DatabaseSync(":memory:");
 try {
   db.exec("PRAGMA foreign_keys=OFF");
@@ -36,6 +42,30 @@ try {
       );
     ids.add(row.id);
   }
+  for (const legacy of legacyImports) {
+    const document = db
+      .prepare("SELECT * FROM editorial_documents WHERE id=?")
+      .get(legacy.id);
+    if (!document) continue;
+    if (
+      document.document_kind !== "canonical" ||
+      document.source_article_id !== legacy.sourceArticleId ||
+      document.created_at !== legacy.createdAt
+    )
+      throw new Error(
+        "旧取り込み記事の確証metadataが一致しません。migrationを停止してください。",
+      );
+    if (
+      !verifyApplied &&
+      document.creator_kind !== "organization" &&
+      createHash("sha256").update(document.body.trim()).digest("hex") !==
+        legacy.sourceBodySha256
+    )
+      throw new Error(
+        "旧取り込み記事の公開本文hashが一致しません。migrationを停止してください。",
+      );
+    ids.add(document.id);
+  }
   if (!ids.size)
     throw new Error(
       "確証のある取り込み記事がありません。migrationを停止してください。",
@@ -46,16 +76,31 @@ try {
   const beforeCatalog = db
     .prepare("SELECT * FROM editorial_article_catalog ORDER BY path")
     .all();
-  if (!verifyApplied)
+  if (!verifyApplied) {
+    const hasCreatorKind = db
+      .prepare("PRAGMA table_info(editorial_documents)")
+      .all()
+      .some((column) => column.name === "creator_kind");
+    if (!hasCreatorKind)
+      db.exec(
+        readFileSync(
+          new URL(
+            "../migrations/0124_editorial_document_creator_kind.sql",
+            import.meta.url,
+          ),
+          "utf8",
+        ),
+      );
     db.exec(
       readFileSync(
         new URL(
-          "../migrations/0124_editorial_document_creator_kind.sql",
+          "../migrations/0125_legacy_editorial_document_creators.sql",
           import.meta.url,
         ),
         "utf8",
       ),
     );
+  }
   const after = db
     .prepare("SELECT * FROM editorial_documents ORDER BY id")
     .all();
