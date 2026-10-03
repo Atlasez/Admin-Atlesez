@@ -14,13 +14,17 @@ migration `0124_editorial_document_creator_kind.sql`は、カタログ取り込�
 
 現在の記事分類が変更されていても、取り込み時のカタログidentityで検証する。`registration_method`は過去の観測で上書きされているため、それだけでは判定しない。出典IDがある個人原稿、更新案、由来を確定できない旧UUIDv4原稿は組織へ変更しない。
 
+追加調査で旧方式のUUIDv4取り込み3件を確定した。作成以前の公開main祖先commit `fae16b9828c8f9942c41b77d9230c6f0722229f7`の記事と、sourceArticleId・元identity・本文（当時の保存処理と同じJS trim）が一致した。1件は初期revisionも一致し、他2件はrevisionがない。旧editor/Workerはこの公開本文をUUIDv4と操作者created_byで保存していた。`scripts/editorial-legacy-imports.json`に公開情報だけの証拠と3件の固定IDを保存し、migration0125はcanonical・固定ID・sourceArticleId・作成時刻を全て一致させて作成主体だけ補正する。sourceArticleIdがNULLの旧原稿15件は変更しない。
+
+preflightは未追加のcreator_kind列があれば0124をsimulateし、0125もsimulateする。0124適用済みDBでは0125だけをsimulateする。旧3件が存在すればmetadataを照合し、未補正の記事は本文hashも一致させる。配信後の監査は3件のmetadataを照合してorganizationを確認するが、その後の本文編集・分類変更を妨げない。
+
 ## 本番適用の順序
 
 1. PRでコード・migration・対象条件・検証結果をレビューし、CI成功後にmainへマージする。
 2. main CIと通常のADMIN deploy検証jobが成功したことを確認する。production Environment承認はmigration完了後に行う。
 3. 固定Account `812021e62fa20465950b61be55dfe064`、D1 `atlasez-reports`、`wrangler.admin.jsonc`を指定し、所有者限定のリポジトリ外ディレクトリへ直前のD1 SQL exportを取得する。exportはchmod600とし、内容をログ・Issue・GitHubへ載せない。
 4. `node scripts/verify-d1-export.mjs /absolute/private/export.sql`で復元・整合性を検証し、`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/export.sql`で全候補の完全hash一致、全既存列・カタログ不変性を検証する。
-5. cleanなレビュー済みmain checkoutで、固定Accountとconfigを指定して`wrangler d1 migrations list`を確認する。未適用が0124だけであること、直前の読み取りで候補ID集合が検証exportと一致することを確認し、0124を適用する。想定外の候補・migration・不整合があれば停止してIssueへ記録する。
+5. cleanなレビュー済みmain checkoutで、固定Accountとconfigを指定して`wrangler d1 migrations list`を確認する。未適用migrationが適用回のレビュー済み一覧と完全一致すること、直前の読み取りで候補ID集合が検証exportと一致することを確認し、対象のmigrationだけを適用する。0124・0125はそれぞれ別PRでレビューした。想定外の候補・migration・不整合があれば停止してIssueへ記録する。
 6. 適用後も非公開exportを取り、既存原稿の全列（追加したcreator_kind以外）・カタログ・件数が変わらないこととDB整合性を照合する。旧Workerは追加列と共存する。
 7. production Environmentを承認し、通常のGitHub Actions経路で新Workerを配信する。main SHA・Worker Version・100%配信・本番build-info・認証済みChromeの表示を確認する。
 8. 配信後にも新しい非公開exportを取得し、`node scripts/verify-editorial-creator-backfill.mjs /absolute/private/after-deploy.sql --verify-applied`で全候補の完全hashと組織主体を検証する。移行後から旧Workerの配信終了までに新規取り込みがあれば個人の既定値で作られる可能性がある。組織でない確定候補が残る場合は完了扱いにせず、そのsnapshotで確定したIDだけを補正する追補migrationを別PRでレビューし、適用後に再監査する。取り込みや編集を行う利用者がいないという推測では省略しない。
@@ -30,3 +34,7 @@ migration `0124_editorial_document_creator_kind.sql`は、カタログ取り込�
 ## 復旧
 
 問題があれば本番反映を停止する。コードは修正・revert PRを同じ通常経路で反映し、互換性のある追加列は残す。作成主体のデータを戻す必要がある場合は、適用直前exportで完全hashを検証したIDだけを対象に`creator_kind`を戻す別のレビュー済みmigrationを用意する。以後に取り込んだ記事や編集を消さない。データベース全体の復元や列の削除を通常の復旧に使わない。
+
+## 0125追補の適用
+
+0125は上記3件だけを補正するデータmigrationで、WorkerコードやCloudflare設定を変更しない。別PRのレビュー・CI成功後にmainへマージし、main CI・deploy verify成功、直前backup/preflight成功、pendingが0125だけであることを確認してclean reviewed mainから適用する。前後exportで全既存document列（creator_kind除く）・catalog不変とFK/integrityを照合する。全164取り込み候補のmetadata/fullhash・organizationを監査し、個人原稿28件を維持する。production Environment承認後に通常配信とSHA/100%/Chromeを再確認する。0125の復旧は公開manifestの3IDに限定したcreator_kind補正のレビュー済みmigrationとし、全DB復元はしない。
