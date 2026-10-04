@@ -12,6 +12,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
       <h2 data-start-heading>準備しています</h2>
       <p data-start-message>ログイン情報と参加状況を読み込んでいます。</p>
       <div class="start-actions">
+        <a class="primary-action" data-member-link href="/admin/portal/" hidden>メンバー用サイトへ進む</a>
         <a class="primary-action" data-basic-link href="/apply/?step=basic" hidden>基本情報を入力する</a>
         <a class="primary-action" data-project-link href="/apply/" hidden>参加するプロジェクトを選ぶ</a>
       </div>
@@ -91,6 +92,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
     const startMessage = root.querySelector<HTMLElement>("[data-start-message]")!;
     const basicLink = root.querySelector<HTMLAnchorElement>("[data-basic-link]")!;
     const projectLink = root.querySelector<HTMLAnchorElement>("[data-project-link]")!;
+    const memberLink = root.querySelector<HTMLAnchorElement>("[data-member-link]")!;
     const applicationCard = root.querySelector<HTMLElement>("[data-application-card]")!;
     const discordCard = root.querySelector<HTMLElement>("[data-discord-card]")!;
     const discordStatus = root.querySelector<HTMLElement>("[data-discord-status]")!;
@@ -110,10 +112,16 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         if (!response.ok) throw new Error(data.error ?? "参加状況を読み込めませんでした。");
         const applications = data.applications?.length ? data.applications : data.application ? [data.application] : [];
         const profileComplete = data.basicProfileComplete === true;
+        const isMember = data.stage === "MEMBER";
+        memberLink.hidden = !isMember;
         startStatus.textContent = stageLabels[data.stage ?? "NEW_USER"] ?? "参加準備中";
         if (applications.length) {
           startHeading.textContent = "応募状況を確認できます";
           startMessage.textContent = "複数のプロジェクトへ応募できます。追加で応募する場合は、下のボタンからプロジェクトを選択してください。";
+          if (isMember) {
+            startHeading.textContent = "活動を始められます";
+            startMessage.textContent = "参加先のタスクや予定はメンバー用サイトで確認できます。別のプロジェクトへの応募中も、参加済みのプロジェクトで活動できます。";
+          }
           applicationCard.hidden = false;
           basicLink.hidden = true;
           projectLink.hidden = false;
@@ -139,6 +147,10 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
             "[data-application-message]",
             allRejected
               ? "今回の応募は見送りとなりました。プロジェクトごとの結果をご確認ください。"
+              : hasAccepted
+                ? isMember
+                  ? "受入済みのプロジェクトで活動できます。追加の応募結果はプロジェクトごとにご確認ください。"
+                  : "受入済みです。参加先の設定を運営に確認してください。"
               : "応募を受け付けています。運営からの連絡をお待ちください。",
           );
           discordCard.hidden = false;
@@ -165,6 +177,14 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         }
         applicationCard.hidden = true;
         discordCard.hidden = true;
+        if (isMember) {
+          startHeading.textContent = "活動を始められます";
+          startMessage.textContent = "参加先のタスクや予定はメンバー用サイトで確認できます。参加後の案内でプロフィールや最初の作業も確認しましょう。";
+          basicLink.hidden = true;
+          projectLink.hidden = false;
+          projectLink.textContent = "別のプロジェクトに応募する";
+          return;
+        }
         if (profileComplete) {
           startHeading.textContent = "参加するプロジェクトを選べます";
           startMessage.textContent = "基本情報は登録済みです。参加したいプロジェクトを選んで、必要な項目を入力してください。";
@@ -184,6 +204,7 @@ import ApplicantLayout from "../../layouts/ApplicantLayout.astro";
         startStatus.textContent = "読み込みエラー";
         startHeading.textContent = "参加状況を確認できませんでした";
         startMessage.textContent = message;
+        memberLink.hidden = true;
         basicLink.hidden = false;
         projectLink.hidden = true;
         applicationCard.hidden = true;

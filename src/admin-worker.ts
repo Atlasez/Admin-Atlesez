@@ -806,6 +806,8 @@ type CurrentUserStage = {
   stage: UserStage;
   applicationStatus: string | null;
   projectSlug: string | null;
+  projectId: string | null;
+  projectName: string | null;
   baseProfileComplete: boolean;
   projectProfileComplete: boolean;
   tutorialStep: number;
@@ -1346,18 +1348,34 @@ async function getUserStageForEmail(
       .first<{ display_name: string; bio: string }>(),
   ]);
   const applicationStatus = application?.status ?? null;
-  const projectSlug = application?.project_slug ?? null;
-  const projectId = projectSlug ? onboardingProjectId(projectSlug) : null;
-  const projectProfile =
-    applicationStatus === "accepted" && projectId
-      ? await env.REPORTS.prepare(
-          "SELECT internal_bio FROM editorial_project_member_profiles WHERE project_id=? AND lower(email)=lower(?)",
-        )
-          .bind(projectId, email)
-          .first<{ internal_bio: string }>()
-      : null;
+  const isAdmin =
+    localAdmin || Boolean(permission) || email === primaryAdminEmail(env);
+  const memberships = isAdmin
+    ? []
+    : (await env.REPORTS.prepare(
+      `SELECT m.project_id,p.slug,p.name,pp.internal_bio
+       FROM atlasez_project_memberships m
+       JOIN atlasez_projects p ON p.id=m.project_id
+       LEFT JOIN editorial_project_member_profiles pp ON pp.project_id=m.project_id AND lower(pp.email)=lower(m.email)
+       LEFT JOIN admin_member_lifecycle lifecycle ON lower(lifecycle.email)=lower(m.email)
+       WHERE lower(m.email)=lower(?)
+         AND (m.project_id!='atlas' OR COALESCE(lifecycle.status,'active')!='archived')
+       ORDER BY m.joined_at DESC,m.project_id`,
+      )
+        .bind(email)
+        .all<{
+          project_id: string;
+          slug: string;
+          name: string;
+          internal_bio: string | null;
+        }>()).results ?? [];
+  // 完了済みの所属を優先し、追加応募・二つ目のプロフィール入力で既存利用を止めない。
+  const membership =
+    memberships.find((item) => item.internal_bio?.trim()) ?? memberships[0];
+  const projectSlug = membership?.slug ?? application?.project_slug ?? null;
+  const projectId = membership?.project_id ?? null;
   const tutorial =
-    applicationStatus === "accepted" && projectId
+    projectId
       ? await env.REPORTS.prepare(
           `SELECT tutorial_step,tutorial_completed_at,atlas_writing_practice_step,atlas_writing_practice_completed_at
            FROM atlasez_member_onboarding_progress
@@ -1372,10 +1390,12 @@ async function getUserStageForEmail(
           }>()
       : null;
   const baseProfileComplete = Boolean(profile?.bio?.trim());
-  const projectProfileComplete = Boolean(projectProfile?.internal_bio?.trim());
+  const projectProfileComplete = Boolean(membership?.internal_bio?.trim());
   return {
     applicationStatus,
     projectSlug,
+    projectId,
+    projectName: membership?.name ?? null,
     baseProfileComplete,
     projectProfileComplete,
     tutorialStep: Math.max(0, Number(tutorial?.tutorial_step ?? 0)),
@@ -1394,11 +1414,11 @@ async function getUserStageForEmail(
     ),
     stage: getUserStage({
       applicationStatus,
+      hasMembership: memberships.length > 0,
       profileComplete: baseProfileComplete,
       projectProfileComplete,
       tutorialComplete: Boolean(tutorial?.tutorial_completed_at),
-      isAdmin:
-        localAdmin || Boolean(permission) || email === primaryAdminEmail(env),
+      isAdmin,
     }),
   };
 }
@@ -1430,9 +1450,11 @@ async function getMemberProfileScope(
 ): Promise<AdminScope | Response> {
   const current = await getCurrentUserStage(request, env);
   if (isResponse(current)) return current;
+  if (current.stage === "ADMIN") return getAdminScope(request, env);
   const applicantProfile = await getApplicantProfile(env, current.email);
   if (
-    (current.applicationStatus === "accepted" && current.baseProfileComplete) ||
+    canAccess(current.stage, "member") ||
+    (current.projectId && current.baseProfileComplete) ||
     applicantBasicProfileComplete(applicantProfile)
   )
     return {
@@ -7429,7 +7451,12 @@ async function accessibleOperationProjects(
         `SELECT p.id,p.slug,p.name,p.description,m.role
          FROM atlasez_projects p
          JOIN atlasez_project_memberships m ON m.project_id=p.id
-         WHERE m.email=? ORDER BY p.name,p.id`,
+         WHERE m.email=?
+           AND (p.id!='atlas' OR NOT EXISTS (
+             SELECT 1 FROM admin_member_lifecycle lifecycle
+             WHERE lower(lifecycle.email)=lower(m.email) AND lifecycle.status='archived'
+           ))
+         ORDER BY p.name,p.id`,
       )
         .bind(scope.email)
         .all<OperationProjectAccess>();
@@ -7443,7 +7470,11 @@ async function operationProjectRole(
 ): Promise<string | null> {
   if (scope.isManager) return "manager";
   const membership = await env.REPORTS.prepare(
-    "SELECT role FROM atlasez_project_memberships WHERE project_id=? AND email=?",
+    `SELECT role FROM atlasez_project_memberships WHERE project_id=? AND email=?
+     AND (project_id!='atlas' OR NOT EXISTS (
+       SELECT 1 FROM admin_member_lifecycle lifecycle
+       WHERE lower(lifecycle.email)=lower(atlasez_project_memberships.email) AND lifecycle.status='archived'
+     ))`,
   )
     .bind(projectId, scope.email)
     .first<{ role: string }>();
@@ -9767,7 +9798,12 @@ async function portalOverview(request: Request, env: Env): Promise<Response> {
       ])
     : await Promise.all([
         env.REPORTS.prepare(
-          `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p JOIN atlasez_project_memberships m ON m.project_id=p.id WHERE m.email=? ORDER BY p.name`,
+          `SELECT p.id,p.slug,p.name,p.description,m.role FROM atlasez_projects p
+           JOIN atlasez_project_memberships m ON m.project_id=p.id
+           WHERE m.email=? AND (p.id!='atlas' OR NOT EXISTS (
+             SELECT 1 FROM admin_member_lifecycle lifecycle
+             WHERE lower(lifecycle.email)=lower(m.email) AND lifecycle.status='archived'
+           )) ORDER BY p.name`,
         )
           .bind(scope.email)
           .all(),
@@ -14397,17 +14433,18 @@ async function getOnboarding(request: Request, env: Env): Promise<Response> {
     )
       .bind(current.email)
       .first<{ display_name: string; bio: string }>(),
-    current.projectSlug
+    current.projectId
       ? env.REPORTS.prepare(
           "SELECT internal_bio FROM editorial_project_member_profiles WHERE project_id=? AND lower(email)=lower(?)",
         )
-          .bind(onboardingProjectId(current.projectSlug), current.email)
+          .bind(current.projectId, current.email)
           .first<{ internal_bio: string }>()
       : Promise.resolve(null),
   ]);
   return json({
     email: current.email,
     project:
+      current.projectName ??
       APPLICATION_FORM_LABELS[current.projectSlug ?? ""] ??
       current.projectSlug ??
       "Atlasez",
@@ -14447,10 +14484,10 @@ async function completeOnboarding(
   const internalBio = text(payload.internalBio, 4_000).trim();
   if (!displayName || !bio)
     return json({ error: "表示名と運営外自己紹介を入力してください。" }, 400);
-  if (!current.projectSlug || !APPLICATION_FORM_SLUGS.has(current.projectSlug))
-    return json({ error: "応募先プロジェクトを確認できません。" }, 409);
+  if (!current.projectId)
+    return json({ error: "参加先プロジェクトを確認できません。" }, 409);
   const now = new Date().toISOString();
-  const projectId = onboardingProjectId(current.projectSlug);
+  const projectId = current.projectId;
   const statements = [
     env.REPORTS.prepare(
       `INSERT INTO editorial_member_profiles (email,display_name,bio,updated_at)
@@ -14482,7 +14519,7 @@ async function completeOnboarding(
   return json({
     ok: true,
     stage: internalBio ? "MEMBER" : "ONBOARDING",
-    next: internalBio ? "/applicant/" : "/onboarding/project/",
+    next: internalBio ? "/admin/portal/" : "/onboarding/project/",
   });
 }
 
@@ -14497,16 +14534,17 @@ async function getOnboardingProject(
       { error: "プロジェクト情報を入力できる段階ではありません。" },
       403,
     );
-  const internalProfile = current.projectSlug
+  const internalProfile = current.projectId
     ? await env.REPORTS.prepare(
         "SELECT internal_bio FROM editorial_project_member_profiles WHERE project_id=? AND lower(email)=lower(?)",
       )
-        .bind(onboardingProjectId(current.projectSlug), current.email)
+        .bind(current.projectId, current.email)
         .first<{ internal_bio: string }>()
     : null;
   return json({
     email: current.email,
     project:
+      current.projectName ??
       APPLICATION_FORM_LABELS[current.projectSlug ?? ""] ??
       current.projectSlug ??
       "Atlasez",
@@ -14539,10 +14577,10 @@ async function completeOnboardingProject(
   const internalBio = text(payload.internalBio, 4_000).trim();
   if (!internalBio)
     return json({ error: "プロジェクト内自己紹介を入力してください。" }, 400);
-  if (!current.projectSlug || !APPLICATION_FORM_SLUGS.has(current.projectSlug))
-    return json({ error: "応募先プロジェクトを確認できません。" }, 409);
+  if (!current.projectId)
+    return json({ error: "参加先プロジェクトを確認できません。" }, 409);
   const now = new Date().toISOString();
-  const projectId = onboardingProjectId(current.projectSlug);
+  const projectId = current.projectId;
   await env.REPORTS.batch([
     env.REPORTS.prepare(
       `INSERT INTO editorial_project_member_profiles (project_id,email,internal_bio,updated_at)
@@ -14559,7 +14597,7 @@ async function completeOnboardingProject(
        updated_at=excluded.updated_at`,
     ).bind(projectId, current.email, now, now),
   ]);
-  return json({ ok: true, stage: "MEMBER", next: "/applicant/" });
+  return json({ ok: true, stage: "MEMBER", next: "/admin/portal/" });
 }
 
 async function getOnboardingTutorial(
@@ -14576,6 +14614,7 @@ async function getOnboardingTutorial(
   return json({
     email: current.email,
     project:
+      current.projectName ??
       APPLICATION_FORM_LABELS[current.projectSlug ?? ""] ??
       current.projectSlug ??
       "Atlasez",
@@ -14612,8 +14651,8 @@ async function advanceOnboardingTutorial(
       { error: "画面を再読み込みして、現在の手順から続けてください。" },
       409,
     );
-  if (!current.projectSlug)
-    return json({ error: "応募先プロジェクトを確認できません。" }, 409);
+  if (!current.projectId)
+    return json({ error: "参加先プロジェクトを確認できません。" }, 409);
   const nextStep = Math.min(step + 1, ONBOARDING_TUTORIAL_STEPS);
   if (
     current.projectSlug === "atlas" &&
@@ -14641,7 +14680,7 @@ async function advanceOnboardingTutorial(
        AND atlasez_member_onboarding_progress.tutorial_completed_at IS NULL`,
   )
     .bind(
-      onboardingProjectId(current.projectSlug),
+      current.projectId,
       current.email,
       now,
       nextStep,
@@ -14661,7 +14700,7 @@ async function advanceOnboardingTutorial(
     totalSteps: ONBOARDING_TUTORIAL_STEPS,
     complete: completed,
     stage: completed ? "MEMBER" : "TUTORIAL",
-    next: completed ? "/applicant/" : "/onboarding/tutorial/",
+    next: completed ? "/admin/portal/" : "/onboarding/tutorial/",
   });
 }
 
