@@ -396,6 +396,197 @@ it("公開記事registerは実SQLで運営作成・操作者記録を分離し�
   expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
+it("旧jaディレクトリのカタログ行をcanonicalなjpn pathへ寄せて公開記事を登録する", async () => {
+  const { db, request, env } = environment();
+  creatorAuditProfile(db);
+  creatorAuditGithubFixture(env);
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO editorial_article_catalog
+      (path,identity_key,repository,locale,subject,category,slug,source_article_id,title,last_seen_at,registration_method)
+     VALUES ('src/content/articles/ja/mathematics/ring-theory/ring-definition.md',?,'Atlasez/Atlasez01','ja','mathematics','ring-theory','ring-definition','ja-mathematics-ring-definition','環の定義',?,'catalog-observation')`,
+  ).run("ja/mathematics/ring-theory/ring-definition", now);
+
+  const response = await request(
+    "/api/admin/editor/catalog/register",
+    "global@atlasez.test",
+    creatorAuditArticle,
+  );
+  expect(response.status, await response.clone().text()).toBe(201);
+  const { documentId } = (await response.json()) as { documentId: string };
+  expect(
+    db
+      .prepare(
+        "SELECT path,document_id,registration_method,registered_by FROM editorial_article_catalog",
+      )
+      .all(),
+  ).toEqual([
+    {
+      path: "src/content/articles/jpn/mathematics/ring-theory/ring-definition.md",
+      document_id: documentId,
+      registration_method: "public-article-adoption",
+      registered_by: "global@atlasez.test",
+    },
+  ]);
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_documents").get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
+  ).toEqual({ count: 0 });
+});
+
+it("canonical原稿と同じpathの更新案があっても未登録記事をcanonical原稿へ紐付ける", async () => {
+  const { db, request, env } = environment();
+  creatorAuditProfile(db);
+  creatorAuditGithubFixture(env);
+  const now = new Date().toISOString();
+  const canonicalId = "a4a6c053-58c9-4c22-9df3-e4567720d3f5";
+  const proposalId = "19383967-06dd-4407-95c8-09fcf7ee3e8c";
+  const insert = db.prepare(
+    `INSERT INTO editorial_documents
+      (id,creator_kind,document_kind,base_document_id,source_article_id,subject,category,locale,slug,title,concept_id,body,status,created_by,updated_by,created_at,updated_at)
+     VALUES (?,'organization',?,?,?,'mathematics','ring-theory','ja','ring-definition',?,'math.ring-theory.ring-definition','保持する原稿本文','draft','global@atlasez.test','global@atlasez.test',?,?)`,
+  );
+  insert.run(canonicalId, "canonical", null, null, "運営の正規原稿", now, now);
+  insert.run(
+    proposalId,
+    "update-proposal",
+    canonicalId,
+    "ja-mathematics-ring-definition",
+    "更新案",
+    now,
+    now,
+  );
+
+  const response = await request(
+    "/api/admin/editor/catalog/register",
+    "global@atlasez.test",
+    creatorAuditArticle,
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    ok: true,
+    registered: true,
+    documentId: canonicalId,
+  });
+  expect(
+    db
+      .prepare("SELECT source_article_id FROM editorial_documents WHERE id=?")
+      .get(canonicalId),
+  ).toEqual({ source_article_id: "ja-mathematics-ring-definition" });
+  expect(
+    db
+      .prepare("SELECT source_article_id FROM editorial_documents WHERE id=?")
+      .get(proposalId),
+  ).toEqual({ source_article_id: "ja-mathematics-ring-definition" });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
+  ).toEqual({ count: 0 });
+});
+
+it("公開記事IDが別identityの原稿にある場合は未登録と誤表示せず競合として返す", async () => {
+  const { db, request, env } = environment();
+  creatorAuditGithubFixture(env);
+  const documentId = "850a1ce1-1123-4b27-b92c-d9276a9e2a01";
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO editorial_documents
+      (id,source_article_id,subject,category,locale,slug,title,concept_id,body,created_by,updated_by,created_at,updated_at)
+     VALUES (?, 'ja-mathematics-ring-definition','mathematics','overview','ja','ring-definition','環の定義','math.overview.ring-definition','保持する本文','global@atlasez.test','global@atlasez.test',?,?)`,
+  ).run(documentId, now, now);
+
+  const response = await request(
+    "/api/admin/editor/catalog",
+    "global@atlasez.test",
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const payload = (await response.json()) as {
+    catalog: Array<Record<string, unknown>>;
+  };
+  expect(
+    payload.catalog.find(
+      (entry) =>
+        entry.identity_key === "ja/mathematics/ring-theory/ring-definition",
+    ),
+  ).toMatchObject({
+    state: "identity-conflict",
+    editorial_document_id: documentId,
+  });
+
+  const diagnostics = await request(
+    "/api/admin/editor/catalog/diagnostics",
+    "global@atlasez.test",
+  );
+  expect(diagnostics.status).toBe(200);
+  const result = (await diagnostics.json()) as {
+    issues: Array<Record<string, unknown>>;
+  };
+  expect(
+    result.issues.filter(
+      (issue) =>
+        issue.identity_key === "ja/mathematics/ring-theory/ring-definition",
+    ),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: "identity-mismatch",
+        severity: "error",
+        document_id: documentId,
+      }),
+    ]),
+  );
+  expect(
+    result.issues.some(
+      (issue) =>
+        issue.identity_key === "ja/mathematics/ring-theory/ring-definition" &&
+        issue.code === "unregistered",
+    ),
+  ).toBe(false);
+});
+
+it("公開記事の一括登録は重複を除き、競合記事があっても他記事を続け、通知系レコードを作らない", async () => {
+  const { db, request, env } = environment();
+  creatorAuditProfile(db);
+  creatorAuditGithubFixture(env);
+  const response = await request(
+    "/api/admin/editor/catalog/register-bulk",
+    "global@atlasez.test",
+    {
+      articles: [
+        creatorAuditArticle,
+        creatorAuditArticle,
+        { ...creatorAuditArticle, slug: "unavailable-article" },
+      ],
+    },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const result = (await response.json()) as {
+    attempted: number;
+    results: Array<{ status: string }>;
+  };
+  expect(result.attempted).toBe(2);
+  expect(result.results.map((item) => item.status)).toEqual([
+    "registered",
+    "failed",
+  ]);
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_documents").get(),
+  ).toEqual({ count: 1 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
+  ).toEqual({ count: 0 });
+});
+
 it("既存の個人原稿への公開記事linkは本文・作者種別・操作者を維持する", async () => {
   const { db, request, env } = environment();
   creatorAuditProfile(db);
