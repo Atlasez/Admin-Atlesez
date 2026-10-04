@@ -59,6 +59,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       <p class="catalog-note" data-catalog-summary data-state="loading">公開記事との対応状態を確認しています…</p>
       <button type="button" class="article-action" data-reset-filters>絞り込みをリセット</button>
       <button type="button" class="article-action" data-run-catalog-diagnostics>カタログを診断</button>
+      <button type="button" class="article-action" data-register-unregistered hidden>未登録記事を一括登録</button>
     </div>
     <details class="catalog-diagnostics" data-catalog-diagnostics hidden>
       <summary>公開記事カタログの診断結果</summary>
@@ -119,6 +120,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
           <option value="all">運営管理：すべて</option>
           <option value="managed">運営原稿あり</option>
           <option value="unregistered">公開済み・未登録</option>
+          <option value="conflict">紐付け要確認</option>
         </select>
       </label>
       <label class="filter-control">
@@ -380,6 +382,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     margin: 0 auto 0.55rem;
     max-width: 60rem;
     min-height: 1.2em;
+    white-space: pre-line;
   }
   .catalog-feedback.is-error { color: #b24b38; }
   .list {
@@ -752,9 +755,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
-  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string};
-  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown};
-  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"};
+  type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string;duplicateDocumentIds?:string[]};
+  type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown;duplicate_document_ids?:unknown};
+  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"conflict";publicArticle:PublicArticle;management:"conflict"};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
@@ -774,6 +777,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const scopeNote = root.querySelector<HTMLElement>("[data-scope-note]")!;
     const catalogFeedback = root.querySelector<HTMLElement>("[data-catalog-feedback]")!;
     const catalogDiagnosticsButton = root.querySelector<HTMLButtonElement>("[data-run-catalog-diagnostics]")!;
+    const registerUnregisteredButton = root.querySelector<HTMLButtonElement>("[data-register-unregistered]")!;
     const catalogDiagnostics = root.querySelector<HTMLDetailsElement>("[data-catalog-diagnostics]")!;
     const catalogDiagnosticsSummary = root.querySelector<HTMLElement>("[data-catalog-diagnostics-summary]")!;
     const catalogDiagnosticsIssues = root.querySelector<HTMLUListElement>("[data-catalog-diagnostics-issues]")!;
@@ -792,6 +796,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     let catalogReady = false;
     const registeredPublicArticleIds = new Map<string, string | undefined>();
     let items: Article[] = [];
+    let bulkRegistrationInFlight = false;
     let scopeEmail = "";
     let articleScope: ArticleScope | null = null;
     let nextCursor: string | null = null;
@@ -919,7 +924,11 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
     const updateWorkflowButtons = () => root.querySelectorAll<HTMLButtonElement>("[data-workflow-action]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.workflowAction === currentWorkflow())));
     const publicArticleKey = (article: PublicArticle) => `${article.subject}/${article.category}/${article.slug}`;
     const catalogRows = (): CatalogRow[] => {
-      const rows: CatalogRow[] = items.map((article) => ({ kind: "editorial", article, publicArticle: publicArticles.find((source) => article.source_article_id === source.articleId || publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`), management: "managed" }));
+      const rows: CatalogRow[] = items.map((article) => {
+        const pathMatch = publicArticles.find((source) => publicArticleKey(source) === `${article.subject}/${article.category}/${article.slug}`);
+        const publicArticle = pathMatch && (!article.source_article_id || article.source_article_id === pathMatch.articleId) ? pathMatch : undefined;
+        return { kind: "editorial", article, publicArticle, management: "managed" };
+      });
       // The document list is useful before the remote catalog responds. Do not
       // show build-time catalog entries until the current API result is known.
       if (!catalogReady) return rows;
@@ -934,6 +943,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const key = publicArticleKey(publicArticle);
         if (managedKeys.has(key)) continue;
         if (registeredPublicArticleIds.has(key) || publicArticle.managementState === "managed") rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key) ?? publicArticle.documentId, management: "managed" });
+        else if (publicArticle.managementState === "duplicate" || publicArticle.managementState === "identity-conflict") rows.push({ kind: "conflict", publicArticle, management: "conflict" });
         else rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
       }
       return rows;
@@ -978,16 +988,17 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const mode = currentWorkflow();
       const normalizedQuery = query.value.toLowerCase();
       const rows = catalogRows();
-      const registeredCount = rows.filter((row) => (row.kind === "editorial" && row.publicArticle) || row.kind === "registered").length;
-      const unregisteredCount = rows.filter((row) => row.kind === "unregistered").length;
+      const registeredCount = publicArticles.filter((article) => article.managementState === "managed" || article.managementState === "needs-registration").length;
+      const unregisteredCount = publicArticles.filter((article) => article.managementState === "unmanaged").length;
+      const conflictCount = publicArticles.filter((article) => article.managementState === "identity-conflict" || article.managementState === "duplicate").length;
       catalogSummary.dataset.state = catalogReady ? catalogSource === "api" ? "ready" : "error" : "loading";
       catalogSummary.textContent = catalogReady
         ? catalogSource === "api"
-          ? `公開記事 ${publicArticles.length}件 ・ 運営原稿と紐付け済み ${registeredCount}件 ・ 未登録 ${unregisteredCount}件（APIカタログ）`
+          ? `公開記事 ${publicArticles.length}件 ・ 運営原稿あり ${registeredCount}件 ・ 未登録 ${unregisteredCount}件 ・ 要確認 ${conflictCount}件（APIカタログ）`
           : "公開記事カタログを確認できませんでした。原稿一覧は表示しています。"
         : "公開記事カタログを確認しています…";
       const filtered = rows.filter((row) => {
-        const isUnregistered = row.kind === "unregistered";
+        const isUnregistered = row.kind === "unregistered" || row.kind === "conflict";
         const article = row.kind === "editorial" ? row.article : null;
         if (isUnregistered && mode !== "all") return false;
         if (article && archive.value === "active" && isArchived(article)) return false;
@@ -1016,6 +1027,10 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       // 公開記事由来の原稿だけは source_article_id または公開パスでまとめる。
       // 未登録の公開記事も同じ一覧に補い、公開記事の管理漏れを見える化する。
       const shown = [...new Map(sorted.map((row) => [row.kind === "editorial" ? row.article.source_article_id || row.article.id : `public:${row.publicArticle.articleId}`, row])).values()];
+      const registerableCount = catalogRows().filter((row) => row.kind === "unregistered").length;
+      registerUnregisteredButton.hidden = !catalogReady || registerableCount === 0;
+      registerUnregisteredButton.disabled = bulkRegistrationInFlight;
+      registerUnregisteredButton.textContent = bulkRegistrationInFlight ? "一括登録中…" : `未登録記事を一括登録（${registerableCount}件）`;
       count.textContent = `${shown.length}件`;
       renderSubjectBrowser(shown);
       const formatDate = (value: string) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(value));
@@ -1027,6 +1042,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       list.innerHTML = shown.length ? shown.map((row) => {
         if (row.kind === "unregistered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理未登録"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営管理未登録</span><a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営管理へ登録</a></div></article>`;
         if (row.kind === "registered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理登録済み"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge published">運営管理登録済み</span>${row.documentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&mode=update&from=articles">更新案を作成</a>` : '<span class="badge">運営原稿を準備中</span>'}</div></article>`;
+        if (row.kind === "conflict") { const relatedDocumentId = row.publicArticle.duplicateDocumentIds?.[0] ?? row.publicArticle.documentId; return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は運営管理の紐付け要確認"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">紐付け要確認</span>${relatedDocumentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(relatedDocumentId)}&from=articles">関連原稿を確認</a>` : ""}</div></article>`; }
         const article = row.article;
         const editing = activeEditorsFor(article);
         const editingSummary = activeEditorSummary(article);
@@ -1062,7 +1078,8 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const updatedAt = typeof entry.public_updated_at === "string" ? entry.public_updated_at : typeof entry.editorial_updated_at === "string" ? entry.editorial_updated_at : new Date().toISOString();
         const managementState = typeof entry.state === "string" ? entry.state : undefined;
         const documentId = typeof entry.editorial_document_id === "string" ? entry.editorial_document_id : undefined;
-        return [{ articleId, subject, category, slug, title, updatedAt, managementState, documentId }];
+        const duplicateDocumentIds = Array.isArray(entry.duplicate_document_ids) ? entry.duplicate_document_ids.filter((id): id is string => typeof id === "string") : [];
+        return [{ articleId, subject, category, slug, title, updatedAt, managementState, documentId, ...(duplicateDocumentIds.length ? { duplicateDocumentIds } : {}) }];
       });
     };
     const loadCatalog = async (abortSignal?: AbortSignal) => {
@@ -1235,6 +1252,54 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       const text = await response.text();
       return { error: text || undefined } as T;
     };
+    const registerUnregisteredArticles = async () => {
+      const pending = catalogRows().flatMap((row) => row.kind === "unregistered" ? [row.publicArticle] : []);
+      if (!pending.length || bulkRegistrationInFlight) return;
+      bulkRegistrationInFlight = true;
+      render();
+      setCatalogFeedback("");
+      const totals = { registered: 0, alreadyManaged: 0, conflict: 0, failed: 0 };
+      const errors: string[] = [];
+      try {
+        for (let offset = 0; offset < pending.length; offset += 20) {
+          const batch = pending.slice(offset, offset + 20);
+          const response = await fetch("/api/admin/editor/catalog/register-bulk", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ articles: batch.map(({ subject, category, slug }) => ({ locale: "ja", subject, category, slug })) }),
+          });
+          const data = await readApiResponse<{ error?: string; results?: Array<{ identityKey?: string; status?: "registered" | "already-managed" | "conflict" | "failed"; documentId?: string; error?: string }> }>(response);
+          if (!response.ok || !Array.isArray(data.results)) throw new Error(data.error ?? `一括登録に失敗しました（${response.status}）。`);
+          for (const result of data.results) {
+            const identity = (result.identityKey ?? "").split("/").slice(1).join("/");
+            const article = batch.find((item) => `${item.subject}/${item.category}/${item.slug}` === identity);
+            if (result.status === "registered") {
+              totals.registered += 1;
+              if (article) registeredPublicArticleIds.set(publicArticleKey(article), result.documentId);
+            } else if (result.status === "already-managed") {
+              totals.alreadyManaged += 1;
+              if (article) registeredPublicArticleIds.set(publicArticleKey(article), result.documentId);
+            } else if (result.status === "conflict") {
+              totals.conflict += 1;
+              errors.push(`${article?.title ?? identity}：${result.error ?? "既存原稿との紐付けを確認してください。"}`);
+            } else {
+              totals.failed += 1;
+              errors.push(`${article?.title ?? identity}：${result.error ?? "登録に失敗しました。"}`);
+            }
+          }
+        }
+        render();
+        const summary = `一括処理：新規登録${totals.registered}件、登録済み${totals.alreadyManaged}件、競合${totals.conflict}件、失敗${totals.failed}件。通知・メール・タスク・コメント・公開処理は行いません。`;
+        setCatalogFeedback([summary, ...errors].join("\n"), totals.failed > 0 || totals.conflict > 0);
+      } catch (error) {
+        setCatalogFeedback(error instanceof Error ? error.message : "一括登録に失敗しました。", true);
+      } finally {
+        bulkRegistrationInFlight = false;
+        render();
+      }
+    };
+    registerUnregisteredButton.addEventListener("click", () => { void registerUnregisteredArticles(); });
     const registerPublicArticle = async (link: HTMLAnchorElement) => {
       const articleId = link.dataset.articleId;
       const source = publicArticles.find((article) => article.articleId === articleId);

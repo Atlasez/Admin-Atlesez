@@ -6372,7 +6372,8 @@ const catalogDocumentRows = async (env: Env) =>
     await env.REPORTS.prepare(
       `SELECT id, source_article_id, subject, category, locale, slug, title,
               status, published_at, updated_at, created_at
-       FROM editorial_documents`,
+       FROM editorial_documents
+       WHERE document_kind IS NULL OR document_kind='canonical'`,
     ).all<{
       id: string;
       source_article_id: string | null;
@@ -6391,10 +6392,13 @@ const catalogDocumentRows = async (env: Env) =>
 const catalogDocumentState = (
   documents: Awaited<ReturnType<typeof catalogDocumentRows>>,
   sourceArticleId?: string,
+  otherSourceDocuments: Awaited<ReturnType<typeof catalogDocumentRows>> = [],
 ) => {
   if (documents.length > 1) return "duplicate" as const;
   const document = documents[0];
-  if (!document) return "unmanaged" as const;
+  if (!document) {
+    return otherSourceDocuments.length ? "identity-conflict" as const : "unmanaged" as const;
+  }
   if (
     document.source_article_id &&
     document.source_article_id !== sourceArticleId
@@ -6427,6 +6431,14 @@ async function getEditorialArticleCatalog(
     const publicKeys = new Set(
       publicArticles.map((article) => article.identityKey),
     );
+    const documentBySourceId = new Map<string, typeof documents>();
+    for (const document of documents) {
+      if (!document.source_article_id) continue;
+      documentBySourceId.set(document.source_article_id, [
+        ...(documentBySourceId.get(document.source_article_id) ?? []),
+        document,
+      ]);
+    }
     const catalog = publicArticles
       .filter(
         (article) =>
@@ -6436,7 +6448,10 @@ async function getEditorialArticleCatalog(
       )
       .map((article) => {
         const matches = documentByKey.get(article.identityKey) ?? [];
-        const state = catalogDocumentState(matches, article.sourceArticleId);
+        const sourceMatches = (documentBySourceId.get(article.sourceArticleId) ?? []).filter(
+          (document) => editorialArticleIdentity(document) !== article.identityKey,
+        );
+        const state = catalogDocumentState(matches, article.sourceArticleId, sourceMatches);
         const stored = storedByPath.get(article.path);
         return {
           path: article.path,
@@ -6452,7 +6467,7 @@ async function getEditorialArticleCatalog(
           summary: article.summary,
           concept_id: article.conceptId,
           public_status: "published",
-          editorial_document_id: matches.length === 1 ? matches[0].id : null,
+          editorial_document_id: matches.length === 1 ? matches[0].id : sourceMatches[0]?.id ?? null,
           editorial_status: matches.length === 1 ? matches[0].status : null,
           editorial_published_at:
             matches.length === 1 ? matches[0].published_at : null,
@@ -6570,6 +6585,14 @@ async function getEditorialArticleCatalogDiagnostics(
       const key = editorialArticleIdentity(document);
       documentByKey.set(key, [...(documentByKey.get(key) ?? []), document]);
     }
+    const documentBySourceId = new Map<string, typeof documents>();
+    for (const document of documents) {
+      if (!document.source_article_id) continue;
+      documentBySourceId.set(document.source_article_id, [
+        ...(documentBySourceId.get(document.source_article_id) ?? []),
+        document,
+      ]);
+    }
     const storedByPath = new Map(storedCatalog.map((row) => [row.path, row]));
     const publicKeys = new Set(
       visibleArticles.map((article) => article.identityKey),
@@ -6594,10 +6617,19 @@ async function getEditorialArticleCatalogDiagnostics(
 
     for (const article of visibleArticles) {
       const matches = documentByKey.get(article.identityKey) ?? [];
+      const sourceMatches = (documentBySourceId.get(article.sourceArticleId) ?? []).filter(
+        (document) => editorialArticleIdentity(document) !== article.identityKey,
+      );
       const stored = storedByPath.get(article.path);
-      if (!matches.length)
+      if (!matches.length && !sourceMatches.length)
         addIssue("unregistered", "warning", article, {
           message: "公開記事に対応する運営原稿がありません。",
+        });
+      if (!matches.length && sourceMatches.length)
+        addIssue("identity-mismatch", "error", article, {
+          message: "公開記事IDは別の公開パスの運営原稿に紐付いています。内容を確認してから分類を修正してください。",
+          document_id: sourceMatches[0].id,
+          document_identity_key: editorialArticleIdentity(sourceMatches[0]),
         });
       if (matches.length > 1)
         addIssue("duplicate", "error", article, {
@@ -6930,7 +6962,9 @@ async function registerPublicArticleInEditorialCatalog(
       return json(
         {
           error: "この公開記事は別の運営原稿に紐付いています。",
+          code: "SOURCE_ARTICLE_LINK_CONFLICT",
           documentId: conflictingSource.id,
+          documentIdentityKey: editorialArticleIdentity(conflictingSource),
         },
         409,
       );
@@ -7055,6 +7089,97 @@ async function registerPublicArticleInEditorialCatalog(
       502,
     );
   }
+}
+
+async function registerPublicArticlesInEditorialCatalog(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const scope = await getAdminScope(request, env);
+  if (isResponse(scope)) return scope;
+  if (!isSameOrigin(request))
+    return json({ error: "この送信元からは受け付けられません。" }, 403);
+  if (!request.headers.get("content-type")?.includes("application/json"))
+    return json({ error: "JSON形式で送信してください。" }, 415);
+  const payload = (await request.json().catch(() => null)) as {
+    articles?: unknown;
+  } | null;
+  if (
+    !Array.isArray(payload?.articles) ||
+    payload.articles.length < 1 ||
+    payload.articles.length > 20
+  )
+    return json(
+      { error: "一括登録は1回につき1〜20件で指定してください。" },
+      400,
+    );
+
+  const uniqueArticles = new Map<
+    string,
+    { locale: string; subject: string; category: string; slug: string }
+  >();
+  for (const item of payload.articles) {
+    if (!item || typeof item !== "object")
+      return json({ error: "記事の識別情報を確認してください。" }, 400);
+    const identity = catalogRegistrationInput(item as Record<string, unknown>);
+    if (!identity)
+      return json({ error: "記事の識別情報を確認してください。" }, 400);
+    uniqueArticles.set(editorialArticleIdentity(identity), identity);
+  }
+
+  const results: Array<{
+    identityKey: string;
+    status: "registered" | "already-managed" | "conflict" | "failed";
+    documentId?: string;
+    error?: string;
+  }> = [];
+  const forwardedHeaders = new Headers({ "content-type": "application/json" });
+  for (const name of ["cookie", "origin", "authorization"] as const) {
+    const value = request.headers.get(name);
+    if (value) forwardedHeaders.set(name, value);
+  }
+  for (const [identityKey, identity] of uniqueArticles) {
+    const itemRequest = new Request(request.url, {
+      method: "POST",
+      headers: forwardedHeaders,
+      body: JSON.stringify(identity),
+    });
+    try {
+      const response = await registerPublicArticleInEditorialCatalog(
+        itemRequest,
+        env,
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        registered?: boolean;
+        documentId?: string;
+        error?: string;
+      };
+      results.push({
+        identityKey,
+        status:
+          response.ok && body.ok
+            ? body.registered === false
+              ? "already-managed"
+              : "registered"
+            : response.status === 409
+              ? "conflict"
+              : "failed",
+        ...(body.documentId ? { documentId: body.documentId } : {}),
+        ...(body.error ? { error: body.error } : {}),
+      });
+    } catch (error) {
+      results.push({
+        identityKey,
+        status: "failed",
+        error:
+          error instanceof Error
+            ? error.message
+            : "公開記事を運営管理下へ登録できませんでした。",
+      });
+    }
+  }
+  return json({ ok: true, attempted: uniqueArticles.size, results });
 }
 
 const normalizePersonalMathPresets = (raw: unknown): PersonalMathPreset[] => {
@@ -17195,8 +17320,8 @@ const upsertEditorialArticleCatalog = async (
     `INSERT INTO editorial_article_catalog
       (path, identity_key, repository, locale, subject, category, slug, source_article_id, git_sha, title, summary, concept_id, public_status, document_id, last_seen_at, registered_at, registered_by, source_kind, source_ref, source_checksum, source_checksum_algorithm, source_body_checksum, source_fetched_at, source_authority, registration_method, identity_status)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(path) DO UPDATE SET
-       identity_key=excluded.identity_key,
+     ON CONFLICT(identity_key) DO UPDATE SET
+       path=excluded.path,
        repository=excluded.repository,
        locale=excluded.locale,
        subject=excluded.subject,
@@ -23219,6 +23344,11 @@ async function handleAdminRequest(
     request.method === "POST"
   )
     return registerPublicArticleInEditorialCatalog(request, env);
+  if (
+    url.pathname === "/api/admin/editor/catalog/register-bulk" &&
+    request.method === "POST"
+  )
+    return registerPublicArticlesInEditorialCatalog(request, env);
   if (url.pathname === "/api/admin/editor/documents") {
     if (request.method === "GET") return listEditorialDocuments(request, env);
     if (request.method === "POST") return createEditorialDocument(request, env);
