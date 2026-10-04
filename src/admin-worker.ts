@@ -6921,6 +6921,7 @@ async function registerPublicArticleInEditorialCatalog(
     const existingDocuments = await env.REPORTS.prepare(
       `SELECT id, source_article_id, body, status, published_at FROM editorial_documents
        WHERE locale=? AND subject=? AND category=? AND slug=?
+         AND (document_kind IS NULL OR document_kind='canonical')
        ORDER BY CASE WHEN published_at IS NOT NULL THEN 0 ELSE 1 END, updated_at DESC, id`,
     )
       .bind(identity.locale, identity.subject, identity.category, identity.slug)
@@ -6944,7 +6945,7 @@ async function registerPublicArticleInEditorialCatalog(
       );
     const sourceDocument = documents[0];
     const conflictingSource = await env.REPORTS.prepare(
-      "SELECT id, locale, subject, category, slug FROM editorial_documents WHERE source_article_id=? AND (? IS NULL OR id != ?)",
+      "SELECT id, locale, subject, category, slug FROM editorial_documents WHERE source_article_id=? AND (document_kind IS NULL OR document_kind='canonical') AND (? IS NULL OR id != ?)",
     )
       .bind(
         article.sourceArticleId,

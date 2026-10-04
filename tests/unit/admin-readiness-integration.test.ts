@@ -439,6 +439,58 @@ it("旧jaディレクトリのカタログ行をcanonicalなjpn pathへ寄せて
   ).toEqual({ count: 0 });
 });
 
+it("canonical原稿と同じpathの更新案があっても未登録記事をcanonical原稿へ紐付ける", async () => {
+  const { db, request, env } = environment();
+  creatorAuditProfile(db);
+  creatorAuditGithubFixture(env);
+  const now = new Date().toISOString();
+  const canonicalId = "a4a6c053-58c9-4c22-9df3-e4567720d3f5";
+  const proposalId = "19383967-06dd-4407-95c8-09fcf7ee3e8c";
+  const insert = db.prepare(
+    `INSERT INTO editorial_documents
+      (id,creator_kind,document_kind,base_document_id,source_article_id,subject,category,locale,slug,title,concept_id,body,status,created_by,updated_by,created_at,updated_at)
+     VALUES (?,'organization',?,?,?,'mathematics','ring-theory','ja','ring-definition',?,'math.ring-theory.ring-definition','保持する原稿本文','draft','global@atlasez.test','global@atlasez.test',?,?)`,
+  );
+  insert.run(canonicalId, "canonical", null, null, "運営の正規原稿", now, now);
+  insert.run(
+    proposalId,
+    "update-proposal",
+    canonicalId,
+    "ja-mathematics-ring-definition",
+    "更新案",
+    now,
+    now,
+  );
+
+  const response = await request(
+    "/api/admin/editor/catalog/register",
+    "global@atlasez.test",
+    creatorAuditArticle,
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    ok: true,
+    registered: true,
+    documentId: canonicalId,
+  });
+  expect(
+    db
+      .prepare("SELECT source_article_id FROM editorial_documents WHERE id=?")
+      .get(canonicalId),
+  ).toEqual({ source_article_id: "ja-mathematics-ring-definition" });
+  expect(
+    db
+      .prepare("SELECT source_article_id FROM editorial_documents WHERE id=?")
+      .get(proposalId),
+  ).toEqual({ source_article_id: "ja-mathematics-ring-definition" });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_comments").get(),
+  ).toEqual({ count: 0 });
+  expect(
+    db.prepare("SELECT COUNT(*) AS count FROM editorial_tasks").get(),
+  ).toEqual({ count: 0 });
+});
+
 it("公開記事IDが別identityの原稿にある場合は未登録と誤表示せず競合として返す", async () => {
   const { db, request, env } = environment();
   creatorAuditGithubFixture(env);
