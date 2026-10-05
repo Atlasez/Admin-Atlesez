@@ -277,7 +277,6 @@ describe("task reminder delivery", () => {
   it("skips paused recipients for due reminders and existing retries", async () => {
     const db = new FakeDb();
     db.recipientActive = false;
-    db.dueRows.splice(0);
     let calls = 0;
     const result = await dispatchDueTaskReminders(env(db), {
       now,
