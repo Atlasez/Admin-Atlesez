@@ -75,14 +75,13 @@ test("休止中の本人はタイムゾーン付き再開申請を送れ、送�
     "現在の状態：休止中",
   );
   await expect(page.locator("[data-review]")).toBeHidden();
-  const form = page.locator("[data-procedure-form]");
-  await form.locator('[name="type"]').selectOption("restart");
+  const form = page.locator('[data-procedure-form="restart"]');
   await form.locator('[name="effectiveFrom"]').fill("2026-11-01");
   await form.locator('[name="timezone"]').fill("Europe/London");
   await form.locator('[name="reason"]').fill(pending.reason);
   await form.locator('[name="note"]').fill(pending.note);
-  await form.getByRole("button", { name: "申請する" }).click();
-  await expect(page.locator("[data-form-message]")).toHaveText(
+  await form.getByRole("button", { name: "活動再開を申請" }).click();
+  await expect(form.locator("[data-form-message]")).toHaveText(
     "一時的に申請できません。",
   );
   await expect(form.locator('[name="reason"]')).toHaveValue(pending.reason);
@@ -90,8 +89,8 @@ test("休止中の本人はタイムゾーン付き再開申請を送れ、送�
   await expect(form.locator('[name="effectiveFrom"]')).toHaveValue(
     "2026-11-01",
   );
-  await form.getByRole("button", { name: "申請する" }).click();
-  await expect(page.locator("[data-form-message]")).toContainText(
+  await form.getByRole("button", { name: "活動再開を申請" }).click();
+  await expect(form.locator("[data-form-message]")).toContainText(
     "申請を受け付けました",
   );
   expect(submitted).toHaveLength(2);
@@ -127,13 +126,15 @@ test("本人の手続き一覧の読込失敗から再試行しても記入中�
     });
   });
   await page.goto("admin/procedures/?project=thinking-cafe");
-  const form = page.locator("[data-procedure-form]");
+  const form = page.locator('[data-procedure-form="restart"]');
   await expect(page.locator("[data-admin-load-error]")).toBeVisible();
   await form.locator('[name="reason"]').fill("読み込み待ちに入力した再開理由");
   await form.locator('[name="timezone"]').fill("America/New_York");
   await page.getByRole("button", { name: "再試行", exact: true }).click();
   await expect(page.locator("[data-admin-load-error]")).toBeHidden();
-  await expect(form.getByRole("button", { name: "申請する" })).toBeEnabled();
+  await expect(
+    form.getByRole("button", { name: "活動再開を申請" }),
+  ).toBeEnabled();
   await expect(form.locator('[name="reason"]')).toHaveValue(
     "読み込み待ちに入力した再開理由",
   );
@@ -141,6 +142,33 @@ test("本人の手続き一覧の読込失敗から再試行しても記入中�
     "America/New_York",
   );
   expect(loads).toBe(2);
+});
+
+test("申請カードは所属状態に合わせ、退会済みからの再開申請も表示する", async ({
+  page,
+}) => {
+  await mockCommon(page);
+  let state = "active";
+  await page.route("**/api/admin/member-procedures?**", (route) =>
+    route.fulfill({
+      json: {
+        projects: [{ ...project, state }],
+        project: { ...project, state },
+        canReview: false,
+        requests: [],
+      },
+    }),
+  );
+  await page.goto("admin/procedures/?project=thinking-cafe");
+  await expect(page.locator('[data-card="pause"]')).toBeVisible();
+  await expect(page.locator('[data-card="withdrawal"]')).toBeVisible();
+  await expect(page.locator('[data-card="restart"]')).toBeHidden();
+
+  state = "withdrawn";
+  await page.locator("[data-own]").click();
+  await expect(page.locator('[data-card="pause"]')).toBeHidden();
+  await expect(page.locator('[data-card="withdrawal"]')).toBeHidden();
+  await expect(page.locator('[data-card="restart"]')).toBeVisible();
 });
 
 test("担当責任者の審査は対象プロジェクト・更新時刻・引き継ぎ確認を送る", async ({
