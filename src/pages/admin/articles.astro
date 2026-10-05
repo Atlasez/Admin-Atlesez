@@ -751,13 +751,14 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
 <script>
   import { createAdminLoadRetry } from "../../scripts/admin-load-retry";
   import { readAdminApiJson } from "../../lib/admin-api";
+  import { canRegisterArticleInSubject, isBulkArticleRegistrationCandidate, isTestArticleTitle } from "../../lib/admin-article-registration";
   type Article={id:string;source_article_id?:string|null;subject:string;category:string;slug?:string;title:string;status:"draft"|"in-review"|"on-hold"|"approved";updated_at:string;published_at:string|null;scheduled_publish_at?:string|null;archived_at?:string|null;archive_expires_at?:string|null;created_by?:string;updated_by?:string;reviewer_email?:string|null;active_editors?:Array<{sessionId:string;email:string;displayName:string;field:string}>};
   type ArticleFilterState={query:string;subject:string;category:string;status:string;publication:string;management:string;test:string;workflow:string;archive:string};
   type ArticleScope={email:string;subjects?:string[];coordinatorSubjects?:string[];allSubjects?:boolean;isManager?:boolean;isProjectLeader?:boolean};
   type ArticlePagination={limit:number;nextCursor:string|null;hasMore:boolean};
   type PublicArticle={articleId:string;subject:string;category:string;slug:string;title:string;updatedAt:string;managementState?:string;documentId?:string;duplicateDocumentIds?:string[]};
   type PublicArticleCatalogEntry={locale?:unknown;public_status?:unknown;source_article_id?:unknown;subject?:unknown;category?:unknown;slug?:unknown;title?:unknown;public_updated_at?:unknown;editorial_updated_at?:unknown;state?:unknown;editorial_document_id?:unknown;duplicate_document_ids?:unknown};
-  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"conflict";publicArticle:PublicArticle;management:"conflict"};
+  type CatalogRow={kind:"editorial";article:Article;publicArticle?:PublicArticle;management:"managed"} | {kind:"unregistered";publicArticle:PublicArticle;management:"unregistered"} | {kind:"registered";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"needs-registration";publicArticle:PublicArticle;documentId?:string;management:"managed"} | {kind:"conflict";publicArticle:PublicArticle;management:"conflict"};
   const initializeArticleIndex = () => {
     const root = document.querySelector<HTMLElement>("[data-article-index]");
     if (!root || root.dataset.ready === "true") return;
@@ -943,16 +944,20 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const key = publicArticleKey(publicArticle);
         if (managedKeys.has(key)) continue;
         if (registeredPublicArticleIds.has(key) || publicArticle.managementState === "managed") rows.push({ kind: "registered", publicArticle, documentId: registeredPublicArticleIds.get(key) ?? publicArticle.documentId, management: "managed" });
+        else if (publicArticle.managementState === "needs-registration") rows.push({ kind: "needs-registration", publicArticle, documentId: publicArticle.documentId, management: "managed" });
         else if (publicArticle.managementState === "duplicate" || publicArticle.managementState === "identity-conflict") rows.push({ kind: "conflict", publicArticle, management: "conflict" });
-        else rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
+        else if (publicArticle.managementState === "unmanaged") rows.push({ kind: "unregistered", publicArticle, management: "unregistered" });
       }
       return rows;
     };
-    const isTestTitle = (title: string) => /(^|[\s_-])test($|[\s_-])|テスト/i.test(title);
     const rowTitle = (row: CatalogRow) => row.kind === "editorial" ? row.article.title : row.publicArticle.title;
     const rowSubject = (row: CatalogRow) => row.kind === "editorial" ? row.article.subject : row.publicArticle.subject;
     const rowCategory = (row: CatalogRow) => row.kind === "editorial" ? row.article.category : row.publicArticle.category;
     const rowUpdatedAt = (row: CatalogRow) => row.kind === "editorial" ? row.article.updated_at : row.publicArticle.updatedAt;
+    const canRegisterPublicArticle = (article: PublicArticle) => canRegisterArticleInSubject(articleScope, article.subject);
+    const bulkRegistrationCandidates = () => catalogRows().flatMap((row) =>
+      row.kind === "unregistered" && isBulkArticleRegistrationCandidate(row.publicArticle, canRegisterPublicArticle(row.publicArticle)) ? [row.publicArticle] : [],
+    );
     const renderSubjectBrowser = (shown: CatalogRow[]) => {
       const counts = new Map<string, CatalogRow[]>();
       for (const row of shown) counts.set(rowSubject(row), [...(counts.get(rowSubject(row)) ?? []), row]);
@@ -1012,7 +1017,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         if (publication.value === "published" && (isUnregistered ? true : !article?.published_at)) return false;
         if (publication.value === "scheduled" && (isUnregistered || Boolean(article?.published_at) || !article?.scheduled_publish_at)) return false;
         if (publication.value === "unpublished" && (isUnregistered || Boolean(article?.published_at) || Boolean(article?.scheduled_publish_at))) return false;
-        const testMatch = isTestTitle(rowTitle(row));
+        const testMatch = isTestArticleTitle(rowTitle(row));
         if (test.value === "only" && !testMatch) return false;
         if (test.value === "exclude" && testMatch) return false;
         return `${rowTitle(row)} ${rowSubject(row)} ${rowCategory(row)}`.toLowerCase().includes(normalizedQuery);
@@ -1027,7 +1032,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       // 公開記事由来の原稿だけは source_article_id または公開パスでまとめる。
       // 未登録の公開記事も同じ一覧に補い、公開記事の管理漏れを見える化する。
       const shown = [...new Map(sorted.map((row) => [row.kind === "editorial" ? row.article.source_article_id || row.article.id : `public:${row.publicArticle.articleId}`, row])).values()];
-      const registerableCount = catalogRows().filter((row) => row.kind === "unregistered").length;
+      const registerableCount = bulkRegistrationCandidates().length;
       registerUnregisteredButton.hidden = !catalogReady || registerableCount === 0;
       registerUnregisteredButton.disabled = bulkRegistrationInFlight;
       registerUnregisteredButton.textContent = bulkRegistrationInFlight ? "一括登録中…" : `未登録記事を一括登録（${registerableCount}件）`;
@@ -1040,8 +1045,9 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         return new Intl.DateTimeFormat("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Tokyo" }).format(instant);
       };
       list.innerHTML = shown.length ? shown.map((row) => {
-        if (row.kind === "unregistered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理未登録"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営管理未登録</span><a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営管理へ登録</a></div></article>`;
+        if (row.kind === "unregistered") { const registerAction = canRegisterPublicArticle(row.publicArticle) ? `<a class="catalog-action" href="/admin/editor/?sourceArticle=${encodeURIComponent(row.publicArticle.articleId)}&from=articles" data-register-link data-article-id="${esc(row.publicArticle.articleId)}" data-catalog-subject="${esc(row.publicArticle.subject)}" data-catalog-category="${esc(row.publicArticle.category)}" data-catalog-slug="${esc(row.publicArticle.slug)}">運営管理へ登録</a>` : '<span class="badge" title="公開記事を運営管理へ登録するには分野の編集権限が必要です">登録には編集権限が必要</span>'; return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理未登録"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営管理未登録</span>${registerAction}</div></article>`; }
         if (row.kind === "registered") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は公開済み・運営管理登録済み"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge published">運営管理登録済み</span>${row.documentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&mode=update&from=articles">更新案を作成</a>` : '<span class="badge">運営原稿を準備中</span>'}</div></article>`;
+        if (row.kind === "needs-registration") return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は運営原稿あり・公開記事ID未紐付け"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">運営原稿あり・公開記事ID未紐付け</span>${row.documentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(row.documentId)}&from=articles">原稿を確認</a>` : ""}</div></article>`;
         if (row.kind === "conflict") { const relatedDocumentId = row.publicArticle.duplicateDocumentIds?.[0] ?? row.publicArticle.documentId; return `<article class="article article-unregistered" aria-label="${esc(row.publicArticle.title)}は運営管理の紐付け要確認"><div><h2>${esc(row.publicArticle.title)}</h2><p>${esc(row.publicArticle.subject)} / ${esc(row.publicArticle.category)} ・ 学習サイトで公開中 ・ 最終更新 ${formatDate(row.publicArticle.updatedAt)}</p></div><div class="badges"><span class="badge published">公開済み</span><span class="badge unregistered">紐付け要確認</span>${relatedDocumentId ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(relatedDocumentId)}&from=articles">関連原稿を確認</a>` : ""}</div></article>`; }
         const article = row.article;
         const editing = activeEditorsFor(article);
@@ -1051,11 +1057,12 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
         const archiveSummary = isArchived(article) && article.archive_expires_at ? ` ・ 復元期限 ${new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" }).format(new Date(article.archive_expires_at))}` : "";
         const scheduleSummary = article.scheduled_publish_at ? ` ・ 公開予約：${formatSchedule(article.scheduled_publish_at)}` : "";
         const scheduleBadge = article.scheduled_publish_at ? `<span class="badge scheduled" aria-label="公開予約済み ${esc(formatSchedule(article.scheduled_publish_at))}">公開予約済み・${esc(formatSchedule(article.scheduled_publish_at))}</span>` : "";
+        const sourceLinkBadge = row.publicArticle?.managementState === "needs-registration" ? '<span class="badge unregistered" aria-label="運営原稿あり・公開記事ID未紐付け">公開記事ID未紐付け</span>' : "";
         const archiveAction = article.status === "draft" && !article.published_at ? (isArchived(article) ? (archiveExpired(article) ? '<button type="button" class="article-action" disabled title="アーカイブ期限を過ぎています">期限切れ</button>' : `<button type="button" class="article-action" data-archive-action="unarchive" data-archive-document-id="${esc(article.id)}">復元</button>`) : `<button type="button" class="article-action" data-archive-action="archive" data-archive-document-id="${esc(article.id)}">アーカイブ</button>`) : "";
         const updateInProgress = Boolean(article.published_at && hasUnpublishedPublicationChanges(article));
         const updateActionLabel = updateInProgress ? "更新案作成中" : "更新案を作成";
         const updateAction = article.published_at ? `<a class="catalog-action" href="/admin/editor/?document=${encodeURIComponent(article.id)}&mode=update&from=articles" aria-label="${esc(article.title || "無題の記事")}の${updateActionLabel}" data-update-proposal-state="${updateInProgress ? "in-progress" : "available"}">${updateActionLabel}</a>` : "";
-        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}${article.scheduled_publish_at ? `・公開予約済み ${esc(formatSchedule(article.scheduled_publish_at))}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${formatDate(article.updated_at)}${scheduleSummary}${archiveSummary}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="article-actions"><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${scheduleBadge}${archiveBadge}${isTestTitle(article.title) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み・運営管理中</span>' : ""}</div>${archiveAction}${updateAction}</div></article>`;
+        return `<article class="article" role="link" tabindex="0" data-document-id="${esc(article.id)}" data-href="/admin/editor/?document=${encodeURIComponent(article.id)}" aria-label="${esc(article.title || "無題の原稿")}を開く${editingSummary ? `・${esc(editingSummary)}` : ""}${article.scheduled_publish_at ? `・公開予約済み ${esc(formatSchedule(article.scheduled_publish_at))}` : ""}"><div><h2>${esc(article.title || "無題の原稿")}</h2><p>${esc(article.subject)} / ${esc(article.category)} ・ 最終更新 ${formatDate(article.updated_at)}${scheduleSummary}${archiveSummary}${mode === "review" && assignedToScope(article) ? " ・ 自分へのフィードバック依頼" : ""}${editingSummary ? `<span class="article-presence" data-active-editors="${esc(article.id)}"><span class="presence-dot" aria-hidden="true"></span>${esc(editingSummary)}</span>` : ""}</p></div><div class="article-actions"><div class="badges">${editingBadge}<span class="badge ${article.status}">${labels[article.status]}</span>${scheduleBadge}${archiveBadge}${sourceLinkBadge}${isTestArticleTitle(article.title) ? '<span class="badge">テスト</span>' : ""}${article.published_at ? '<span class="badge published">公開済み・運営管理中</span>' : ""}</div>${archiveAction}${updateAction}</div></article>`;
       }).join("") : "<p>条件に一致する原稿はありません。</p>";
       pagination.hidden = !hasMore;
       paginationStatus.textContent = loadedPageCount ? `${items.length}件を読み込み済み${hasMore ? "・続きがあります" : "・すべて読み込み済み"}` : "";
@@ -1253,7 +1260,7 @@ const publicArticlesPayload = JSON.stringify(publicArticles).replace(/</g, "\\u0
       return { error: text || undefined } as T;
     };
     const registerUnregisteredArticles = async () => {
-      const pending = catalogRows().flatMap((row) => row.kind === "unregistered" ? [row.publicArticle] : []);
+      const pending = bulkRegistrationCandidates();
       if (!pending.length || bulkRegistrationInFlight) return;
       bulkRegistrationInFlight = true;
       render();
