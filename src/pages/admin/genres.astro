@@ -182,7 +182,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
       container.replaceChildren();
       if (!relevant.length) {
         const emptyMembers = document.createElement("p");
-        emptyMembers.className = "loading-note";
+        emptyMembers.className = "member-note";
         emptyMembers.textContent = membersLoaded ? "担当者はまだ登録されていません。" : "担当メンバーを読み込んでいます…";
         container.append(emptyMembers);
         return;
@@ -265,7 +265,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
             memberCount.textContent = "—";
             members.replaceChildren();
             const message = document.createElement("p");
-            message.className = "loading-note";
+            message.className = "member-note";
             message.textContent = "担当メンバーを読み込めませんでした。";
             members.append(message);
           }
@@ -414,7 +414,7 @@ const categoryCount = subjects.reduce((total, subject) => total + subject.data.c
   .member-avatar--fallback { align-items: center; background: var(--background-secondary); color: var(--text-secondary); display: inline-flex; font-size: .62rem; justify-content: center; }
   .member-item strong { color: var(--text-primary); font-size: .72rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .member-item span { color: var(--text-muted); flex: 0 0 auto; font-size: .65rem; max-width: 58%; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-  .loading-note, .progress-view { color: var(--text-secondary); font-size: .74rem; line-height: 1.55; margin: 0; white-space: pre-wrap; }
+  .loading-note, .member-note, .progress-view { color: var(--text-secondary); font-size: .74rem; line-height: 1.55; margin: 0; white-space: pre-wrap; }
   .progress-view { background: var(--surface-alt); border: 0; border-radius: var(--radius); padding: .45rem .55rem; }
   .progress-form { display: grid; gap: .4rem; }
   .progress-form[hidden] { display: none; }
